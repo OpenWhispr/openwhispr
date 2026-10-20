@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { recipientLabel } from "../../helpers/connectors/emailCompose";
 import {
@@ -6,6 +6,7 @@ import {
   type EmailFieldProblems,
   type EmailFields,
 } from "../../utils/emailApprovalFields";
+import { INLINE_FIELD } from "./interactions/cardStyles";
 
 // A subject is one header line. A pasted line break becomes a space here,
 // so the card never shows a subject main would refuse to send.
@@ -13,13 +14,16 @@ function singleLine(value: string): string {
   return value.replace(/[\r\n]+/g, " ");
 }
 
-const FIELD_CLASS = "w-full rounded-md border border-border/70 bg-background px-2 py-1";
-const LABEL_CLASS = "w-14 shrink-0 text-xs text-muted-foreground";
+const LABEL_CLASS = "w-16 shrink-0 text-xs text-muted-foreground";
 
 interface EmailApprovalFieldsProps {
   fields: EmailFields;
-  /** Edit mode. The card sets it only while pending, so the inputs need no disabled state. */
+  /** Inline editing. The card allows it only while the email can still be sent. */
   editing: boolean;
+  /** Cc shows when it has addresses (or had them when the card opened). */
+  showCc: boolean;
+  /** The sending Gmail address, read only. */
+  accountLabel: string;
   /** What blocks Send, and the id of the text that says why. */
   problems: EmailFieldProblems | null;
   problemsId: string;
@@ -30,7 +34,7 @@ interface EmailApprovalFieldsProps {
 function invalidFields(
   fields: EmailFields,
   problems: EmailFieldProblems | null
-): { to: boolean; cc: boolean; subject: boolean; body: boolean } {
+): { to: boolean; cc: boolean; subject: boolean } {
   const hasInvalid = (list: string[]): boolean =>
     Boolean(problems && list.some((address) => problems.invalid.includes(address)));
   const tooMany = Boolean(problems?.tooManyRecipients);
@@ -38,8 +42,16 @@ function invalidFields(
     to: hasInvalid(fields.to) || Boolean(problems?.missingTo) || tooMany,
     cc: hasInvalid(fields.cc) || tooMany,
     subject: Boolean(problems?.subjectTooLong),
-    body: Boolean(problems?.bodyTooLong),
   };
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  return (
+    <div className="flex min-h-6 items-center gap-2">
+      <span className={LABEL_CLASS}>{label}</span>
+      {children}
+    </div>
+  );
 }
 
 // A pasted "Name <address>" (Outlook's "Last, First <address>" too) sends to
@@ -49,7 +61,7 @@ function ResolvedAddresses({ addresses }: { addresses: string[] }): ReactElement
   const { t } = useTranslation();
   if (addresses.length === 0) return null;
   return (
-    <p className="pl-16 text-xs text-muted-foreground" dir="auto">
+    <p className="ps-18 text-xs text-muted-foreground" dir="auto">
       {t("connectors.approval.email.sendsTo", {
         addresses: addresses.map(recipientLabel).join(", "),
       })}
@@ -60,10 +72,11 @@ function ResolvedAddresses({ addresses }: { addresses: string[] }): ReactElement
 // Mounted only while editing, so every edit session starts from the draft.
 function EmailFieldsEditor({
   fields,
+  showCc,
   problems,
   problemsId,
   onChange,
-}: Omit<EmailApprovalFieldsProps, "editing">): ReactElement {
+}: Omit<EmailApprovalFieldsProps, "editing" | "accountLabel">): ReactElement {
   const { t } = useTranslation();
   const invalid = invalidFields(fields, problems);
   const validity = (isInvalid: boolean): { "aria-invalid"?: true; "aria-describedby"?: string } =>
@@ -72,16 +85,17 @@ function EmailFieldsEditor({
   // keystroke would swallow the comma the user just typed.
   const [toText, setToText] = useState(() => fields.to.join(", "));
   const [ccText, setCcText] = useState(() => fields.cc.join(", "));
+  const addressHint = t("connectors.approval.email.addressHint");
 
   return (
-    <div className="space-y-2">
-      <label className="flex items-center gap-2">
-        <span className={LABEL_CLASS}>{t("connectors.approval.email.toLabel")}</span>
+    <>
+      <Row label={t("connectors.approval.email.toLabel")}>
         <input
           aria-label={t("connectors.approval.email.toLabel")}
+          title={addressHint}
           {...validity(invalid.to)}
           type="text"
-          className={FIELD_CLASS}
+          className={INLINE_FIELD}
           dir="auto"
           value={toText}
           onChange={(event) => {
@@ -89,97 +103,88 @@ function EmailFieldsEditor({
             onChange({ to: parseAddressList(event.target.value) });
           }}
         />
-      </label>
+      </Row>
       {toText.includes("<") && <ResolvedAddresses addresses={fields.to} />}
-      <label className="flex items-center gap-2">
-        <span className={LABEL_CLASS}>{t("connectors.approval.email.ccLabel")}</span>
-        <input
-          aria-label={t("connectors.approval.email.ccLabel")}
-          {...validity(invalid.cc)}
-          type="text"
-          className={FIELD_CLASS}
-          dir="auto"
-          value={ccText}
-          onChange={(event) => {
-            setCcText(event.target.value);
-            onChange({ cc: parseAddressList(event.target.value) });
-          }}
-        />
-      </label>
-      {ccText.includes("<") && <ResolvedAddresses addresses={fields.cc} />}
-      <p className="text-xs text-muted-foreground">{t("connectors.approval.email.addressHint")}</p>
-      <label className="flex items-center gap-2">
-        <span className={LABEL_CLASS}>{t("connectors.approval.email.subjectLabel")}</span>
+      {showCc && (
+        <Row label={t("connectors.approval.email.ccLabel")}>
+          <input
+            aria-label={t("connectors.approval.email.ccLabel")}
+            title={addressHint}
+            {...validity(invalid.cc)}
+            type="text"
+            className={INLINE_FIELD}
+            dir="auto"
+            value={ccText}
+            onChange={(event) => {
+              setCcText(event.target.value);
+              onChange({ cc: parseAddressList(event.target.value) });
+            }}
+          />
+        </Row>
+      )}
+      {showCc && ccText.includes("<") && <ResolvedAddresses addresses={fields.cc} />}
+      <Row label={t("connectors.approval.email.subjectLabel")}>
         <input
           aria-label={t("connectors.approval.email.subjectLabel")}
           {...validity(invalid.subject)}
           type="text"
-          className={FIELD_CLASS}
+          className={`${INLINE_FIELD} font-medium`}
           dir="auto"
           value={fields.subject}
           onChange={(event) => onChange({ subject: singleLine(event.target.value) })}
         />
-      </label>
-      <textarea
-        aria-label={t("connectors.approval.email.bodyLabel")}
-        {...validity(invalid.body)}
-        className={`min-h-24 ${FIELD_CLASS}`}
-        dir="auto"
-        value={fields.body}
-        onChange={(event) => onChange({ body: event.target.value })}
-      />
-    </div>
+      </Row>
+    </>
   );
 }
 
-function EmailFieldsView({ fields }: { fields: EmailFields }): ReactElement {
+// Display only: a non-ASCII domain also shows the punycode form it routes to
+// (recipientLabel), same as destinationLabel and the tool step, so a
+// single-script look-alike domain doesn't pass as the real one. Editing
+// still reads and writes the raw address.
+function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: boolean }) {
   const { t } = useTranslation();
-  // Display only: a non-ASCII domain also shows the punycode form it
-  // routes to (recipientLabel), same as destinationLabel and the tool
-  // step, so a single-script look-alike domain doesn't pass as the real
-  // one. Editing still reads and writes the raw address.
-  const rows: Array<[string, string]> = [
-    ["toLabel", fields.to.map(recipientLabel).join(", ")],
-    ...(fields.cc.length > 0
-      ? [["ccLabel", fields.cc.map(recipientLabel).join(", ")] as [string, string]]
-      : []),
-    ["subjectLabel", fields.subject],
-  ];
+  const value = (text: string, className = "") => (
+    <span className={`min-w-0 flex-1 break-words text-foreground ${className}`} dir="auto">
+      {text}
+    </span>
+  );
   return (
-    <div>
-      <dl className="space-y-0.5">
-        {rows.map(([labelKey, value]) => (
-          <div key={labelKey} className="flex gap-2">
-            <dt className={LABEL_CLASS}>{t(`connectors.approval.email.${labelKey}`)}</dt>
-            <dd className="min-w-0 break-words" dir="auto">
-              {value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <p className="mt-2 whitespace-pre-wrap" dir="auto">
-        {fields.body}
-      </p>
-    </div>
+    <>
+      <Row label={t("connectors.approval.email.toLabel")}>
+        {value(fields.to.map(recipientLabel).join(", "))}
+      </Row>
+      {showCc && fields.cc.length > 0 && (
+        <Row label={t("connectors.approval.email.ccLabel")}>
+          {value(fields.cc.map(recipientLabel).join(", "))}
+        </Row>
+      )}
+      <Row label={t("connectors.approval.email.subjectLabel")}>
+        {value(fields.subject, "font-medium")}
+      </Row>
+    </>
   );
 }
 
-/** The email card's To, Cc, Subject and Body, shown or edited. */
+/** The email card's To, Cc and Subject, shown or edited inline, and who it is from. */
 export function EmailApprovalFields({
-  fields,
   editing,
-  problems,
-  problemsId,
-  onChange,
+  accountLabel,
+  ...props
 }: EmailApprovalFieldsProps): ReactElement {
-  return editing ? (
-    <EmailFieldsEditor
-      fields={fields}
-      problems={problems}
-      problemsId={problemsId}
-      onChange={onChange}
-    />
-  ) : (
-    <EmailFieldsView fields={fields} />
+  const { t } = useTranslation();
+  return (
+    <>
+      {editing ? (
+        <EmailFieldsEditor {...props} />
+      ) : (
+        <EmailFieldsView fields={props.fields} showCc={props.showCc} />
+      )}
+      <Row label={t("connectors.approval.email.fromLabel")}>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto">
+          {accountLabel}
+        </span>
+      </Row>
+    </>
   );
 }

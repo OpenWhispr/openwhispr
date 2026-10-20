@@ -4181,7 +4181,6 @@
     "approval": {
       "headers": {
         "default": "Invia a {{destination}}",
-        "slackPost": "Pubblica su {{destination}}",
         "email": "Email a {{destination}}",
         "issue": "Crea issue in {{destination}}",
         "comment": "Commenta {{destination}}"
@@ -4189,8 +4188,6 @@
       "identity": "Come {{account}}",
       "identityWithWorkspace": "Come {{account}} in {{workspace}}",
       "send": "Invia",
-      "edit": "Modifica",
-      "doneEditing": "Modifica completata",
       "cancel": "Annulla",
       "titleLabel": "Titolo",
       "bodyLabel": "Messaggio",
@@ -4276,7 +4273,6 @@
         }
       },
       "email": {
-        "from": "Da {{account}}",
         "toLabel": "A",
         "ccLabel": "Cc",
         "subjectLabel": "Oggetto",
@@ -4289,7 +4285,8 @@
         "tooManyRecipients": "Un'email può andare al massimo a {{max}} indirizzi, tra A e Cc.",
         "subjectTooLong": "L'oggetto può contenere al massimo {{max}} caratteri.",
         "bodyTooLong": "Il messaggio è troppo lungo per Gmail. Accorcialo per inviarlo.",
-        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata."
+        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata.",
+        "fromLabel": "Da"
       },
       "github": {
         "notes": {
@@ -4334,7 +4331,15 @@
           "targetTitle": "Su «{{title}}»"
         }
       },
-      "sentEarlier": "Hai già inviato questo in precedenza in questa chat."
+      "sentEarlier": "Hai già inviato questo in precedenza in questa chat.",
+      "slack": {
+        "channelLabel": "Canale",
+        "asLabel": "Come",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Inviato",
+      "identityChanged": "Ora verrà inviato come {{account}}. Premi Invia per inviarlo.",
+      "connectToSend": "Collega {{name}} per inviarlo"
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
     "email": {

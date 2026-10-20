@@ -4181,7 +4181,6 @@
     "approval": {
       "headers": {
         "default": "{{destination}} に送信",
-        "slackPost": "{{destination}}に投稿",
         "email": "{{destination}} 宛てのメール",
         "issue": "{{destination}} に Issue を作成",
         "comment": "{{destination}} にコメント"
@@ -4189,8 +4188,6 @@
       "identity": "{{account}} として",
       "identityWithWorkspace": "{{workspace}} の {{account}} として",
       "send": "送信",
-      "edit": "編集",
-      "doneEditing": "編集完了",
       "cancel": "キャンセル",
       "titleLabel": "タイトル",
       "bodyLabel": "メッセージ",
@@ -4276,7 +4273,6 @@
         }
       },
       "email": {
-        "from": "差出人: {{account}}",
         "toLabel": "宛先",
         "ccLabel": "Cc",
         "subjectLabel": "件名",
@@ -4289,7 +4285,8 @@
         "tooManyRecipients": "1通のメールの宛先は、宛先とCcを合わせて最大{{max}}件です。",
         "subjectTooLong": "件名は{{max}}文字以内にしてください。",
         "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
-        "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。"
+        "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。",
+        "fromLabel": "差出人"
       },
       "github": {
         "notes": {
@@ -4334,7 +4331,15 @@
           "targetTitle": "「{{title}}」へ"
         }
       },
-      "sentEarlier": "このチャットで以前に送信済みです。"
+      "sentEarlier": "このチャットで以前に送信済みです。",
+      "slack": {
+        "channelLabel": "チャンネル",
+        "asLabel": "送信者",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "送信済み",
+      "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
+      "connectToSend": "送信するには {{name}} を接続してください"
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {

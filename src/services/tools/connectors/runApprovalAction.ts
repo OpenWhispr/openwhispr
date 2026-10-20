@@ -1,5 +1,6 @@
 import i18n from "../../../i18n";
 import type { ToolExecutionContext, ToolResult } from "../ToolRegistry";
+import type { ConnectorPrepareResult } from "../../../types/connectors";
 import { requestApproval } from "../../../stores/connectorApprovalStore";
 import {
   alreadySentResult,
@@ -47,11 +48,18 @@ export async function runApprovalAction(
       i18n.t("connectors.toolStatus.cardLimit", { max: MAX_APPROVAL_CARDS_PER_TURN })
     );
   }
-  // A rejected IPC call reads as unavailable, so the caller's turn slot is
-  // given back and the model is told not to retry.
-  const prepared = await window.electronAPI
-    ?.connectorPrepare?.(connectorId, action, args)
-    .catch(() => undefined);
+  // The same send in an earlier request may be wanted again; the card says so
+  // and the user's Send decides. A rejected IPC call reads as unavailable.
+  const prepare = async (): Promise<ConnectorPrepareResult | undefined> => {
+    const result = await window.electronAPI
+      ?.connectorPrepare?.(connectorId, action, args)
+      .catch(() => undefined);
+    if (result?.status !== "ready" || !context.sentEarlier(actionKey)) return result;
+    const { preview } = result;
+    const notes = [...(preview.notes ?? []), { key: "connectors.approval.sentEarlier" }];
+    return { ...result, preview: { ...preview, notes } };
+  };
+  const prepared = await prepare();
   // No card appeared, so the slot goes back for another try this turn.
   if (!prepared) {
     context.releaseTurnSlot(CARD_SLOT);
@@ -64,19 +72,13 @@ export async function runApprovalAction(
     return prepareFailureResult(prepared, connectorId);
   }
 
-  // The same send in an earlier request may be wanted again; the card says so
-  // and the user's Send decides.
-  const preview = context.sentEarlier(actionKey)
-    ? {
-        ...prepared.preview,
-        notes: [...(prepared.preview.notes ?? []), { key: "connectors.approval.sentEarlier" }],
-      }
-    : prepared.preview;
-  const outcome = await requestApproval(context, {
-    actionId: prepared.actionId,
-    connectorId,
-    preview,
-  });
+  // Retry and a reconnect prepare the same action again while the tool
+  // still waits, so it stays this one send.
+  const outcome = await requestApproval(
+    context,
+    { actionId: prepared.actionId, connectorId, preview: prepared.preview },
+    prepare
+  );
   if (outcome.state === "sent" || outcome.state === "unknown") {
     context.recordCompletedAction(actionKey);
   } else {

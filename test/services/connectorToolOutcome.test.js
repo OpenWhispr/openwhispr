@@ -324,7 +324,8 @@ test("runApprovalAction words a Gmail failure for Gmail and passes its unknown g
     },
   });
   const { runApprovalAction } = await loadRun();
-  const { approvalKey, approveAction, useConnectorApprovalStore } = await loadStore();
+  const { approvalKey, approveAction, cancelApproval, useConnectorApprovalStore } =
+    await loadStore();
   await (await loadI18n()).changeLanguage("en");
   useConnectorApprovalStore.setState({ entries: {} });
   const ctx = (toolCallId) => ({
@@ -360,7 +361,10 @@ test("runApprovalAction words a Gmail failure for Gmail and passes its unknown g
     committed = result;
     const pending = runApprovalAction(ctx(toolCallId), "gmail", "send", {}, options);
     await new Promise((resolve) => setImmediate(resolve));
-    await approveAction(approvalKey("m7", toolCallId));
+    const key = approvalKey("m7", toolCallId);
+    await approveAction(key);
+    // A failed send waits for Retry; the user gives up instead.
+    if (useConnectorApprovalStore.getState().entries[key].awaitingRetry) cancelApproval(key);
     return pending;
   };
 
@@ -494,4 +498,57 @@ test("an issue or comment's tool step says what was created, or where to check",
     approvalOutcomeResult({ state: "sent" }, "#eng", { verbKey: "slackPost" }).displayText,
     "Sent to #eng."
   );
+});
+
+test("a send that had to be prepared again is still one send for the request", async (t) => {
+  const prepared = [];
+  const commits = [
+    { state: "not_sent", reason: "not_found" },
+    { state: "sent", url: "u" },
+  ];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async () => {
+          prepared.push(prepared.length);
+          return {
+            status: "ready",
+            actionId: `a${prepared.length}`,
+            preview: {
+              verbKey: "slackPost",
+              destinationLabel: "#eng",
+              accountLabel: "chad",
+              body: "hi",
+            },
+          };
+        },
+        connectorCommit: async () => commits.shift(),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { runApprovalAction } = await loadRun();
+  const { approvalKey, approveAction, useConnectorApprovalStore } = await loadStore();
+  useConnectorApprovalStore.setState({ entries: {} });
+  const ledger = { claimed: 0, released: 0, recorded: 0 };
+  const context = {
+    messageId: "m8",
+    toolCallId: "call-1",
+    signal: new AbortController().signal,
+    claimTurnSlot: () => true,
+    releaseTurnSlot() {},
+    claimAction: () => (ledger.claimed += 1) === 1,
+    releaseAction: () => (ledger.released += 1),
+    sentEarlier: () => false,
+    recordCompletedAction: () => (ledger.recorded += 1),
+  };
+
+  const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
+  await new Promise((resolve) => setImmediate(resolve));
+  await approveAction(approvalKey("m8", "call-1"));
+  const result = await running;
+
+  assert.equal(result.data.status, "sent");
+  assert.deepEqual(prepared, [0, 1], "prepared again after main lost the first action");
+  assert.deepEqual(ledger, { claimed: 1, released: 0, recorded: 1 });
 });

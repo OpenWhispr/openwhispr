@@ -874,7 +874,7 @@ test("a sixth card in one turn is refused by the shared card cap", async (t) => 
   assert.equal(prepared, 5);
 });
 
-test("a card whose login lapsed by Send tells the model to reconnect GitHub", async (t) => {
+test("a card whose login lapsed by Send asks to connect GitHub again", async (t) => {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -888,24 +888,17 @@ test("a card whose login lapsed by Send tells the model to reconnect GitHub", as
     },
   });
   await setGithubStatus(t);
-  const [{ githubCreateIssueTool, GITHUB_RECONNECT_GUIDANCE }, approvals] = await Promise.all([
-    loadTools(),
-    resetApprovals(),
-  ]);
+  const [{ githubCreateIssueTool }, approvals] = await Promise.all([loadTools(), resetApprovals()]);
   const { context } = await turn();
 
   const pending = githubCreateIssueTool.execute({ title: "Bug" }, context());
   const key = await cardFor(approvals, "call-1");
   await approvals.approveAction(key);
+  assert.equal(approvals.useConnectorApprovalStore.getState().entries[key].reconnect, "prompt");
+  approvals.cancelApproval(key);
   const result = await pending;
 
-  assert.equal(result.data.status, "unavailable");
-  assert.equal(result.data.guidance, GITHUB_RECONNECT_GUIDANCE);
-  // The card itself still says what happened.
-  assert.equal(
-    approvals.useConnectorApprovalStore.getState().entries[key].errorCode,
-    "reconnect_needed"
-  );
+  assert.equal(result.data.status, "cancelled_by_user");
 });
 
 test("each GitHub tool has a step icon, and an English name and working line after find_contact's", async (t) => {

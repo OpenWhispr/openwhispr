@@ -280,6 +280,11 @@ test("an API key is masked, reaches the saver only, and leaves just “key saved
   assert.equal(input.getAttribute("autocomplete"), "off");
   assert.equal(input.getAttribute("dir"), "ltr");
   assert.equal(input.getAttribute("placeholder"), "Paste or write here");
+  assert.match(
+    input.className,
+    /\binput-inline\b/,
+    "styled by the card, not the app's global field"
+  );
   assert.equal(card.button("Save").disabled, true);
 
   await card.type(input, "sk-qa-fake-not-a-real-key-123");

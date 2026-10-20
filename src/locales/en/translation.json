@@ -4351,7 +4351,6 @@
     "approval": {
       "headers": {
         "default": "Send to {{destination}}",
-        "slackPost": "Post to {{destination}}",
         "email": "Email to {{destination}}",
         "issue": "Create issue in {{destination}}",
         "comment": "Comment on {{destination}}"
@@ -4359,8 +4358,6 @@
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
       "send": "Send",
-      "edit": "Edit",
-      "doneEditing": "Done editing",
       "cancel": "Cancel",
       "titleLabel": "Title",
       "bodyLabel": "Message",
@@ -4446,7 +4443,6 @@
         }
       },
       "email": {
-        "from": "From {{account}}",
         "toLabel": "To",
         "ccLabel": "Cc",
         "subjectLabel": "Subject",
@@ -4459,7 +4455,8 @@
         "tooManyRecipients": "An email can go to at most {{max}} addresses, To and Cc together.",
         "subjectTooLong": "Keep the subject to {{max}} characters or fewer.",
         "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
-        "unknown": "Couldn't confirm it was sent. Check your Sent folder."
+        "unknown": "Couldn't confirm it was sent. Check your Sent folder.",
+        "fromLabel": "From"
       },
       "github": {
         "notes": {
@@ -4504,7 +4501,15 @@
           "targetTitle": "On \"{{title}}\""
         }
       },
-      "sentEarlier": "You already sent this earlier in this chat."
+      "sentEarlier": "You already sent this earlier in this chat.",
+      "slack": {
+        "channelLabel": "Channel",
+        "asLabel": "As",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Sent",
+      "identityChanged": "Now sending as {{account}}. Press Send to send it.",
+      "connectToSend": "Connect {{name}} to send this"
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {

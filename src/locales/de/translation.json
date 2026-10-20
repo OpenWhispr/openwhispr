@@ -4351,7 +4351,6 @@
     "approval": {
       "headers": {
         "default": "An {{destination}} senden",
-        "slackPost": "In {{destination}} posten",
         "email": "E-Mail an {{destination}}",
         "issue": "Issue in {{destination}} erstellen",
         "comment": "{{destination}} kommentieren"
@@ -4359,8 +4358,6 @@
       "identity": "Als {{account}}",
       "identityWithWorkspace": "Als {{account}} in {{workspace}}",
       "send": "Senden",
-      "edit": "Bearbeiten",
-      "doneEditing": "Bearbeitung fertig",
       "cancel": "Abbrechen",
       "titleLabel": "Titel",
       "bodyLabel": "Nachricht",
@@ -4446,7 +4443,6 @@
         }
       },
       "email": {
-        "from": "Von {{account}}",
         "toLabel": "An",
         "ccLabel": "Cc",
         "subjectLabel": "Betreff",
@@ -4459,7 +4455,8 @@
         "tooManyRecipients": "Eine E-Mail kann an höchstens {{max}} Adressen gehen, An und Cc zusammen.",
         "subjectTooLong": "Der Betreff darf höchstens {{max}} Zeichen lang sein.",
         "bodyTooLong": "Die Nachricht ist zu lang für Gmail. Kürze sie, um sie zu senden.",
-        "unknown": "Konnte nicht bestätigt werden. Bitte den Ordner „Gesendet“ prüfen."
+        "unknown": "Konnte nicht bestätigt werden. Bitte den Ordner „Gesendet“ prüfen.",
+        "fromLabel": "Von"
       },
       "github": {
         "notes": {
@@ -4504,7 +4501,15 @@
           "targetTitle": "Zu „{{title}}“"
         }
       },
-      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet."
+      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet.",
+      "slack": {
+        "channelLabel": "Kanal",
+        "asLabel": "Als",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Gesendet",
+      "identityChanged": "Wird jetzt als {{account}} gesendet. Drücke Senden, um es zu senden.",
+      "connectToSend": "{{name}} verbinden, um das zu senden"
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {

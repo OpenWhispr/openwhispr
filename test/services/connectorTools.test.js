@@ -234,6 +234,9 @@ test("slack_send_message turns a channel that vanished by Send into a question",
     await new Promise((resolve) => setImmediate(resolve));
   }
   await approvals.approveAction(key);
+  // The card keeps the draft for Retry; the user cancels it instead.
+  assert.equal(approvals.useConnectorApprovalStore.getState().entries[key].awaitingRetry, true);
+  approvals.cancelApproval(key);
   const result = await pending;
 
   assert.equal(result.data.status, "needs_clarification");
@@ -1107,7 +1110,7 @@ test("a reconnect main reports while preparing reads the same as one the store k
   assert.deepEqual(context.releases, ["approval_card", "email_draft"]);
 });
 
-test("a reconnect at Send keeps the user's edits, so a later retry sends their version", async (t) => {
+test("a login that lapsed by Send asks to connect again and keeps the user's edits", async (t) => {
   await useEnglish();
   const { approvals, key, pending, context } = await startGmailCard(
     t,
@@ -1123,13 +1126,14 @@ test("a reconnect at Send keeps the user's edits, so a later retry sends their v
   );
   approvals.updateApprovalDraft(key, { fields: { to: ["dana@acme.test"] } });
   await approvals.approveAction(key);
-  const result = await pending;
+  const entry = approvals.useConnectorApprovalStore.getState().entries[key];
+  assert.equal(entry.state, "pending", "nothing was sent, and the tool still waits");
+  assert.equal(entry.reconnect, "prompt");
+  assert.deepEqual(entry.draft.fields.to, ["dana@acme.test"]);
 
-  assert.equal(result.data.status, "unavailable");
-  assert.equal(result.data.reason, "reconnect_needed");
-  assert.match(result.data.guidance, /reconnect Gmail/);
-  assert.deepEqual(result.data.final.to, ["dana@acme.test"]);
-  assert.equal(result.displayText, "Gmail needs to be reconnected.");
+  approvals.cancelApproval(key);
+  const result = await pending;
+  assert.equal(result.data.status, "cancelled_by_user");
   assert.deepEqual(context.releases, ["email_draft"]);
 });
 

@@ -4233,7 +4233,6 @@
     "approval": {
       "headers": {
         "default": "Enviar a {{destination}}",
-        "slackPost": "Publicar en {{destination}}",
         "email": "Correo para {{destination}}",
         "issue": "Crear incidencia en {{destination}}",
         "comment": "Comentar en {{destination}}"
@@ -4241,8 +4240,6 @@
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} en {{workspace}}",
       "send": "Enviar",
-      "edit": "Editar",
-      "doneEditing": "Edición terminada",
       "cancel": "Cancelar",
       "titleLabel": "Título",
       "bodyLabel": "Mensaje",
@@ -4328,7 +4325,6 @@
         }
       },
       "email": {
-        "from": "De {{account}}",
         "toLabel": "Para",
         "ccLabel": "CC",
         "subjectLabel": "Asunto",
@@ -4341,7 +4337,8 @@
         "tooManyRecipients": "Un correo puede ir a {{max}} direcciones como máximo, entre Para y CC.",
         "subjectTooLong": "El asunto debe tener {{max}} caracteres como máximo.",
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
-        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados."
+        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados.",
+        "fromLabel": "De"
       },
       "github": {
         "notes": {
@@ -4386,7 +4383,15 @@
           "targetTitle": "En «{{title}}»"
         }
       },
-      "sentEarlier": "Ya enviaste esto antes en este chat."
+      "sentEarlier": "Ya enviaste esto antes en este chat.",
+      "slack": {
+        "channelLabel": "Canal",
+        "asLabel": "Como",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Enviado",
+      "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",
+      "connectToSend": "Conecta {{name}} para enviar esto"
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {

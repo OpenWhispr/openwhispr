@@ -4229,7 +4229,6 @@
     "approval": {
       "headers": {
         "default": "Отправить в {{destination}}",
-        "slackPost": "Опубликовать в {{destination}}",
         "email": "Письмо для {{destination}}",
         "issue": "Создать задачу в {{destination}}",
         "comment": "Комментарий к {{destination}}"
@@ -4237,8 +4236,6 @@
       "identity": "От имени {{account}}",
       "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
       "send": "Отправить",
-      "edit": "Изменить",
-      "doneEditing": "Готово",
       "cancel": "Отмена",
       "titleLabel": "Заголовок",
       "bodyLabel": "Сообщение",
@@ -4324,7 +4321,6 @@
         }
       },
       "email": {
-        "from": "От {{account}}",
         "toLabel": "Кому",
         "ccLabel": "Копия",
         "subjectLabel": "Тема",
@@ -4337,7 +4333,8 @@
         "tooManyRecipients": "Письмо можно отправить не более чем на {{max}} адресов в полях «Кому» и «Копия» вместе.",
         "subjectTooLong": "Тема должна быть не длиннее {{max}} символов.",
         "bodyTooLong": "Сообщение слишком длинное для Gmail. Сократите его, чтобы отправить.",
-        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные»."
+        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные».",
+        "fromLabel": "От"
       },
       "github": {
         "notes": {
@@ -4382,7 +4379,15 @@
           "targetTitle": "К «{{title}}»"
         }
       },
-      "sentEarlier": "Вы уже отправляли это ранее в этом чате."
+      "sentEarlier": "Вы уже отправляли это ранее в этом чате.",
+      "slack": {
+        "channelLabel": "Канал",
+        "asLabel": "От имени",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Отправлено",
+      "identityChanged": "Теперь будет отправлено от имени {{account}}. Нажмите «Отправить», чтобы отправить.",
+      "connectToSend": "Подключите {{name}}, чтобы отправить это"
     },
     "policyOff": "Ваша организация отключила коннекторы.",
     "email": {

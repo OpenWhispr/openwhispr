@@ -768,7 +768,6 @@
     "approval": {
       "headers": {
         "default": "إرسال إلى {{destination}}",
-        "slackPost": "نشر في {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
         "comment": "التعليق على {{destination}}"
@@ -776,8 +775,6 @@
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
       "send": "إرسال",
-      "edit": "تعديل",
-      "doneEditing": "تم التعديل",
       "cancel": "إلغاء",
       "titleLabel": "العنوان",
       "bodyLabel": "الرسالة",
@@ -863,7 +860,6 @@
         }
       },
       "email": {
-        "from": "من {{account}}",
         "toLabel": "إلى",
         "ccLabel": "نسخة",
         "subjectLabel": "الموضوع",
@@ -876,7 +872,8 @@
         "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
         "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
         "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
-        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل.",
+        "fromLabel": "من"
       },
       "github": {
         "notes": {
@@ -921,7 +918,15 @@
           "targetTitle": "على \"{{title}}\""
         }
       },
-      "sentEarlier": "سبق أن أرسلت هذا في وقت سابق من هذه المحادثة."
+      "sentEarlier": "سبق أن أرسلت هذا في وقت سابق من هذه المحادثة.",
+      "slack": {
+        "channelLabel": "القناة",
+        "asLabel": "بصفتك",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "تم الإرسال",
+      "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
+      "connectToSend": "اربط {{name}} لإرسال هذا"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {

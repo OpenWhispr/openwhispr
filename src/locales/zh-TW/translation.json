@@ -4181,7 +4181,6 @@
     "approval": {
       "headers": {
         "default": "傳送至 {{destination}}",
-        "slackPost": "發佈到 {{destination}}",
         "email": "寄送郵件給 {{destination}}",
         "issue": "在 {{destination}} 中建立問題",
         "comment": "留言於 {{destination}}"
@@ -4189,8 +4188,6 @@
       "identity": "以 {{account}} 身分",
       "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
       "send": "傳送",
-      "edit": "編輯",
-      "doneEditing": "編輯完成",
       "cancel": "取消",
       "titleLabel": "標題",
       "bodyLabel": "訊息",
@@ -4276,7 +4273,6 @@
         }
       },
       "email": {
-        "from": "寄件者：{{account}}",
         "toLabel": "收件者",
         "ccLabel": "副本",
         "subjectLabel": "主旨",
@@ -4289,7 +4285,8 @@
         "tooManyRecipients": "一封郵件最多可寄給 {{max}} 個地址（收件者和副本合計）。",
         "subjectTooLong": "主旨不能超過 {{max}} 個字元。",
         "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
-        "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。"
+        "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。",
+        "fromLabel": "寄件者"
       },
       "github": {
         "notes": {
@@ -4334,7 +4331,15 @@
           "targetTitle": "關於「{{title}}」"
         }
       },
-      "sentEarlier": "你已在此對話中傳送過此內容。"
+      "sentEarlier": "你已在此對話中傳送過此內容。",
+      "slack": {
+        "channelLabel": "頻道",
+        "asLabel": "身分",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "已傳送",
+      "identityChanged": "現在將以 {{account}} 身分傳送。按「傳送」即可傳送。",
+      "connectToSend": "連接 {{name}} 以傳送此內容"
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {

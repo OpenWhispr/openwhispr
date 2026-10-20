@@ -109,24 +109,25 @@ async function mountApprovalTurn(t) {
     );
     await new Promise((resolve) => setImmediate(resolve));
   });
-  assert.match(container.textContent, /Original text/);
+  assert.ok(
+    findElement(container, (element) => element.tagName === "TEXTAREA"),
+    "the card shows the text, editable"
+  );
   return { container, store, commits, toolResult };
 }
 
-test("Edit, change, Done editing, Send: the reviewed text is what gets sent", async (t) => {
+test("Change the text in place, Send: the reviewed text is what gets sent", async (t) => {
   const { container, store, commits, toolResult } = await mountApprovalTurn(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   // Editing must not lose the direction-detection the static view gets:
-  // an RTL draft opened for editing should still render right-to-left.
+  // an RTL draft should still render right-to-left.
   const bodyField = findElement(container, (element) => element.tagName === "TEXTAREA");
-  assert.ok(bodyField, "the body textarea is rendered in edit mode");
+  assert.ok(bodyField, "a pending card's body is edited in place");
   assert.equal(bodyField.getAttribute("dir"), "auto");
   // What the textarea's onChange calls with the typed value.
   await React.act(async () =>
     store.updateApprovalDraft(store.approvalKey("m1", "call-1"), { body: "Edited text" })
   );
-  await React.act(async () => click(button(container, "connectors.approval.doneEditing")));
-  assert.match(container.textContent, /Edited text/);
+  assert.equal(bodyField.value, "Edited text");
   await React.act(async () => click(button(container, "connectors.approval.send")));
 
   const result = await toolResult;
@@ -136,10 +137,9 @@ test("Edit, change, Done editing, Send: the reviewed text is what gets sent", as
   assert.match(container.textContent, /connectors\.approval\.sent/);
 });
 
-test("Send while editing commits the edit and leaves edit mode", async (t) => {
+test("Send commits the edit and freezes the text", async (t) => {
   const { container, store, commits, toolResult } = await mountApprovalTurn(t);
 
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () =>
     store.updateApprovalDraft(store.approvalKey("m1", "call-1"), { body: "Edited text" })
   );
@@ -150,7 +150,7 @@ test("Send while editing commits the edit and leaves edit mode", async (t) => {
   // A boolean: a failing assert would otherwise try to print the fake DOM node.
   assert.ok(
     !findElement(container, (element) => element.tagName === "TEXTAREA"),
-    "the card left edit mode"
+    "the sent text is no longer editable"
   );
   assert.match(container.textContent, /Edited text/);
 });
