@@ -142,8 +142,11 @@ export function FolderNotesPopover({
           }}
           onFocus={a11y.onFocus}
           className={cn(
-            "flex h-7 items-center gap-2 rounded-md pe-2 text-xs text-foreground/55 cursor-pointer hover:bg-foreground/5 outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
-            level === 2 ? "ps-8" : "ps-[42px]"
+            "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring/30",
+            level === 2 ? "ps-8" : "ps-[42px]",
+            open
+              ? "bg-foreground/8 text-foreground dark:bg-white/10"
+              : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground dark:hover:bg-white/5"
           )}
         >
           <MoreHorizontal size={13} aria-hidden="true" />
