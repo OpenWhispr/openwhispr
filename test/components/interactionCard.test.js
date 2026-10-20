@@ -326,7 +326,7 @@ test("Esc in the key field dismisses the card without saving", async (t) => {
   assert.deepEqual(card.savedKeys, []);
 });
 
-test("a key card that appears in a focused window takes the keyboard from the composer", async (t) => {
+test("a key card that appears in a focused window takes the keyboard from an empty composer", async (t) => {
   const card = await mountCard(t, { kind: "apiKey", provider: "openai", providerName: "OpenAI" });
   const { document } = card.happyWindow;
   const composer = document.createElement("textarea");
@@ -336,6 +336,18 @@ test("a key card that appears in a focused window takes the keyboard from the co
   await card.remount();
   // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
   assert.ok(document.activeElement === card.host.querySelector("input"));
+});
+
+test("a key card never takes the keyboard from a message being typed", async (t) => {
+  const card = await mountCard(t, { kind: "apiKey", provider: "openai", providerName: "OpenAI" });
+  const { document } = card.happyWindow;
+  const composer = document.createElement("textarea");
+  document.body.append(composer);
+  composer.value = "and also check";
+  composer.focus();
+  document.hasFocus = () => true;
+  await card.remount();
+  assert.ok(document.activeElement === composer, "the next keystrokes still go to the message");
 });
 
 test("Esc right after a question moves on still dismisses the card", async (t) => {
@@ -358,6 +370,8 @@ test("Esc right after a question moves on still dismisses the card", async (t) =
 test("a window given the keyboard with nothing focused puts it in the card", async (t) => {
   const card = await mountCard(t, { kind: "settings", target: "llms", message: "Add a key" });
   const { document } = card.happyWindow;
+  // The window lost the keyboard (the user went to another app), then gets it back.
+  document.activeElement?.blur();
   assert.ok(document.activeElement === document.body);
   await React.act(async () => card.happyWindow.dispatchEvent(new card.happyWindow.Event("focus")));
   assert.ok(document.activeElement === card.host.querySelector("[data-interaction-card]"));

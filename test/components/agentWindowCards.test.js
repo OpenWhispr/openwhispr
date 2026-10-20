@@ -15,6 +15,7 @@ const MOCKS = {
     globalThis.__chat = {
       set(next) { state = { ...state, ...next }; listeners.forEach((listener) => listener()); },
       sent: [],
+      cancels: 0,
     };
     export function useAgentChat() {
       const current = useSyncExternalStore(
@@ -28,7 +29,7 @@ const MOCKS = {
         forkOrigin: null,
         agentState: current.busy ? "streaming" : "idle",
         send: async (text) => { globalThis.__chat.sent.push(text); return true; },
-        cancel() {},
+        cancel() { globalThis.__chat.cancels += 1; },
         switchChat: async () => true,
         newChat() {},
         fork: async () => null,
@@ -194,8 +195,13 @@ const reply = (toolCalls, content = "") => ({
 });
 const askUser = { id: "c1", name: "ask_user", arguments: "{}", status: "executing" };
 
+const TEXT_QUESTION = {
+  kind: "questions",
+  questions: [{ id: "deadline", kind: "text", prompt: "When is it due?" }],
+};
+
 // A spoken request whose reply asks a question first.
-async function askWhileCompact(view) {
+async function askWhileCompact(view, payload = QUESTION) {
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.settle();
   assert.equal(view.layout(), "pill");
@@ -206,7 +212,7 @@ async function askWhileCompact(view) {
       reply([askUser]),
     ],
   });
-  const results = await view.ask("c1", QUESTION);
+  const results = await view.ask("c1", payload);
   await view.settle();
   return results;
 }
@@ -335,12 +341,157 @@ test("a card that arrives while typing: a question shows above the pill, an answ
   assert.equal(results.length, 1);
   assert.equal(view.layout(), "typing", "back to typing once it is answered");
 
-  // An answer card from the typing layout: the waiting pill.
+  // An answer card from the typing layout opens in the modal: the keyboard
+  // stays with the window instead of going to the app behind.
   await view.chat({ messages: [user, reply([{ ...askUser, status: "completed" }, slackCall])] });
   await view.askApproval("c5");
   await view.wait(100);
+  assert.equal(view.layout(), "modal");
+  assert.equal(view.main.layouts.at(-1).focus, true);
+});
+
+test("a question that replaces the typing composer takes the keyboard, so Esc dismisses it", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await React.act(async () => view.button("Type").click());
+  await view.settle();
+  view.host.querySelector("textarea").focus();
+
+  const results = await view.ask("c1", QUESTION);
+  await view.settle();
+  assert.equal(view.layout(), "standalone");
+  assert.ok(
+    view.host.querySelector("[data-interaction-card]").contains(document.activeElement),
+    "focus in the card, not on the page"
+  );
+  await React.act(async () =>
+    document.activeElement.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  assert.deepEqual(results, [{ status: "cancelled" }]);
+  assert.equal(globalThis.__chat.cancels, 0, "the turn goes on");
+});
+
+test("the window being given the keyboard doesn't count as starting on the card", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view, TEXT_QUESTION);
+  assert.equal(view.layout(), "standalone");
+  // Windows and Linux focus the window for a card that needs typing; the card
+  // puts that focus in its field.
+  await React.act(async () => view.happyWindow.dispatchEvent(new view.happyWindow.Event("focus")));
+  assert.ok(view.button("Expand").className.includes("agent-expand-cue"), "still cued");
+  await view.wait(4200);
+  await view.settle();
+  assert.equal(view.layout(), "modal", "and it still opens");
+});
+
+test("working on a card in the modal uses up its timed open", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+  await view.askApproval("c5");
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  await React.act(async () =>
+    view.host
+      .querySelector("[data-approval-card] textarea")
+      .dispatchEvent(new view.happyWindow.PointerEvent("pointerdown", { bubbles: true }))
+  );
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
   assert.equal(view.layout(), "pill");
-  assert.match(view.host.textContent, /Waiting for answer/);
+  assert.ok(!view.button("Expand").className.includes("agent-expand-cue"));
+  await view.wait(4500);
+  assert.equal(view.layout(), "pill", "no second open");
+});
+
+test("the composer answers a restored question, and points at a card only when it shows one", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  const answered = [];
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
+      (result) => answered.push(result)
+    )
+  );
+  await view.settle();
+  const composer = view.host.querySelector("textarea");
+  assert.equal(composer.getAttribute("placeholder"), "Answer here…");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(
+      view.happyWindow.HTMLTextAreaElement.prototype,
+      "value"
+    ).set.call(composer, "Whatever is cheapest");
+    composer.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => view.button("Send").click());
+  assert.deepEqual(answered, [{ status: "answered", answers: { goal: "Whatever is cheapest" } }]);
+  assert.deepEqual(globalThis.__chat.sent, [], "not sent as a new request");
+});
+
+test("a held command over a waiting connect card types with the usual placeholder", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.ask("c1", { kind: "connection", target: "slack" });
+  await view.settle();
+  await React.act(async () => view.button("Expand").click());
+  await view.settle();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  // A wake-word command while the turn runs waits in the typing composer.
+  await React.act(async () => view.main.handlers.command({ text: "and Linear too" }));
+  await view.settle();
+  assert.equal(view.layout(), "typing");
+  assert.notEqual(
+    view.host.querySelector("textarea").getAttribute("placeholder"),
+    "Answer on the card above…",
+    "no card shows above this composer"
+  );
+});
+
+test("only the pill that reads Waiting for answer asks for the wide window", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.settle();
+  assert.deepEqual(
+    [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).wide],
+    ["pill", undefined],
+    "the thinking pill stays narrow"
+  );
+  await view.ask("c1", QUESTION);
+  await view.settle();
+  await React.act(async () => view.button("Expand").click());
+  await view.settle();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.deepEqual(
+    [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).wide],
+    ["pill", true]
+  );
+  await React.act(async () => view.button("Expand").click());
+  await view.settle();
+  await React.act(async () => view.host.querySelector('[role="radio"]').click());
+  await view.settle();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.deepEqual(
+    [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).wide],
+    ["pill", undefined],
+    "narrow again once answered"
+  );
 });
 
 test("an answer card the reply opened the modal for still opens it again after a minimize", async (t) => {

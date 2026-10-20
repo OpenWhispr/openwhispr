@@ -17,7 +17,7 @@ import { SubmitArrowButton } from "./SubmitArrowButton";
 // Long enough to see the pick land before the next question replaces it.
 const RADIO_COMMIT_MS = 200;
 
-const NAV_BUTTON = cn(ICON_BUTTON, "size-6");
+const NAV_BUTTON = cn(ICON_BUTTON, "size-6 disabled:opacity-30");
 
 /**
  * One question at a time, with ‹ n/N › between them. Everything the user

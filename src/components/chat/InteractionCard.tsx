@@ -45,13 +45,18 @@ const focusLost = (): boolean =>
   !document.activeElement || document.activeElement === document.body;
 
 /**
- * Keeps the keyboard in the card, so Esc reaches it: when a change on the card
- * (the next question, Done appearing, a connect starting) removes the control
- * that had focus, and when the window is given the keyboard with nothing
- * focused (Windows and Linux, for a card that needs typing).
+ * Keeps the keyboard in the card, so Esc reaches it: when the card appears in
+ * a focused window with nothing focused (the composer it replaced went away),
+ * when a change on the card (the next question, Done appearing, a connect
+ * starting) removes the control that had focus, and when the window is given
+ * the keyboard with nothing focused (Windows and Linux, for a card that needs
+ * typing).
  */
 function useCardFocus(rootRef: RefObject<HTMLDivElement | null>, shape: string): void {
   const shapeRef = useRef(shape);
+  useLayoutEffect(() => {
+    if (rootRef.current && document.hasFocus() && focusLost()) focusCard(rootRef.current);
+  }, [rootRef]);
   useLayoutEffect(() => {
     if (shapeRef.current === shape) return;
     shapeRef.current = shape;

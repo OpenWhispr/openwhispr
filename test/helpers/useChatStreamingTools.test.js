@@ -1273,3 +1273,49 @@ test("without Tone & Style no send carries a writing style", async (t) => {
   await captured.sendToAI("Tell them it's shipped", []);
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });
+
+test("open_settings carries the model scope of the chat that asked", async (t) => {
+  for (const inferenceScope of ["dictationAgent", undefined]) {
+    const { captured, reasoningService, vite } = await renderChatStreaming(
+      t,
+      { allowInteractions: true, ...(inferenceScope ? { inferenceScope } : {}) },
+      {
+        // Both scopes on the user's own OpenAI key, so the tools run on the AI SDK path.
+        settings: {
+          ...BYOK_SETTINGS,
+          useDictationAgent: true,
+          dictationAgentMode: "providers",
+          dictationAgentProvider: "openai",
+          dictationAgentModel: "gpt-5-mini",
+        },
+      }
+    );
+    const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+    let payload = null;
+    reasoningService.processTextStreamingAI.mock.mockImplementation(
+      (_messages, _model, _provider, _config, tools) =>
+        (async function* () {
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "call-1", name: "open_settings", arguments: "{}" }],
+          };
+          const running = tools.open_settings.execute(
+            { target: "llms", message: "Add your key" },
+            { toolCallId: "call-1", messages: [] }
+          );
+          let entry;
+          while (
+            !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+          ) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+          payload = entry.payload;
+          interactions.cancelInteraction(entry.key);
+          await running;
+          yield { type: "done", finishReason: "stop" };
+        })()
+    );
+    await captured.sendToAI("My model keeps failing", []);
+    assert.equal(payload?.scope, inferenceScope ?? "chatIntelligence");
+  }
+});

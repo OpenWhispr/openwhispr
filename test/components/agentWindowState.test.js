@@ -208,7 +208,9 @@ test("a card that arrives while compact shows above the pill, and the pill comes
   const asked = agentWindowReducer(typing, { type: "showCard", asks: true });
   assert.deepEqual([asked.layout, asked.draft], ["standalone", "Also"]);
   assert.equal(agentWindowReducer(asked, { type: "cardSettled" }).layout, "typing");
-  assert.equal(agentWindowReducer(typing, { type: "showCard", asks: false }).layout, "pill");
+  // An answer card from typing opens in the modal: the keyboard stays with the window.
+  const answer = agentWindowReducer(typing, { type: "showCard", asks: false });
+  assert.deepEqual([answer.layout, answer.input, answer.draft], ["modal", "keyboard", "Also"]);
 
   // The modal already shows the card.
   const modal = { ...pill, layout: "modal" };

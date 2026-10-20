@@ -103,6 +103,11 @@ export default function AgentWindow() {
     () => findPendingCard(messages, interactions, approvals),
     [approvals, interactions, messages]
   );
+  // What the composer answers: a restored question too, though nothing waits on it.
+  const answerableCard = useMemo(
+    () => findPendingCard(messages, interactions, approvals, { includeRestored: true }),
+    [approvals, interactions, messages]
+  );
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -130,9 +135,9 @@ export default function AgentWindow() {
       ((state.layout === "modal" || standalone) && (cardClicked || awaitsTypedAnswer(messages))));
 
   // A card that arrives while compact shows above the pill if it asks
-  // something; an answer card waits behind the pill instead. Once it is
-  // answered the window goes back to how it was. A card the user minimized
-  // stays behind the pill.
+  // something; an answer card waits behind the pill instead (or, from the
+  // typing layout, opens in the modal). Once it is answered the window goes
+  // back to how it was. A card the user minimized stays behind the pill.
   const shownCardsRef = useRef(new Set<string>());
   useEffect(() => {
     if (!pendingCard) {
@@ -617,11 +622,23 @@ export default function AgentWindow() {
 
   // The composer's text answers the question on screen (D3); a key is never
   // typed here.
-  const answering = pendingCard?.interaction === "questions";
+  const answering = answerableCard?.interaction === "questions";
   const answerQuestion = (text: string) => {
-    if (!pendingCard) return;
-    answerWithText(pendingCard.key, text);
+    if (!answerableCard) return;
+    answerWithText(answerableCard.key, text);
     dispatch({ type: "setDraft", draft: "" });
+  };
+
+  // The user starting on the waiting card (a click or a key in it, in the
+  // modal or above the pill) uses up its timed opening.
+  const engageCard = (target: EventTarget) => {
+    const card =
+      target instanceof Element
+        ? target.closest("[data-interaction-card], [data-approval-card]")
+        : null;
+    const key =
+      card?.getAttribute("data-interaction-card") ?? card?.getAttribute("data-approval-card");
+    if (pendingCard && key === pendingCard.key) nudge.cancel();
   };
 
   const composer = (inModal: boolean) => (
@@ -632,8 +649,8 @@ export default function AgentWindow() {
       placeholder={
         answering
           ? t("agentWindow.composer.answerPlaceholder")
-          : pendingCard?.interaction
-            ? // A connect, access, key or settings card: answered on the card, never here.
+          : inModal && answerableCard?.interaction
+            ? // A connect, access, key or settings card above: answered there, never here.
               t("agentWindow.composer.cardPlaceholder")
             : inModal && messages.length > 0
               ? t("agentWindow.composer.followUpPlaceholder")
@@ -673,7 +690,11 @@ export default function AgentWindow() {
           (state.layout === "typing" || standalone) && "gap-3"
         )}
         data-shown={surface.shown}
-        onPointerDown={cardShown ? () => setCardClicked(true) : undefined}
+        onPointerDown={(event) => {
+          if (cardShown) setCardClicked(true);
+          engageCard(event.target);
+        }}
+        onKeyDown={(event) => engageCard(event.target)}
       >
         {state.layout === "modal" ? (
           <AgentModal
@@ -720,13 +741,11 @@ export default function AgentWindow() {
         ) : standalone && pendingCard ? (
           <>
             {/* The same card as in the modal, so what the user picked carries
-                over. Pointing at it or starting on it stops the timed opening. */}
+                over. Pointing at it stops the timed opening, as starting on it
+                does; focus alone doesn't (the window can be given it). */}
             <div
               ref={cardFrameRef}
               onPointerEnter={nudge.cancel}
-              onPointerDown={nudge.cancel}
-              onFocus={nudge.cancel}
-              onKeyDown={nudge.cancel}
               className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 bg-surface-1 shadow-[var(--shadow-card)] *:my-0"
             >
               <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />

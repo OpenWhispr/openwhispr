@@ -1,4 +1,4 @@
-import { useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from "react";
+import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, CopyRounded, ExternalLink, Send } from "../icons";
 import { cn } from "../lib/utils";

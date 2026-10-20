@@ -35,20 +35,19 @@ export function useAgentSurface({
   focus: boolean;
   /** The standalone card's height; a change resizes the window without a fade. */
   contentHeight?: number;
-  /** pill only: the wider pill that reads "Waiting for answer". */
+  /** pill only: the wider pill that reads "Waiting for answer"; it widens in place. */
   wide?: boolean;
 }) {
   const [shown, setShown] = useState(false);
-  // The layout (and pill width) main last sized the window for; a hide
-  // shrinks it to the pill.
-  const appliedLayoutRef = useRef("pill");
+  // The layout main last sized the window for; a hide shrinks it to the pill.
+  const appliedLayoutRef = useRef<AgentWindowLayout>("pill");
 
   useEffect(() => {
     if (!visible) return undefined;
     let current = true;
-    const size = layout === "pill" && wide ? "pill:wide" : layout;
+    const widePill = layout === "pill" && wide;
     void (async () => {
-      const resizes = appliedLayoutRef.current !== size;
+      const resizes = appliedLayoutRef.current !== layout;
       if (resizes) {
         setShown(false);
         await nextFrame();
@@ -60,9 +59,9 @@ export function useAgentSurface({
         layout,
         focus,
         ...(contentHeight !== undefined ? { contentHeight } : {}),
-        ...(size === "pill:wide" ? { wide: true } : {}),
+        ...(widePill ? { wide: true } : {}),
       });
-      appliedLayoutRef.current = size;
+      appliedLayoutRef.current = layout;
       if (resizes) {
         await resized;
         await nextFrame();

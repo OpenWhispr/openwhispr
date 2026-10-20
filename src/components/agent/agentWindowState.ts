@@ -35,7 +35,8 @@ export type AgentWindowAction =
   | { type: "useKeyboard"; pending?: boolean }
   /**
    * A card arrived while compact: one that asks something shows above the
-   * pill, an answer card waits behind it.
+   * pill. An answer card waits behind it, or opens in the modal from the
+   * typing layout, where the keyboard has to stay with the window.
    */
   | { type: "showCard"; asks: boolean }
   /** The standalone card is answered or gone. */
@@ -94,9 +95,9 @@ export function agentWindowReducer(
         notice: null,
       };
     case "showCard":
-      return state.layout === "modal"
-        ? state
-        : { ...state, layout: action.asks ? "standalone" : "pill" };
+      if (state.layout === "modal") return state;
+      if (action.asks) return { ...state, layout: "standalone" };
+      return { ...state, layout: state.layout === "typing" ? "modal" : "pill" };
     case "cardSettled":
       return state.layout === "standalone"
         ? { ...state, layout: compactLayout(state.input) }
@@ -194,19 +195,25 @@ export interface PendingCard {
 /**
  * The first card a running turn waits on the user for: an interaction (a
  * question, a connect, …) still open, or an answer card waiting on Send or on
- * a Retry. Only cards of the messages on screen count, and not a card restored
- * from a turn that ended: nothing waits on it.
+ * a Retry. Only cards of the messages on screen count. A card restored from a
+ * turn that ended counts only with `includeRestored`: no turn waits on it, but
+ * the composer can still answer it.
  */
 export function findPendingCard(
   messages: ReadonlyArray<Pick<Message, "id" | "toolCalls">>,
   interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload" | "restored">>>,
-  approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>
+  approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>,
+  { includeRestored = false }: { includeRestored?: boolean } = {}
 ): PendingCard | null {
   for (const message of messages) {
     for (const toolCall of message.toolCalls ?? []) {
       const key = approvalKey(message.id, toolCall.id);
       const interaction = interactions[key];
-      if (interaction && interaction.state !== "settled" && !interaction.restored) {
+      if (
+        interaction &&
+        interaction.state !== "settled" &&
+        (includeRestored || !interaction.restored)
+      ) {
         const { kind } = interaction.payload;
         return { key, id: `${key}:${kind}`, messageId: message.id, toolCall, interaction: kind };
       }

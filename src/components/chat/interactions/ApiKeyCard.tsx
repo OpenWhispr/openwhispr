@@ -12,8 +12,9 @@ type ApiKeyPayload = Extract<InteractionPayload, { kind: "apiKey" }>;
  * A masked field for a provider key. The key lives only in the field itself
  * (uncontrolled, so React never copies it into state or the value attribute)
  * until ↑ hands it to the secure saver: never in the store, and lost on a
- * remount. It takes focus when it appears in a focused window, so a key is
- * never pasted into the composer instead.
+ * remount. It takes focus when it appears in a focused window with nothing
+ * being typed, so a key is never pasted into the composer instead, and a
+ * message being typed never lands in it.
  */
 export function ApiKeyCard({
   entry,
@@ -26,7 +27,13 @@ export function ApiKeyCard({
   const inputRef = useRef<HTMLInputElement>(null);
   const [hasValue, setHasValue] = useState(false);
   useEffect(() => {
-    if (document.hasFocus()) inputRef.current?.focus();
+    // Never from text the user is typing: only from nothing, or an empty composer.
+    const active = document.activeElement;
+    const free =
+      !active ||
+      active === document.body ||
+      (active.tagName === "TEXTAREA" && (active as HTMLTextAreaElement).value === "");
+    if (document.hasFocus() && free) inputRef.current?.focus();
   }, []);
   return (
     <div>
