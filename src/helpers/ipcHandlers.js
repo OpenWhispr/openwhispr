@@ -11075,6 +11075,8 @@ class IPCHandlers {
         await this.environmentManager.setKeyInEnvFile("OPENWHISPR_LOG_LEVEL", level);
         process.env.OPENWHISPR_LOG_LEVEL = level;
         debugLogger.refreshLogLevel();
+        // Each window caches its level on first log, so tell them all to re-read it.
+        broadcastToWindows("log-level-changed");
 
         return {
           success: true,

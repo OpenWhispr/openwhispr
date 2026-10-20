@@ -2536,6 +2536,7 @@ declare global {
 
       // Debug logging
       getLogLevel?: () => Promise<string>;
+      onLogLevelChanged?: (callback: () => void) => () => void;
       log?: (entry: {
         level: string;
         message: string;
