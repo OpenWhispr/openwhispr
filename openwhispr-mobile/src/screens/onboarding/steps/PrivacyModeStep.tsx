@@ -6,7 +6,11 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { BRAND } from '@/config/colors';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
-import { canRunLocalReasoning, getLocalReasoningReadiness } from '@/lib/localReasoning';
+import {
+  canRunLocalReasoning,
+  getLocalReasoningLanguageNote,
+  getLocalReasoningReadiness,
+} from '@/lib/localReasoning';
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useModelDownloadStore } from '@/store/useModelDownloadStore';
@@ -45,7 +49,9 @@ function privateCleanupLine(
       hint:
         readiness?.status === 'appleIntelligenceOff'
           ? 'Starts once it’s on in Settings → Apple Intelligence & Siri.'
-          : undefined,
+          : readiness?.status === 'unsupportedLanguage'
+            ? `${getLocalReasoningLanguageNote(readiness)} Starts once that's changed in Settings.`
+            : undefined,
     };
   }
   if (readiness?.status === 'unsupportedDevice') {

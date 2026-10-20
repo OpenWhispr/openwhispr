@@ -43,19 +43,15 @@ it('is enabled once the voice assistant has a Bring Your Own Key selection', () 
   expect(screen.UNSAFE_getAllByType(Switch).some((toggle) => toggle.props.disabled)).toBe(false);
 });
 
-// Private mode turns the voice assistant off, so its switch must not read as on.
-it('shows the voice assistant off in Local Mode and says where to turn it back on', () => {
+// The voice assistant runs its own selection, so Local Mode leaves it on.
+it('keeps the voice assistant on in Local Mode', () => {
   mockActiveMode = 'private';
   mockConfig = { defaultMode: 'private', dictationAgentEnabled: true };
   render(<DictationAgentScreen />);
-  expect(
-    screen.getByText(
-      'Off while Local Mode is on. Change Dictation in AI Models to turn it off. Your settings are saved and apply once Local Mode is off.',
-    ),
-  ).toBeTruthy();
+  expect(screen.queryByText(/Local Mode/)).not.toBeOnTheScreen();
   const [enable] = screen.UNSAFE_getAllByType(Switch);
-  expect(enable.props.value).toBe(false);
-  expect(enable.props.disabled).toBe(true);
+  expect(enable.props.value).toBe(true);
+  expect(enable.props.disabled).toBe(false);
 });
 
 it('switches only the voice assistant, keeping note chat as it was', () => {

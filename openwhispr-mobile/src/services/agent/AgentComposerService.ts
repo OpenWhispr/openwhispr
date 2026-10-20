@@ -310,7 +310,8 @@ async function runGeneration(params: {
     if (session.inferenceRoute?.mode === 'providers') {
       const { resolveMobileProviderRoute } =
         require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
-      const route = await resolveMobileProviderRoute('agent', session.inferenceRoute);
+      // The provider saved for the voice assistant is the user's choice, in Local Mode too.
+      const route = await resolveMobileProviderRoute('agent', session.inferenceRoute, false, true);
       if (controller.signal.aborted) return;
       session.inferenceRoute = route;
     }

@@ -92,7 +92,12 @@ function readRoute(jobId: string, storageKey: string): TranscriptionJobRoute | u
         if (route.provider === 'byok')
           route[unavailable] =
             `${scope === 'cleanup' ? 'Cleanup' : 'The voice assistant'} is unavailable. Your raw transcript is saved.`;
-        else route[field] = { mode: route.provider === 'local' ? 'local' : 'openwhispr', scope };
+        // The voice assistant has no on-device version, so only cleanup defaults to this iPhone.
+        else
+          route[field] = {
+            mode: route.provider === 'local' && scope === 'cleanup' ? 'local' : 'openwhispr',
+            scope,
+          };
       }
     }
     return route;

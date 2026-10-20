@@ -127,7 +127,7 @@ jest.mock('@/services/providers/ProviderCredentials', () => ({
 }));
 
 import { WorkflowSettingsScreen } from '../WorkflowSettingsScreen';
-import { CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE, PRIVATE_MODE_LOCKED_REASON } from '@/lib/aiWorkflows';
+import { CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE } from '@/lib/aiWorkflows';
 
 function chooseProvider(provider: string): void {
   fireEvent.press(screen.getByText('Provider'));
@@ -520,9 +520,8 @@ it('says why a held Cloud cleanup is skipped under Bring Your Own Key without an
   expect(screen.getByText(CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE)).toBeTruthy();
 });
 
-// Local Mode formats notes on this phone first, so a Cloud hold shows what runs, as the AI Models
-// row does.
-it('shows note formatting held on Cloud as On-Device in Local Mode', () => {
+// Note formatting runs its own selection in Local Mode, so a Cloud hold shows as Cloud.
+it('shows note formatting held on Cloud as OpenWhispr Cloud in Local Mode', () => {
   mockConfig = {
     defaultMode: 'private',
     inference: { dictation: { mode: 'local' }, notes: { mode: 'openwhispr' } },
@@ -531,7 +530,7 @@ it('shows note formatting held on Cloud as On-Device in Local Mode', () => {
   mockActiveMode = 'private';
   mockScope = 'notes';
   render(<WorkflowSettingsScreen />);
-  expect(selectedMode()).toBe('On-Device');
+  expect(selectedMode()).toBe('OpenWhispr Cloud');
 });
 
 it('keeps On-Device cleanup selected once a private-mode user has saved it', () => {
@@ -580,13 +579,13 @@ it('keeps uploads on Cloud when a user with a session leaves Local Mode for a pr
       cleanup: { mode: 'local' },
       noteChat: { mode: 'local' },
     },
-    pinnedInference: ['upload', 'cleanup', 'notes', 'noteChat'],
+    pinnedInference: ['upload', 'cleanup', 'notes', 'noteChat', 'agent'],
   });
 });
 
-// Local Mode formatted notes with Apple Intelligence. It turned the voice assistant off, so that
-// stays unset and is skipped until a provider is saved for it.
-it('keeps notes on this phone when dictation leaves Local Mode for a provider', async () => {
+// Local Mode ran note formatting and the voice assistant on their own choices, Cloud when unset, and
+// asked before sending note chat off the phone.
+it('holds note formatting and the voice assistant on Cloud when dictation leaves Local Mode for a provider', async () => {
   mockLocalReasoningReady = true;
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
@@ -596,10 +595,13 @@ it('keeps notes on this phone when dictation leaves Local Mode for a provider', 
   fireEvent.press(screen.getByText('Save'));
   await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
   expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
-    inference: { notes: { mode: 'local' }, noteChat: { mode: 'local' } },
-    pinnedInference: ['upload', 'cleanup', 'notes', 'noteChat'],
+    inference: {
+      notes: { mode: 'openwhispr' },
+      noteChat: { mode: 'local' },
+      agent: { mode: 'openwhispr' },
+    },
+    pinnedInference: ['upload', 'cleanup', 'notes', 'noteChat', 'agent'],
   });
-  expect(mockUpdateConfig.mock.calls[0][0].inference.agent).toBeUndefined();
 });
 
 it('switches dictation from Bring Your Own Key to Cloud on tap, without Save', async () => {
@@ -996,14 +998,14 @@ describe('the Voice Assistant page', () => {
     expect(screen.getByText('The OpenWhispr keyboard shows no wand.')).toBeTruthy();
   });
 
-  it('shows the voice assistant off in Local Mode', () => {
+  // The voice assistant runs its own selection, so Local Mode leaves it on.
+  it('keeps the voice assistant on in Local Mode', () => {
     mockActiveMode = 'private';
     mockConfig = { defaultMode: 'private', dictationAgentEnabled: true };
     render(<WorkflowSettingsScreen />);
-    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(false);
-    expect(screen.getByLabelText('Voice Assistant').props.disabled).toBe(true);
-    expect(screen.getAllByText(PRIVATE_MODE_LOCKED_REASON).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Voice Assistant Settings')).toBeNull();
+    expect(screen.getByLabelText('Voice Assistant').props.value).toBe(true);
+    expect(screen.getByLabelText('Voice Assistant').props.disabled).toBeFalsy();
+    expect(screen.getByText('Voice Assistant Settings')).toBeTruthy();
   });
 });
 
@@ -1026,17 +1028,15 @@ it('treats Note Chat as unused for keys once its switch is off', async () => {
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
-// Local Mode never runs the voice assistant on its saved provider.
-it('treats the Voice Assistant as unused for keys in Local Mode', async () => {
+// Local Mode runs the voice assistant on its saved provider too.
+it('counts the Voice Assistant as using its key in Local Mode', async () => {
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   mockActiveMode = 'private';
   mockScope = 'noteChat';
   const groq = { mode: 'providers', providerId: 'groq', modelId: 'openai/gpt-oss-20b' };
   mockConfig = { defaultMode: 'private', inference: { noteChat: groq, agent: groq } };
   render(<WorkflowSettingsScreen />);
-  expect(
-    screen.getByText('Stays on this iPhone. Every workflow set to Groq uses the same key.'),
-  ).toBeTruthy();
+  expect(screen.getByText('Stays on this iPhone. Also used by Voice Assistant.')).toBeTruthy();
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
@@ -1132,19 +1132,23 @@ it.each([
   expect(selectedMode()).toBe(label);
 });
 
-it.each([
-  ['agent', 'In Local Mode the voice assistant is off.'],
-  ['noteChat', 'In Local Mode note chat asks before sending a note off this iPhone.'],
-  [
-    'notes',
-    'Local Mode formats notes on this iPhone and asks before sending one to your choice here.',
-  ],
-])('explains what Local Mode means for %s', (scope, note) => {
+it('explains what Local Mode means for note chat', () => {
+  mockConfig = { defaultMode: 'private' };
+  mockActiveMode = 'private';
+  mockScope = 'noteChat';
+  render(<WorkflowSettingsScreen />);
+  expect(
+    screen.getByText('In Local Mode note chat asks before sending a note off this iPhone.'),
+  ).toBeTruthy();
+});
+
+// Note formatting and the voice assistant run their own selections in Local Mode.
+it.each(['notes', 'agent'])('says nothing about Local Mode on the %s page', (scope) => {
   mockConfig = { defaultMode: 'private' };
   mockActiveMode = 'private';
   mockScope = scope;
   render(<WorkflowSettingsScreen />);
-  expect(screen.getByText(note)).toBeTruthy();
+  expect(screen.queryByText(/Local Mode/)).not.toBeOnTheScreen();
 });
 
 it('shows On-Device for a guest whose saved Cloud dictation Local Mode overrides', () => {
@@ -1190,16 +1194,6 @@ it.each([
   expect(screen.getByText(note)).toBeTruthy();
 });
 
-it('turns the voice assistant off in Local Mode', () => {
-  mockConfig = { defaultMode: 'private' };
-  mockActiveMode = 'private';
-  mockScope = 'agent';
-  render(<WorkflowSettingsScreen />);
-  expect(
-    screen.getByText('Off while Local Mode is on. Change Dictation in AI Models to turn it off.'),
-  ).toBeTruthy();
-});
-
 it('turns Local Mode off when OpenWhispr Cloud is picked on the Dictation page', async () => {
   mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
   mockActiveMode = 'private';
@@ -1218,11 +1212,11 @@ it('locks no mode outside Local Mode', () => {
 it.each([
   [
     'cloud',
-    'On-Device turns on Local Mode: dictation stays on this iPhone and notes ask before leaving it.',
+    'On-Device turns on Local Mode: dictation stays on this iPhone, notes you make stay private, and note chat asks before leaving it.',
   ],
   [
     'private',
-    'Local Mode is on: dictation stays on this iPhone and notes ask before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.',
+    'Local Mode is on: dictation stays on this iPhone, notes you make stay private, and note chat asks before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.',
   ],
 ])('explains Local Mode on the Dictation page in %s mode', (mode, note) => {
   mockConfig = { defaultMode: mode };
@@ -1474,8 +1468,16 @@ describe('an iPhone that cannot run Apple Intelligence', () => {
   it.each([
     ['appleIntelligenceOff', 'Apple Intelligence is turned off in iOS Settings.'],
     ['modelNotReady', 'Apple Intelligence is downloading its model.'],
+    [
+      'unsupportedLanguage',
+      "Apple Intelligence doesn't support Polish (Poland), your iPhone's language.",
+    ],
   ])('keeps On-Device available and says why while it is %s', async (status, reason) => {
-    mockLocalReadiness.mockResolvedValue({ status, tokenCounting: false });
+    mockLocalReadiness.mockResolvedValue({
+      status,
+      tokenCounting: false,
+      deviceLanguage: 'Polish (Poland)',
+    });
     mockScope = 'cleanup';
     render(<WorkflowSettingsScreen />);
 

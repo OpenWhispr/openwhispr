@@ -140,7 +140,9 @@ export class ReasoningService {
     const allowCloudFallback = routing?.allowCloudFallback === true;
     const chosenProvider = usesProviders && routing?.sendToChosenProvider === true;
     let privateContent = !chosenProvider && routing?.isPrivateNote === true;
-    if ((usesProviders && !chosenProvider) || localSelected) {
+    // Local Mode keeps cleanup and note chat on this iPhone unless the user chose otherwise; note
+    // formatting follows its own selection there.
+    if (scope !== 'notes' && ((usesProviders && !chosenProvider) || localSelected)) {
       const { useProcessingModeStore } =
         require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
       privateContent ||= useProcessingModeStore.getState().activeMode === 'private';

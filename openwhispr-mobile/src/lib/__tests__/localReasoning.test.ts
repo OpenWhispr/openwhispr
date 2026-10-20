@@ -59,11 +59,12 @@ describe('local reasoning readiness policy', () => {
     expect(mockAppleAvailability).not.toHaveBeenCalled();
   });
 
-  it('uses local reasoning in private mode when Apple Intelligence is ready', async () => {
+  // Note formatting follows its own selection in Local Mode; a note made there is private.
+  it('does not require local reasoning for a shared note in Local Mode', async () => {
     mockProcessingState.activeMode = 'private';
 
-    await expect(shouldUseLocalReasoning({ isPrivateNote: false })).resolves.toBe(true);
-    expect(mockAppleAvailability).toHaveBeenCalledTimes(1);
+    await expect(shouldUseLocalReasoning({ isPrivateNote: false })).resolves.toBe(false);
+    await expect(shouldUseLocalReasoning({ isPrivateNote: true })).resolves.toBe(true);
   });
 
   it('uses local reasoning for signed-out content when ready', async () => {
@@ -125,18 +126,23 @@ it.each([
   },
 );
 
-it.each(['ready', 'disabled', 'appleIntelligenceOff', 'modelNotReady', 'unavailable'] as const)(
-  'does not treat %s as an unsupported iPhone, since it can change',
-  (status) => {
-    expect(isLocalReasoningUnsupported({ status, tokenCounting: false })).toBe(false);
-  },
-);
+it.each([
+  'ready',
+  'disabled',
+  'appleIntelligenceOff',
+  'modelNotReady',
+  'unavailable',
+  'unsupportedLanguage',
+] as const)('does not treat %s as an unsupported iPhone, since it can change', (status) => {
+  expect(isLocalReasoningUnsupported({ status, tokenCounting: false })).toBe(false);
+});
 
 // Off in iOS Settings or still preparing its model, the iPhone still runs Apple Intelligence.
 it.each([
   ['ready', true],
   ['appleIntelligenceOff', true],
   ['modelNotReady', true],
+  ['unsupportedLanguage', true],
   ['disabled', false],
   ['unavailable', false],
   ['unsupportedDevice', false],
@@ -155,7 +161,118 @@ it.each([
   expect(getLocalReasoningUnavailableMessage({ status, tokenCounting: false })).toBe(message);
 });
 
+// iOS reports Apple Intelligence as off when the language keeps it off, so the language explains it.
+describe("an iPhone set to a language Apple Intelligence doesn't support", () => {
+  it.each(['appleIntelligenceNotEnabled', 'unavailable'])(
+    'names the language when availability is %s',
+    async (native) => {
+      mockAppleAvailability.mockResolvedValue({
+        status: native,
+        tokenCounting: false,
+        localeSupported: false,
+        deviceLanguage: 'Polish (Poland)',
+      });
+
+      const readiness = await getLocalReasoningReadiness();
+
+      expect(readiness).toEqual({
+        status: 'unsupportedLanguage',
+        deviceLanguage: 'Polish (Poland)',
+        tokenCounting: false,
+      });
+      expect(getLocalReasoningUnavailableMessage(readiness)).toBe(
+        "Apple Intelligence doesn't support Polish (Poland), your iPhone's language. Choose a supported one in Settings → General → Language & Region.",
+      );
+    },
+  );
+
+  // An ineligible iPhone can't be fixed in Settings, and a download means Apple Intelligence is on.
+  it.each([
+    ['deviceNotEligible', 'unsupportedDevice'],
+    ['modelNotReady', 'modelNotReady'],
+  ])('keeps the reason iOS gave for %s', async (native, status) => {
+    mockAppleAvailability.mockResolvedValue({
+      status: native,
+      tokenCounting: false,
+      localeSupported: false,
+      deviceLanguage: 'Polish (Poland)',
+    });
+
+    await expect(getLocalReasoningReadiness()).resolves.toEqual(
+      expect.objectContaining({ status }),
+    );
+  });
+
+  it('never stops Apple Intelligence that iOS says is available', async () => {
+    mockAppleAvailability.mockResolvedValue({
+      status: 'available',
+      contextSize: 4096,
+      tokenCounting: true,
+      localeSupported: false,
+      deviceLanguage: 'English (South Africa)',
+    });
+
+    await expect(getLocalReasoningReadiness()).resolves.toMatchObject({ status: 'ready' });
+  });
+
+  // Binaries built before the check shipped send no language fields, and the model lists no
+  // languages while it is off, so localeSupported is left out then.
+  it.each([
+    { status: 'appleIntelligenceNotEnabled', tokenCounting: false },
+    {
+      status: 'appleIntelligenceNotEnabled',
+      tokenCounting: false,
+      deviceLanguage: 'English (United States)',
+    },
+  ])('keeps the reason iOS gave when the language is not known to be wrong', async (payload) => {
+    mockAppleAvailability.mockResolvedValue(payload);
+
+    await expect(getLocalReasoningReadiness()).resolves.toMatchObject({
+      status: 'appleIntelligenceOff',
+    });
+  });
+
+  it("says the iPhone's language without a name", () => {
+    expect(
+      getLocalReasoningUnavailableMessage({ status: 'unsupportedLanguage', tokenCounting: false }),
+    ).toBe(
+      "Apple Intelligence doesn't support your iPhone's language. Choose a supported one in Settings → General → Language & Region.",
+    );
+  });
+});
+
+// The app can't read Siri's language, so the off message says what a Siri-only Settings page means.
+it("says Apple Intelligence also needs Siri set to the iPhone's language", async () => {
+  mockAppleAvailability.mockResolvedValue({
+    status: 'appleIntelligenceNotEnabled',
+    tokenCounting: false,
+    localeSupported: true,
+    deviceLanguage: 'English (South Africa)',
+  });
+
+  const readiness = await getLocalReasoningReadiness();
+
+  expect(readiness).toMatchObject({ status: 'appleIntelligenceOff' });
+  expect(getLocalReasoningUnavailableMessage(readiness)).toBe(
+    "Apple Intelligence is turned off, so this can't run on-device. Turn it on in Settings → Apple Intelligence & Siri. If that page shows only Siri, set Siri to the same language as your iPhone.",
+  );
+});
+
 describe('toLocalReasoningError', () => {
+  it('explains an unsupported language rather than passing on the native text', () => {
+    const error = toLocalReasoningError(
+      Object.assign(new Error('UnsupportedLanguageOrLocale'), {
+        code: 'APPLE_LLM_UNSUPPORTED_LANGUAGE',
+      }),
+    );
+    expect(error).toMatchObject({
+      code: 'APPLE_LLM_UNSUPPORTED_LANGUAGE',
+      message:
+        "Apple Intelligence doesn't support this language. If it's your iPhone's, choose another in Settings → General → Language & Region.",
+      retryable: false,
+    });
+  });
+
   it('reads an aborted request as cancelled', () => {
     const aborted = Object.assign(new Error('cancelled'), { name: 'AbortError' });
     expect(toLocalReasoningError(aborted)).toMatchObject({

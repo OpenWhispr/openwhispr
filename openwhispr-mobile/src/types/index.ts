@@ -23,6 +23,9 @@ export interface UserConfig {
   // Set once note chat has its own selection, copied from the voice assistant's it used to share.
   // New installs start with it; older configs get it from noteChatSplitConfig at launch.
   noteChatSplit?: boolean;
+  // Set once note formatting follows its own selection in Local Mode instead of running on this
+  // iPhone. New installs start with it; older configs get it from notesLocalModeSplitConfig.
+  notesLocalModeSplit?: boolean;
   defaultMode: ProcessingMode;
   cleanupEnabled?: boolean;
   autoGenerateNoteTitle?: boolean;
@@ -146,12 +149,16 @@ export type LocalReasoningStatus =
   | 'unsupportedDevice'
   | 'unsupportedOS'
   | 'appleIntelligenceOff'
-  | 'modelNotReady';
+  | 'modelNotReady'
+  // Apple Intelligence doesn't support the iPhone's language, which Settings can change.
+  | 'unsupportedLanguage';
 
 export interface LocalReasoningReadiness {
   status: LocalReasoningStatus;
   contextSize?: number;
   tokenCounting?: boolean;
+  // The iPhone's language, named for unsupportedLanguage.
+  deviceLanguage?: string;
 }
 
 export type LocalReasoningErrorCode =
@@ -160,6 +167,7 @@ export type LocalReasoningErrorCode =
   | 'APPLE_LLM_OUTPUT_LIMIT'
   | 'APPLE_LLM_RATE_LIMITED'
   | 'APPLE_LLM_UNAVAILABLE'
+  | 'APPLE_LLM_UNSUPPORTED_LANGUAGE'
   | 'APPLE_LLM_FAILED'
   | 'APPLE_LLM_CANCELLED'
   | 'LOCAL_CONTEXT_LIMIT'

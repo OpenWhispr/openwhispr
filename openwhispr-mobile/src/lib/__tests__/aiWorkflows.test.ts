@@ -2,6 +2,7 @@ import {
   cleanupRunsOnDevice,
   cloudCleanupNeedsAccount,
   unsetSelection,
+  voiceAssistantCanRun,
   workflowSelection,
   workflowSummary,
 } from '@/lib/aiWorkflows';
@@ -233,9 +234,9 @@ describe('workflowSelection in Local Mode for a Cloud hold', () => {
     });
   });
 
-  it('formats notes on this phone and keeps note chat on Cloud', () => {
+  it('keeps note formatting and note chat on Cloud', () => {
     expect(workflowSelection(heldOnCloud('notes'), 'notes', 'private', 'account')).toEqual({
-      mode: 'local',
+      mode: 'openwhispr',
     });
     expect(workflowSelection(heldOnCloud('noteChat'), 'noteChat', 'private', 'none')).toEqual({
       mode: 'openwhispr',
@@ -266,8 +267,62 @@ describe('workflowSummary for switched-off workflows', () => {
     const saved = config({ defaultMode: 'cloud', dictationAgentEnabled: false });
     expect(workflowSummary(saved, 'noteChat', 'cloud')).toBe('OpenWhispr Cloud');
   });
+});
 
-  it('says the Voice Assistant is Off in Local Mode, which turns it off', () => {
-    expect(workflowSummary(config({}), 'agent', 'private')).toBe('Off');
+// Local Mode keeps dictation on this iPhone; note formatting and the voice assistant run their own
+// choices there.
+describe('workflowSummary in Local Mode', () => {
+  it('shows note formatting and the voice assistant on Cloud with nothing saved', () => {
+    expect(workflowSummary(config({}), 'notes', 'private', { cloudAccess: 'account' })).toBe(
+      'OpenWhispr Cloud',
+    );
+    expect(workflowSummary(config({}), 'agent', 'private', { cloudAccess: 'account' })).toBe(
+      'OpenWhispr Cloud',
+    );
+  });
+
+  it('shows the providers saved for them', () => {
+    const groq = { mode: 'providers' as const, providerId: 'groq', modelId: 'llama' };
+    const saved = config({ inference: { notes: groq, agent: groq } });
+    expect(workflowSummary(saved, 'notes', 'private')).toBe('Groq');
+    expect(workflowSummary(saved, 'agent', 'private')).toBe('Groq');
+  });
+
+  it('shows On-Device note formatting saved for it', () => {
+    const saved = config({ inference: { notes: { mode: 'local' } } });
+    expect(workflowSummary(saved, 'notes', 'private')).toBe('On-Device');
+  });
+});
+
+describe('voiceAssistantCanRun', () => {
+  const groq = { mode: 'providers' as const, providerId: 'groq', modelId: 'llama' };
+
+  it.each(['cloud', 'private'] as const)(
+    'runs on OpenWhispr Cloud in %s mode for a signed-in account only',
+    (mode) => {
+      expect(voiceAssistantCanRun(config({}), mode, 'account')).toBe(true);
+      expect(voiceAssistantCanRun(config({}), mode, 'session')).toBe(false);
+      expect(voiceAssistantCanRun(config({}), mode, 'none')).toBe(false);
+    },
+  );
+
+  it.each(['cloud', 'private', 'providers'] as const)(
+    'runs on its own provider in %s mode, signed out too',
+    (mode) => {
+      expect(voiceAssistantCanRun(config({ inference: { agent: groq } }), mode, 'none')).toBe(true);
+    },
+  );
+
+  it('is skipped under Bring Your Own Key with nothing saved', () => {
+    expect(voiceAssistantCanRun(config({}), 'providers', 'account')).toBe(false);
+  });
+
+  it('never runs switched off or on the iPhone', () => {
+    expect(voiceAssistantCanRun(config({ dictationAgentEnabled: false }), 'cloud', 'account')).toBe(
+      false,
+    );
+    expect(
+      voiceAssistantCanRun(config({ inference: { agent: { mode: 'local' } } }), 'cloud', 'account'),
+    ).toBe(false);
   });
 });

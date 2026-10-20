@@ -64,9 +64,22 @@ jest.mock('@/lib/uuid', () => ({
   randomUUID: jest.fn(() => 'test-uuid-1234'),
 }));
 
+jest.mock('@/store/useAuthStore', () => {
+  const { create } = jest.requireActual('zustand');
+  return { useAuthStore: create(() => ({ user: null })) };
+});
+
+const { useAuthStore: mockAuthStore } = jest.requireMock('@/store/useAuthStore') as {
+  useAuthStore: {
+    setState: (state: { user: { id: string; isAnonymous: boolean } | null }) => void;
+  };
+};
+const ACCOUNT = { id: 'u', isAnonymous: false };
+
 beforeEach(() => {
   for (const key of Object.keys(store)) delete store[key];
   jest.clearAllMocks();
+  mockAuthStore.setState({ user: ACCOUNT });
 });
 
 // ─── Mirror keys ───────────────────────────────────────────────────────────────
@@ -105,14 +118,34 @@ describe('startKeyboardAgentSync mirror keys', () => {
     stop();
   });
 
-  it('writes applicable=0 in private mode even when agent enabled', () => {
+  // The voice assistant runs its own selection in every mode, Local Mode included.
+  it('writes applicable=1 in Local Mode for a signed-in account', () => {
     useConfigStore.setState({
-      config: { defaultMode: 'cloud', dictationAgentEnabled: true } as any,
+      config: { defaultMode: 'private', dictationAgentEnabled: true } as any,
     });
     useProcessingModeStore.setState({ activeMode: 'private' });
 
     const stop = startKeyboardAgentSync();
+    expect(store.keyboard_agent_applicable).toBe('1');
+    stop();
+  });
+
+  // Cloud refuses the voice assistant without an account; its own provider needs none.
+  it('writes applicable=0 without an account unless the voice assistant has a provider', () => {
+    mockAuthStore.setState({ user: { id: 'a', isAnonymous: true } });
+    useConfigStore.setState({ config: { defaultMode: 'private' } as any });
+    useProcessingModeStore.setState({ activeMode: 'private' });
+
+    const stop = startKeyboardAgentSync();
     expect(store.keyboard_agent_applicable).toBe('0');
+
+    useConfigStore.setState({
+      config: {
+        defaultMode: 'private',
+        inference: { agent: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
+      } as any,
+    });
+    expect(store.keyboard_agent_applicable).toBe('1');
     stop();
   });
 
@@ -171,11 +204,26 @@ describe('startKeyboardAgentSync mirror keys', () => {
     stop();
   });
 
-  it('updates applicable when mode changes', () => {
+  it('updates applicable when the user signs in', () => {
+    mockAuthStore.setState({ user: null });
     useConfigStore.setState({
       config: { defaultMode: 'cloud', dictationAgentEnabled: true } as any,
     });
     useProcessingModeStore.setState({ activeMode: 'private' });
+
+    const stop = startKeyboardAgentSync();
+    expect(store.keyboard_agent_applicable).toBe('0');
+
+    mockAuthStore.setState({ user: ACCOUNT });
+    expect(store.keyboard_agent_applicable).toBe('1');
+    stop();
+  });
+
+  it('updates applicable when the mode changes', () => {
+    useConfigStore.setState({
+      config: { defaultMode: 'cloud', dictationAgentEnabled: true } as any,
+    });
+    useProcessingModeStore.setState({ activeMode: 'providers' });
 
     const stop = startKeyboardAgentSync();
     expect(store.keyboard_agent_applicable).toBe('0');

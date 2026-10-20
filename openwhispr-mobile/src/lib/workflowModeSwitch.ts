@@ -8,7 +8,7 @@ import {
   requiresRealAccount,
   showAccountRequiredAlert,
 } from '@/lib/accountAccess';
-import { cloudAccessFor } from '@/lib/aiWorkflows';
+import { cloudAccessFor, workflowSelection, workflowSummary } from '@/lib/aiWorkflows';
 import { localSelection, workflowSaveConfig } from '@/lib/inferenceModes';
 import {
   canRunLocalReasoning,
@@ -17,7 +17,6 @@ import {
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
 import { type InferenceSelection, type MobileInferenceScope } from '@/lib/mobileProviders';
-import type { InferenceMode, ProcessingMode } from '@/types';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 
 type SpeechScope = 'dictation' | 'upload';
@@ -57,6 +56,11 @@ async function appleIntelligenceReady(): Promise<ModeSwitchResult | null> {
     Alert.alert('On-Device Unavailable', message);
     return 'refused';
   }
+  // Changing the iPhone's language restarts every app, so this page can't wait for it.
+  if (readiness.status === 'unsupportedLanguage') {
+    Alert.alert('On-Device Unavailable', `${message} Then come back and choose On-Device again.`);
+    return 'refused';
+  }
   Alert.alert(
     'On-Device Unavailable',
     `${message} Keep this page open and On-Device turns on once Apple Intelligence is ready.`,
@@ -64,16 +68,27 @@ async function appleIntelligenceReady(): Promise<ModeSwitchResult | null> {
   return 'not-ready';
 }
 
-// Whether Apple Intelligence can run here, which decides where note formatting with nothing saved
-// is held when dictation leaves Local Mode (workflowSaveConfig). Asked only then, and afresh, since
-// the cached answer outlives a change in iOS Settings.
-export async function leavingLocalModeWithLocalReasoning(
-  scope: MobileInferenceScope,
-  activeMode: ProcessingMode,
-  target: InferenceMode,
-): Promise<boolean> {
-  if (scope !== 'dictation' || activeMode !== 'private' || target === 'local') return false;
-  return (await getLocalReasoningReadiness({ refresh: true })).status === 'ready';
+// On-Device dictation keeps only dictation on this iPhone, so turning it on offers to move note
+// formatting here too, while Apple Intelligence can run it.
+async function offerOnDeviceNoteFormatting(): Promise<void> {
+  const { config } = useConfigStore.getState();
+  const cloudAccess = cloudAccessFor(useAuthStore.getState().user);
+  if (workflowSelection(config, 'notes', 'private', cloudAccess).mode === 'local') return;
+  if ((await getLocalReasoningReadiness()).status !== 'ready') return;
+  const current = workflowSummary(config, 'notes', 'private', { cloudAccess });
+  Alert.alert(
+    'Format notes on this iPhone too?',
+    `Dictation now stays on this iPhone. Note formatting and titles still use ${current}.`,
+    [
+      { text: 'Not Now', style: 'cancel' },
+      {
+        text: 'Use On-Device',
+        onPress: (): void => {
+          switchWorkflowMode('notes', 'local').catch(() => undefined);
+        },
+      },
+    ],
+  );
 }
 
 // Applies OpenWhispr Cloud or On-Device to a workflow as soon as it is tapped, after its sign-in
@@ -104,22 +119,16 @@ export async function switchWorkflowMode(
     if (blocked) return blocked;
   }
 
-  const { activeMode, setActiveMode } = useProcessingModeStore.getState();
-  const localReasoningReady = await leavingLocalModeWithLocalReasoning(scope, activeMode, mode);
   const { config, updateConfig } = useConfigStore.getState();
+  const { activeMode, setActiveMode } = useProcessingModeStore.getState();
   if (scope === 'dictation') setActiveMode(mode === 'local' ? 'private' : 'cloud', true);
   const selection: InferenceSelection =
     mode === 'local' ? localSelection(config, scope) : { mode: 'openwhispr' };
   await updateConfig(
-    workflowSaveConfig(
-      config,
-      scope,
-      selection,
-      activeMode,
-      cloudAccessFor(user),
-      localReasoningReady,
-    ),
+    workflowSaveConfig(config, scope, selection, activeMode, cloudAccessFor(user)),
   );
+  if (scope === 'dictation' && mode === 'local' && activeMode !== 'private')
+    offerOnDeviceNoteFormatting().catch(() => undefined);
   return 'switched';
 }
 

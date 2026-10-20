@@ -620,7 +620,9 @@ describe('runMeetingPipeline', () => {
     });
   });
 
-  it('derives the title locally in private mode and never sends transcript to the cloud', async () => {
+  // Note formatting follows its own selection in Local Mode; only a private note stays here, and a
+  // meeting recorded in Local Mode is private.
+  it('titles a shared meeting note with its note formatting choice in Local Mode', async () => {
     mockAuthState.user = signedInUser;
     mockProcessingModeState.activeMode = 'private';
     mockConfigState.config.autoGenerateNoteTitle = true;
@@ -635,12 +637,8 @@ describe('runMeetingPipeline', () => {
 
     await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
 
-    expect(mockGenerateNoteTitle).not.toHaveBeenCalled();
-    expect(ReasoningService.processText).not.toHaveBeenCalled();
-    expect(mockDeriveLocalTitle).toHaveBeenCalledWith('Discuss launch risks.');
-    expect(notesRepository.updateNote).toHaveBeenCalledWith(7, {
-      title: 'Local fallback title',
-    });
+    expect(mockGenerateNoteTitle).toHaveBeenCalled();
+    expect(mockDeriveLocalTitle).not.toHaveBeenCalled();
   });
 
   it('derives the title locally for notes marked private even in cloud mode', async () => {
@@ -878,7 +876,7 @@ describe('runMeetingPipeline', () => {
       title: 'Planning Sync',
       content: 'Customer launch risk came up twice. Prioritize onboarding.',
       noteType: 'meeting',
-      isPrivate: 0,
+      isPrivate: 1,
       deletedAt: null,
       enhancedAtContentHash: null,
     });
@@ -921,7 +919,7 @@ describe('runMeetingPipeline', () => {
       expect.objectContaining({
         routing: expect.objectContaining({
           allowCloudFallback: true,
-          isPrivateNote: false,
+          isPrivateNote: true,
         }),
       }),
     );

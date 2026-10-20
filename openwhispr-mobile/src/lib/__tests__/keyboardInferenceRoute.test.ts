@@ -224,3 +224,15 @@ it('recovers a BYOK keyboard job with no text route as unavailable, never Cloud'
     'The voice assistant is unavailable. Your raw transcript is saved.',
   );
 });
+
+// The voice assistant has no on-device version, so a stored on-device job with no text route gives
+// it OpenWhispr Cloud while cleanup stays on this iPhone.
+it('recovers an on-device keyboard job with no text route, sending only cleanup to the iPhone', () => {
+  mockStorage.set(
+    'keyboard_inference_route',
+    JSON.stringify({ version: 1, jobId: 'local-job', route: { provider: 'local' } }),
+  );
+  const route = readKeyboardInferenceRoute('local-job');
+  expect(route?.cleanupRoute).toEqual({ mode: 'local', scope: 'cleanup' });
+  expect(route?.agentRoute).toEqual({ mode: 'openwhispr', scope: 'agent' });
+});

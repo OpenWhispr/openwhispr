@@ -128,6 +128,11 @@ describe('a long transcript', () => {
 
 it.each([
   ['APPLE_LLM_RATE_LIMITED', 'Apple Intelligence was busy.'],
+  [
+    'APPLE_LLM_UNSUPPORTED_LANGUAGE',
+    "Apple Intelligence doesn't support this language. If it's your iPhone's, choose another in Settings → General → Language & Region.",
+  ],
+  ['APPLE_LLM_UNAVAILABLE', 'Cleanup failed.'],
   ['APPLE_LLM_CONTEXT_LIMIT', 'This transcript is too long for On-Device cleanup.'],
   ['APPLE_LLM_GUARDRAIL', 'Cleanup failed.'],
   ['APPLE_LLM_FAILED', 'Cleanup failed.'],

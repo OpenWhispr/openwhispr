@@ -44,7 +44,6 @@ import {
   CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
   LOCAL_MODE_DICTATION_NOTES,
   ON_DEVICE_MODE_NOTES,
-  PRIVATE_MODE_LOCKED_REASON,
   ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE,
   UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
@@ -59,13 +58,10 @@ import { isLocalModelKey } from '@/lib/localModelCatalog';
 import { getDictationAgentName } from '@/lib/dictationAgent';
 import { safeHaptics } from '@/lib/utils';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import {
-  leavingLocalModeWithLocalReasoning,
-  type ModeSwitchResult,
-  switchWorkflowMode,
-} from '@/lib/workflowModeSwitch';
+import { type ModeSwitchResult, switchWorkflowMode } from '@/lib/workflowModeSwitch';
 import { getPrivateModeReadiness } from '@/lib/privateMode';
 import {
+  getLocalReasoningLanguageNote,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   isLocalReasoningUnsupported,
@@ -118,7 +114,7 @@ function joinNames(names: string[]): string {
 }
 
 // A workflow that can be turned off: its switch sits above Mode, with the workflow's own
-// settings row under it while it is on. A disabled switch shows why in its description.
+// settings row under it while it is on.
 function WorkflowSwitchCard({
   title,
   label,
@@ -126,7 +122,6 @@ function WorkflowSwitchCard({
   icon,
   mdIcon,
   enabled,
-  disabled = false,
   onToggle,
   offNote,
   children,
@@ -137,7 +132,6 @@ function WorkflowSwitchCard({
   icon: string;
   mdIcon: LucideIconName;
   enabled: boolean;
-  disabled?: boolean;
   onToggle: (value: boolean) => void;
   offNote: string;
   children?: React.ReactNode;
@@ -151,20 +145,14 @@ function WorkflowSwitchCard({
           mdIcon={mdIcon}
           title={title}
           description={description}
-          disabled={disabled}
           rightElement={
-            <SettingsSwitch
-              accessibilityLabel={label}
-              value={enabled}
-              disabled={disabled}
-              onValueChange={onToggle}
-            />
+            <SettingsSwitch accessibilityLabel={label} value={enabled} onValueChange={onToggle} />
           }
           showChevron={false}
         />
         {enabled ? children : null}
       </SettingsSection>
-      {enabled || disabled ? null : <SectionFooter>{offNote}</SectionFooter>}
+      {enabled ? null : <SectionFooter>{offNote}</SectionFooter>}
     </>
   );
 }
@@ -213,26 +201,19 @@ function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element 
   );
 }
 
-// Local Mode turns the voice assistant off.
 function VoiceAssistantSettings({ enabled }: { enabled: boolean }): React.JSX.Element {
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const agentName = useConfigStore((state) =>
     state.config ? getDictationAgentName(state.config) : undefined,
   );
-  const privateMode = useProcessingModeStore((state) => state.activeMode === 'private');
   return (
     <WorkflowSwitchCard
       title="Enable Voice Assistant"
       label="Voice Assistant"
-      description={
-        privateMode
-          ? PRIVATE_MODE_LOCKED_REASON
-          : 'Tap the wand on the OpenWhispr keyboard and say what to write.'
-      }
+      description="Tap the wand on the OpenWhispr keyboard and say what to write."
       icon="person.wave.2"
       mdIcon="UserRoundCog"
-      enabled={enabled && !privateMode}
-      disabled={privateMode}
+      enabled={enabled}
       onToggle={(value) => {
         safeHaptics('light');
         void updateConfig({ dictationAgentEnabled: value });
@@ -369,7 +350,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const onDeviceUnsupported = isLocalReasoningUnsupported(appleIntelligence)
     ? getLocalReasoningUnavailableMessage(appleIntelligence ?? undefined)
     : null;
-  const onDeviceStatus = appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
+  const onDeviceStatus =
+    appleIntelligence?.status === 'unsupportedLanguage'
+      ? getLocalReasoningLanguageNote(appleIntelligence)
+      : appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
   // Nothing is shown as picked when the On-Device text workflow can never run on this iPhone.
   const pickedMode =
     !speechScope && onDeviceUnsupported && selection.mode === 'local' ? null : selection.mode;
@@ -407,9 +391,9 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const keyOwner =
     provider?.id === 'custom' ? 'this server' : providerDisplayName(provider?.id ?? '');
   const workflowOff = workflowSwitchedOff(config, scope);
-  // A switched-off workflow uses no key, nor does the voice assistant in Local Mode.
+  // A switched-off workflow uses no key.
   const usesKey = (workflow: MobileInferenceScope): boolean =>
-    !workflowSwitchedOff(config, workflow) && !(activeMode === 'private' && workflow === 'agent');
+    !workflowSwitchedOff(config, workflow);
   const sharedWith = WORKFLOWS.filter((other) => {
     const saved = config?.inference?.[other];
     return (
@@ -657,20 +641,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     try {
       const saved = await prepareSelection();
       if (!saved) return;
-      const localReasoningReady = await leavingLocalModeWithLocalReasoning(
-        scope,
-        activeMode,
-        saved.mode,
-      );
       await updateConfig(
-        workflowSaveConfig(
-          useConfigStore.getState().config,
-          scope,
-          saved,
-          activeMode,
-          cloudAccess,
-          localReasoningReady,
-        ),
+        workflowSaveConfig(useConfigStore.getState().config, scope, saved, activeMode, cloudAccess),
       );
       if (useConfigStore.getState().error) {
         showError('Unable to save your selection. Please try again.');
