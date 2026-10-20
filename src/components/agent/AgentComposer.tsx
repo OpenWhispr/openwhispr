@@ -13,7 +13,8 @@ interface AgentComposerProps {
   busy: boolean;
   /** The reply waits on a question the text can answer, so Send works meanwhile. */
   answering?: boolean;
-  onStop: () => void;
+  /** Absent while a card waits on the user or sends: the card carries the turn then. */
+  onStop?: () => void;
   /** In the modal the composer carries Close and Mic; above the pill they are the pill's. */
   onClose?: () => void;
   onMic?: () => void;
@@ -126,7 +127,7 @@ export function AgentComposer({
           >
             <CornerDownLeft size={16} className="rtl:scale-x-[-1]" />
           </button>
-          {busy && (
+          {busy && onStop && (
             <button
               type="button"
               onClick={onStop}

@@ -456,6 +456,31 @@ test("the composer answers a restored question, and points at a card only when i
   assert.deepEqual(globalThis.__chat.sent, [], "not sent as a new request");
 });
 
+test("while an answer card waits, the composer offers no Stop", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+  assert.ok(view.button("Stop"), "a running reply can be stopped");
+  await view.askApproval("c5");
+  await view.settle();
+  assert.equal(view.button("Stop"), undefined, "the card carries the turn");
+});
+
+test("while an answer card waits, the voice modal's pill reads as at rest", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([slackCall], "Drafting it now.")] });
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  assert.ok(view.button("Stop"), "the voice pill stops a streaming reply");
+  await view.askApproval("c5");
+  await view.settle();
+  assert.equal(view.button("Stop"), undefined);
+  assert.ok(view.button("Speak") && view.button("Type") && view.button("Close"));
+});
+
 test("a held command over a waiting connect card types with the usual placeholder", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));

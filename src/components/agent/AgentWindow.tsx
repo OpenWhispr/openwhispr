@@ -9,7 +9,7 @@ import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules
 import { getSettings } from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
 import { answerWithText, useAgentInteractionStore } from "../../stores/agentInteractionStore";
-import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
@@ -108,6 +108,18 @@ export default function AgentWindow() {
     () => findPendingCard(messages, interactions, approvals, { includeRestored: true }),
     [approvals, interactions, messages]
   );
+  // A card waiting on the user or sending carries the turn: the composer
+  // offers no Stop, and the modal's pill reads as at rest.
+  const cardSending = useMemo(
+    () =>
+      messages.some((message) =>
+        message.toolCalls?.some(
+          (call) => approvals[approvalKey(message.id, call.id)]?.state === "committing"
+        )
+      ),
+    [approvals, messages]
+  );
+  const cardHolds = pendingCard !== null || cardSending;
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -629,7 +641,8 @@ export default function AgentWindow() {
   const answerStarted =
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
   // In the modal an answer card is on screen with its own Send, so the pill
-  // waits only on a question; outside it, the pill waits on any card.
+  // waits only on a question, and reads as at rest while the card waits or
+  // sends; outside it, the pill waits on any card.
   const pillStatus = (placement: AgentPillPlacement): AgentPillStatus =>
     listening
       ? "listening"
@@ -637,11 +650,13 @@ export default function AgentWindow() {
         ? "transcribing"
         : pendingCard && (placement !== "modal" || pendingCard.interaction !== null)
           ? "waiting"
-          : busy && !answerStarted
-            ? "thinking"
-            : busy
-              ? "streaming"
-              : "idle";
+          : placement === "modal" && cardHolds
+            ? "idle"
+            : busy && !answerStarted
+              ? "thinking"
+              : busy
+                ? "streaming"
+                : "idle";
   const notice = state.notice ? t(state.notice) : null;
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
@@ -710,7 +725,7 @@ export default function AgentWindow() {
         }
         busy={busy}
         answering={answering}
-        onStop={cancelTurn}
+        onStop={cardHolds ? undefined : cancelTurn}
         onClose={inModal ? () => void close() : undefined}
         onMic={inModal ? () => void startListening() : undefined}
         micDisabled={busy || transcribing}
