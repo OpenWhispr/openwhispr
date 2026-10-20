@@ -184,13 +184,27 @@ test("a title edit after a notes edit still saves the notes", async (t) => {
   ]);
 });
 
-for (const [label, transcribing, liveNoteId, expectLive, recording = transcribing] of [
-  ["stopped meeting", false, NOTE.id, false],
-  ["active meeting", true, NOTE.id, true],
-  ["finishing meeting", true, NOTE.id, true, false],
-  ["another active meeting", true, NOTE.id + 1, false],
+for (const { name, transcribing, liveNoteId, expectLive } of [
+  {
+    name: "a stopped meeting's summary reads the saved transcript and speaker names",
+    transcribing: false,
+    liveNoteId: NOTE.id,
+    expectLive: false,
+  },
+  {
+    name: "a meeting still transcribing summarizes its live transcript",
+    transcribing: true,
+    liveNoteId: NOTE.id,
+    expectLive: true,
+  },
+  {
+    name: "another note's live meeting leaves this summary on the saved transcript",
+    transcribing: true,
+    liveNoteId: NOTE.id + 1,
+    expectLive: false,
+  },
 ]) {
-  test(`summary input uses saved speaker edits for ${label}`, async (t) => {
+  test(name, async (t) => {
     const calls = await mountView(t);
     globalThis.__noteActionCalls = [];
     t.after(() => delete globalThis.__noteActionCalls);
@@ -210,15 +224,18 @@ for (const [label, transcribing, liveNoteId, expectLive, recording = transcribin
         speakerLocked: true,
         speakerLockSource: "user",
       },
+      // Named only by its speaker mapping, so the summary has to read the mappings.
+      { source: "system", timestamp: 200, text: "Bob reviews it.", speaker: "speaker_1" },
     ]);
     globalThis.__note = { ...NOTE, transcript };
     globalThis.window.electronAPI.getSpeakerMappings = async () => [
       { speaker_id: "speaker_0", display_name: "Alice" },
+      { speaker_id: "speaker_1", display_name: "Bob" },
     ];
     await React.act(async () => {
       useMeetingRecordingStore.setState({
         recordingNoteId: liveNoteId,
-        isRecording: recording,
+        isRecording: transcribing,
         isTranscribing: transcribing,
         transcript: "Old live transcript without speaker names.",
       });
@@ -233,9 +250,9 @@ for (const [label, transcribing, liveNoteId, expectLive, recording = transcribin
         sections: null,
       });
     });
+    assert.equal(globalThis.__noteActionCalls.length, 1);
     const [, input, hash] = globalThis.__noteActionCalls[0];
     const source = expectLive ? "Old live transcript without speaker names." : transcript;
-    if (!expectLive) assert.match(input, /Alice: Ship on Friday/);
     assert.equal(
       hash,
       `${NOTE.content.length + 1 + source.length}-${`${NOTE.content}\n${source}`.slice(0, 50)}`
@@ -245,6 +262,7 @@ for (const [label, transcribing, liveNoteId, expectLive, recording = transcribin
       assert.doesNotMatch(input, /Alice: Ship on Friday/);
     } else {
       assert.match(input, /Alice: Ship on Friday/);
+      assert.match(input, /Bob: Bob reviews it/);
       assert.doesNotMatch(input, /Old live transcript/);
       globalThis.__note = {
         ...globalThis.__note,
