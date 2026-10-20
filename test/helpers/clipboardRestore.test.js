@@ -1606,3 +1606,78 @@ test("clipboard write failure is never classified as an Accessibility denial", a
     return true;
   });
 });
+
+test("a Windows fast-paste spawn failure starts the fallback only once across error and close", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const TestClipboardManager = loadClipboardManager({ spawn: () => child });
+  const manager = new TestClipboardManager();
+  let fallbackCalls = 0;
+  manager.pasteWithNircmdOrPowerShell = async () => {
+    fallbackCalls++;
+    return { restoreComplete: Promise.resolve() };
+  };
+  const pasted = manager.pasteWithFastPaste("windows-fast-paste.exe", null);
+  t.mock.timers.tick(100);
+  child.emit("error", Object.assign(new Error("spawn EACCES"), { code: "EACCES" }));
+  child.emit("close", -13);
+  await pasted;
+  assert.equal(fallbackCalls, 1, "both notifications describe the same failed paste attempt");
+});
+
+test("a NirCmd spawn failure starts PowerShell only once across error and close", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const child = new EventEmitter();
+  child.stderr = new EventEmitter();
+  const TestClipboardManager = loadClipboardManager({ spawn: () => child });
+  const manager = new TestClipboardManager();
+  let fallbackCalls = 0;
+  manager.pasteWithPowerShell = async () => {
+    fallbackCalls++;
+    return { restoreComplete: Promise.resolve() };
+  };
+  const pasted = manager.pasteWithNircmd("nircmd.exe", null);
+  t.mock.timers.tick(100);
+  child.emit("error", Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" }));
+  child.emit("close", -2);
+  await pasted;
+  assert.equal(fallbackCalls, 1, "one failed helper must not inject two fallback pastes");
+});
+
+test("the Windows paste chain reaches PowerShell once when both helpers cannot launch", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const children = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      children.push(child);
+      return child;
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.resolveWindowsFastPasteBinary = () => "windows-fast-paste.exe";
+  manager.getNircmdPath = () => "nircmd.exe";
+  const original = { type: "text", data: "previous clipboard" };
+  const options = { targetWindow: "0x123", expectedClipboardText: "dictated text" };
+  const fallbacks = [];
+  manager.pasteWithPowerShell = async (...args) => {
+    fallbacks.push(args);
+    return { restoreComplete: Promise.resolve() };
+  };
+  const pasted = manager.pasteWindows(original, options);
+  t.mock.timers.tick(100);
+  children[0].emit("error", new Error("spawn EACCES"));
+  children[0].emit("close", -13);
+  t.mock.timers.tick(100);
+  for (const child of children.slice(1)) {
+    child.emit("error", new Error("spawn ENOENT"));
+    child.emit("close", -2);
+  }
+  await pasted;
+  assert.equal(children.length, 2, "each helper is attempted once");
+  assert.deepEqual(fallbacks, [[original, options]], "one paste keeps its restoration context");
+});

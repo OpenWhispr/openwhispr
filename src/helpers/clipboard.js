@@ -1279,7 +1279,7 @@ class ClipboardManager {
   async pasteWithFastPaste(fastPastePath, originalClipboard, options = {}) {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
-        let hasTimedOut = false;
+        let hasSettled = false;
         const startTime = Date.now();
 
         // Restore the window captured at record start (#859) so the paste lands
@@ -1309,7 +1309,8 @@ class ClipboardManager {
         });
 
         pasteProcess.on("close", (code) => {
-          if (hasTimedOut) return;
+          if (hasSettled) return;
+          hasSettled = true;
           clearTimeout(timeoutId);
 
           const elapsed = Date.now() - startTime;
@@ -1342,7 +1343,8 @@ class ClipboardManager {
         });
 
         pasteProcess.on("error", (error) => {
-          if (hasTimedOut) return;
+          if (hasSettled) return;
+          hasSettled = true;
           clearTimeout(timeoutId);
           this.safeLog("❌ Windows fast-paste error, falling back to nircmd/PowerShell", {
             elapsedMs: Date.now() - startTime,
@@ -1352,7 +1354,7 @@ class ClipboardManager {
         });
 
         const timeoutId = setTimeout(() => {
-          hasTimedOut = true;
+          hasSettled = true;
           this.safeLog("⏱️ Windows fast-paste timeout, falling back to nircmd/PowerShell");
           killProcess(pasteProcess, "SIGKILL");
           pasteProcess.removeAllListeners();
@@ -1376,7 +1378,7 @@ class ClipboardManager {
       const restoreDelay = RESTORE_DELAYS.win32_nircmd;
 
       setTimeout(() => {
-        let hasTimedOut = false;
+        let hasSettled = false;
         const startTime = Date.now();
 
         this.safeLog(`⚡ nircmd paste starting (delay: ${pasteDelay}ms)`);
@@ -1392,7 +1394,8 @@ class ClipboardManager {
         });
 
         pasteProcess.on("close", (code) => {
-          if (hasTimedOut) return;
+          if (hasSettled) return;
+          hasSettled = true;
           clearTimeout(timeoutId);
 
           const elapsed = Date.now() - startTime;
@@ -1422,7 +1425,8 @@ class ClipboardManager {
         });
 
         pasteProcess.on("error", (error) => {
-          if (hasTimedOut) return;
+          if (hasSettled) return;
+          hasSettled = true;
           clearTimeout(timeoutId);
           const elapsed = Date.now() - startTime;
           this.safeLog(`❌ nircmd error, falling back to PowerShell`, {
@@ -1433,7 +1437,7 @@ class ClipboardManager {
         });
 
         const timeoutId = setTimeout(() => {
-          hasTimedOut = true;
+          hasSettled = true;
           const elapsed = Date.now() - startTime;
           this.safeLog(`⏱️ nircmd timeout, falling back to PowerShell`, { elapsedMs: elapsed });
           killProcess(pasteProcess, "SIGKILL");
