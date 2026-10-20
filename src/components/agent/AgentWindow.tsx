@@ -676,8 +676,9 @@ export default function AgentWindow() {
               : busy
                 ? "streaming"
                 : "idle";
-  // Full on an empty chat, faint while listening or working, none at rest or
-  // while a card waits on the user.
+  // Full on an empty chat, while the user speaks into it too (modal-empty);
+  // faint while a draft is typed into it, or while listening or working in a
+  // chat; none at rest or while a card waits on the user.
   const glow: AgentModalGlow =
     messages.length === 0 && !refusal
       ? state.draft.trim()

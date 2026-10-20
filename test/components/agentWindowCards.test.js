@@ -38,9 +38,19 @@ const MOCKS = {
     }
   `,
   "/useAgentVoice": `
+    import { useSyncExternalStore } from "react";
+    const listeners = new Set();
+    let status = "idle";
+    globalThis.__voice = {
+      set(next) { status = next; listeners.forEach((listener) => listener()); },
+    };
     export function useAgentVoice() {
+      const current = useSyncExternalStore(
+        (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
+        () => status
+      );
       return {
-        status: "idle", opening: false, readLevel: () => 0, streamingOnlyProvider: false,
+        status: current, opening: false, readLevel: () => 0, streamingOnlyProvider: false,
         start: async () => "started", stop() {}, cancel() {},
       };
     }
@@ -531,12 +541,15 @@ test("an answer card that waits or sends leaves the pill at rest, in the modal a
   assert.ok(!view.button("Stop"), "the pill on its own offers no Stop while the card sends");
 });
 
-test("the modal's glow is full on an empty chat, faint while working, gone at rest or while a card waits", async (t) => {
+test("the modal's glow is full on an empty chat, faint while speaking or working in one, gone at rest or while a card waits", async (t) => {
   const view = await mountWindow(t);
   const glow = () => view.host.querySelector(".agent-modal-glow").getAttribute("data-glow");
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
   await view.settle();
   assert.equal(glow(), "strong");
+  await React.act(async () => globalThis.__voice.set("recording"));
+  assert.equal(glow(), "strong", "speaking into the empty chat, as the design's empty modal");
+  await React.act(async () => globalThis.__voice.set("idle"));
   await view.chat({ busy: true, messages: [user, reply([slackCall])] });
   assert.equal(glow(), "soft");
   await view.askApproval("c5");
@@ -544,6 +557,8 @@ test("the modal's glow is full on an empty chat, faint while working, gone at re
   assert.equal(glow(), "none");
   await view.chat({ busy: false, messages: [user, { ...reply([], "Done."), isStreaming: false }] });
   assert.equal(glow(), "none");
+  await React.act(async () => globalThis.__voice.set("recording"));
+  assert.equal(glow(), "soft", "speaking a follow-up in the chat");
 });
 
 test("a fork with nothing of its own yet shows its chip, not the new-chat prompt", async (t) => {
