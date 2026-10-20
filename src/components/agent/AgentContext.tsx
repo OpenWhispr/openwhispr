@@ -8,17 +8,29 @@ export function SelectedContextBlock({
   text,
   source,
   onRemove,
+  compact = false,
   className,
 }: {
   text: string;
   source?: AgentSelectionSource;
   /** Offered before the request is sent. */
   onRemove?: () => void;
+  /**
+   * Inside the typing layout's fixed-height composer: one line of the quote,
+   * so the input line keeps its room, a shade lighter than the composer.
+   */
+  compact?: boolean;
   className?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <div className={cn("rounded-2xl bg-surface-1 px-3 py-2.5", className)}>
+    <div
+      className={cn(
+        "rounded-2xl px-3",
+        compact ? "bg-surface-2 py-2" : "bg-surface-1 py-2.5",
+        className
+      )}
+    >
       <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
         <TextSelect size={14} className="shrink-0" />
         <span className="flex-1">{t("agentWindow.selectedContext.title")}</span>
@@ -34,7 +46,13 @@ export function SelectedContextBlock({
           </button>
         )}
       </div>
-      <p dir="auto" className="mt-1.5 line-clamp-3 text-[15px] leading-snug text-foreground/85">
+      <p
+        dir="auto"
+        className={cn(
+          "text-[15px] leading-snug text-foreground/85",
+          compact ? "mt-1 line-clamp-1" : "mt-1.5 line-clamp-3"
+        )}
+      >
         {t(
           source === "external"
             ? "agentWindow.selectedContext.fromOtherApp"

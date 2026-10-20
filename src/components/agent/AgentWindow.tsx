@@ -693,13 +693,15 @@ export default function AgentWindow() {
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
     : undefined;
-  const pendingContext = state.selectedContext && (
-    <SelectedContextBlock
-      text={state.selectedContext.text}
-      source={state.selectedContext.source}
-      onRemove={() => dispatch({ type: "setContext", context: null })}
-    />
-  );
+  const pendingContext = (compact: boolean) =>
+    state.selectedContext && (
+      <SelectedContextBlock
+        text={state.selectedContext.text}
+        source={state.selectedContext.source}
+        onRemove={() => dispatch({ type: "setContext", context: null })}
+        compact={compact}
+      />
+    );
 
   const pill = (placement: "compact" | "typing" | "modal") => (
     <AgentPill
@@ -768,10 +770,9 @@ export default function AgentWindow() {
           keyboardWanted &&
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
-        // Inside the composer, a shade lighter than it, so it reads as a box.
         header={
-          !inModal && pendingContext ? (
-            <div className="pb-2 *:bg-surface-2">{pendingContext}</div>
+          !inModal && state.selectedContext ? (
+            <div className="pb-2">{pendingContext(true)}</div>
           ) : null
         }
         className={inModal ? "min-h-21" : "h-[145px] w-[510px]"}
@@ -821,7 +822,7 @@ export default function AgentWindow() {
                 {state.input === "keyboard" && notice && (
                   <p className="self-start px-1 text-xs text-muted-foreground">{notice}</p>
                 )}
-                {pendingContext && <div className="w-full">{pendingContext}</div>}
+                {state.selectedContext && <div className="w-full">{pendingContext(false)}</div>}
                 {state.input === "keyboard" ? (
                   <div className="w-full">{composer(true)}</div>
                 ) : (
