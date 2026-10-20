@@ -124,17 +124,17 @@ async function mountWindow(t) {
     );
   const layout = () => main.layouts.at(-1)?.layout;
   // A tool call of the running turn waits on this question or answer card.
-  const toolContext = (toolCallId) => ({
-    messageId: "a1",
+  const toolContext = (toolCallId, messageId = "a1") => ({
+    messageId,
     toolCallId,
     signal: turn.signal,
     onInteraction() {},
   });
-  const ask = async (toolCallId, payload) => {
+  const ask = async (toolCallId, payload, messageId = "a1") => {
     const results = [];
     await React.act(async () => {
       void interactions
-        .requestInteraction(toolContext(toolCallId), payload)
+        .requestInteraction(toolContext(toolCallId, messageId), payload)
         .then((result) => results.push(result));
     });
     return results;
@@ -722,8 +722,6 @@ for (const [what, payload] of [
     await view.settle();
     assert.equal(view.layout(), "modal", "the timed open");
     assert.equal(view.main.layouts.at(-1).focus, false, "main isn't asked for the keyboard");
-    // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
-    assert.ok(document.activeElement !== view.host.querySelector(COMPOSER));
     assert.ok(!view.host.querySelector("[data-interaction-card]").contains(document.activeElement));
 
     // Pointing at the window gives it the keyboard.
@@ -835,4 +833,96 @@ test("moving the pointer over a card above the pill uses up its timed open", asy
   await view.settle();
   assert.equal(view.layout(), "standalone", "the user pointing at it keeps it above the pill");
   assert.ok(!view.button("Expand").className.includes("agent-expand-cue"));
+});
+
+for (const [what, payload, draft] of [
+  ["a key card, with a message being written", KEY_CARD, "and also check my cal"],
+  ["a text question", TEXT_QUESTION, ""],
+  ["a text question, with a message being written", TEXT_QUESTION, "and also check my cal"],
+]) {
+  test(`back from another app, the field the user clicks on ${what} keeps the keyboard`, async (t) => {
+    const view = await mountWindow(t);
+    const { document } = view.happyWindow;
+    document.hasFocus = () => true;
+    await React.act(async () => view.main.handlers.hotkey({ external: false }));
+    await view.settle();
+    await view.chat({ busy: true, messages: [user, reply([askUser])] });
+    await React.act(async () => view.button("Type").click());
+    await view.settle();
+    const typing = view.host.querySelector("textarea");
+    typing.focus();
+    if (draft) await setDraft(view, typing, draft);
+    // The user goes to another app; the card arrives meanwhile.
+    typing.blur();
+    document.hasFocus = () => false;
+    await view.ask("c1", payload);
+    await view.settle();
+    // Back, a click into the card's own field.
+    const field = view.host.querySelector("[data-interaction-card] input");
+    document.hasFocus = () => true;
+    await pointer(view, field, "pointerdown");
+    field.focus();
+    await React.act(async () =>
+      view.happyWindow.dispatchEvent(new view.happyWindow.Event("focus"))
+    );
+    await view.settle();
+    await view.settle();
+    // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
+    assert.ok(document.activeElement === field, "the composer doesn't take it back");
+  });
+}
+
+test("the modal's composer never takes the keyboard while a restored key card shows", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await view.chat({ messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: KEY_CARD },
+      () => {}
+    )
+  );
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.settle();
+  assert.ok(view.host.querySelector(KEY_FIELD), "the restored key card shows");
+  assert.ok(
+    document.activeElement !== view.host.querySelector(COMPOSER),
+    "a pasted key can't land in the message"
+  );
+});
+
+test("a spoken command after a timed open made while away asks for the keyboard again", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.ask("c1", QUESTION);
+  await view.settle();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  document.hasFocus = () => false;
+  await view.wait(4300);
+  await view.settle();
+  assert.equal(view.main.layouts.at(-1).focus, false, "the timed open while away");
+  await React.act(async () => view.interactions.cancelInteraction("a1::c1"));
+  const done = { ...reply([{ ...askUser, status: "completed" }], "ok"), isStreaming: false };
+  await view.chat({ busy: false, messages: [user, done] });
+  await view.settle();
+  // A wake-word command, whose reply asks a text question.
+  await React.act(async () => view.main.handlers.command({ text: "draft a reply" }));
+  const asking = {
+    id: "a2",
+    role: "assistant",
+    content: "",
+    isStreaming: true,
+    toolCalls: [{ id: "c9", name: "ask_user", arguments: "{}", status: "executing" }],
+  };
+  const second = { id: "u2", role: "user", content: "draft a reply", isStreaming: false };
+  await view.chat({ busy: true, messages: [user, done, second, asking] });
+  await view.ask("c9", TEXT_QUESTION, "a2");
+  await view.settle();
+  assert.equal(view.main.layouts.at(-1).focus, true, "the question can be typed into");
 });

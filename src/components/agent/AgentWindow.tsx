@@ -132,7 +132,8 @@ export default function AgentWindow() {
   // A move the window makes by itself (the timed open, a card from the
   // keyboard layouts) keeps the keyboard only if the window has it, so it
   // never takes it from the app the user went to. The user pointing at the
-  // window, the window getting focus, or a press of the hotkey ends that.
+  // window, the window getting focus, a press of the hotkey or a new spoken
+  // command ends that.
   const [movedAway, setMovedAway] = useState(false);
   const moveOnItsOwn = useCallback(
     (action: AgentWindowAction) => {
@@ -146,15 +147,17 @@ export default function AgentWindow() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, []);
-  // Who has the keyboard is decided here: the window (asked of main), and in
-  // it the composer, unless a key card waits and no message is being written
-  // (the key field takes it then). A card places the caret inside itself
-  // (InteractionCard's useCardFocus).
-  const surfaceFocus =
-    !movedAway &&
+  // Who has the keyboard is decided here: the window (asked of main, never
+  // after a move made while the user was away), and in it the composer, unless
+  // a key card is shown and no message is being written (the key field takes
+  // it then). The composer's own focus doesn't follow movedAway, so a user who
+  // comes back and clicks a card's field keeps it. A card places the caret
+  // inside itself (InteractionCard's useCardFocus).
+  const keyboardWanted =
     state.layout !== "pill" &&
     (state.input === "keyboard" ||
       ((state.layout === "modal" || standalone) && (cardClicked || awaitsTypedAnswer(messages))));
+  const surfaceFocus = keyboardWanted && !movedAway;
 
   // A card that arrives while compact shows above the pill if it asks
   // something; an answer card waits behind the pill instead (or, from the
@@ -179,7 +182,9 @@ export default function AgentWindow() {
     if (fresh && pendingCard.interaction === "questions" && stateRef.current.draft.trim()) {
       setDraftHeldCard(pendingCard.key);
     }
-    if (stateRef.current.input === "keyboard") moveOnItsOwn({ type: "showCard", asks });
+    // In the modal the card shows where it is: the window doesn't move.
+    const moves = stateRef.current.input === "keyboard" && stateRef.current.layout !== "modal";
+    if (moves) moveOnItsOwn({ type: "showCard", asks });
     else dispatch({ type: "showCard", asks });
   }, [dispatch, moveOnItsOwn, pendingCard, standalone]);
 
@@ -476,7 +481,10 @@ export default function AgentWindow() {
         setMovedAway(false);
         handlersRef.current.open(layout);
       }),
-      api?.onAgentWindowCommand?.((command) => handlersRef.current.command(command)),
+      api?.onAgentWindowCommand?.((command) => {
+        setMovedAway(false);
+        handlersRef.current.command(command);
+      }),
       api?.onAgentWindowDismiss?.(() => handlersRef.current.dismiss()),
       api?.onCancelHotkeyPressed?.(() => handlersRef.current.escape()),
     ];
@@ -709,8 +717,8 @@ export default function AgentWindow() {
         micUnavailableHint={micHint}
         focused={
           surface.shown &&
-          surfaceFocus &&
-          (pendingCard?.interaction !== "apiKey" || state.draft.trim() !== "")
+          keyboardWanted &&
+          (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
         header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
         className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
