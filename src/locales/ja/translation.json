@@ -4027,7 +4027,8 @@
     "composer": {
       "placeholder": "質問を話すか入力してください…",
       "followUpPlaceholder": "続けて質問…",
-      "answerPlaceholder": "ここに回答…"
+      "answerPlaceholder": "ここに回答…",
+      "cardPlaceholder": "上のカードで回答…"
     },
     "empty": {
       "title": "何をお手伝いしましょうか？",

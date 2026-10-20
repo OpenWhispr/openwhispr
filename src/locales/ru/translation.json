@@ -4071,7 +4071,8 @@
     "composer": {
       "placeholder": "Продиктуйте или введите вопрос…",
       "followUpPlaceholder": "Задайте уточняющий вопрос…",
-      "answerPlaceholder": "Ответьте здесь…"
+      "answerPlaceholder": "Ответьте здесь…",
+      "cardPlaceholder": "Ответьте в карточке выше…"
     },
     "empty": {
       "title": "Чем могу помочь?",

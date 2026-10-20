@@ -4197,7 +4197,8 @@
     "composer": {
       "placeholder": "Dictate or type your question…",
       "followUpPlaceholder": "Ask a follow-up…",
-      "answerPlaceholder": "Answer here…"
+      "answerPlaceholder": "Answer here…",
+      "cardPlaceholder": "Answer on the card above…"
     },
     "empty": {
       "title": "What can I help with?",

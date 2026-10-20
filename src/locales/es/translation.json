@@ -4079,7 +4079,8 @@
     "composer": {
       "placeholder": "Dicta o escribe tu pregunta…",
       "followUpPlaceholder": "Haz una pregunta de seguimiento…",
-      "answerPlaceholder": "Responde aquí…"
+      "answerPlaceholder": "Responde aquí…",
+      "cardPlaceholder": "Responde en la tarjeta de arriba…"
     },
     "empty": {
       "title": "¿En qué puedo ayudarte?",

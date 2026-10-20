@@ -58,6 +58,8 @@ export interface InteractionEntry {
   step: number;
   /** The settings card's Open Settings was used; it now offers Done. */
   settingsOpened?: true;
+  /** Reopened from a turn that ended: answering it starts a new turn. */
+  restored?: true;
   result?: InteractionResult;
   /** Why the last attempt from the card failed (an error code); the card stays open to retry. */
   error?: string;
@@ -94,13 +96,22 @@ function patchEntry(key: string, patch: Partial<InteractionEntry>): void {
 function addEntry(
   key: string,
   request: { messageId: string; toolCallId: string; payload: InteractionPayload },
-  waiter: Waiter
+  waiter: Waiter,
+  restored = false
 ): void {
   waiters.set(key, waiter);
   useAgentInteractionStore.setState((state) => ({
     entries: {
       ...state.entries,
-      [key]: { key, ...request, state: "pending", draft: {}, typedAnswers: {}, step: 0 },
+      [key]: {
+        key,
+        ...request,
+        state: "pending",
+        draft: {},
+        typedAnswers: {},
+        step: 0,
+        ...(restored ? { restored: true } : {}),
+      },
     },
   }));
 }
@@ -178,7 +189,7 @@ export function restoreInteraction(
 ): boolean {
   const key = approvalKey(request.messageId, request.toolCallId);
   if (isOpen(key)) return false;
-  addEntry(key, request, { settle: onSettled, detach: () => {} });
+  addEntry(key, request, { settle: onSettled, detach: () => {} }, true);
   return true;
 }
 

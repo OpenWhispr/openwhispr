@@ -28,22 +28,27 @@ export function useAgentSurface({
   layout,
   focus,
   contentHeight,
+  wide = false,
 }: {
   visible: boolean;
   layout: AgentWindowLayout;
   focus: boolean;
   /** The standalone card's height; a change resizes the window without a fade. */
   contentHeight?: number;
+  /** pill only: the wider pill that reads "Waiting for answer". */
+  wide?: boolean;
 }) {
   const [shown, setShown] = useState(false);
-  // The layout main last sized the window for; a hide shrinks it to the pill.
-  const appliedLayoutRef = useRef<AgentWindowLayout>("pill");
+  // The layout (and pill width) main last sized the window for; a hide
+  // shrinks it to the pill.
+  const appliedLayoutRef = useRef("pill");
 
   useEffect(() => {
     if (!visible) return undefined;
     let current = true;
+    const size = layout === "pill" && wide ? "pill:wide" : layout;
     void (async () => {
-      const resizes = appliedLayoutRef.current !== layout;
+      const resizes = appliedLayoutRef.current !== size;
       if (resizes) {
         setShown(false);
         await nextFrame();
@@ -55,8 +60,9 @@ export function useAgentSurface({
         layout,
         focus,
         ...(contentHeight !== undefined ? { contentHeight } : {}),
+        ...(size === "pill:wide" ? { wide: true } : {}),
       });
-      appliedLayoutRef.current = layout;
+      appliedLayoutRef.current = size;
       if (resizes) {
         await resized;
         await nextFrame();
@@ -66,7 +72,7 @@ export function useAgentSurface({
     return () => {
       current = false;
     };
-  }, [visible, layout, focus, contentHeight]);
+  }, [visible, layout, focus, contentHeight, wide]);
 
   // Close: transparent first, so the next show never paints this frame.
   const hide = useCallback(async () => {

@@ -1886,7 +1886,8 @@
     "composer": {
       "placeholder": "أملِ سؤالك أو اكتبه…",
       "followUpPlaceholder": "اطرح سؤال متابعة…",
-      "answerPlaceholder": "أجب هنا…"
+      "answerPlaceholder": "أجب هنا…",
+      "cardPlaceholder": "أجب في البطاقة أعلاه…"
     },
     "empty": {
       "title": "كيف يمكنني المساعدة؟",

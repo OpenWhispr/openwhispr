@@ -34,6 +34,7 @@ class AgentWindowManager {
     this.layout = "pill";
     // A standalone card's measured height.
     this.contentHeight = 0;
+    this.wide = false;
     this.anchor = null;
     this.displayId = null;
     this.voiceState = "idle";
@@ -126,10 +127,15 @@ class AgentWindowManager {
     if (!isFromWindow(event, this.window) || !AGENT_LAYOUT_SIZES[request?.layout]) return false;
     const standalone = request.layout === "standalone";
     if (standalone && !Number.isFinite(request.contentHeight)) return false;
+    const focus = request.focus === true;
+    // A card that only changed height must not take the keyboard back from
+    // the app the user went to.
+    const refocus = request.layout !== this.layout || focus !== this.keyboardFocus;
     this.layout = request.layout;
     this.contentHeight = standalone ? request.contentHeight : 0;
+    this.wide = request.layout === "pill" && request.wide === true;
     this._applyBounds();
-    this._setKeyboardFocus(request.focus === true);
+    if (refocus) this._setKeyboardFocus(focus);
     return true;
   }
 
@@ -241,6 +247,7 @@ class AgentWindowManager {
     this.ready = false;
     this.pending = null;
     this.layout = "pill";
+    this.wide = false;
     this.keyboardFocus = false;
     this.inputRegion?.stop();
     this.inputRegion = null;
@@ -283,6 +290,7 @@ class AgentWindowManager {
     this._setKeyboardFocus(false);
     // Shrunk while hidden, so the next show never paints a stale modal frame.
     this.layout = "pill";
+    this.wide = false;
     if (this.anchor) this._applyBounds();
   }
 
@@ -336,6 +344,7 @@ class AgentWindowManager {
       layout: this.layout,
       workArea: display.workArea || display.bounds,
       contentHeight: this.contentHeight,
+      wide: this.wide,
     });
     if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds);
   }

@@ -4027,7 +4027,8 @@
     "composer": {
       "placeholder": "說出或輸入你的問題…",
       "followUpPlaceholder": "繼續提問…",
-      "answerPlaceholder": "在此回答…"
+      "answerPlaceholder": "在此回答…",
+      "cardPlaceholder": "在上方卡片中回答…"
     },
     "empty": {
       "title": "有什麼可以幫你？",

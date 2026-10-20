@@ -138,7 +138,7 @@ Module._load = function loadWithStubs(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const { AgentWindowManager } = require("../../src/helpers/agentWindowManager");
-const { AGENT_LAYOUT_SIZES } = require("../../src/helpers/agentWindowPlacement");
+const { AGENT_LAYOUT_SIZES, WAITING_PILL_SIZE } = require("../../src/helpers/agentWindowPlacement");
 Module._load = originalLoad;
 
 function createWindowManager(overrides = {}) {
@@ -184,9 +184,21 @@ test("the hotkey loads ?agent=true and shows the pill at the bottom center of th
   assert.deepEqual(win.calls[0], ["setContentProtection", true]);
 });
 
-test("the pill window fits the widest pill, Waiting for answer, with its shadow margins", () => {
-  // The reference's waiting pill is 287px wide.
-  assert.ok(AGENT_LAYOUT_SIZES.pill.width >= 287 + 2 * 8);
+test("only the pill that reads Waiting for answer widens the pill window", async () => {
+  const { manager, win } = await openedManager();
+  // The reference's waiting pill is 287px wide, its idle pill 173px; 8px shadow margins.
+  assert.ok(WAITING_PILL_SIZE.width >= 287 + 2 * 8);
+  assert.ok(AGENT_LAYOUT_SIZES.pill.width >= 173 + 2 * 8);
+  assert.ok(AGENT_LAYOUT_SIZES.pill.width < WAITING_PILL_SIZE.width);
+
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false, wide: true });
+  assert.equal(win.bounds.width, WAITING_PILL_SIZE.width);
+  assert.equal(win.bounds.x, (1440 - WAITING_PILL_SIZE.width) / 2, "still centered");
+  manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
+  assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.pill.width);
+  // Only the pill is ever widened.
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false, wide: true });
+  assert.equal(win.bounds.width, AGENT_LAYOUT_SIZES.modal.width);
 });
 
 test("a press before the renderer is ready reaches it once it is", () => {
@@ -329,6 +341,21 @@ test("Windows takes focus for typing and blurs before giving it back", async () 
     win.calls.filter(([name]) => ["focus", "blur", "setFocusable"].includes(name)),
     [["setFocusable", true], ["focus"], ["blur"], ["setFocusable", false]]
   );
+});
+
+test("Windows: a standalone card that only changes height never takes the keyboard back", async () => {
+  const { manager, win } = await openedManager({ platform: "win32" });
+  const focusCalls = () => win.calls.filter(([name]) => name === "focus").length;
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: true, contentHeight: 120 });
+  assert.equal(focusCalls(), 1);
+  // The user went to Settings; the card grew a Done button.
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: true, contentHeight: 160 });
+  assert.equal(win.bounds.height, AGENT_LAYOUT_SIZES.standalone.height - 80 + 160);
+  assert.equal(focusCalls(), 1, "resized without focusing");
+  // A real change still asks: the keyboard released, then wanted again.
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: false, contentHeight: 160 });
+  manager.setLayout(fromAgent(win), { layout: "standalone", focus: true, contentHeight: 160 });
+  assert.equal(focusCalls(), 2);
 });
 
 test("Windows releases the keyboard only from a focused window, and hides first", async () => {

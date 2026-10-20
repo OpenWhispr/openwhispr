@@ -33,8 +33,11 @@ export type AgentWindowAction =
   | { type: "collapse"; pending?: boolean }
   /** pending: the card opens in the modal, with the composer. */
   | { type: "useKeyboard"; pending?: boolean }
-  /** A card arrived while compact: it shows above the pill. */
-  | { type: "showCard" }
+  /**
+   * A card arrived while compact: one that asks something shows above the
+   * pill, an answer card waits behind it.
+   */
+  | { type: "showCard"; asks: boolean }
   /** The standalone card is answered or gone. */
   | { type: "cardSettled" }
   | { type: "useVoice" }
@@ -91,7 +94,9 @@ export function agentWindowReducer(
         notice: null,
       };
     case "showCard":
-      return state.layout === "pill" ? { ...state, layout: "standalone" } : state;
+      return state.layout === "modal"
+        ? state
+        : { ...state, layout: action.asks ? "standalone" : "pill" };
     case "cardSettled":
       return state.layout === "standalone"
         ? { ...state, layout: compactLayout(state.input) }
@@ -172,34 +177,42 @@ export function awaitsTypedAnswer(messages: ReadonlyArray<Pick<Message, "toolCal
   );
 }
 
-/**
- * The first card the chat waits on the user for: an interaction (a question, a
- * connect, …) still open, or an answer card waiting on Send or on a Retry.
- * Only cards of the messages on screen count.
- */
 export interface PendingCard {
+  /** The stores' key for the tool call. */
   key: string;
+  /**
+   * This card: an interaction and the answer card that follows it on the
+   * same tool call are different cards.
+   */
+  id: string;
   messageId: string;
   toolCall: ToolCallInfo;
   /** The interaction's kind; null for an answer card. */
   interaction: InteractionPayload["kind"] | null;
 }
 
+/**
+ * The first card a running turn waits on the user for: an interaction (a
+ * question, a connect, …) still open, or an answer card waiting on Send or on
+ * a Retry. Only cards of the messages on screen count, and not a card restored
+ * from a turn that ended: nothing waits on it.
+ */
 export function findPendingCard(
   messages: ReadonlyArray<Pick<Message, "id" | "toolCalls">>,
-  interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload">>>,
+  interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload" | "restored">>>,
   approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>
 ): PendingCard | null {
   for (const message of messages) {
     for (const toolCall of message.toolCalls ?? []) {
       const key = approvalKey(message.id, toolCall.id);
       const interaction = interactions[key];
-      if (interaction && interaction.state !== "settled") {
-        return { key, messageId: message.id, toolCall, interaction: interaction.payload.kind };
+      if (interaction && interaction.state !== "settled" && !interaction.restored) {
+        const { kind } = interaction.payload;
+        return { key, id: `${key}:${kind}`, messageId: message.id, toolCall, interaction: kind };
       }
       const approval = approvals[key];
       if (approval?.state === "pending" || approval?.awaitingRetry) {
-        return { key, messageId: message.id, toolCall, interaction: null };
+        return { key, id: `${key}:approval`, messageId: message.id, toolCall, interaction: null };
       }
     }
   }

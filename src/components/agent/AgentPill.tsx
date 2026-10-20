@@ -46,7 +46,7 @@ export function AgentPill({
   return (
     <div
       className={cn(
-        "flex h-10 items-center gap-1 rounded-full border border-border/60 bg-surface-1 ps-2 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)]",
+        "flex h-10 max-w-full items-center gap-1 rounded-full border border-border/60 bg-surface-1 ps-2 pe-1.5 text-muted-foreground shadow-[var(--shadow-card)]",
         className
       )}
     >
@@ -56,7 +56,11 @@ export function AgentPill({
           {notice}
         </span>
       ) : controls.waiting ? (
-        <span className="ps-1 text-[13px] whitespace-nowrap text-foreground/80 select-none">
+        // Truncates where a translation outgrows the window.
+        <span
+          className="min-w-0 truncate ps-1 text-[13px] text-foreground/80 select-none"
+          title={t("agentWindow.waitingForAnswer")}
+        >
           {t("agentWindow.waitingForAnswer")}
         </span>
       ) : controls.thinking ? (

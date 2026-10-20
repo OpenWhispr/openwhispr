@@ -4197,7 +4197,8 @@
     "composer": {
       "placeholder": "Dictez ou tapez votre question…",
       "followUpPlaceholder": "Poser une question complémentaire…",
-      "answerPlaceholder": "Répondez ici…"
+      "answerPlaceholder": "Répondez ici…",
+      "cardPlaceholder": "Répondez sur la carte ci-dessus…"
     },
     "empty": {
       "title": "Comment puis-je vous aider ?",

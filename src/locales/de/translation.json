@@ -4197,7 +4197,8 @@
     "composer": {
       "placeholder": "Frage diktieren oder eintippen…",
       "followUpPlaceholder": "Rückfrage stellen…",
-      "answerPlaceholder": "Hier antworten…"
+      "answerPlaceholder": "Hier antworten…",
+      "cardPlaceholder": "Auf der Karte oben antworten…"
     },
     "empty": {
       "title": "Wobei kann ich helfen?",

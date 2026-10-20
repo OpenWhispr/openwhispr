@@ -56,6 +56,9 @@ const MOCKS = {
 async function mountWindow(t) {
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
+  // Ends the turn's waits (and their timers) while the DOM still exists.
+  const turn = new AbortController();
+  t.after(() => turn.abort());
   const happyWindow = await installHappyDom(t);
   const main = { layouts: [], handlers: {} };
   const on = (name) => (callback) => {
@@ -76,6 +79,7 @@ async function mountWindow(t) {
     onAgentWindowCommand: on("command"),
     onAgentWindowDismiss: on("dismiss"),
     onCancelHotkeyPressed: on("cancel"),
+    connectorCancel: async () => ({ cancelled: true }),
   };
   // Frames as plain timers: the window fades through two of them around each resize.
   globalThis.requestAnimationFrame = (callback) => setTimeout(() => callback(Date.now()), 0);
@@ -85,10 +89,12 @@ async function mountWindow(t) {
     mockModules: MOCKS,
   });
   const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
   const { default: AgentWindow } = await vite.ssrLoadModule("/components/agent/AgentWindow.tsx");
   const { SettingsProvider } = await vite.ssrLoadModule("/hooks/useSettings.ts");
   const { ToastProvider } = await vite.ssrLoadModule("/components/ui/Toast.tsx");
   interactions.useAgentInteractionStore.setState({ entries: {} });
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
   const { createRoot } = require("react-dom/client");
   const host = happyWindow.document.createElement("div");
   happyWindow.document.body.append(host);
@@ -105,10 +111,10 @@ async function mountWindow(t) {
   );
 
   // Twice: what the first round sets off (a timed commit, a resize) lands in the second.
-  const wait = () => React.act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  const wait = (ms) => React.act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
   const settle = async () => {
-    await wait();
-    await wait();
+    await wait(300);
+    await wait(300);
   };
   const chat = (next) => React.act(async () => globalThis.__chat.set(next));
   const button = (label) =>
@@ -116,8 +122,53 @@ async function mountWindow(t) {
       (element) => element.getAttribute("aria-label") === label || element.textContent === label
     );
   const layout = () => main.layouts.at(-1)?.layout;
-  return { happyWindow, host, main, interactions, settle, chat, button, layout };
+  // A tool call of the running turn waits on this question or answer card.
+  const toolContext = (toolCallId) => ({
+    messageId: "a1",
+    toolCallId,
+    signal: turn.signal,
+    onInteraction() {},
+  });
+  const ask = async (toolCallId, payload) => {
+    const results = [];
+    await React.act(async () => {
+      void interactions
+        .requestInteraction(toolContext(toolCallId), payload)
+        .then((result) => results.push(result));
+    });
+    return results;
+  };
+  const askApproval = (toolCallId) =>
+    React.act(async () => {
+      void approvals.requestApproval(
+        toolContext(toolCallId),
+        { actionId: "act-1", connectorId: "slack", preview: SLACK_PREVIEW },
+        async () => undefined
+      );
+    });
+  return {
+    happyWindow,
+    host,
+    main,
+    interactions,
+    approvals,
+    settle,
+    chat,
+    button,
+    layout,
+    ask,
+    askApproval,
+    wait,
+  };
 }
+
+const SLACK_PREVIEW = {
+  verbKey: "slackPost",
+  destinationLabel: "#general",
+  accountLabel: "QA Fixture",
+  workspaceLabel: "Fixture Co",
+  body: "The homepage draft is ready.",
+};
 
 const QUESTION = {
   kind: "questions",
@@ -155,13 +206,7 @@ async function askWhileCompact(view) {
       reply([askUser]),
     ],
   });
-  const results = [];
-  await React.act(async () =>
-    view.interactions.restoreInteraction(
-      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
-      (result) => results.push(result)
-    )
-  );
+  const results = await view.ask("c1", QUESTION);
   await view.settle();
   return results;
 }
@@ -246,12 +291,7 @@ test("a connector step that asks to connect first keeps its card above the pill"
   const slack = { id: "c3", name: "slack_send_message", arguments: "{}", status: "executing" };
   await view.chat({ busy: true, messages: [reply([slack])] });
   // The connect card registers just after the step starts.
-  await React.act(async () =>
-    view.interactions.restoreInteraction(
-      { messageId: "a1", toolCallId: "c3", payload: { kind: "connection", target: "slack" } },
-      () => {}
-    )
-  );
+  await view.ask("c3", { kind: "connection", target: "slack" });
   await view.chat({
     messages: [
       reply([
@@ -265,4 +305,151 @@ test("a connector step that asks to connect first keeps its card above the pill"
   await view.settle();
   assert.equal(view.layout(), "standalone");
   assert.match(view.host.textContent, /Connect Slack/);
+});
+
+const user = { id: "u1", role: "user", content: "Plan it", isStreaming: false };
+// Text fields outside the cards (an answer card edits its message in one).
+const composers = (view) =>
+  [...view.host.querySelectorAll("textarea")].filter(
+    (field) => !field.closest("[data-approval-card]")
+  ).length;
+const slackCall = { id: "c5", name: "slack_send_message", arguments: "{}", status: "executing" };
+
+test("a card that arrives while typing: a question shows above the pill, an answer card waits behind it", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  // Keyboard on the pill while the request thinks: the typing layout.
+  await React.act(async () => view.button("Type").click());
+  await view.settle();
+  assert.equal(view.layout(), "typing");
+
+  const results = await view.ask("c1", QUESTION);
+  await view.settle();
+  assert.equal(view.layout(), "standalone");
+  assert.ok(view.host.querySelector("[data-interaction-card]"));
+  assert.match(view.host.textContent, /Waiting for answer/);
+  await React.act(async () => view.host.querySelector('[role="radio"]').click());
+  await view.settle();
+  assert.equal(results.length, 1);
+  assert.equal(view.layout(), "typing", "back to typing once it is answered");
+
+  // An answer card from the typing layout: the waiting pill.
+  await view.chat({ messages: [user, reply([{ ...askUser, status: "completed" }, slackCall])] });
+  await view.askApproval("c5");
+  await view.wait(100);
+  assert.equal(view.layout(), "pill");
+  assert.match(view.host.textContent, /Waiting for answer/);
+});
+
+test("an answer card the reply opened the modal for still opens it again after a minimize", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+  await view.askApproval("c5");
+  await view.settle();
+  assert.equal(view.layout(), "modal", "the reply's step opened it");
+  // In the modal the card has its own Send: the voice pill is the turn's, not waiting.
+  assert.ok(view.host.querySelector("[data-approval-card]"));
+  assert.doesNotMatch(view.host.textContent, /Waiting for answer/);
+
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  assert.match(view.host.textContent, /Waiting for answer/);
+  assert.ok(view.button("Expand").className.includes("agent-expand-cue"));
+  await view.wait(2800);
+  assert.equal(view.layout(), "pill");
+  await view.wait(1500);
+  await view.settle();
+  assert.equal(view.layout(), "modal", "opened about four seconds after the minimize");
+  assert.equal(composers(view), 0, "a voice request opens with no composer");
+});
+
+test("in the voice modal the pill waits for a question, and Expand adds no composer", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  await React.act(async () => view.button("Expand").click());
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  assert.equal(composers(view), 0);
+  assert.match(view.host.textContent, /Waiting for answer/);
+});
+
+test("a click on a card above the pill asks for the keyboard", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  assert.equal(view.main.layouts.at(-1).focus, false);
+  const card = view.host.querySelector("[data-interaction-card]");
+  await React.act(async () =>
+    card.dispatchEvent(new view.happyWindow.PointerEvent("pointerdown", { bubbles: true }))
+  );
+  await view.settle();
+  assert.deepEqual(
+    [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).focus],
+    ["standalone", true]
+  );
+});
+
+test("a reply never reopens a modal the user opened and then minimized", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  await React.act(async () => view.button("Expand").click());
+  await view.settle();
+  await React.act(async () => view.host.querySelector('[role="radio"]').click());
+  await view.settle();
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+
+  await view.chat({
+    messages: [user, reply([{ ...askUser, status: "completed" }], "Optimizing for speed.")],
+  });
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+});
+
+test("a step's moment to show its card starts once, however often the reply streams", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  const search = { id: "c2", name: "search_notes", arguments: "{}", status: "completed" };
+  const streaming = (reasoning) => ({ ...reply([search]), reasoning });
+  await view.chat({ busy: true, messages: [user, streaming("a")] });
+  // Reasoning streams in every 60 ms, well inside the 300 ms each time.
+  for (let i = 0; i < 8; i++) {
+    await view.wait(60);
+    await view.chat({ messages: [user, streaming("a".repeat(i + 2))] });
+  }
+  assert.equal(view.layout(), "modal");
+});
+
+test("a card restored from a turn that ended doesn't wait anything", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
+      () => {}
+    )
+  );
+  await view.settle();
+  assert.equal(view.layout(), "pill");
+  assert.doesNotMatch(view.host.textContent, /Waiting for answer/);
+  assert.ok(!view.button("Expand")?.className.includes("agent-expand-cue"));
+});
+
+test("on a connect card the composer points at the card", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.ask("c1", { kind: "connection", target: "slack" });
+  await view.settle();
+  const composer = view.host.querySelector("textarea");
+  assert.equal(composer.getAttribute("placeholder"), "Answer on the card above…");
 });

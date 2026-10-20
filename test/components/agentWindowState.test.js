@@ -197,13 +197,22 @@ test("a request that arrives while a reply runs waits in the composer with what 
 test("a card that arrives while compact shows above the pill, and the pill comes back after", async () => {
   const { agentWindowReducer, INITIAL_AGENT_WINDOW_STATE } = await load();
   const pill = { ...INITIAL_AGENT_WINDOW_STATE, visible: true, layout: "pill", input: "voice" };
-  const standalone = agentWindowReducer(pill, { type: "showCard" });
+  const standalone = agentWindowReducer(pill, { type: "showCard", asks: true });
   assert.equal(standalone.layout, "standalone");
   assert.equal(agentWindowReducer(standalone, { type: "cardSettled" }).layout, "pill");
+  // An answer card waits behind the pill.
+  assert.equal(agentWindowReducer(pill, { type: "showCard", asks: false }).layout, "pill");
 
-  // Only from the pill: the modal and the typing layout already show the card.
+  // From the typing layout too, and back to it once the card is answered.
+  const typing = { ...pill, layout: "typing", input: "keyboard", draft: "Also" };
+  const asked = agentWindowReducer(typing, { type: "showCard", asks: true });
+  assert.deepEqual([asked.layout, asked.draft], ["standalone", "Also"]);
+  assert.equal(agentWindowReducer(asked, { type: "cardSettled" }).layout, "typing");
+  assert.equal(agentWindowReducer(typing, { type: "showCard", asks: false }).layout, "pill");
+
+  // The modal already shows the card.
   const modal = { ...pill, layout: "modal" };
-  assert.equal(agentWindowReducer(modal, { type: "showCard" }), modal);
+  assert.equal(agentWindowReducer(modal, { type: "showCard", asks: true }), modal);
   assert.equal(agentWindowReducer(modal, { type: "cardSettled" }), modal);
 });
 
@@ -255,6 +264,7 @@ test("the pending card is the first open question or answer card on screen", asy
   const interaction = { "m2::c3": { state: "pending", payload: questions } };
   assert.deepEqual(findPendingCard(messages, interaction, {}), {
     key: "m2::c3",
+    id: "m2::c3:questions",
     messageId: "m2",
     toolCall: messages[1].toolCalls[1],
     interaction: "questions",
@@ -263,6 +273,13 @@ test("the pending card is the first open question or answer card on screen", asy
   const approval = { "m1::c1": { state: "pending" } };
   assert.equal(findPendingCard(messages, interaction, approval).key, "m1::c1");
   assert.equal(findPendingCard(messages, interaction, approval).interaction, null);
+  // An answer card is a card of its own, after a connect on the same call.
+  const connect = { "m1::c1": { state: "settled", payload: { kind: "connection" } } };
+  assert.equal(findPendingCard(messages, connect, approval).id, "m1::c1:approval");
+
+  // A card restored from a turn that ended: nothing waits on it.
+  const restored = { "m2::c3": { state: "pending", payload: questions, restored: true } };
+  assert.equal(findPendingCard(messages, restored, {}), null);
 
   // Sending, sent, or failed with nothing waiting: not waiting on the user.
   for (const entry of [{ state: "committing" }, { state: "sent" }, { state: "failed" }]) {

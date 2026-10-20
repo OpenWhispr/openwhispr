@@ -21,6 +21,7 @@ import {
   INITIAL_AGENT_WINDOW_STATE,
   resolveAgentPillControls,
   type AgentPillButton,
+  type AgentPillPlacement,
   type AgentPillStatus,
   type AgentWindowAction,
   type AgentWindowState,
@@ -127,60 +128,57 @@ export default function AgentWindow() {
     state.layout !== "pill" &&
     (state.input === "keyboard" ||
       ((state.layout === "modal" || standalone) && (cardClicked || awaitsTypedAnswer(messages))));
-  const surface = useAgentSurface({
-    visible: state.visible,
-    layout: state.layout,
-    focus: surfaceFocus,
-    ...(standalone ? { contentHeight: cardHeight } : {}),
-  });
 
-  // A card that arrives while compact shows above the pill, if it asks
-  // something (an answer card waits behind the pill instead); once it is
-  // answered the pill is back on its own. A card the user minimized stays
-  // behind the pill.
+  // A card that arrives while compact shows above the pill if it asks
+  // something; an answer card waits behind the pill instead. Once it is
+  // answered the window goes back to how it was. A card the user minimized
+  // stays behind the pill.
   const shownCardsRef = useRef(new Set<string>());
   useEffect(() => {
     if (!pendingCard) {
       if (standalone) dispatch({ type: "cardSettled" });
       return;
     }
-    if (standalone && pendingCard.interaction === null) dispatch({ type: "cardSettled" });
-    if (shownCardsRef.current.has(pendingCard.key)) return;
-    shownCardsRef.current.add(pendingCard.key);
-    if (pendingCard.interaction !== null) dispatch({ type: "showCard" });
+    const asks = pendingCard.interaction !== null;
+    const fresh = !shownCardsRef.current.has(pendingCard.id);
+    shownCardsRef.current.add(pendingCard.id);
+    if (fresh || (standalone && !asks)) dispatch({ type: "showCard", asks });
   }, [dispatch, pendingCard, standalone]);
 
   // A reply opens the modal once it has something to show: text, an error, or
   // a step that is doing more than asking the user (D2). A spoken request that
   // asks first keeps its card above the pill, a connector's step that asks to
   // connect included; such a step reports its card just after it starts, so a
-  // step gets a moment before it counts.
+  // step gets a moment before it counts. Once per reply: the user opening the
+  // modal counts too, so a reply never reopens a modal the user minimized.
+  const latest = messages.at(-1);
+  const replyId = latest?.role === "assistant" ? latest.id : null;
+  const replyShows = replyId !== null && Boolean(latest?.content || latest?.error);
+  const replyWorks =
+    replyId !== null &&
+    Boolean(
+      latest?.toolCalls?.some(
+        (call) => !INTERACTION_TOOL_NAMES.has(call.name) && call.interaction?.state !== "pending"
+      )
+    );
   const expandedRepliesRef = useRef(new Set<string>());
   useEffect(() => {
-    const reply = messages.at(-1);
-    if (reply?.role !== "assistant" || expandedRepliesRef.current.has(reply.id)) return;
+    if (replyId === null || expandedRepliesRef.current.has(replyId)) return;
+    if (!replyShows && !replyWorks) return;
     const expand = () => {
-      expandedRepliesRef.current.add(reply.id);
+      expandedRepliesRef.current.add(replyId);
       if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
     };
-    if (reply.content || reply.error) {
+    if (replyShows) {
       expand();
       return;
     }
-    const working = reply.toolCalls?.some(
-      (call) => !INTERACTION_TOOL_NAMES.has(call.name) && call.interaction?.state !== "pending"
-    );
-    if (!working) return;
     const timer = setTimeout(expand, STEP_SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [dispatch, messages]);
-
-  const nudge = useAnswerNudge({
-    pendingKey: pendingCard?.key ?? null,
-    compact: state.layout !== "modal",
-    visible: state.visible,
-    onOpen: () => dispatch({ type: "expand" }),
-  });
+  }, [dispatch, replyId, replyShows, replyWorks]);
+  useEffect(() => {
+    if (state.layout === "modal" && replyId !== null) expandedRepliesRef.current.add(replyId);
+  }, [replyId, state.layout]);
 
   // The press that opened the window owns it until the user does something
   // else: Esc on its take then closes the window again.
@@ -261,6 +259,24 @@ export default function AgentWindow() {
     onMicError: () => dispatch({ type: "notice", notice: "agentWindow.notices.micUnavailable" }),
   });
   const listening = voice.status === "recording" || voice.opening;
+  const transcribing = voice.status === "transcribing";
+
+  const nudge = useAnswerNudge({
+    pendingKey: pendingCard?.id ?? null,
+    compact: state.layout !== "modal",
+    visible: state.visible,
+    paused: listening || transcribing,
+    onOpen: () => dispatch({ type: "expand" }),
+  });
+
+  const surface = useAgentSurface({
+    visible: state.visible,
+    layout: state.layout,
+    focus: surfaceFocus,
+    ...(standalone ? { contentHeight: cardHeight } : {}),
+    // Only the pill that reads "Waiting for answer" needs the wider window.
+    wide: state.layout === "pill" && pendingCard !== null && !listening && !transcribing,
+  });
 
   // Another app's selection and a screenshot, read at the press, ride with
   // the request it starts.
@@ -536,6 +552,7 @@ export default function AgentWindow() {
     switch (button) {
       case "expand":
         openedByTakeRef.current = false;
+        nudge.cancel();
         dispatch({ type: "expand" });
         return;
       case "mic":
@@ -545,6 +562,7 @@ export default function AgentWindow() {
         // What was said so far becomes the start of the typed draft.
         if (listening) voice.stop("draft");
         openedByTakeRef.current = false;
+        nudge.cancel();
         // A waiting card opens in the modal, with the composer to answer it.
         dispatch({ type: "useKeyboard", pending: Boolean(pendingCard) });
         return;
@@ -556,21 +574,22 @@ export default function AgentWindow() {
     }
   };
 
-  const latest = messages.at(-1);
   const answerStarted =
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
-  const transcribing = voice.status === "transcribing";
-  const pillStatus: AgentPillStatus = listening
-    ? "listening"
-    : transcribing
-      ? "transcribing"
-      : pendingCard
-        ? "waiting"
-        : busy && !answerStarted
-          ? "thinking"
-          : busy
-            ? "streaming"
-            : "idle";
+  // In the modal an answer card is on screen with its own Send, so the pill
+  // waits only on a question; outside it, the pill waits on any card.
+  const pillStatus = (placement: AgentPillPlacement): AgentPillStatus =>
+    listening
+      ? "listening"
+      : transcribing
+        ? "transcribing"
+        : pendingCard && (placement !== "modal" || pendingCard.interaction !== null)
+          ? "waiting"
+          : busy && !answerStarted
+            ? "thinking"
+            : busy
+              ? "streaming"
+              : "idle";
   const notice = state.notice ? t(state.notice) : null;
   const micHint = voice.streamingOnlyProvider
     ? t("agentMode.input.voiceDraftStreamingOnly")
@@ -585,7 +604,7 @@ export default function AgentWindow() {
 
   const pill = (placement: "compact" | "typing" | "modal") => (
     <AgentPill
-      controls={resolveAgentPillControls(placement, pillStatus, Boolean(notice))}
+      controls={resolveAgentPillControls(placement, pillStatus(placement), Boolean(notice))}
       recording={voice.status === "recording"}
       readLevel={voice.readLevel}
       notice={placement === "typing" ? null : notice}
@@ -613,9 +632,12 @@ export default function AgentWindow() {
       placeholder={
         answering
           ? t("agentWindow.composer.answerPlaceholder")
-          : inModal && messages.length > 0
-            ? t("agentWindow.composer.followUpPlaceholder")
-            : t("agentWindow.composer.placeholder")
+          : pendingCard?.interaction
+            ? // A connect, access, key or settings card: answered on the card, never here.
+              t("agentWindow.composer.cardPlaceholder")
+            : inModal && messages.length > 0
+              ? t("agentWindow.composer.followUpPlaceholder")
+              : t("agentWindow.composer.placeholder")
       }
       busy={busy}
       answering={answering}
@@ -690,15 +712,18 @@ export default function AgentWindow() {
           </AgentModal>
         ) : state.layout === "typing" ? (
           <>
-            {composer(false)}
+            {/* A command held while a card waits brings this back; typing here
+                stops the timed opening. */}
+            <div onKeyDown={nudge.cancel}>{composer(false)}</div>
             {pill("typing")}
           </>
         ) : standalone && pendingCard ? (
           <>
             {/* The same card as in the modal, so what the user picked carries
-                over. Starting on it stops the timed opening. */}
+                over. Pointing at it or starting on it stops the timed opening. */}
             <div
               ref={cardFrameRef}
+              onPointerEnter={nudge.cancel}
               onPointerDown={nudge.cancel}
               onFocus={nudge.cancel}
               onKeyDown={nudge.cancel}

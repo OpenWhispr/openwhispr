@@ -61,25 +61,54 @@ test("moving between the pill and the card above it keeps the same timer", async
   assert.deepEqual(view.opened, ["m1::c1"]);
 });
 
+test("it stops when the card is answered or dismissed", async (t) => {
+  const view = await mountNudge(t, WAITING);
+  await view.tick(1000);
+  await view.render({ pendingKey: null });
+  assert.equal(view.nudge().cue, false);
+  await view.tick(10_000);
+  assert.deepEqual(view.opened, []);
+});
+
 for (const [why, change] of [
-  ["the card is answered or dismissed", { pendingKey: null }],
-  ["the modal opens", { compact: false }],
+  ["the modal opens by itself (the reply's own expand)", { compact: false }],
   ["the window hides", { visible: false }],
+  ["a voice take starts", { paused: true }],
 ]) {
-  test(`it stops for good when ${why}`, async (t) => {
+  test(`it only pauses when ${why}, and starts over after`, async (t) => {
     const view = await mountNudge(t, WAITING);
-    await view.tick(1000);
+    await view.tick(3000);
     await view.render(change);
     assert.equal(view.nudge().cue, false);
-    await view.render(WAITING);
     await view.tick(10_000);
-    assert.deepEqual(view.opened, [], "never armed again for that card");
+    assert.deepEqual(view.opened, [], "nothing opens meanwhile");
+
+    await view.render({ compact: true, visible: true, paused: false });
+    assert.equal(view.nudge().cue, true, "cued again");
+    await view.tick(3999);
+    assert.deepEqual(view.opened, [], "a fresh four seconds");
+    await view.tick(1);
+    assert.deepEqual(view.opened, ["m1::c1"]);
   });
 }
 
-test("starting on the card stops it", async (t) => {
+test("a voice take that starts with the card never arms it", async (t) => {
+  const view = await mountNudge(t, { ...WAITING, paused: true });
+  assert.equal(view.nudge().cue, false);
+  await view.tick(10_000);
+  assert.deepEqual(view.opened, []);
+});
+
+test("the user acting on the card stops it for good", async (t) => {
   const view = await mountNudge(t, WAITING);
   await React.act(async () => view.nudge().cancel());
+  assert.equal(view.nudge().cue, false);
+  await view.tick(10_000);
+  assert.deepEqual(view.opened, []);
+
+  // Expand pressed, then minimized again: it stays minimized.
+  await view.render({ compact: false });
+  await view.render({ compact: true });
   assert.equal(view.nudge().cue, false);
   await view.tick(10_000);
   assert.deepEqual(view.opened, []);

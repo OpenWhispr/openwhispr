@@ -4027,7 +4027,8 @@
     "composer": {
       "placeholder": "Dite ou digite sua pergunta…",
       "followUpPlaceholder": "Faça uma pergunta de acompanhamento…",
-      "answerPlaceholder": "Responda aqui…"
+      "answerPlaceholder": "Responda aqui…",
+      "cardPlaceholder": "Responda no cartão acima…"
     },
     "empty": {
       "title": "Como posso ajudar?",
