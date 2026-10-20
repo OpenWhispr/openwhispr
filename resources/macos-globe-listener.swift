@@ -9,6 +9,23 @@ var suppressedMouseButtons: Set<String> = []
 struct ListenerConfig: Decodable {
     var mouseButtons: Set<String> = []
     var suppressGlobeAction: Bool = false
+    // Modifier-only chords to watch, as canonical names ("option+command").
+    var modifierChords: [String] = []
+}
+
+// Each configuration line carries the whole state, but a key a build does not
+// know is a config it can still apply: missing keys keep their defaults.
+extension ListenerConfig {
+    private enum CodingKeys: String, CodingKey {
+        case mouseButtons, suppressGlobeAction, modifierChords
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mouseButtons = try container.decodeIfPresent(Set<String>.self, forKey: .mouseButtons) ?? []
+        suppressGlobeAction = try container.decodeIfPresent(Bool.self, forKey: .suppressGlobeAction) ?? false
+        modifierChords = try container.decodeIfPresent([String].self, forKey: .modifierChords) ?? []
+    }
 }
 
 func emit(_ message: String) {
@@ -36,6 +53,11 @@ func parseArguments() -> (config: ListenerConfig, statePath: String?, restoreLef
             statePath = arguments.next()
         case "--restore-leftover-globe-preference":
             restoreLeftoverPreferenceOnly = true
+        case "--modifier-chords":
+            config.modifierChords = (arguments.next() ?? "")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
         default:
             config.mouseButtons.formUnion(
                 argument.split(separator: ",")
@@ -178,7 +200,8 @@ enum GlobeSystemAction {
 
 func applyConfiguration(_ config: ListenerConfig) {
     suppressedMouseButtons = config.mouseButtons
-    updateMouseEventTap()
+    applyModifierChords(config.modifierChords)
+    updateEventTap()
     if config.suppressGlobeAction {
         GlobeSystemAction.apply()
     } else {
@@ -210,6 +233,88 @@ let releases: [(NSEvent.ModifierFlags, String)] = [
     (.shift, "shift"),
 ]
 
+// A modifier-only chord such as Option+Command. Neither Electron's accelerators
+// nor the right-modifier path above can watch one, so the listener reports the
+// chord itself: MOD_CHORD_DOWN once the held modifiers are exactly the chord,
+// MOD_CHORD_INTERRUPTED when another key or modifier joins it (the user is
+// typing a shortcut the chord merely prefixes, e.g. Option+Command+Esc), and
+// MOD_CHORD_UP once a chord modifier is released. Which side of the keyboard a
+// modifier came from does not matter.
+struct ModifierChord {
+    let name: String
+    let flags: NSEvent.ModifierFlags
+}
+
+let modifierFlagsByName: [String: NSEvent.ModifierFlags] = [
+    "control": .control,
+    "option": .option,
+    "command": .command,
+    "shift": .shift,
+]
+
+var modifierChords: [ModifierChord] = []
+var activeChord: ModifierChord?
+var activeChordInterrupted = false
+
+func parseModifierChord(_ name: String) -> ModifierChord? {
+    var flags: NSEvent.ModifierFlags = []
+    var count = 0
+    for part in name.split(separator: "+") {
+        guard let flag = modifierFlagsByName[String(part)] else { return nil }
+        if flags.contains(flag) { return nil }
+        flags.insert(flag)
+        count += 1
+    }
+    guard count >= 2 else { return nil }
+    return ModifierChord(name: name, flags: flags)
+}
+
+func applyModifierChords(_ names: [String]) {
+    modifierChords = names.compactMap { name in
+        guard let chord = parseModifierChord(name) else {
+            emitWarning("Ignored unsupported modifier chord: \(name)")
+            return nil
+        }
+        return chord
+    }
+    // A chord no longer configured must not report a release later.
+    if let active = activeChord, !modifierChords.contains(where: { $0.flags == active.flags }) {
+        activeChord = nil
+        activeChordInterrupted = false
+    }
+}
+
+func interruptActiveChord() {
+    guard let active = activeChord, !activeChordInterrupted else { return }
+    activeChordInterrupted = true
+    emit("MOD_CHORD_INTERRUPTED:\(active.name)")
+}
+
+func updateChordState(_ current: NSEvent.ModifierFlags) {
+    if let active = activeChord {
+        if current == active.flags { return }
+        let next = modifierChords.first(where: { $0.flags == current })
+        if current.isSuperset(of: active.flags) && next == nil {
+            // Another modifier joined the chord: a larger shortcut is being typed.
+            interruptActiveChord()
+            return
+        }
+        activeChord = nil
+        activeChordInterrupted = false
+        emit("MOD_CHORD_UP:\(active.name)")
+        if let next {
+            activeChord = next
+            emit("MOD_CHORD_DOWN:\(next.name)")
+        }
+        return
+    }
+    if let chord = modifierChords.first(where: { $0.flags == current }) {
+        activeChord = chord
+        activeChordInterrupted = false
+        emit("MOD_CHORD_DOWN:\(chord.name)")
+    }
+}
+
 func mouseButtonName(_ buttonNumber: Int) -> String? {
     switch buttonNumber {
     case 3:
@@ -235,35 +340,61 @@ let mouseEventMask =
     (1 << CGEventType.otherMouseDown.rawValue) |
     (1 << CGEventType.otherMouseUp.rawValue)
 
-var mouseEventTapPort: CFMachPort?
-var mouseRunLoopSource: CFRunLoopSource?
+// A key pressed while a chord is held has to be seen even when macOS consumes
+// it for a system shortcut (Option+Command+Esc, Command+Space), which never
+// reaches an NSEvent global monitor; a session-level tap sees it first.
+let keyDownEventMask = 1 << CGEventType.keyDown.rawValue
 
-// The active tap can suppress configured side buttons and is Accessibility-
-// protected, so keep it absent until a mouse-button hotkey actually needs it.
-func updateMouseEventTap() {
-    if suppressedMouseButtons.isEmpty {
-        if let mouseEventTapPort {
-            CGEvent.tapEnable(tap: mouseEventTapPort, enable: false)
-            if let mouseRunLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
-            }
+var eventTapPort: CFMachPort?
+var eventRunLoopSource: CFRunLoopSource?
+var eventTapMask: CGEventMask = 0
+
+func removeEventTap() {
+    if let eventTapPort {
+        CGEvent.tapEnable(tap: eventTapPort, enable: false)
+        if let eventRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), eventRunLoopSource, .commonModes)
         }
-        mouseEventTapPort = nil
-        mouseRunLoopSource = nil
+    }
+    eventTapPort = nil
+    eventRunLoopSource = nil
+    eventTapMask = 0
+}
+
+// The tap is Accessibility-protected, so keep it absent until a mouse-button or
+// chord hotkey needs it. Only a mouse button has to be swallowed; a chord just
+// watches key-downs, and a listen-only tap can never hold up the keyboard if
+// the listener stalls.
+func updateEventTap() {
+    var mask: CGEventMask = 0
+    if !suppressedMouseButtons.isEmpty {
+        mask |= CGEventMask(mouseEventMask)
+    }
+    if !modifierChords.isEmpty {
+        mask |= CGEventMask(keyDownEventMask)
+    }
+    if mask == 0 {
+        removeEventTap()
         return
     }
-    if mouseEventTapPort != nil { return }
+    if eventTapPort != nil && eventTapMask == mask { return }
+    removeEventTap()
 
     guard let tap = CGEvent.tapCreate(
         tap: .cgSessionEventTap,
         place: .headInsertEventTap,
-        options: .defaultTap,
-        eventsOfInterest: CGEventMask(mouseEventMask),
+        options: suppressedMouseButtons.isEmpty ? .listenOnly : .defaultTap,
+        eventsOfInterest: mask,
         callback: { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-                if let mouseEventTapPort {
-                    CGEvent.tapEnable(tap: mouseEventTapPort, enable: true)
+                if let eventTapPort {
+                    CGEvent.tapEnable(tap: eventTapPort, enable: true)
                 }
+                return Unmanaged.passUnretained(event)
+            }
+
+            if type == .keyDown {
+                interruptActiveChord()
                 return Unmanaged.passUnretained(event)
             }
 
@@ -275,13 +406,14 @@ func updateMouseEventTap() {
         },
         userInfo: nil
     ) else {
-        emitWarning("Failed to create mouse event tap")
+        emitWarning("Failed to create event tap")
         return
     }
 
-    mouseEventTapPort = tap
-    mouseRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-    CFRunLoopAddSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
+    eventTapPort = tap
+    eventTapMask = mask
+    eventRunLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+    CFRunLoopAddSource(CFRunLoopGetMain(), eventRunLoopSource, .commonModes)
     CGEvent.tapEnable(tap: tap, enable: true)
 }
 
@@ -316,6 +448,7 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
             }
         }
         lastModifierFlags = currentModifiers
+        updateChordState(currentModifiers)
     }
 }) else {
     emitWarning("Failed to create event monitor")
@@ -338,12 +471,7 @@ func shutdownListener() -> Never {
     if let keyMonitor {
         NSEvent.removeMonitor(keyMonitor)
     }
-    if let mouseEventTapPort {
-        CGEvent.tapEnable(tap: mouseEventTapPort, enable: false)
-    }
-    if let mouseRunLoopSource {
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseRunLoopSource, .commonModes)
-    }
+    removeEventTap()
     exit(0)
 }
 

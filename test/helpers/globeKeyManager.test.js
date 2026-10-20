@@ -254,7 +254,7 @@ test("a configuration change reconfigures the running listener instead of restar
 
   assert.equal(spawnCalls.length, 1, "listener should not be respawned");
   assert.deepEqual(spawnCalls[0].child.stdin.writes, [
-    '{"mouseButtons":["MouseButton4"],"suppressGlobeAction":true}\n',
+    '{"mouseButtons":["MouseButton4"],"suppressGlobeAction":true,"modifierChords":[]}\n',
   ]);
 
   manager.stop();
@@ -285,9 +285,9 @@ test("successive changes each reach the listener as one full-state line", () => 
 
   assert.equal(spawnCalls.length, 1);
   assert.deepEqual(spawnCalls[0].child.stdin.writes, [
-    '{"mouseButtons":[],"suppressGlobeAction":true}\n',
-    '{"mouseButtons":["MouseButton5"],"suppressGlobeAction":true}\n',
-    '{"mouseButtons":[],"suppressGlobeAction":false}\n',
+    '{"mouseButtons":[],"suppressGlobeAction":true,"modifierChords":[]}\n',
+    '{"mouseButtons":["MouseButton5"],"suppressGlobeAction":true,"modifierChords":[]}\n',
+    '{"mouseButtons":[],"suppressGlobeAction":false,"modifierChords":[]}\n',
   ]);
 
   manager.stop();
@@ -340,6 +340,54 @@ test("no state path means no state argument", () => {
   manager.stop();
 
   assert.deepEqual(spawnCalls[0].args, ["--suppress-system-globe-action"]);
+});
+
+test("modifier chords reach the listener as one argument and as configuration lines", () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager({ preferenceStatePath: "/tmp/state.json" });
+
+  // Duplicates collapse, the order is fixed, and anything that is not a chord
+  // the listener understands is dropped rather than passed on.
+  manager.setConfiguration({
+    modifierChords: ["option+command", "control+shift", "option+command", "Command+Alt", "option"],
+  });
+  manager.start();
+
+  assert.deepEqual(spawnCalls[0].args, [
+    "--globe-preference-state",
+    "/tmp/state.json",
+    "--modifier-chords",
+    "control+shift,option+command",
+  ]);
+
+  manager.setConfiguration({ modifierChords: ["option+command"] });
+  assert.deepEqual(spawnCalls[0].child.stdin.writes, [
+    '{"mouseButtons":[],"suppressGlobeAction":false,"modifierChords":["option+command"]}\n',
+  ]);
+
+  manager.stop();
+});
+
+test("chord lines from the listener become chord events", () => {
+  const { GlobeKeyManager, spawnCalls } = loadManager();
+  const manager = new GlobeKeyManager();
+  const events = [];
+  for (const name of ["modifier-chord-down", "modifier-chord-interrupted", "modifier-chord-up"]) {
+    manager.on(name, (chord) => events.push([name, chord]));
+  }
+
+  manager.start();
+  spawnCalls[0].child.stdout.emit(
+    "data",
+    "MOD_CHORD_DOWN:option+command\nMOD_CHORD_INTERRUPTED:option+command\nMOD_CHORD_UP:option+command\nMOD_CHORD_UP:\n"
+  );
+  manager.stop();
+
+  assert.deepEqual(events, [
+    ["modifier-chord-down", "option+command"],
+    ["modifier-chord-interrupted", "option+command"],
+    ["modifier-chord-up", "option+command"],
+  ]);
 });
 
 test("the listener is not started off macOS", () => {
