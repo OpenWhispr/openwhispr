@@ -147,8 +147,9 @@ export default function AgentWindow() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
   // Who has the keyboard is decided here: the window (asked of main), and in
-  // it the composer unless the waiting card has a key field of its own. A card
-  // places the caret inside itself (InteractionCard's useCardFocus).
+  // it the composer, unless a key card waits and no message is being written
+  // (the key field takes it then). A card places the caret inside itself
+  // (InteractionCard's useCardFocus).
   const surfaceFocus =
     !movedAway &&
     state.layout !== "pill" &&
@@ -706,7 +707,11 @@ export default function AgentWindow() {
         onMic={inModal ? () => void startListening() : undefined}
         micDisabled={busy || transcribing}
         micUnavailableHint={micHint}
-        focused={surface.shown && surfaceFocus && pendingCard?.interaction !== "apiKey"}
+        focused={
+          surface.shown &&
+          surfaceFocus &&
+          (pendingCard?.interaction !== "apiKey" || state.draft.trim() !== "")
+        }
         header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
         className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
       />

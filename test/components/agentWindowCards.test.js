@@ -654,6 +654,11 @@ for (const [what, payload] of [
     assert.equal(view.layout(), "modal");
     assert.equal(view.host.querySelector(`${COMPOSER}`).value, "and also check my cal");
     assert.ok(document.activeElement !== field(), "nor once the modal shows");
+    // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
+    assert.ok(
+      document.activeElement === view.host.querySelector(COMPOSER),
+      "the message keeps the keyboard"
+    );
     assert.equal(field().value, "", "nothing landed in the card");
   });
 }
