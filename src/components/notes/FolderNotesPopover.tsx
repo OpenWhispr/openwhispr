@@ -24,7 +24,7 @@ interface Props {
     onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
     onFocus: () => void;
   };
-  onPick: (note: NoteItem) => void;
+  onPick: (note: NoteItem, keyboard: boolean) => void;
   onOpenFolder: () => void;
 }
 
@@ -47,11 +47,14 @@ export function FolderNotesPopover({
   const [reload, setReload] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const keyboardRef = useRef(false);
+  const pickedNoteRef = useRef(false);
   const titleId = useId();
   const name = defaultFolderDisplayName(folder, t);
 
   useEffect(() => {
     if (!open) return;
+    pickedNoteRef.current = false;
     setQuery("");
     let stale = false;
     setAllNotes(null);
@@ -90,8 +93,9 @@ export function FolderNotesPopover({
       </>
     );
   };
-  const pick = (note: NoteItem) => {
-    onPick(note);
+  const pick = (note: NoteItem, keyboard = true) => {
+    pickedNoteRef.current = true;
+    onPick(note, keyboard);
     onOpenChange(false);
   };
   const relativeTime = (value: string) => {
@@ -129,7 +133,13 @@ export function FolderNotesPopover({
           aria-label={t("notes.folderMore.more", { count: hiddenCount })}
           ref={a11y.rowRef}
           tabIndex={a11y.tabIndex}
-          onKeyDown={a11y.onKeyDown}
+          onKeyDown={(event) => {
+            keyboardRef.current = true;
+            a11y.onKeyDown(event);
+          }}
+          onPointerDown={() => {
+            keyboardRef.current = false;
+          }}
           onFocus={a11y.onFocus}
           className={cn(
             "flex h-7 items-center gap-2 rounded-md pe-2 text-xs text-foreground/55 cursor-pointer hover:bg-foreground/5 outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
@@ -145,9 +155,24 @@ export function FolderNotesPopover({
         align="start"
         className="flex max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-24px)] flex-col p-2 rounded-xl"
         aria-labelledby={titleId}
+        onKeyDownCapture={() => {
+          keyboardRef.current = true;
+        }}
+        onPointerDownCapture={() => {
+          keyboardRef.current = false;
+        }}
+        onEscapeKeyDown={() => {
+          keyboardRef.current = true;
+        }}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           inputRef.current?.focus();
+        }}
+        onCloseAutoFocus={(event) => {
+          // Picking a note hands focus back to the tree on keyboard paths only.
+          // Restoring focus after a pointer click can inherit the search input's
+          // :focus-visible state and leave a ring on the closed trigger.
+          if (pickedNoteRef.current || !keyboardRef.current) event.preventDefault();
         }}
       >
         <div className="relative">
@@ -239,7 +264,7 @@ export function FolderNotesPopover({
               <button
                 key={note.id}
                 type="button"
-                onClick={() => pick(note)}
+                onClick={(event) => pick(note, event.detail === 0)}
                 aria-current={note.id === activeNoteId ? "page" : undefined}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-start outline-none hover:bg-foreground/5 focus-visible:bg-foreground/8 focus-visible:ring-1 focus-visible:ring-ring/30",

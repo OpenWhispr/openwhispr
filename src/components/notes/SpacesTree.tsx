@@ -1867,9 +1867,10 @@ export default function SpacesTree({
                 open={openFolderId === folder.id}
                 onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
                 a11y={a11yFor(`more:${folder.id}`)}
-                onPick={(note) => {
+                onPick={(note, keyboard) => {
                   setActiveNoteId(note.id);
-                  focusRowSoon(`n:${note.id}`);
+                  if (keyboard) focusRowSoon(`n:${note.id}`);
+                  else setFocusedKey(`n:${note.id}`);
                 }}
                 onOpenFolder={() => {
                   setActiveNoteId(null);
