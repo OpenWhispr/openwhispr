@@ -202,11 +202,15 @@ export function approvalOutcomeResult(
         data: {
           status: "cancelled_by_user",
           guidance: `The user cancelled this action. ${NO_RETRY} Ask what they would like to change if it is unclear.`,
+          ...userEdits(outcome),
         },
         displayText: i18n.t("connectors.approval.cancelled"),
       };
-    case "not_sent":
-      return notSentResult(outcome.reason);
+    case "not_sent": {
+      // With what the user wrote on the card, so a later draft starts from it.
+      const result = notSentResult(outcome.reason);
+      return { ...result, data: { ...(result.data as object), ...userEdits(outcome) } };
+    }
     case "failed":
       return failedResult(
         outcome.errorCode,

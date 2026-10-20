@@ -654,15 +654,40 @@ async function rebindCard(t, { commits, prepares = [], status = "ready", connect
     statuses.slack = { ...statuses.slack, connected: false };
     statusStore.useConnectorStatusStore.setState({ statuses: { ...statuses } });
   };
+  // Main flags the login after a commit Slack refused for it.
+  const flagReconnect = () => {
+    statuses.slack = { ...statuses.slack, needsReconnect: true };
+    statusStore.useConnectorStatusStore.setState({ statuses: { ...statuses } });
+  };
   return {
     store,
     ctx,
-    outcome,
+    // Awaited, it fails within seconds (never waiting out the card's expiry)
+    // when the card doesn't settle.
+    get outcome() {
+      return settledWithin(outcome, () => store.cancelApproval(key));
+    },
     key,
     entry,
     calls,
     disconnect,
+    flagReconnect,
   };
+}
+
+async function settledWithin(outcome, giveUp, ms = 5000) {
+  let timer;
+  const timedOut = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      giveUp();
+      reject(new Error(`the card didn't settle within ${ms} ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([outcome, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const READY = (actionId, preview = PREVIEW) => ({ status: "ready", actionId, preview });
@@ -744,6 +769,33 @@ test("a send that loses its login twice asks to connect instead of trying again"
   assert.equal(card.entry().reconnect, "prompt");
 });
 
+for (const [ending, end, outcome] of [
+  [
+    "X then Cancel",
+    (card) => {
+      card.store.dismissReconnect(card.key);
+      card.store.cancelApproval(card.key);
+    },
+    { state: "cancelled" },
+  ],
+  [
+    "the turn ending",
+    (card) => card.ctx.controller.abort(),
+    { state: "not_sent", reason: "conversation_ended" },
+  ],
+]) {
+  test(`giving up on the connect a Send asked for (${ending}) reports the user's edits`, async (t) => {
+    const card = await rebindCard(t, {
+      commits: [{ state: "failed", errorCode: "reconnect_needed", message: "Reconnect." }],
+    });
+    card.store.updateApprovalDraft(card.key, { body: "Edited before the reconnect" });
+    await card.store.approveAction(card.key);
+    assert.equal(card.entry().reconnect, "prompt");
+    end(card);
+    assert.deepEqual(await card.outcome, { ...outcome, finalText: "Edited before the reconnect" });
+  });
+}
+
 for (const reason of ["not_pending", "expired", "account_changed"]) {
   test(`${reason} never prepares again`, async (t) => {
     const card = await rebindCard(t, { commits: [{ state: "not_sent", reason }] });
@@ -773,9 +825,49 @@ test("Send while the service needs a reconnect asks first; Yes connects and send
   assert.deepEqual(card.calls.cancel, [{ actionId: "a-old", reason: "cancelled_by_user" }]);
 });
 
-test("a commit that finds the login lapsed asks to connect, never sending twice", async (t) => {
+test("Send does nothing while the card asks to connect", async (t) => {
+  const card = await rebindCard(t, { status: "needsReconnect", commits: [POSTED] });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().reconnect, "prompt");
+  // Connected elsewhere, but the card still shows its prompt: only Yes or X moves on.
+  const statusStore = await import("../../src/stores/connectorStatusStore.ts");
+  statusStore.useConnectorStatusStore.setState({
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.calls.commit.length, 0);
+  assert.equal(card.entry().reconnect, "prompt");
+});
+
+test("Yes on a card whose service got connected meanwhile sends without another sign-in", async (t) => {
   const card = await rebindCard(t, {
-    commits: [{ state: "failed", errorCode: "reconnect_needed", message: "Reconnect." }, POSTED],
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new")],
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().reconnect, "prompt");
+  // Another card's connect (or Settings) connected the service.
+  const statusStore = await import("../../src/stores/connectorStatusStore.ts");
+  statusStore.useConnectorStatusStore.setState({
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  await card.store.connectToSend(card.key);
+  assert.deepEqual(card.calls.connect, [], "no second sign-in");
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.equal(card.calls.commit.length, 1);
+});
+
+test("a commit that finds the login lapsed asks to connect, never sending twice", async (t) => {
+  let card = null;
+  card = await rebindCard(t, {
+    commits: [
+      () => {
+        card.flagReconnect();
+        return { state: "failed", errorCode: "reconnect_needed", message: "Reconnect." };
+      },
+      POSTED,
+    ],
     prepares: [READY("a-new")],
   });
   await card.store.approveAction(card.key);
@@ -783,6 +875,7 @@ test("a commit that finds the login lapsed asks to connect, never sending twice"
   assert.equal(card.entry().reconnect, "prompt");
   assert.equal(card.calls.prepare, 0, "a lapsed login is never prepared again on its own");
   await card.store.connectToSend(card.key);
+  assert.deepEqual(card.calls.connect, ["slack"], "the real connect");
   assert.deepEqual(await card.outcome, POSTED);
   assert.equal(card.calls.commit.length, 2);
 });

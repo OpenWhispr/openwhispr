@@ -208,7 +208,7 @@ function withdraw(key: string, reason: "conversation_ended" | "expired"): void {
   }
   if (entry.state !== "pending") return;
   void window.electronAPI?.connectorCancel?.(entry.actionId, reason);
-  settle(key, { state: "not_sent", reason }, "not_sent");
+  settle(key, { state: "not_sent", reason, ...userEditsOf(entry) }, "not_sent");
 }
 
 // The card waits on the user again after a Send that didn't go out. An abort
@@ -304,7 +304,7 @@ export function cancelApproval(key: string): void {
   }
   if (entry.state !== "pending") return;
   void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
-  settle(key, { state: "cancelled" }, "cancelled");
+  settle(key, { state: "cancelled", ...userEditsOf(entry) }, "cancelled");
 }
 
 // Reported whatever the outcome, so after a failure the model proposes the
@@ -372,6 +372,11 @@ export async function connectToSend(key: string): Promise<void> {
   if (entry?.state !== "pending" || entry.reconnect !== "prompt" || !pending) return;
   const attempt = ++pending.connectAttempt;
   patchEntry(key, { reconnect: "connecting", connectError: undefined });
+  // Connected meanwhile (another card's Yes, or Settings): no second sign-in.
+  if (useConnectorStatusStore.getState().loaded && isConnectorReady(entry.connectorId)) {
+    await rebind(key);
+    return;
+  }
   // Loaded when used: the interaction store imports this one.
   const { connectTarget } = await import("./agentInteractionStore");
   const outcome = await connectTarget(entry.connectorId as Exclude<ConnectionTarget, "calendar">);

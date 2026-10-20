@@ -653,3 +653,36 @@ test("an edited Slack card posts its edited text through the manager, and nothin
   assert.equal(posts(slack)[0].params.channel, "C0ENG");
   assert.equal(postedText(posts(slack)[0].params), "Ship it today");
 });
+
+test("a picked @username finds that person even when it is someone else's display name", async () => {
+  const person = (id, name, realName, displayName) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: realName, display_name: displayName },
+  });
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [
+      ok({
+        ok: true,
+        members: [
+          person("U1", "john", "John Park", ""),
+          person("U2", "jsmith", "John Smith", "john"),
+        ],
+      }),
+    ],
+  });
+  const asked = await connector.prepare("send_message", { destination: "John", text: "hi" }, BOUND);
+  assert.equal(asked.status, "needs_clarification");
+  const park = asked.choices.find((choice) => choice.label.startsWith("John Park"));
+  assert.equal(park.destination, "@john");
+  const picked = await connector.prepare(
+    "send_message",
+    { destination: park.destination, text: "hi" },
+    BOUND
+  );
+  assert.equal(picked.status, "ready");
+  assert.match(picked.preview.destinationLabel, /John Park/);
+});

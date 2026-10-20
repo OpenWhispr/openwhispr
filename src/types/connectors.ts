@@ -99,7 +99,7 @@ export type ApprovalOutcome =
     } & ApprovalEdits)
   | ({ state: "failed"; errorCode: string; message: string } & ApprovalEdits)
   | ({ state: "unknown"; checkUrl?: string; destinationLabel?: string } & ApprovalEdits)
-  | { state: "cancelled" }
+  | ({ state: "cancelled" } & ApprovalEdits)
   | ({
       state: "not_sent";
       reason: string;

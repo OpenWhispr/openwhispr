@@ -91,22 +91,26 @@ function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
           },
         ],
       });
-      if (answer.status !== "answered") return unansweredResult(answer);
       const written = (result.data as { finalText?: unknown } | null)?.finalText;
+      // The user rewrote the message on the card: whatever comes of the pick
+      // (sent, another question, a failure, no answer), the model hears that text.
+      const withWritten = (outcome: ToolResult): ToolResult => {
+        const data = outcome.data as (Record<string, unknown> & ApprovalEdits) | null;
+        if (typeof written !== "string" || !data || data.finalText !== undefined) return outcome;
+        return { ...outcome, data: { ...data, finalText: written } };
+      };
+      if (answer.status !== "answered") return withWritten(unansweredResult(answer));
       // A single-choice answer is one string: the pick, or the typed text.
-      const next = await tool.execute(
-        {
-          ...args,
-          destination: String(answer.answers.destination),
-          ...(typeof written === "string" ? { text: written } : {}),
-        },
-        context
+      return withWritten(
+        await tool.execute(
+          {
+            ...args,
+            destination: String(answer.answers.destination),
+            ...(typeof written === "string" ? { text: written } : {}),
+          },
+          context
+        )
       );
-      // The card went out with the user's text, not the model's: whatever came
-      // of it (sent, another question, a failure), the model hears that text.
-      const data = next.data as (Record<string, unknown> & ApprovalEdits) | null;
-      if (typeof written !== "string" || !data || data.finalText !== undefined) return next;
-      return { ...next, data: { ...data, finalText: written } };
     },
   };
 }

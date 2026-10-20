@@ -134,6 +134,15 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     if (failure) return { error: failure.errorCode };
     const candidates = lists.flatMap((list) => list.items);
 
+    // A username is unique in a workspace, so "@handle" (what the picker
+    // sends) finds exactly that person, even when it is also someone else's
+    // display name.
+    if (parsed.kind === "person") {
+      const handle = parsed.query.toLowerCase();
+      const exact = candidates.find((candidate) => candidate.handle?.toLowerCase() === handle);
+      if (exact) return { candidate: exact };
+    }
+
     // A name is only unique if every candidate was seen. When a list stopped
     // at the page cap, only an exact channel name (unique in a workspace)
     // still identifies something; a person needs an email address.

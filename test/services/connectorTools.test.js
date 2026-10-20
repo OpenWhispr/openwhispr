@@ -6,6 +6,29 @@ const loadEmail = () => import("../../src/services/tools/connectors/emailDraftTo
 const loadContact = () => import("../../src/services/tools/connectors/findContactTool.ts");
 const loadSlack = () => import("../../src/services/tools/connectors/slackSendMessageTool.ts");
 const loadApprovals = () => import("../../src/stores/connectorApprovalStore.ts");
+
+// Waits for a condition, failing within seconds instead of hanging the run:
+// on timeout every open card is cancelled first, so the tool call settles and
+// its expiry timer doesn't keep the process alive.
+async function until(ready, what = "the condition", ms = 5000) {
+  const deadline = Date.now() + ms;
+  while (!ready()) {
+    if (Date.now() > deadline) {
+      const [approvals, interactions] = await Promise.all([
+        loadApprovals(),
+        import("../../src/stores/agentInteractionStore.ts"),
+      ]);
+      for (const key of Object.keys(approvals.useConnectorApprovalStore.getState().entries)) {
+        approvals.cancelApproval(key);
+      }
+      for (const key of Object.keys(interactions.useAgentInteractionStore.getState().entries)) {
+        interactions.cancelInteraction(key);
+      }
+      throw new Error(`timed out waiting for ${what}`);
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}
 const loadEligibility = () => import("../../src/utils/connectorEligibility.ts");
 const loadRegistry = () => import("../../src/services/tools/index.ts");
 // Tool-step text is localized; the UI language otherwise follows the machine's locale.
@@ -256,9 +279,7 @@ test("slack_send_message lets the user pick a person a name matched, then sends 
     { destination: "gab", text: "hi" },
     { ...toolContext("m30", "call-30"), onInteraction() {} }
   );
-  while (!interactions.useAgentInteractionStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => interactions.useAgentInteractionStore.getState().entries[key]);
   const question = interactions.useAgentInteractionStore.getState().entries[key].payload;
   assert.deepEqual(question.questions[0].options, [
     { id: "@gabe", label: "Gabe Smith (@gabe)" },
@@ -268,9 +289,7 @@ test("slack_send_message lets the user pick a person a name matched, then sends 
 
   interactions.updateInteractionDraft(key, { destination: "@gabe" });
   interactions.answerQuestions(key);
-  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
   assert.deepEqual(prepared, ["gab", "@gabe"]);
   await approvals.approveAction(key);
   assert.equal((await pending).data.status, "sent");
@@ -298,9 +317,7 @@ test("slack_send_message asks which one only once", async (t) => {
     { destination: "gab", text: "hi" },
     { ...toolContext("m31", "call-31"), onInteraction() {} }
   );
-  while (!interactions.useAgentInteractionStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => interactions.useAgentInteractionStore.getState().entries[key]);
   // Typed in the composer instead of picked: tried as written.
   interactions.answerWithText(key, "Gabriel from design");
   // A second question would hold the tool for its ten-minute wait: fail at once instead.
@@ -344,9 +361,7 @@ test("dismissing the Slack picker tells the model no", async (t) => {
     { destination: "gab", text: "hi" },
     { ...toolContext("m32", "call-32"), onInteraction() {} }
   );
-  while (!interactions.useAgentInteractionStore.getState().entries["m32::call-32"]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => interactions.useAgentInteractionStore.getState().entries["m32::call-32"]);
   interactions.cancelInteraction("m32::call-32");
   assert.equal((await pending).data.status, "cancelled_by_user");
 });
@@ -383,9 +398,7 @@ test("slack_send_message turns a channel that vanished by Send into a question",
     { destination: "#eng", text: "hi" },
     toolContext("m9", "call-9")
   );
-  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
   await approvals.approveAction(key);
   // The card keeps the draft for Retry; the user cancels it instead.
   assert.equal(approvals.useConnectorApprovalStore.getState().entries[key].awaitingRetry, true);
@@ -1133,9 +1146,7 @@ async function startGmailCard(t, electronAPI, messageId, toolCallId) {
     () => (settled = true),
     () => (settled = true)
   );
-  while (!settled && !approvals.useConnectorApprovalStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => settled || approvals.useConnectorApprovalStore.getState().entries[key]);
   assert.ok(approvals.useConnectorApprovalStore.getState().entries[key], "the Gmail card is shown");
   return { approvals, key, pending, context, calls };
 }
@@ -1254,9 +1265,7 @@ test("a Gmail login that needs reconnecting asks to connect on the call's card, 
   assert.deepEqual(calls, { prepare: 0, runDirect: 0, connect: [] }, "nothing before the connect");
 
   await interactions.connectInteraction(key);
-  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
   assert.deepEqual(calls.connect, ["gmail"]);
   assert.equal(calls.prepare, 1, "the email goes on to its card");
   approvals.cancelApproval(key);
@@ -1832,9 +1841,6 @@ test("a message the user rewrote survives a Retry that has to ask where it goes"
     statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
   });
   const key = approvals.approvalKey("m40", "call-40");
-  const until = async (ready) => {
-    while (!ready()) await new Promise((resolve) => setImmediate(resolve));
-  };
   const pending = slackSendMessageTool.execute(
     { destination: "#launch", text: "Launch is Thursday" },
     { ...toolContext("m40", "call-40"), onInteraction() {} }
@@ -1914,6 +1920,7 @@ function rewriteFlow(t, { afterPick }) {
 for (const [what, afterPick, answer] of [
   ["sent where the user picked", "ready", "#launch-2"],
   ["still unclear after a typed answer", "unclear", "the launch channel"],
+  ["the picker dismissed", "dismissed", null],
 ]) {
   test(`after the picker, the model hears the user's rewrite: ${what}`, async (t) => {
     const { prepared } = rewriteFlow(t, { afterPick });
@@ -1933,9 +1940,6 @@ for (const [what, afterPick, answer] of [
       },
     });
     const key = approvals.approvalKey("m41", "call-41");
-    const until = async (ready) => {
-      while (!ready()) await new Promise((resolve) => setImmediate(resolve));
-    };
     const pending = slackSendMessageTool.execute(
       { destination: "#launch", text: "Launch is Thursday" },
       { ...toolContext("m41", "call-41"), onInteraction() {} }
@@ -1958,11 +1962,14 @@ for (const [what, afterPick, answer] of [
         () => approvals.useConnectorApprovalStore.getState().entries[key]?.state === "pending"
       );
       await approvals.approveAction(key);
-    } else {
+    } else if (afterPick === "unclear") {
       interactions.answerWithText(key, answer);
+    } else {
+      interactions.cancelInteraction(key);
     }
     const result = await pending;
-    assert.equal(prepared.at(-1).text, "Launch moved to Friday");
+    // The pick prepares again with the user's text.
+    if (afterPick !== "dismissed") assert.equal(prepared.at(-1).text, "Launch moved to Friday");
     assert.equal(result.data.finalText, "Launch moved to Friday", `${result.data.status} result`);
   });
 }
@@ -2006,9 +2013,7 @@ test("a channel gone by Send asks where, with the user's rewrite", async (t) => 
     toolContext("m42", "call-42")
   );
   t.after(() => approvals.cancelApproval(key));
-  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
   approvals.updateApprovalDraft(key, { body: "Launch moved to Friday" });
   await approvals.approveAction(key);
   approvals.cancelApproval(key);

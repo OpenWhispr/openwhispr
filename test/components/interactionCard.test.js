@@ -68,6 +68,7 @@ async function mountCard(t, payload, electronAPI = {}) {
   const wait = (ms) => React.act(async () => new Promise((resolve) => setTimeout(resolve, ms)));
   return {
     happyWindow,
+    vite,
     host,
     store,
     results,
@@ -415,4 +416,47 @@ test("a card for any calendar has a translated title", async (t) => {
   await React.act(async () => card.i18n.changeLanguage("de"));
   assert.match(card.host.textContent, /Kalender verbinden/);
   assert.doesNotMatch(card.host.textContent, /a calendar/);
+});
+
+test("a question waiting under the key of a settled answer card shows instead of it", async (t) => {
+  // After Retry, the Slack picker asks where to send under the same key.
+  const card = await mountCard(t, {
+    kind: "questions",
+    questions: [
+      {
+        id: "destination",
+        kind: "single",
+        prompt: "Where should it go?",
+        options: [
+          { id: "#launch-2", label: "#launch-2" },
+          { id: "#launch-old", label: "#launch-old" },
+        ],
+      },
+    ],
+  });
+  const approvals = await card.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  await React.act(async () =>
+    approvals.useConnectorApprovalStore.setState({
+      entries: {
+        "m1::c1": {
+          key: "m1::c1",
+          messageId: "m1",
+          toolCallId: "c1",
+          actionId: "a1",
+          connectorId: "slack",
+          preview: {
+            verbKey: "slackPost",
+            destinationLabel: "#launch",
+            accountLabel: "QA",
+            body: "hi",
+          },
+          draft: { body: "hi" },
+          state: "not_sent",
+        },
+      },
+    })
+  );
+  assert.equal(radios(card).length, 2, "the picker's options");
+  assert.equal(card.host.querySelector("[data-approval-card]"), null);
+  t.after(() => approvals.useConnectorApprovalStore.setState({ entries: {} }));
 });

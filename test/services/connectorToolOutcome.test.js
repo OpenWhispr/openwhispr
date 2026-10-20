@@ -612,3 +612,19 @@ test("a send prepared again that needs the user to say where asks the model that
   });
   assert.deepEqual(ledger, { released: 1, recorded: 0 }, "nothing went out");
 });
+
+test("a cancelled or withdrawn card still tells the model what the user wrote", async () => {
+  const { approvalOutcomeResult } = await loadOutcome();
+  const cancelled = approvalOutcomeResult(
+    { state: "cancelled", finalText: "Launch moved to Friday" },
+    "#launch"
+  );
+  assert.equal(cancelled.data.status, "cancelled_by_user");
+  assert.equal(cancelled.data.finalText, "Launch moved to Friday");
+  const withdrawn = approvalOutcomeResult(
+    { state: "not_sent", reason: "conversation_ended", final: { subject: "Notes" } },
+    "dana@acme.test"
+  );
+  assert.equal(withdrawn.data.status, "not_sent");
+  assert.deepEqual(withdrawn.data.final, { subject: "Notes" });
+});
