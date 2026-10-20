@@ -2767,6 +2767,12 @@
       "contextTooLargeGeneric": "內容過長，{{model}} 無法在這台電腦上讀取。請改用雲端模型，或對更短的選取範圍執行該動作。",
       "localServerUnavailable": "無法在這台電腦上啟動 {{model}}。請重試，或改用雲端模型。",
       "localModelBusy": "本機模型仍在處理另一個請求。請等待其完成後再試。"
+    },
+    "speed": {
+      "fast": "快速",
+      "medium": "中速",
+      "slow": "較慢",
+      "realtime": "即時"
     }
   },
   "referral": {

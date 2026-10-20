@@ -2861,6 +2861,12 @@
       "contextTooLargeGeneric": "This is too long for {{model}} to read on this computer. Try a cloud model, or run the action on a shorter selection.",
       "localServerUnavailable": "{{model}} couldn't be started on this computer. Try again, or switch to a cloud model.",
       "localModelBusy": "The local model is still working on another request. Wait for it to finish, then try again."
+    },
+    "speed": {
+      "fast": "Fast",
+      "medium": "Medium",
+      "slow": "Slow",
+      "realtime": "Real-time"
     }
   },
   "sidebar": {

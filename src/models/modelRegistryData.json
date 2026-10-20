@@ -4,6 +4,7 @@
       "name": "Parakeet TDT 0.6B",
       "sherpaModelType": "nemo_transducer",
       "description": "Fast multilingual ASR with auto language detection",
+      "speed": "fast",
       "size": "680MB",
       "sizeMb": 680,
       "language": "multilingual",
@@ -41,6 +42,7 @@
     "parakeet-unified-en-0.6b": {
       "name": "Parakeet Unified EN 0.6B",
       "description": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+      "speed": "fast",
       "size": "631MB",
       "sizeMb": 631,
       "language": "en",
@@ -52,6 +54,7 @@
     "nemotron-speech-streaming-en-0.6b": {
       "name": "Nemotron Speech Streaming EN 0.6B",
       "description": "English streaming ASR from NVIDIA Nemotron",
+      "speed": "fast",
       "size": "632MB",
       "sizeMb": 632,
       "language": "en",
@@ -64,6 +67,7 @@
     "nemotron-3.5-asr-streaming-0.6b": {
       "name": "Nemotron 3.5 ASR Streaming 0.6B",
       "description": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)",
+      "speed": "fast",
       "size": "650MB",
       "sizeMb": 650,
       "language": "multilingual",
@@ -92,6 +96,7 @@
     "cohere-transcribe-03-2026": {
       "name": "Cohere Transcribe 2B",
       "description": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection",
+      "speed": "medium",
       "size": "2.7GB",
       "sizeMb": 2700,
       "expectedSizeBytes": 1699791751,
@@ -120,6 +125,7 @@
     "orukeet-v0.1.0": {
       "name": "Orukeet",
       "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
+      "speed": "fast",
       "descriptionKey": "models.descriptions.parakeet.orukeet",
       "size": "672MB",
       "sizeMb": 671.6198,
@@ -190,6 +196,7 @@
     "tiny": {
       "name": "Tiny",
       "description": "Fastest, lower quality",
+      "speed": "fast",
       "size": "75MB",
       "sizeMb": 75,
       "expectedSizeBytes": 78000000,
@@ -200,6 +207,7 @@
     "base": {
       "name": "Base",
       "description": "Good balance",
+      "speed": "fast",
       "size": "142MB",
       "sizeMb": 142,
       "expectedSizeBytes": 148000000,
@@ -211,6 +219,7 @@
     "small": {
       "name": "Small",
       "description": "Better quality, slower",
+      "speed": "medium",
       "size": "466MB",
       "sizeMb": 466,
       "expectedSizeBytes": 488000000,
@@ -221,6 +230,7 @@
     "medium": {
       "name": "Medium",
       "description": "High quality",
+      "speed": "slow",
       "size": "1.5GB",
       "sizeMb": 1500,
       "expectedSizeBytes": 1570000000,
@@ -231,6 +241,7 @@
     "large": {
       "name": "Large",
       "description": "Best quality, slowest",
+      "speed": "slow",
       "size": "3GB",
       "sizeMb": 3000,
       "expectedSizeBytes": 3140000000,
@@ -241,6 +252,7 @@
     "turbo": {
       "name": "Turbo",
       "description": "Fast with good quality",
+      "speed": "medium",
       "size": "1.6GB",
       "sizeMb": 1600,
       "expectedSizeBytes": 1670000000,
@@ -259,12 +271,14 @@
           "id": "gpt-transcribe",
           "name": "GPT Transcribe",
           "description": "Newest, most accurate transcription",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.openai_gpt_transcribe"
         },
         {
           "id": "gpt-4o-mini-transcribe",
           "name": "GPT-4o Mini Transcribe",
           "description": "Fast and accurate transcription",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_mini_transcribe",
           "streaming": true
         },
@@ -272,6 +286,7 @@
           "id": "gpt-4o-transcribe",
           "name": "GPT-4o Transcribe",
           "description": "Most accurate transcription",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_transcribe",
           "streaming": true
         },
@@ -279,6 +294,7 @@
           "id": "whisper-1",
           "name": "Whisper",
           "description": "Original Whisper model",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.openai_whisper_1"
         }
       ]
@@ -292,12 +308,14 @@
           "id": "whisper-large-v3",
           "name": "Whisper Large v3",
           "description": "High accuracy speech recognition",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.groq_whisper_large_v3"
         },
         {
           "id": "whisper-large-v3-turbo",
           "name": "Whisper Large v3 Turbo",
           "description": "216x real-time speed",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.groq_whisper_large_v3_turbo"
         }
       ]
@@ -311,6 +329,7 @@
           "id": "grok-stt",
           "name": "Grok STT",
           "description": "High-accuracy speech recognition by xAI",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.xai_grok_stt"
         }
       ]
@@ -324,6 +343,7 @@
           "id": "voxtral-mini-latest",
           "name": "Voxtral Mini",
           "description": "Fast multilingual transcription",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
@@ -338,12 +358,14 @@
           "id": "gemini-3.5-transcribe",
           "name": "Gemini 3.5 Transcribe",
           "description": "Google's Gemini speech-to-text",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe"
         },
         {
           "id": "gemini-3.5-transcribe-live",
           "name": "Gemini 3.5 Transcribe Live",
           "description": "Realtime streaming speech-to-text",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.gemini_3_5_transcribe_live",
           "streaming": true
         }
@@ -358,6 +380,7 @@
           "id": "corti-transcribe",
           "name": "Corti Transcribe",
           "description": "Clinical-grade medical transcription",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.corti_transcribe",
           "streaming": true
         }
@@ -373,6 +396,7 @@
           "id": "voxtral-mini-4b-realtime",
           "name": "Voxtral",
           "description": "Verifiably private transcription",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
           "streaming": true
         }
@@ -387,6 +411,7 @@
           "id": "nova-3",
           "name": "Nova-3",
           "description": "Deepgram's most accurate realtime model",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.deepgram_nova_3",
           "streaming": true
         }
@@ -401,6 +426,7 @@
           "id": "universal-3-5-pro",
           "name": "Universal-3.5 Pro",
           "description": "Highest accuracy realtime, 18 languages",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_5_pro",
           "streaming": true
         },
@@ -408,6 +434,7 @@
           "id": "universal-streaming-english",
           "name": "Universal Streaming (English)",
           "description": "Immutable realtime transcripts, English",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_english",
           "streaming": true
         },
@@ -415,6 +442,7 @@
           "id": "universal-streaming-multilingual",
           "name": "Universal Streaming (Multilingual)",
           "description": "Immutable realtime transcripts, multilingual",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.transcription.assemblyai_universal_streaming_multilingual",
           "streaming": true
         }
@@ -430,6 +458,7 @@
           "id": "gpt-6-astra",
           "name": "GPT-6 Astra",
           "description": "OpenAI's most capable model for coding, computer use, and research, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_6_astra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -442,6 +471,7 @@
           "id": "gpt-5.6-sol",
           "name": "GPT-5.6 Sol",
           "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -455,6 +485,7 @@
           "id": "gpt-5.6-terra",
           "name": "GPT-5.6 Terra",
           "description": "Balanced capability, speed, and cost for everyday work",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -468,6 +499,7 @@
           "id": "gpt-5.6-luna",
           "name": "GPT-5.6 Luna",
           "description": "Fastest and lowest-cost model in the GPT-5.6 family",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -481,6 +513,7 @@
           "id": "gpt-5.5",
           "name": "GPT-5.5",
           "description": "Frontier model for complex reasoning, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -494,6 +527,7 @@
           "id": "gpt-5.2",
           "name": "GPT-5.2",
           "description": "Strong reasoning model",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -507,6 +541,7 @@
           "id": "gpt-5-mini",
           "name": "GPT-5 Mini",
           "description": "Fast and cost-efficient",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -520,6 +555,7 @@
           "id": "gpt-5-nano",
           "name": "GPT-5 Nano",
           "description": "Ultra-fast, low latency",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
@@ -533,6 +569,7 @@
           "id": "gpt-4.1",
           "name": "GPT-4.1",
           "description": "Strong baseline, 1M context",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": true,
@@ -542,6 +579,7 @@
           "id": "gpt-4.1-mini",
           "name": "GPT-4.1 Mini",
           "description": "Smaller GPT-4.1 model",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": true,
@@ -551,6 +589,7 @@
           "id": "gpt-4.1-nano",
           "name": "GPT-4.1 Nano",
           "description": "Lowest latency GPT-4.1",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": true,
@@ -566,6 +605,7 @@
           "id": "claude-fable-5-1",
           "name": "Claude Fable 5.1",
           "description": "Anthropic's most capable model, Mythos-class, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5_1",
           "supportsTemperature": false,
           "supportsVision": true
@@ -574,6 +614,7 @@
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Previous Mythos-class flagship, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
           "supportsTemperature": false,
           "supportsVision": true
@@ -582,6 +623,7 @@
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
           "supportsTemperature": false,
           "supportsVision": true
@@ -590,6 +632,7 @@
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
           "supportsTemperature": true,
           "supportsVision": true
@@ -598,6 +641,7 @@
           "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "description": "Fast with near-frontier intelligence",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
           "supportsTemperature": true,
           "supportsVision": true
@@ -606,6 +650,7 @@
           "id": "claude-opus-5",
           "name": "Claude Opus 5",
           "description": "Most capable Opus model, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
           "supportsTemperature": false,
           "supportsVision": true
@@ -614,6 +659,7 @@
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
           "supportsTemperature": false,
           "supportsVision": true
@@ -622,6 +668,7 @@
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
           "description": "Powerful Opus model, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
           "supportsTemperature": false,
           "supportsVision": true
@@ -630,6 +677,7 @@
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "description": "Previous Opus generation, 1M context",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
           "supportsTemperature": true,
           "supportsVision": true
@@ -638,6 +686,7 @@
           "id": "claude-sonnet-4-5",
           "name": "Claude Sonnet 4.5",
           "description": "Previous Sonnet generation",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
           "supportsTemperature": true,
           "supportsVision": true
@@ -646,6 +695,7 @@
           "id": "claude-opus-4-5",
           "name": "Claude Opus 4.5",
           "description": "Earlier Opus model",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
           "supportsTemperature": true,
           "supportsVision": true
@@ -660,6 +710,7 @@
           "id": "gemini-3.5-flash",
           "name": "Gemini 3.5 Flash",
           "description": "Latest fast, high-capability Gemini model",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
           "supportsThinking": true,
           "supportsVision": true,
@@ -672,6 +723,7 @@
           "id": "gemini-3.5-flash-lite",
           "name": "Gemini 3.5 Flash Lite",
           "description": "Fastest, most cost-effective 3.5 model",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
           "supportsThinking": true,
           "supportsVision": true,
@@ -684,6 +736,7 @@
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
+          "speed": "slow",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
           "supportsThinking": true,
           "supportsVision": true,
@@ -696,6 +749,7 @@
           "id": "gemini-3.1-flash-lite",
           "name": "Gemini 3.1 Flash Lite",
           "description": "Frontier-class performance at low cost",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
           "supportsVision": true,
           "reasoningEffort": {
@@ -706,6 +760,7 @@
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
           "supportsThinking": true,
           "supportsVision": true,
@@ -718,6 +773,7 @@
           "id": "gemini-2.5-flash-lite",
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite",
           "supportsVision": true
         },
@@ -725,12 +781,14 @@
           "id": "gemma-4-31b-it",
           "name": "Gemma 4 31B",
           "description": "Google's largest Gemma 4, 31B dense, 256K context",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it"
         },
         {
           "id": "gemma-4-26b-a4b-it",
           "name": "Gemma 4 26B MoE",
           "description": "Google's Gemma 4 MoE, 4B active params, 256K context",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it"
         }
       ]
@@ -743,6 +801,7 @@
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
+          "speed": "fast",
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
           "reasoningEffort": {
@@ -760,6 +819,7 @@
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
+          "speed": "fast",
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
           "reasoningEffort": {
@@ -770,12 +830,14 @@
           "id": "groq/compound",
           "name": "Compound",
           "description": "Groq's compound system, 450 T/sec",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.groq_compound"
         },
         {
           "id": "groq/compound-mini",
           "name": "Compound Mini",
           "description": "Fast compound system, 3x lower latency",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
         }
       ]
@@ -789,6 +851,7 @@
           "id": "glm-5-3",
           "name": "GLM-5.3",
           "description": "Private agentic coding model in secure enclaves, 1M context",
+          "speed": "medium",
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_3",
@@ -798,6 +861,7 @@
           "id": "gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "Private open-weight reasoning model with tool use, 131K context",
+          "speed": "medium",
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
@@ -807,6 +871,7 @@
           "id": "gemma4-31b",
           "name": "Gemma 4 31B",
           "description": "Private multilingual reasoning model with tool calling, 256K context",
+          "speed": "medium",
           "tokenParam": "max_tokens",
           "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
@@ -822,6 +887,7 @@
           "id": "corti-s1-instant",
           "name": "Corti S1 Instant",
           "description": "Fast healthcare model, no reasoning trace",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.corti_corti_s1_instant",
           "tokenParam": "max_tokens",
           "supportsTemperature": true
@@ -830,6 +896,7 @@
           "id": "corti-s1",
           "name": "Corti S1",
           "description": "Most capable clinical model with reasoning",
+          "speed": "medium",
           "descriptionKey": "models.descriptions.cloud.corti_corti_s1",
           "tokenParam": "max_tokens",
           "supportsTemperature": true
@@ -838,6 +905,7 @@
           "id": "corti-s1-mini-instant",
           "name": "Corti S1 Mini Instant",
           "description": "Compact healthcare model, fastest and lowest cost",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini_instant",
           "tokenParam": "max_tokens",
           "supportsTemperature": true
@@ -846,6 +914,7 @@
           "id": "corti-s1-mini",
           "name": "Corti S1 Mini",
           "description": "Compact clinical model with reasoning at half the price",
+          "speed": "fast",
           "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini",
           "tokenParam": "max_tokens",
           "supportsTemperature": true
@@ -941,6 +1010,7 @@
           "size": "5.5GB",
           "sizeBytes": 5889811552,
           "description": "Powerful hybrid model",
+          "speed": "medium",
           "fileName": "Qwen_Qwen3.5-9B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -955,6 +1025,7 @@
           "size": "2.7GB",
           "sizeBytes": 2871743520,
           "description": "Balanced Qwen3.5 for general use",
+          "speed": "fast",
           "fileName": "Qwen_Qwen3.5-4B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -968,6 +1039,7 @@
           "size": "1.3GB",
           "sizeBytes": 1329766560,
           "description": "Small Qwen3.5 for quick tasks",
+          "speed": "fast",
           "fileName": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -981,6 +1053,7 @@
           "size": "5.0GB",
           "sizeBytes": 5402263552,
           "description": "Latest Qwen3 with thinking mode support",
+          "speed": "medium",
           "fileName": "Qwen3-8B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -994,6 +1067,7 @@
           "size": "5.9GB",
           "sizeBytes": 6281625600,
           "description": "Higher quality Qwen3 with thinking mode",
+          "speed": "medium",
           "fileName": "Qwen3-8B-Q5_K_M.gguf",
           "quantization": "q5_k_m",
           "contextLength": 131072,
@@ -1007,6 +1081,7 @@
           "size": "2.5GB",
           "sizeBytes": 2684354560,
           "description": "Compact Qwen3 with reasoning capabilities",
+          "speed": "fast",
           "fileName": "Qwen3-4B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1020,6 +1095,7 @@
           "size": "1.8GB",
           "sizeBytes": 1965555712,
           "description": "Small but capable Qwen3 model",
+          "speed": "fast",
           "fileName": "Qwen3-1.7B-Q8_0.gguf",
           "quantization": "q8_0",
           "contextLength": 131072,
@@ -1033,6 +1109,7 @@
           "size": "19.8GB",
           "sizeBytes": 21260251955,
           "description": "Most powerful local Qwen3 with deep reasoning",
+          "speed": "slow",
           "fileName": "Qwen3-32B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1046,6 +1123,7 @@
           "size": "1.3GB",
           "sizeBytes": 1395864371,
           "description": "Small model, good for basic tasks",
+          "speed": "fast",
           "fileName": "qwen2.5-1.5b-instruct-q5_k_m.gguf",
           "quantization": "q5_k_m",
           "contextLength": 32768,
@@ -1058,6 +1136,7 @@
           "size": "2.4GB",
           "sizeBytes": 2620055552,
           "description": "Balanced model for general use",
+          "speed": "fast",
           "fileName": "qwen2.5-3b-instruct-q5_k_m.gguf",
           "quantization": "q5_k_m",
           "contextLength": 32768,
@@ -1070,6 +1149,7 @@
           "size": "4.7GB",
           "sizeBytes": 5025128858,
           "description": "Large model with high quality (Q4_K_M)",
+          "speed": "medium",
           "fileName": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 128000,
@@ -1082,6 +1162,7 @@
           "size": "5.4GB",
           "sizeBytes": 5841530470,
           "description": "Large model, high quality reasoning (Q5_K_M)",
+          "speed": "medium",
           "fileName": "Qwen2.5-7B-Instruct-Q5_K_M.gguf",
           "quantization": "q5_k_m",
           "contextLength": 128000,
@@ -1101,6 +1182,7 @@
           "size": "7.5GB",
           "sizeBytes": 8028321792,
           "description": "Mistral's 12B model, strong multilingual performance",
+          "speed": "medium",
           "fileName": "Mistral-Nemo-12B-Instruct.Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1114,6 +1196,7 @@
           "size": "4.4GB",
           "sizeBytes": 4692635648,
           "description": "Fast and efficient instruction model",
+          "speed": "medium",
           "fileName": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 32768,
@@ -1126,6 +1209,7 @@
           "size": "5.1GB",
           "sizeBytes": 5519900672,
           "description": "Higher quality instruction model",
+          "speed": "medium",
           "fileName": "Mistral-7B-Instruct-v0.3-Q5_K_M.gguf",
           "quantization": "q5_k_m",
           "contextLength": 32768,
@@ -1145,6 +1229,7 @@
           "size": "0.8GB",
           "sizeBytes": 847249408,
           "description": "Tiny model for edge devices",
+          "speed": "fast",
           "fileName": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1157,6 +1242,7 @@
           "size": "2.0GB",
           "sizeBytes": 2168958976,
           "description": "Small but capable multilingual model",
+          "speed": "fast",
           "fileName": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1170,6 +1256,7 @@
           "size": "4.9GB",
           "sizeBytes": 5282717696,
           "description": "Powerful model with great performance",
+          "speed": "medium",
           "fileName": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1189,6 +1276,7 @@
           "size": "12.1GB",
           "sizeBytes": 12999763968,
           "description": "OpenAI's open-weight model for consumer hardware",
+          "speed": "medium",
           "fileName": "gpt-oss-20b-MXFP4.gguf",
           "quantization": "mxfp4",
           "contextLength": 128000,
@@ -1210,6 +1298,7 @@
           "size": "19.6GB",
           "sizeBytes": 19598487712,
           "description": "Google's largest Gemma 4, best quality",
+          "speed": "slow",
           "fileName": "google_gemma-4-31B-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -1222,6 +1311,7 @@
           "size": "17.9GB",
           "sizeBytes": 17651001568,
           "description": "Google's official QAT build, smaller with quality preserved",
+          "speed": "slow",
           "fileName": "gemma-4-31B_q4_0-it.gguf",
           "quantization": "q4_0",
           "contextLength": 262144,
@@ -1237,6 +1327,7 @@
           "size": "17.0GB",
           "sizeBytes": 17035037632,
           "description": "Google's MoE Gemma 4, fast with 4B active params",
+          "speed": "medium",
           "fileName": "google_gemma-4-26B-A4B-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -1249,6 +1340,7 @@
           "size": "14.7GB",
           "sizeBytes": 14439363584,
           "description": "Google's official QAT MoE build, smaller with quality preserved",
+          "speed": "medium",
           "fileName": "gemma-4-26B_q4_0-it.gguf",
           "quantization": "q4_0",
           "contextLength": 262144,
@@ -1264,6 +1356,7 @@
           "size": "5.4GB",
           "sizeBytes": 5812137984,
           "description": "Google's latest multimodal, strong reasoning",
+          "speed": "fast",
           "fileName": "google_gemma-4-E4B-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -1276,6 +1369,7 @@
           "size": "5.2GB",
           "sizeBytes": 5154941280,
           "description": "Google's official QAT build, strong reasoning, smaller size",
+          "speed": "fast",
           "fileName": "gemma-4-E4B_q4_0-it.gguf",
           "quantization": "q4_0",
           "contextLength": 262144,
@@ -1292,6 +1386,7 @@
           "size": "3.5GB",
           "sizeBytes": 3711514624,
           "description": "Google's compact Gemma 4, fast and efficient",
+          "speed": "fast",
           "fileName": "google_gemma-4-E2B-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,
@@ -1304,6 +1399,7 @@
           "size": "3.4GB",
           "sizeBytes": 3349516256,
           "description": "Google's official compact QAT build, quality preserved",
+          "speed": "fast",
           "fileName": "gemma-4-E2B_q4_0-it.gguf",
           "quantization": "q4_0",
           "contextLength": 262144,
@@ -1319,6 +1415,7 @@
           "size": "7.3GB",
           "sizeBytes": 7847624704,
           "description": "Google's mid-range model, strong reasoning",
+          "speed": "medium",
           "fileName": "google_gemma-3-12b-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1331,6 +1428,7 @@
           "size": "2.49GB",
           "sizeBytes": 2489758112,
           "description": "Google's open-weight model, great balance of speed and quality",
+          "speed": "fast",
           "fileName": "google_gemma-3-4b-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 131072,
@@ -1343,6 +1441,7 @@
           "size": "0.81GB",
           "sizeBytes": 806058496,
           "description": "Ultra-fast Google model, best for short dictation cleanup",
+          "speed": "fast",
           "fileName": "google_gemma-3-1b-it-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 32768,
@@ -1363,6 +1462,7 @@
           "size": "0.73GB",
           "sizeBytes": 730895168,
           "description": "Liquid AI's efficient on-device model, excellent instruction following",
+          "speed": "fast",
           "fileName": "LFM2.5-1.2B-Instruct-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 32768,
@@ -1376,6 +1476,7 @@
           "size": "4.8GB",
           "sizeBytes": 5155564768,
           "description": "Liquid AI's MoE, high quality with only 1.5B active params",
+          "speed": "fast",
           "fileName": "LFM2.5-8B-A1B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 32768,
@@ -1388,6 +1489,7 @@
           "size": "1.5GB",
           "sizeBytes": 1563668704,
           "description": "Balanced LFM2 for higher quality cleanup",
+          "speed": "fast",
           "fileName": "LFM2-2.6B-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 32768,
@@ -1400,6 +1502,7 @@
           "size": "0.38GB",
           "sizeBytes": 379217632,
           "description": "Ultra-light model for fast dictation cleanup",
+          "speed": "fast",
           "fileName": "LFM2.5-350M-Q8_0.gguf",
           "quantization": "q8_0",
           "contextLength": 32768,
@@ -1412,6 +1515,7 @@
           "size": "0.25GB",
           "sizeBytes": 246598496,
           "description": "Tiny model, instant cleanup on modest hardware",
+          "speed": "fast",
           "fileName": "LFM2.5-230M-Q8_0.gguf",
           "quantization": "q8_0",
           "contextLength": 32768,
