@@ -21,6 +21,8 @@ export interface InteractionToolOptions {
   missingKeyProviders: readonly string[];
   /** A screenshot can reach the model answering this send. */
   screenAccess: boolean;
+  /** The chat's model scope; Settings Done checks it. Typed chat when absent. */
+  inferenceScope?: "chatIntelligence" | "dictationAgent";
 }
 
 const MAX_QUESTIONS = 4;
@@ -355,7 +357,9 @@ function createApiKeyTool(providers: readonly string[]): ToolDefinition {
   };
 }
 
-const openSettingsTool: ToolDefinition = {
+const createOpenSettingsTool = (
+  scope: NonNullable<InteractionToolOptions["inferenceScope"]>
+): ToolDefinition => ({
   name: "open_settings",
   description: `Show the user a button that opens the settings page where they can fix something you can't, and wait until they say they're done. Targets: llms (AI models), speechToText, privacyData (permissions and data), integrations.connectors, integrations.calendars.`,
   parameters: {
@@ -383,6 +387,7 @@ const openSettingsTool: ToolDefinition = {
       target,
       ...(message ? { message } : {}),
       ...(technicalDetails ? { technicalDetails } : {}),
+      ...(target === "llms" ? { scope } : {}),
     });
     if (result.status !== "done") return unansweredResult(result);
     return {
@@ -398,16 +403,7 @@ const openSettingsTool: ToolDefinition = {
       displayText: i18n.t("agentMode.interactions.status.done"),
     };
   },
-};
-
-/** Every interaction tool's name: a step that only asks the user something. */
-export const INTERACTION_TOOL_NAMES: ReadonlySet<string> = new Set([
-  "ask_user",
-  "request_connection",
-  "request_access",
-  "request_api_key",
-  "open_settings",
-]);
+});
 
 export function createInteractionTools(options: InteractionToolOptions): ToolDefinition[] {
   return [
@@ -419,9 +415,18 @@ export function createInteractionTools(options: InteractionToolOptions): ToolDef
     ...(options.missingKeyProviders.length > 0
       ? [createApiKeyTool(options.missingKeyProviders)]
       : []),
-    openSettingsTool,
+    createOpenSettingsTool(options.inferenceScope ?? "chatIntelligence"),
   ];
 }
+
+/** Every interaction tool's name: a step that only asks the user something. */
+export const INTERACTION_TOOL_NAMES: ReadonlySet<string> = new Set(
+  createInteractionTools({
+    connectionTargets: ["calendar"],
+    missingKeyProviders: ["openai"],
+    screenAccess: true,
+  }).map((tool) => tool.name)
+);
 
 /**
  * A tool whose service can be connected from the chat: registered before it

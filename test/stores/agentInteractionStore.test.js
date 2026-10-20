@@ -437,7 +437,7 @@ test("the card's own submit path still needs a real option for a single choice",
   store.cancelInteraction(key);
 });
 
-test("Done is offered only after Settings opened, and llms checks the agent's key", async () => {
+test("Done is offered only after Settings opened, and llms checks the chat's key", async () => {
   const opened = [];
   const store = await loadStore({ openSettingsSection: async (section) => opened.push(section) });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
@@ -455,6 +455,7 @@ test("Done is offered only after Settings opened, and llms checks the agent's ke
       kind: "settings",
       target: "llms",
       message: "Add your Groq key",
+      scope: "dictationAgent",
     });
 
   let pending = ask();
@@ -469,8 +470,48 @@ test("Done is offered only after Settings opened, and llms checks the agent's ke
   pending = store.requestInteraction(context("call-25").value, {
     kind: "settings",
     target: "llms",
+    scope: "dictationAgent",
   });
   await store.confirmSettingsDone("m1::call-25");
   assert.deepEqual(await pending, { status: "done", ready: true });
   useSettingsStore.setState(previous, true);
+});
+
+test("Done never asks for a key the chat's model doesn't use", async () => {
+  const store = await loadStore();
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = useSettingsStore.getState();
+  const done = async (callId, scope) => {
+    const pending = store.requestInteraction(context(callId).value, {
+      kind: "settings",
+      target: "llms",
+      ...(scope ? { scope } : {}),
+    });
+    await store.confirmSettingsDone(`m1::${callId}`);
+    return pending;
+  };
+  try {
+    // Cloud mode, with the provider an old BYOK setup left behind.
+    useSettingsStore.setState({
+      isSignedIn: true,
+      useDictationAgent: true,
+      dictationAgentMode: "openwhispr",
+      dictationAgentProvider: "openai",
+      openaiApiKey: "",
+      chatAgentMode: "openwhispr",
+      chatAgentProvider: "openai",
+    });
+    assert.deepEqual(await done("call-60", "dictationAgent"), { status: "done" });
+    assert.deepEqual(await done("call-61"), { status: "done" });
+
+    // Typed chat checks its own scope, not the Voice Assistant's.
+    useSettingsStore.setState({
+      chatAgentMode: "providers",
+      chatAgentProvider: "openai",
+      chatAgentModel: "gpt-5-mini",
+    });
+    assert.deepEqual(await done("call-62"), { status: "done", ready: false });
+  } finally {
+    useSettingsStore.setState(previous, true);
+  }
 });

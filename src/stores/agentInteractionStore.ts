@@ -436,20 +436,24 @@ export function openInteractionSettings(key: string): void {
 }
 
 // Readiness the app can check for itself; other targets report done without it.
-async function settingsReady(target: string): Promise<boolean | undefined> {
+async function settingsReady(
+  payload: Extract<InteractionPayload, { kind: "settings" }>
+): Promise<boolean | undefined> {
+  const { target } = payload;
   if (target === "llms") {
-    // The agent's model needs its provider's key, when that is a key the app holds.
+    // With the user's own provider keys, the chat's model needs its provider's
+    // key, when that is a key the app holds. Cloud, self-hosted and enterprise
+    // models need none.
     const [{ getSettings }, { resolveChatStreamingInference }] = await Promise.all([
       loadSettingsStore(),
       import("../helpers/dictationAgentInference"),
     ]);
     const settings = getSettings();
-    const { provider } = resolveChatStreamingInference(settings, {
-      inferenceScope: "dictationAgent",
+    const { mode, provider } = resolveChatStreamingInference(settings, {
+      inferenceScope: payload.scope ?? "chatIntelligence",
     }).config;
-    return Object.hasOwn(API_KEY_SETTERS, provider)
-      ? Boolean(settings[`${provider as ApiKeyProvider}ApiKey`])
-      : undefined;
+    if (mode !== "providers" || !Object.hasOwn(API_KEY_SETTERS, provider)) return undefined;
+    return Boolean(settings[`${provider as ApiKeyProvider}ApiKey`]);
   }
   if (target === "integrations.connectors") {
     await refreshConnectorStatus();
@@ -467,7 +471,7 @@ export async function confirmSettingsDone(key: string): Promise<void> {
   const entry = entryFor(key);
   if (entry?.state !== "pending" || entry.payload.kind !== "settings") return;
   patchEntry(key, { state: "working" });
-  const ready = await settingsReady(entry.payload.target);
+  const ready = await settingsReady(entry.payload);
   if (!isOpen(key)) return;
   settle(key, { status: "done", ...(ready !== undefined ? { ready } : {}) });
 }

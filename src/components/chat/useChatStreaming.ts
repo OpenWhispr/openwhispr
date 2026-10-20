@@ -528,6 +528,7 @@ export function useChatStreaming({
                   isScreenContextAllowed(policy) &&
                   providerSupportsImages(llmConfig.provider) &&
                   !!getCloudModel(llmConfig.model, llmConfig.provider)?.supportsVision,
+                inferenceScope,
               }
             : undefined;
           const connectors = connectorsAvailable

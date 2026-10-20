@@ -33,7 +33,14 @@ export type InteractionPayload =
   | { kind: "connection"; target: ConnectionTarget; reason?: string }
   | { kind: "access"; resource: "screen"; reason: string }
   | { kind: "apiKey"; provider: string; providerName: string; reason?: string }
-  | { kind: "settings"; target: SettingsTarget; message?: string; technicalDetails?: string };
+  | {
+      kind: "settings";
+      target: SettingsTarget;
+      message?: string;
+      technicalDetails?: string;
+      /** The model scope of the chat that asked, which Done checks for the AI models target. */
+      scope?: "chatIntelligence" | "dictationAgent";
+    };
 
 /** Per question: an option id, several option ids, or the typed text. */
 export type InteractionAnswers = Record<string, string | string[]>;
