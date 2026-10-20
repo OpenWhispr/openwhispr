@@ -182,7 +182,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
         disabled={!expandable}
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expandable ? expanded : undefined}
-        className="flex max-w-full items-center gap-2.5 rounded-md py-0.5 text-start transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:text-muted-foreground"
+        className="flex max-w-full items-center gap-2.5 rounded-md py-0.5 text-start transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:text-inherit"
       >
         {icon}
         <span className={cn("truncate", active && "agent-shimmer-text")}>{label}</span>
