@@ -768,7 +768,12 @@ export default function AgentWindow() {
           keyboardWanted &&
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
-        header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+        // Inside the composer, a shade lighter than it, so it reads as a box.
+        header={
+          !inModal && pendingContext ? (
+            <div className="pb-2 *:bg-surface-2">{pendingContext}</div>
+          ) : null
+        }
         className={inModal ? "min-h-21" : "h-[145px] w-[510px]"}
       />
     );
