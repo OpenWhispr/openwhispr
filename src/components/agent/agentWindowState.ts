@@ -235,6 +235,18 @@ export function findPendingCard(
   return null;
 }
 
+/**
+ * What the chat shows: a fork shows its own turns, under the chip that opens
+ * the chat it came from. The copied history stays in the fork and goes with
+ * every request; it shows only when that chat is gone, and the chip with it.
+ */
+export function shownMessages<T>(
+  messages: T[],
+  forkOrigin: { parentTitle: string | null; copiedMessageCount: number } | null
+): T[] {
+  return forkOrigin?.parentTitle ? messages.slice(forkOrigin.copiedMessageCount) : messages;
+}
+
 export type AgentPillPlacement = "compact" | "typing" | "modal";
 export type AgentPillStatus =
   "idle" | "listening" | "transcribing" | "waiting" | "thinking" | "streaming";

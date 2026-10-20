@@ -20,6 +20,7 @@ import {
   findPendingCard,
   INITIAL_AGENT_WINDOW_STATE,
   resolveAgentPillControls,
+  shownMessages,
   type AgentPillButton,
   type AgentPillPlacement,
   type AgentPillStatus,
@@ -96,28 +97,30 @@ export default function AgentWindow() {
   const readAloud = useReadAloud(i18n.language);
   const { stop: stopReading } = readAloud;
 
+  // A fork's list leaves out the history it copied (the chip opens it).
+  const shown = useMemo(() => shownMessages(messages, forkOrigin), [forkOrigin, messages]);
   // The card the turn waits on: above the pill when it arrives while compact.
   const interactions = useAgentInteractionStore((store) => store.entries);
   const approvals = useConnectorApprovalStore((store) => store.entries);
   const pendingCard = useMemo(
-    () => findPendingCard(messages, interactions, approvals),
-    [approvals, interactions, messages]
+    () => findPendingCard(shown, interactions, approvals),
+    [approvals, interactions, shown]
   );
   // What the composer answers: a restored question too, though nothing waits on it.
   const answerableCard = useMemo(
-    () => findPendingCard(messages, interactions, approvals, { includeRestored: true }),
-    [approvals, interactions, messages]
+    () => findPendingCard(shown, interactions, approvals, { includeRestored: true }),
+    [approvals, interactions, shown]
   );
   // A card waiting on the user or sending carries the turn: the composer
   // offers no Stop, and the modal's pill reads as at rest.
   const cardSending = useMemo(
     () =>
-      messages.some((message) =>
+      shown.some((message) =>
         message.toolCalls?.some(
           (call) => approvals[approvalKey(message.id, call.id)]?.state === "committing"
         )
       ),
-    [approvals, messages]
+    [approvals, shown]
   );
   const cardHolds = pendingCard !== null || cardSending;
   const cardFrameRef = useRef<HTMLDivElement>(null);
@@ -804,7 +807,7 @@ export default function AgentWindow() {
           >
             <AgentMessageList
               key={openedChat}
-              messages={refusal ? [] : messages}
+              messages={refusal ? [] : shown}
               forkOrigin={forkOrigin}
               onOpenParent={switchChat}
               busy={busy}

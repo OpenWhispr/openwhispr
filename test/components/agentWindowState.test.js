@@ -309,3 +309,12 @@ test("the pending card is the first open question or answer card on screen", asy
   // A card of another chat's message never counts.
   assert.equal(findPendingCard([], interaction, approval), null);
 });
+
+test("a fork shows its own turns; the copied history shows only once its chat is gone", async () => {
+  const { shownMessages } = await load();
+  const messages = ["m1", "m2", "t1", "m3", "m4"];
+  const origin = { parentTitle: "Plan", copiedMessageCount: 3 };
+  assert.deepEqual(shownMessages(messages, origin), ["m3", "m4"]);
+  assert.deepEqual(shownMessages(messages, { ...origin, parentTitle: null }), messages);
+  assert.deepEqual(shownMessages(messages, null), messages);
+});

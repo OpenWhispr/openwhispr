@@ -42,9 +42,9 @@ const MESSAGES = [
   message("m4", "assistant", "A shorter plan."),
 ];
 
-test("a fork's chip sits where the copied history ends and its own turns begin", async (t) => {
+test("a fork shows its chip above its own turns", async (t) => {
   const markup = await renderList(t, {
-    messages: MESSAGES,
+    messages: MESSAGES.slice(2),
     forkOrigin: {
       parentConversationId: 1,
       parentTitle: "Plan",
@@ -52,9 +52,7 @@ test("a fork's chip sits where the copied history ends and its own turns begin",
       copiedMessageCount: 2,
     },
   });
-  const chip = markup.indexOf("chat.forkedFrom");
-  assert.ok(chip > markup.indexOf("Here is the plan."));
-  assert.ok(chip < markup.indexOf("Shorter, please"));
+  assert.ok(markup.indexOf("chat.forkedFrom") < markup.indexOf("Shorter, please"));
 });
 
 test("a fork that copied nothing it can place shows its chip at the top", async (t) => {
@@ -68,24 +66,4 @@ test("a fork that copied nothing it can place shows its chip at the top", async 
     },
   });
   assert.ok(markup.indexOf("chat.forkedFrom") < markup.indexOf("Draft the plan"));
-});
-
-test("a fork whose copied history ends on a tool row keeps its chip after the last shown message", async (t) => {
-  const markup = await renderList(t, {
-    messages: [
-      MESSAGES[0],
-      MESSAGES[1],
-      { id: "t1", role: "tool", content: "{}", isStreaming: false },
-      MESSAGES[2],
-    ],
-    forkOrigin: {
-      parentConversationId: 1,
-      parentTitle: "Plan",
-      context: null,
-      copiedMessageCount: 3,
-    },
-  });
-  const chip = markup.indexOf("chat.forkedFrom");
-  assert.ok(chip > markup.indexOf("Here is the plan."));
-  assert.ok(chip < markup.indexOf("Shorter, please"));
 });

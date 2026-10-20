@@ -1,5 +1,4 @@
 import {
-  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -314,21 +313,6 @@ export function AgentMessageList({
   const [selection, setSelection] = useState<SelectionTarget | null>(null);
   const visible = messages.filter((message) => message.role !== "tool");
   const lastId = visible.at(-1)?.id;
-  // A fork opens at its newest message, so its chip sits where the copied
-  // history ends and its own turns begin, not above all of that history.
-  const forkChip = forkOrigin?.parentTitle && (
-    <div className="flex">
-      <ForkOriginChip
-        title={forkOrigin.parentTitle}
-        onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
-      />
-    </div>
-  );
-  // The last copied message the list shows (tool rows aren't); none puts the chip on top.
-  const forkPointId = messages
-    .slice(0, forkOrigin?.copiedMessageCount ?? 0)
-    .reverse()
-    .find((message) => message.role !== "tool")?.id;
   const selectionSaved =
     selection != null && messages.some((m) => m.id === selection.messageId && m.dbId != null);
 
@@ -379,29 +363,35 @@ export function AgentMessageList({
     >
       {/* One child, so following the bottom sees everything the chat grows by. */}
       <div className="flex min-h-full flex-col">
-        {!forkPointId && forkChip && <div className="pt-1 pb-3">{forkChip}</div>}
+        {/* A fork shows its own turns under the chip back to the chat it came from. */}
+        {forkOrigin?.parentTitle && (
+          <div className="flex justify-end pt-1 pb-4">
+            <ForkOriginChip
+              title={forkOrigin.parentTitle}
+              onOpen={() => onOpenParent(forkOrigin.parentConversationId)}
+            />
+          </div>
+        )}
         {visible.length === 0 ? (
           emptyState
         ) : (
           <div className="flex flex-col gap-4">
-            {visible.map((message) => (
-              <Fragment key={message.id}>
-                {message.role === "user" ? (
-                  <UserMessage message={message} />
-                ) : (
-                  <AssistantMessage
-                    message={message}
-                    latest={message.id === lastId}
-                    busy={busy}
-                    readAloud={readAloud}
-                    onRegenerate={onRegenerate}
-                    onFork={onFork}
-                    onContinue={onContinue}
-                  />
-                )}
-                {message.id === forkPointId && forkChip}
-              </Fragment>
-            ))}
+            {visible.map((message) =>
+              message.role === "user" ? (
+                <UserMessage key={message.id} message={message} />
+              ) : (
+                <AssistantMessage
+                  key={message.id}
+                  message={message}
+                  latest={message.id === lastId}
+                  busy={busy}
+                  readAloud={readAloud}
+                  onRegenerate={onRegenerate}
+                  onFork={onFork}
+                  onContinue={onContinue}
+                />
+              )
+            )}
           </div>
         )}
       </div>
