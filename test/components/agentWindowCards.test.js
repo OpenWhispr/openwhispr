@@ -845,6 +845,31 @@ test("a spoken command that arrives while a question waits is held as a message,
   assert.deepEqual(globalThis.__chat.sent, ["and email Dana"]);
 });
 
+test("back to the window by focus alone, a key card that came meanwhile takes the keyboard from the empty composer", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.settle();
+  const composer = view.host.querySelector(COMPOSER);
+  assert.ok(document.activeElement === composer, "the empty composer has the caret");
+  // The user goes to another app (the caret stays put); the key card arrives meanwhile.
+  document.hasFocus = () => false;
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.ask("c1", KEY_CARD);
+  await view.settle();
+  assert.ok(document.activeElement === composer, "nothing moves while the user is away");
+  // Back by Alt-Tab: the window gets focus, nothing is clicked.
+  document.hasFocus = () => true;
+  await React.act(async () => view.happyWindow.dispatchEvent(new view.happyWindow.Event("focus")));
+  await view.settle();
+  assert.ok(
+    document.activeElement === view.host.querySelector(KEY_FIELD),
+    "a pasted key lands in the key field"
+  );
+});
+
 test("Keyboard on a waiting key card puts the keyboard in the key field, not the composer", async (t) => {
   const view = await mountWindow(t);
   const { document } = view.happyWindow;

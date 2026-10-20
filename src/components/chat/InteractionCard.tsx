@@ -66,7 +66,10 @@ const draftInProgress = (): boolean =>
  * when a change on the card (the next question, Done appearing, a connect
  * starting) removes the control that had focus; and when the window is given
  * the keyboard with nothing focused (Windows and Linux, for a card that needs
- * typing). A card restored from a turn that ended never takes it on its own.
+ * typing), or, for a key card, with an empty composer focused and no message
+ * being written (the user coming back by window focus alone, Alt-Tab, to a
+ * key card that arrived while they were away). A card restored from a turn
+ * that ended never takes it on its own.
  */
 function useCardFocus(
   rootRef: RefObject<HTMLDivElement | null>,
@@ -86,11 +89,14 @@ function useCardFocus(
   useEffect(() => {
     if (restored) return;
     const onWindowFocus = () => {
-      if (rootRef.current && focusLost()) focusCard(rootRef.current);
+      if (!rootRef.current) return;
+      if (focusLost() || (keyField && emptyComposerFocused() && !draftInProgress())) {
+        focusCard(rootRef.current);
+      }
     };
     window.addEventListener("focus", onWindowFocus);
     return () => window.removeEventListener("focus", onWindowFocus);
-  }, [restored, rootRef]);
+  }, [keyField, restored, rootRef]);
 }
 
 /** A question, connection, access, key or settings card the turn is waiting on. */
