@@ -404,6 +404,7 @@ export function useChatStreaming({
           ![
             "openai",
             "groq",
+            "xai",
             "custom",
             "anthropic",
             "gemini",

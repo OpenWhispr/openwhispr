@@ -462,6 +462,35 @@ test("a fixed port, redirect host and path shape the redirect uri both times", a
   });
 });
 
+test("a well-known callback port requires state before it settles", async () => {
+  const port = await freePort();
+  let codeVerifier;
+  const started = startFlow(
+    async (code, redirectUri, verifier) => {
+      codeVerifier = verifier;
+      return { code, redirectUri };
+    },
+    {
+      ports: [port],
+      callbackPath: "/callback",
+      pkceBytes: 64,
+      requireStateToSettle: true,
+    }
+  );
+  const redirectUri = await until(started.getRedirectUri);
+  assert.equal(redirectUri, `http://127.0.0.1:${port}/callback`);
+
+  const denied = await getLocal(`${redirectUri}?error=access_denied`);
+  const stolen = await getLocal(`${redirectUri}?code=stolen&state=wrong`);
+  assert.equal(denied.status, 400);
+  assert.equal(stolen.status, 400);
+  assert.equal(await stillWaiting(started.flow), "pending");
+
+  await getLocal(`${redirectUri}?code=ok&state=${started.getState()}`);
+  assert.deepEqual(await started.flow, { code: "ok", redirectUri });
+  assert.equal(codeVerifier.length, 86);
+});
+
 test("a busy fixed port falls through to the next with one browser launch; all busy rejects ports_busy", async () => {
   const blocker = net.createServer();
   await new Promise((resolve) => blocker.listen(0, "127.0.0.1", resolve));

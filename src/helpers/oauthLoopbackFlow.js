@@ -58,6 +58,10 @@ function codedError(code, message, extra = {}) {
 //   that match it exactly (fixed ports are tried in order); the server
 //   always listens on 127.0.0.1. With a callbackPath, only that path is a
 //   callback.
+// - pkceBytes — optional PKCE verifier byte count; SuperGrok uses 64 bytes.
+// - requireStateToSettle — ignore error and wrong-state-code requests without
+//   settling the flow. This protects a well-known callback port from stray
+//   requests while accepting only a state-validated authorization code.
 // - renderResultPage({ ok }) — answer the browser from this server instead
 //   of the hosted page, for providers that page doesn't know.
 // - publicRedirectUri — for providers that require an HTTPS redirect: the
@@ -76,6 +80,8 @@ function runOAuthLoopbackFlow({
   redirectHost = "127.0.0.1",
   ports = [0],
   callbackPath = "",
+  pkceBytes,
+  requireStateToSettle = false,
   renderResultPage = null,
   publicRedirectUri = null,
   timeoutMs = OAUTH_TIMEOUT_MS,
@@ -87,7 +93,10 @@ function runOAuthLoopbackFlow({
   }
 
   return new Promise((resolve, reject) => {
-    const codeVerifier = crypto.randomBytes(32).toString("base64url").slice(0, 43);
+    const codeVerifier =
+      pkceBytes == null
+        ? crypto.randomBytes(32).toString("base64url").slice(0, 43)
+        : crypto.randomBytes(pkceBytes).toString("base64url");
     const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
     const nonce = crypto.randomBytes(32).toString("hex");
     // Behind a relay the provider never sees this server, so the relay finds it
@@ -140,6 +149,11 @@ function runOAuthLoopbackFlow({
         }
 
         if (error) {
+          if (requireStateToSettle && returnedState !== state) {
+            res.writeHead(400, { "Content-Type": "text/html" });
+            res.end("<html><body><h3>Invalid request.</h3></body></html>");
+            return;
+          }
           callbackClaimed = true;
           respond(res, false, { [errorParam]: error });
           cleanup();
@@ -150,9 +164,11 @@ function runOAuthLoopbackFlow({
         if (!code || returnedState !== state) {
           invalidRequest(res);
           // A real callback with a code but the wrong state is a failed
-          // attempt (stale tab, CSRF). Fail the flow now. A request with no
-          // code (favicon / bare GET) must keep waiting for the redirect.
-          if (code) {
+          // attempt (stale tab, CSRF). Fail the flow now — unless the listen
+          // port is a well-known SuperGrok callback, where unauthenticated
+          // GETs must not abort login. A request with no code (favicon /
+          // bare GET) must keep waiting for the redirect.
+          if (code && !requireStateToSettle) {
             callbackClaimed = true;
             cleanup();
             reject(codedError("oauth_state_mismatch", "OAuth state mismatch"));
@@ -241,5 +257,4 @@ function runOAuthLoopbackFlow({
     }, timeoutMs);
   });
 }
-
 module.exports = { runOAuthLoopbackFlow, OAuthFlowError };

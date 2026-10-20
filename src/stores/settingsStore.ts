@@ -1163,6 +1163,8 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setXaiApiKey: (key: string) => void;
+  xaiOAuthConnected: boolean;
+  setXaiOAuthConnected: (value: boolean) => void;
   setMistralApiKey: (key: string) => void;
   setOpenrouterApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
@@ -1583,6 +1585,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: "",
   groqApiKey: "",
   xaiApiKey: "",
+  xaiOAuthConnected: false,
   mistralApiKey: "",
   openrouterApiKey: "",
   cortiClientId: "",
@@ -2233,6 +2236,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
   setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
   setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setXaiOAuthConnected: (value: boolean) => {
+    set({ xaiOAuthConnected: value });
+  },
   setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
   setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
@@ -2743,6 +2749,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
+    if (keys.xaiOAuthConnected !== undefined) s.setXaiOAuthConnected(keys.xaiOAuthConnected);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
@@ -3523,6 +3530,19 @@ export async function initializeSettings(): Promise<void> {
       hydratingSecrets = false;
       await Promise.all([...pendingSecretUpdates].map(refreshApiKey));
       pendingSecretUpdates.clear();
+    }
+
+    try {
+      const xaiOAuth = await window.electronAPI.xaiOAuthStatus?.();
+      useSettingsStore.setState({
+        xaiOAuthConnected: Boolean(xaiOAuth?.connected),
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to hydrate xAI OAuth status",
+        { error: (err as Error).message },
+        "settings"
+      );
     }
 
     // Sync dictation key from main process.

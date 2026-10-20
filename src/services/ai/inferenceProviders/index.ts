@@ -2,6 +2,7 @@ import type { InferenceProvider } from "./types";
 import { anthropicProvider } from "./anthropic";
 import { geminiProvider } from "./gemini";
 import { groqProvider } from "./groq";
+import { xaiProvider } from "./xai";
 import { localProvider } from "./local";
 import { enterpriseProvider } from "./enterprise";
 import { openwhisprProvider } from "./openwhispr";
@@ -17,6 +18,7 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   anthropic: anthropicProvider,
   gemini: geminiProvider,
   groq: groqProvider,
+  xai: xaiProvider,
   tinfoil: tinfoilProvider,
   corti: cortiProvider,
   local: localProvider,

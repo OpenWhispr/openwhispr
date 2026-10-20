@@ -70,6 +70,12 @@ const listRows = (x: number) => (
     <path d={`M${x} 18h11`} />
   </>
 );
+const PauseMark = glyph(
+  <>
+    <path d="M8 5v14" />
+    <path d="M16 5v14" />
+  </>
+);
 
 const BoldMark = glyph(
   <>
@@ -188,6 +194,7 @@ const SquareSparkleMark = glyph(
 
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
+export const Pause = createIcon("pause", PauseMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
 export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);

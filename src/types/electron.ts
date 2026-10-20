@@ -2,6 +2,7 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+import type { XaiCatalogModel } from "../models/xaiModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
@@ -1357,6 +1358,7 @@ declare global {
         scope: "transcription" | "reasoning";
         provider: string;
         apiKey?: string;
+        oauthConnected?: boolean;
         baseUrl?: string;
         model?: string;
         clientId?: string;
@@ -2389,7 +2391,60 @@ declare global {
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
+      getXaiBearer?: () => Promise<string | null>;
       saveXaiKey?: (key: string) => Promise<void>;
+      xaiOAuthLogin?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
+      xaiOAuthLogout?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
+      xaiOAuthStatus?: () => Promise<{
+        connected?: boolean;
+        expiresAt?: number | null;
+        scope?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
+      xaiTtsVoices?: () => Promise<
+        Array<{
+          voiceId: string;
+          name: string;
+          language: string;
+          gender: string;
+          source: "default" | "custom";
+        }>
+      >;
+      xaiTtsGenerate?: (input: {
+        text: string;
+        voiceId?: string;
+        language?: string;
+        speed?: number;
+        optimizeStreamingLatency?: number;
+        codec?: string;
+        sampleRate?: number;
+        bitRate?: number;
+        textNormalization?: boolean;
+        withTimestamps?: boolean;
+      }) => Promise<{
+        success: boolean;
+        audioBase64?: string;
+        contentType?: string;
+        error?: string;
+        errorCode?: string;
+        status?: number;
+      }>;
       proxyXaiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;
@@ -2422,6 +2477,7 @@ declare global {
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
+      getXaiLanguageModels?: () => Promise<XaiCatalogModel[]>;
       proxyTinfoilTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;
