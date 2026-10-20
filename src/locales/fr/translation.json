@@ -4136,7 +4136,14 @@
         "failed": "Connexion impossible. Réessayez.",
         "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez.",
         "calendarTitle": "Connecter un calendrier",
-        "yes": "Oui"
+        "yes": "Oui",
+        "reasons": {
+          "gmail": "Je peux envoyer l'e-mail depuis votre Gmail.",
+          "slack": "Je peux publier le message sur Slack pour vous.",
+          "linear": "Je peux trouver et créer des tickets Linear pour vous.",
+          "github": "Je peux trouver et créer des issues GitHub pour vous.",
+          "calendar": "Je peux vérifier vos disponibilités et proposer des créneaux."
+        }
       },
       "access": {
         "screen": "Autoriser l'accès à votre écran ?",

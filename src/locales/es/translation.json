@@ -4018,7 +4018,14 @@
         "failed": "No se pudo conectar. Inténtalo de nuevo.",
         "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo.",
         "calendarTitle": "Conectar un calendario",
-        "yes": "Sí"
+        "yes": "Sí",
+        "reasons": {
+          "gmail": "Puedo enviar el correo desde tu Gmail.",
+          "slack": "Puedo publicar el mensaje en Slack por ti.",
+          "linear": "Puedo buscar y crear incidencias de Linear por ti.",
+          "github": "Puedo buscar y crear issues de GitHub por ti.",
+          "calendar": "Puedo consultar tu disponibilidad y sugerir horarios."
+        }
       },
       "access": {
         "screen": "¿Permitir el acceso a tu pantalla?",

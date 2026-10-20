@@ -4136,7 +4136,14 @@
         "failed": "Couldn't connect. Try again.",
         "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
         "calendarTitle": "Connect a calendar",
-        "yes": "Yes"
+        "yes": "Yes",
+        "reasons": {
+          "gmail": "I can send the email from your Gmail.",
+          "slack": "I can post the message to Slack for you.",
+          "linear": "I can find and file Linear issues for you.",
+          "github": "I can find and file GitHub issues for you.",
+          "calendar": "I can check your availability and suggest times."
+        }
       },
       "access": {
         "screen": "Allow access to your screen?",

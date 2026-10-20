@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CornerDownLeft, Mic, Square, X } from "../icons";
 import { cn } from "../lib/utils";
+import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 
 interface AgentComposerProps {
   draft: string;
@@ -26,9 +27,6 @@ interface AgentComposerProps {
   header?: ReactNode;
   className?: string;
 }
-
-const ICON_BUTTON =
-  "flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent";
 
 /** The agent's typed input: the draft, with Close and Mic on the left and Send (or Stop) on the right. */
 export function AgentComposer({

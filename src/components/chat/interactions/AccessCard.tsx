@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { respondToAccess, type InteractionEntry } from "../../../stores/agentInteractionStore";
+import { cn } from "../../lib/utils";
 import type { InteractionPayload } from "../../../types/agentInteractions";
 import { PILL_BUTTON, PRIMARY_PILL_BUTTON } from "./cardStyles";
 
@@ -26,7 +27,7 @@ export function AccessCard({
         <button
           type="button"
           onClick={() => void respondToAccess(entry.key, false)}
-          className={`${PILL_BUTTON} text-muted-foreground`}
+          className={cn(PILL_BUTTON, "text-muted-foreground")}
         >
           {t("agentMode.interactions.notNow")}
         </button>

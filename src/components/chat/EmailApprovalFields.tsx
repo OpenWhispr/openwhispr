@@ -6,15 +6,15 @@ import {
   type EmailFieldProblems,
   type EmailFields,
 } from "../../utils/emailApprovalFields";
+import { cn } from "../lib/utils";
 import { INLINE_FIELD } from "./interactions/cardStyles";
+import { HeaderRow } from "./interactions/HeaderRow";
 
 // A subject is one header line. A pasted line break becomes a space here,
 // so the card never shows a subject main would refuse to send.
 function singleLine(value: string): string {
   return value.replace(/[\r\n]+/g, " ");
 }
-
-const LABEL_CLASS = "w-16 shrink-0 text-xs text-muted-foreground";
 
 interface EmailApprovalFieldsProps {
   fields: EmailFields;
@@ -43,15 +43,6 @@ function invalidFields(
     cc: hasInvalid(fields.cc) || tooMany,
     subject: Boolean(problems?.subjectTooLong),
   };
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
-  return (
-    <div className="flex min-h-6 items-center gap-2">
-      <span className={LABEL_CLASS}>{label}</span>
-      {children}
-    </div>
-  );
 }
 
 // A pasted "Name <address>" (Outlook's "Last, First <address>" too) sends to
@@ -89,7 +80,7 @@ function EmailFieldsEditor({
 
   return (
     <>
-      <Row label={t("connectors.approval.email.toLabel")}>
+      <HeaderRow label={t("connectors.approval.email.toLabel")}>
         <input
           aria-label={t("connectors.approval.email.toLabel")}
           title={addressHint}
@@ -103,10 +94,10 @@ function EmailFieldsEditor({
             onChange({ to: parseAddressList(event.target.value) });
           }}
         />
-      </Row>
+      </HeaderRow>
       {toText.includes("<") && <ResolvedAddresses addresses={fields.to} />}
       {showCc && (
-        <Row label={t("connectors.approval.email.ccLabel")}>
+        <HeaderRow label={t("connectors.approval.email.ccLabel")}>
           <input
             aria-label={t("connectors.approval.email.ccLabel")}
             title={addressHint}
@@ -120,20 +111,20 @@ function EmailFieldsEditor({
               onChange({ cc: parseAddressList(event.target.value) });
             }}
           />
-        </Row>
+        </HeaderRow>
       )}
       {showCc && ccText.includes("<") && <ResolvedAddresses addresses={fields.cc} />}
-      <Row label={t("connectors.approval.email.subjectLabel")}>
+      <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
         <input
           aria-label={t("connectors.approval.email.subjectLabel")}
           {...validity(invalid.subject)}
           type="text"
-          className={`${INLINE_FIELD} font-medium`}
+          className={cn(INLINE_FIELD, "font-medium")}
           dir="auto"
           value={fields.subject}
           onChange={(event) => onChange({ subject: singleLine(event.target.value) })}
         />
-      </Row>
+      </HeaderRow>
     </>
   );
 }
@@ -151,17 +142,17 @@ function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: bool
   );
   return (
     <>
-      <Row label={t("connectors.approval.email.toLabel")}>
+      <HeaderRow label={t("connectors.approval.email.toLabel")}>
         {value(fields.to.map(recipientLabel).join(", "))}
-      </Row>
+      </HeaderRow>
       {showCc && fields.cc.length > 0 && (
-        <Row label={t("connectors.approval.email.ccLabel")}>
+        <HeaderRow label={t("connectors.approval.email.ccLabel")}>
           {value(fields.cc.map(recipientLabel).join(", "))}
-        </Row>
+        </HeaderRow>
       )}
-      <Row label={t("connectors.approval.email.subjectLabel")}>
+      <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
         {value(fields.subject, "font-medium")}
-      </Row>
+      </HeaderRow>
     </>
   );
 }
@@ -180,11 +171,11 @@ export function EmailApprovalFields({
       ) : (
         <EmailFieldsView fields={props.fields} showCc={props.showCc} />
       )}
-      <Row label={t("connectors.approval.email.fromLabel")}>
+      <HeaderRow label={t("connectors.approval.email.fromLabel")}>
         <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto">
           {accountLabel}
         </span>
-      </Row>
+      </HeaderRow>
     </>
   );
 }

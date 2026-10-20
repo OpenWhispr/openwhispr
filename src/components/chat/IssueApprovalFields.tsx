@@ -1,7 +1,7 @@
 import { useId, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { liveCardNotesFor } from "./liveCardNotes";
-import { INLINE_FIELD } from "./interactions/cardStyles";
+import { INLINE_TEXT_FIELD, INLINE_TITLE_FIELD } from "./interactions/cardStyles";
 import type { IssueFieldProblem, IssueFields, IssueVerb } from "../../utils/issueApprovalFields";
 
 const TITLE_PROBLEMS: ReadonlySet<IssueFieldProblem> = new Set(["missingTitle", "titleTooLong"]);
@@ -76,7 +76,7 @@ function IssueFieldsLayout({
           aria-label={t("connectors.approval.issue.titleLabel")}
           {...description(titleInvalid)}
           type="text"
-          className={`${INLINE_FIELD} mx-0 mb-1 block w-full font-medium`}
+          className={INLINE_TITLE_FIELD}
           dir="auto"
           value={fields.title}
           onChange={(event) => onChange({ title: singleLine(event.target.value) })}
@@ -87,7 +87,7 @@ function IssueFieldsLayout({
           hasTitle ? "connectors.approval.issue.bodyLabel" : "connectors.approval.comment.bodyLabel"
         )}
         {...description(bodyInvalid)}
-        className={`${INLINE_FIELD} field-sizing-content mx-0 block w-full resize-none leading-6`}
+        className={INLINE_TEXT_FIELD}
         dir="auto"
         value={fields.body}
         onChange={(event) => onChange({ body: event.target.value })}

@@ -137,6 +137,21 @@ test("right to left, the left arrow moves forward", async (t) => {
   assert.ok(isFocused(view, radios[0]));
 });
 
+test("a radio group given fewer options keeps a tab stop", async (t) => {
+  const { RadioGroup } = await loadControls(t);
+  const four = [...OPTIONS, { value: "cost", label: "Cost" }];
+  const group = (options) =>
+    React.createElement(RadioGroup, { options, value: undefined, onValueChange() {} });
+  const view = await mount(t, group(four));
+  const last = view.host.querySelectorAll('[role="radio"]')[3];
+  await React.act(async () => last.focus());
+  await view.render(group(OPTIONS.slice(0, 2)));
+  assert.deepEqual(
+    [...view.host.querySelectorAll('[role="radio"]')].map((radio) => radio.tabIndex),
+    [0, -1]
+  );
+});
+
 test("a checkbox reports the opposite of its state and says which it is", async (t) => {
   const { Checkbox } = await loadControls(t);
   const changes = [];

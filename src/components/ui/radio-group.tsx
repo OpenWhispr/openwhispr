@@ -1,6 +1,6 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useDirection } from "@radix-ui/react-direction";
-import { isArrowKey, logicalArrowKey } from "../../lib/emojiPicker";
+import { isArrowKey, logicalArrowKey } from "../../lib/arrowKeys";
 import { cn } from "../lib/utils";
 
 export interface RadioGroupOption {
@@ -33,7 +33,8 @@ export function RadioGroup({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const pickedIndex = options.findIndex((option) => option.value === value);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
-  const tabStop = focusIndex ?? Math.max(0, pickedIndex);
+  const tabStop =
+    focusIndex !== null && focusIndex < options.length ? focusIndex : Math.max(0, pickedIndex);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key === " " || event.key === "Enter") {

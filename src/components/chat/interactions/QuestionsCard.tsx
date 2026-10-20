@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "../../icons";
 import { Checkbox } from "../../ui/checkbox";
@@ -10,14 +10,14 @@ import {
   type InteractionEntry,
 } from "../../../stores/agentInteractionStore";
 import type { InteractionPayload, InteractionQuestion } from "../../../types/agentInteractions";
-import { CARD_FIELD, PILL_BUTTON } from "./cardStyles";
+import { cn } from "../../lib/utils";
+import { CARD_FIELD, ICON_BUTTON, PILL_BUTTON } from "./cardStyles";
 import { SubmitArrowButton } from "./SubmitArrowButton";
 
 // Long enough to see the pick land before the next question replaces it.
 const RADIO_COMMIT_MS = 200;
 
-const NAV_BUTTON =
-  "flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-30 disabled:hover:bg-transparent";
+const NAV_BUTTON = cn(ICON_BUTTON, "size-6");
 
 /**
  * One question at a time, with ‹ n/N › between them. Everything the user
@@ -32,8 +32,9 @@ export function QuestionsCard({
   payload: Extract<InteractionPayload, { kind: "questions" }>;
 }): ReactElement {
   const { t } = useTranslation();
+  // Not cleared on unmount: a card that remounts (Expand, the timed opening)
+  // still moves on, and a commit for a question already left does nothing.
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(commitTimer.current), []);
 
   const { questions } = payload;
   const step = Math.min(entry.step, questions.length - 1);
@@ -92,6 +93,7 @@ export function QuestionsCard({
       <div className="mt-2">
         {question.kind === "single" ? (
           <RadioGroup
+            key={question.id}
             aria-label={question.prompt}
             options={(question.options ?? []).map((option) => ({
               value: option.id,
@@ -101,7 +103,10 @@ export function QuestionsCard({
             onValueChange={(id) => {
               set(id);
               clearTimeout(commitTimer.current);
-              commitTimer.current = setTimeout(() => commitQuestion(entry.key), RADIO_COMMIT_MS);
+              commitTimer.current = setTimeout(
+                () => commitQuestion(entry.key, step),
+                RADIO_COMMIT_MS
+              );
             }}
           />
         ) : question.kind === "multiple" ? (
@@ -127,7 +132,9 @@ export function QuestionsCard({
             <div className="mt-1 flex justify-end">
               <button
                 type="button"
-                onClick={() => commitQuestion(entry.key)}
+                // Nothing picked yet (a typed answer counts until a pick replaces it).
+                disabled={!(Array.isArray(value) && value.length > 0) && typed === undefined}
+                onClick={() => commitQuestion(entry.key, step)}
                 className={PILL_BUTTON}
               >
                 {t("agentMode.interactions.questions.continue")}
@@ -139,7 +146,7 @@ export function QuestionsCard({
             className="flex items-center gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              if (typeof value === "string" && value.trim()) commitQuestion(entry.key);
+              if (typeof value === "string" && value.trim()) commitQuestion(entry.key, step);
             }}
           >
             <input

@@ -356,7 +356,10 @@ test("questions are answered one at a time, and moving between them keeps every 
   assert.equal(entry().step, 0);
 
   store.updateInteractionDraft(key, { goal: "balanced" });
-  store.commitQuestion(key);
+  store.commitQuestion(key, 0);
+  assert.equal(entry().step, 1);
+  // A second commit for a question already left (a late radio timer) does nothing.
+  store.commitQuestion(key, 0);
   assert.equal(entry().step, 1);
   store.updateInteractionDraft(key, { ...entry().draft, include: ["research"] });
   store.goToQuestion(key, 0);
@@ -369,7 +372,7 @@ test("questions are answered one at a time, and moving between them keeps every 
 
   store.goToQuestion(key, 2);
   store.updateInteractionDraft(key, { ...entry().draft, notes: "Ship it" });
-  store.commitQuestion(key);
+  store.commitQuestion(key, 2);
   assert.deepEqual(await pending, {
     status: "answered",
     answers: { goal: "balanced", include: ["research"], notes: "Ship it" },
@@ -386,14 +389,14 @@ test("the last question submits once; with one still unanswered it goes back to 
   // The first question was skipped with ›; the recommended option is no answer.
   store.goToQuestion(key, 2);
   store.updateInteractionDraft(key, { notes: "n" });
-  store.commitQuestion(key);
+  store.commitQuestion(key, 2);
   assert.equal(entry().state, "pending");
   assert.equal(entry().step, 0, "back to the first unanswered question");
 
   store.updateInteractionDraft(key, { ...entry().draft, goal: "speed" });
   store.goToQuestion(key, 2);
-  store.commitQuestion(key);
-  store.commitQuestion(key);
+  store.commitQuestion(key, 2);
+  store.commitQuestion(key, 2);
   await Promise.resolve();
   assert.deepEqual(results, [
     { status: "answered", answers: { goal: "speed", include: [], notes: "n" } },

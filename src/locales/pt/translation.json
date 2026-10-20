@@ -3966,7 +3966,14 @@
         "failed": "Não foi possível conectar. Tente novamente.",
         "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
         "calendarTitle": "Conectar um calendário",
-        "yes": "Sim"
+        "yes": "Sim",
+        "reasons": {
+          "gmail": "Posso enviar o e-mail pelo seu Gmail.",
+          "slack": "Posso publicar a mensagem no Slack para você.",
+          "linear": "Posso encontrar e criar issues do Linear para você.",
+          "github": "Posso encontrar e criar issues do GitHub para você.",
+          "calendar": "Posso verificar sua disponibilidade e sugerir horários."
+        }
       },
       "access": {
         "screen": "Permitir acesso à sua tela?",

@@ -267,9 +267,12 @@ test("Open Settings, then Done checks again before the task goes on", async (t) 
   assert.deepEqual(card.results, [{ status: "done", ready: false }]);
 });
 
-test("Esc in the settings card dismisses it", async (t) => {
+test("Esc in the settings card dismisses it, and never reaches the window", async (t) => {
   const card = await mountCard(t, { kind: "settings", target: "llms", message: "Add a key" });
+  let reachedWindow = 0;
+  card.happyWindow.addEventListener("keydown", () => (reachedWindow += 1));
   await card.press(card.button("Open Settings"), "Escape");
+  assert.equal(reachedWindow, 0);
   assert.deepEqual(card.results, [{ status: "cancelled" }]);
 });
 
@@ -289,6 +292,8 @@ test("an API key is masked, reaches the saver only, and leaves just “key saved
 
   await card.type(input, "sk-qa-fake-not-a-real-key-123");
   assert.doesNotMatch(JSON.stringify(card.store.useAgentInteractionStore.getState()), /sk-qa/);
+  assert.equal(input.getAttribute("value"), null, "never copied into the value attribute");
+  assert.doesNotMatch(card.host.innerHTML, /sk-qa/, "nor anywhere else in the page");
   assert.equal(card.button("Save").disabled, false);
 
   await card.click(card.button("Save"));
@@ -312,10 +317,76 @@ test("a typed key is lost on a remount rather than kept anywhere", async (t) => 
 test("Esc in the key field dismisses the card without saving", async (t) => {
   const card = await mountCard(t, { kind: "apiKey", provider: "openai", providerName: "OpenAI" });
   const input = card.host.querySelector("input");
+  let reachedWindow = 0;
+  card.happyWindow.addEventListener("keydown", () => (reachedWindow += 1));
   await card.type(input, "sk-qa-fake-esc");
   await card.press(input, "Escape");
+  assert.equal(reachedWindow, 0);
   assert.deepEqual(card.results, [{ status: "cancelled" }]);
   assert.deepEqual(card.savedKeys, []);
+});
+
+test("a key card that appears in a focused window takes the keyboard from the composer", async (t) => {
+  const card = await mountCard(t, { kind: "apiKey", provider: "openai", providerName: "OpenAI" });
+  const { document } = card.happyWindow;
+  const composer = document.createElement("textarea");
+  document.body.append(composer);
+  composer.focus();
+  document.hasFocus = () => true;
+  await card.remount();
+  // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
+  assert.ok(document.activeElement === card.host.querySelector("input"));
+});
+
+test("Esc right after a question moves on still dismisses the card", async (t) => {
+  const card = await mountCard(t, PLAN);
+  const { document } = card.happyWindow;
+  let reachedWindow = 0;
+  card.happyWindow.addEventListener("keydown", () => (reachedWindow += 1));
+  // A click focuses the option, which goes away with its question.
+  radios(card)[1].focus();
+  await card.click(radios(card)[1]);
+  await card.wait(260);
+  assert.equal(card.entry().step, 1);
+  assert.ok(card.host.contains(document.activeElement), "the keyboard stays in the card");
+  assert.ok(document.activeElement === checkboxes(card)[0], "on the next question's first option");
+  await card.press(document.activeElement, "Escape");
+  assert.equal(reachedWindow, 0);
+  assert.deepEqual(card.results, [{ status: "cancelled" }]);
+});
+
+test("a window given the keyboard with nothing focused puts it in the card", async (t) => {
+  const card = await mountCard(t, { kind: "settings", target: "llms", message: "Add a key" });
+  const { document } = card.happyWindow;
+  assert.ok(document.activeElement === document.body);
+  await React.act(async () => card.happyWindow.dispatchEvent(new card.happyWindow.Event("focus")));
+  assert.ok(document.activeElement === card.host.querySelector("[data-interaction-card]"));
+  await card.press(document.activeElement, "Escape");
+  assert.deepEqual(card.results, [{ status: "cancelled" }]);
+});
+
+test("Continue waits for a pick", async (t) => {
+  const card = await mountCard(t, PLAN);
+  await card.click(card.button("Next question"));
+  assert.equal(card.button("Continue").disabled, true);
+  await card.click(checkboxes(card)[0]);
+  assert.equal(card.button("Continue").disabled, false);
+});
+
+test("a connect card says what connecting is for when the model doesn't", async (t) => {
+  const card = await mountCard(t, { kind: "connection", target: "google" });
+  assert.match(card.host.textContent, /I can check your availability and suggest times\./);
+});
+
+test("a connect that didn't happen is worded as the service's Settings row words it", async (t) => {
+  const card = await mountCard(
+    t,
+    { kind: "connection", target: "slack" },
+    { connectorConnect: async () => ({ status: "failed", errorCode: "oauth_denied" }) }
+  );
+  await card.click(card.button("Yes"));
+  await card.wait(0);
+  assert.match(card.host.textContent, /Slack wasn't connected because access wasn't allowed\./);
 });
 
 test("a card for any calendar has a translated title", async (t) => {

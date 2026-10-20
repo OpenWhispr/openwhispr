@@ -2,6 +2,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X } from "../../icons";
 import { LogoTile } from "../../ui/LogoTile";
+import { cn } from "../../lib/utils";
 import { GithubDeviceCode } from "../../connectors/GithubDeviceCode";
 import {
   cancelInteraction,
@@ -59,11 +60,21 @@ export function ConnectRow({
   onDismiss,
   children,
 }: ConnectRowProps): ReactElement {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const logo = TARGET_LOGOS[target];
   const dismissLabel = t(
     working ? "agentMode.interactions.cancel" : "agentMode.interactions.notNow"
   );
+  // A connector's own copy for why it didn't connect (signed out, turned off
+  // by the organization, access declined), as its Settings row words it.
+  const connectorError = `connectors.${target}.errors.${error}`;
+  const errorText = !error
+    ? null
+    : error === "permission_denied"
+      ? t("agentMode.interactions.connection.permissionDenied")
+      : i18n.exists(connectorError)
+        ? t(connectorError)
+        : t("agentMode.interactions.connection.failed");
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -79,7 +90,7 @@ export function ConnectRow({
           )}
         </div>
         {onConnect && !working && (
-          <button type="button" onClick={onConnect} className={`${PILL_BUTTON} text-primary`}>
+          <button type="button" onClick={onConnect} className={cn(PILL_BUTTON, "text-primary")}>
             <Check size={14} />
             {t("agentMode.interactions.connection.yes")}
           </button>
@@ -103,19 +114,23 @@ export function ConnectRow({
             {t("agentMode.interactions.connection.connecting")}
           </p>
         )}
-        {error && (
-          <p className="mt-2 text-destructive">
-            {t(
-              error === "permission_denied"
-                ? "agentMode.interactions.connection.permissionDenied"
-                : "agentMode.interactions.connection.failed"
-            )}
-          </p>
-        )}
+        {errorText && <p className="mt-2 text-destructive">{errorText}</p>}
       </div>
     </div>
   );
 }
+
+// What connecting is for, when the model didn't say.
+const DEFAULT_REASONS: Record<ConnectionTarget, string> = {
+  gmail: "agentMode.interactions.connection.reasons.gmail",
+  slack: "agentMode.interactions.connection.reasons.slack",
+  linear: "agentMode.interactions.connection.reasons.linear",
+  github: "agentMode.interactions.connection.reasons.github",
+  google: "agentMode.interactions.connection.reasons.calendar",
+  microsoft: "agentMode.interactions.connection.reasons.calendar",
+  apple: "agentMode.interactions.connection.reasons.calendar",
+  calendar: "agentMode.interactions.connection.reasons.calendar",
+};
 
 /** A service the request needs: Yes runs the real connect, X cancels what depends on it. */
 export function ConnectionCard({
@@ -142,7 +157,7 @@ export function ConnectionCard({
           ? t("agentMode.interactions.connection.calendarTitle")
           : t("agentMode.interactions.connection.title", { name: CONNECTION_TARGET_NAMES[target] })
       }
-      reason={reason}
+      reason={reason || t(DEFAULT_REASONS[target])}
       working={working}
       error={entry.error}
       onConnect={target === "calendar" ? undefined : () => connect()}

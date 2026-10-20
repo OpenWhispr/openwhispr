@@ -36,19 +36,14 @@ import {
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
 import { ConnectRow } from "./interactions/ConnectionCard";
-import { INLINE_FIELD, PILL_BUTTON, PRIMARY_PILL_BUTTON } from "./interactions/cardStyles";
+import { HeaderRow } from "./interactions/HeaderRow";
+import {
+  INLINE_TEXT_FIELD,
+  INLINE_TITLE_FIELD,
+  PILL_BUTTON,
+  PRIMARY_PILL_BUTTON,
+} from "./interactions/cardStyles";
 import slackMark from "../../assets/icons/slack.svg";
-
-const ROW_LABEL_CLASS = "w-16 shrink-0 text-xs text-muted-foreground";
-
-function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
-  return (
-    <div className="flex min-h-6 items-center gap-2">
-      <span className={ROW_LABEL_CLASS}>{label}</span>
-      {children}
-    </div>
-  );
-}
 
 /** The message body: edited in place while the card can still send it. */
 function BodyField({
@@ -72,7 +67,7 @@ function BodyField({
       dir="auto"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className={cn(INLINE_FIELD, "field-sizing-content mx-0 block w-full resize-none leading-6")}
+      className={INLINE_TEXT_FIELD}
     />
   ) : (
     <p className="whitespace-pre-wrap break-words leading-6 text-foreground" dir="auto">
@@ -195,7 +190,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     />
   ) : slack ? (
     <>
-      <Row label={t("connectors.approval.slack.channelLabel")}>
+      <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
           <img
             src={slackMark}
@@ -216,12 +211,12 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               : destination}
           </span>
         </span>
-      </Row>
-      <Row label={t("connectors.approval.slack.asLabel")}>
+      </HeaderRow>
+      <HeaderRow label={t("connectors.approval.slack.asLabel")}>
         <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">
           {preview.accountLabel}
         </span>
-      </Row>
+      </HeaderRow>
     </>
   ) : (
     <>
@@ -260,7 +255,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           (editing ? (
             <input
               aria-label={t("connectors.approval.titleLabel")}
-              className={cn(INLINE_FIELD, "mx-0 mb-1 block w-full font-medium")}
+              className={INLINE_TITLE_FIELD}
               dir="auto"
               value={draft.title}
               onChange={(event) => updateApprovalDraft(entry.key, { title: event.target.value })}

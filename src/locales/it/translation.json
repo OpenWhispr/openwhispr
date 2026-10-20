@@ -3966,7 +3966,14 @@
         "failed": "Impossibile connettersi. Riprova.",
         "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova.",
         "calendarTitle": "Connetti un calendario",
-        "yes": "Sì"
+        "yes": "Sì",
+        "reasons": {
+          "gmail": "Posso inviare l'email dal tuo Gmail.",
+          "slack": "Posso pubblicare il messaggio su Slack per te.",
+          "linear": "Posso trovare e creare issue di Linear per te.",
+          "github": "Posso trovare e creare issue di GitHub per te.",
+          "calendar": "Posso controllare la tua disponibilità e proporre degli orari."
+        }
       },
       "access": {
         "screen": "Consentire l'accesso allo schermo?",

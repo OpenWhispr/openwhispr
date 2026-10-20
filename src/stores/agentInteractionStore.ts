@@ -263,12 +263,13 @@ export function goToQuestion(key: string, step: number): void {
 }
 
 /**
- * The current question is answered: on to the next one. After the last, the
- * card submits, or goes back to the first question still unanswered.
+ * Question `step` is answered: on to the next one. After the last, the card
+ * submits, or goes back to the first question still unanswered. Only while
+ * that question is still on screen, so two commits for it move on once.
  */
-export function commitQuestion(key: string): void {
+export function commitQuestion(key: string, step: number): void {
   const card = pendingQuestions(key);
-  if (!card) return;
+  if (!card || card.entry.step !== step) return;
   const { entry, questions } = card;
   if (entry.step < questions.length - 1) {
     patchEntry(key, { step: entry.step + 1 });
@@ -298,7 +299,7 @@ export function answerWithText(key: string, text: string): void {
     const { [question.id]: _picked, ...draft } = entry.draft;
     patchEntry(key, { draft, typedAnswers: { ...entry.typedAnswers, [question.id]: answer } });
   }
-  commitQuestion(key);
+  commitQuestion(key, entry.step);
 }
 
 export function cancelInteraction(key: string): void {
@@ -308,7 +309,7 @@ export function cancelInteraction(key: string): void {
   settle(key, { status: "cancelled" });
 }
 
-export type ConnectOutcome =
+type ConnectOutcome =
   | { status: "connected" }
   | { status: "cancelled" }
   | { status: "failed"; errorCode: string }

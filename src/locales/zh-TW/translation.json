@@ -3966,7 +3966,14 @@
         "failed": "無法連結，請再試一次。",
         "permissionDenied": "行事曆存取遭拒。請在系統設定中允許後再試一次。",
         "calendarTitle": "連結日曆",
-        "yes": "是"
+        "yes": "是",
+        "reasons": {
+          "gmail": "我可以透過你的 Gmail 寄出郵件。",
+          "slack": "我可以替你把訊息發到 Slack。",
+          "linear": "我可以替你搜尋和建立 Linear 問題。",
+          "github": "我可以替你搜尋和建立 GitHub Issue。",
+          "calendar": "我可以查看你的空閒時間並建議時段。"
+        }
       },
       "access": {
         "screen": "允許存取你的螢幕嗎？",

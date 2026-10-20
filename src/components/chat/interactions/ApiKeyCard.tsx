@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "../../icons";
 import { submitApiKey, type InteractionEntry } from "../../../stores/agentInteractionStore";
@@ -9,8 +9,11 @@ import { SubmitArrowButton } from "./SubmitArrowButton";
 type ApiKeyPayload = Extract<InteractionPayload, { kind: "apiKey" }>;
 
 /**
- * A masked field for a provider key. The key lives only in this field until
- * ↑ hands it to the secure saver: never in the store, and lost on a remount.
+ * A masked field for a provider key. The key lives only in the field itself
+ * (uncontrolled, so React never copies it into state or the value attribute)
+ * until ↑ hands it to the secure saver: never in the store, and lost on a
+ * remount. It takes focus when it appears in a focused window, so a key is
+ * never pasted into the composer instead.
  */
 export function ApiKeyCard({
   entry,
@@ -20,7 +23,11 @@ export function ApiKeyCard({
   payload: ApiKeyPayload;
 }): ReactElement {
   const { t } = useTranslation();
-  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [hasValue, setHasValue] = useState(false);
+  useEffect(() => {
+    if (document.hasFocus()) inputRef.current?.focus();
+  }, []);
   return (
     <div>
       <p className="text-[14px] font-medium text-foreground">
@@ -35,28 +42,27 @@ export function ApiKeyCard({
         className="mt-2 flex items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!value.trim()) return;
-          void submitApiKey(entry.key, value);
-          setValue("");
+          const input = inputRef.current;
+          if (!input?.value.trim()) return;
+          void submitApiKey(entry.key, input.value);
+          input.value = "";
+          setHasValue(false);
         }}
       >
         <input
+          ref={inputRef}
           dir="ltr"
           type="password"
           autoComplete="off"
           spellCheck={false}
-          value={value}
           placeholder={t("agentMode.interactions.apiKey.placeholder")}
           aria-label={t("agentMode.interactions.apiKey.label", {
             provider: payload.providerName,
           })}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => setHasValue(event.target.value.trim() !== "")}
           className={CARD_FIELD}
         />
-        <SubmitArrowButton
-          label={t("agentMode.interactions.apiKey.save")}
-          disabled={!value.trim()}
-        />
+        <SubmitArrowButton label={t("agentMode.interactions.apiKey.save")} disabled={!hasValue} />
       </form>
     </div>
   );

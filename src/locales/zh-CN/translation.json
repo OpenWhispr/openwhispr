@@ -3966,7 +3966,14 @@
         "failed": "无法连接，请重试。",
         "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。",
         "calendarTitle": "连接日历",
-        "yes": "是"
+        "yes": "是",
+        "reasons": {
+          "gmail": "我可以通过你的 Gmail 发送邮件。",
+          "slack": "我可以替你把消息发到 Slack。",
+          "linear": "我可以替你查找和创建 Linear 问题。",
+          "github": "我可以替你查找和创建 GitHub Issue。",
+          "calendar": "我可以查看你的空闲时间并建议时间。"
+        }
       },
       "access": {
         "screen": "允许访问你的屏幕吗？",
