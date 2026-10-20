@@ -316,6 +316,21 @@ test("a connector step that asks to connect first keeps its card above the pill"
 const user = { id: "u1", role: "user", content: "Plan it", isStreaming: false };
 // The composer's field, never an answer card's message.
 const COMPOSER = "textarea:not([data-approval-card] textarea)";
+const KEY_CARD = { kind: "apiKey", provider: "openai", providerName: "OpenAI" };
+const KEY_FIELD = '[data-interaction-card] input[type="password"]';
+
+const setDraft = (view, field, text) =>
+  React.act(async () => {
+    Object.getOwnPropertyDescriptor(
+      view.happyWindow.HTMLTextAreaElement.prototype,
+      "value"
+    ).set.call(field, text);
+    field.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+const pointer = (view, target, type, init = {}) =>
+  React.act(async () =>
+    target.dispatchEvent(new view.happyWindow.PointerEvent(type, { bubbles: true, ...init }))
+  );
 
 // Text fields outside the cards (an answer card edits its message in one).
 const composers = (view) =>
@@ -324,7 +339,7 @@ const composers = (view) =>
   ).length;
 const slackCall = { id: "c5", name: "slack_send_message", arguments: "{}", status: "executing" };
 
-test("a card that arrives while typing: a question shows above the pill, an answer card waits behind it", async (t) => {
+test("a card that arrives while typing: a question shows above the pill, an answer card opens the modal", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.settle();
@@ -679,4 +694,140 @@ test("a question that arrives at the pill opens the card without widening the pi
     view.main.layouts.slice(0, firstCard).every((request) => !request.wide),
     "no wide pill shown for a moment before the card"
   );
+});
+
+for (const [what, payload] of [
+  ["a question", QUESTION],
+  ["a key card", KEY_CARD],
+]) {
+  test(`the timed open of ${what} never takes the keyboard from the app the user went to`, async (t) => {
+    const view = await mountWindow(t);
+    const { document } = view.happyWindow;
+    await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+    await view.settle();
+    await view.chat({ busy: true, messages: [user, reply([askUser])] });
+    await view.ask("c1", payload);
+    await view.settle();
+    await React.act(async () => view.button("Minimize").click());
+    await view.settle();
+    // The window lost the keyboard (main blurred it on Windows and Linux; on
+    // macOS the user is in another app), and the user types there.
+    document.hasFocus = () => false;
+    await view.wait(4300);
+    await view.settle();
+    assert.equal(view.layout(), "modal", "the timed open");
+    assert.equal(view.main.layouts.at(-1).focus, false, "main isn't asked for the keyboard");
+    // Compared by identity: a failed deep-equal of two DOM nodes inspects the whole document.
+    assert.ok(document.activeElement !== view.host.querySelector(COMPOSER));
+    assert.ok(!view.host.querySelector("[data-interaction-card]").contains(document.activeElement));
+
+    // Pointing at the window gives it the keyboard.
+    document.hasFocus = () => true;
+    await pointer(view, view.host.querySelector(".agent-window-content"), "pointerdown");
+    await view.settle();
+    assert.equal(view.main.layouts.at(-1).focus, true);
+  });
+}
+
+test("a message typed before a question arrives is never sent as its answer", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await React.act(async () => view.button("Type").click());
+  await view.settle();
+  const typing = view.host.querySelector("textarea");
+  typing.focus();
+  await setDraft(view, typing, "and also check my cal");
+  const results = await view.ask("c1", TEXT_QUESTION);
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  const composer = view.host.querySelector(COMPOSER);
+  assert.equal(composer.value, "and also check my cal");
+  assert.equal(view.button("Send").disabled, true, "Send stays off: the turn is busy");
+  await React.act(async () =>
+    composer.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    )
+  );
+  assert.deepEqual(results, [], "Enter doesn't answer the question with the message");
+  assert.deepEqual(globalThis.__chat.sent, []);
+
+  // Once the message is gone, the composer answers the question as usual.
+  await setDraft(view, composer, "");
+  assert.equal(composer.getAttribute("placeholder"), "Answer here…");
+  await setDraft(view, composer, "Friday");
+  await React.act(async () => view.button("Send").click());
+  assert.deepEqual(results, [{ status: "answered", answers: { deadline: "Friday" } }]);
+});
+
+test("Keyboard on a waiting key card puts the keyboard in the key field, not the composer", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  await view.ask("c1", KEY_CARD);
+  await view.settle();
+  const type = view.button("Type");
+  type.focus();
+  await React.act(async () => type.click());
+  await view.settle();
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  assert.ok(document.activeElement === view.host.querySelector(KEY_FIELD), "after the fade too");
+});
+
+test("a restored question never takes the keyboard, so Esc still closes the window", async (t) => {
+  const view = await mountWindow(t);
+  const { document } = view.happyWindow;
+  document.hasFocus = () => true;
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  await view.chat({ messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  const answered = [];
+  await React.act(async () =>
+    view.interactions.restoreInteraction(
+      { messageId: "a1", toolCallId: "c1", payload: QUESTION },
+      (result) => answered.push(result)
+    )
+  );
+  await view.settle();
+  const expand = view.button("Expand");
+  expand.focus();
+  await React.act(async () => expand.click());
+  await view.settle();
+  assert.equal(view.layout(), "modal");
+  const card = view.host.querySelector("[data-interaction-card]");
+  assert.ok(card);
+  assert.ok(!card.contains(document.activeElement), "no focus in the restored card");
+  await React.act(async () => view.happyWindow.dispatchEvent(new view.happyWindow.Event("focus")));
+  assert.ok(!card.contains(document.activeElement), "nor when the window gets the keyboard");
+  assert.deepEqual(answered, []);
+});
+
+test("a card laid out under a resting cursor keeps its timed open", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  const frame = view.host.querySelector("[data-interaction-card]").closest(".agent-chat-scroll");
+  // Chromium replays a resting cursor's position after layout, with no movement.
+  await pointer(view, frame, "pointerover");
+  await pointer(view, frame, "pointermove");
+  await view.wait(4300);
+  await view.settle();
+  assert.equal(view.layout(), "modal", "the timed open still happens");
+});
+
+test("moving the pointer over a card above the pill uses up its timed open", async (t) => {
+  const view = await mountWindow(t);
+  await askWhileCompact(view);
+  const frame = view.host.querySelector("[data-interaction-card]").closest(".agent-chat-scroll");
+  await pointer(view, frame, "pointermove", { movementX: 4, movementY: 1 });
+  await view.wait(4300);
+  await view.settle();
+  assert.equal(view.layout(), "standalone", "the user pointing at it keeps it above the pill");
+  assert.ok(!view.button("Expand").className.includes("agent-expand-cue"));
 });

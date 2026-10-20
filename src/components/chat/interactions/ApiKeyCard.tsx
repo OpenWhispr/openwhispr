@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Check } from "../../icons";
 import { submitApiKey, type InteractionEntry } from "../../../stores/agentInteractionStore";
@@ -26,14 +26,6 @@ export function ApiKeyCard({
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [hasValue, setHasValue] = useState(false);
-  useEffect(() => {
-    // From an empty composer too (the card takes it from nothing itself), never
-    // from text the user is typing.
-    const active = document.activeElement;
-    const emptyComposer =
-      active?.tagName === "TEXTAREA" && (active as HTMLTextAreaElement).value === "";
-    if (document.hasFocus() && emptyComposer) inputRef.current?.focus();
-  }, []);
   return (
     <div>
       <p className="text-[14px] font-medium text-foreground">

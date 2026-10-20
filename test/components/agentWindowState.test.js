@@ -217,6 +217,11 @@ test("a card that arrives while compact shows above the pill, and the pill comes
     { type: "showCard", asks: true }
   );
   assert.deepEqual([writing.layout, writing.draft], ["modal", "and also check my cal"]);
+  // A card above the pill the user is typing on counts as typing; with voice input it doesn't.
+  const typedCard = { ...pill, layout: "standalone", input: "keyboard", draft: "" };
+  assert.equal(agentWindowReducer(typedCard, { type: "showCard", asks: false }).layout, "modal");
+  const spokenCard = { ...pill, layout: "standalone", input: "voice", draft: "" };
+  assert.equal(agentWindowReducer(spokenCard, { type: "showCard", asks: false }).layout, "pill");
 
   // The modal already shows the card.
   const modal = { ...pill, layout: "modal" };

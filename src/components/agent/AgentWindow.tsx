@@ -129,7 +129,28 @@ export default function AgentWindow() {
   useEffect(() => {
     if (!cardShown) setCardClicked(false);
   }, [cardShown]);
+  // A move the window makes by itself (the timed open, a card from the
+  // keyboard layouts) keeps the keyboard only if the window has it, so it
+  // never takes it from the app the user went to. The user pointing at the
+  // window, the window getting focus, or a press of the hotkey ends that.
+  const [movedAway, setMovedAway] = useState(false);
+  const moveOnItsOwn = useCallback(
+    (action: AgentWindowAction) => {
+      setMovedAway(!document.hasFocus());
+      dispatch(action);
+    },
+    [dispatch]
+  );
+  useEffect(() => {
+    const onFocus = () => setMovedAway(false);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+  // Who has the keyboard is decided here: the window (asked of main), and in
+  // it the composer unless the waiting card has a key field of its own. A card
+  // places the caret inside itself (InteractionCard's useCardFocus).
   const surfaceFocus =
+    !movedAway &&
     state.layout !== "pill" &&
     (state.input === "keyboard" ||
       ((state.layout === "modal" || standalone) && (cardClicked || awaitsTypedAnswer(messages))));
@@ -139,6 +160,10 @@ export default function AgentWindow() {
   // typing layout, opens in the modal). Once it is answered the window goes
   // back to how it was. A card the user minimized stays behind the pill.
   const shownCardsRef = useRef(new Set<string>());
+  const [draftHeldCard, setDraftHeldCard] = useState<string | null>(null);
+  useEffect(() => {
+    if (!state.draft.trim()) setDraftHeldCard(null);
+  }, [state.draft]);
   useEffect(() => {
     if (!pendingCard) {
       if (standalone) dispatch({ type: "cardSettled" });
@@ -147,8 +172,15 @@ export default function AgentWindow() {
     const asks = pendingCard.interaction !== null;
     const fresh = !shownCardsRef.current.has(pendingCard.id);
     shownCardsRef.current.add(pendingCard.id);
-    if (fresh || (standalone && !asks)) dispatch({ type: "showCard", asks });
-  }, [dispatch, pendingCard, standalone]);
+    if (!fresh && !(standalone && !asks)) return;
+    // A question that arrives while a message is being written isn't answered
+    // from the composer until it is emptied: Enter would send the message as the answer.
+    if (fresh && pendingCard.interaction === "questions" && stateRef.current.draft.trim()) {
+      setDraftHeldCard(pendingCard.key);
+    }
+    if (stateRef.current.input === "keyboard") moveOnItsOwn({ type: "showCard", asks });
+    else dispatch({ type: "showCard", asks });
+  }, [dispatch, moveOnItsOwn, pendingCard, standalone]);
 
   // A reply opens the modal once it has something to show: text, an error, or
   // a step that is doing more than asking the user (D2). A spoken request that
@@ -271,7 +303,7 @@ export default function AgentWindow() {
     compact: state.layout !== "modal",
     visible: state.visible,
     paused: listening || transcribing,
-    onOpen: () => dispatch({ type: "expand" }),
+    onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
 
   const surface = useAgentSurface({
@@ -435,8 +467,14 @@ export default function AgentWindow() {
   useEffect(() => {
     const api = window.electronAPI;
     const disposers = [
-      api?.onAgentWindowHotkey?.((payload) => handlersRef.current.hotkey(payload)),
-      api?.onAgentWindowOpen?.(({ layout }) => handlersRef.current.open(layout)),
+      api?.onAgentWindowHotkey?.((payload) => {
+        setMovedAway(false);
+        handlersRef.current.hotkey(payload);
+      }),
+      api?.onAgentWindowOpen?.(({ layout }) => {
+        setMovedAway(false);
+        handlersRef.current.open(layout);
+      }),
       api?.onAgentWindowCommand?.((command) => handlersRef.current.command(command)),
       api?.onAgentWindowDismiss?.(() => handlersRef.current.dismiss()),
       api?.onCancelHotkeyPressed?.(() => handlersRef.current.escape()),
@@ -643,7 +681,7 @@ export default function AgentWindow() {
 
   const composer = (inModal: boolean) => {
     const card = cardFor(inModal);
-    const answering = card?.interaction === "questions";
+    const answering = card?.interaction === "questions" && card.key !== draftHeldCard;
     return (
       <AgentComposer
         draft={state.draft}
@@ -668,7 +706,7 @@ export default function AgentWindow() {
         onMic={inModal ? () => void startListening() : undefined}
         micDisabled={busy || transcribing}
         micUnavailableHint={micHint}
-        focused={surface.shown && surfaceFocus}
+        focused={surface.shown && surfaceFocus && pendingCard?.interaction !== "apiKey"}
         header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
         className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
       />
@@ -698,6 +736,7 @@ export default function AgentWindow() {
         data-shown={surface.shown}
         onPointerDown={(event) => {
           if (cardShown) setCardClicked(true);
+          setMovedAway(false);
           engageCard(event.target);
         }}
         onKeyDown={(event) => engageCard(event.target)}
@@ -747,11 +786,15 @@ export default function AgentWindow() {
         ) : standalone && pendingCard ? (
           <>
             {/* The same card as in the modal, so what the user picked carries
-                over. Pointing at it stops the timed opening, as starting on it
-                does; focus alone doesn't (the window can be given it). */}
+                over. Moving the pointer over it stops the timed opening, as
+                starting on it does. Neither focus (the window can be given it)
+                nor a card laid out under a resting cursor counts: Chromium
+                replays that position as a pointerenter with no movement. */}
             <div
               ref={cardFrameRef}
-              onPointerEnter={nudge.cancel}
+              onPointerMove={(event) => {
+                if (event.movementX || event.movementY) nudge.cancel();
+              }}
               className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 bg-surface-1 shadow-[var(--shadow-card)] *:my-0"
             >
               <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />

@@ -9,6 +9,9 @@ async function mountCard(t, payload, electronAPI = {}) {
   let root = null;
   // Node runs after hooks in registration order: unmount while the DOM exists.
   t.after(() => root && React.act(async () => root.unmount()));
+  // Ends the card's wait (and its timer) while the DOM still exists.
+  const turn = new AbortController();
+  t.after(() => turn.abort());
   const happyWindow = await installHappyDom(t);
   happyWindow.electronAPI = electronAPI;
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-interaction-card-test-" });
@@ -22,9 +25,13 @@ async function mountCard(t, payload, electronAPI = {}) {
   await i18n.changeLanguage("en");
   store.useAgentInteractionStore.setState({ entries: {} });
   const results = [];
-  store.restoreInteraction({ messageId: "m1", toolCallId: "c1", payload }, (result) =>
-    results.push(result)
-  );
+  // A card a running turn waits on.
+  void store
+    .requestInteraction(
+      { messageId: "m1", toolCallId: "c1", signal: turn.signal, onInteraction() {} },
+      payload
+    )
+    .then((result) => results.push(result));
 
   // The card as the chat shows it: through the tool call it belongs to.
   const card = React.createElement(ToolCallCard, { messageId: "m1", toolCall: { id: "c1" } });
