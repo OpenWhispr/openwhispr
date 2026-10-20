@@ -45,6 +45,7 @@ class AgentWindowManager {
     this.showGeneration = 0;
     this.inputRegion = null;
     this.linuxFocusRequest = null;
+    this.linuxFocusRetry = null;
     this.displayListening = false;
     this.refit = () => this._refit();
   }
@@ -254,6 +255,7 @@ class AgentWindowManager {
     this.inputRegion?.stop();
     this.inputRegion = null;
     this.linuxFocusRequest = null;
+    clearTimeout(this.linuxFocusRetry);
     this._applyVoiceState("idle");
   }
 
@@ -378,7 +380,8 @@ class AgentWindowManager {
         this._focusLinux();
         // Chromium can miss the focus of a window that has only just become
         // focusable (a card resizing the window in the same moment): once more.
-        setTimeout(() => {
+        clearTimeout(this.linuxFocusRetry);
+        this.linuxFocusRetry = setTimeout(() => {
           if (this.keyboardFocus && this.window === win && win.isVisible() && !win.isFocused()) {
             this._focusLinux();
           }
@@ -388,6 +391,7 @@ class AgentWindowManager {
     }
     if (!this.keyboardFocus) return;
     this.keyboardFocus = false;
+    clearTimeout(this.linuxFocusRetry);
     if (this.platform === "win32") {
       // focus() activated OpenWhispr; blur hands the foreground back. A window
       // that no longer has it (hidden, or the user clicked away) must not
