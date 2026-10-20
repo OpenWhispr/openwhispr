@@ -51,7 +51,7 @@ const MOCKS = {
       );
       return {
         status: current, opening: false, readLevel: () => 0, streamingOnlyProvider: false,
-        start: async () => "started", stop() {}, cancel() {},
+        start: async () => globalThis.__voice.startResult ?? "started", stop() {}, cancel() {},
       };
     }
   `,
@@ -633,7 +633,7 @@ test("a held command over a waiting connect card types with the usual placeholde
   );
 });
 
-test("only the pill that reads Waiting for answer asks for the wide window", async (t) => {
+test("only the pill that reads Waiting for answer, or a notice, asks for the wide window", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.settle();
@@ -664,6 +664,19 @@ test("only the pill that reads Waiting for answer asks for the wide window", asy
     [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).wide],
     ["pill", undefined],
     "narrow again once answered"
+  );
+
+  // A notice in the pill (here: the hotkey while dictation has the mic).
+  await view.chat({ busy: false, messages: [user, { ...reply([], "Done."), isStreaming: false }] });
+  await view.settle();
+  globalThis.__voice.startResult = "refused";
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+  assert.match(view.host.textContent, /Dictation is using the mic/);
+  assert.deepEqual(
+    [view.main.layouts.at(-1).layout, view.main.layouts.at(-1).wide],
+    ["pill", true],
+    "a notice has room to read"
   );
 });
 

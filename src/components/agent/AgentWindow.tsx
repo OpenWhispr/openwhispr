@@ -348,8 +348,10 @@ export default function AgentWindow() {
     layout: state.layout,
     focus: surfaceFocus,
     ...(standalone ? { contentHeight: cardHeight } : {}),
-    // Only the pill that reads "Waiting for answer" needs the wider window.
-    wide: state.layout === "pill" && pendingCard !== null && !listening && !transcribing,
+    // Only the pill that reads "Waiting for answer", or a notice, needs the wider window.
+    wide:
+      state.layout === "pill" &&
+      (state.notice !== null || (pendingCard !== null && !listening && !transcribing)),
   });
 
   // Another app's selection and a screenshot, read at the press, ride with

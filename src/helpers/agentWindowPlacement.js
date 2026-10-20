@@ -2,12 +2,13 @@
 // unit-tested: the manager supplies the work area and where the dictation pill is.
 
 // The window shrinks to what it shows, plus an 8px margin on every side for
-// the surface's shadow. The pill row is never wider than PILL_CONTENT_WIDTH
-// (the reference's idle pill is 173px), except the pill that reads "Waiting
-// for answer" (the reference's is 287px).
+// the surface's shadow; on Windows and Linux its transparent parts still take
+// clicks. The pill row is never wider than PILL_CONTENT_WIDTH (the idle pill
+// is 176px, and Thinking… in German 199px), except the pill that reads
+// "Waiting for answer" (the reference's is 287px, French 299px) or a notice.
 const SHADOW_MARGIN = 8;
-const PILL_CONTENT_WIDTH = 240;
-const WAITING_PILL_CONTENT_WIDTH = 296;
+const PILL_CONTENT_WIDTH = 200;
+const WAITING_PILL_CONTENT_WIDTH = 304;
 const PILL_HEIGHT = 40;
 const COMPOSER = { width: 510, height: 145 };
 const COMPOSER_GAP = 12;

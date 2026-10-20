@@ -35,7 +35,7 @@ export function useAgentSurface({
   focus: boolean;
   /** The standalone card's height; a change resizes the window without a fade. */
   contentHeight?: number;
-  /** pill only: the wider pill that reads "Waiting for answer"; it widens in place. */
+  /** pill only: the wider pill that reads "Waiting for answer" or a notice; it widens in place. */
   wide?: boolean;
 }) {
   const [shown, setShown] = useState(false);
