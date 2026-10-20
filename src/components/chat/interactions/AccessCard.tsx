@@ -17,8 +17,10 @@ export function AccessCard({
   const capturing = entry.state === "working";
   return (
     <div>
-      <p className="font-medium text-foreground">{t("agentMode.interactions.access.screen")}</p>
-      <p className="text-[13px] text-muted-foreground" dir="auto">
+      <p className="text-[14px] font-medium text-foreground agent:text-[15px]">
+        {t("agentMode.interactions.access.screen")}
+      </p>
+      <p className="text-xs text-muted-foreground agent:text-[13px]" dir="auto">
         {payload.reason}
       </p>
       <div className="mt-3 flex justify-end gap-2">

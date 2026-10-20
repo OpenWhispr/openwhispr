@@ -117,7 +117,11 @@ export function IssueApprovalFields({
       {hasNotes && (
         <div id={notesId}>
           {liveNotes.map((note) => (
-            <p key={note.key} className="mt-1 text-[13px] text-muted-foreground" dir="auto">
+            <p
+              key={note.key}
+              className="mt-1 text-xs text-muted-foreground agent:text-[13px]"
+              dir="auto"
+            >
               {t(note.key, note.values)}
             </p>
           ))}

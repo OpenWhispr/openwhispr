@@ -5,6 +5,9 @@
 @import "./styles/agent-window.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Inside the assistant's own window, whose chat cards are a step larger than
+   the same cards in the Control Panel and note chats. */
+@custom-variant agent (&:where(.agent-window *));
 
 @theme {
   /* OpenWhispr Theme — registers color tokens with Tailwind v4.

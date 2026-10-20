@@ -55,11 +55,14 @@ export function QuestionsCard({
   return (
     <div>
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 font-medium text-foreground" dir="auto">
+        <p
+          className="min-w-0 flex-1 text-[14px] font-medium text-foreground agent:text-[15px]"
+          dir="auto"
+        >
           {question.prompt}
         </p>
         {questions.length > 1 && (
-          <div className="flex shrink-0 items-center gap-0.5 text-[13px] font-medium text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground agent:text-[13px] agent:font-medium">
             <button
               type="button"
               onClick={() => go(step - 1)}
@@ -167,7 +170,7 @@ export function QuestionsCard({
         )}
         {/* Answered in the composer; a pick replaces it. */}
         {question.kind !== "text" && typed !== undefined && value === undefined && (
-          <p className="mt-1 text-[13px] text-muted-foreground" dir="auto">
+          <p className="mt-1 text-xs text-muted-foreground agent:text-[13px]" dir="auto">
             {t("agentMode.interactions.questions.typedAnswer", { answer: typed })}
           </p>
         )}

@@ -28,11 +28,11 @@ export function ApiKeyCard({
   const [hasValue, setHasValue] = useState(false);
   return (
     <div>
-      <p className="font-medium text-foreground">
+      <p className="text-[14px] font-medium text-foreground agent:text-[15px]">
         {t("agentMode.interactions.apiKey.title", { provider: payload.providerName })}
       </p>
       {payload.reason && (
-        <p className="text-[13px] text-muted-foreground" dir="auto">
+        <p className="text-xs text-muted-foreground agent:text-[13px]" dir="auto">
           {payload.reason}
         </p>
       )}
@@ -72,9 +72,9 @@ export function ApiKeySavedRow({ payload }: { payload: ApiKeyPayload }): ReactEl
   return (
     <p
       data-api-key-saved=""
-      className="flex items-center gap-1.5 text-[13px] text-muted-foreground"
+      className="flex items-center gap-1.5 text-xs text-muted-foreground agent:text-[13px]"
     >
-      <Check size={14} className="text-success" />
+      <Check size={13} className="text-success" />
       {t("agentMode.interactions.apiKey.saved", { provider: payload.providerName })}
     </p>
   );

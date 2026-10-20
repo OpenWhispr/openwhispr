@@ -68,7 +68,7 @@ export function RadioGroup({
             onClick={() => onValueChange(option.value)}
             onFocus={() => setFocusIndex(index)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className="flex h-10 w-full items-center gap-3.5 rounded-md px-1.5 text-start text-[15px] font-medium text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+            className="flex w-full items-center gap-3 rounded-md py-1.5 text-start text-[14px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:min-h-10 agent:gap-3.5 agent:px-1.5 agent:py-2 agent:text-[15px] agent:font-medium"
           >
             <span
               aria-hidden="true"
