@@ -3821,6 +3821,16 @@
       "applied": "Assistant updated “{{title}}”",
       "changed": "This note changed after the assistant edit. Undo is no longer available.",
       "failed": "Could not undo the edit. Please try again."
+    },
+    "folderMore": {
+      "more": "{{count}} more",
+      "search": "Search {{count}} notes in {{folder}}",
+      "newest": "Newest first",
+      "openFolder": "Open folder",
+      "empty": "No matching notes",
+      "loading": "Loading notes…",
+      "retry": "Couldn’t load notes. Try again",
+      "results": "{{count}} of {{total}} notes"
     }
   },
   "dictionary": {

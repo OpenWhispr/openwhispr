@@ -3470,6 +3470,16 @@
       "applied": "助手已更新“{{title}}”",
       "changed": "助手编辑后，这篇笔记又发生了更改，无法撤销。",
       "failed": "无法撤销编辑，请重试。"
+    },
+    "folderMore": {
+      "more": "还有 {{count}} 篇",
+      "search": "在 {{folder}} 中搜索 {{count}} 篇笔记",
+      "newest": "最新优先",
+      "openFolder": "打开文件夹",
+      "empty": "没有匹配的笔记",
+      "loading": "正在加载笔记…",
+      "retry": "无法加载笔记。重试",
+      "results": "{{count}} / {{total}} 篇笔记"
     }
   },
   "dictionary": {

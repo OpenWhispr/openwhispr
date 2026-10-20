@@ -3470,6 +3470,16 @@
       "applied": "O assistente atualizou “{{title}}”",
       "changed": "Esta nota mudou após a edição do assistente. Já não é possível desfazer.",
       "failed": "Não foi possível desfazer a edição. Tente novamente."
+    },
+    "folderMore": {
+      "more": "Mais {{count}}",
+      "search": "Pesquisar {{count}} notas em {{folder}}",
+      "newest": "Mais recentes primeiro",
+      "openFolder": "Abrir pasta",
+      "empty": "Nenhuma nota correspondente",
+      "loading": "Carregando notas…",
+      "retry": "Não foi possível carregar as notas. Tentar novamente",
+      "results": "{{count}} de {{total}} notas"
     }
   },
   "dictionary": {

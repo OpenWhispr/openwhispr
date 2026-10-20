@@ -52,6 +52,7 @@ async function renderTree(t, direction) {
         ]);
         export const useActiveContext = () => null;
         export const useActiveNoteId = () => null;
+        export const useActiveNote = () => null;
         export const useIsTreeLoading = () => false;
         export const useShareCache = () => new Map();
         export const getNoteFromStore = (id) => notes.find((note) => note.id === id);

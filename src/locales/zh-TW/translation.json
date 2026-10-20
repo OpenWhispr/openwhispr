@@ -3470,6 +3470,16 @@
       "applied": "助理已更新「{{title}}」",
       "changed": "助理編輯後，這篇筆記又有變更，無法復原。",
       "failed": "無法復原編輯，請再試一次。"
+    },
+    "folderMore": {
+      "more": "還有 {{count}} 篇",
+      "search": "在 {{folder}} 中搜尋 {{count}} 篇筆記",
+      "newest": "最新優先",
+      "openFolder": "開啟資料夾",
+      "empty": "沒有符合的筆記",
+      "loading": "正在載入筆記…",
+      "retry": "無法載入筆記。重試",
+      "results": "{{count}} / {{total}} 篇筆記"
     }
   },
   "dictionary": {

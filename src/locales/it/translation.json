@@ -3470,6 +3470,16 @@
       "applied": "L’assistente ha aggiornato «{{title}}»",
       "changed": "Questa nota è cambiata dopo la modifica dell’assistente. Non è più possibile annullarla.",
       "failed": "Impossibile annullare la modifica. Riprova."
+    },
+    "folderMore": {
+      "more": "Altre {{count}}",
+      "search": "Cerca {{count}} note in {{folder}}",
+      "newest": "Più recenti prima",
+      "openFolder": "Apri cartella",
+      "empty": "Nessuna nota corrispondente",
+      "loading": "Caricamento delle note…",
+      "retry": "Impossibile caricare le note. Riprova",
+      "results": "{{count}} di {{total}} note"
     }
   },
   "dictionary": {

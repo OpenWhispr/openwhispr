@@ -3821,6 +3821,16 @@
       "applied": "Der Assistent hat „{{title}}“ aktualisiert",
       "changed": "Diese Notiz wurde nach der Änderung des Assistenten erneut geändert. Rückgängig ist nicht mehr verfügbar.",
       "failed": "Die Änderung konnte nicht rückgängig gemacht werden. Bitte versuche es erneut."
+    },
+    "folderMore": {
+      "more": "{{count}} weitere",
+      "search": "{{count}} Notizen in {{folder}} durchsuchen",
+      "newest": "Neueste zuerst",
+      "openFolder": "Ordner öffnen",
+      "empty": "Keine passenden Notizen",
+      "loading": "Notizen werden geladen…",
+      "retry": "Notizen konnten nicht geladen werden. Erneut versuchen",
+      "results": "{{count}} von {{total}} Notizen"
     }
   },
   "dictionary": {

@@ -3398,6 +3398,16 @@
       "applied": "アシスタントが「{{title}}」を更新しました",
       "changed": "アシスタントの編集後にノートが変更されたため、元に戻せません。",
       "failed": "編集を元に戻せませんでした。もう一度お試しください。"
+    },
+    "folderMore": {
+      "more": "他 {{count}} 件",
+      "search": "{{folder}} の {{count}} 件のノートを検索",
+      "newest": "新しい順",
+      "openFolder": "フォルダーを開く",
+      "empty": "一致するノートがありません",
+      "loading": "ノートを読み込み中…",
+      "retry": "ノートを読み込めませんでした。再試行",
+      "results": "{{total}} 件中 {{count}} 件のノート"
     }
   },
   "dictionary": {

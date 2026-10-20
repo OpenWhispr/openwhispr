@@ -3522,6 +3522,16 @@
       "applied": "El asistente actualizó «{{title}}»",
       "changed": "Esta nota cambió después de la edición del asistente. Ya no se puede deshacer.",
       "failed": "No se pudo deshacer la edición. Inténtalo de nuevo."
+    },
+    "folderMore": {
+      "more": "{{count}} más",
+      "search": "Buscar {{count}} notas en {{folder}}",
+      "newest": "Más recientes primero",
+      "openFolder": "Abrir carpeta",
+      "empty": "No hay notas coincidentes",
+      "loading": "Cargando notas…",
+      "retry": "No se pudieron cargar las notas. Reintentar",
+      "results": "{{count}} de {{total}} notas"
     }
   },
   "dictionary": {

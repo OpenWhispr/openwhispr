@@ -3821,6 +3821,16 @@
       "applied": "L’assistant a modifié « {{title}} »",
       "changed": "Cette note a changé après la modification de l’assistant. Il n’est plus possible de l’annuler.",
       "failed": "Impossible d’annuler la modification. Réessayez."
+    },
+    "folderMore": {
+      "more": "{{count}} de plus",
+      "search": "Rechercher {{count}} notes dans {{folder}}",
+      "newest": "Plus récentes en premier",
+      "openFolder": "Ouvrir le dossier",
+      "empty": "Aucune note correspondante",
+      "loading": "Chargement des notes…",
+      "retry": "Impossible de charger les notes. Réessayer",
+      "results": "{{count}} sur {{total}} notes"
     }
   },
   "dictionary": {

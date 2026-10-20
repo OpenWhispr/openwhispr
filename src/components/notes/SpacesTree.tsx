@@ -19,6 +19,8 @@ import {
   Trash2,
   Users,
 } from "../icons";
+import { FolderNotesPopover } from "./FolderNotesPopover";
+import { sidebarFolderNotes } from "./sidebarFolderNotes";
 import { Button } from "../ui/button";
 import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import sharedSpaceEmptyLight from "../../assets/empty-states/notes-shared-space-light.svg";
@@ -76,6 +78,7 @@ import {
   useExpandedContainers,
   useActiveContext,
   useActiveNoteId,
+  useActiveNote,
   useIsTreeLoading,
   setActiveContext,
   setActiveNoteId,
@@ -126,6 +129,7 @@ const SUB_TRIGGER_CLASS = cn(
 type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 type TreeRow =
+  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: 2 | 3 }
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
   | {
       type: "folder";
@@ -1121,9 +1125,12 @@ export default function SpacesTree({
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
   const notesByContainer = useNotesByContainer();
+  const [openFolderId, setOpenFolderId] = useState<number | null>(null);
   const expanded = useExpandedContainers();
   const activeContext = useActiveContext();
   const activeNoteId = useActiveNoteId();
+  const activeNote = useActiveNote();
+
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
@@ -1456,15 +1463,30 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, level: 1 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).forEach(
+              (note) => {
+                rows.push({
+                  type: "note",
+                  key: `n:${note.id}`,
+                  note,
+                  parentKey: folderKey,
+                  level: 2,
+                });
+              }
+            );
+            if (
+              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) > 5 &&
+              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) >
+                sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).length
+            ) {
               rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
                 parentKey: folderKey,
                 level: 2,
               });
-            });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1481,15 +1503,30 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).forEach(
+              (note) => {
+                rows.push({
+                  type: "note",
+                  key: `n:${note.id}`,
+                  note,
+                  parentKey: folderKey,
+                  level: 3,
+                });
+              }
+            );
+            if (
+              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) > 5 &&
+              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) >
+                sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).length
+            ) {
               rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
                 parentKey: folderKey,
                 level: 3,
               });
-            });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1499,7 +1536,16 @@ export default function SpacesTree({
     privateSpaces.forEach(pushPrivateSpace);
     if (teamCapability) orderedTeamSpaces.forEach(pushSpace);
     return rows;
-  }, [privateSpaces, orderedTeamSpaces, folders, notesByContainer, expanded, teamCapability]);
+  }, [
+    privateSpaces,
+    orderedTeamSpaces,
+    folders,
+    notesByContainer,
+    expanded,
+    teamCapability,
+    activeNote,
+    folderCounts,
+  ]);
 
   const effectiveFocusKey =
     focusedKey && visibleRows.some((r) => r.key === focusedKey)
@@ -1519,7 +1565,9 @@ export default function SpacesTree({
   };
 
   const activateRow = (row: TreeRow) => {
-    if (row.type === "space") {
+    if (row.type === "more") {
+      setOpenFolderId(row.folder.id);
+    } else if (row.type === "space") {
       // Deselect the note so the main pane shows the container overview.
       setActiveNoteId(null);
       setActiveContext(row.space.id, null);
@@ -1582,7 +1630,7 @@ export default function SpacesTree({
     const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
     if (horizontalIntent === "inward") {
       e.preventDefault();
-      if (row.type === "note") return;
+      if (row.type === "note" || row.type === "more") return;
       if (!expanded.has(row.key)) {
         setContainerExpanded(row.key, true);
       } else if (visibleRows[idx + 1]?.parentKey === row.key) {
@@ -1592,7 +1640,7 @@ export default function SpacesTree({
     }
     if (horizontalIntent === "outward") {
       e.preventDefault();
-      if (row.type !== "note" && expanded.has(row.key)) {
+      if (row.type !== "note" && row.type !== "more" && expanded.has(row.key)) {
         setContainerExpanded(row.key, false);
       } else if (row.parentKey) {
         focusRow(row.parentKey);
@@ -1741,6 +1789,10 @@ export default function SpacesTree({
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
+    const folderNotes = notesByContainer[folderKey] ?? [];
+    const shownNotes = sidebarFolderNotes(folderNotes, activeNote, folder.id);
+    const total = folderCounts[folder.id] ?? folderNotes.length;
+    const hiddenCount = total > 5 ? Math.max(0, total - shownNotes.length) : 0;
 
     if (isRenaming) {
       return (
@@ -1802,8 +1854,28 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
-            {(notesByContainer[folderKey] ?? []).map((note) =>
+            {shownNotes.map((note) =>
               level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
+            )}
+            {hiddenCount > 0 && (
+              <FolderNotesPopover
+                folder={folder}
+                total={total}
+                hiddenCount={hiddenCount}
+                activeNoteId={activeNoteId}
+                level={level === 1 ? 2 : 3}
+                open={openFolderId === folder.id}
+                onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
+                a11y={a11yFor(`more:${folder.id}`)}
+                onPick={(note) => {
+                  setActiveNoteId(note.id);
+                  focusRowSoon(`n:${note.id}`);
+                }}
+                onOpenFolder={() => {
+                  setActiveNoteId(null);
+                  setActiveContext(folder.space_id, folder.id);
+                }}
+              />
             )}
           </div>
         </TreeChildren>
