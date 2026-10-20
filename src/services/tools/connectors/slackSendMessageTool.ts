@@ -2,18 +2,22 @@ import i18n from "../../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
 import { requestInteraction } from "../../../stores/agentInteractionStore";
 import { unansweredResult } from "../interactionTools";
-import type { ConnectorChoice } from "../../../types/connectors";
+import type { ApprovalEdits, ConnectorChoice } from "../../../types/connectors";
 import { runApprovalAction } from "./runApprovalAction";
 import { failedResult, needsClarificationResult } from "./toolOutcome";
 import type { ConnectorToolModule } from "./connectorToolModules";
 
 // By Send the card was already shown, so a channel that disappeared after
-// prepare comes back as a failure. The model should ask where to send it.
+// prepare comes back as a failure. The model should ask where to send it,
+// with the message as the user left it on the card.
 function askAboutVanishedChannel(result: ToolResult, destination: string): ToolResult {
-  const data = result.data as { status?: string; errorCode?: string } | null;
+  const data = result.data as ({ status?: string; errorCode?: string } & ApprovalEdits) | null;
   if (data?.status === "failed" && data.errorCode === "channel_not_found") {
     return needsClarificationResult(
-      `${destination} couldn't be found in Slack anymore. Ask the user where to send the message.`
+      `${destination} couldn't be found in Slack anymore. Ask the user where to send the message.`,
+      [],
+      undefined,
+      { finalText: data.finalText, final: data.final }
     );
   }
   return result;
@@ -90,7 +94,7 @@ function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
       if (answer.status !== "answered") return unansweredResult(answer);
       const written = (result.data as { finalText?: unknown } | null)?.finalText;
       // A single-choice answer is one string: the pick, or the typed text.
-      return tool.execute(
+      const next = await tool.execute(
         {
           ...args,
           destination: String(answer.answers.destination),
@@ -98,6 +102,11 @@ function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
         },
         context
       );
+      // The card went out with the user's text, not the model's: whatever came
+      // of it (sent, another question, a failure), the model hears that text.
+      const data = next.data as (Record<string, unknown> & ApprovalEdits) | null;
+      if (typeof written !== "string" || !data || data.finalText !== undefined) return next;
+      return { ...next, data: { ...data, finalText: written } };
     },
   };
 }

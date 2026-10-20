@@ -199,14 +199,14 @@ function withdraw(key: string, reason: "conversation_ended" | "expired"): void {
   const entry = entryFor(key);
   const pending = resolutions.get(key);
   if (!entry || !pending) return;
+  // Only a connect the card started for Send runs, and only while it waits.
+  stopConnect(entry);
   const failure = failureToReport(entry, pending);
   if (failure) {
-    stopConnect(entry);
     settle(key, { ...failure, ...userEditsOf(entry) }, "failed");
     return;
   }
   if (entry.state !== "pending") return;
-  stopConnect(entry);
   void window.electronAPI?.connectorCancel?.(entry.actionId, reason);
   settle(key, { state: "not_sent", reason }, "not_sent");
 }
@@ -296,14 +296,13 @@ export function cancelApproval(key: string): void {
   const pending = resolutions.get(key);
   if (!entry || !pending) return;
   // After a failed send the model hears that failure, with the user's edits.
+  stopConnect(entry);
   const failure = failureToReport(entry, pending);
   if (failure) {
-    stopConnect(entry);
     settle(key, { ...failure, ...userEditsOf(entry) }, "cancelled");
     return;
   }
   if (entry.state !== "pending") return;
-  stopConnect(entry);
   void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
   settle(key, { state: "cancelled" }, "cancelled");
 }

@@ -1862,3 +1862,157 @@ test("a message the user rewrote survives a Retry that has to ask where it goes"
   assert.equal((await pending).data.status, "sent");
   assert.equal(commits.at(-1).edits.body, "Launch moved to Friday");
 });
+
+// A card the user rewrote, sent on to Slack through the picker.
+function rewriteFlow(t, { afterPick }) {
+  const prepared = [];
+  const commits = [];
+  const ready = (actionId, text) => ({
+    status: "ready",
+    actionId,
+    preview: {
+      verbKey: "slackPost",
+      destinationLabel: "#launch",
+      accountLabel: "chad",
+      body: text,
+    },
+  });
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => {
+          prepared.push(args);
+          if (prepared.length === 1) return ready("a1", args.text);
+          if (prepared.length === 2) {
+            return {
+              status: "needs_clarification",
+              message: "#launch is archived.",
+              candidates: ["#launch-2", "#launch-old"],
+              choices: [
+                { label: "#launch-2", destination: "#launch-2" },
+                { label: "#launch-old", destination: "#launch-old" },
+              ],
+            };
+          }
+          return afterPick === "unclear"
+            ? { status: "needs_clarification", message: "No channel by that name.", candidates: [] }
+            : ready("a3", args.text);
+        },
+        connectorCommit: async (actionId, edits) => {
+          commits.push({ actionId, edits });
+          return commits.length === 1
+            ? { state: "failed", errorCode: "rate_limited", message: "Busy" }
+            : { state: "sent", url: "https://slack.test/p/1" };
+        },
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  return { prepared, commits };
+}
+
+for (const [what, afterPick, answer] of [
+  ["sent where the user picked", "ready", "#launch-2"],
+  ["still unclear after a typed answer", "unclear", "the launch channel"],
+]) {
+  test(`after the picker, the model hears the user's rewrite: ${what}`, async (t) => {
+    const { prepared } = rewriteFlow(t, { afterPick });
+    const [slackSendMessageTool, approvals, interactions, { useConnectorStatusStore }] =
+      await Promise.all([
+        askingSlackTool(),
+        loadApprovals(),
+        import("../../src/stores/agentInteractionStore.ts"),
+        loadStatus(),
+      ]);
+    approvals.useConnectorApprovalStore.setState({ entries: {} });
+    interactions.useAgentInteractionStore.setState({ entries: {} });
+    useConnectorStatusStore.setState({
+      loaded: true,
+      statuses: {
+        slack: { id: "slack", connected: true, configured: true, needsReconnect: false },
+      },
+    });
+    const key = approvals.approvalKey("m41", "call-41");
+    const until = async (ready) => {
+      while (!ready()) await new Promise((resolve) => setImmediate(resolve));
+    };
+    const pending = slackSendMessageTool.execute(
+      { destination: "#launch", text: "Launch is Thursday" },
+      { ...toolContext("m41", "call-41"), onInteraction() {} }
+    );
+    t.after(() => {
+      approvals.cancelApproval(key);
+      interactions.cancelInteraction(key);
+    });
+    await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
+    approvals.updateApprovalDraft(key, { body: "Launch moved to Friday" });
+    await approvals.approveAction(key);
+    await approvals.retryApproval(key);
+    await until(
+      () => interactions.useAgentInteractionStore.getState().entries[key]?.state === "pending"
+    );
+    if (afterPick === "ready") {
+      interactions.updateInteractionDraft(key, { destination: answer });
+      interactions.answerQuestions(key);
+      await until(
+        () => approvals.useConnectorApprovalStore.getState().entries[key]?.state === "pending"
+      );
+      await approvals.approveAction(key);
+    } else {
+      interactions.answerWithText(key, answer);
+    }
+    const result = await pending;
+    assert.equal(prepared.at(-1).text, "Launch moved to Friday");
+    assert.equal(result.data.finalText, "Launch moved to Friday", `${result.data.status} result`);
+  });
+}
+
+test("a channel gone by Send asks where, with the user's rewrite", async (t) => {
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => ({
+          status: "ready",
+          actionId: "a1",
+          preview: {
+            verbKey: "slackPost",
+            destinationLabel: "#launch",
+            accountLabel: "chad",
+            body: args.text,
+          },
+        }),
+        connectorCommit: async () => ({
+          state: "failed",
+          errorCode: "channel_not_found",
+          message: "Not found",
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const [{ slackSendMessageTool }, approvals, { useConnectorStatusStore }] = await Promise.all([
+    loadSlack(),
+    loadApprovals(),
+    loadStatus(),
+  ]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  useConnectorStatusStore.setState({
+    loaded: true,
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  const key = approvals.approvalKey("m42", "call-42");
+  const pending = slackSendMessageTool.execute(
+    { destination: "#launch", text: "Launch is Thursday" },
+    toolContext("m42", "call-42")
+  );
+  t.after(() => approvals.cancelApproval(key));
+  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  approvals.updateApprovalDraft(key, { body: "Launch moved to Friday" });
+  await approvals.approveAction(key);
+  approvals.cancelApproval(key);
+  const result = await pending;
+  assert.equal(result.data.status, "needs_clarification");
+  assert.equal(result.data.finalText, "Launch moved to Friday");
+});
