@@ -179,6 +179,8 @@ test("a saved key reaches the model only as saved", async () => {
   const result = await running;
   useSettingsStore.setState({ setOpenaiApiKey });
   assert.equal(result.data.status, "saved");
+  // Saving a key switches nothing, so the model mustn't say it will now be used.
+  assert.match(result.data.guidance, /nothing else changed/);
   assert.equal(JSON.stringify(result).includes("sk-test-secret"), false);
 });
 

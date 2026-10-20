@@ -226,7 +226,7 @@ export function approvalOutcomeResult(
           destination,
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
-          guidance: `It may or may not have gone through. Never say it went through (sent, posted or created): say you couldn't confirm it. ${NO_RETRY} ${
+          guidance: `It may or may not have gone through. Say you tried and couldn't confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". ${NO_RETRY} ${
             options.unknownGuidance ?? `Tell the user to check ${destination}.`
           }`,
         },

@@ -349,7 +349,8 @@ function createApiKeyTool(providers: readonly string[]): ToolDefinition {
         data: {
           status: "saved",
           provider,
-          guidance: "The key is saved in the user's settings. Never repeat or ask for its value.",
+          guidance:
+            "The key is saved in the user's settings, and nothing else changed: the provider and model in use are the same as before. Don't say anything will now use it. Never repeat or ask for its value.",
         },
         displayText: i18n.t("agentMode.interactions.status.saved"),
       };

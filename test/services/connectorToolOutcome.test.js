@@ -43,7 +43,7 @@ test("every approval outcome tells the model what happened and whether to retry"
   assert.equal(unknown.status, "unknown");
   assert.match(unknown.guidance, /may or may not have gone through/);
   // The model once answered an unconfirmed post with "I've posted the message".
-  assert.match(unknown.guidance, /Never say it went through \(sent, posted or created\)/);
+  assert.match(unknown.guidance, /Never say or imply you sent, posted or created it/);
   assert.match(unknown.guidance, /#eng/);
 });
 
@@ -233,7 +233,7 @@ test("a sent email reports what the user sent, and an unknown one the connector'
       destination: "dana@acme.test",
       checkUrl: "c",
       guidance:
-        "It may or may not have gone through. Never say it went through (sent, posted or created): say you couldn't confirm it. Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.",
+        'It may or may not have gone through. Say you tried and couldn\'t confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.',
     }
   );
 });
