@@ -95,8 +95,8 @@ test("a turn saved while it waited, and never finished, shows no growing duratio
 });
 
 // zustand renders its initial state under renderToStaticMarkup, so a card on
-// screen (an approval store entry) needs a real mount.
-test("a running reply's row says nothing above a card it shows, and checks answers once it's gone", async (t) => {
+// screen (a store entry) needs a real mount, where strings show as their keys.
+async function mountRow(t) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -104,13 +104,25 @@ test("a running reply's row says nothing above a card it shows, and checks answe
   installBrowserGlobals(t);
   const container = installInteractiveDom(t);
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-progress-row-" });
-  const store = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
   const { AgentProgressRow } = await vite.ssrLoadModule("/components/agent/AgentProgressRow.tsx");
   root = createRoot(container);
-  const show = async (status, cardState) => {
-    const key = store.approvalKey("a", "c1");
-    store.useConnectorApprovalStore.setState({
-      entries: cardState ? { [key]: { key, state: cardState } } : {},
+  const key = (id) => approvals.approvalKey("a", id);
+  // The reply's steps, with the answer cards and question cards on screen.
+  const show = async (steps, { cards = {}, questions = {} } = {}) => {
+    approvals.useConnectorApprovalStore.setState({
+      entries: Object.fromEntries(
+        Object.entries(cards).map(([id, entry]) => [key(id), { key: key(id), ...entry }])
+      ),
+    });
+    interactions.useAgentInteractionStore.setState({
+      entries: Object.fromEntries(
+        Object.entries(questions).map(([id, state]) => [
+          key(id),
+          { key: key(id), state, payload: { kind: "questions", questions: [] } },
+        ])
+      ),
     });
     const message = {
       id: "a",
@@ -118,12 +130,49 @@ test("a running reply's row says nothing above a card it shows, and checks answe
       content: "",
       isStreaming: true,
       turn: { startedAt: 100, status: "running" },
-      toolCalls: [call("c1", "slack_send_message", status)],
+      toolCalls: steps,
     };
     await React.act(async () => root.render(React.createElement(AgentProgressRow, { message })));
     return container.textContent;
   };
-  assert.equal(await show("executing", "committing"), "", "the sending card says it");
-  assert.equal(await show("completed", "sent"), "", "and the sent one");
-  assert.match(await show("completed"), /checkingAnswers|Checking answers/);
+  return show;
+}
+
+test("a running reply's row says nothing above a card that waits or sends, and checks answers after it", async (t) => {
+  const show = await mountRow(t);
+  const slack = (status) => [call("c1", "slack_send_message", status)];
+  assert.equal(await show(slack("executing"), { cards: { c1: { state: "pending" } } }), "");
+  assert.equal(
+    await show(slack("executing"), { cards: { c1: { state: "committing" } } }),
+    "",
+    "the sending card says it"
+  );
+  assert.equal(
+    await show(slack("executing"), { cards: { c1: { state: "failed", awaitingRetry: true } } }),
+    "",
+    "nor while a failed card waits for Retry"
+  );
+  assert.match(
+    await show(slack("completed"), { cards: { c1: { state: "sent" } } }),
+    /checkingAnswers/,
+    "after Send the reply goes on"
+  );
+  assert.match(
+    await show(slack("completed"), { cards: { c1: { state: "cancelled" } } }),
+    /checkingAnswers/
+  );
+
+  const ask = [call("q1", "ask_user", "executing")];
+  assert.equal(await show(ask, { questions: { q1: "pending" } }), "", "a question waits");
+  assert.match(await show([{ ...ask[0], status: "completed" }]), /checkingAnswers/);
+});
+
+test("above a waiting card, a step that failed still shows, so it's seen before Send", async (t) => {
+  const show = await mountRow(t);
+  const steps = [
+    { ...call("g1", "github_search_issues", "error"), result: "GitHub isn't connected." },
+    call("c1", "slack_send_message", "executing"),
+  ];
+  const row = await show(steps, { cards: { c1: { state: "pending" } } });
+  assert.match(row, /GitHub isn't connected\./);
 });

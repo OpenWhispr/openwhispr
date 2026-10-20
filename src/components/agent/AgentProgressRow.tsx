@@ -53,9 +53,9 @@ function formatDuration(ms: number, locale: string): string {
 }
 
 /**
- * The steps whose card is on screen (a question or connect still open, an
- * answer card in any state). A card says what its step is doing, so the row
- * doesn't say it again above it.
+ * The steps whose card waits on the user or sends (a question or connect still
+ * open, an answer card pending, failed and waiting for Retry, or sending). Such
+ * a card says what its step is doing, so the row doesn't say it again above it.
  */
 function useCardedSteps(messageId: string, stepIds: string[]): Set<string> {
   // Joined into strings, so each selector returns the same value until a card comes or goes.
@@ -68,7 +68,12 @@ function useCardedSteps(messageId: string, stepIds: string[]): Set<string> {
       .join("\n")
   );
   const answering = useConnectorApprovalStore((state) =>
-    stepIds.filter((id) => approvalKey(messageId, id) in state.entries).join("\n")
+    stepIds
+      .filter((id) => {
+        const entry = state.entries[approvalKey(messageId, id)];
+        return entry?.state === "pending" || entry?.state === "committing" || entry?.awaitingRetry;
+      })
+      .join("\n")
   );
   return new Set(`${asking}\n${answering}`.split("\n").filter(Boolean));
 }
@@ -76,8 +81,9 @@ function useCardedSteps(messageId: string, stepIds: string[]): Set<string> {
 /**
  * What a reply is doing, then what it did: one compact row that expands into
  * its steps. While it runs: thinking, reasoning, the tool it is calling (or
- * how many), then checking what they returned; nothing while a card of the
- * reply is on screen. Once done: how long it took and how many steps.
+ * how many), then checking what they returned. While a card of the reply
+ * waits or sends, nothing, unless a step failed: that step shows, so the user
+ * sees it before answering. Once done: how long it took and how many steps.
  */
 export function AgentProgressRow({ message }: { message: Message }) {
   const { t, i18n } = useTranslation();
@@ -98,6 +104,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
   let icon: React.ReactNode = null;
   let label: string;
   let active = running;
+  let failed = false;
   if (running && executing.length > 1) {
     icon = (
       <span className="flex -space-x-1">
@@ -116,8 +123,15 @@ export function AgentProgressRow({ message }: { message: Message }) {
     icon = <ToolMark name={executing[0].name} />;
     label = toolCallStepText(executing[0], t);
   } else if (running && !message.content) {
-    if (carded.size > 0) return null;
-    if (steps.length > 0) {
+    const failedStep = carded.size > 0 && steps.filter((step) => step.status === "error").at(-1);
+    if (failedStep) {
+      icon = <ToolMark name={failedStep.name} />;
+      label = toolCallStepText(failedStep, t).split("\n")[0];
+      active = false;
+      failed = true;
+    } else if (carded.size > 0) {
+      return null;
+    } else if (steps.length > 0) {
       icon = <MessageCircleQuestion size={16} className="shrink-0" />;
       label = t("agentWindow.progress.checkingAnswers");
     } else if (reasoning) {
@@ -150,7 +164,12 @@ export function AgentProgressRow({ message }: { message: Message }) {
   const expandable = steps.length > 0 || Boolean(reasoning);
 
   return (
-    <div className={cn("text-[15px]", active ? "text-foreground" : "text-muted-foreground")}>
+    <div
+      className={cn(
+        "text-[15px]",
+        active ? "text-foreground" : failed ? "text-destructive/80" : "text-muted-foreground"
+      )}
+    >
       <button
         type="button"
         disabled={!expandable}
