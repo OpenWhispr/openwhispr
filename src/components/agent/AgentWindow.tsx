@@ -767,7 +767,8 @@ export default function AgentWindow() {
       <BrandMarkIcon size={22} className="text-primary" />
       <p dir="auto">{t(refusal)}</p>
     </div>
-  ) : state.input === "keyboard" ? (
+  ) : state.input === "keyboard" && !forkOrigin ? (
+    // A fork with nothing of its own yet shows just its chip.
     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
       <BrandMarkIcon size={22} className="text-primary" />
       <p className="text-lg font-medium text-foreground">{t("agentWindow.empty.title")}</p>

@@ -26,7 +26,7 @@ const MOCKS = {
         messages: current.messages,
         busy: current.busy,
         conversationId: 1,
-        forkOrigin: null,
+        forkOrigin: current.forkOrigin ?? null,
         agentState: current.busy ? "streaming" : "idle",
         send: async (text) => { globalThis.__chat.sent.push(text); return true; },
         cancel() { globalThis.__chat.cancels += 1; },
@@ -494,6 +494,25 @@ test("the modal's glow is full on an empty chat, faint while working, gone at re
   assert.equal(glow(), "none");
   await view.chat({ busy: false, messages: [user, { ...reply([], "Done."), isStreaming: false }] });
   assert.equal(glow(), "none");
+});
+
+test("a fork with nothing of its own yet shows its chip, not the new-chat prompt", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  assert.match(view.host.textContent, /What can I help with/);
+  await view.chat({
+    messages: [user, { ...reply([], "Here is the plan."), isStreaming: false }],
+    forkOrigin: {
+      parentConversationId: 1,
+      parentTitle: "Plan",
+      context: null,
+      copiedMessageCount: 2,
+    },
+  });
+  await view.settle();
+  assert.match(view.host.textContent, /Forked from/);
+  assert.doesNotMatch(view.host.textContent, /What can I help with|Here is the plan/);
 });
 
 test("a held command over a waiting connect card types with the usual placeholder", async (t) => {
