@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
+import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import { PillWaveform } from "../dictation/PillWaveform";
 import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
@@ -82,10 +83,7 @@ export function AgentPill({
             disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
             aria-label={t(label)}
             title={unavailable ?? t(label)}
-            className={cn(
-              "flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent",
-              button === "expand" && expandCue && "agent-expand-cue"
-            )}
+            className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}
           >
             <Icon size={button === "stop" ? 14 : 16} />
           </button>

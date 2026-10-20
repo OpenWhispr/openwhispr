@@ -2,6 +2,9 @@ import type { SETTINGS_TARGETS } from "../helpers/settingsTargets.js";
 
 export type SettingsTarget = (typeof SETTINGS_TARGETS)[number];
 
+/** The model a chat answers with: typed chat's, or the Voice Assistant's. */
+export type ChatInferenceScope = "chatIntelligence" | "dictationAgent";
+
 /**
  * What the agent can ask of the user mid-turn. The tool that asks waits for
  * the answer, so the turn resumes where it stopped once the user responds.
@@ -39,7 +42,7 @@ export type InteractionPayload =
       message?: string;
       technicalDetails?: string;
       /** The model scope of the chat that asked, which Done checks for the AI models target. */
-      scope?: "chatIntelligence" | "dictationAgent";
+      scope?: ChatInferenceScope;
     };
 
 /** Per question: an option id, several option ids, or the typed text. */

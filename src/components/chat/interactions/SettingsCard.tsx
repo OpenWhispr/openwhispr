@@ -7,6 +7,7 @@ import {
   type InteractionEntry,
 } from "../../../stores/agentInteractionStore";
 import type { InteractionPayload } from "../../../types/agentInteractions";
+import { cn } from "../../lib/utils";
 import { PILL_BUTTON } from "./cardStyles";
 
 /**
@@ -42,7 +43,7 @@ export function SettingsCard({
             type="button"
             disabled={checking}
             onClick={() => void confirmSettingsDone(entry.key)}
-            className={`${PILL_BUTTON} ms-auto`}
+            className={cn(PILL_BUTTON, "ms-auto")}
           >
             {t(
               checking

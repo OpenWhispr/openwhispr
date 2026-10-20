@@ -44,7 +44,7 @@ import { isQueryResultData } from "../../services/tools/connectors/runQueryActio
 import type { InteractionToolOptions } from "../../services/tools/interactionTools";
 import { API_KEY_PROVIDERS } from "../../stores/agentInteractionStore";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
-import type { ConnectionTarget } from "../../types/agentInteractions";
+import type { ChatInferenceScope, ConnectionTarget } from "../../types/agentInteractions";
 import type {
   Message,
   MessageError,
@@ -152,14 +152,6 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
   }
 }
 
-/**
- * Which settings scope answers a conversation. Typed chat surfaces stay on the
- * Chat scope; the agent window runs on the Voice Assistant scope so
- * the model picked under Settings > Voice Assistant is the one that answers
- * (see resolveChatStreamingInference for its Chat fallback).
- */
-export type ChatStreamingScope = "chatIntelligence" | "dictationAgent";
-
 export interface OpenNoteContext {
   text: string;
   /** Only the start of the transcript is included; get_note reads the rest. */
@@ -168,8 +160,13 @@ export interface OpenNoteContext {
 
 interface UseChatStreamingOptions {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  /** Settings scope the conversation resolves its provider and model from. */
-  inferenceScope?: ChatStreamingScope;
+  /**
+   * Settings scope the conversation resolves its provider and model from. Typed
+   * chat surfaces stay on the Chat scope; the agent window runs on the Voice
+   * Assistant scope, so the model picked under Settings > Voice Assistant
+   * answers (see resolveChatStreamingInference for its Chat fallback).
+   */
+  inferenceScope?: ChatInferenceScope;
   /** Notes listed in the system prompt as possibly relevant (container overview chat). */
   noteContext?: string;
   /**
@@ -426,8 +423,6 @@ export function useChatStreaming({
       }
 
       async function runSend(): Promise<void> {
-        // Visible text or a tool call arrived; a stream with neither still ends in a reply.
-        let responseShown = false;
         const settings = getSettings();
         const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
           inferenceScope,
@@ -929,7 +924,6 @@ export function useChatStreaming({
               afterToolCall = false;
               rawContent += chunk.text;
               fullContent = withoutEchoedToolTrace(rawContent);
-              if (fullContent) responseShown = true;
               scheduleContentFlush();
             } else if (chunk.type === "reasoning") {
               if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning))
@@ -943,7 +937,6 @@ export function useChatStreaming({
               // Text that arrived before a tool step must be on screen before the
               // step appears, not an interval after it.
               flushContentNow();
-              if (chunk.calls.length > 0) responseShown = true;
               for (const call of chunk.calls) {
                 setAgentState("tool-executing");
                 beginToolActivity(
@@ -1020,7 +1013,9 @@ export function useChatStreaming({
           }
 
           const hasDeliverableContent = fullContent.trim().length > 0;
-          if (!responseShown && !cancelled()) {
+          // Visible text or a tool call of this stream; one with neither still ends in a reply.
+          const responseShown = Boolean(fullContent) || toolCalls.length > carriedCallCount;
+          if (!responseShown) {
             // The stream ended without a visible token or tool call (think-only
             // local model, empty completion). Show that as a reply so every
             // listener — the agent window's thinking state included — sees a

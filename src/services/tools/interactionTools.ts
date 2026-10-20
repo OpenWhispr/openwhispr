@@ -7,6 +7,7 @@ import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import { getProviderDisplayName } from "../../models/ModelRegistry";
 import { answerText, optionLabel } from "../../utils/interactionAnswers";
 import type {
+  ChatInferenceScope,
   ConnectionTarget,
   InteractionPayload,
   InteractionQuestion,
@@ -22,7 +23,7 @@ export interface InteractionToolOptions {
   /** A screenshot can reach the model answering this send. */
   screenAccess: boolean;
   /** The chat's model scope; Settings Done checks it. Typed chat when absent. */
-  inferenceScope?: "chatIntelligence" | "dictationAgent";
+  inferenceScope?: ChatInferenceScope;
 }
 
 const MAX_QUESTIONS = 4;
