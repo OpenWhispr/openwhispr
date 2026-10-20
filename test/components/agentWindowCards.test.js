@@ -806,6 +806,45 @@ test("a message typed before a question arrives is never sent as its answer", as
   assert.deepEqual(results, [{ status: "answered", answers: { deadline: "Friday" } }]);
 });
 
+test("a spoken command that arrives while a question waits is held as a message, never its answer", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([askUser])] });
+  const results = await view.ask("c1", TEXT_QUESTION);
+  await view.settle();
+  // A wake-word command while the question waits goes into the composer.
+  await React.act(async () => view.main.handlers.command({ text: "and email Dana" }));
+  await view.settle();
+  const composer = view.host.querySelector(COMPOSER);
+  assert.equal(composer.value, "and email Dana");
+  assert.notEqual(composer.getAttribute("placeholder"), "Answer here…");
+  await React.act(async () =>
+    composer.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    )
+  );
+  assert.deepEqual(results, [], "Enter doesn't answer the question with the command");
+  assert.deepEqual(globalThis.__chat.sent, []);
+
+  // Answered on its card, the question goes; once the turn ends the command can be sent.
+  const field = view.host.querySelector("[data-interaction-card] input");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(view.happyWindow.HTMLInputElement.prototype, "value").set.call(
+      field,
+      "Friday"
+    );
+    field.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => field.form.requestSubmit());
+  await view.settle();
+  assert.deepEqual(results, [{ status: "answered", answers: { deadline: "Friday" } }]);
+  await view.chat({ busy: false, messages: [user, { ...reply([askUser]), isStreaming: false }] });
+  await view.settle();
+  await React.act(async () => view.button("Send").click());
+  assert.deepEqual(globalThis.__chat.sent, ["and email Dana"]);
+});
+
 test("Keyboard on a waiting key card puts the keyboard in the key field, not the composer", async (t) => {
   const view = await mountWindow(t);
   const { document } = view.happyWindow;

@@ -123,6 +123,9 @@ export default function AgentWindow() {
     [approvals, shown]
   );
   const cardHolds = pendingCard !== null || cardSending;
+  // Read when a spoken command arrives, so it can be kept from answering.
+  const pendingCardRef = useRef(pendingCard);
+  pendingCardRef.current = pendingCard;
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
   const standalone = state.layout === "standalone";
@@ -269,8 +272,12 @@ export default function AgentWindow() {
       const selectedContext = extras ? extras.selectedContext : current.selectedContext;
       const attachment = extras ? extras.attachment : current.attachment;
       // A wake-word command can arrive while a reply runs; it waits rather
-      // than being lost or cutting the reply off.
+      // than being lost or cutting the reply off. A question waiting
+      // meanwhile is answered on its card, never with the command, as with
+      // a message written before the question came.
       if (busyRef.current) {
+        const waiting = pendingCardRef.current;
+        if (waiting?.interaction === "questions") setDraftHeldCard(waiting.key);
         dispatch({
           type: "held",
           text,
