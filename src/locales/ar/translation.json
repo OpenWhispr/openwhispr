@@ -4095,6 +4095,35 @@
       "upgradeCta": "الترقية الآن",
       "upgradedTitle": "تمت الترقية إلى Enterprise",
       "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
+    },
+    "readAloud": {
+      "title": "Read aloud",
+      "description": "Select text in any app and press the hotkey to hear it in a local voice.",
+      "enable": "Enable read aloud",
+      "enableDescription": "Registers the read and pause hotkeys and keeps the voice ready in the background.",
+      "voice": "Voice",
+      "voiceInstalled": "Installed on this computer.",
+      "voiceMissing": "Not downloaded yet ({{size}}).",
+      "spoken": {
+        "noSelection": "لم يتم تحديد أي نص.",
+        "test": "مرحبًا! هذه ميزة القراءة بصوت عالٍ في OpenWhispr. حدّد نصًا واضغط على الاختصار."
+      },
+      "download": "Download",
+      "downloading": "Downloading… {{percent}}%",
+      "installing": "Installing…",
+      "remove": "Remove",
+      "test": "Test",
+      "speed": "Speed",
+      "readHotkey": "Read / stop hotkey",
+      "pauseHotkey": "Pause / resume hotkey",
+      "otherHotkey": "Other read aloud hotkey",
+      "indicator": "Show indicator while reading",
+      "indicatorDescription": "A small bar at the bottom of the screen with pause and stop buttons.",
+      "privacy": "Reading runs entirely on this computer. Text is never sent anywhere or saved in logs.",
+      "errors": {
+        "generic": "Could not save this setting.",
+        "download": "Voice download failed. Check your connection and try again."
+      }
     }
   },
   "settings": {
@@ -4573,6 +4602,10 @@
       "system": {
         "description": "التحديثات والتخزين وأدوات المطورين",
         "label": "النظام"
+      },
+      "readAloud": {
+        "label": "Read aloud",
+        "description": "Hear selected text in a local voice"
       }
     },
     "title": "الإعدادات"

@@ -1098,6 +1098,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
   updateTranslationHotkey: (hotkey) => ipcRenderer.invoke("update-translation-hotkey", hotkey),
   getTranslationKey: () => ipcRenderer.invoke("get-translation-key"),
+
+  // Read aloud (selected text → local TTS)
+  readAloudGetStatus: () => ipcRenderer.invoke("read-aloud:get-status"),
+  readAloudSetConfig: (patch) => ipcRenderer.invoke("read-aloud:set-config", patch),
+  readAloudTest: () => ipcRenderer.invoke("read-aloud:test"),
+  readAloudStop: () => ipcRenderer.invoke("read-aloud:stop"),
+  readAloudInstallVoice: (voiceId) => ipcRenderer.invoke("read-aloud:install-voice", voiceId),
+  readAloudRemoveVoice: (voiceId) => ipcRenderer.invoke("read-aloud:remove-voice", voiceId),
+  onReadAloudInstallProgress: registerListener(
+    "read-aloud:install-progress",
+    (callback) => (_event, progress) => callback(progress)
+  ),
   onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
   onPreviewAppend: registerListener(
     "preview-append",

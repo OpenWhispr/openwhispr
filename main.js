@@ -305,6 +305,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
+const ReadAloudManager = require("./src/helpers/readAloud/readAloudManager");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
@@ -353,6 +354,7 @@ let windowsKeyManager = null;
 let linuxKeyManager = null;
 let textEditMonitor = null;
 let selectionManager = null;
+let readAloudManager = null;
 let whisperCudaManager = null;
 let whisperVulkanManager = null;
 let googleCalendarManager = null;
@@ -1356,6 +1358,18 @@ async function startApp() {
       windowManager.reconcileNativeKeyListeners();
       return { success: true };
     }
+  });
+
+  // Read aloud (selected text → local TTS). Opt-in from Settings → Hotkeys;
+  // kept out of the dictation pipeline entirely.
+  readAloudManager = new ReadAloudManager({
+    selectionManager,
+    hotkeyManager,
+    environmentManager,
+  });
+  sidecarRegistry.register("tts", () => readAloudManager.shutdown());
+  readAloudManager.init().catch((err) => {
+    debugLogger.error("Read aloud init failed", { error: err.message }, "read-aloud");
   });
 
   // Phase 2: Initialize remaining managers after windows are visible

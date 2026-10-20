@@ -1,0 +1,308 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; media-src blob:"
+    />
+    <title>OpenWhispr Read Aloud</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        font-family: system-ui, sans-serif;
+      }
+      .pill {
+        position: absolute;
+        inset: 6px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 0 16px;
+        border-radius: 999px;
+        background: rgba(24, 24, 27, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        -webkit-app-region: drag;
+      }
+      .bars {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        height: 18px;
+        flex: 1;
+      }
+      .bars span {
+        width: 3px;
+        height: 6px;
+        border-radius: 2px;
+        background: #a7f3d0;
+        animation: wave 0.9s ease-in-out infinite;
+      }
+      .bars span:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .bars span:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      .bars span:nth-child(4) {
+        animation-delay: 0.45s;
+      }
+      .bars span:nth-child(5) {
+        animation-delay: 0.6s;
+      }
+      .bars span:nth-child(6) {
+        animation-delay: 0.75s;
+      }
+      body.paused .bars span {
+        animation-play-state: paused;
+        background: #71717a;
+      }
+      @keyframes wave {
+        0%,
+        100% {
+          height: 5px;
+        }
+        50% {
+          height: 18px;
+        }
+      }
+      button {
+        -webkit-app-region: no-drag;
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.08);
+        color: #f4f4f5;
+        cursor: pointer;
+        padding: 0;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      svg {
+        width: 14px;
+        height: 14px;
+        fill: currentColor;
+      }
+      .speed {
+        -webkit-app-region: no-drag;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .speed button {
+        width: 24px;
+        height: 24px;
+        background: transparent;
+        font-size: 15px;
+        line-height: 1;
+      }
+      .speed span {
+        min-width: 38px;
+        text-align: center;
+        color: #f4f4f5;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .icon-play {
+        display: none;
+      }
+      body.paused .icon-play {
+        display: block;
+      }
+      body.paused .icon-pause {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pill">
+      <div class="bars" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="speed">
+        <button id="slower" aria-label="Slower">−</button>
+        <span id="speed">1×</span>
+        <button id="faster" aria-label="Faster">+</button>
+      </div>
+      <button id="pause" aria-label="Pause">
+        <svg class="icon-pause" viewBox="0 0 14 14">
+          <rect x="2" y="1" width="3.5" height="12" rx="1" />
+          <rect x="8.5" y="1" width="3.5" height="12" rx="1" />
+        </svg>
+        <svg class="icon-play" viewBox="0 0 14 14">
+          <path d="M3 1.5v11a.6.6 0 0 0 .9.5l9-5.5a.6.6 0 0 0 0-1l-9-5.5A.6.6 0 0 0 3 1.5z" />
+        </svg>
+      </button>
+      <button id="stop" aria-label="Stop">
+        <svg viewBox="0 0 14 14"><rect x="2" y="2" width="10" height="10" rx="1.5" /></svg>
+      </button>
+    </div>
+    <script>
+      // Read-aloud overlay: plays the per-sentence PCM chunks main streams and
+      // shows the pill (pause, stop, speed) while reading. Chunks play through
+      // one <audio> element so speed is a pitch-preserving playback rate that
+      // changes instantly, without stopping or re-synthesizing.
+      const audio = new Audio();
+      audio.preservesPitch = true;
+      let queue = []; // object URLs of sentences not played yet
+      let current = null; // object URL playing now
+      let paused = false;
+      let rate = 1;
+      let requestId = null;
+      let generationDone = false;
+      let lastReported = null;
+
+      document
+        .getElementById("pause")
+        .addEventListener("click", () => window.ttsPlayer.action("toggle-pause"));
+      document
+        .getElementById("stop")
+        .addEventListener("click", () => window.ttsPlayer.action("stop"));
+      for (const [id, direction] of [
+        ["slower", -1],
+        ["faster", 1],
+      ]) {
+        document
+          .getElementById(id)
+          .addEventListener("click", () => window.ttsPlayer.action({ type: "speed", direction }));
+      }
+
+      function setSpeed(speed) {
+        if (typeof speed !== "number") return;
+        rate = speed;
+        audio.defaultPlaybackRate = rate;
+        audio.playbackRate = rate;
+        document.getElementById("speed").textContent = `${speed.toLocaleString()}×`;
+      }
+
+      function report(state) {
+        if (state === lastReported) return;
+        lastReported = state;
+        document.body.classList.toggle("paused", state === "paused");
+        window.ttsPlayer.reportState({ state, requestId });
+      }
+
+      // 16-bit PCM WAV so the <audio> element can play each sentence.
+      function toWavUrl(samples, sampleRate) {
+        const buffer = new ArrayBuffer(44 + samples.length * 2);
+        const view = new DataView(buffer);
+        const text = (offset, value) => {
+          for (let i = 0; i < value.length; i += 1) view.setUint8(offset + i, value.charCodeAt(i));
+        };
+        text(0, "RIFF");
+        view.setUint32(4, 36 + samples.length * 2, true);
+        text(8, "WAVE");
+        text(12, "fmt ");
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        text(36, "data");
+        view.setUint32(40, samples.length * 2, true);
+        for (let i = 0; i < samples.length; i += 1) {
+          const v = Math.max(-1, Math.min(1, samples[i]));
+          view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+        }
+        return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+      }
+
+      function release(url) {
+        if (url) URL.revokeObjectURL(url);
+      }
+
+      function stopAll() {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        release(current);
+        queue.forEach(release);
+        queue = [];
+        current = null;
+        paused = false;
+        generationDone = false;
+      }
+
+      function maybeFinished() {
+        if (generationDone && !current && queue.length === 0) {
+          report("idle");
+          requestId = null;
+        }
+      }
+
+      function playNext() {
+        release(current);
+        current = queue.shift() ?? null;
+        if (!current) {
+          maybeFinished();
+          return;
+        }
+        audio.src = current;
+        audio.defaultPlaybackRate = rate;
+        audio.playbackRate = rate;
+        audio.play().catch(() => {});
+      }
+
+      audio.addEventListener("ended", playNext);
+
+      window.ttsPlayer.onCommand((command) => {
+        switch (command.type) {
+          case "start":
+            stopAll();
+            requestId = command.requestId;
+            lastReported = null;
+            setSpeed(command.speed);
+            report("speaking");
+            break;
+          case "chunk":
+            if (command.requestId !== requestId) return;
+            queue.push(toWavUrl(command.samples, command.sampleRate));
+            if (!current && !paused) playNext();
+            break;
+          case "done":
+            if (command.requestId !== requestId) return;
+            generationDone = true;
+            maybeFinished();
+            break;
+          case "pause":
+            if (requestId) {
+              paused = true;
+              audio.pause();
+              report("paused");
+            }
+            break;
+          case "resume":
+            if (requestId) {
+              paused = false;
+              if (current) audio.play().catch(() => {});
+              else playNext();
+              report("speaking");
+            }
+            break;
+          case "speed":
+            setSpeed(command.speed);
+            break;
+          case "stop":
+            stopAll();
+            report("idle");
+            requestId = null;
+            break;
+        }
+      });
+    </script>
+  </body>
+</html>

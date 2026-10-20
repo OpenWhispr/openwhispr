@@ -1666,6 +1666,10 @@
       "system": {
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
+      },
+      "readAloud": {
+        "label": "Lecture à voix haute",
+        "description": "Écoutez le texte sélectionné avec une voix locale"
       }
     },
     "title": "Paramètres"
@@ -2719,6 +2723,35 @@
       "upgradeCta": "Mettre à niveau",
       "upgradedTitle": "Mise à niveau effectuée",
       "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
+    },
+    "readAloud": {
+      "title": "Lecture à voix haute",
+      "description": "Sélectionnez du texte dans n'importe quelle application et appuyez sur le raccourci pour l'écouter avec une voix locale.",
+      "enable": "Activer la lecture à voix haute",
+      "enableDescription": "Enregistre les raccourcis de lecture et de pause et garde la voix prête en arrière-plan.",
+      "voice": "Voix",
+      "voiceInstalled": "Installée sur cet ordinateur.",
+      "voiceMissing": "Pas encore téléchargée ({{size}}).",
+      "spoken": {
+        "noSelection": "Aucun texte sélectionné.",
+        "test": "Bonjour ! Voici la lecture à voix haute d'OpenWhispr. Sélectionnez un texte et appuyez sur le raccourci."
+      },
+      "download": "Télécharger",
+      "downloading": "Téléchargement… {{percent}} %",
+      "installing": "Installation…",
+      "remove": "Supprimer",
+      "test": "Tester",
+      "speed": "Vitesse",
+      "readHotkey": "Raccourci lire / arrêter",
+      "pauseHotkey": "Raccourci pause / reprendre",
+      "otherHotkey": "Autre raccourci de lecture",
+      "indicator": "Afficher un indicateur pendant la lecture",
+      "indicatorDescription": "Une petite barre en bas de l'écran avec des boutons pause et arrêt.",
+      "privacy": "La lecture s'effectue entièrement sur cet ordinateur. Le texte n'est jamais envoyé ni enregistré dans les journaux.",
+      "errors": {
+        "generic": "Impossible d'enregistrer ce réglage.",
+        "download": "Échec du téléchargement de la voix. Vérifiez la connexion et réessayez."
+      }
     }
   },
   "models": {

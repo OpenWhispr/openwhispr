@@ -1572,6 +1572,10 @@
       "workspace": {
         "description": "Membri, spazi del team e chiavi API",
         "label": "Area di lavoro"
+      },
+      "readAloud": {
+        "label": "Lettura ad alta voce",
+        "description": "Ascolta il testo selezionato con una voce locale"
       }
     },
     "title": "Impostazioni"
@@ -2625,6 +2629,35 @@
       "upgradeCta": "Esegui l'upgrade",
       "upgradedTitle": "Upgrade completato",
       "upgradedDescription": "{{workspace}} è ora su Enterprise."
+    },
+    "readAloud": {
+      "title": "Lettura ad alta voce",
+      "description": "Seleziona del testo in qualsiasi app e premi la scorciatoia per ascoltarlo con una voce locale.",
+      "enable": "Attiva lettura ad alta voce",
+      "enableDescription": "Registra le scorciatoie di lettura e pausa e tiene la voce pronta in background.",
+      "voice": "Voce",
+      "voiceInstalled": "Installata su questo computer.",
+      "voiceMissing": "Non ancora scaricata ({{size}}).",
+      "spoken": {
+        "noSelection": "Nessun testo selezionato.",
+        "test": "Ciao! Questa è la lettura ad alta voce di OpenWhispr. Seleziona un testo e premi la scorciatoia."
+      },
+      "download": "Scarica",
+      "downloading": "Download… {{percent}}%",
+      "installing": "Installazione…",
+      "remove": "Rimuovi",
+      "test": "Prova",
+      "speed": "Velocità",
+      "readHotkey": "Scorciatoia leggi / ferma",
+      "pauseHotkey": "Scorciatoia pausa / riprendi",
+      "otherHotkey": "Altra scorciatoia di lettura",
+      "indicator": "Mostra indicatore durante la lettura",
+      "indicatorDescription": "Una piccola barra in fondo allo schermo con i pulsanti pausa e stop.",
+      "privacy": "La lettura avviene interamente su questo computer. Il testo non viene mai inviato né salvato nei log.",
+      "errors": {
+        "generic": "Impossibile salvare questa impostazione.",
+        "download": "Download della voce non riuscito. Controlla la connessione e riprova."
+      }
     }
   },
   "models": {

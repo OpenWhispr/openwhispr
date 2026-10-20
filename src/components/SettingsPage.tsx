@@ -75,6 +75,7 @@ import { useUpdater } from "../hooks/useUpdater";
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { HotkeyListInput } from "./ui/HotkeyListInput";
+import ReadAloudSettings from "./ReadAloudSettings";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -171,6 +172,7 @@ export type SettingsSectionType =
   | "general"
   | "hotkeys"
   | "speechToText"
+  | "readAloud"
   | "llms"
   | "privacyData"
   | "system";
@@ -4195,6 +4197,9 @@ EOF`,
             </div>
           </div>
         );
+
+      case "readAloud":
+        return <ReadAloudSettings />;
 
       case "speechToText":
       case "llms":

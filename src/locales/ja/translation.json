@@ -1572,6 +1572,10 @@
       "workspace": {
         "description": "メンバー、チームスペース、API キー",
         "label": "ワークスペース"
+      },
+      "readAloud": {
+        "label": "Read aloud",
+        "description": "Hear selected text in a local voice"
       }
     },
     "title": "設定"
@@ -2625,6 +2629,35 @@
       "upgradeCta": "今すぐアップグレード",
       "upgradedTitle": "Enterpriseにアップグレードしました",
       "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
+    },
+    "readAloud": {
+      "title": "Read aloud",
+      "description": "Select text in any app and press the hotkey to hear it in a local voice.",
+      "enable": "Enable read aloud",
+      "enableDescription": "Registers the read and pause hotkeys and keeps the voice ready in the background.",
+      "voice": "Voice",
+      "voiceInstalled": "Installed on this computer.",
+      "voiceMissing": "Not downloaded yet ({{size}}).",
+      "spoken": {
+        "noSelection": "テキストが選択されていません。",
+        "test": "こんにちは。OpenWhisprの読み上げです。テキストを選択してショートカットを押してください。"
+      },
+      "download": "Download",
+      "downloading": "Downloading… {{percent}}%",
+      "installing": "Installing…",
+      "remove": "Remove",
+      "test": "Test",
+      "speed": "Speed",
+      "readHotkey": "Read / stop hotkey",
+      "pauseHotkey": "Pause / resume hotkey",
+      "otherHotkey": "Other read aloud hotkey",
+      "indicator": "Show indicator while reading",
+      "indicatorDescription": "A small bar at the bottom of the screen with pause and stop buttons.",
+      "privacy": "Reading runs entirely on this computer. Text is never sent anywhere or saved in logs.",
+      "errors": {
+        "generic": "Could not save this setting.",
+        "download": "Voice download failed. Check your connection and try again."
+      }
     }
   },
   "models": {

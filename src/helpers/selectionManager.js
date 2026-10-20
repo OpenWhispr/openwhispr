@@ -203,7 +203,10 @@ class SelectionManager {
       if (!expectedTarget) {
         return { status: "unavailable", code: "target_unavailable" };
       }
-      const capture = await this._readCurrentSelection(expectedTarget, { probeEditable });
+      const capture = await this._readCurrentSelection(expectedTarget, {
+        probeEditable,
+        acceptClipboardEcho: options.acceptClipboardEcho === true,
+      });
       if (capture.status === "editable") {
         const sessionId = crypto.randomUUID();
         // The renderer asks for plain prose and strips markdown only when the
@@ -218,12 +221,15 @@ class SelectionManager {
       }
       if (capture.status !== "selected") return capture;
 
+      // Read-aloud only reads the selection, so it may pass a larger ceiling
+      // than the in-place edit limit.
+      const maxCharacters = options.maxCharacters ?? MAX_SELECTION_EDIT_CODE_POINTS;
       const characterCount = [...capture.text].length;
-      if (characterCount > MAX_SELECTION_EDIT_CODE_POINTS) {
+      if (characterCount > maxCharacters) {
         return {
           status: "too_large",
           characterCount,
-          maxCharacters: MAX_SELECTION_EDIT_CODE_POINTS,
+          maxCharacters,
         };
       }
 
@@ -440,16 +446,23 @@ class SelectionManager {
     return runSpawn(binary, args, { timeout: COPY_TIMEOUT_MS });
   }
 
-  async _readWindowsSelection(expectedTarget, { probeEditable = false } = {}) {
+  async _readWindowsSelection(
+    expectedTarget,
+    { probeEditable = false, acceptClipboardEcho = false } = {}
+  ) {
     const binary = this.clipboardManager.resolveWindowsFastPasteBinary();
     if (!binary) return { status: "unavailable", code: "copy_helper_unavailable" };
 
-    const capture = await this._captureViaClipboard(async () => {
-      const result = await runSpawn(binary, ["--copy"], { timeout: COPY_TIMEOUT_MS });
-      if (!result.success) return { success: false };
-      const match = result.stdout.match(/COPY_OK\s+(\S+)/);
-      return { success: !!match, target: match ? { kind: "win-hwnd", id: match[1] } : null };
-    }, expectedTarget);
+    const capture = await this._captureViaClipboard(
+      async () => {
+        const result = await runSpawn(binary, ["--copy"], { timeout: COPY_TIMEOUT_MS });
+        if (!result.success) return { success: false };
+        const match = result.stdout.match(/COPY_OK\s+(\S+)/);
+        return { success: !!match, target: match ? { kind: "win-hwnd", id: match[1] } : null };
+      },
+      expectedTarget,
+      { acceptClipboardEcho }
+    );
     // The copy reports only the HWND; a same-window expectedTarget (verified by
     // _captureViaClipboard) carries the exe/class identity the terminal and
     // line-copy checks need, so keep it on the target a caret session stores.
@@ -773,7 +786,7 @@ class SelectionManager {
     return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
   }
 
-  async _captureViaClipboard(sendCopy, expectedTarget) {
+  async _captureViaClipboard(sendCopy, expectedTarget, { acceptClipboardEcho = false } = {}) {
     const original = this.clipboardManager._saveClipboard();
     const beforeWrite = this.clipboardManager._readClipboardTextAll();
     const sentinel = `__OPENWHISPR_SELECTION_${crypto.randomUUID()}__`;
@@ -796,13 +809,16 @@ class SelectionManager {
       return { status: "target_changed" };
     }
 
+    // Windows has a single clipboard, so the sentinel write always lands and
+    // anything replacing it came from the copy — even when it equals what the
+    // user had copied before. Read-aloud opts in; editing keeps the strict rule.
+    const isCopiedText = acceptClipboardEcho
+      ? (text) => text.length > 0 && text !== sentinel
+      : (text) => text.length > 0 && text !== sentinel && !baseline.has(text);
     const deadline = Date.now() + COPY_TIMEOUT_MS;
     let copiedText = null;
     while (Date.now() < deadline) {
-      copiedText =
-        this.clipboardManager
-          ._readClipboardTextAll()
-          .find((text) => text.length > 0 && text !== sentinel && !baseline.has(text)) ?? null;
+      copiedText = this.clipboardManager._readClipboardTextAll().find(isCopiedText) ?? null;
       if (copiedText !== null) break;
       await new Promise((resolve) => setTimeout(resolve, CLIPBOARD_POLL_MS));
     }

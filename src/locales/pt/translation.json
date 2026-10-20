@@ -1551,6 +1551,10 @@
       "workspace": {
         "description": "Membros, espaços de equipe e chaves de API",
         "label": "Espaço de trabalho"
+      },
+      "readAloud": {
+        "label": "Leitura em voz alta",
+        "description": "Ouça qualquer texto selecionado com uma voz local"
       }
     },
     "title": "Configurações"
@@ -2604,6 +2608,35 @@
       "upgradeCta": "Fazer upgrade agora",
       "upgradedTitle": "Upgrade concluído",
       "upgradedDescription": "{{workspace}} agora está no Enterprise."
+    },
+    "readAloud": {
+      "title": "Leitura em voz alta",
+      "description": "Selecione um texto em qualquer programa e aperte o atalho para ouvi-lo com uma voz local.",
+      "enable": "Ativar leitura em voz alta",
+      "enableDescription": "Registra os atalhos de leitura e pausa e mantém a voz pronta em segundo plano.",
+      "voice": "Voz",
+      "voiceInstalled": "Instalada neste computador.",
+      "voiceMissing": "Ainda não baixada ({{size}}).",
+      "spoken": {
+        "noSelection": "Nenhum texto selecionado.",
+        "test": "Olá! Esta é a leitura em voz alta do OpenWhispr. Selecione um texto e aperte o atalho."
+      },
+      "download": "Baixar",
+      "downloading": "Baixando… {{percent}}%",
+      "installing": "Instalando…",
+      "remove": "Remover",
+      "test": "Testar",
+      "speed": "Velocidade",
+      "readHotkey": "Atalho para ler / parar",
+      "pauseHotkey": "Atalho para pausar / continuar",
+      "otherHotkey": "Outro atalho da leitura",
+      "indicator": "Mostrar indicador durante a leitura",
+      "indicatorDescription": "Uma pequena barra na parte de baixo da tela com botões de pausar e parar.",
+      "privacy": "A leitura acontece inteiramente neste computador. O texto nunca é enviado nem salvo em logs.",
+      "errors": {
+        "generic": "Não foi possível salvar esta configuração.",
+        "download": "Falha ao baixar a voz. Verifique a conexão e tente de novo."
+      }
     }
   },
   "models": {

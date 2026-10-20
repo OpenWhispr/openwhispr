@@ -96,6 +96,8 @@
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
+    "**/node_modules/sherpa-onnx-node/**/*",
+    "**/node_modules/sherpa-onnx-win-x64/**/*",
     "src/workers/**/*"
   ],
   "extraResources": [

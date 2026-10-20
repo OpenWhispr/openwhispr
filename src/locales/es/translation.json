@@ -1624,6 +1624,10 @@
       "workspace": {
         "label": "Espacio de trabajo",
         "description": "Miembros, espacios de equipo y claves API"
+      },
+      "readAloud": {
+        "label": "Lectura en voz alta",
+        "description": "Escucha el texto seleccionado con una voz local"
       }
     },
     "title": "Ajustes"
@@ -2677,6 +2681,35 @@
       "upgradeCta": "Actualizar ahora",
       "upgradedTitle": "Actualizado a Enterprise",
       "upgradedDescription": "{{workspace}} ahora está en Enterprise."
+    },
+    "readAloud": {
+      "title": "Lectura en voz alta",
+      "description": "Selecciona texto en cualquier aplicación y pulsa el atajo para escucharlo con una voz local.",
+      "enable": "Activar lectura en voz alta",
+      "enableDescription": "Registra los atajos de lectura y pausa y mantiene la voz lista en segundo plano.",
+      "voice": "Voz",
+      "voiceInstalled": "Instalada en este equipo.",
+      "voiceMissing": "Aún no descargada ({{size}}).",
+      "spoken": {
+        "noSelection": "No hay texto seleccionado.",
+        "test": "¡Hola! Esta es la lectura en voz alta de OpenWhispr. Selecciona un texto y pulsa el atajo."
+      },
+      "download": "Descargar",
+      "downloading": "Descargando… {{percent}}%",
+      "installing": "Instalando…",
+      "remove": "Eliminar",
+      "test": "Probar",
+      "speed": "Velocidad",
+      "readHotkey": "Atajo para leer / detener",
+      "pauseHotkey": "Atajo para pausar / continuar",
+      "otherHotkey": "Otro atajo de lectura",
+      "indicator": "Mostrar indicador durante la lectura",
+      "indicatorDescription": "Una pequeña barra en la parte inferior de la pantalla con botones de pausa y detener.",
+      "privacy": "La lectura se realiza por completo en este equipo. El texto nunca se envía ni se guarda en registros.",
+      "errors": {
+        "generic": "No se pudo guardar este ajuste.",
+        "download": "Error al descargar la voz. Comprueba la conexión e inténtalo de nuevo."
+      }
     }
   },
   "models": {

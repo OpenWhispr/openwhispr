@@ -1666,6 +1666,10 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
+      },
+      "readAloud": {
+        "label": "Vorlesen",
+        "description": "Markierten Text mit einer lokalen Stimme hören"
       }
     },
     "title": "Einstellungen"
@@ -2719,6 +2723,35 @@
       "upgradeCta": "Jetzt upgraden",
       "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
+    },
+    "readAloud": {
+      "title": "Vorlesen",
+      "description": "Markiere Text in einer beliebigen App und drücke das Tastenkürzel, um ihn mit einer lokalen Stimme zu hören.",
+      "enable": "Vorlesen aktivieren",
+      "enableDescription": "Registriert die Tastenkürzel zum Vorlesen und Pausieren und hält die Stimme im Hintergrund bereit.",
+      "voice": "Stimme",
+      "voiceInstalled": "Auf diesem Computer installiert.",
+      "voiceMissing": "Noch nicht heruntergeladen ({{size}}).",
+      "spoken": {
+        "noSelection": "Kein Text ausgewählt.",
+        "test": "Hallo! Das ist die Vorlesefunktion von OpenWhispr. Markiere einen Text und drücke das Tastenkürzel."
+      },
+      "download": "Herunterladen",
+      "downloading": "Wird heruntergeladen… {{percent}} %",
+      "installing": "Wird installiert…",
+      "remove": "Entfernen",
+      "test": "Testen",
+      "speed": "Geschwindigkeit",
+      "readHotkey": "Tastenkürzel Vorlesen / Stopp",
+      "pauseHotkey": "Tastenkürzel Pause / Fortsetzen",
+      "otherHotkey": "Anderes Vorlese-Tastenkürzel",
+      "indicator": "Anzeige beim Vorlesen einblenden",
+      "indicatorDescription": "Eine kleine Leiste am unteren Bildschirmrand mit Pause- und Stopp-Taste.",
+      "privacy": "Das Vorlesen läuft vollständig auf diesem Computer. Text wird nie gesendet oder in Protokollen gespeichert.",
+      "errors": {
+        "generic": "Diese Einstellung konnte nicht gespeichert werden.",
+        "download": "Download der Stimme fehlgeschlagen. Prüfe die Verbindung und versuche es erneut."
+      }
     }
   },
   "models": {

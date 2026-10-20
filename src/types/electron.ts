@@ -47,6 +47,29 @@ export interface MainWindowInputRegion {
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
+export interface ReadAloudConfig {
+  enabled: boolean;
+  readKey: string;
+  pauseKey: string;
+  speed: number;
+  voice: string;
+  showIndicator: boolean;
+}
+
+export interface ReadAloudVoice {
+  id: string;
+  label: string;
+  sizeBytes: number;
+  installed: boolean;
+}
+
+export interface ReadAloudStatus extends ReadAloudConfig {
+  state: "idle" | "capturing" | "speaking" | "paused";
+  active: boolean;
+  installing: string | null;
+  voices: ReadAloudVoice[];
+}
+
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 /** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
@@ -2912,6 +2935,27 @@ declare global {
       getVoiceAgentKey?: () => Promise<string>;
       updateTranslationHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       getTranslationKey?: () => Promise<string>;
+
+      // Read aloud
+      readAloudGetStatus?: () => Promise<ReadAloudStatus>;
+      readAloudSetConfig?: (
+        patch: Partial<ReadAloudConfig>
+      ) => Promise<{ success: boolean; error?: string; status: ReadAloudStatus }>;
+      readAloudTest?: () => Promise<{ success: boolean; error?: string }>;
+      readAloudStop?: () => Promise<{ success: boolean }>;
+      readAloudInstallVoice?: (
+        voiceId: string
+      ) => Promise<{ success: boolean; error?: string; status: ReadAloudStatus }>;
+      readAloudRemoveVoice?: (
+        voiceId: string
+      ) => Promise<{ success: boolean; status: ReadAloudStatus }>;
+      onReadAloudInstallProgress?: (
+        callback: (progress: {
+          voiceId: string;
+          phase: "downloading" | "installing";
+          percentage: number;
+        }) => void
+      ) => () => void;
       createAgentConversation?: (
         title: string,
         noteId?: number | null,

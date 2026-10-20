@@ -12,6 +12,7 @@ import {
   Shield,
   ShieldCheck,
   Users,
+  AudioLines,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
@@ -103,6 +104,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.speechToText.label"),
         icon: Mic,
         description: t("settingsModal.sections.speechToText.description"),
+        group: t("settingsModal.groups.aiModels"),
+      },
+      {
+        id: "readAloud",
+        label: t("settingsModal.sections.readAloud.label"),
+        icon: AudioLines,
+        description: t("settingsModal.sections.readAloud.description"),
         group: t("settingsModal.groups.aiModels"),
       },
       {

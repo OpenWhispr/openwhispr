@@ -1666,6 +1666,10 @@
       "system": {
         "description": "Updates, storage & developer tools",
         "label": "System"
+      },
+      "readAloud": {
+        "label": "Read aloud",
+        "description": "Hear selected text in a local voice"
       }
     },
     "title": "Settings"
@@ -2719,6 +2723,35 @@
       "upgradeCta": "Upgrade now",
       "upgradedTitle": "Upgraded to Enterprise",
       "upgradedDescription": "{{workspace}} is now on Enterprise."
+    },
+    "readAloud": {
+      "title": "Read aloud",
+      "description": "Select text in any app and press the hotkey to hear it in a local voice.",
+      "enable": "Enable read aloud",
+      "enableDescription": "Registers the read and pause hotkeys and keeps the voice ready in the background.",
+      "voice": "Voice",
+      "voiceInstalled": "Installed on this computer.",
+      "voiceMissing": "Not downloaded yet ({{size}}).",
+      "spoken": {
+        "noSelection": "No text selected.",
+        "test": "Hi! This is read aloud in OpenWhispr. Select some text and press the hotkey."
+      },
+      "download": "Download",
+      "downloading": "Downloading… {{percent}}%",
+      "installing": "Installing…",
+      "remove": "Remove",
+      "test": "Test",
+      "speed": "Speed",
+      "readHotkey": "Read / stop hotkey",
+      "pauseHotkey": "Pause / resume hotkey",
+      "otherHotkey": "Other read aloud hotkey",
+      "indicator": "Show indicator while reading",
+      "indicatorDescription": "A small bar at the bottom of the screen with pause and stop buttons.",
+      "privacy": "Reading runs entirely on this computer. Text is never sent anywhere or saved in logs.",
+      "errors": {
+        "generic": "Could not save this setting.",
+        "download": "Voice download failed. Check your connection and try again."
+      }
     }
   },
   "models": {
