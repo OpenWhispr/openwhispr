@@ -69,7 +69,7 @@ export function AgentPill({
           {t("agentWindow.waitingForAnswer")}
         </span>
       ) : controls.thinking ? (
-        <span className="agent-shimmer-text ms-3.5 me-2 text-sm select-none">
+        <span className="agent-shimmer-text ms-3.5 me-2 min-w-0 truncate text-sm select-none">
           {t("agentMode.input.thinking")}
         </span>
       ) : controls.waveform ? (

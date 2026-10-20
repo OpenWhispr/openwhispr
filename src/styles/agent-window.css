@@ -38,8 +38,8 @@
   --color-surface-3: oklch(0.29 0 0);
   --color-surface-raised: oklch(0.31 0 0);
   --color-border: oklch(0.31 0 0);
-  --color-popover: oklch(0.218 0 0);
-  --color-muted: oklch(0.269 0 0);
+  --color-popover: var(--color-surface-1);
+  --color-muted: var(--color-surface-2);
   /* Within the window's 8px margin: a larger shadow is cut off at its edge. */
   --shadow-modal: 0 2px 8px -2px oklch(0 0 0 / 0.4);
 }
