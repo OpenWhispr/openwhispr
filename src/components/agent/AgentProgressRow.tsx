@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Brain, ChevronRight, Search } from "../icons";
+import { Brain, ChevronRight, Lightbulb, MessageCircleQuestion, Search } from "../icons";
 import { cn } from "../lib/utils";
 import { toolIcons } from "../chat/toolIcons";
 import { toolCallStepText, visibleToolCalls } from "../chat/toolCallText";
 import type { Message } from "../chat/types";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import githubMark from "../../assets/icons/github.svg";
 import linearMark from "../../assets/icons/linear.svg";
 import slackMark from "../../assets/icons/slack.svg";
@@ -17,7 +19,7 @@ const APP_LOGOS: Record<string, { src: string; monochrome: boolean }> = {
 };
 const MAX_GROUPED_ICONS = 3;
 
-function ToolMark({ name, size = 14 }: { name: string; size?: number }) {
+function ToolMark({ name, size = 16 }: { name: string; size?: number }) {
   const logo = APP_LOGOS[name.split("_")[0]];
   if (logo) {
     return (
@@ -51,10 +53,31 @@ function formatDuration(ms: number, locale: string): string {
 }
 
 /**
+ * The steps whose card is on screen (a question or connect still open, an
+ * answer card in any state). A card says what its step is doing, so the row
+ * doesn't say it again above it.
+ */
+function useCardedSteps(messageId: string, stepIds: string[]): Set<string> {
+  // Joined into strings, so each selector returns the same value until a card comes or goes.
+  const asking = useAgentInteractionStore((state) =>
+    stepIds
+      .filter((id) => {
+        const entry = state.entries[approvalKey(messageId, id)];
+        return entry !== undefined && entry.state !== "settled";
+      })
+      .join("\n")
+  );
+  const answering = useConnectorApprovalStore((state) =>
+    stepIds.filter((id) => approvalKey(messageId, id) in state.entries).join("\n")
+  );
+  return new Set(`${asking}\n${answering}`.split("\n").filter(Boolean));
+}
+
+/**
  * What a reply is doing, then what it did: one compact row that expands into
  * its steps. While it runs: thinking, reasoning, the tool it is calling (or
- * how many), then checking what they returned. Once done: how long it took
- * and how many steps.
+ * how many), then checking what they returned; nothing while a card of the
+ * reply is on screen. Once done: how long it took and how many steps.
  */
 export function AgentProgressRow({ message }: { message: Message }) {
   const { t, i18n } = useTranslation();
@@ -66,7 +89,11 @@ export function AgentProgressRow({ message }: { message: Message }) {
   );
   const reasoning = message.turn?.reasoning;
   const running = message.isStreaming;
-  const executing = steps.filter((step) => step.status === "executing");
+  const carded = useCardedSteps(
+    message.id,
+    steps.map((step) => step.id)
+  );
+  const executing = steps.filter((step) => step.status === "executing" && !carded.has(step.id));
 
   let icon: React.ReactNode = null;
   let label: string;
@@ -89,11 +116,17 @@ export function AgentProgressRow({ message }: { message: Message }) {
     icon = <ToolMark name={executing[0].name} />;
     label = toolCallStepText(executing[0], t);
   } else if (running && !message.content) {
-    if (steps.length > 0) label = t("agentWindow.progress.checkingAnswers");
-    else if (reasoning) {
-      icon = <Brain size={14} className="shrink-0" />;
+    if (carded.size > 0) return null;
+    if (steps.length > 0) {
+      icon = <MessageCircleQuestion size={16} className="shrink-0" />;
+      label = t("agentWindow.progress.checkingAnswers");
+    } else if (reasoning) {
+      icon = <Brain size={16} className="shrink-0" />;
       label = t("agentWindow.progress.reasoning");
-    } else label = t("agentMode.input.thinking");
+    } else {
+      icon = <Lightbulb size={16} className="shrink-0" />;
+      label = t("agentMode.input.thinking");
+    }
   } else {
     if (!steps.length && !reasoning) return null;
     active = false;
@@ -110,36 +143,36 @@ export function AgentProgressRow({ message }: { message: Message }) {
         }),
       steps.length > 0 && t("agentWindow.progress.steps", { count: steps.length }),
     ].filter(Boolean);
-    icon = <Brain size={14} className="shrink-0" />;
+    icon = <Brain size={16} className="shrink-0" />;
     label = parts.join(" · ") || t("agentMode.turn.reasoning");
   }
 
   const expandable = steps.length > 0 || Boolean(reasoning);
 
   return (
-    <div className="text-[13px] text-muted-foreground">
+    <div className={cn("text-[15px]", active ? "text-foreground" : "text-muted-foreground")}>
       <button
         type="button"
         disabled={!expandable}
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expandable ? expanded : undefined}
-        className="flex max-w-full items-center gap-2 rounded-md py-0.5 text-start transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:text-muted-foreground"
+        className="flex max-w-full items-center gap-2.5 rounded-md py-0.5 text-start transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:text-muted-foreground"
       >
         {icon}
-        <span className={cn("truncate", active && "thinking-shimmer-text")}>{label}</span>
+        <span className={cn("truncate", active && "agent-shimmer-text")}>{label}</span>
         {expandable && (
           <ChevronRight
-            size={13}
+            size={14}
             className={cn("shrink-0 transition-transform rtl:rotate-180", expanded && "rotate-90")}
           />
         )}
       </button>
       {expanded && (
-        <div className="ms-[7px] mt-1.5 flex flex-col gap-2 border-s border-border/70 ps-3.5">
+        <div className="ms-2 mt-2 flex flex-col gap-2.5 border-s border-border ps-4 text-muted-foreground">
           {reasoning && (
             <p
               dir="auto"
-              className="whitespace-pre-wrap text-[12px] leading-5 text-muted-foreground/80"
+              className="whitespace-pre-wrap text-[13px] leading-5 text-muted-foreground/80"
             >
               {reasoning}
             </p>

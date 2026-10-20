@@ -2,9 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
+const { createRoot } = require("react-dom/client");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom } = require("../lib/interactiveDom");
 
 // The row rendered with the English strings.
 async function renderRow(t, message) {
@@ -90,4 +92,38 @@ test("a turn saved while it waited, and never finished, shows no growing duratio
   });
   assert.doesNotMatch(markup, /Reasoned for|Worked for/);
   assert.match(markup, />Reasoning</);
+});
+
+// zustand renders its initial state under renderToStaticMarkup, so a card on
+// screen (an approval store entry) needs a real mount.
+test("a running reply's row says nothing above a card it shows, and checks answers once it's gone", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-progress-row-" });
+  const store = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  const { AgentProgressRow } = await vite.ssrLoadModule("/components/agent/AgentProgressRow.tsx");
+  root = createRoot(container);
+  const show = async (status, cardState) => {
+    const key = store.approvalKey("a", "c1");
+    store.useConnectorApprovalStore.setState({
+      entries: cardState ? { [key]: { key, state: cardState } } : {},
+    });
+    const message = {
+      id: "a",
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+      turn: { startedAt: 100, status: "running" },
+      toolCalls: [call("c1", "slack_send_message", status)],
+    };
+    await React.act(async () => root.render(React.createElement(AgentProgressRow, { message })));
+    return container.textContent;
+  };
+  assert.equal(await show("executing", "committing"), "", "the sending card says it");
+  assert.equal(await show("completed", "sent"), "", "and the sent one");
+  assert.match(await show("completed"), /checkingAnswers|Checking answers/);
 });

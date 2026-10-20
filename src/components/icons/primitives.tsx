@@ -233,6 +233,24 @@ const ArrowUpMark = glyph(
   </>
 );
 
+// The agent's progress row: Thinking… and Checking answers… (Lucide's
+// lightbulb and message-circle-question).
+const LightbulbMark = glyph(
+  <>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+  </>
+);
+
+const MessageCircleQuestionMark = glyph(
+  <>
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </>
+);
+
 const TextSelectMark = glyph(
   <>
     <path d="M21 6H3" />
@@ -254,8 +272,13 @@ export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
 export const GitFork = createIcon("git-fork", GitForkMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Maximize = createIcon("maximize", MaximizeMark);
+export const MessageCircleQuestion = createIcon(
+  "message-circle-question",
+  MessageCircleQuestionMark
+);
 export const Minimize = createIcon("minimize", MinimizeMark);
 export const Italic = createIcon("italic", ItalicMark);
+export const Lightbulb = createIcon("lightbulb", LightbulbMark);
 export const List = createIcon("list", ListMark);
 export const ListChecks = createIcon("list-checks", ListChecksMark);
 export const ListEnd = createIcon("list-end", ListEndMark);
