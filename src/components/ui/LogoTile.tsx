@@ -15,7 +15,16 @@ export function LogoTile({ src, alt, monochrome, className }: LogoTileProps) {
         className
       )}
     >
-      <img src={src} alt={alt} className={`w-5 h-5${monochrome ? " icon-monochrome" : ""}`} />
+      <img
+        src={src}
+        alt={alt}
+        aria-hidden={alt ? undefined : true}
+        width={20}
+        height={20}
+        decoding="async"
+        draggable={false}
+        className={`w-5 h-5${monochrome ? " icon-monochrome" : ""}`}
+      />
     </div>
   );
 }
