@@ -58,7 +58,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
       setMessages([userMessage]);
       void sendToAI(request, [userMessage], {
         attachment: command.attachment ?? undefined,
-        suppressResponseContent: true,
         onComplete: ({ content }) => {
           repliedRef.current = true;
           publish({ status: "success", text: content });

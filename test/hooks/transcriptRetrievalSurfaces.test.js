@@ -127,7 +127,7 @@ for (const surface of ["note chat", "agent window"]) {
       const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
       const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
       function AgentHarness() {
-        agentChat = useAgentChat({ onResponseContent: noop });
+        agentChat = useAgentChat({ onRegenerateFailed: noop });
         return null;
       }
       function Harness() {

@@ -65,7 +65,8 @@ function destinationChoices(result: ToolResult): ConnectorChoice[] {
 /**
  * In a chat that can ask the user: a name that matched several people or
  * channels is picked on a question card, once, and the message goes there.
- * A pick still unclear (an answer typed instead) goes back to the model.
+ * An answer typed in place of a pick is tried as the destination, as
+ * written; if that is unclear too, the model hears the question.
  */
 function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
   return {
@@ -86,10 +87,8 @@ function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
         ],
       });
       if (answer.status !== "answered") return unansweredResult(answer);
-      const picked = answer.answers.destination;
-      return typeof picked === "string"
-        ? tool.execute({ ...args, destination: picked }, context)
-        : result;
+      // A single-choice answer is one string: the pick, or the typed text.
+      return tool.execute({ ...args, destination: String(answer.answers.destination) }, context);
     },
   };
 }

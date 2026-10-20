@@ -6,7 +6,7 @@ import {
   isValidEmailAddress,
   recipientLabel,
 } from "../../../helpers/connectors/emailCompose";
-import type { ApprovalEdits, ConnectorDirectResult } from "../../../types/connectors";
+import type { ConnectorDirectResult } from "../../../types/connectors";
 import type { ComposeTarget, EmailDraftTarget } from "../../../utils/emailDraftTarget";
 import { getCachedPlatform } from "../../../utils/platform";
 import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
@@ -20,7 +20,6 @@ import {
   notSentResult,
   unavailableResult,
   unknownResult,
-  userEdits,
 } from "./toolOutcome";
 import { findContactTool } from "./findContactTool";
 import { connectorActionKey } from "./actionKey";
@@ -118,9 +117,9 @@ function draftOpenedGuidance(
 
 // The tool step reads "Gmail needs to be reconnected.", the same copy a
 // failed reconnect_needed step shows, not the generic "connectors unavailable".
-function gmailReconnectResult(edits: ApprovalEdits = {}): ToolResult {
+function gmailReconnectResult(): ToolResult {
   return {
-    ...unavailableResult("reconnect_needed", GMAIL_RECONNECT_GUIDANCE, edits),
+    ...unavailableResult("reconnect_needed", GMAIL_RECONNECT_GUIDANCE),
     displayText: connectorErrorText(i18n.t, "toolStatus", "gmail", "reconnect_needed"),
   };
 }
@@ -188,12 +187,9 @@ function createGmailSendTool(canConnect: boolean): ToolDefinition {
       // one that never went out gives it back for a retry in the same turn.
       const status = resultStatus(result);
       if (status !== "sent" && status !== "unknown") context?.releaseTurnSlot("email_draft");
-      // The card itself shows a Send-time reconnect as failed; the model gets
-      // the same instruction either way: send the user to Settings. The
-      // user's edits ride along, so a later "send it again" uses their email.
-      return isReconnectFailure(result)
-        ? gmailReconnectResult(userEdits((result.data ?? {}) as ApprovalEdits))
-        : result;
+      // The login lapsed between the status read above and the prepare: no
+      // card appeared, and the user reconnects in Settings.
+      return isReconnectFailure(result) ? gmailReconnectResult() : result;
     },
   };
 }

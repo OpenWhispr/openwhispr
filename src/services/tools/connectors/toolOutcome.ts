@@ -161,7 +161,7 @@ function sentDisplayText(destination: string, resultLabel?: string, verbKey?: st
 
 // What the user changed on the card, so the model describes (or proposes
 // again) the email the user settled on, not the one it drafted.
-export function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
+function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
   return {
     ...(finalText !== undefined ? { finalText } : {}),
     ...(final !== undefined ? { final } : {}),

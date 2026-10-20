@@ -218,7 +218,7 @@ test("a key typed on the card reaches only the secure saver: never the model, th
     await new Promise((resolve) => setTimeout(resolve, 1100));
 
     assert.deepEqual(saved, [SECRET], "the secure saver got the key");
-    // What the chat saves with the tool call, and what a fork copies verbatim.
+    // The tool call the chat keeps: the step's text and the interaction record.
     const toolCall = {
       id: "k-leak",
       name: "request_api_key",
@@ -244,7 +244,6 @@ test("a key typed on the card reaches only the secure saver: never the model, th
       result,
       records,
       entry: store.useAgentInteractionStore.getState().entries["m1::k-leak"],
-      savedToolCall: { toolCalls: [toolCall] },
       history,
       logged,
       console: consoleCalls,

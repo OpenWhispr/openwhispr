@@ -97,7 +97,6 @@ async function renderChatStreaming(
   t.after(() => reasoningService.destroy());
 
   let messages = [];
-  let responseContentCalls = 0;
   const setMessages = (updater) => {
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
@@ -108,9 +107,6 @@ async function renderChatStreaming(
       messages,
       setMessages,
       onStreamComplete,
-      onResponseContent: () => {
-        responseContentCalls += 1;
-      },
     });
     return null;
   }
@@ -134,7 +130,6 @@ async function renderChatStreaming(
   return {
     captured,
     getMessages: () => messages,
-    getResponseContentCalls: () => responseContentCalls,
     unmount,
   };
 }
@@ -158,7 +153,6 @@ test("a genuine empty completion still shows the empty-response fallback", async
   const { captured, getMessages } = await renderChatStreaming(t);
 
   await captured.sendToAI("hello", [], {
-    suppressResponseContent: true,
     onComplete: () => {
       completionCalls += 1;
     },
@@ -170,7 +164,7 @@ test("a genuine empty completion still shows the empty-response fallback", async
   assert.equal(completionCalls, 0);
 });
 
-test("a completed response runs its request delivery hook without opening response content", async (t) => {
+test("a completed response runs its request delivery hook", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -187,14 +181,12 @@ test("a completed response runs its request delivery hook without opening respon
   };
 
   const completions = [];
-  const { captured, getResponseContentCalls } = await renderChatStreaming(t);
+  const { captured } = await renderChatStreaming(t);
 
   await captured.sendToAI("hello", [], {
-    suppressResponseContent: true,
     onComplete: (result) => completions.push(result),
   });
 
-  assert.equal(getResponseContentCalls(), 0);
   assert.equal(completions.length, 1);
   assert.equal(completions[0].content, "Agent answer");
 });
@@ -344,11 +336,7 @@ test("an unmount mid-stream persists the partial reply without delivering it", a
         completionCalls += 1;
       },
     });
-    for (
-      let i = 0;
-      i < 50 && !getMessages().some((m) => m.content === "Partial reply");
-      i++
-    ) {
+    for (let i = 0; i < 50 && !getMessages().some((m) => m.content === "Partial reply"); i++) {
       await waitForFlush();
     }
   });
@@ -396,7 +384,7 @@ test("cancelling a tool-ineligible raw stream after reading starts shows no erro
     });
   };
 
-  const { captured, getMessages, getResponseContentCalls } = await renderChatStreaming(t, {
+  const { captured, getMessages } = await renderChatStreaming(t, {
     settings: { chatAgentModel: "qwen3-1.7b-q4_k_m" },
   });
   const sendPromise = captured.sendToAI("hello", []);
@@ -408,9 +396,8 @@ test("cancelling a tool-ineligible raw stream after reading starts shows no erro
   await sendPromise;
 
   const [message] = getMessages();
-  assert.equal(message.content, "");
+  assert.equal(message.content, "", "a user cancellation shows no error");
   assert.equal(message.isStreaming, false);
-  assert.equal(getResponseContentCalls(), 0, "a user cancellation must not announce an error");
 });
 
 test("cloud screen context is sent without claiming the screenshot is already attached", async (t) => {

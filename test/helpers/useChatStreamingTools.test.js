@@ -974,11 +974,8 @@ test("a reply that imitates the tool notes is shown, saved and delivered without
   assert.equal(delivered, "Done.");
 });
 
-test("a reply that is only a tool note settles as an empty response, announced once", async (t) => {
-  let announced = 0;
-  const { captured, reasoningService, getMessages } = await renderChatStreaming(t, {
-    onResponseContent: () => announced++,
-  });
+test("a reply that is only a tool note settles as an empty response", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(t);
   reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
     (async function* () {
       yield { type: "content", text: "[Tools used: web_" };
@@ -993,7 +990,6 @@ test("a reply that is only a tool note settles as an empty response, announced o
     getMessages().find((m) => m.role === "assistant").content,
     "The model returned no response."
   );
-  assert.equal(announced, 1);
 });
 
 test("the onboarding demo isn't told to send the user off to enable anything", async (t) => {

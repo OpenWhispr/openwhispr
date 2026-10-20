@@ -211,8 +211,6 @@ interface UseChatStreamingOptions {
    * again), and when a send lands after it stopped.
    */
   onTurnCheckpoint?: TurnHandler;
-  /** Fires exactly once when displayable assistant content or tool activity becomes available. */
-  onResponseContent?: () => void;
 }
 
 /** What a saved turn needs besides its text and tool calls. */
@@ -244,8 +242,6 @@ export interface SendToAIOptions {
   requestText?: string;
   /** This turn isn't offered update_note, so it can't change a note (a note's chat action). */
   keepNotesUnchanged?: boolean;
-  /** Keeps the answer from announcing itself (the onboarding demo streams it elsewhere). */
-  suppressResponseContent?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
@@ -296,7 +292,6 @@ export function useChatStreaming({
   noteMeeting,
   onStreamComplete,
   onTurnCheckpoint,
-  onResponseContent,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("idle");
@@ -431,12 +426,8 @@ export function useChatStreaming({
       }
 
       async function runSend(): Promise<void> {
-        let responseAnnounced = false;
-        const announceResponse = () => {
-          if (responseAnnounced) return;
-          responseAnnounced = true;
-          if (!options?.suppressResponseContent) onResponseContent?.();
-        };
+        // Visible text or a tool call arrived; a stream with neither still ends in a reply.
+        let responseShown = false;
         const settings = getSettings();
         const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
           inferenceScope,
@@ -460,7 +451,6 @@ export function useChatStreaming({
           const restriction = !isAgentAllowed(policyState)
             ? t("common.policyAgentRestricted")
             : t("common.policyAiProcessingRestricted");
-          announceResponse();
           setMessages((prev) => [
             ...prev,
             {
@@ -939,7 +929,7 @@ export function useChatStreaming({
               afterToolCall = false;
               rawContent += chunk.text;
               fullContent = withoutEchoedToolTrace(rawContent);
-              if (fullContent) announceResponse();
+              if (fullContent) responseShown = true;
               scheduleContentFlush();
             } else if (chunk.type === "reasoning") {
               if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning))
@@ -953,7 +943,7 @@ export function useChatStreaming({
               // Text that arrived before a tool step must be on screen before the
               // step appears, not an interval after it.
               flushContentNow();
-              if (chunk.calls.length > 0) announceResponse();
+              if (chunk.calls.length > 0) responseShown = true;
               for (const call of chunk.calls) {
                 setAgentState("tool-executing");
                 beginToolActivity(
@@ -1030,13 +1020,12 @@ export function useChatStreaming({
           }
 
           const hasDeliverableContent = fullContent.trim().length > 0;
-          if (!responseAnnounced && !cancelled()) {
+          if (!responseShown && !cancelled()) {
             // The stream ended without a visible token or tool call (think-only
             // local model, empty completion). Show that as a reply so every
             // listener — the agent window's thinking state included — sees a
             // terminal outcome.
             fullContent = t("agentMode.chat.emptyResponse");
-            announceResponse();
           }
 
           turn = {
@@ -1085,7 +1074,6 @@ export function useChatStreaming({
             );
           } else {
             cancelContentFlush();
-            announceResponse();
             const failure = describeProviderError(error, t);
             // Set on every failed reply: the chat then knows the failure is on screen.
             const messageError: MessageError = {
@@ -1128,7 +1116,6 @@ export function useChatStreaming({
       setMessages,
       onStreamComplete,
       onTurnCheckpoint,
-      onResponseContent,
       clearToolActivity,
       beginToolActivity,
       completeToolActivity,
