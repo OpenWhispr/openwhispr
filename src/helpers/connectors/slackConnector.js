@@ -144,8 +144,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     }
 
     // A name is only unique if every candidate was seen. When a list stopped
-    // at the page cap, only an exact channel name (unique in a workspace)
-    // still identifies something; a person needs an email address.
+    // at the page cap, only what is unique in a workspace still identifies
+    // something: an exact @username (above), an exact channel name, or an
+    // email address.
     if (lists.some((list) => list.truncated)) {
       if (parsed.kind !== "channel") return { clarify: clarify(TOO_LARGE_FOR_NAMES) };
       const exact = resolveTarget(parsed.query, candidates, { exactOnly: true });

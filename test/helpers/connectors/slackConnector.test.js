@@ -686,3 +686,30 @@ test("a picked @username finds that person even when it is someone else's displa
   assert.equal(picked.status, "ready");
   assert.match(picked.preview.destinationLabel, /John Park/);
 });
+
+test("a list cut off at the page cap still finds an exact @username", async () => {
+  const sam = {
+    id: "U0SAM",
+    name: "sam",
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Sam Lee", display_name: "sam" },
+  };
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    // More pages than the cap: the list is cut off.
+    "users.list": [ok({ ok: true, members: [sam], response_metadata: { next_cursor: "more" } })],
+  });
+  const picked = await connector.prepare(
+    "send_message",
+    { destination: "@sam", text: "hi" },
+    BOUND
+  );
+  assert.equal(picked.status, "ready");
+  const named = await connector.prepare(
+    "send_message",
+    { destination: "Sam Lee", text: "hi" },
+    BOUND
+  );
+  assert.equal(named.status, "needs_clarification", "a name alone still isn't enough");
+});
