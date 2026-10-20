@@ -11,6 +11,7 @@ import type { ComposeTarget, EmailDraftTarget } from "../../../utils/emailDraftT
 import { getCachedPlatform } from "../../../utils/platform";
 import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
+import { connectFirst } from "../interactionTools";
 import { runApprovalAction } from "./runApprovalAction";
 import {
   alreadySentResult,
@@ -134,7 +135,8 @@ function isReconnectFailure(result: ToolResult): boolean {
   return data?.status === "failed" && data.errorCode === "reconnect_needed";
 }
 
-function createGmailSendTool(): ToolDefinition {
+// canConnect: the chat can connect Gmail itself (it offers interactions).
+function createGmailSendTool(canConnect: boolean): ToolDefinition {
   return {
     name: "email_draft",
     description:
@@ -153,9 +155,15 @@ function createGmailSendTool(): ToolDefinition {
       if (context?.signal.aborted) return notSentResult("cancelled");
 
       // Read live, not when the registry was built: a login can lapse
-      // mid-conversation. No compose window stands in for it (spec §4.3).
+      // mid-conversation. No compose window stands in for it (spec §4.3):
+      // where the chat can, the user reconnects Gmail on this call's card and
+      // the email goes on; elsewhere they are sent to Settings.
       const gmail = useConnectorStatusStore.getState().statuses.gmail;
-      if (gmail?.connected && gmail.needsReconnect) return gmailReconnectResult();
+      if (gmail?.connected && gmail.needsReconnect) {
+        if (!canConnect) return gmailReconnectResult();
+        const refused = await connectFirst(context, "gmail");
+        if (refused) return refused;
+      }
 
       if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
         return notSentResult(
@@ -331,15 +339,22 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
  * `currentTarget`, each call takes the path the target resolves to then:
  * Gmail can be connected in the middle of a turn.
  */
+function emailDraftTool(target: EmailDraftTarget, canConnectGmail: boolean): ToolDefinition {
+  return target === "gmailSend"
+    ? createGmailSendTool(canConnectGmail)
+    : createComposeDraftTool(target);
+}
+
+// currentTarget is set when the chat can connect Gmail itself.
 export function createEmailDraftTool(
   target: EmailDraftTarget,
   currentTarget?: () => EmailDraftTarget
 ): ToolDefinition {
-  const tool = target === "gmailSend" ? createGmailSendTool() : createComposeDraftTool(target);
+  const tool = emailDraftTool(target, Boolean(currentTarget));
   if (!currentTarget) return tool;
   return {
     ...tool,
-    execute: (args, context) => createEmailDraftTool(currentTarget()).execute(args, context),
+    execute: (args, context) => emailDraftTool(currentTarget(), true).execute(args, context),
   };
 }
 

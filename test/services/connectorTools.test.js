@@ -198,6 +198,146 @@ test("slack_send_message prepares in main and passes a clarification through", a
   assert.deepEqual(result.data.candidates, ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"]);
 });
 
+// The Slack tool as a chat that can ask the user offers it.
+const askingSlackTool = async () =>
+  (await loadSlack()).slackToolModule.createTools({ emailDraftTarget: "auto", asksUser: true })[0];
+
+// Two people matched "gab"; the second prepare names one exactly.
+function slackPicker(t, { secondReply } = {}) {
+  const prepared = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => {
+          prepared.push(args.destination);
+          if (prepared.length === 1) {
+            return {
+              status: "needs_clarification",
+              message: 'More than one match for "gab".',
+              candidates: ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"],
+              choices: [
+                { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+                { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+              ],
+            };
+          }
+          return (
+            secondReply ?? {
+              status: "ready",
+              actionId: "a-picked",
+              preview: {
+                verbKey: "slackPost",
+                destinationLabel: "Gabe Smith",
+                accountLabel: "chad",
+                body: "hi",
+              },
+            }
+          );
+        },
+        connectorCommit: async () => ({ state: "sent", url: "https://slack.test/p/1" }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  return prepared;
+}
+
+test("slack_send_message lets the user pick a person a name matched, then sends there", async (t) => {
+  const prepared = slackPicker(t);
+  const [slackSendMessageTool, approvals, interactions] = await Promise.all([
+    askingSlackTool(),
+    loadApprovals(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const key = approvals.approvalKey("m30", "call-30");
+  const pending = slackSendMessageTool.execute(
+    { destination: "gab", text: "hi" },
+    { ...toolContext("m30", "call-30"), onInteraction() {} }
+  );
+  while (!interactions.useAgentInteractionStore.getState().entries[key]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  const question = interactions.useAgentInteractionStore.getState().entries[key].payload;
+  assert.deepEqual(question.questions[0].options, [
+    { id: "@gabe", label: "Gabe Smith (@gabe)" },
+    { id: "@gstone", label: "Gabriel Stone (@gstone)" },
+  ]);
+  assert.equal(question.questions[0].kind, "single");
+
+  interactions.updateInteractionDraft(key, { destination: "@gabe" });
+  interactions.answerQuestions(key);
+  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepEqual(prepared, ["gab", "@gabe"]);
+  await approvals.approveAction(key);
+  assert.equal((await pending).data.status, "sent");
+});
+
+test("slack_send_message asks which one only once", async (t) => {
+  const prepared = slackPicker(t, {
+    secondReply: {
+      status: "needs_clarification",
+      message: "Still unclear.",
+      candidates: ["A", "B"],
+      choices: [
+        { label: "A", destination: "@a" },
+        { label: "B", destination: "@b" },
+      ],
+    },
+  });
+  const [slackSendMessageTool, interactions] = await Promise.all([
+    askingSlackTool(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const key = "m31::call-31";
+  const pending = slackSendMessageTool.execute(
+    { destination: "gab", text: "hi" },
+    { ...toolContext("m31", "call-31"), onInteraction() {} }
+  );
+  while (!interactions.useAgentInteractionStore.getState().entries[key]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  // Typed in the composer instead of picked: tried as written.
+  interactions.answerWithText(key, "Gabriel from design");
+  const result = await pending;
+  assert.deepEqual(prepared, ["gab", "Gabriel from design"]);
+  assert.equal(result.data.status, "needs_clarification", "the model asks from here");
+});
+
+test("a chat that can't ask the user hands the matches to the model", async (t) => {
+  const prepared = slackPicker(t);
+  const { slackToolModule } = await loadSlack();
+  const [tool] = slackToolModule.createTools({ emailDraftTarget: "auto" });
+  const result = await tool.execute(
+    { destination: "gab", text: "hi" },
+    toolContext("m33", "call-33")
+  );
+  assert.equal(result.data.status, "needs_clarification");
+  assert.deepEqual(prepared, ["gab"]);
+});
+
+test("dismissing the Slack picker tells the model no", async (t) => {
+  slackPicker(t);
+  const [slackSendMessageTool, interactions] = await Promise.all([
+    askingSlackTool(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const pending = slackSendMessageTool.execute(
+    { destination: "gab", text: "hi" },
+    { ...toolContext("m32", "call-32"), onInteraction() {} }
+  );
+  while (!interactions.useAgentInteractionStore.getState().entries["m32::call-32"]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  interactions.cancelInteraction("m32::call-32");
+  assert.equal((await pending).data.status, "cancelled_by_user");
+});
+
 test("slack_send_message turns a channel that vanished by Send into a question", async (t) => {
   installBrowserGlobals(t, {
     window: {
@@ -1054,35 +1194,102 @@ test("a cancelled Gmail card gives its slot back", async (t) => {
   assert.deepEqual(context.releases, ["email_draft"], "a card the user saw keeps its card slot");
 });
 
-test("a Gmail login that needs reconnecting stops before any card or compose window", async (t) => {
+test("a Gmail login that needs reconnecting asks to connect on the call's card, then goes on", async (t) => {
   await useEnglish();
-  const calls = { prepare: 0, runDirect: 0 };
+  const calls = { prepare: 0, runDirect: 0, connect: [] };
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         connectorPrepare: async () => {
           calls.prepare += 1;
+          return { status: "ready", actionId: "a-m23", preview: GMAIL_PREVIEW };
         },
         connectorRunDirect: async () => {
           calls.runDirect += 1;
         },
+        connectorConnect: async (target) => {
+          calls.connect.push(target);
+          await setGmailStatus();
+          return { status: "connected", accountLabel: "you@example.test", workspaceLabel: null };
+        },
+        connectorStatus: async () => [
+          { id: "gmail", connected: true, configured: true, needsReconnect: false },
+        ],
+        connectorCancel: async () => ({ cancelled: true }),
       },
     },
   });
   await setGmailStatus({ needsReconnect: true });
+  const [{ createEmailDraftTool }, approvals, interactions] = await Promise.all([
+    loadEmail(),
+    loadApprovals(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const context = { ...gmailContext("m23", "call-23"), onInteraction() {} };
+  const key = approvals.approvalKey("m23", "call-23");
+
+  // A chat that can connect Gmail itself (the agent window) follows the target live.
+  const pending = createEmailDraftTool("gmailSend", () => "gmailSend").execute(
+    GMAIL_DRAFT,
+    context
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const card = interactions.useAgentInteractionStore.getState().entries[key];
+  assert.deepEqual(card.payload, { kind: "connection", target: "gmail" });
+  assert.deepEqual(calls, { prepare: 0, runDirect: 0, connect: [] }, "nothing before the connect");
+
+  await interactions.connectInteraction(key);
+  while (!approvals.useConnectorApprovalStore.getState().entries[key]) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.deepEqual(calls.connect, ["gmail"]);
+  assert.equal(calls.prepare, 1, "the email goes on to its card");
+  approvals.cancelApproval(key);
+  assert.equal((await pending).data.status, "cancelled_by_user");
+});
+
+test("a chat that can't connect Gmail sends the user to Settings instead", async (t) => {
+  await useEnglish();
+  const calls = { prepare: 0 };
+  installBrowserGlobals(t, {
+    window: { electronAPI: { connectorPrepare: async () => (calls.prepare += 1) } },
+  });
+  await setGmailStatus({ needsReconnect: true });
   const { createEmailDraftTool } = await loadEmail();
-  const context = gmailContext("m23", "call-23");
+  const context = gmailContext("m24b", "call-24b");
 
   const result = await createEmailDraftTool("gmailSend").execute(GMAIL_DRAFT, context);
 
   assert.equal(result.data.status, "unavailable");
   assert.equal(result.data.reason, "reconnect_needed");
   assert.match(result.data.guidance, /reconnect Gmail under Settings → Integrations → Connectors/);
-  assert.match(result.data.guidance, /Don't retry/);
-  // The tool step names Gmail, not the generic "connectors unavailable".
   assert.equal(result.displayText, "Gmail needs to be reconnected.");
-  assert.deepEqual(calls, { prepare: 0, runDirect: 0 });
+  assert.deepEqual(calls, { prepare: 0 });
   assert.deepEqual(context.claims, [], "no slot is used for an email that can't be prepared");
+});
+
+test("a Gmail reconnect the user dismisses tells the model no", async (t) => {
+  await useEnglish();
+  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  await setGmailStatus({ needsReconnect: true });
+  const [{ createEmailDraftTool }, interactions] = await Promise.all([
+    loadEmail(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const context = { ...gmailContext("m25", "call-25"), onInteraction() {} };
+
+  const pending = createEmailDraftTool("gmailSend", () => "gmailSend").execute(
+    GMAIL_DRAFT,
+    context
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  interactions.cancelInteraction("m25::call-25");
+  const result = await pending;
+  assert.equal(result.data.status, "cancelled_by_user");
+  assert.deepEqual(context.claims, [], "no slot is used for an email that wasn't prepared");
 });
 
 test("a reconnect main reports while preparing reads the same as one the store knew about", async (t) => {

@@ -975,7 +975,8 @@
         "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
         "failedTitle": "لم يتم توصيل Slack",
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
-      }
+      },
+      "pickDestination": "أيّ «{{destination}}» تقصد؟"
     },
     "github": {
       "title": "GitHub",

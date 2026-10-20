@@ -4390,7 +4390,8 @@
         "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
         "failedTitle": "Slack non è stato connesso",
         "failedBody": "Torna a OpenWhispr per riprovare."
-      }
+      },
+      "pickDestination": "Quale «{{destination}}» intendevi?"
     },
     "github": {
       "title": "GitHub",

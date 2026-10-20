@@ -536,6 +536,7 @@ export function useChatStreaming({
                 readyConnectorIds: readyConnectorIds(),
                 ...(interactions
                   ? {
+                      asksUser: true,
                       connectableConnectorIds: interactions.connectionTargets,
                       ...(interactions.connectionTargets.includes("gmail")
                         ? { currentEmailDraftTarget }

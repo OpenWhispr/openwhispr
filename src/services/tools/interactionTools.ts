@@ -52,7 +52,7 @@ function noContextResult(): ToolResult {
 }
 
 // What every interaction reports when it didn't get the answer it asked for.
-function unansweredResult(result: InteractionResult): ToolResult {
+export function unansweredResult(result: InteractionResult): ToolResult {
   switch (result.status) {
     case "cancelled":
     case "declined":
@@ -438,12 +438,24 @@ export function requireConnection(
     ...tool,
     async execute(args, context?: ToolExecutionContext) {
       if (!isReady()) {
-        const result = context
-          ? await requestConnection(context, { kind: "connection", target })
-          : ({ status: "unavailable", reason: "not_connected" } as const);
-        if (result.status !== "connected") return unansweredResult(result);
+        const refused = await connectFirst(context, target);
+        if (refused) return refused;
       }
       return tool.execute(args, context);
     },
   };
+}
+
+/**
+ * Asks the user to connect a service a tool needs, on that tool's own card,
+ * and waits. Null once it is connected; otherwise what the tool reports.
+ */
+export async function connectFirst(
+  context: ToolExecutionContext | undefined,
+  target: ConnectionTarget
+): Promise<ToolResult | null> {
+  const result = context
+    ? await requestConnection(context, { kind: "connection", target })
+    : ({ status: "unavailable", reason: "not_connected" } as const);
+  return result.status === "connected" ? null : unansweredResult(result);
 }

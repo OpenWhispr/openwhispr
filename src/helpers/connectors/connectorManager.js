@@ -200,6 +200,13 @@ function normalizePrepareResult(result, editable) {
             status: "needs_clarification",
             message: result.message,
             candidates: Array.isArray(result.candidates) ? result.candidates.filter(isString) : [],
+            ...(Array.isArray(result.choices)
+              ? {
+                  choices: result.choices
+                    .filter((choice) => isString(choice?.label) && isString(choice?.destination))
+                    .map(({ label, destination }) => ({ label, destination })),
+                }
+              : {}),
           }
         : INVALID_PREPARE_RESULT;
     case "failed":

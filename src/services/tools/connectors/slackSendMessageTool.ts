@@ -1,4 +1,8 @@
+import i18n from "../../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
+import { requestInteraction } from "../../../stores/agentInteractionStore";
+import { unansweredResult } from "../interactionTools";
+import type { ConnectorChoice } from "../../../types/connectors";
 import { runApprovalAction } from "./runApprovalAction";
 import { failedResult, needsClarificationResult } from "./toolOutcome";
 import type { ConnectorToolModule } from "./connectorToolModules";
@@ -53,8 +57,47 @@ export const slackSendMessageTool: ToolDefinition = {
   },
 };
 
+function destinationChoices(result: ToolResult): ConnectorChoice[] {
+  const data = result.data as { status?: string; choices?: ConnectorChoice[] } | null;
+  return data?.status === "needs_clarification" ? (data.choices ?? []) : [];
+}
+
+/**
+ * In a chat that can ask the user: a name that matched several people or
+ * channels is picked on a question card, once, and the message goes there.
+ * A pick still unclear (an answer typed instead) goes back to the model.
+ */
+function withDestinationPicker(tool: ToolDefinition): ToolDefinition {
+  return {
+    ...tool,
+    async execute(args, context) {
+      const result = await tool.execute(args, context);
+      const choices = destinationChoices(result);
+      if (!context || choices.length < 2) return result;
+      const answer = await requestInteraction(context, {
+        kind: "questions",
+        questions: [
+          {
+            id: "destination",
+            kind: "single",
+            prompt: i18n.t("connectors.slack.pickDestination", { destination: args.destination }),
+            options: choices.map((choice) => ({ id: choice.destination, label: choice.label })),
+          },
+        ],
+      });
+      if (answer.status !== "answered") return unansweredResult(answer);
+      const picked = answer.answers.destination;
+      return typeof picked === "string"
+        ? tool.execute({ ...args, destination: picked }, context)
+        : result;
+    },
+  };
+}
+
 export const slackToolModule: ConnectorToolModule = {
   connectorId: "slack",
   requiresConnection: true,
-  createTools: () => [slackSendMessageTool],
+  createTools: (env) => [
+    env.asksUser ? withDestinationPicker(slackSendMessageTool) : slackSendMessageTool,
+  ],
 };

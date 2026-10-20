@@ -90,10 +90,21 @@ function parseDestination(raw) {
 }
 
 function clarify(message, candidates = []) {
+  const labels = candidates.map((candidate) => candidate.hint ?? candidate.label);
   return {
     status: "needs_clarification",
     message,
-    candidates: candidates.map((candidate) => candidate.hint ?? candidate.label),
+    candidates: labels,
+    // What the user can pick from: each destination finds exactly that
+    // channel (#name) or person (@username) when prepared again.
+    ...(candidates.length > 0
+      ? {
+          choices: candidates.map((candidate, index) => ({
+            label: labels[index],
+            destination: candidate.kind === "channel" ? candidate.label : `@${candidate.handle}`,
+          })),
+        }
+      : {}),
   };
 }
 

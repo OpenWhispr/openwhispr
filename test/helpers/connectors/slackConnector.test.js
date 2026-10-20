@@ -127,6 +127,15 @@ test("an ambiguous name asks which one and prepares nothing", async () => {
 
   assert.equal(prepared.status, "needs_clarification");
   assert.deepEqual(prepared.candidates, ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"]);
+  // What the user picks from: each one finds exactly that person again.
+  assert.deepEqual(prepared.choices, [
+    { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+    { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+  ]);
+  for (const { destination } of prepared.choices) {
+    const picked = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(picked.status, "ready", destination);
+  }
   assert.equal(
     slack
       .methods()

@@ -22,6 +22,8 @@ function personCandidate(user) {
     kind: "user",
     label,
     hint: `${label} (@${displayName || user.name})`,
+    // The username, unique in a workspace: "@handle" finds exactly this person.
+    handle: user.name,
     names: [...new Set([displayName, realName, user.name].filter(Boolean))],
   };
 }

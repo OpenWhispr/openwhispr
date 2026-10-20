@@ -4390,7 +4390,8 @@
         "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
         "failedTitle": "Slack 未连接",
         "failedBody": "请返回 OpenWhispr 重试。"
-      }
+      },
+      "pickDestination": "你指的是哪个“{{destination}}”？"
     },
     "github": {
       "title": "GitHub",

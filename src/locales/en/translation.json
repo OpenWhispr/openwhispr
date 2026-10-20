@@ -4560,7 +4560,8 @@
         "connectedBody": "You can close this tab and return to OpenWhispr.",
         "failedTitle": "Slack wasn't connected",
         "failedBody": "Return to OpenWhispr to try again."
-      }
+      },
+      "pickDestination": "Which “{{destination}}” did you mean?"
     },
     "github": {
       "title": "GitHub",

@@ -6,6 +6,7 @@ import type { ToolResult } from "../ToolRegistry";
 import type {
   ApprovalEdits,
   ApprovalOutcome,
+  ConnectorChoice,
   ConnectorPrepareResult,
 } from "../../../types/connectors";
 
@@ -15,10 +16,14 @@ const NO_RETRY = "Do not retry this action unless the user asks you to.";
 // structured status (the AI SDK path turns failures into a bare error string).
 // data is for the model; displayText is the user's tool step, so it is
 // localized and never carries codes.
-export function needsClarificationResult(message: string, candidates: string[] = []): ToolResult {
+export function needsClarificationResult(
+  message: string,
+  candidates: string[] = [],
+  choices?: ConnectorChoice[]
+): ToolResult {
   return {
     success: true,
-    data: { status: "needs_clarification", message, candidates },
+    data: { status: "needs_clarification", message, candidates, ...(choices ? { choices } : {}) },
     displayText: i18n.t("connectors.toolStatus.needsDetails"),
   };
 }
@@ -112,7 +117,7 @@ export function prepareFailureResult(
 ): ToolResult {
   switch (result.status) {
     case "needs_clarification":
-      return needsClarificationResult(result.message, result.candidates);
+      return needsClarificationResult(result.message, result.candidates, result.choices);
     case "failed":
       return failedResult(result.errorCode, result.message, connectorId);
     case "unavailable":

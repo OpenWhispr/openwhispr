@@ -70,6 +70,7 @@ test("people skip bots, deleted users and Slackbot, and carry a handle hint", as
     kind: "user",
     label: "Gabe Smith",
     hint: "Gabe Smith (@gabe)",
+    handle: "gabe",
     names: ["gabe", "Gabe Smith"],
   });
 });

@@ -31,9 +31,20 @@ export interface ConnectorEdits {
   [field: string]: string | string[] | undefined;
 }
 
+/** A destination the user can pick when a name matched several (Slack's #channel or @username). */
+export interface ConnectorChoice {
+  label: string;
+  destination: string;
+}
+
 export type ConnectorPrepareResult =
   | { status: "ready"; actionId: string; preview: ConnectorPreview }
-  | { status: "needs_clarification"; message: string; candidates: string[] }
+  | {
+      status: "needs_clarification";
+      message: string;
+      candidates: string[];
+      choices?: ConnectorChoice[];
+    }
   | { status: "failed"; errorCode: string; message: string }
   | { status: "unavailable"; reason: string };
 

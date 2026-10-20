@@ -13,6 +13,8 @@ export interface ConnectorToolEnv {
   emailDraftTarget: EmailDraftTarget;
   /** Set when Gmail can be connected from the chat: email_draft follows it mid-turn. */
   currentEmailDraftTarget?: () => EmailDraftTarget;
+  /** The chat can ask the user on a card (it offers interactions). */
+  asksUser?: boolean;
 }
 
 /** One connector's tools. Each connector's own file exports its module. */
@@ -43,10 +45,11 @@ export function registerConnectorTools(
   settings: ConnectorToolSettings,
   modules: readonly ConnectorToolModule[] = CONNECTOR_TOOL_MODULES
 ): void {
-  const { emailDraftTarget, currentEmailDraftTarget } = settings;
+  const { emailDraftTarget, currentEmailDraftTarget, asksUser } = settings;
   const env: ConnectorToolEnv = {
     emailDraftTarget,
     ...(currentEmailDraftTarget ? { currentEmailDraftTarget } : {}),
+    ...(asksUser ? { asksUser } : {}),
   };
   for (const toolModule of modules) {
     const { connectorId } = toolModule;

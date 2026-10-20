@@ -412,6 +412,24 @@ test("prepare passes on only the fields each connector result defines", async ()
     ],
     [
       {
+        status: "needs_clarification",
+        message: "Which #eng?",
+        candidates: ["#eng-web"],
+        choices: [
+          { label: "#eng-web", destination: "#eng-web", extra: "secret text" },
+          { label: 7, destination: "#eng-ios" },
+          null,
+        ],
+      },
+      {
+        status: "needs_clarification",
+        message: "Which #eng?",
+        candidates: ["#eng-web"],
+        choices: [{ label: "#eng-web", destination: "#eng-web" }],
+      },
+    ],
+    [
+      {
         status: "failed",
         errorCode: "channel_archived",
         message: "That channel is archived.",
