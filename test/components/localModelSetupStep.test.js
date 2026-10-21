@@ -108,7 +108,6 @@ async function createSetupHarness(
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
-      "/ProviderConnectionTest": `export default function ProviderConnectionTest() { return null; }`,
       "/OnboardingShell": `export function BrandMark() { return null; }`,
       "/ui/ProviderIcon": `export function ProviderIcon() { return null; }`,
     },

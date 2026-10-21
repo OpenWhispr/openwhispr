@@ -968,7 +968,14 @@ export class TranscriptionService {
         const { transcribeWithProvider } =
           require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
         const scope = request.requestContext === 'file' ? 'upload' : 'dictation';
-        const route = await resolveMobileProviderRoute(scope, request.inferenceRoute);
+        // Local Mode keeps dictation on this iPhone, but an upload goes to the provider saved for
+        // uploads.
+        const route = await resolveMobileProviderRoute(
+          scope,
+          request.inferenceRoute,
+          false,
+          scope === 'upload',
+        );
         const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
         const routeSnapshot = recoveryJobId
           ? JSON.stringify({
@@ -979,9 +986,7 @@ export class TranscriptionService {
                 provider: 'byok',
                 inferenceRoute: route,
                 cleanupRoute: request.cleanupRoute,
-                agentRoute: request.agentRoute,
                 cleanupUnavailable: request.cleanupUnavailable,
-                agentUnavailable: request.agentUnavailable,
               },
             })
           : undefined;

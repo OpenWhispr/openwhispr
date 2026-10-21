@@ -778,6 +778,20 @@ test("each tab has its own body editor, so undo never carries over between tabs"
   await unmount();
 });
 
+test("the body editor sits under the bottom bar's parent, which the bar publishes its height on", async (t) => {
+  // The editor keeps the caret clear of the bar by inheriting --bottom-overlay-height.
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  await render(ENHANCEMENT);
+  let barParent = null;
+  walk(latest(), (node) => {
+    const children = React.Children.toArray(node.props.children);
+    if (!barParent && children.some((child) => child.props?.onAskSubmit)) barParent = node;
+  });
+  assert.ok(barParent, "the note renders its bottom bar");
+  assert.ok(bodyEditor(barParent), "the body editor is inside the bar's parent");
+  await unmount();
+});
+
 const CONFLICT = {
   id: "cloud-1",
   client_note_id: NOTE.client_note_id,

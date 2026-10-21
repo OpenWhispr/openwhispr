@@ -62,6 +62,20 @@ private/internal addresses are rejected.
 | `*.googlevideo.com`                                                                | HTTPS    | 443  | YouTube media CDN — the actual audio stream download.                        |
 | _User-pasted hosts_                                                                | HTTPS    | 443  | Direct audio/video URL imports contact whatever public host the user pastes. |
 
+## Required for product help lookup (optional feature)
+
+Contacted when the assistant retrieves official help and both privacy settings
+and organization policy permit online documentation lookup. The assistant must be
+enabled (`agentEnabled`); the existing web-search policy (`webSearchEnabled`) also
+controls documentation lookups. Signed-out and fully-local configurations use
+bundled reference material without contacting this host. Only the MCP handshake and reads
+of curated documentation page paths are sent; settings and conversation content are not
+sent to this host. Bundled essentials remain available without this connection.
+
+| Host                  | Protocol | Port | Purpose                                     |
+| --------------------- | -------- | ---- | ------------------------------------------- |
+| `docs.openwhispr.com` | HTTPS    | 443  | Public documentation search/read at `/mcp`. |
+
 ## BYOK provider hosts (only if configured)
 
 Required only when a user configures their own API key for the corresponding
@@ -76,10 +90,10 @@ provider. Skip any provider not in use.
 | `api.groq.com`                                                                   | HTTPS      | 443  | Groq API key configured.                                                                                                                                                                                                                                                                                                                                 |
 | `atc.tinfoil.sh`, `*.tinfoil.sh`                                                 | WSS, HTTPS | 443  | Tinfoil API key configured. `atc.tinfoil.sh` serves the enclave attestation bundle (verified locally against an embedded sigstore root). Inference and realtime transcription connect to an enclave host assigned dynamically at runtime (e.g. `inference.tinfoil.sh`, `router.infN.tinfoil.sh`), so allowlist `*.tinfoil.sh` rather than pinning hosts. |
 | `api.mistral.ai`                                                                 | HTTPS      | 443  | Mistral API key configured.                                                                                                                                                                                                                                                                                                                              |
-| `api.deepgram.com`                                                               | WSS, HTTPS | 443  | Deepgram API key configured. Realtime-only: dictation and note recording open a WSS session (there is no file-upload or retry path); the Settings connection test calls `/v1/models` over HTTPS.                                                                                                                                                         |
+| `api.deepgram.com`                                                               | WSS, HTTPS | 443  | Deepgram API key configured. Realtime-only: dictation and note recording open a WSS session (there is no file-upload or retry path); the key check calls `/v1/auth/token` over HTTPS.                                                                                                                                                                    |
 | `streaming.assemblyai.com`                                                       | WSS, HTTPS | 443  | AssemblyAI API key configured. `/v3/token` mints the short-lived session token over HTTPS; the live session is WSS. Realtime-only, like Deepgram.                                                                                                                                                                                                        |
-| `api.assemblyai.com`                                                             | HTTPS      | 443  | AssemblyAI API key configured. Credential check when the key is tested in Settings (`/v2/transcript`).                                                                                                                                                                                                                                                   |
-| `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key).                                                                                                                                                                                                                                                            |
+| `api.assemblyai.com`                                                             | HTTPS      | 443  | AssemblyAI API key configured. Credential check when onboarding or Settings checks the key (`/v2/transcript`).                                                                                                                                                                                                                                           |
+| `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key; the key check calls `/api/v1/key`).                                                                                                                                                                                                                         |
 
 ## Notes
 

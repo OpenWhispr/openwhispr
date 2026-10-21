@@ -12,6 +12,7 @@ const baseSettings = {
   dictationAgentCloudBaseUrl: "",
   dictationAgentCustomApiKey: "",
   dictationAgentDisableThinking: true,
+  dictationAgentReasoningEffort: "high",
 };
 
 test("uses the dictation agent scope, not the cleanup scope", async () => {
@@ -22,10 +23,12 @@ test("uses the dictation agent scope, not the cleanup scope", async () => {
     // Cleanup is configured completely differently; it must not leak through.
     cleanupProvider: "openai",
     cleanupModel: "gpt-4.1-mini",
+    cleanupReasoningEffort: "low",
   });
 
   assert.equal(result.model, "gpt-5-mini");
   assert.equal(result.config.provider, "openai");
+  assert.equal(result.config.reasoningEffort, "high");
 });
 
 test("a model-required agent is unreachable without an explicit model", async () => {
@@ -242,9 +245,11 @@ test("vision override runs as the dictation agent scope and inherits key with en
     dictationAgentVisionModel: "vision-model",
     dictationAgentVisionCloudBaseUrl: "",
     dictationAgentVisionCustomApiKey: "",
+    dictationAgentVisionReasoningEffort: "low",
   });
 
   assert.equal(result.config.inferenceScope, "dictationAgent");
+  assert.equal(result.config.reasoningEffort, "low", "the vision scope keeps its own effort");
   assert.equal(result.config.baseUrl, "https://agent.example.com/v1");
   assert.equal(
     result.config.customApiKey,

@@ -25,6 +25,7 @@ export function resolveDictationTranslationInference(
         provider: managed.provider,
         language: settings.translationTargetLanguage,
         disableThinking: settings.translationDisableThinking,
+        reasoningEffort: settings.translationReasoningEffort,
       },
     };
   }
@@ -65,6 +66,7 @@ export function resolveDictationTranslationInference(
       customApiKey:
         isCustom || isSelfHosted ? settings.translationCustomApiKey || undefined : undefined,
       disableThinking: settings.translationDisableThinking,
+      reasoningEffort: settings.translationReasoningEffort,
     },
   };
 }

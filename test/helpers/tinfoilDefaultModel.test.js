@@ -166,16 +166,18 @@ test("the retirement notice fires when the startup sweep is what moved the user"
     cachePrefix: "openwhispr-tinfoil-sweep-notice-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
   assert.equal(useSettingsStore.getState().cleanupModel, "glm-5-3");
   // Two scopes moved, but the user is told about the model once.
-  assert.deepEqual(consumeTinfoilModelSwitches(), [{ from: "GLM-5.2", to: "GLM-5.3" }]);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "GLM-5.2", to: "GLM-5.3" },
+  ]);
 });
 
-test("a Groq remap is not announced as a Tinfoil retirement", async (t) => {
+test("a Groq remap is announced as Groq's retirement, not Tinfoil's", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
       _llmScopeKeysMigrated: "1",
@@ -188,12 +190,14 @@ test("a Groq remap is not announced as a Tinfoil retirement", async (t) => {
     cachePrefix: "openwhispr-groq-sweep-notice-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
   assert.equal(useSettingsStore.getState().cleanupModel, "openai/gpt-oss-120b");
-  assert.deepEqual(consumeTinfoilModelSwitches(), []);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "groq", from: "llama-3.3-70b-versatile", to: "GPT-OSS 120B" },
+  ]);
 });
 
 // Every live site that resolves a provider's default reads the name the
@@ -245,10 +249,12 @@ test("a replacement with no curated name is still announced, by id", async (t) =
     cachePrefix: "openwhispr-tinfoil-unnamed-replacement-test-",
   });
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { consumeTinfoilModelSwitches } = await vite.ssrLoadModule(
-    "/stores/tinfoilModelSwitchStore.ts"
+  const { consumeRetiredModelSwitches } = await vite.ssrLoadModule(
+    "/stores/retiredModelSwitchStore.ts"
   );
 
   assert.equal(useSettingsStore.getState().cleanupModel, "kimi-k3");
-  assert.deepEqual(consumeTinfoilModelSwitches(), [{ from: "Kimi K2.6", to: "kimi-k3" }]);
+  assert.deepEqual(consumeRetiredModelSwitches(), [
+    { provider: "tinfoil", from: "Kimi K2.6", to: "kimi-k3" },
+  ]);
 });

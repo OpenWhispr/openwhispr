@@ -148,7 +148,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       // decodes Opus, so route private-mode Opus uploads there instead.
       if (transcriptionProvider === 'local' && isOggOpus(file.name, file.mimeType, file.uri)) {
         throw new Error(
-          "Opus audio can't be transcribed on this iPhone yet. In Account → AI Models, turn off Private Mode or set Uploads to OpenWhispr Cloud, then try again.",
+          "Opus audio can't be transcribed on this iPhone yet. Set Uploads to OpenWhispr Cloud in Account → AI Models, then try again.",
         );
       }
 
@@ -175,9 +175,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             provider,
             inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
             cleanupRoute: jobRoute.cleanupRoute,
-            agentRoute: jobRoute.agentRoute,
             cleanupUnavailable: jobRoute.cleanupUnavailable,
-            agentUnavailable: jobRoute.agentUnavailable,
             requestContext: 'file',
             jobId: transcriptId,
             errorMessage: toFriendlyTranscriptionErrorMessage(error),
@@ -208,9 +206,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
               provider,
               inferenceRoute: provider === 'byok' ? jobRoute.inferenceRoute : undefined,
               cleanupRoute: jobRoute.cleanupRoute,
-              agentRoute: jobRoute.agentRoute,
               cleanupUnavailable: jobRoute.cleanupUnavailable,
-              agentUnavailable: jobRoute.agentUnavailable,
               fileName: file.name,
               mimeType: file.mimeType,
               language: getPreferredTranscriptionLanguage(),
@@ -235,9 +231,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             provider: processedResult.transcription.provider,
             inferenceRoute: processedResult.transcription.inferenceRoute,
             cleanupRoute: processedResult.transcription.cleanupRoute,
-            agentRoute: processedResult.transcription.agentRoute,
             cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
-            agentUnavailable: processedResult.transcription.agentUnavailable,
             cleanupWarning: processedResult.transcription.cleanupWarning,
             requestContext: 'file',
             jobId: transcriptId,

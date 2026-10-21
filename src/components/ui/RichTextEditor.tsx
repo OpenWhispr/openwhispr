@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
+import { useEffect, useRef, useCallback, useState, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
@@ -6,6 +6,31 @@ import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
+
+/**
+ * ProseMirror's scroll margin or threshold (`side` on every side), raised at the
+ * bottom to whatever an ancestor overlays there: NoteBottomBar publishes its height
+ * in --bottom-overlay-height. ProseMirror reads the sides each time it scrolls the
+ * caret into view, so the getter follows the bar as it grows (action chips, the
+ * summary callout, an open chat).
+ */
+function clearOfBottomOverlay(
+  containerRef: MutableRefObject<HTMLElement | null>,
+  side: number
+): Record<"top" | "right" | "bottom" | "left", number> {
+  return {
+    top: side,
+    right: side,
+    left: side,
+    get bottom(): number {
+      const container = containerRef.current;
+      const overlay = container
+        ? parseFloat(getComputedStyle(container).getPropertyValue("--bottom-overlay-height"))
+        : NaN;
+      return Number.isFinite(overlay) ? Math.max(overlay, side) : side;
+    },
+  };
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -51,6 +76,12 @@ export function RichTextEditor({
   }, [mentionPeople]);
   const withMentions = useRef(mentionPeople != null).current;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollClearance] = useState(() => ({
+    scrollMargin: clearOfBottomOverlay(containerRef, 5),
+    scrollThreshold: clearOfBottomOverlay(containerRef, 0),
+  }));
+
   const editor = useEditor({
     extensions: [
       ...(withMentions ? [createMentionExtension(() => mentionPeopleRef.current ?? [])] : []),
@@ -73,6 +104,7 @@ export function RichTextEditor({
         class: "rich-text-editor-content",
         dir: "auto",
       },
+      ...scrollClearance,
     },
   });
 
@@ -120,18 +152,25 @@ export function RichTextEditor({
   }, [editor, disabled]);
 
   return (
-    <div className={cn("relative w-full h-full", className)} onClick={handleClick}>
+    <div
+      ref={containerRef}
+      className={cn("relative w-full h-full", className)}
+      onClick={handleClick}
+    >
       <EditorContent
         editor={editor}
         className={cn(
           // relative: the table menu positions against this scroller and scrolls with it.
           "relative h-full overflow-y-auto",
-          disabled && "pointer-events-none opacity-70",
-          // Reserved by an ancestor via --floating-inset; 0 elsewhere.
-          "pb-[var(--floating-inset,0px)]"
+          disabled && "pointer-events-none opacity-70"
         )}
       />
-      {editor && !disabled && <RichTextEditorFormatMenu editor={editor} />}
+      {editor && !disabled && (
+        <RichTextEditorFormatMenu
+          editor={editor}
+          lineMenuPadding={scrollClearance.scrollThreshold}
+        />
+      )}
       {editor && !disabled && <RichTextEditorTableMenu editor={editor} />}
     </div>
   );

@@ -1,6 +1,6 @@
 import { parseTranscriptSegments } from "./parseTranscriptSegments";
 import { withoutAttendeesFence } from "./noteAttendees";
-import { resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import { isYouSpeakerName, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
 import { buildMeetingContext, type MeetingIdentity } from "./llmTranscript";
 import i18n from "../i18n";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
@@ -43,11 +43,7 @@ function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string
   // Stored JSON is untrusted: a malformed name must not block the transcript.
   const resolved: unknown = resolveSegmentSpeakerName(segment, speakerMappings);
   if (typeof resolved === "string" && resolved) {
-    // A speaker mapped to "You" is stored in the UI language.
-    const name = resolved.trim().toLowerCase();
-    return name === "you" || name === i18n.t("notes.speaker.you").toLowerCase()
-      ? NOTE_TAKER_LABEL
-      : resolved;
+    return isYouSpeakerName(resolved, i18n.t("notes.speaker.you")) ? NOTE_TAKER_LABEL : resolved;
   }
   if (segment.speaker === "you") return NOTE_TAKER_LABEL;
   // Numbered from 1, as the note shows speakers. An in-person meeting is

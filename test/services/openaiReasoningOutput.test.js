@@ -133,6 +133,138 @@ test("a custom endpoint keeps the caller's output budget even for a reasoning-sh
   assert.equal(bodies[0].max_output_tokens, 4096);
 });
 
+// GLM-5.3 reasons at max unless asked otherwise, and on a long meeting that
+// thinking spent the whole 4,096-token notes budget before any notes (#2008).
+const glmNotesCall = (config = {}) => ({
+  text: TRANSCRIPT,
+  model: "glm-5.3",
+  agentName: null,
+  config: {
+    provider: "custom",
+    baseUrl: "https://glm-host.example/v1",
+    customApiKey: "test-key",
+    systemPrompt: "Summarize",
+    maxTokens: 4096,
+    ...config,
+  },
+  ctx: makeCtx(),
+});
+
+test("a GLM-5.3 notes request on a Responses endpoint pins high effort", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("# Notes"));
+  const { openaiProvider } = await load();
+
+  await openaiProvider.call(glmNotesCall());
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "high" });
+});
+
+test("with thinking disabled, GLM-5.3 on a Responses endpoint gets its low floor", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("# Notes"));
+  const { openaiProvider } = await load();
+
+  await openaiProvider.call(glmNotesCall({ disableThinking: true }));
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "low" });
+});
+
+test("Responses requests carry the other families' effort facts too", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("Cleaned."));
+  const { openaiProvider } = await load();
+  const customConfig = {
+    provider: "custom",
+    baseUrl: "https://custom-host.example/v1",
+    customApiKey: "test-key",
+  };
+
+  // gpt-oss cleanup pins low, as on chat; qwen's off value is none.
+  await openaiProvider.call({
+    text: "raw transcript",
+    model: "gpt-oss:20b",
+    agentName: null,
+    config: customConfig,
+    ctx: makeCtx(),
+  });
+  await openaiProvider.call({
+    text: "raw transcript",
+    model: "qwen3:32b",
+    agentName: null,
+    config: { ...customConfig, disableThinking: true },
+    ctx: makeCtx(),
+  });
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "low" });
+  assert.deepEqual(bodies[1].reasoning, { effort: "none" });
+});
+
+test("a model outside the family table gets the generic off value on a Responses endpoint", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("# Notes"));
+  const { openaiProvider } = await load();
+
+  await openaiProvider.call({ ...glmNotesCall({ disableThinking: true }), model: "glm-5.2" });
+  await openaiProvider.call({ ...glmNotesCall({ disableThinking: false }), model: "glm-5.2" });
+
+  // "none", as the chat body's generic dialect sends (#791); thinking on leaves the default.
+  assert.deepEqual(bodies[0].reasoning, { effort: "none" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
+test("a chosen level on a Responses endpoint is checked against the endpoint's host", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("Cleaned."));
+  const { openaiProvider } = await load();
+  const xaiCall = (reasoningEffort) => ({
+    text: "raw transcript",
+    model: "grok-4.7",
+    agentName: null,
+    config: {
+      provider: "custom",
+      baseUrl: "https://api.x.ai/v1",
+      customApiKey: "test-key",
+      disableThinking: false,
+      reasoningEffort,
+    },
+    ctx: makeCtx(),
+  });
+
+  await openaiProvider.call(xaiCall("xhigh"));
+  // x.ai takes no "minimal", so it's left at the server's default.
+  await openaiProvider.call(xaiCall("minimal"));
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "xhigh" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
+test("a Custom endpoint that rejects the off value pays the 400 once, not on every request", async (t) => {
+  // e.g. Azure OpenAI with a non-reasoning deployment, whose name we can't recognise.
+  const bodies = installFetch(t, (body) =>
+    body.reasoning
+      ? jsonResponse({ error: { message: "Unsupported parameter: 'reasoning.effort'" } }, 400)
+      : completeMessage("Cleaned.")
+  );
+  const { openaiProvider } = await load();
+  const cleanup = () =>
+    openaiProvider.call({
+      text: "raw transcript",
+      model: "gpt-4o-prod",
+      agentName: null,
+      config: {
+        provider: "custom",
+        baseUrl: "https://rejecting-host.example/v1",
+        customApiKey: "test-key",
+        disableThinking: true,
+      },
+      ctx: makeCtx(),
+    });
+
+  assert.equal(await cleanup(), "Cleaned.");
+  assert.equal(await cleanup(), "Cleaned.");
+
+  assert.deepEqual(
+    bodies.map((body) => body.reasoning),
+    [{ effort: "none" }, undefined, undefined]
+  );
+});
+
 test("a Responses result that ran out of tokens before any text is an error, not the input echoed back", async (t) => {
   installFetch(t, () =>
     jsonResponse({

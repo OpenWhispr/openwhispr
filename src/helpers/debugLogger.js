@@ -116,7 +116,7 @@ class DebugLogger {
 
   resolveConsoleLogging() {
     // Packaged Windows apps can inherit the launching shell's standard handles.
-    return process.platform !== "win32" || !app.isPackaged || hasConsoleLogOptIn();
+    return process.platform !== "win32" || !app?.isPackaged || hasConsoleLogOptIn();
   }
 
   refreshLogLevel() {

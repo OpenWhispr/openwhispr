@@ -57,6 +57,7 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isCloudBackupAllowed,
+  isLlmSelectionAllowed,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
 } from "../stores/policyRules";
@@ -64,6 +65,7 @@ import { usePolicyStore } from "../stores/policyStore";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
+  getProviderDisplayName,
   getTranscriptionProvider,
   getTranscriptionProviders,
   isOnlineParakeetModel,
@@ -94,7 +96,13 @@ import {
 } from "./transcriptionFallback";
 import { transcriptionFailureOutcome } from "./transcriptionFailureOutcome";
 import { IPC_ERROR_FIELDS, errorFromIpcResult } from "./ipcErrorFields";
-import { asProviderError, providerHttpError, redactProviderBody } from "./providerHttpErrors";
+import {
+  PROVIDER_ERROR_CODES,
+  asProviderError,
+  providerError,
+  providerHttpError,
+  redactProviderBody,
+} from "./providerHttpErrors";
 import {
   executeTranslationChain,
   hasTextContent,
@@ -107,6 +115,7 @@ import {
   stripAgentAddressPreservingFormatting,
 } from "../config/agentDetection";
 import {
+  cleanupUnconfiguredNotice,
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
@@ -118,6 +127,8 @@ import {
 import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
+import { resolveDictationToneStyle } from "../config/toneStyle";
+import { selectionEditToneSentence } from "../config/prompts/toneStyle";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -127,6 +138,7 @@ import {
   dictionaryEchoError,
   matchesDictionaryPrompt,
   payloadSendsDictionaryBias,
+  stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
 import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
 import {
@@ -156,7 +168,10 @@ import {
   resolveManagedOrukeetRoute,
   resolveStreamingProviderName,
   buildStreamingSessionOptions,
-  shouldRetranscribeOrukeetLanguage,
+  isCloudMeteredStream,
+  evaluateOrukeetLanguageRouting,
+  hasOrukeetExperiment,
+  ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -169,6 +184,23 @@ const PREVIEW_FLUSH_WATCHDOG_MS = 1000;
 const neverCancelled = () => false;
 const MIN_SPARSE_RECORDING_DURATION_SECONDS = 3;
 const MIN_UNIQUE_WORD_GAIN = 2;
+
+// A selection edit that fails leaves its transcript behind; it rides out on the
+// error so the failed history entry keeps it. Only those errors carry it: they
+// are created per dictation, while others can be one cached rejection shared by
+// every dictation. Non-enumerable, so a logged error never writes the text out.
+const attachTranscript = (error, transcript, clientTranscriptionId) => {
+  if (!error?.selectionEditFatal || error.transcript !== undefined) return;
+  const text = typeof transcript === "string" ? transcript.trim() : "";
+  if (!text) return;
+  Object.defineProperty(error, "transcript", { value: text, configurable: true });
+  if (clientTranscriptionId) {
+    Object.defineProperty(error, "transcriptClientId", {
+      value: clientTranscriptionId,
+      configurable: true,
+    });
+  }
+};
 
 const cleanupFailureFromError = (error) => ({
   message: error?.message || String(error),
@@ -304,6 +336,7 @@ function resolveReasoningRoute(
   const cleanupConfig = {
     inferenceScope: /** @type {const} */ ("dictationCleanup"),
     disableThinking: settings.cleanupDisableThinking,
+    reasoningEffort: settings.cleanupReasoningEffort,
     temperature: cleanupTemperature,
     requireCompleteOutput: true,
   };
@@ -348,6 +381,7 @@ function resolveReasoningRoute(
 
     return {
       kind: "agent",
+      cleanupReachable,
       model: target.model,
       config: {
         ...target.config,
@@ -370,9 +404,9 @@ function resolveReasoningRoute(
     };
   }
   if (kind === "cleanup") {
-    return { kind: "cleanup", config: cleanupConfig };
+    return { kind: "cleanup", cleanupReachable, config: cleanupConfig };
   }
-  return { kind: "skip" };
+  return { kind: "skip", cleanupReachable };
 }
 
 const PLACEHOLDER_KEYS = {
@@ -672,6 +706,10 @@ class AudioManager {
     this._streamingCancellationGeneration = 0;
     this._activeTranscriptionAbortController = null;
     this._activeStreamingSessionId = null;
+    this._streamingMeteredByCloud = false;
+    this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this._recordingSpool = null;
@@ -681,10 +719,14 @@ class AudioManager {
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
+    this.lastToneAppCategory = null;
+    this.toneStyleStartDeadline = 0;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -851,6 +893,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
   }
 
+  // Drops a hint list the model recited after the speech (#2581). Pass the
+  // prompt the request actually carried: a capped prompt can only echo itself.
+  // Snippet triggers beside the dictionary never start or count toward a recital.
+  stripTrailingDictionaryEcho(text, sentPrompt) {
+    const stripped = stripTrailingDictionaryEcho(text, sentPrompt, this.getCustomDictionaryArray());
+    if (stripped !== text) {
+      logger.debug(
+        "Stripped trailing dictionary echo",
+        { originalLength: text.length, strippedLength: stripped.length },
+        "transcription"
+      );
+    }
+    return stripped;
+  }
+
   setCallbacks({
     onStateChange,
     onError,
@@ -939,6 +996,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // cancelled voice-agent recording, even after the setting was turned
     // off). A live voice-agent start re-captures right after this call.
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
     // Same for a prefetched selection: bounded to one recording, so a read taken
     // in an earlier app can never be edited in place by this command.
     this.selectionCapturePromise = null;
@@ -1019,6 +1077,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Kicked off at dictation start while Tone & Style is on, so the target app
+  // is classified while the user speaks. Only a dictation that captured its
+  // app gets a tone: a retried or re-run transcription has no target.
+  beginToneStyleCapture() {
+    this.toneStylePromise =
+      window.electronAPI?.captureDictationAppCategory?.()?.catch(() => null) ?? null;
+    // An Orukeet start waits at most 250 ms from here for the app, so the wait
+    // overlaps the mic opening instead of delaying the start cue after it.
+    this.toneStyleStartDeadline = performance.now() + 250;
+  }
+
+  // Consumed by the cleanup route, and by an agent command for an answer
+  // typed at the caret or a rewrite of the selection. Translation keeps its
+  // source's tone.
+  async consumeToneStyle() {
+    const pending = this.toneStylePromise;
+    this.toneStylePromise = null;
+    const settings = getSettings();
+    if (!pending || !settings.toneStyleEnabled) return null;
+    // Classification lands while the user speaks (a Wayland AT-SPI target takes
+    // about a second); the race only guards the paste path if the IPC ever
+    // hangs, and an unknown app reads as other.
+    const appCategory = await Promise.race([
+      pending,
+      new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+    const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
+    logger.logReasoning("TONE_STYLE", toneStyle);
+    return toneStyle;
+  }
+
   // An agent-route failure pastes the spoken command verbatim into the focused
   // app — surface that. Cleanup failures stay quiet; raw text is a fine result.
   _notifyAgentReasoningFailed() {
@@ -1062,11 +1151,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   isSttConfigStale(now = Date.now()) {
-    return (
-      !this.sttConfig ||
-      !this.sttConfigFetchedAt ||
-      now - this.sttConfigFetchedAt > STT_CONFIG_TTL_MS
-    );
+    // Re-check opt-in language experiments frequently so a server rollback
+    // takes effect on the next recording after at most 30 s of cached config.
+    const ttl = hasOrukeetExperiment(this.sttConfig)
+      ? ORUKEET_EXPERIMENT_CONFIG_TTL_MS
+      : STT_CONFIG_TTL_MS;
+    return !this.sttConfig || !this.sttConfigFetchedAt || now - this.sttConfigFetchedAt > ttl;
   }
 
   invalidateSttConfig() {
@@ -1074,8 +1164,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.sttConfigFetchedAt = null;
   }
 
-  getStreamingProvider() {
-    return STREAMING_PROVIDERS[this.getStreamingProviderName()];
+  getStreamingProvider(name) {
+    return STREAMING_PROVIDERS[name];
+  }
+
+  // The provider the active streaming session started on. The sttConfig can be
+  // refreshed mid-recording and resolve a different provider, but the open
+  // socket, its final and its disconnect belong to the one that started.
+  getActiveStreamingProviderName() {
+    return this._activeStreamingProviderName ?? this.getStreamingProviderName();
+  }
+
+  // Only the session that set the active fields clears them: a newer start
+  // may already own them.
+  _endStreamingSession(sessionId) {
+    if (this._activeStreamingSessionId !== sessionId) return;
+    this._activeStreamingSessionId = null;
+    this._activeStreamingProviderName = null;
+    this._activeStreamingConfig = null;
+    this._activePipelineOptions = undefined;
   }
 
   getStreamingProviderName() {
@@ -1427,6 +1534,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return false;
       }
 
+      const activationGeneration = this._activationCaptureGeneration ?? 0;
+      if (
+        !(await this._beginActivationCapture()) ||
+        activationGeneration !== (this._activationCaptureGeneration ?? 0)
+      )
+        return false;
       const startRequestedAt = performance.now();
       prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
       const constraints =
@@ -1585,6 +1698,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
+      this._cancelActivationCapture(this._takeActivationCapture());
       // A prepared value the recording never adopted still owns a live stream
       // (and possibly a pre-roll recorder); release it before any retry.
       freshTap?.close();
@@ -1689,15 +1803,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Taken now, so a cancelled pipeline that settles late can't end the next
     // recording's spool.
     const spool = this._takeRecordingSpool();
+    const activationCapture = this._takeActivationCapture();
     try {
-      await this._finalizeBatchRecording(finalSegment);
+      if (activationCapture)
+        void window.electronAPI?.stopActivationCapture?.(activationCapture).catch(() => {});
+      await this._finalizeBatchRecording(finalSegment, activationCapture);
     } finally {
+      this._cancelActivationCapture(activationCapture);
       spool?.finish();
     }
   }
 
-  async _finalizeBatchRecording(finalSegment) {
+  async _finalizeBatchRecording(finalSegment, activationCapture = null) {
     const processingPipeline = this._startProcessingPipeline();
+    processingPipeline.activationCapture = activationCapture;
     const wasCancelled = () => this._shouldAbandonProcessingPipeline(processingPipeline);
     this.micRecovery.stop();
     this.teardownSpeechGate();
@@ -1896,6 +2015,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cancelRecording() {
+    this._cancelActivationCapture(this._takeActivationCapture());
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
       this._cancelRequestedDuringMicRecovery = true;
@@ -2037,6 +2157,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cancelProcessing() {
+    this._cancelActivationCapture(this._activeProcessingPipeline?.activationCapture);
     if (this.isProcessing) {
       this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
       this._requestStreamingCancellation();
@@ -2178,6 +2299,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Settles once the result is delivered and saved; the recording's spool
       // waits for it, so a main process that hangs on the paste or the save
       // can't take the audio with it.
+      await this._completeActivationCapture(pipeline.activationCapture, result);
+      if (wasCancelled()) return;
       pipeline.resultHandled = this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -2232,7 +2355,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         pipeline.resultHandled = this.saveFailedTranscription(
           error.message,
           error.code || null,
-          metadata
+          metadata,
+          { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
         );
       }
     } finally {
@@ -2769,7 +2893,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
-    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown } = options || {};
+    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown, deliveryAppCategory } =
+      options || {};
     this.pendingAssistantConversation = {
       transcript,
       // resolveReasoningRoute mirrors an attached screenContext into
@@ -2779,6 +2904,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       screenContext: config?.rawScreenContext ?? null,
       ...(selectedContext ? { selectedContext } : {}),
       ...(deliverySessionId ? { deliverySessionId, deliveryAcceptsMarkdown } : {}),
+      ...(deliveryAppCategory ? { deliveryAppCategory } : {}),
     };
   }
 
@@ -2804,7 +2930,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     text,
     agentName,
     config,
-    { selectedContext, selectedText, deliverySessionId, deliveryAcceptsMarkdown } = {}
+    {
+      selectedContext,
+      selectedText,
+      deliverySessionId,
+      deliveryAcceptsMarkdown,
+      deliveryAppCategory,
+    } = {}
   ) {
     this.assertAgentAllowedByPolicy();
     const settings = getSettings();
@@ -2821,6 +2953,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       selectedContext,
       deliverySessionId,
       deliveryAcceptsMarkdown,
+      deliveryAppCategory,
     });
     return text;
   }
@@ -2859,6 +2992,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ? capture.sessionId
         : undefined;
     const deliveryAcceptsMarkdown = capture?.acceptsMarkdown === true;
+    const toneStyle = await this.consumeToneStyle();
+    const deliveryAppCategory = deliverySessionId ? toneStyle?.appCategory : undefined;
 
     if (!config?.selectionEditReachable) {
       // No in-place editor: the panel never types, so only a readable
@@ -2870,6 +3005,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : undefined,
         deliverySessionId,
         deliveryAcceptsMarkdown,
+        deliveryAppCategory,
       });
     }
 
@@ -2890,6 +3026,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return this._bankPanelAgentCommand(text, agentName, config, {
         deliverySessionId,
         deliveryAcceptsMarkdown,
+        deliveryAppCategory,
       });
     }
 
@@ -2919,6 +3056,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       requireCompleteOutput: true,
     };
     const isLocalSelection = config?.provider === "local";
+    const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
+    const withToneSentence = (prompt) =>
+      toneSentence ? `${String(prompt ?? "").trim()}\n\n${toneSentence}` : prompt;
     let userPrompt;
     let completionMarker;
     if (isLocalSelection) {
@@ -2929,6 +3069,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           agentName?.trim() || "Assistant"
         ),
         dictionary: getDictionaryHintWords(settings),
+        toneSentence,
       });
       selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
       selectionConfig.disableThinking = true;
@@ -2944,14 +3085,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } else {
       completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
-        config?.systemPrompt,
+        withToneSentence(config?.systemPrompt),
         completionMarker
       );
       if (selectionConfig.textOnlySystemPrompt) {
         // The text-only retry prompt must carry the same selection-edit
         // instructions and marker, or a rejected screenshot loses the command.
         selectionConfig.textOnlySystemPrompt = buildSelectionEditSystemPrompt(
-          selectionConfig.textOnlySystemPrompt,
+          withToneSentence(selectionConfig.textOnlySystemPrompt),
           completionMarker
         );
       }
@@ -3152,10 +3293,47 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Runs wherever a dictation's route is decided, with the reachability that
+  // decision used. The notice reaches the user through the result extras.
+  _noteCleanupRoute(settings, { kind, cleanupReachable }) {
+    const { forget, notice } = cleanupUnconfiguredNotice(this._shownCleanupSetupKey, {
+      skipped: kind === "skip",
+      cleanupReachable,
+      settings,
+    });
+    if (forget) this._shownCleanupSetupKey = null;
+    if (notice && !this.pendingCleanupFailure) this.pendingCleanupFailure = notice;
+  }
+
+  // A BYOK cleanup model is selected, but the availability check found no API key
+  // for any provider, so this one has none either. Reports the failure the cleanup
+  // route raises when it runs, as the Cloud and streaming paths already do.
+  _noteMissingCleanupKey(settings) {
+    const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+    if (cleanup.mode !== "providers" || cleanup.provider === "custom") return;
+    this.pendingCleanupFailure = cleanupFailureFromError(
+      providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+        provider: getProviderDisplayName(cleanup.provider),
+        surface: "llm",
+      })
+    );
+  }
+
+  // The renderer confirms an unconfigured-cleanup notice once it is on screen, so
+  // a dictation cancelled or discarded before then never uses up the warning.
+  markCleanupNoticeShown(failure) {
+    if (failure?.setupKey) this._shownCleanupSetupKey = failure.setupKey;
+  }
+
   async processTranscription(text, source, wasCancelled = neverCancelled) {
-    const result = await this.processTranscriptionCore(text, source, wasCancelled);
-    if (wasCancelled()) return result;
-    return this.finalizeChineseScript(result);
+    try {
+      const result = await this.processTranscriptionCore(text, source, wasCancelled);
+      if (wasCancelled()) return result;
+      return this.finalizeChineseScript(result);
+    } catch (error) {
+      attachTranscript(error, text);
+      throw error;
+    }
   }
 
   async processTranscriptionCore(text, source, wasCancelled = neverCancelled) {
@@ -3196,6 +3374,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
       return normalizedText;
     }
 
@@ -3208,6 +3387,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       cleanupProvider,
       agentName,
     });
+    // Nothing can run cleanup although the assistant could, so no route is decided.
+    if (!useReasoning) {
+      this._noteCleanupRoute(settings, { kind: "skip", cleanupReachable });
+      if (cleanupReachable) this._noteMissingCleanupKey(settings);
+    }
 
     if (useReasoning) {
       let route;
@@ -3224,6 +3408,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
         }
+        this._noteCleanupRoute(settings, route);
         if (route.kind === "skip") return normalizedText;
 
         if (route.kind === "translation") {
@@ -3250,7 +3435,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
-        const reasoningConfig = route.config;
+        const reasoningConfig =
+          route.kind === "cleanup"
+            ? { ...route.config, toneStyle: await this.consumeToneStyle() }
+            : route.config;
 
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
@@ -3477,6 +3665,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const timings = {};
     const settings = getSettings();
+    const isCloudCleanup = isCloudCleanupMode();
     const language = getBaseLanguageCode(this.getEffectiveSttLanguage(settings));
 
     const arrayBuffer = await audioBlob.arrayBuffer();
@@ -3488,6 +3677,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingFallbackReason =
       metadata.streamingFallbackReason ?? this.consumeStreamingFallbackReason(settings);
     if (streamingFallbackReason) opts.streamingFallbackReason = streamingFallbackReason;
+    if (metadata.orukeetLanguageRouting)
+      opts.orukeetLanguageRouting = metadata.orukeetLanguageRouting;
+    if (metadata.orukeetCleanup) opts.orukeetCleanup = metadata.orukeetCleanup;
     // Orukeet's audio estimate rides along for the backend's per-user gate
     // only. It is never the declared `language`: /api/transcribe picks models
     // by declared language, and the fallback must be the request the user
@@ -3498,14 +3690,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
-    const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     // Only cloud cleanup writes a combined STT log; translation alone does not.
     // A voice assistant recording never runs cleanup, so this upload is its log.
-    if (
-      settings.useCleanupModel &&
-      cleanupCloudMode === "openwhispr" &&
-      !this.voiceAgentRequested
-    ) {
+    if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
       opts.sendLogs = "false";
     }
 
@@ -3530,11 +3717,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     timings.transcriptionProcessingDurationMs = Math.round(performance.now() - transcriptionStart);
 
-    const rawText = result.text;
-    if (this.isDictionaryEcho(rawText)) {
+    if (this.isDictionaryEcho(result.text)) {
       throw dictionaryEchoError();
     }
-    let processedText = result.text;
+    const rawText = this.stripTrailingDictionaryEcho(result.text, dictionaryPrompt);
+    let processedText = rawText;
     if (processedText) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
@@ -3551,7 +3738,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
-      const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
+      this._noteCleanupRoute(settings, route);
+      // A cancelled upload can still resolve after the next dictation started;
+      // reading the tone then would take that dictation's app.
+      const toneStyle =
+        route.kind === "cleanup" && !wasCancelled() ? await this.consumeToneStyle() : null;
 
       try {
         if (route.kind === "agent") {
@@ -3566,7 +3757,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             wasCancelled
           );
           if (hasTextContent(reasoned)) processedText = reasoned;
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
@@ -3575,9 +3766,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               purpose: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt,
+              ...toneStyle,
               language: this.getCleanupLanguage(settings),
               locale: settings.uiLanguage || "en",
               streamingFallbackReason,
+              orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+              orukeetCleanup: metadata.orukeetCleanup,
               ...detectedLanguageFields,
               sttProvider: result.sttProvider,
               sttModel: result.sttModel,
@@ -3608,7 +3802,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               processedText,
               effectiveModel,
               agentName,
-              route.config
+              { ...route.config, toneStyle }
             );
             if (hasTextContent(reasoned)) processedText = reasoned;
           }
@@ -3618,34 +3812,40 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      streamingFallbackReason,
-                      ...detectedLanguageFields,
-                      sttProvider: result.sttProvider,
-                      sttModel: result.sttModel,
-                      sttProcessingMs: result.sttProcessingMs,
-                      sttWordCount: result.sttWordCount,
-                      sttLanguage: result.sttLanguage,
-                      audioDurationMs: result.audioDurationMs,
-                      audioSizeBytes,
-                      audioFormat,
-                    },
-                    log: { level: "error", channel: "transcription" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "transcription" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    streamingFallbackReason,
+                    orukeetLanguageRouting: metadata.orukeetLanguageRouting,
+                    orukeetCleanup: metadata.orukeetCleanup,
+                    ...detectedLanguageFields,
+                    sttProvider: result.sttProvider,
+                    sttModel: result.sttModel,
+                    sttProcessingMs: result.sttProcessingMs,
+                    sttWordCount: result.sttWordCount,
+                    sttLanguage: result.sttLanguage,
+                    audioDurationMs: result.audioDurationMs,
+                    audioSizeBytes,
+                    audioFormat,
                   },
+                  log: { level: "error", channel: "transcription" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "transcription" },
+                },
           });
           processedText = resolveTranslatedText(processedText, chainResult);
         }
       } catch (reasonError) {
-        if (reasonError.selectionEditFatal) throw reasonError;
+        if (reasonError.selectionEditFatal) {
+          // Cloud already recorded this transcription under its client id; the
+          // failed entry reuses it so a later retry syncs onto the same row.
+          attachTranscript(reasonError, rawText, result.clientTranscriptionId);
+          throw reasonError;
+        }
         if (!wasCancelled()) {
           logger.error(
             "Cloud reasoning failed, using raw transcription",
@@ -3742,6 +3942,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
+        const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
         const proxyPayload = proxySpec.buildPayload({
           audioBuffer: await optimizedAudio.arrayBuffer(),
           model,
@@ -3749,7 +3950,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           apiSettings,
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
-          dictionaryPrompt: this.getWhisperPrompt(apiSettings),
+          dictionaryPrompt: proxyDictionaryPrompt,
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
             .filter(Boolean)
@@ -3771,11 +3972,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           // message (net::ERR_*), so classify the rebuilt error here.
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
-        const proxyText = result?.text;
+        const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
+        const proxyText = this.stripTrailingDictionaryEcho(
+          result?.text,
+          sendsDictionaryBias ? proxyDictionaryPrompt : null
+        );
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        if (payloadSendsDictionaryBias(proxyPayload) && this.isDictionaryEcho(proxyText)) {
+        if (sendsDictionaryBias && this.isDictionaryEcho(result.text)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -3889,6 +4094,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           formData.append("keywords[]", keyword);
         }
       }
+      // The terms the model could recite. gpt-transcribe got them as keywords[]
+      // plus the prompt's overflow; when the overflow was capped, count only the
+      // keywords.
+      const sentDictionaryPrompt = usesKeywords
+        ? trimmedPrompt.truncated
+          ? dictionaryKeywords(dictionary).join(", ")
+          : dictionary
+        : dictionaryPrompt;
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
       if (shouldStream) {
@@ -4044,10 +4257,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-        const rawText = result.text;
+        const rawText = this.stripTrailingDictionaryEcho(
+          result.text,
+          model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt
+        );
 
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai", wasCancelled);
+        const text = await this.processTranscription(rawText, "openai", wasCancelled);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
@@ -4242,6 +4458,46 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  async _beginActivationCapture() {
+    if (this._activationCapture || this.voiceAgentRequested) return true;
+    const generation = this._activationCaptureGeneration ?? 0;
+    try {
+      const id = await window.electronAPI?.beginActivationCapture?.();
+      if (generation !== (this._activationCaptureGeneration ?? 0)) {
+        this._cancelActivationCapture(id);
+        return false;
+      }
+      this._activationCapture = id;
+    } catch {
+      // Marketing capture must never interrupt dictation.
+    }
+    return generation === (this._activationCaptureGeneration ?? 0);
+  }
+
+  _takeActivationCapture() {
+    this._activationCaptureGeneration = (this._activationCaptureGeneration ?? 0) + 1;
+    const id = this._activationCapture;
+    this._activationCapture = null;
+    return id;
+  }
+
+  _cancelActivationCapture(id) {
+    if (id) void window.electronAPI?.cancelActivationCapture?.(id).catch(() => {});
+  }
+
+  async _completeActivationCapture(id, result) {
+    if (!id) return;
+    const words =
+      result?.success && !result.assistantConversation && !result.selectionEdit
+        ? countSpokenWords(result.rawText)
+        : 0;
+    try {
+      await window.electronAPI?.finishActivationCapture?.(id, words);
+    } catch {
+      // The main-process pending capture fences completeness after write failure.
+    }
+  }
+
   async saveTranscription(
     text,
     rawText = null,
@@ -4310,7 +4566,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveFailedTranscription(errorMessage, errorCode = null, metadata = {}) {
+  async saveFailedTranscription(
+    errorMessage,
+    errorCode = null,
+    metadata = {},
+    { transcript = "", clientTranscriptionId } = {}
+  ) {
     const { dataRetentionEnabled, audioRetentionDays } = getEffectiveRetentionPreferences();
     if (!dataRetentionEnabled) {
       logger.debug("Skipping failed transcription save — data retention disabled", {}, "audio");
@@ -4320,16 +4581,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const result = await window.electronAPI.saveTranscription("", null, {
-        status: "failed",
-        errorMessage,
-        errorCode,
-        routeKind: this.translationRequested ? "translation" : null,
-        ...(metadata?.analyticsOccurredAt
-          ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
-          : {}),
-      });
-      if (result?.id) syncService.debouncedPush("transcription", result.id);
+      // Empty when transcription itself failed; otherwise the transcript a later
+      // step could not process, kept as both the entry's text and its raw text.
+      const keptTranscript = typeof transcript === "string" ? transcript : "";
+      const result = await window.electronAPI.saveTranscription(
+        keptTranscript,
+        keptTranscript || null,
+        {
+          status: "failed",
+          errorMessage,
+          errorCode,
+          routeKind: this.translationRequested ? "translation" : null,
+          ...(clientTranscriptionId ? { clientTranscriptionId } : {}),
+          ...(metadata?.analyticsOccurredAt
+            ? { analyticsOccurredAt: metadata.analyticsOccurredAt }
+            : {}),
+        }
+      );
 
       if (result?.id && this.lastAudioBlob) {
         if (audioRetentionDays > 0) {
@@ -4564,6 +4832,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig.dictation?.mode === "streaming";
   }
 
+  getPipelineCleanupOptions(
+    settings,
+    {
+      voiceAgentRequested = this.voiceAgentRequested,
+      translationRequested = this.translationRequested,
+      appCategory = null,
+    } = {}
+  ) {
+    if (
+      this.sttConfig?.orukeetPipeline !== "gemma12" ||
+      settings.useLocalWhisper ||
+      settings.cloudTranscriptionMode !== "openwhispr" ||
+      !settings.useCleanupModel ||
+      !isCloudCleanupMode() ||
+      !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
+      voiceAgentRequested ||
+      translationRequested
+    )
+      return undefined;
+    return {
+      agentName: getAgentName() || "",
+      customDictionary: getDictionaryHintWords(settings),
+      customPrompt: this.getCustomPrompt(),
+      ...(settings.toneStyleEnabled
+        ? resolveDictationToneStyle(settings.toneStyles, appCategory)
+        : {}),
+      language: this.getCleanupLanguage(settings) || undefined,
+      locale: settings.uiLanguage || "en",
+    };
+  }
+
   async warmupStreamingConnection({ isSignedIn: isSignedInOverride, warmMic = true } = {}) {
     if (!this.isRecordingAllowedByPolicy()) {
       logger.debug("Streaming warmup skipped by workspace policy", {}, "streaming");
@@ -4588,6 +4887,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: settings.preferredLanguage,
               keyterms: this.getKeyterms(),
               voiceAgentRequested: this.voiceAgentRequested,
+              // Warmup runs while idle, so the socket is for an ordinary
+              // dictation into the app the last start learned in time (Tone &
+              // Style). With no app known, a start mints no combined cleanup,
+              // so neither does warmup.
+              pipelineOptions:
+                settings.toneStyleEnabled && !this.lastToneAppCategory
+                  ? undefined
+                  : this.getPipelineCleanupOptions(settings, {
+                      voiceAgentRequested: false,
+                      translationRequested: false,
+                      appCategory: this.lastToneAppCategory,
+                    }),
             })
           );
           // Throw error to trigger retry if AUTH_EXPIRED
@@ -4766,7 +5077,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return { needsFallback: true };
     }
     const fallbackReason = resolveStreamingStartFallback({
-      providerName: this.getStreamingProviderName(),
+      providerName: this.getActiveStreamingProviderName(),
       cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       result: res,
     });
@@ -4814,6 +5125,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let acquiredStream = null;
     let usedPreparedCapture = false;
     let sessionId = null;
+    let providerName = null;
     let startWasCancelled = () => false;
     this._startInProgress = true;
     try {
@@ -4832,12 +5144,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.stopRequestedDuringStreamingStart = false;
+      const activationGeneration = this._activationCaptureGeneration ?? 0;
+      if (
+        !(await this._beginActivationCapture()) ||
+        activationGeneration !== (this._activationCaptureGeneration ?? 0)
+      ) {
+        this._settleStreamingStart();
+        return false;
+      }
       sessionId = (this._streamingSessionGeneration || 0) + 1;
       this._streamingSessionGeneration = sessionId;
       this.streamingFallbackReason = null;
       this._streamingFailoverReason = null;
       this._streamingSpeechGateState = createLocalSpeechGateState();
       this._activeStreamingSessionId = sessionId;
+      providerName = this.getStreamingProviderName();
+      this._activeStreamingProviderName = providerName;
+      this._activeStreamingConfig = { ...this.sttConfig };
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -4901,7 +5224,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
-      const provider = this.getStreamingProvider();
+      const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
       // session whose fallback recorder started has a capture to fail over
@@ -4909,9 +5232,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const failsOver =
         Boolean(this.streamingFallbackRecorder) &&
         isManagedOrukeetStream({
-          providerName: this.getStreamingProviderName(),
+          providerName,
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
+      let heldFrames = null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -4925,7 +5249,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Measured from the first chunk: a recording that fails over later
         // still has its opening words in the gate.
         recordPcm16SpeechWindow(this._streamingSpeechGateState, event.data);
-        if (!this._streamingFailoverReason) provider.send(event.data);
+        if (this._streamingFailoverReason) return;
+        if (heldFrames) heldFrames.push(event.data);
+        else provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -5000,7 +5326,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (startWasCancelled()) {
         // Cancelled while the mic was opening: never flip to recording.
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
         // cancelStreamingRecording may already be awaiting this start's
         // settlement before it can disconnect the provider.
         this._settleStreamingStart();
@@ -5012,20 +5337,55 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
       await this.beginMicRecovery(stream);
 
-      // 4. Connect WebSocket — audio is already flowing from the pipeline above,
-      //    so Deepgram receives data immediately (no idle timeout).
+      // A combined cleanup's prompt is fixed when its session is minted, so with
+      // Tone & Style on the start waits briefly for the app being dictated into
+      // before minting. Audio from the wait is held until the session has
+      // started: with no warm socket main has nowhere to buffer it, and a warm
+      // one minted for another app is replaced. An app not known by then (a
+      // Wayland AT-SPI target takes about a second) gets no combined cleanup:
+      // /api/reason cleans up in its tone at stop.
+      const pipelineSettings = getSettings();
+      if (
+        providerName === "orukeet" &&
+        pipelineSettings.toneStyleEnabled &&
+        this.getPipelineCleanupOptions(pipelineSettings)
+      ) {
+        heldFrames = [];
+        const waitMs = Math.max(0, this.toneStyleStartDeadline - performance.now());
+        this.lastToneAppCategory = await Promise.race([
+          this.toneStylePromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), waitMs)),
+        ]);
+        if (startWasCancelled()) {
+          // cancelStreamingRecording waits for this settlement before it
+          // releases the capture; minting a session now would only waste one.
+          this._settleStreamingStart();
+          return false;
+        }
+      }
+      this._activePipelineOptions =
+        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+          ? undefined
+          : this.getPipelineCleanupOptions(pipelineSettings, {
+              appCategory: this.lastToneAppCategory,
+            });
+
+      // 4. Connect WebSocket.
       const result = await withSessionRefresh(async () => {
         const streamingSettings = getSettings();
         const { useLocalWhisper } = streamingSettings;
-        const res = await provider.start(
-          buildStreamingSessionOptions({
-            providerName: this.getStreamingProviderName(),
-            settings: streamingSettings,
-            language: this.getEffectiveSttLanguage(streamingSettings),
-            keyterms: this.getKeyterms(),
-            voiceAgentRequested: this.voiceAgentRequested,
-          })
-        );
+        const sessionOptions = buildStreamingSessionOptions({
+          providerName,
+          settings: streamingSettings,
+          language: this.getEffectiveSttLanguage(streamingSettings),
+          keyterms: this.getKeyterms(),
+          voiceAgentRequested: this.voiceAgentRequested,
+          pipelineOptions: this._activePipelineOptions,
+        });
+        // Decided from the credentials this session opens with, so a mode
+        // switch before stop cannot move its words in or out of Cloud usage.
+        this._streamingMeteredByCloud = isCloudMeteredStream(sessionOptions);
+        const res = await provider.start(sessionOptions);
 
         return this.classifyStreamingStartResult(res, { useLocalWhisper });
       });
@@ -5056,11 +5416,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.recordingStartTime = null;
         this.stopRequestedDuringStreamingStart = false;
         await this.cleanupStreaming();
-        if (ownsSession()) this._activeStreamingSessionId = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
         return this.startRecording();
       }
+
+      if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
+      heldFrames = null;
 
       logger.info(
         "Streaming start timing",
@@ -5085,6 +5447,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     } catch (error) {
       const stopRequested = this.stopRequestedDuringStreamingStart;
+      this._cancelActivationCapture(this._takeActivationCapture());
       this._settleStreamingStart();
       this.stopRequestedDuringStreamingStart = false;
 
@@ -5111,9 +5474,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         this.cachedMicDeviceId = null;
         await this.cleanupStreaming();
-        if (this._activeStreamingSessionId === sessionId) {
-          this._activeStreamingSessionId = null;
-        }
         this.isRecording = false;
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5122,7 +5482,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       logger.error(
         "Failed to start streaming recording",
-        { provider: this.getStreamingProviderName(), error: error.message, code: error.code },
+        { provider: providerName, error: error.message, code: error.code },
         "streaming"
       );
 
@@ -5157,9 +5517,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       await this.cleanupStreaming();
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
       this.isRecording = false;
       this.recordingStartTime = null;
       this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5206,7 +5563,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const sessionId = this._activeStreamingSessionId;
     const spool = this._takeRecordingSpool();
-    const delivery = {};
+    const delivery = { activationCapture: this._takeActivationCapture() };
+    if (delivery.activationCapture)
+      void window.electronAPI?.stopActivationCapture?.(delivery.activationCapture).catch(() => {});
     const stopPromise = this._finalizeStreamingRecording(sessionId, delivery);
     this._streamingStopPromise = stopPromise;
     this._streamingStopMode = "finalize";
@@ -5214,14 +5573,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return await stopPromise;
     } finally {
       // The stop settles at delivery; the spool waits until the result is saved.
+      this._cancelActivationCapture(delivery.activationCapture);
       if (spool) void Promise.resolve(delivery.resultHandled).finally(() => spool.finish());
       if (this._streamingStopPromise === stopPromise) {
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
 
       // Finalization has several provider/reasoning awaits. A thrown error must
       // never leave the renderer or main process stuck in a busy lifecycle.
@@ -5246,10 +5604,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingCleanupFailure = null;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
+    this.toneStylePromise = null;
     this.selectionCapturePromise = null;
   }
 
   async cancelStreamingRecording() {
+    this._cancelActivationCapture(this._takeActivationCapture());
     if (this._streamingStopPromise) {
       if (this._streamingStopMode === "finalize") {
         this._requestStreamingCancellation();
@@ -5262,6 +5622,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const sessionId = this._activeStreamingSessionId;
     const spool = this._takeRecordingSpool();
+    const providerName = this.getActiveStreamingProviderName();
     const cancelPromise = (async () => {
       this._requestStreamingCancellation();
       this.stopRequestedDuringStreamingStart = false;
@@ -5283,7 +5644,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           this.micRecovery.stop();
           this.cleanupStreamingAudio();
           this.cleanupStreamingListeners(sessionId);
-          return this.getStreamingProvider().stop?.();
+          return this.getStreamingProvider(providerName).stop?.();
         })
         .catch((error) => {
           logger.debug(
@@ -5306,9 +5667,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._streamingStopPromise = null;
         this._streamingStopMode = null;
       }
-      if (this._activeStreamingSessionId === sessionId) {
-        this._activeStreamingSessionId = null;
-      }
+      this._endStreamingSession(sessionId);
       this.isRecording = false;
       this.isProcessing = false;
       this.isStreaming = false;
@@ -5325,6 +5684,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
+    const providerName = this.getActiveStreamingProviderName();
     const cancellationGeneration = this._streamingCancellationGeneration;
     const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
     const abandonFinalization = async () => {
@@ -5332,7 +5692,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cleanupStreamingListeners(sessionId);
       this._streamingFallbackSegments = [];
       try {
-        await this.getStreamingProvider().stop?.();
+        await this.getStreamingProvider(providerName).stop?.();
       } catch (error) {
         logger.debug(
           "Streaming disconnect after cancellation failed",
@@ -5367,7 +5727,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const t0 = performance.now();
     let finalText = this.streamingFinalText || "";
 
-    const provider = this.getStreamingProvider();
+    const provider = this.getStreamingProvider(providerName);
     let acknowledgedFinal = null;
     let finalAcknowledged = false;
     let orukeetFinal = null;
@@ -5520,8 +5880,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
+    const meteredByCloud = this._streamingMeteredByCloud;
     const streamingSttModel = stopResult?.model || "nova-3";
-    const streamingSttProcessingMs = Math.round(tTerminate - t0);
+    const streamingSttProcessingMs = Number.isFinite(orukeetFinal?.asrFinalMs)
+      ? Math.round(orukeetFinal.asrFinalMs)
+      : Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
     const streamingSttLanguage =
       getBaseLanguageCode(this.getEffectiveSttLanguage(stSettings)) || undefined;
@@ -5535,10 +5898,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let batchWarning = null;
     let batchFallbackResult = null;
     let failureReport = null;
-    const isOrukeetStream = this.getStreamingProviderName() === "orukeet";
+    const isOrukeetStream = providerName === "orukeet";
     const detectedLanguageFields = isOrukeetStream
       ? orukeetDetectedLanguageFields(orukeetFinal)
       : {};
+    const languageRouting = evaluateOrukeetLanguageRouting({
+      language: streamingSttLanguage,
+      final: orukeetFinal,
+      mode:
+        isOrukeetStream && stSettings.cloudTranscriptionMode === "openwhispr"
+          ? (this._activeStreamingConfig || this.sttConfig)?.orukeetLanguageRouting
+          : undefined,
+    });
+    const orukeetLanguageRouting = languageRouting.comparison
+      ? {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        }
+      : undefined;
+    const orukeetCleanup = orukeetFinal?.cleanup;
+    const orukeetTelemetry = { orukeetLanguageRouting, orukeetCleanup };
+    // A request whose text isn't the combined cleanup (a language fallback, a
+    // cleanup redone through /api/reason, an agent command) must not report a
+    // completed Gemma cleanup as its own.
+    const uncombinedTelemetry = {
+      orukeetLanguageRouting,
+      orukeetCleanup: orukeetCleanup?.status === "complete" ? undefined : orukeetCleanup,
+    };
+    if (isOrukeetStream && languageRouting.comparison) {
+      logger.info(
+        "Orukeet language routing comparison",
+        {
+          ...languageRouting.comparison,
+          fallbackAvailable:
+            fallbackBlob?.size > 0 && resolveStreamingFallbackTarget(stSettings) === "cloud",
+        },
+        "streaming"
+      );
+    }
 
     // Orukeet renders speech outside its 25 languages as confident nonsense.
     // With a confident final estimate, send the kept recording through Cloud
@@ -5548,7 +5946,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isOrukeetStream &&
       fallbackBlob?.size > 0 &&
       resolveStreamingFallbackTarget(stSettings) === "cloud" &&
-      shouldRetranscribeOrukeetLanguage({ language: streamingSttLanguage, final: orukeetFinal })
+      languageRouting.fallback
     ) {
       logger.info(
         "Orukeet detected an unsupported language, re-transcribing through Cloud",
@@ -5567,10 +5965,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const outcome = transcriptionFailureOutcome(error);
         failureReport = outcome.report;
         if (outcome.keepAudio) {
-          delivery.resultHandled = this.saveFailedTranscription(error.message, error.code || null, {
-            durationSeconds,
-            analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-          });
+          // error.transcript is Cloud's re-transcription, never Orukeet's text.
+          delivery.resultHandled = this.saveFailedTranscription(
+            error.message,
+            error.code || null,
+            { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+            { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
+          );
         }
       };
       try {
@@ -5579,8 +5980,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           {
             durationSeconds,
             analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-            streamingFallbackReason: "language_detected_unsupported",
+            streamingFallbackReason:
+              languageRouting.comparison && !languageRouting.comparison.legacyFallback
+                ? "language_supported_score_low"
+                : "language_detected_unsupported",
             detectedLanguageFields,
+            ...uncombinedTelemetry,
           },
           wasCancelled
         );
@@ -5602,6 +6007,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     let usedCloudReasoning = false;
+    let combinedCleanup = false;
     // The Cloud batch path already ran its own cleanup, agent or translation.
     if (finalText && !usedBatchFallback) {
       const reasoningStart = performance.now();
@@ -5620,7 +6026,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
       }
-      const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
+      this._noteCleanupRoute(stSettings, route);
+      const isCloudCleanup = isCloudCleanupMode();
+      const toneStyle = route.kind === "cleanup" ? await this.consumeToneStyle() : null;
 
       try {
         if (route.kind === "agent") {
@@ -5640,36 +6048,54 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
             "streaming"
           );
-        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+        } else if (route.kind === "cleanup" && isCloudCleanup) {
           const customPrompt = this.getCustomPrompt();
-          const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              promptMode: "cleanup",
-              purpose: "cleanup",
-              customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt,
-              language: this.getCleanupLanguage(stSettings),
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              ...detectedLanguageFields,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
-            });
-            if (!res.success) {
-              const err = new Error(res.error || "Cloud reasoning failed");
-              err.code = res.code;
-              throw err;
-            }
-            return res;
-          });
+          // ASR finished but the combined cleanup didn't: paste the raw text, as
+          // any other failed cleanup does.
+          if (orukeetFinal?.cleanupError) {
+            throw Object.assign(
+              new Error(`Combined cleanup did not finish: ${orukeetFinal.cleanupError}`),
+              { messageKey: "app.toasts.cleanupFailed.title" }
+            );
+          }
+          combinedCleanup =
+            orukeetFinal?.cleanupStatus === "complete" &&
+            JSON.stringify(orukeetFinal.cleanupOptions) ===
+              JSON.stringify(this._activePipelineOptions) &&
+            typeof orukeetFinal.cleanupText === "string" &&
+            hasTextContent(orukeetFinal.cleanupText);
+          const reasonResult = combinedCleanup
+            ? { success: true, text: orukeetFinal.cleanupText, model: orukeetCleanup?.model }
+            : await withSessionRefresh(async () => {
+                const res = await window.electronAPI.cloudReason(finalText, {
+                  agentName,
+                  promptMode: "cleanup",
+                  purpose: "cleanup",
+                  customDictionary: getDictionaryHintWords(stSettings),
+                  customPrompt,
+                  ...toneStyle,
+                  language: this.getCleanupLanguage(stSettings),
+                  locale: stSettings.uiLanguage || "en",
+                  sttProvider: providerName,
+                  sttModel: streamingSttModel,
+                  sttProcessingMs: streamingSttProcessingMs,
+                  sttWordCount: streamingSttWordCount,
+                  sttLanguage: streamingSttLanguage,
+                  ...detectedLanguageFields,
+                  ...uncombinedTelemetry,
+                  audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                  audioSizeBytes: streamingAudioBytesSent || undefined,
+                  audioFormat: "linear16",
+                });
+                if (!res.success) {
+                  const err = new Error(res.error || "Cloud reasoning failed");
+                  err.code = res.code;
+                  throw err;
+                }
+                return res;
+              });
 
-          usedCloudReasoning = true;
+          usedCloudReasoning = !combinedCleanup;
           if (reasonResult.success && hasTextContent(reasonResult.text)) {
             if (!customPrompt) assertValidCleanupOutput(finalText, reasonResult.text);
             finalText = reasonResult.text;
@@ -5690,7 +6116,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               finalText,
               effectiveModel,
               agentName,
-              route.config
+              { ...route.config, toneStyle }
             );
             if (hasTextContent(reasoned)) finalText = reasoned;
             logger.info(
@@ -5705,30 +6131,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             settings: stSettings,
             agentName,
             route,
-            cleanup:
-              cleanupCloudMode === "openwhispr"
-                ? {
-                    mode: "cloudReason",
-                    meta: {
-                      sttProvider: this.getStreamingProviderName(),
-                      sttModel: streamingSttModel,
-                      sttProcessingMs: streamingSttProcessingMs,
-                      sttWordCount: streamingSttWordCount,
-                      sttLanguage: streamingSttLanguage,
-                      ...detectedLanguageFields,
-                      audioDurationMs: durationSeconds
-                        ? Math.round(durationSeconds * 1000)
-                        : undefined,
-                      audioSizeBytes: streamingAudioBytesSent || undefined,
-                      audioFormat: "linear16",
-                    },
-                    log: { level: "error", channel: "streaming" },
-                  }
-                : {
-                    mode: "model",
-                    model: getEffectiveCleanupModel(),
-                    log: { level: "error", channel: "streaming" },
+            cleanup: isCloudCleanup
+              ? {
+                  mode: "cloudReason",
+                  meta: {
+                    sttProvider: providerName,
+                    sttModel: streamingSttModel,
+                    sttProcessingMs: streamingSttProcessingMs,
+                    sttWordCount: streamingSttWordCount,
+                    sttLanguage: streamingSttLanguage,
+                    ...detectedLanguageFields,
+                    ...uncombinedTelemetry,
+                    audioDurationMs: durationSeconds
+                      ? Math.round(durationSeconds * 1000)
+                      : undefined,
+                    audioSizeBytes: streamingAudioBytesSent || undefined,
+                    audioFormat: "linear16",
                   },
+                  log: { level: "error", channel: "streaming" },
+                }
+              : {
+                  mode: "model",
+                  model: getEffectiveCleanupModel(),
+                  log: { level: "error", channel: "streaming" },
+                },
           });
           finalText = resolveTranslatedText(finalText, chainResult);
           usedCloudReasoning = chainResult.usedCloudReasoning || usedCloudReasoning;
@@ -5737,6 +6163,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (wasCancelled()) return true;
         if (reasonError.selectionEditFatal) {
           this.pendingSelectionEdit = null;
+          attachTranscript(reasonError, rawStreamingText);
+          delivery.resultHandled = this.saveFailedTranscription(
+            reasonError.message,
+            reasonError.code || null,
+            { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+            { transcript: reasonError.transcript }
+          );
           this.onError?.(transcriptionFailureOutcome(reasonError).report);
           this.isProcessing = false;
           this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
@@ -5772,13 +6205,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // reads as silence for a retry, as batch does.
     const failBatchFallback = (error) => {
       const outcome = transcriptionFailureOutcome(error);
-      if (!failoverReason && outcome.report) return;
+      // A transcript the fallback produced before a later step failed is
+      // reported and kept like the batch pipeline's.
+      if (!failoverReason && outcome.report && !error.transcript) return;
       failureReport = outcome.report;
       if (outcome.keepAudio) {
-        delivery.resultHandled = this.saveFailedTranscription(error.message, error.code || null, {
-          durationSeconds,
-          analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-        });
+        delivery.resultHandled = this.saveFailedTranscription(
+          error.message,
+          error.code || null,
+          { durationSeconds, analyticsOccurredAt: analyticsOccurredAt.toISOString() },
+          { transcript: error.transcript, clientTranscriptionId: error.transcriptClientId }
+        );
       }
     };
     if (
@@ -5854,15 +6291,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         durationMs: durationSeconds
           ? Math.round(durationSeconds * 1000)
           : Math.round(tBeforePaste - t0),
-        provider: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        provider: batchFallbackResult?.source || `${providerName}-streaming`,
         model: batchFallbackResult ? null : streamingSttModel || null,
       };
+      if (wasCancelled()) return true;
+      await this._completeActivationCapture(delivery.activationCapture, {
+        success: true,
+        rawText: batchFallbackResult?.rawText ?? rawStreamingText,
+        assistantConversation: this.pendingAssistantConversation,
+        selectionEdit: this.pendingSelectionEdit,
+      });
       if (wasCancelled()) return true;
       delivery.resultHandled = this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
         rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
-        source: batchFallbackResult?.source || `${this.getStreamingProviderName()}-streaming`,
+        source: batchFallbackResult?.source || `${providerName}-streaming`,
         clientTranscriptionId,
         analyticsOccurredAt: resultAnalyticsOccurredAt,
         // The upgrade prompt opens on these, as after a batch recording.
@@ -5877,20 +6321,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
 
-      if (!usedBatchFallback) {
+      // Only a stream on OpenWhispr Cloud credentials draws on the account's
+      // word allowance; opted-in history and insights sync push the local row
+      // of every other stream themselves.
+      if (!usedBatchFallback && meteredByCloud) {
         (async () => {
           try {
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
-                finalText,
+                combinedCleanup ? rawStreamingText : finalText,
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
-                  sttProvider: this.getStreamingProviderName(),
+                  sttProvider: providerName,
                   sttModel: streamingSttModel,
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
                   ...detectedLanguageFields,
+                  ...(combinedCleanup ? orukeetTelemetry : uncombinedTelemetry),
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
@@ -5898,14 +6346,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   // makes the row the server writes and the local one the same
                   // event. Held back until opt-in, a later sync would push the
                   // local copy under a second id and double every total.
-                  // Cosmetic caveat: the server labels its row mode
-                  // "openwhispr_cloud" whatever actually transcribed the audio,
-                  // and BYOK streaming reaches here too (tinfoil-realtime,
-                  // corti, openai-realtime — see resolveStreamingProviderName).
-                  // That row only exists when localDate rides along, which is
-                  // exactly when this device also pushes its own copy under the
-                  // same id, and last-write-wins replaces the label with the
-                  // real mode. Neither summary renders mode either way.
                   clientTranscriptionId,
                   ...(analyticsSyncEnabled()
                     ? {
@@ -5928,7 +6368,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           window.dispatchEvent(new Event("usage-changed"));
         })();
-      } else {
+      } else if (batchFallbackResult?.source === "openwhispr") {
+        // /api/transcribe recorded the Cloud upload's words.
         window.dispatchEvent(new Event("usage-changed"));
       }
 
@@ -6084,12 +6525,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._takeRecordingSpool()?.finish();
     this.cleanupStreamingAudio();
     this.cleanupStreamingListeners(sessionId);
-    if (this._activeStreamingSessionId === sessionId) {
-      this._activeStreamingSessionId = null;
-    }
+    this._endStreamingSession(sessionId);
   }
 
   cleanup() {
+    // Read before cleanupStreaming ends the session below.
+    const streamingProviderName = this.getActiveStreamingProviderName();
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
@@ -6113,7 +6554,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.workletBlobUrl = null;
     }
     try {
-      this.getStreamingProvider().stop?.();
+      this.getStreamingProvider(streamingProviderName).stop?.();
     } catch (e) {
       // Ignore errors during cleanup (page may be unloading)
     }

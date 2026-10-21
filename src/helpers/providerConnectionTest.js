@@ -3,19 +3,25 @@ const ENDPOINTS = {
   groq: "https://api.groq.com/openai/v1/models",
   xai: "https://api.x.ai/v1/models",
   mistral: "https://api.mistral.ai/v1/models",
-  anthropic: "https://api.anthropic.com/v1/models",
-  gemini: "https://generativelanguage.googleapis.com/v1beta/models",
-  openrouter: "https://openrouter.ai/api/v1/models",
+  // The largest page each API allows, so a valid but older model is still listed.
+  anthropic: "https://api.anthropic.com/v1/models?limit=1000",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+  // OpenRouter's model list is public, so it cannot vouch for a key. The key route
+  // describes the key that calls it.
+  openrouter: "https://openrouter.ai/api/v1/key",
   corti: "https://ai.eu.corti.app/v1/models",
+  // Public too, so it vouches only for the model; testTinfoilKey checks the key.
   tinfoil: "https://inference.tinfoil.sh/v1/models",
-  deepgram: "https://api.deepgram.com/v1/models",
+  // Deepgram's model list answers without a key, so it cannot vouch for one. This is
+  // Deepgram's documented key check.
+  deepgram: "https://api.deepgram.com/v1/auth/token",
   // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
   assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
 };
-
-// Neither response is OpenAI-shaped — Deepgram's /v1/models is {stt,tts}-keyed
-// and AssemblyAI returns transcripts — so a 200 is the whole credential signal.
-const MODEL_LIST_UNVERIFIABLE = new Set(["deepgram", "assemblyai"]);
+// Listing the key's projects proves the key too: used only if Deepgram retires the route above.
+const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
+// Turns a made-up key away before embedding anything; a valid key pays for one token.
+const TINFOIL_KEY_ENDPOINT = "https://inference.tinfoil.sh/v1/embeddings";
 
 // Renderers translate errorCode via onboarding.rehaul.provider.errors.*; the
 // English `error` string stays for logs and older callers.
@@ -151,16 +157,34 @@ function buildModelEndpoints(base) {
   });
 }
 
+// Where the app sends a custom server's audio: buildApiUrl(normalizeBaseUrl(url),
+// "/audio/transcriptions") in src/config/constants.ts and transcriptionRoute.ts.
+// buildApiUrl normalises its base again, which strips a suffix a trailing slash hid
+// from the first pass, so this address takes the same two passes.
+function buildTranscriptionEndpoint(base) {
+  const { path, query, hash } = splitUrlDecorators(normalizeBaseUrl(normalizeBaseUrl(base)));
+  return joinUrlDecorators(`${path}/audio/transcriptions`, query, hash);
+}
+
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
+  // A hosted provider's fixed endpoint never redirects. Following one would carry
+  // x-api-key or x-goog-api-key to whichever host it names (fetch drops only
+  // Authorization across origins), so a redirect fails the check instead. Custom
+  // servers may redirect within themselves, such as adding a trailing slash.
+  let redirect = "error";
+  let transcriptionEndpoint;
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(
       process.env.OPENWHISPR_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL
     );
-    if (override) endpoints = buildModelEndpoints(override);
+    if (override) {
+      endpoints = buildModelEndpoints(override);
+      redirect = "follow";
+    }
   }
 
   if (provider === "custom") {
@@ -184,6 +208,8 @@ function resolveProviderRequest(config) {
       );
     }
     endpoints = buildModelEndpoints(parsed.toString());
+    transcriptionEndpoint = buildTranscriptionEndpoint(parsed.toString());
+    redirect = "follow";
   }
 
   if (endpoints.length === 0) {
@@ -212,22 +238,32 @@ function resolveProviderRequest(config) {
     }
   }
 
-  return { endpoint: endpoints[0], endpoints, headers };
+  return { endpoint: endpoints[0], endpoints, headers, redirect, transcriptionEndpoint };
 }
 
-// When several candidate endpoints fail, report the most actionable failure.
+// When several candidate endpoints fail, report the most actionable failure. An answer that
+// faults the setup outranks no answer (unverified), so a busy candidate never hides a refused
+// key or a missing model. No answer outranks a candidate without a model list, which may only
+// be an address the server doesn't use.
 const FAILURE_PRIORITY = {
-  credentialsRejected: 4,
-  providerStatus: 3,
-  modelNotFound: 2.5,
-  endpointNotFound: 2,
-  timeout: 1,
-  network: 0,
+  credentialsRejected: 6,
+  providerStatus: 5,
+  modelNotFound: 4,
+  endpointNotFound: 0,
 };
+const UNVERIFIED_PRIORITY = { providerStatus: 3, timeout: 2, network: 1 };
 
 function pickFailure(current, next) {
   if (!current) return next;
-  return FAILURE_PRIORITY[next.errorCode] > FAILURE_PRIORITY[current.errorCode] ? next : current;
+  const rank = (failure) =>
+    (failure.unverified ? UNVERIFIED_PRIORITY : FAILURE_PRIORITY)[failure.errorCode];
+  return rank(next) > rank(current) ? next : current;
+}
+
+// A provider that is slow, busy or down gives no verdict on the credentials. Such a failure is
+// marked unverified: the app may go ahead with them, and only a later check can tell.
+function isUnverifiedStatus(status) {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 function describeStatusFailure(status, provider) {
@@ -245,7 +281,64 @@ function describeStatusFailure(status, provider) {
       status,
     };
   }
-  return { errorCode: "providerStatus", error: `The provider returned status ${status}.`, status };
+  const failure = {
+    errorCode: "providerStatus",
+    error: `The provider returned status ${status}.`,
+    status,
+  };
+  return isUnverifiedStatus(status) ? { ...failure, unverified: true } : failure;
+}
+
+const MODEL_NOT_FOUND = {
+  errorCode: "modelNotFound",
+  error: "The selected model is not available from this provider.",
+};
+const TIMEOUT_FAILURE = {
+  errorCode: "timeout",
+  error: "The connection test timed out.",
+  unverified: true,
+};
+const NETWORK_FAILURE = {
+  errorCode: "network",
+  error: "The provider could not be reached.",
+  unverified: true,
+};
+
+// An empty or non-JSON body reads as undefined. A body that never arrives (the 12 s cap
+// firing, a dropped connection) is not an answer, so its error goes on to probe's catch.
+async function readJson(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    if (error instanceof SyntaxError) return undefined;
+    throw error;
+  }
+}
+
+// Gemini, xAI and Corti answer a made-up key with a 400, which on its own can also
+// mean a malformed request. Their error bodies say which it was.
+const KEY_REJECTED_BY_BODY = {
+  gemini: (_, body) =>
+    Array.isArray(body?.error?.details) &&
+    body.error.details.some((detail) => detail?.reason === "API_KEY_INVALID"),
+  xai: (status, body) =>
+    status === 400 && typeof body?.error === "string" && /incorrect api key/i.test(body.error),
+  // Corti's gateway turns an unknown key away before routing, with no body at all.
+  corti: (status, body) => status === 400 && body === undefined,
+};
+
+async function describeResponseFailure(response, provider) {
+  const failure = describeStatusFailure(response.status, provider);
+  const keyRejected = KEY_REJECTED_BY_BODY[provider];
+  // A 401 or 403 already says the key was refused; only a vaguer status needs the body.
+  if (
+    failure.errorCode !== "credentialsRejected" &&
+    keyRejected &&
+    keyRejected(response.status, await readJson(response))
+  ) {
+    return { ...describeStatusFailure(401, provider), status: response.status };
+  }
+  return failure;
 }
 
 function normalizeModelId(value) {
@@ -269,17 +362,48 @@ function responseModelIds(payload) {
     .filter(Boolean);
 }
 
-async function responseOffersModel(response, model) {
+// Anthropic resolves an alias (claude-haiku-4-5) to a dated snapshot and lists only the
+// snapshot (claude-haiku-4-5-20251001). Other servers match ids exactly.
+function isDatedSnapshot(id, model) {
+  return id.startsWith(model) && /^-\d{8}$/.test(id.slice(model.length));
+}
+
+async function responseOffersModel(response, model, provider) {
   if (!model) return true;
+  const selected = normalizeModelId(model);
+  return responseModelIds(await readJson(response)).some(
+    (id) => id === selected || (provider === "anthropic" && isDatedSnapshot(id, selected))
+  );
+}
+
+// One request (a GET unless `init` says otherwise) under the 12 s cap. `judge` reads the
+// response inside that window, so a body that stalls cannot hold the check past the cap. It
+// returns null when the check passes.
+async function probe(endpoint, request, fetchImpl, judge, init = { method: "GET" }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
-    const payload = await response.json();
-    return responseModelIds(payload).includes(normalizeModelId(model));
-  } catch {
-    return false;
+    const response = await fetchImpl(endpoint, {
+      ...init,
+      headers: request.headers,
+      redirect: request.redirect,
+      signal: controller.signal,
+    });
+    return await judge(response);
+  } catch (error) {
+    return error?.name === "AbortError" ? TIMEOUT_FAILURE : NETWORK_FAILURE;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
-async function testProviderConnection(config, fetchImpl = fetch) {
+// `runPaidCheck(key, check)` runs a check that spends the user's credits. The main process
+// passes one that runs it once per key (paidKeyCheck.js).
+async function testProviderConnection(
+  config,
+  fetchImpl = fetch,
+  runPaidCheck = (_key, check) => check()
+) {
   let request;
   try {
     request = resolveProviderRequest(config);
@@ -292,44 +416,133 @@ async function testProviderConnection(config, fetchImpl = fetch) {
   }
 
   const provider = String(config?.provider || "").toLowerCase();
+  if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
+
   const model = String(config?.model || "").trim();
   let failure = null;
+  let everyListMissing = true;
   for (const endpoint of request.endpoints) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-    try {
-      const response = await fetchImpl(endpoint, {
-        method: "GET",
-        headers: request.headers,
-        signal: controller.signal,
-      });
-      if (response.ok) {
-        if (MODEL_LIST_UNVERIFIABLE.has(provider)) return { success: true };
-        if (await responseOffersModel(response, model)) return { success: true };
-        failure = pickFailure(failure, {
-          errorCode: "modelNotFound",
-          error: "The selected model is not available from this provider.",
-        });
-        continue;
+    const next = await probe(endpoint, request, fetchImpl, async (response) => {
+      if (!response.ok) return describeResponseFailure(response, provider);
+      if (provider === "openrouter") return describeOpenRouterKey(response);
+      // AssemblyAI's probe lists transcripts, not models, so a 200 is the whole signal.
+      if (provider === "assemblyai" || (await responseOffersModel(response, model, provider))) {
+        return null;
       }
-      failure = pickFailure(failure, describeStatusFailure(response.status, provider));
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        failure = pickFailure(failure, {
-          errorCode: "timeout",
-          error: "The connection test timed out.",
-        });
-      } else {
-        failure = pickFailure(failure, {
-          errorCode: "network",
-          error: "The provider could not be reached.",
-        });
-      }
-    } finally {
-      clearTimeout(timeout);
+      return MODEL_NOT_FOUND;
+    });
+    if (!next) {
+      return provider === "tinfoil"
+        ? testTinfoilKey(request, config.apiKey.trim(), fetchImpl, runPaidCheck)
+        : { success: true };
     }
+    everyListMissing = everyListMissing && next.status === 404;
+    failure = pickFailure(failure, next);
+  }
+  if (everyListMissing && provider === "custom" && config?.scope === "transcription") {
+    return testTranscriptionEndpoint(request, model, fetchImpl);
   }
   return { success: false, ...failure };
 }
 
-module.exports = { resolveProviderRequest, testProviderConnection };
+// OpenRouter's key route describes the key that called it. A management key (formerly a
+// provisioning key) only administers other keys and can never run a request. Only a 200
+// carries that description; any other 2xx has no key to read, so it keeps its status.
+async function describeOpenRouterKey(response) {
+  if (response.status !== 200) return describeStatusFailure(response.status, "openrouter");
+  const key = (await readJson(response))?.data;
+  if (!key?.is_management_key && !key?.is_provisioning_key) return null;
+  return { ...describeStatusFailure(401, "openrouter"), status: response.status };
+}
+
+// A speech-only server may publish no model list. Its transcription address answers a
+// request that carries no audio with 400 or 422, which proves the address without
+// transcribing anything. The model is not checked.
+async function testTranscriptionEndpoint(request, model, fetchImpl) {
+  const body = new FormData();
+  body.append("model", model);
+  const failure = await probe(
+    request.transcriptionEndpoint,
+    request,
+    fetchImpl,
+    async (response) => {
+      if (response.status === 400 || response.status === 422) return null;
+      // Nothing takes transcriptions at this address.
+      if (response.status === 404 || response.status === 405) {
+        return {
+          errorCode: "transcriptionEndpointNotFound",
+          error: "Nothing takes transcriptions at this address.",
+          status: response.status,
+        };
+      }
+      return describeStatusFailure(response.status, "custom");
+    },
+    { method: "POST", body }
+  );
+  return failure ? { success: false, ...failure } : { success: true };
+}
+
+// Deepgram is checked by key alone, since its model names don't match the app's model ids.
+// A 404 means the key route was retired, not that the key is wrong, so the project list
+// stands in.
+async function testDeepgramKey(request, fetchImpl) {
+  let retired = false;
+  const failure = await probe(request.endpoint, request, fetchImpl, async (response) => {
+    if (response.ok) return null;
+    retired = response.status === 404;
+    return describeStatusFailure(response.status, "deepgram");
+  });
+  if (!retired) return failure ? { success: false, ...failure } : { success: true };
+  const fallback = await probe(DEEPGRAM_PROJECTS_ENDPOINT, request, fetchImpl, async (response) => {
+    if (!response.ok) return describeStatusFailure(response.status, "deepgram");
+    // No errorCode: the step shows its generic "could not be verified".
+    return Array.isArray((await readJson(response))?.projects) ? null : {};
+  });
+  return fallback ? { success: false, ...fallback } : { success: true };
+}
+
+// Runs once Tinfoil's public model list has vouched for the model. A valid key pays for one
+// embedded token, hence runPaidCheck. A 404 means this check's own model was retired, which
+// says nothing about the key.
+function testTinfoilKey(request, apiKey, fetchImpl, runPaidCheck) {
+  const jsonRequest = {
+    ...request,
+    headers: { ...request.headers, "Content-Type": "application/json" },
+  };
+  return runPaidCheck(apiKey, async () => {
+    const failure = await probe(
+      TINFOIL_KEY_ENDPOINT,
+      jsonRequest,
+      fetchImpl,
+      async (response) => {
+        if (response.ok) return null;
+        const statusFailure = describeStatusFailure(response.status, "tinfoil");
+        return response.status === 404 ? { ...statusFailure, unverified: true } : statusFailure;
+      },
+      { method: "POST", body: JSON.stringify({ model: "nomic-embed-text", input: "." }) }
+    );
+    return failure ? { success: false, ...failure } : { success: true };
+  });
+}
+
+// Corti's speech credentials are exchanged for a token (cortiAuth.js). Only an answer from
+// Corti can refuse them, and getCortiToken prefixes those errors and attaches the status. A
+// token request that never reached Corti, or found it busy or down, gives no verdict, and
+// reporting it as "credentials rejected" sends the user to re-type a key that was never the
+// issue.
+function describeCortiTokenFailure(error) {
+  if (error?.name === "AbortError") return { success: false, ...TIMEOUT_FAILURE };
+  if (!/^(Corti authentication failed|Invalid Corti)/.test(error?.message || "")) {
+    return { success: false, ...NETWORK_FAILURE };
+  }
+  if (isUnverifiedStatus(error.status)) {
+    return { success: false, ...describeStatusFailure(error.status, "corti") };
+  }
+  return {
+    success: false,
+    errorCode: "credentialsRejected",
+    error: "Corti rejected these credentials.",
+  };
+}
+
+module.exports = { describeCortiTokenFailure, resolveProviderRequest, testProviderConnection };

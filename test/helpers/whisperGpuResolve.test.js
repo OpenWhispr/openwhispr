@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const WhisperManager = require("../../src/helpers/whisper.js");
 const { resolveFailedGpuBackends } = require("../../src/helpers/whisper.js");
+const debugLogger = require("../../src/helpers/debugLogger.js");
 
 // Every whisper-server start resolves its GPU backend from the current env +
 // installed packs + remembered failures. This is what makes "Enable GPU" work
@@ -26,11 +27,16 @@ test.afterEach(() => {
   }
 });
 
-function managerWith({ cudaDownloaded = false, vulkanDownloaded = false } = {}) {
+function managerWith({
+  cudaDownloaded = false,
+  vulkanDownloaded = false,
+  cudaNeedsUpdate = false,
+  vulkanNeedsUpdate = false,
+} = {}) {
   const manager = new WhisperManager();
   manager.setGpuBinaryManagers({
-    cuda: { isDownloaded: () => cudaDownloaded },
-    vulkan: { isDownloaded: () => vulkanDownloaded },
+    cuda: { isDownloaded: () => cudaDownloaded, needsUpdate: () => cudaNeedsUpdate },
+    vulkan: { isDownloaded: () => vulkanDownloaded, needsUpdate: () => vulkanNeedsUpdate },
   });
   return manager;
 }
@@ -163,4 +169,157 @@ for (const [name, packs, failed, optedOut, expected] of [
 test("without injected binary managers (macOS) no pack is in use", () => {
   process.env.WHISPER_GPU_FAILED = "cuda,vulkan";
   assert.equal(new WhisperManager().resolveGpuPackInUse(), null);
+});
+
+test("_warnIfGpuFallback logs warning when CUDA is enabled in env but pack is missing", () => {
+  const manager = managerWith({ cudaDownloaded: false });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "Whisper CUDA enabled but cannot be used, falling back to CPU");
+    assert.equal(warned[0][1].reason, "pack not installed or missing required libraries");
+
+    // Deduplication check
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
+});
+
+test("_warnIfGpuFallback logs warning when CUDA is enabled in env and pack needs update", () => {
+  const manager = new WhisperManager();
+  manager.setGpuBinaryManagers({
+    cuda: { isDownloaded: () => false, needsUpdate: () => true },
+    vulkan: { isDownloaded: () => false, needsUpdate: () => false },
+  });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "Whisper CUDA enabled but cannot be used, falling back to CPU");
+    assert.equal(warned[0][1].reason, "pack needs update");
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
+});
+
+test("_warnIfGpuFallback does not log when CUDA is downloaded and used", () => {
+  const manager = managerWith({ cudaDownloaded: true });
+  process.env.WHISPER_CUDA_ENABLED = "true";
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    manager._warnIfGpuFallback();
+    assert.equal(warned.length, 0);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
+});
+
+function fallbackWarnings(t, manager) {
+  const warn = t.mock.method(debugLogger, "warn", () => {});
+  manager._warnIfGpuFallback();
+  return warn.mock.calls.map(({ arguments: [message, meta] }) => ({ message, ...meta }));
+}
+
+test("_warnIfGpuFallback warns about an outdated pack whose flag line was lost (#1340)", (t) => {
+  const warnings = fallbackWarnings(t, managerWith({ cudaNeedsUpdate: true }));
+  assert.deepEqual(warnings, [
+    {
+      message: "Whisper CUDA enabled but cannot be used, falling back to CPU",
+      pack: "CUDA whisper",
+      reason: "pack needs update",
+    },
+  ]);
+});
+
+test("_warnIfGpuFallback stays quiet for a pack that was never installed or is turned off", (t) => {
+  assert.deepEqual(fallbackWarnings(t, managerWith()), [], "unset flag, no pack");
+
+  process.env.WHISPER_CUDA_ENABLED = "false";
+  process.env.WHISPER_VULKAN_ENABLED = "false";
+  const turnedOff = managerWith({ cudaNeedsUpdate: true, vulkanNeedsUpdate: true });
+  assert.deepEqual(fallbackWarnings(t, turnedOff), [], "explicit opt-out");
+});
+
+test("_warnIfGpuFallback names Vulkan when an unusable CUDA pack leaves it running", (t) => {
+  process.env.WHISPER_CUDA_ENABLED = "true";
+  const manager = managerWith({ cudaNeedsUpdate: true, vulkanDownloaded: true });
+  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: false, useVulkan: true });
+
+  const [warning] = fallbackWarnings(t, manager);
+  assert.equal(warning.message, "Whisper CUDA enabled but cannot be used, falling back to Vulkan");
+});
+
+test("_warnIfGpuFallback warns about an unusable Vulkan pack when CUDA isn't wanted", (t) => {
+  process.env.WHISPER_VULKAN_ENABLED = "true";
+  const warnings = fallbackWarnings(t, managerWith({ vulkanNeedsUpdate: true }));
+  assert.deepEqual(warnings, [
+    {
+      message: "Whisper Vulkan enabled but cannot be used, falling back to CPU",
+      pack: "Vulkan whisper",
+      reason: "pack needs update",
+    },
+  ]);
+});
+
+test("_warnIfGpuFallback names a recorded failure for a downloaded pack", (t) => {
+  process.env.WHISPER_GPU_FAILED = "cuda";
+  const [warning] = fallbackWarnings(t, managerWith({ cudaDownloaded: true }));
+  assert.equal(warning.reason, "previous failure recorded");
+});
+
+test("pre-warm and every server start check for a GPU fallback before starting", async (t) => {
+  const os = require("node:os");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-gpu-warn-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const modelPath = path.join(dir, "ggml-base.bin");
+  fs.writeFileSync(modelPath, "");
+
+  const manager = managerWith();
+  const order = [];
+  t.mock.method(manager, "_warnIfGpuFallback", () => order.push("warn"));
+  manager.getModelsDir = () => dir;
+  manager.getModelPath = () => modelPath;
+  manager.serverManager = {
+    isAvailable: () => true,
+    getServerBinaryPath: () => null,
+    start: async () => {
+      order.push("start");
+      throw new Error("stop here");
+    },
+  };
+
+  await manager.initializeAtStartup({
+    localTranscriptionProvider: "whisper",
+    whisperModel: "base",
+  });
+  assert.deepEqual(order, ["warn", "start"], "pre-warm");
+
+  order.length = 0;
+  await assert.rejects(manager._runServerTranscription(Buffer.alloc(0), "base", "en"), /stop here/);
+  assert.deepEqual(order, ["warn", "start"], "server start");
+});
+
+test("_warnIfGpuFallback ignores an outdated Vulkan pack while CUDA runs", (t) => {
+  const manager = managerWith({ cudaDownloaded: true, vulkanNeedsUpdate: true });
+  assert.deepEqual(manager.resolveGpuStartOptions(), { useCuda: true, useVulkan: false });
+  assert.deepEqual(fallbackWarnings(t, manager), []);
 });
