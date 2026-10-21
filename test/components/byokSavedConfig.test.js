@@ -62,7 +62,7 @@ async function uploadRoute(step) {
   const { resolveTranscriptionRoute } = await loadTranscriptionRoute();
   return resolveTranscriptionRoute({
     settings: {
-      ...selectResolvedUploadTranscription(state),
+      ...selectResolvedUploadTranscription(state, state),
       remoteTranscriptionUrl: state.remoteTranscriptionUrl,
       remoteTranscriptionModel: state.remoteTranscriptionModel,
     },
