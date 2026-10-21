@@ -7,7 +7,7 @@ import {
 } from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
+import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
 import {
   asProviderError,
@@ -31,7 +31,7 @@ interface GeminiResponse {
 interface GeminiGenerationConfig {
   temperature: number;
   thinkingConfig?: {
-    thinkingLevel?: "minimal" | "low";
+    thinkingLevel?: string;
     thinkingBudget?: number;
     includeThoughts: boolean;
   };
@@ -57,7 +57,7 @@ export const geminiProvider: InferenceProvider = {
     const apiKey = await ctx.getApiKey("gemini");
     logger.logReasoning("GEMINI_API_KEY", { hasApiKey: !!apiKey, keyLength: apiKey?.length || 0 });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
     const isGemini = model.startsWith("gemini-");
@@ -73,7 +73,12 @@ export const geminiProvider: InferenceProvider = {
       // limit and the request timeout bound the reply.
     };
 
-    if (config.disableThinking === true && minimalThinking[model]) {
+    // A chosen level is only offered while thinking isn't suppressed, so it wins
+    // over the minimal floor that a model without the toggle gets by default.
+    const thinkingLevel = chosenReasoningEffort("gemini", model, config);
+    if (thinkingLevel) {
+      generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
+    } else if (config.disableThinking === true && minimalThinking[model]) {
       generationConfig.thinkingConfig = minimalThinking[model];
     }
 

@@ -215,6 +215,19 @@ for (const backend of ["GNOME", "Hyprland"]) {
   });
 }
 
+// gnomeShortcut.js answers with a reason when the keymap leaves GNOME nothing to grab.
+test("GNOME startup falls back to F8 when GNOME can't grab the saved key", async () => {
+  const f = fixture("GNOME", "F19");
+  const register = f.gnome.registerKeybinding;
+  f.gnome.registerKeybinding = async (shortcut) =>
+    shortcut === "F19" ? "keysym_missing" : register(shortcut);
+  await f.manager.initializeHotkey(f.window, () => {});
+  f.timers.shift().callback();
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(f.manager.currentHotkey, "F8");
+  assert.deepEqual(f.registrations, [{ hotkey: "F8", push: false }]);
+});
+
 // Without its evdev listener a Linux session cannot hold through globalShortcut.
 test("KDE that cannot register falls back to globalShortcut and checks Hold again", async () => {
   const f = fixture("KDE", "Scrolllock", false);

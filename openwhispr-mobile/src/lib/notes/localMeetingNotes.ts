@@ -2,10 +2,12 @@ import { AppleLLM } from '@/lib/appleLLM';
 import { notesRepository } from '@/data';
 import type { Note, Segment, Speaker } from '@/data/types';
 import {
+  countLocalInputTokens,
   fitsLocalReasoningBudget,
   getLocalInputTokenBudget,
   getLocalReasoningReadiness,
   isLocalContextLimitError,
+  isLocalOutputLimitError,
   LOCAL_OUTPUT_TOKEN_RESERVE,
   toLocalReasoningError,
 } from '@/lib/localReasoning';
@@ -20,6 +22,23 @@ import type { StructuredMeetingNotes } from '@/types';
 
 const DEFAULT_LOCAL_MEETING_ACTION_PROMPT =
   'Transform this meeting transcript into concise, actionable meeting notes.';
+
+// Each chunk's notes have to fit LOCAL_OUTPUT_TOKEN_RESERVE, the maximumResponseTokens these runs
+// pass, which a larger context (iOS 27's 8,192) doesn't grow. Chunks the size of iOS 26's whole
+// input budget already ran past it. Notes grow with the transcript they cover, so the limit is on
+// transcript, not on the instructions and raw notes every chunk repeats; with the default
+// instructions, a full chunk is about 2,000 tokens.
+const LOCAL_MEETING_CHUNK_MAX_TRANSCRIPT_TOKENS = 1_300;
+
+// A chunk whose notes still run past the cap is halved, and each half can be halved again, at most
+// this many times in a row: up to 7 runs for one chunk, so a model that keeps looping can't turn it
+// into dozens of slow runs. A piece that still overflows fails the note.
+const MAX_OUTPUT_LIMIT_SPLITS = 2;
+
+// Merged notes have to fit LOCAL_OUTPUT_TOKEN_RESERVE too, so a merge reads at most iOS 26's whole
+// input budget (4,096 - 900 - 300), the size merges run at there, however large the context. A
+// bigger merge is more likely to run to the cap, a full slow run before the hand merge.
+const LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS = 2_896;
 
 const emptyMeetingNotes = (): StructuredMeetingNotes => ({
   summary: '',
@@ -134,11 +153,13 @@ async function buildTranscriptChunks(input: {
   meetingContext?: MeetingNotesContext;
   instructions: string;
   budget: number;
+  overhead: number;
 }): Promise<string[][]> {
   const chunks: string[][] = [];
   let current: string[] = [];
+  const pending = [...input.lines];
 
-  for (const line of input.lines) {
+  for (let line = pending.shift(); line !== undefined; line = pending.shift()) {
     const candidate = [...current, line];
     const prompt = buildChunkInput({
       note: input.note,
@@ -151,11 +172,19 @@ async function buildTranscriptChunks(input: {
       budget: input.budget,
     });
 
-    if (!fits && current.length > 0) {
-      chunks.push(current);
-      current = [line];
-    } else {
+    if (fits) {
       current = candidate;
+    } else if (current.length > 0) {
+      chunks.push(current);
+      current = [];
+      pending.unshift(line);
+    } else {
+      // One speaker's consecutive segments are one line, so a long stretch by one speaker can
+      // outgrow a chunk by itself. It is split by words; a single word is kept as it is, and so is
+      // every line when the instructions and raw notes alone fill a chunk.
+      const halves = input.overhead < input.budget ? splitTranscriptLine(line) : null;
+      if (halves) pending.unshift(...halves);
+      else current = [line];
     }
   }
 
@@ -212,7 +241,9 @@ async function mapChunkWithRetry(input: {
   meetingContext?: MeetingNotesContext;
   instructions: string;
   previousSummary?: string;
+  outputLimitSplitsLeft?: number;
 }): Promise<StructuredMeetingNotes[]> {
+  const outputLimitSplitsLeft = input.outputLimitSplitsLeft ?? MAX_OUTPUT_LIMIT_SPLITS;
   const chunkInput = buildChunkInput({
     note: input.note,
     lines: input.lines,
@@ -230,25 +261,37 @@ async function mapChunkWithRetry(input: {
       }),
     ];
   } catch (error) {
-    if (!isLocalContextLimitError(error)) throw error;
+    const outputLimit = isLocalOutputLimitError(error);
+    if (!isLocalContextLimitError(error) && !(outputLimit && outputLimitSplitsLeft > 0)) {
+      throw error;
+    }
 
+    // Notes too long for the output cap come from too much material, so fewer lines fix them.
+    // Chunking already split any line longer than a chunk's transcript limit, so one line's notes
+    // overflowing means the model is looping, and half a line won't help.
     const split =
       input.lines.length > 1
         ? [
             input.lines.slice(0, Math.ceil(input.lines.length / 2)),
             input.lines.slice(Math.ceil(input.lines.length / 2)),
           ]
-        : splitTranscriptLine(input.lines[0])?.map((line) => [line]);
+        : outputLimit
+          ? null
+          : splitTranscriptLine(input.lines[0])?.map((line) => [line]);
 
     if (!split) throw error;
 
-    const left = await mapChunkWithRetry({
+    const next = {
       ...input,
+      outputLimitSplitsLeft: outputLimit ? outputLimitSplitsLeft - 1 : outputLimitSplitsLeft,
+    };
+    const left = await mapChunkWithRetry({
+      ...next,
       lines: split[0],
     });
     const nextSummary = left[left.length - 1]?.summary || input.previousSummary;
     const right = await mapChunkWithRetry({
-      ...input,
+      ...next,
       lines: split[1],
       previousSummary: nextSummary,
     });
@@ -279,10 +322,15 @@ async function reduceStructuredNotes(input: {
       budget: input.budget,
     })
   ) {
-    return generateStructuredNotes({
-      instructions: input.instructions,
-      prompt,
-    });
+    try {
+      return await generateStructuredNotes({
+        instructions: input.instructions,
+        prompt,
+      });
+    } catch (error) {
+      // Merged notes too long for the output cap are merged like ones too long to read.
+      if (!isLocalOutputLimitError(error)) throw error;
+    }
   }
 
   if (input.notes.length === 2) {
@@ -327,13 +375,19 @@ export async function generateLocalMeetingNotes(
   const readiness = await getLocalReasoningReadiness();
   const budget = getLocalInputTokenBudget(readiness);
   const meetingContext = resolveMeetingContext(note);
+  const chunkOverhead = await countLocalInputTokens({
+    instructions,
+    prompt: buildChunkInput({ note, lines: [], meetingContext }),
+  });
+  const chunkBudget = Math.min(budget, chunkOverhead + LOCAL_MEETING_CHUNK_MAX_TRANSCRIPT_TOKENS);
   const lines = transcriptLines(segments, notesRepository.getSpeakers(noteId));
   const chunks = await buildTranscriptChunks({
     note,
     lines,
     meetingContext,
     instructions,
-    budget,
+    budget: chunkBudget,
+    overhead: chunkOverhead,
   });
 
   const mapped: StructuredMeetingNotes[] = [];
@@ -353,7 +407,7 @@ export async function generateLocalMeetingNotes(
   const reduced = await reduceStructuredNotes({
     notes: mapped,
     instructions,
-    budget,
+    budget: Math.min(budget, LOCAL_MEETING_MERGE_MAX_INPUT_TOKENS),
   });
   const markdown = renderStructuredMeetingNotesToMarkdown(reduced);
 

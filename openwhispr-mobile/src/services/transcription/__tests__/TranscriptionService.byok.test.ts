@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
+import { resolveMobileProviderRoute } from '@/lib/inferenceRouting';
 import { transcribeWithProvider } from '@/services/providers/ProviderExecution';
 import { TranscriptionService } from '../TranscriptionService';
 import type { TranscriptionRequest } from '../../../types';
@@ -104,6 +105,28 @@ test('BYOK returns provider metadata without an OpenWhispr session or upload', a
   expect(FileSystem.uploadAsync).not.toHaveBeenCalled();
 });
 
+// Local Mode keeps dictation on this iPhone, but an upload goes to the provider saved for uploads.
+test.each([
+  ['file', 'upload', true],
+  ['recording', 'dictation', false],
+] as const)(
+  'lets a %s go to its saved provider only when it is an upload',
+  async (requestContext, scope, allowRemoteContent): Promise<void> => {
+    await TranscriptionService.transcribe({
+      audioUri: 'file:///clip.wav',
+      provider: 'byok',
+      requestContext,
+      inferenceRoute: mockProviderRoute,
+    });
+    expect(resolveMobileProviderRoute).toHaveBeenCalledWith(
+      scope,
+      mockProviderRoute,
+      false,
+      allowRemoteContent,
+    );
+  },
+);
+
 test('BYOK recovery snapshot preserves the pinned text stages and client job ID', async (): Promise<void> => {
   await TranscriptionService.transcribe({
     audioUri: 'file:///recording.wav',
@@ -112,9 +135,7 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
     clientTranscriptionId: 'client-job-42',
     inferenceRoute: mockProviderRoute,
     cleanupRoute: mockCleanupRoute,
-    agentRoute: mockCleanupRoute,
     cleanupUnavailable: 'cleanup unavailable',
-    agentUnavailable: 'agent unavailable',
   });
 
   const providerInput = mockTranscribeWithProvider.mock.calls[0]?.[0];
@@ -126,9 +147,7 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
       provider: 'byok',
       inferenceRoute: mockProviderRoute,
       cleanupRoute: mockCleanupRoute,
-      agentRoute: mockCleanupRoute,
       cleanupUnavailable: 'cleanup unavailable',
-      agentUnavailable: 'agent unavailable',
     },
   });
 });

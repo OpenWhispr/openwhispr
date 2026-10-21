@@ -4,14 +4,18 @@ import type { KeyboardTone } from '@/types';
 // Any change here must stay in sync with the server-side source.
 export const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
   formal:
-    'Apply this tone: render the text in a formal, professional tone; use complete sentences, no slang or contractions, and keep it courteous and precise. Restyle only; do not add or remove information.',
+    "Apply this tone: formal and polished. Use complete sentences with standard capitalization and full punctuation, spell out informal contractions (in English: I will, do not) but keep any the language's grammar requires, and leave out slang, filler, texting shorthand, emoji and em dashes. Restyle only; do not add or remove information.",
   casual:
-    'Apply this tone: render the text in a casual, conversational tone; natural contractions, friendly and relaxed, as if texting a colleague. Restyle only; do not add or remove information.',
+    "Apply this tone: casual and friendly, like a quick note to a colleague. Use the language's everyday contractions (in English: I'll, it's, don't) and everyday wording, standard capitalization and light punctuation with no semicolons or em dashes; a final period can be dropped. Restyle only; do not add or remove information.",
   very_casual:
-    'Apply this tone: render the text in a very casual, informal tone; contractions, light slang, and relaxed phrasing are welcome, while keeping it brief and breezy. Restyle only; do not add or remove information.',
+    'Apply this tone: very casual, like texting a friend. Write in all lowercase and keep punctuation light: a question still ends with a question mark, but drop the final period and never use em dashes. Use texting shorthand common in the output language only where it stands for the exact words (in English: "u" for you, "lmk" for let me know). Restyle only; do not add or remove information.',
   excited:
-    'Apply this tone: render the text in an enthusiastic, upbeat, energetic tone; emphatic phrasing is welcome and exclamation marks may be used sparingly and naturally. Restyle only; do not add or remove information.',
+    'Apply this tone: upbeat and enthusiastic. Use standard capitalization and warm, energetic wording, and end positive or friendly sentences with an exclamation mark, without overdoing it. Use commas or periods, never semicolons or em dashes, and no emoji. Restyle only; do not add or remove information.',
 };
+
+// The server's TONE_PRIORITY_INSTRUCTION, which cleanup appends after the tone.
+export const TONE_PRIORITY_INSTRUCTION =
+  "This tone overrides any instruction to keep the speaker's tone, voice, style, wording or formality, and it sets capitalization and punctuation; names, acronyms and dictionary terms keep their exact spelling and capitalization. It never changes meaning or intent. Every other cleanup rule still applies.";
 
 const BASE_PROMPT = `You are a text composition assistant embedded in a keyboard. The user's message is always an INSTRUCTION describing what to write — never text to transcribe and never a question for you to answer.
 

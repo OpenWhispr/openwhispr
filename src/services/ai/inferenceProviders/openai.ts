@@ -9,10 +9,10 @@ import {
   applyChatCompletionsParams,
   emptyOutputError,
   emptyResponseError,
-  familyResponsesEffort,
   fetchWithParamFallback,
   isTruncatedFinishReason,
   REASONING_MODEL_MIN_OUTPUT_TOKENS,
+  responsesReasoningEffort,
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
@@ -108,15 +108,13 @@ async function detectServerType(base: string): Promise<void> {
     return;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     const res = await fetch(buildApiUrl(base, "/models"), {
       method: "GET",
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     if (!res.ok) {
       probedBases.add(base);
       return;
@@ -137,6 +135,8 @@ async function detectServerType(base: string): Promise<void> {
     probedBases.add(base);
   } catch {
     probedBases.add(base);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -167,7 +167,7 @@ export const openaiProvider: InferenceProvider = {
       keyLength: apiKey?.length || 0,
     });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const imageDataUrl = config.screenContext
       ? `data:${config.screenContext.mediaType};base64,${config.screenContext.data}`
@@ -250,6 +250,7 @@ export const openaiProvider: InferenceProvider = {
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         const unlinkCancel = abortOnCancel(config.requestId, controller);
+        let readingBody = false;
         try {
           const requestedMaxTokens =
             config.maxTokens ||
@@ -277,7 +278,7 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
-            const effort = familyResponsesEffort(model, config);
+            const effort = responsesReasoningEffort(model, resolvedProvider, config, openAiBase);
             if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);
@@ -291,6 +292,7 @@ export const openaiProvider: InferenceProvider = {
           }
 
           const res = await fetchWithParamFallback(
+            endpoint,
             () =>
               fetch(endpoint, {
                 method: "POST",
@@ -340,12 +342,14 @@ export const openaiProvider: InferenceProvider = {
           }
 
           rememberPreference(openAiBase, type);
-          return res.json();
+          readingBody = true;
+          return await res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
             if (isRequestCancelled(config.requestId)) throw requestCancelledError();
             throw llmRequestTimeoutError(timeoutSeconds);
           }
+          if (readingBody) throw error;
           lastError = error as Error;
           if (retryStrategy.shouldRetry(lastError)) {
             lastRetryableError = lastError;

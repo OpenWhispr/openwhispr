@@ -696,6 +696,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     "Make it shorter",
   ]
   private var agentRecordingHint: String?
+
+  // An example to say, unless the app's own walkthrough is telling the user what to say.
+  private func agentHint(from hints: [String]) -> String? {
+    KeyboardHandoffProvider.shared.agentHintsHidden() ? nil : hints.randomElement()
+  }
   private var isAgentGenerating = false
   private var waitForAgentResultTimer: Timer?
   private var agentReviewNoteResetTimer: Timer?
@@ -1553,7 +1558,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       // Deep-link/recovery starts never pass through the tap handlers, so pick
       // (and stash) a hint lazily here.
       if agentRecordingHint == nil {
-        agentRecordingHint = Self.agentComposeHints.randomElement()
+        agentRecordingHint = agentHint(from: Self.agentComposeHints)
       }
       recordingCaptionLabel.text = agentRecordingHint.map { "\u{201C}\($0)\u{201D}" } ?? "Listening"
       recordingHeaderLabel.text = agentRecordingHeaderText
@@ -1796,7 +1801,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // when locked. The header costs one row of the height-capped menu, so on
     // shorter keyboards the last tone ("Excited") can fall into the scroll
     // region instead of showing inline.
-    let menuTitle = applicable ? "Dictation Tone" : "Turn off Private mode to use tones"
+    let menuTitle = applicable ? "Dictation Tone" : "Tones are off in Local Mode"
     toneButton.menu = UIMenu(title: menuTitle, children: actions)
     toneButton.isUserInteractionEnabled = true
     toneButton.alpha = applicable ? 1.0 : 0.4
@@ -3059,11 +3064,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let provider = KeyboardHandoffProvider.shared
     guard provider.isAgentEnabled() else { return }
 
-    // Not applicable ⇒ Private mode is on. Point at it, swallow the tap.
+    // Not applicable ⇒ the voice assistant can't run: it needs an account or its own provider key.
+    // Point at it, swallow the tap.
     guard provider.isAgentApplicable() else {
       playKeyClick()
       showTransientRecordState(
-        title: "Turn off Private mode",
+        title: "Sign in to use",
         systemImage: "lock.fill",
         background: Palette.issue,
         duration: 1.6
@@ -3096,7 +3102,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // so the user knows the instruction will rewrite that text. Degrade silently
     // when selectedText is nil (most third-party apps don't expose it).
     let selectionCaption: String? = (selectedText?.isEmpty == false) ? "Rewriting Selection" : nil
-    agentRecordingHint = Self.agentComposeHints.randomElement()
+    agentRecordingHint = agentHint(from: Self.agentComposeHints)
 
     if recordsInPlace {
       isAgentRecordingActive = true
@@ -3938,7 +3944,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     isAgentActionInFlight = true
     isAgentRecordingActive = true
     hideAgentReviewCard(clearState: false)
-    agentRecordingHint = Self.agentFollowUpHints.randomElement()
+    agentRecordingHint = agentHint(from: Self.agentFollowUpHints)
     startAgentRecordingInPlace(caption: "Describe your changes")
   }
 
@@ -4072,6 +4078,7 @@ private struct KeyboardHandoffProvider {
   private let agentResultKey = "keyboard_agent_result"
   private let agentActionKey = "keyboard_agent_action"
   private let agentActionAtMsKey = "keyboard_agent_action_at_ms"
+  private let agentHintsHiddenUntilMsKey = "keyboard_agent_hints_hidden_until_ms"
   static let toneValues = ["default", "formal", "casual", "very_casual", "excited"]
   private static var darwinStartNotificationName: String {
     "\(resolvedContainingAppBundleID).startRecording"
@@ -4189,8 +4196,9 @@ private struct KeyboardHandoffProvider {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentEnabledKey) == "1"
   }
 
-  /// Applicable = usable in the current mode (Cloud on). Not applicable ⇒ the
-  /// entry button is dimmed and points the user at the app, mirroring tone.
+  /// Applicable = the voice assistant can run: an account for Cloud, or its own
+  /// provider. Not applicable ⇒ the entry button is dimmed and points the user at
+  /// the app, mirroring tone.
   func isAgentApplicable() -> Bool {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentApplicableKey) == "1"
   }
@@ -4207,6 +4215,15 @@ private struct KeyboardHandoffProvider {
     }
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? "your agent" : trimmed
+  }
+
+  /// The app hides the example instructions until this deadline while its own walkthrough says
+  /// what to dictate (onboarding's voice assistant step). A deadline, so a step the app never left
+  /// (killed mid-onboarding) stops hiding them on its own.
+  func agentHintsHidden() -> Bool {
+    guard let raw = UserDefaults(suiteName: appGroupId)?.string(forKey: agentHintsHiddenUntilMsKey),
+          let untilMs = Double(raw) else { return false }
+    return Date().timeIntervalSince1970 * 1000 < untilMs
   }
 
   /// True when the app has written its heartbeat within the last 5s (same rule

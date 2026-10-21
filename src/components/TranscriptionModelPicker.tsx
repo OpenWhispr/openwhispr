@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
-import ApiKeyInput from "./ui/ApiKeyInput";
 import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
@@ -44,7 +42,18 @@ import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
+import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
+import { ProviderCheckField } from "./ui/ProviderCheckField";
+import { usePanelVisible } from "./ui/usePanelVisible";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { useFocusHold } from "../hooks/useFocusHold";
+import { useTypingPause } from "../hooks/useTypingPause";
+import {
+  useConnectionAutoCheck,
+  type ProviderConnectionConfig,
+} from "../hooks/useConnectionAutoCheck";
 import { getCachedPlatform } from "../utils/platform";
 import { pickWhisperGpuBackend } from "../utils/whisperGpuPack";
 import logger from "../utils/logger";
@@ -301,7 +310,7 @@ const PROVIDER_CREDENTIALS: Record<
   corti: {
     consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
     fields: [
-      { key: "cortiClientId", input: "secret", labelKey: "transcription.corti.clientId" },
+      { key: "cortiClientId", input: "text", labelKey: "transcription.corti.clientId" },
       { key: "cortiClientSecret", input: "secret", labelKey: "transcription.corti.clientSecret" },
       {
         key: "cortiEnvironment",
@@ -1065,20 +1074,22 @@ export default function TranscriptionModelPicker({
 
   const providerCredentials =
     PROVIDER_CREDENTIALS[displayedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+  const keyDraft = useCredentialDraft();
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
-    openaiApiKey,
-    groqApiKey,
-    xaiApiKey,
-    mistralApiKey,
-    geminiApiKey,
-    cortiClientId,
-    cortiClientSecret,
+    openaiApiKey: keyDraft.value("openaiApiKey", openaiApiKey),
+    groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
+    xaiApiKey: keyDraft.value("xaiApiKey", xaiApiKey),
+    mistralApiKey: keyDraft.value("mistralApiKey", mistralApiKey),
+    geminiApiKey: keyDraft.value("geminiApiKey", geminiApiKey),
+    cortiClientId: keyDraft.value("cortiClientId", cortiClientId),
+    cortiClientSecret: keyDraft.value("cortiClientSecret", cortiClientSecret),
     cortiEnvironment,
-    cortiTenant,
-    tinfoilApiKey,
-    deepgramApiKey,
-    assemblyaiApiKey,
+    cortiTenant: keyDraft.value("cortiTenant", cortiTenant),
+    tinfoilApiKey: keyDraft.value("tinfoilApiKey", tinfoilApiKey),
+    deepgramApiKey: keyDraft.value("deepgramApiKey", deepgramApiKey),
+    assemblyaiApiKey: keyDraft.value("assemblyaiApiKey", assemblyaiApiKey),
   };
+  const customKey = keyDraft.value("customTranscriptionApiKey", customTranscriptionApiKey);
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
     groqApiKey: setGroqApiKey,
@@ -1093,6 +1104,107 @@ export default function TranscriptionModelPicker({
     deepgramApiKey: setDeepgramApiKey,
     assemblyaiApiKey: setAssemblyaiApiKey,
   };
+
+  const endpointHold = useFocusHold();
+  const editing = useFocusHold();
+  const visible = usePanelVisible();
+  // A tab that is only being browsed has no model of this panel's: the key alone is checked.
+  const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+  const isCustom = displayedCloudProvider === "custom";
+  const isCorti = displayedCloudProvider === "corti";
+  const providerKey = credentialValues[providerCredentials.fields[0].key];
+  // `typed` is what is typed into this provider's fields (a speech server's address and
+  // model name included); `context` is what is chosen instead.
+  const connection: {
+    config: ProviderConnectionConfig;
+    ready: boolean;
+    typed: string;
+    context: unknown[];
+  } = isCustom
+    ? {
+        config: {
+          scope: "transcription",
+          provider: "custom",
+          baseUrl: cloudTranscriptionBaseUrl,
+          apiKey: customKey,
+          model: panelModel,
+        },
+        // The check speaks only OpenAI's API; Azure gets its own URL and `api-key` header.
+        ready:
+          Boolean(cloudTranscriptionBaseUrl.trim() && panelModel.trim()) &&
+          !isAzureOpenAIEndpoint(cloudTranscriptionBaseUrl),
+        typed: `${cloudTranscriptionBaseUrl}\n${customKey}\n${panelModel}`,
+        context: [],
+      }
+    : isCorti
+      ? {
+          config: {
+            scope: "transcription",
+            provider: "corti",
+            clientId: credentialValues.cortiClientId,
+            clientSecret: credentialValues.cortiClientSecret,
+            environment: cortiEnvironment,
+            tenant: credentialValues.cortiTenant,
+          },
+          ready: Boolean(
+            credentialValues.cortiClientId.trim() && credentialValues.cortiClientSecret.trim()
+          ),
+          typed: `${credentialValues.cortiClientId}\n${credentialValues.cortiClientSecret}`,
+          context: [cortiEnvironment, credentialValues.cortiTenant],
+        }
+      : {
+          config: {
+            scope: "transcription",
+            provider: displayedCloudProvider,
+            apiKey: providerKey,
+            model: panelModel,
+          },
+          ready: Boolean(providerKey.trim()),
+          typed: providerKey,
+          context: [panelModel],
+        };
+  const delayMs = useTypingPause({
+    typed: connection.typed,
+    context: JSON.stringify([
+      displayedCloudProvider,
+      visible,
+      effectiveLocal,
+      ...connection.context,
+    ]),
+    held: editing.held,
+  });
+  const check = useConnectionAutoCheck({
+    config: connection.config,
+    // A hidden panel is not ready to ask; a shown one asks again, and the main process answers
+    // a check it remembers at once.
+    ready:
+      !effectiveLocal && providerAllowed(displayedCloudProvider) && connection.ready && visible,
+    // A half-typed address may belong to someone else: nothing is sent while it is edited.
+    hold: isCustom && endpointHold.held,
+    delayMs,
+  });
+  // The field that completes the connection carries the status.
+  const checkedCredential = isCorti ? "cortiClientSecret" : providerCredentials.fields[0].key;
+  const refused = check.failure?.errorCode === "credentialsRejected";
+  // The typed values the check carries, as one string so the effect sees each new set.
+  const checkedFields = JSON.stringify(
+    isCustom
+      ? { customTranscriptionApiKey: customKey }
+      : Object.fromEntries(
+          providerCredentials.fields.map((field) => [field.key, credentialValues[field.key]])
+        )
+  );
+  const followKeyDraft = keyDraft.follow;
+  useEffect(() => {
+    followKeyDraft({
+      phase: check.phase,
+      checked: JSON.parse(checkedFields),
+      // Someone's own server may refuse a key for other reasons, so its refusal holds nothing back.
+      refused: refused && !isCustom,
+    });
+  }, [check.phase, checkedFields, isCustom, refused, followKeyDraft]);
+  const customFailureReason =
+    !customKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -1277,6 +1389,7 @@ export default function TranscriptionModelPicker({
 
   return (
     <div className={`space-y-2 ${className}`}>
+      <ConnectionCheckAnnouncer announcement={check.announcement} />
       {!mode && <ModeToggle useLocalWhisper={effectiveLocal} onModeChange={handleModeChange} />}
 
       {!effectiveLocal ? (
@@ -1294,40 +1407,60 @@ export default function TranscriptionModelPicker({
           {providerAllowed(displayedCloudProvider) && (
             <div>
               {displayedCloudProvider === "custom" ? (
-                <div className="space-y-2">
+                <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-foreground">
                       {t("transcription.endpointUrl")}
                     </label>
-                    <Input
-                      dir="ltr"
+                    <ProviderCheckField
+                      aria-label={t("transcription.endpointUrl")}
                       value={cloudTranscriptionBaseUrl}
                       onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
-                      onBlur={handleBaseUrlBlur}
+                      onFocus={endpointHold.onFocus}
+                      onBlur={(event) => {
+                        endpointHold.onBlur(event);
+                        handleBaseUrlBlur();
+                      }}
                       placeholder="https://your-api.example.com/v1"
-                      className="h-8 text-sm"
+                      autoComplete="off"
+                      spellCheck={false}
                     />
                   </div>
-
-                  <ApiKeyInput
-                    apiKey={customTranscriptionApiKey}
-                    setApiKey={setCustomTranscriptionApiKey}
-                    label={t("transcription.apiKeyOptional")}
-                    helpText=""
-                  />
-
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium text-foreground">
+                      {t("transcription.apiKeyOptional")}
+                    </label>
+                    <ProviderCheckField
+                      aria-label={t("transcription.apiKeyOptional")}
+                      type="password"
+                      value={customKey}
+                      onChange={(e) =>
+                        keyDraft.change(
+                          "customTranscriptionApiKey",
+                          e.target.value.trim(),
+                          setCustomTranscriptionApiKey
+                        )
+                      }
+                      onBlur={keyDraft.save}
+                      placeholder={t("apiKeyInput.placeholder")}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-foreground">
                       {t("common.model")}
                     </label>
-                    <Input
-                      dir="ltr"
-                      value={
-                        selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : ""
-                      }
+                    <ProviderCheckField
+                      aria-label={t("common.model")}
+                      check={check}
+                      invalidOn="modelNotFound"
+                      failureReason={customFailureReason}
+                      value={panelModel}
                       onChange={(e) => handleCloudModelSelect(e.target.value)}
                       placeholder="whisper-1"
-                      className="h-8 text-sm"
+                      autoComplete="off"
+                      spellCheck={false}
                     />
                   </div>
 
@@ -1337,54 +1470,67 @@ export default function TranscriptionModelPicker({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {providerCredentials.fields.map((field, index) => (
-                    <div key={field.key} className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-foreground">
-                          {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
-                        </label>
-                        {index === 0 && (
-                          <GetApiKeyLink
-                            url={providerCredentials.consoleUrl}
-                            labelKey="transcription.getKey"
-                            className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                  {providerCredentials.fields.map((field, index) => {
+                    const label = field.labelKey ? t(field.labelKey) : t("common.apiKey");
+                    return (
+                      <div key={field.key} className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-foreground">{label}</label>
+                          {index === 0 && (
+                            <GetApiKeyLink
+                              url={providerCredentials.consoleUrl}
+                              labelKey="transcription.getKey"
+                              className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                            />
+                          )}
+                        </div>
+                        {field.input === "select" ? (
+                          <Select
+                            value={credentialValues[field.key]}
+                            onValueChange={credentialSetters[field.key]}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options?.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <ProviderCheckField
+                            aria-label={label}
+                            check={field.key === checkedCredential ? check : undefined}
+                            invalidOn="credentialsRejected"
+                            type={field.input === "secret" ? "password" : "text"}
+                            value={credentialValues[field.key]}
+                            onChange={(e) =>
+                              keyDraft.change(
+                                field.key,
+                                e.target.value.trim(),
+                                credentialSetters[field.key]
+                              )
+                            }
+                            onFocus={editing.onFocus}
+                            onBlur={(event) => {
+                              editing.onBlur(event);
+                              keyDraft.save();
+                            }}
+                            placeholder={
+                              field.input === "secret"
+                                ? t("apiKeyInput.placeholder")
+                                : field.placeholder
+                            }
+                            autoComplete="off"
+                            spellCheck={false}
                           />
                         )}
                       </div>
-                      {field.input === "secret" ? (
-                        <ApiKeyInput
-                          apiKey={credentialValues[field.key]}
-                          setApiKey={credentialSetters[field.key]}
-                          label=""
-                          helpText=""
-                        />
-                      ) : field.input === "select" ? (
-                        <Select
-                          value={credentialValues[field.key]}
-                          onValueChange={credentialSetters[field.key]}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {field.options?.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          dir="ltr"
-                          value={credentialValues[field.key]}
-                          onChange={(e) => credentialSetters[field.key](e.target.value)}
-                          placeholder={field.placeholder}
-                          className="h-8 text-sm"
-                        />
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-foreground">

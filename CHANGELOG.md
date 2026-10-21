@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### AI models
+
+- **Cleanup and notes through OpenAI, OpenRouter or your own endpoint no longer wait forever on a stalled reply.** The request deadline stopped as soon as the server sent its response headers, so a reply that stalled before its body finished left dictation cleanup or the AI Summary waiting with no end, and a stalled model list from a custom endpoint kept the request from ever starting. The 30-second cleanup and 10-minute note deadlines now cover the whole reply, and the model list check gives up after 2 seconds. OpenRouter sends its headers before the model starts writing, so its cleanup used to have no time limit at all; a cleanup that takes longer than 30 seconds there, usually with thinking turned on, now pastes your raw transcript and tells you OpenRouter took too long, as it already did through OpenAI directly. (#2799)
+
 ## [1.10.3] - 2026-10-12
 
 The assistant can now act in other apps: it drafts and sends email, posts to Slack, and works with Linear and GitHub issues, always behind a card you approve. Notes get templates for the AI Summary, actions that answer in a docked chat, and real tables. OpenWhispr also uses far less memory when idle, shows a plain-language error when your API key or provider fails, and fixes a long list of bugs on Linux, Windows and macOS.

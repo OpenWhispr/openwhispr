@@ -75,7 +75,8 @@ export default function ActionChips({
       <DropdownMenuContent
         align={docked ? "start" : "end"}
         side="top"
-        sideOffset={8}
+        // Docked, the tray reaches 7px above the chips; the menu clears its edge by 8px.
+        sideOffset={docked ? 15 : 8}
         // The docked chat sits 24px in from the window's edge; the menu stays inside that too.
         collisionPadding={docked ? 24 : undefined}
         className="min-w-48"

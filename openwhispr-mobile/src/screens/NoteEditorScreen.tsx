@@ -175,7 +175,7 @@ export default function NoteEditorScreen() {
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
-  const chatMode = useConfigStore((s) => s.config?.inference?.agent?.mode);
+  const chatMode = useConfigStore((s) => s.config?.inference?.noteChat?.mode);
   const chatEnabled = useConfigStore((s) => (s.config ? isNoteChatEnabled(s.config) : true));
   const providerNotes = notesMode === 'providers';
   // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
@@ -480,7 +480,11 @@ export default function NoteEditorScreen() {
     }),
     [contentIsTranscript, hasEnhancedTab, transcriptPending, usesSegmentTranscript],
   );
-  const requiresCloudConfirmation = note?.isPrivate === 1 || activeMode === 'private';
+  // A private note asks before any AI leaves this iPhone. Local Mode asks too for note chat; note
+  // formatting follows its own selection there.
+  const formattingRequiresCloudConfirmation = note?.isPrivate === 1;
+  const chatRequiresCloudConfirmation =
+    formattingRequiresCloudConfirmation || activeMode === 'private';
 
   const handleKeepMine = useCallback(() => {
     safeHaptics('selection');
@@ -858,7 +862,7 @@ export default function NoteEditorScreen() {
       }
 
       const localRequired = providerNotes
-        ? requiresCloudConfirmation
+        ? formattingRequiresCloudConfirmation
         : isLocalReasoningRequired(routing);
 
       if (localRequired) {
@@ -899,7 +903,7 @@ export default function NoteEditorScreen() {
         }).catch(() => {});
       };
 
-      if (requiresCloudConfirmation) {
+      if (formattingRequiresCloudConfirmation) {
         confirmCloudOnce(
           `${action.name} sends this note to cloud AI for this request. Your note privacy and sync settings will not change.`,
           () => gateAndRun({ ...routing, allowCloudFallback: true }),
@@ -915,7 +919,7 @@ export default function NoteEditorScreen() {
       notesProviderId,
       providerNotes,
       registerSuperwallGate,
-      requiresCloudConfirmation,
+      formattingRequiresCloudConfirmation,
       runSelectedAction,
       user,
     ],
@@ -1043,7 +1047,7 @@ export default function NoteEditorScreen() {
         }).catch(() => {});
       };
 
-      if (requiresCloudConfirmation && chatMode !== 'local') {
+      if (chatRequiresCloudConfirmation && chatMode !== 'local') {
         confirmCloudOnce(
           'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
           () => gateAndRun(true),
@@ -1053,7 +1057,14 @@ export default function NoteEditorScreen() {
 
       gateAndRun();
     },
-    [chatMode, cloudChat, registerSuperwallGate, requiresCloudConfirmation, startChatRequest, user],
+    [
+      chatMode,
+      chatRequiresCloudConfirmation,
+      cloudChat,
+      registerSuperwallGate,
+      startChatRequest,
+      user,
+    ],
   );
 
   const handleAskNote = useCallback(() => {

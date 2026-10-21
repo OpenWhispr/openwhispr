@@ -86,7 +86,10 @@ async function fixture(t, fetchImpl) {
         assert.equal(options.headers.Authorization, "Bearer account-a");
         assert.equal(options.headers["x-openwhispr-policy-version"], "1");
         // The server mints only for builds that declare they can run Orukeet.
-        assert.equal(options.headers["x-openwhispr-capabilities"], "orukeet");
+        assert.equal(
+          options.headers["x-openwhispr-capabilities"],
+          "orukeet,orukeet-pipeline-v2,orukeet-language-routing"
+        );
         assert.equal(options.useSessionCookies, false);
         assert.equal(options.redirect, "error");
         return Response.json(session());
@@ -228,4 +231,40 @@ test("invalid backend destination is rejected before any WebSocket is constructe
   );
   await assert.rejects(connectManagedOrukeet(f.options), /Invalid Orukeet cloud session/);
   assert.equal(f.sockets.length, 0);
+});
+
+test("only the exact authenticated language-preview route can opt into preview sessions", () => {
+  const baseUrl = ORUKEET_BASE_URL + "/preview/language-routing";
+  const candidate = {
+    ...session(),
+    baseUrl,
+    websocketUrl: baseUrl.replace("https:", "wss:") + "/v1/audio/transcriptions/stream",
+  };
+  assert.deepEqual(validateSession(candidate), { baseUrl, clientToken: candidate.clientToken });
+  for (const altered of [
+    { ...candidate, websocketUrl: session().websocketUrl },
+    { ...session(), websocketUrl: candidate.websocketUrl },
+    { ...candidate, baseUrl: baseUrl + "/" },
+    { ...candidate, baseUrl: baseUrl + "?token=secret" },
+    { ...candidate, baseUrl: ORUKEET_BASE_URL + "/preview/other" },
+    { ...candidate, websocketUrl: candidate.websocketUrl + "?token=secret" },
+    {
+      ...candidate,
+      baseUrl: "https://orukeet.gizmovoice.ai.attacker.test/preview/language-routing",
+    },
+  ])
+    assert.throws(() => validateSession(altered), /Invalid Orukeet cloud session/);
+});
+
+test("consistent language preview lookalike is rejected", () => {
+  const baseUrl = "https://orukeet.gizmovoice.ai.attacker.test/preview/language-routing";
+  assert.throws(
+    () =>
+      validateSession({
+        ...session(),
+        baseUrl,
+        websocketUrl: `${baseUrl.replace("https:", "wss:")}/v1/audio/transcriptions/stream`,
+      }),
+    /Invalid Orukeet cloud session/
+  );
 });
