@@ -39,6 +39,7 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
   );
 
   assert.ok(source.includes('"connectors"'), "device cleanup removes encrypted connector logins");
+  assert.ok(source.includes("PAID_KEY_CHECKS_FILE"), "device cleanup removes paid key checks");
 });
 
 // cleanup-app can't run outside Electron (it closes the database, clears

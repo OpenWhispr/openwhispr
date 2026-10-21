@@ -135,9 +135,7 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
     clientTranscriptionId: 'client-job-42',
     inferenceRoute: mockProviderRoute,
     cleanupRoute: mockCleanupRoute,
-    agentRoute: mockCleanupRoute,
     cleanupUnavailable: 'cleanup unavailable',
-    agentUnavailable: 'agent unavailable',
   });
 
   const providerInput = mockTranscribeWithProvider.mock.calls[0]?.[0];
@@ -149,9 +147,7 @@ test('BYOK recovery snapshot preserves the pinned text stages and client job ID'
       provider: 'byok',
       inferenceRoute: mockProviderRoute,
       cleanupRoute: mockCleanupRoute,
-      agentRoute: mockCleanupRoute,
       cleanupUnavailable: 'cleanup unavailable',
-      agentUnavailable: 'agent unavailable',
     },
   });
 });

@@ -159,40 +159,6 @@ class ClipboardManager {
   // True when wl-copy wrote the Wayland clipboard; every other path only reaches
   // XWayland's.
   _writeClipboardWayland(text, webContents) {
-    const { isKde } = getLinuxSessionInfo();
-
-    // On KDE with XWayland, write to X11 clipboard directly because
-    // wl-copy targets the Wayland clipboard which is desynced from X11
-    if (isKde) {
-      if (this.commandExists("xclip")) {
-        try {
-          const result = spawnSync("xclip", ["-selection", "clipboard"], {
-            input: text,
-            timeout: 200,
-          });
-          if (result.status === 0) {
-            clipboard.writeText(text);
-            return false;
-          }
-        } catch {}
-      }
-      if (this.commandExists("xsel")) {
-        try {
-          const result = spawnSync("xsel", ["--clipboard", "--input"], {
-            input: text,
-            timeout: 200,
-          });
-          if (result.status === 0) {
-            clipboard.writeText(text);
-            return false;
-          }
-        } catch {}
-      }
-      // Last resort: Electron's clipboard.writeText should work on XWayland
-      clipboard.writeText(text);
-      return false;
-    }
-
     if (this._wlCopyExists()) {
       try {
         const result = spawnWlCopy([], text);
@@ -218,14 +184,17 @@ class ClipboardManager {
   // target so we cover Wayland, X11, and XWayland setups. True when wl-copy wrote
   // the Wayland primary selection.
   _writePrimarySelection(text) {
-    if (process.platform !== "linux") return false;
-
-    const { isWayland } = getLinuxSessionInfo();
+    const { isWayland, isKde } = getLinuxSessionInfo();
+    if (process.platform !== "linux" && !isWayland) return false;
 
     if (isWayland && this.commandExists("wl-copy")) {
       try {
         const result = spawnWlCopy(["--primary"], text);
-        if (result.status === 0) return true;
+        if (result.status === 0) {
+          // KDE can leave XWayland's selection out of sync with Wayland's, so write both.
+          if (isKde) clipboard.writeText(text, "selection");
+          return true;
+        }
       } catch {}
     }
 
@@ -287,11 +256,11 @@ class ClipboardManager {
     return null;
   }
 
-  // `--type text` so a copied image never comes back as raw bytes.
-  _readWaylandClipboardText() {
+  // A text type, so a copied image never comes back as raw bytes.
+  _readWaylandClipboardText(type = "text") {
     if (!this._isWayland() || !this.commandExists("wl-paste")) return null;
     try {
-      const result = spawnSync("wl-paste", ["--no-newline", "--type", "text"], { timeout: 200 });
+      const result = spawnSync("wl-paste", ["--no-newline", "--type", type], { timeout: 200 });
       if (result.status === 0) return result.stdout.toString();
     } catch {}
     return null;
@@ -871,6 +840,14 @@ class ClipboardManager {
     }
 
     const keys = Object.keys(data);
+    // A Wayland app's copy can leave an older X11 owner in place on KWin,
+    // and the KDE restore writes the Wayland clipboard too. Plain text only: `--type text`
+    // falls back to the html that Chromium offers with a copied image. A Wayland-only copy
+    // with no plain text (a Spectacle screenshot) isn't saved, so it comes back as X11's text.
+    if (keys.length > 0 && getLinuxSessionInfo().isKde) {
+      const waylandText = this._readWaylandClipboardText("text/plain;charset=utf-8");
+      if (waylandText && waylandText !== text) return { type: "text", data: waylandText };
+    }
     if (keys.length === 1 && keys[0] === "image") {
       return { type: "image", data: data.image };
     }
@@ -887,6 +864,11 @@ class ClipboardManager {
 
   _restoreClipboard(original) {
     if (!original) return;
+    // The KDE save trusts Wayland text that differs from X11's, so replace the transcript or
+    // sentinel left there. X11 goes last, so KWin 6.0.3+ bridges the rich original to Wayland.
+    if (original.type !== "text" && getLinuxSessionInfo().isKde) {
+      this._writeClipboardWayland(original.data.text ?? "");
+    }
     if (original.type === "formats") {
       clipboard.write(original.data);
     } else if (original.type === "image") {

@@ -3064,11 +3064,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let provider = KeyboardHandoffProvider.shared
     guard provider.isAgentEnabled() else { return }
 
-    // Not applicable ⇒ Private mode is on. Point at it, swallow the tap.
+    // Not applicable ⇒ the voice assistant can't run: it needs an account or its own provider key.
+    // Point at it, swallow the tap.
     guard provider.isAgentApplicable() else {
       playKeyClick()
       showTransientRecordState(
-        title: "Off in Local Mode",
+        title: "Sign in to use",
         systemImage: "lock.fill",
         background: Palette.issue,
         duration: 1.6
@@ -4195,8 +4196,9 @@ private struct KeyboardHandoffProvider {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentEnabledKey) == "1"
   }
 
-  /// Applicable = usable in the current mode (Cloud on). Not applicable ⇒ the
-  /// entry button is dimmed and points the user at the app, mirroring tone.
+  /// Applicable = the voice assistant can run: an account for Cloud, or its own
+  /// provider. Not applicable ⇒ the entry button is dimmed and points the user at
+  /// the app, mirroring tone.
   func isAgentApplicable() -> Bool {
     UserDefaults(suiteName: appGroupId)?.string(forKey: agentApplicableKey) == "1"
   }

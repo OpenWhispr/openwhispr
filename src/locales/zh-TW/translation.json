@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "滑鼠按鍵快捷鍵目前僅在 macOS 上受支援。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
+      "keyNotInKeymap": "GNOME 無法在目前的鍵盤配置下使用 \"{{hotkey}}\"。請選擇其他按鍵。",
+      "keyReservedByGnome": "GNOME 已將 \"{{hotkey}}\" 用於自身的快捷鍵。請選擇其他按鍵。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" 無法在此桌面上使用，其快捷鍵需要包含一個一般按鍵。請加入一個按鍵，例如 Control+Alt+Space。",
       "holdNeedsReleaseKey": "按住說話需要 macOS 能偵測到放開的按鍵：Globe、右側 Option 之類的右側按鍵，或帶修飾鍵的快速鍵。點按可用於任何按鍵。",
       "holdNeedsRegularKey": "要使用按住模式，請在快捷鍵中加入一個一般按鍵，例如 Control+Alt+Space。桌面環境無法偵測僅按住修飾鍵的操作。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "我們無法處理你的付款",
-    "weeklyLimit": "你已達到每週使用上限",
+    "weeklyLimit": "你已達到每週雲端使用上限",
     "pastDueDescription": "你目前使用的是免費方案，別擔心，每週仍有 {{limit}} 字的額度。\n更新付款方式即可恢復無限制的 Pro 方案。",
     "limitDescription": "已使用 {{used}} / {{limit}} 字。\n你的轉錄已儲存並貼上。",
     "updatePayment": "更新付款方式",
@@ -410,15 +412,14 @@
         "optional": "選填",
         "modelId": "模型 ID",
         "modelIdPlaceholder": "填寫你的模型 ID",
-        "testConnection": "測試連線",
         "proceed": "繼續",
         "clinical": "用於臨床逐字稿",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "執行測試",
         "testing": "測試中…",
         "connected": "已連接",
         "connectionFailed": "無法驗證這個連線。",
+        "unverified": "無法驗證：{{reason}}",
         "errors": {
           "endpointRequired": "測試前請先輸入端點 URL。",
           "invalidUrl": "端點必須是有效的 HTTP 或 HTTPS URL。",
@@ -427,6 +428,7 @@
           "apiKeyRequired": "測試前請先新增 API Key。",
           "credentialsRejected": "服務商拒絕了這些憑證。",
           "endpointNotFound": "這個端點未提供相容 OpenAI 的模型清單。",
+          "transcriptionEndpointNotFound": "此位址不接受轉錄請求。",
           "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
@@ -631,7 +633,7 @@
       "availableButton": "有可用更新"
     },
     "limit": {
-      "weeklyTitle": "已達每週使用上限",
+      "weeklyTitle": "已達本週雲端上限",
       "weeklyDescription": "你的額度為滾動式重置。升級至 Pro 或使用自己的 API Key 即可無限使用。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "設定您的轉錄服務供應商",
       "failedCtaAndRetry": "然後點擊重試",
       "failedCtaSettingsOnly": "在設定中配置您的轉錄服務供應商",
+      "failedCtaAiSettings": "請在設定中檢查語音助理模型",
+      "editFailedTranscriptKept": "未套用編輯 · 已保留轉錄文字",
       "failedLimitReached": "已達每日限額",
       "failedOffline": "離線",
       "clearAll": "全部清除",
@@ -693,6 +697,9 @@
       "retrying": "正在重新轉錄…",
       "retrySuccess": "轉錄已更新",
       "retryError": "重新轉錄失敗",
+      "retryErrors": {
+        "invalidResponse": "轉錄引擎傳回了非預期的回應。請再試一次。"
+      },
       "audioNotFound": "找不到音訊檔案或檔案已過期",
       "noAiProcessing": "此轉錄未套用 AI 處理",
       "rawTranscript": "原始轉錄",
@@ -767,6 +774,21 @@
       "noSearchResults": "沒有與「{{query}}」相符的模型",
       "selectModelHint": "尚未選擇模型 — 請從下方清單中選擇一個。",
       "keyRequiredHint": "推論需要 API 金鑰 — 請新增金鑰以使用此供應商。"
+    },
+    "effort": {
+      "title": "推理強度",
+      "description": "模型在回答前思考的程度。",
+      "descriptionWithDefault": "模型在回答前思考的程度。「自動」使用服務商的預設設定（{{value}}）。",
+      "auto": "自動",
+      "options": {
+        "none": "無",
+        "minimal": "極低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "極高",
+        "max": "最大"
+      }
     },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
@@ -853,8 +875,11 @@
         "apikeyHelp": "從 Google AI Studio 取得的 Vertex AI Express Mode API 金鑰。"
       }
     },
+    "modelRetiredTitle": "模型已無法使用",
+    "groq": {
+      "modelRetired": "Groq 已停用 {{from}}，已切換至 {{to}}。"
+    },
     "tinfoil": {
-      "modelRetiredTitle": "模型已無法使用",
       "modelRetired": "Tinfoil 已停用 {{from}}，已切換至 {{to}}。",
       "refreshingModels": "正在重新整理模型…"
     },
@@ -898,12 +923,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI 清理使用 OpenWhispr Cloud，但你尚未登入。",
+      "cleanupUnconfigured": "已開啟 AI 清理，但尚未設定清理模型。",
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
         "agentUnavailable": "助理無法使用",
         "screenContextSkipped": "已略過螢幕內容",
-        "dailyLimitReached": "已達每日上限",
+        "cloudLimitReached": "已達本週雲端上限",
         "providerRateLimited": "服務商速率限制"
       },
       "fallback": {
@@ -1526,6 +1553,10 @@
         "description": "聽寫快捷鍵與啟用模式",
         "label": "快捷鍵"
       },
+      "toneStyle": {
+        "label": "語氣與風格",
+        "description": "整理在各個應用程式中的寫法"
+      },
       "speechToText": {
         "description": "聽寫與筆記錄音引擎",
         "label": "語音轉文字"
@@ -1575,7 +1606,7 @@
     "account": {
       "badges": {
         "free": "免費",
-        "limitReached": "已達上限",
+        "limitReached": "已達雲端上限",
         "pastDue": "款項逾期",
         "pro": "Pro",
         "business": "Business",
@@ -1611,9 +1642,10 @@
         "title": "我們無法處理你的付款"
       },
       "planDescriptions": {
-        "freeUsage": "本週已使用 {{used}} / {{limit}} 字",
+        "freeUsage": "本週 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 字",
+        "byokUnlimited": "使用自己的 API 金鑰和本機模型仍不受此限制。",
         "nextBilling": "下次扣款日：{{date}}",
-        "pastDue": "本週 {{used}} / {{limit}} 免費字數——更新付款方式以恢復 Pro",
+        "pastDue": "本週 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 字——更新付款方式以恢復 Pro",
         "trial": "剩餘 {{days}} 天——無限轉錄",
         "unlimited": "無限",
         "accessUntil": "可使用至 {{date}}",
@@ -1635,8 +1667,8 @@
       "title": "帳號",
       "toasts": {
         "approachingLimit": {
-          "description": "你本週已使用 {{used}} / {{limit}} 免費字數。升級至 Pro 即可無限使用。",
-          "title": "即將達到每週上限"
+          "description": "本週已使用 {{used}} / {{limit}} 個 OpenWhispr Cloud 字。升級至 Pro 即可無限使用。",
+          "title": "即將達到雲端字數上限"
         }
       },
       "trialCta": {
@@ -2078,15 +2110,11 @@
             "step1Desc": "啟動 ydotoold 並設定為每次登入時自動執行。",
             "step2Title": "驗證是否正在執行"
           },
-          "xclip": {
-            "step1Title": "安裝 xclip"
-          },
           "wlCopy": {
             "step1Title": "安裝 wl-clipboard",
             "step2Title": "驗證安裝"
           }
         },
-        "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）",
         "nixos": {
           "intro": "你正在使用 NixOS。自動貼上需要 ydotool 及 /dev/uinput 存取權限，NixOS 以宣告式方式授予這些權限。",
           "detected": "已偵測",
@@ -2661,9 +2689,8 @@
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活躍參數，256K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 開源旗艦，500 T/sec",
+        "groq_qwen_qwen3_8_27b": "快速 Qwen 模型，450 T/sec，131K 上下文",
         "groq_openai_gpt_oss_20b": "快速開源模型，1000 T/sec",
-        "groq_compound": "Groq Compound 系統，450 T/sec",
-        "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
         "openai_gpt_6_astra": "OpenAI 最強大的模型，適用於編碼與研究",
         "openai_gpt_5_6_sol": "旗艦 GPT-5.6，適用於複雜編碼與研究",
         "openai_gpt_5_6_terra": "均衡的 GPT-5.6，適合日常工作",
@@ -3370,6 +3397,7 @@
       "speakersIdentified": "已辨識發言者",
       "typeNamePlaceholder": "輸入姓名",
       "knownSpeakers": "已知發言者",
+      "thisIsMe": "這是我",
       "meetingAttendees": "會議參與者",
       "assignName": "指派姓名",
       "isThisPerson": "這是{{name}}嗎？",
@@ -3632,8 +3660,8 @@
     "inviteTeam": "邀請你的團隊",
     "settings": "設定",
     "support": "支援",
-    "limitReached": "已達每週上限",
-    "limitReachedDescription": "升級至 Pro 即可無限轉錄。",
+    "limitReached": "已達本週雲端上限",
+    "limitReachedDescription": "升級至 Pro 或使用自己的 API Key 即可無限使用。",
     "viewPlans": "查看方案",
     "upgradeTitle": "升級至 Pro",
     "upgradeDescription": "無限量、更準確、更快速的轉錄。",
@@ -4872,6 +4900,91 @@
     "details": {
       "provider": "服務商",
       "requestId": "請求 ID"
+    }
+  },
+  "toneStyle": {
+    "title": "語氣與風格",
+    "description": "為不同的應用程式設定你的語氣和風格。",
+    "turnOnAndSetUp": "開啟並設定",
+    "categories": {
+      "personal": {
+        "title": "私人訊息",
+        "inline": "私人訊息",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "work": {
+        "title": "工作訊息",
+        "inline": "工作訊息",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "email": {
+        "title": "電子郵件",
+        "inline": "電子郵件",
+        "question": "{{category}}\n你會怎麼寫？"
+      },
+      "other": {
+        "title": "其他應用程式",
+        "inline": "其他應用程式中的文字",
+        "question": "{{category}}\n你會怎麼寫？"
+      }
+    },
+    "tones": {
+      "formal": "正式",
+      "casual": "隨性",
+      "very_casual": "非常隨性",
+      "excited": "熱情！"
+    },
+    "samples": {
+      "personal": {
+        "formal": "你好，今晚有空嗎？我在想我們可以六點左右一起喝杯咖啡。請告訴我。",
+        "casual": "今晚有空嗎？想六點左右去喝咖啡，跟我說一聲",
+        "very_casual": "今晚有空嗎 6點喝咖啡？回我"
+      },
+      "work": {
+        "sender": "吉米",
+        "time": "18:20",
+        "formal": "你好，可以在通話前把簡報寄給我嗎？第 3 頁的數字似乎已經過時了。不急。",
+        "casual": "通話前可以把簡報傳給我嗎？第 3 頁的數字好像舊了，不急。",
+        "excited": "嗨！通話前可以把簡報傳給我嗎？第 3 頁的數字應該是舊的，不急喔！"
+      },
+      "email": {
+        "to": "收件者：莎拉",
+        "formal": "莎拉您好：\n\n感謝您今天撥冗。我會在週四前寄出更新後的提案。在那之前若有任何需要，請隨時告訴我。\n\n敬祝 順心",
+        "casual": "莎拉你好：\n\n今天謝啦。週四前我把更新後的提案寄給你，之前有需要再跟我說。\n\n謝謝",
+        "excited": "莎拉你好：\n\n非常感謝你今天抽空！週四前我會寄出更新後的提案。之前有任何需要都可以跟我說！\n\n謝謝"
+      },
+      "other": {
+        "formal": "通話紀錄：他們很喜歡定價頁面，希望縮短新手引導流程。下週追蹤。",
+        "casual": "通話紀錄：定價頁反應不錯，想要更短的引導。下週追蹤",
+        "excited": "通話紀錄：他們超喜歡定價頁面！想要更短的引導。下週追蹤！"
+      }
+    },
+    "setup": {
+      "introTitle": "讓 OpenWhispr\n照你說話的方式寫",
+      "introDescription": "為不同的應用程式設定你的語氣和風格。",
+      "personalize": "開始個人化",
+      "cleanupOffTitle": "讓 OpenWhispr\n學會你的風格",
+      "cleanupOffDescription": "開啟文字整理，再為不同的應用程式設定你的語氣和風格。",
+      "stepDescription": "選出最像你的範例。",
+      "progress": "第 {{current}} 步，共 {{total}} 步",
+      "finish": "完成"
+    },
+    "banner": {
+      "title": "教 OpenWhispr 學會你的寫法",
+      "description": "為工作、朋友以及兩者之間的一切設定你偏好的語氣。",
+      "start": "立即開始",
+      "cleanupOffTitle": "讓 OpenWhispr 學會你的風格",
+      "cleanupOffDescription": "開啟文字整理，為訊息、郵件和其他地方選一種語氣。",
+      "notNow": "暫時不要",
+      "decoration": "你的文字應該聽起來就像你。無論你寫什麼，寫給誰。"
+    },
+    "settings": {
+      "saveChanges": "儲存變更",
+      "saved": "語氣與風格已儲存",
+      "cleanupOff": "文字整理已關閉，因此這些語氣不會套用到你的聽寫。助理和聊天仍會使用它們。",
+      "turnOnCleanup": "開啟文字整理",
+      "enabled": "啟用語氣與聲音",
+      "enabledDescription": "文字整理、助理和聊天會為每類應用程式使用你的語氣。關閉時使用標準語氣。"
     }
   },
   "productHelp": {

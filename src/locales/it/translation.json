@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
+      "keyNotInKeymap": "GNOME non può usare \"{{hotkey}}\" con il tuo layout di tastiera. Scegli un altro tasto.",
+      "keyReservedByGnome": "GNOME usa già \"{{hotkey}}\" per una delle sue scorciatoie. Scegli un altro tasto.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" non può essere usato su questo desktop, le cui scorciatoie richiedono un tasto normale. Aggiungi un tasto, ad esempio Control+Alt+Space.",
       "holdNeedsReleaseKey": "Tieni premuto per parlare richiede un tasto di cui macOS rilevi il rilascio: Globo, un tasto destro come Opzione destra o una scorciatoia con modificatore. Tocca funziona con qualsiasi tasto.",
       "holdNeedsRegularKey": "Per usare Tieni premuto, aggiungi un tasto normale alla scorciatoia, ad esempio Control+Alt+Space. Il desktop non può rilevare la pressione prolungata dei soli tasti modificatori.",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "Non siamo riusciti a elaborare il pagamento",
-    "weeklyLimit": "Hai raggiunto il limite settimanale",
+    "weeklyLimit": "Hai raggiunto il limite cloud settimanale",
     "pastDueDescription": "Sei nel piano gratuito per ora — nessun problema, hai ancora {{limit}} parole a settimana.\nAggiorna il metodo di pagamento per tornare a Pro illimitato.",
     "limitDescription": "{{used}} di {{limit}} parole utilizzate.\nLa trascrizione è stata salvata e incollata.",
     "updatePayment": "Aggiorna metodo di pagamento",
@@ -410,15 +412,14 @@
         "optional": "Facoltativo",
         "modelId": "ID modello",
         "modelIdPlaceholder": "Scrivi l’ID del tuo modello",
-        "testConnection": "Prova la connessione",
         "proceed": "Procedi",
         "clinical": "PER LA TRASCRIZIONE CLINICA",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "Esegui test",
         "testing": "Test in corso…",
         "connected": "Connesso",
         "connectionFailed": "Non è stato possibile verificare la connessione.",
+        "unverified": "Impossibile verificare: {{reason}}",
         "errors": {
           "endpointRequired": "Inserisci l’URL dell’endpoint prima di eseguire il test.",
           "invalidUrl": "L’endpoint deve essere un URL HTTP o HTTPS valido.",
@@ -427,6 +428,7 @@
           "apiKeyRequired": "Aggiungi una chiave API prima di eseguire il test.",
           "credentialsRejected": "Il provider ha rifiutato queste credenziali.",
           "endpointNotFound": "L’endpoint non espone un elenco di modelli compatibile con OpenAI.",
+          "transcriptionEndpointNotFound": "Questo indirizzo non accetta trascrizioni.",
           "modelNotFound": "Il modello selezionato non è disponibile presso questo provider.",
           "providerStatus": "Il provider ha restituito lo stato {{status}}.",
           "timeout": "Il test di connessione è scaduto.",
@@ -631,7 +633,7 @@
       "availableButton": "Aggiornamento disponibile"
     },
     "limit": {
-      "weeklyTitle": "Limite settimanale raggiunto",
+      "weeklyTitle": "Limite cloud settimanale raggiunto",
       "weeklyDescription": "Il limite si rinnova in modo progressivo. Passa a Pro o usa la tua chiave API per un uso illimitato."
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "Configura il tuo provider di trascrizione",
       "failedCtaAndRetry": "poi clicca su riprova",
       "failedCtaSettingsOnly": "Configura il tuo provider di trascrizione nelle Impostazioni",
+      "failedCtaAiSettings": "Controlla il modello dell'Assistente vocale nelle Impostazioni",
+      "editFailedTranscriptKept": "Modifica non applicata · trascrizione conservata",
       "failedLimitReached": "Limite giornaliero raggiunto",
       "failedOffline": "Offline",
       "clearAll": "Cancella tutto",
@@ -693,6 +697,9 @@
       "retrying": "Ritrascrizione in corso…",
       "retrySuccess": "Trascrizione aggiornata",
       "retryError": "Ritrascrizione non riuscita",
+      "retryErrors": {
+        "invalidResponse": "Il motore di trascrizione ha restituito una risposta inattesa. Riprova."
+      },
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
       "rawTranscript": "Trascrizione grezza",
@@ -767,6 +774,21 @@
       "noSearchResults": "Nessun modello corrisponde a \"{{query}}\"",
       "selectModelHint": "Nessun modello selezionato — scegline uno dall'elenco qui sotto.",
       "keyRequiredHint": "Per l'inferenza è richiesta una chiave API — aggiungine una per usare questo provider."
+    },
+    "effort": {
+      "title": "Livello di ragionamento",
+      "description": "Quanto ragiona il modello prima di rispondere.",
+      "descriptionWithDefault": "Quanto ragiona il modello prima di rispondere. Auto usa l'impostazione predefinita del provider ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "Nessuno",
+        "minimal": "Minimo",
+        "low": "Basso",
+        "medium": "Medio",
+        "high": "Alto",
+        "xhigh": "Molto alto",
+        "max": "Massimo"
+      }
     },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
@@ -853,8 +875,11 @@
         "apikeyHelp": "Chiave API Vertex AI Express Mode da Google AI Studio."
       }
     },
+    "modelRetiredTitle": "Modello non più disponibile",
+    "groq": {
+      "modelRetired": "Groq ha ritirato {{from}}. Passato a {{to}}."
+    },
     "tinfoil": {
-      "modelRetiredTitle": "Modello non più disponibile",
       "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
       "refreshingModels": "Aggiornamento dei modelli…"
     },
@@ -898,12 +923,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "La pulizia IA usa OpenWhispr Cloud, ma non hai effettuato l'accesso.",
+      "cleanupUnconfigured": "La pulizia IA è attiva, ma non è configurato alcun modello di pulizia.",
       "errorTitles": {
         "sessionExpired": "Sessione scaduta",
         "offline": "Sei offline",
         "agentUnavailable": "Assistente non disponibile",
         "screenContextSkipped": "Contesto dello schermo ignorato",
-        "dailyLimitReached": "Limite giornaliero raggiunto",
+        "cloudLimitReached": "Limite cloud settimanale raggiunto",
         "providerRateLimited": "Limite di velocità del provider"
       },
       "fallback": {
@@ -1526,6 +1553,10 @@
         "description": "Scorciatoia di dettatura e attivazione",
         "label": "Scorciatoie"
       },
+      "toneStyle": {
+        "label": "Tono e stile",
+        "description": "Come scrive la correzione in ogni app"
+      },
       "speechToText": {
         "description": "Motori per dettatura e registrazione di note",
         "label": "Riconoscimento vocale"
@@ -1575,7 +1606,7 @@
     "account": {
       "badges": {
         "free": "Gratuito",
-        "limitReached": "Limite raggiunto",
+        "limitReached": "Limite cloud raggiunto",
         "pastDue": "Scaduto",
         "pro": "Pro",
         "business": "Business",
@@ -1611,9 +1642,10 @@
         "title": "Non siamo riusciti a elaborare il pagamento"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} parole questa settimana",
+        "freeUsage": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana",
+        "byokUnlimited": "Le tue chiavi API e i modelli locali restano utilizzabili senza limiti.",
         "nextBilling": "Prossima fatturazione: {{date}}",
-        "pastDue": "{{used}} / {{limit}} parole gratuite questa settimana — aggiorna il pagamento per ripristinare Pro",
+        "pastDue": "{{used}} / {{limit}} parole di OpenWhispr Cloud questa settimana — aggiorna il pagamento per ripristinare Pro",
         "trial": "{{days}} giorni rimanenti — trascrizioni illimitate",
         "unlimited": "Illimitato",
         "accessUntil": "Accesso fino al {{date}}",
@@ -1635,8 +1667,8 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "Hai usato {{used}} di {{limit}} parole gratuite questa settimana. Passa a Pro per un uso illimitato.",
-          "title": "Prossimo al limite settimanale"
+          "description": "Hai usato {{used}} di {{limit}} parole di OpenWhispr Cloud questa settimana. Passa a Pro per un uso illimitato.",
+          "title": "Limite di parole cloud quasi raggiunto"
         }
       },
       "trialCta": {
@@ -2078,15 +2110,11 @@
             "step1Desc": "Avvia ydotoold e abilitalo per l'esecuzione a ogni accesso.",
             "step2Title": "Verifica che sia in esecuzione"
           },
-          "xclip": {
-            "step1Title": "Installa xclip"
-          },
           "wlCopy": {
             "step1Title": "Installa wl-clipboard",
             "step2Title": "Verifica l'installazione"
           }
         },
-        "xclipDesc": "Strumento appunti per incollare in KDE Wayland (xclip o xsel)",
         "nixos": {
           "intro": "Stai usando NixOS. L'incolla automatico richiede ydotool e l'accesso a /dev/uinput, che NixOS gestisce in modo dichiarativo.",
           "detected": "Rilevato",
@@ -2661,9 +2689,8 @@
         "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
         "groq_openai_gpt_oss_120b": "Ammiraglia open source di OpenAI, 500 T/sec",
+        "groq_qwen_qwen3_8_27b": "Modello Qwen veloce, 450 T/sec, contesto 131K",
         "groq_openai_gpt_oss_20b": "Modello open source veloce, 1000 T/sec",
-        "groq_compound": "Sistema compound di Groq, 450 T/sec",
-        "groq_compound_mini": "Sistema compound veloce, 3x latenza ridotta",
         "openai_gpt_6_astra": "Il modello più capace di OpenAI per programmazione e ricerca",
         "openai_gpt_5_6_sol": "GPT-5.6 di punta per programmazione e ricerca complesse",
         "openai_gpt_5_6_terra": "GPT-5.6 bilanciato per il lavoro quotidiano",
@@ -3370,6 +3397,7 @@
       "speakersIdentified": "Partecipanti identificati",
       "typeNamePlaceholder": "Digita un nome",
       "knownSpeakers": "Parlanti noti",
+      "thisIsMe": "Sono io",
       "meetingAttendees": "Partecipanti alla riunione",
       "assignName": "Assegna nome",
       "isThisPerson": "È {{name}}?",
@@ -3632,8 +3660,8 @@
     "inviteTeam": "Invita il tuo team",
     "settings": "Impostazioni",
     "support": "Assistenza",
-    "limitReached": "Limite settimanale raggiunto",
-    "limitReachedDescription": "Passa a Pro per trascrizioni illimitate.",
+    "limitReached": "Limite cloud settimanale raggiunto",
+    "limitReachedDescription": "Passa a Pro o usa la tua chiave API per un uso illimitato.",
     "viewPlans": "Vedi i piani",
     "upgradeTitle": "Passa a Pro",
     "upgradeDescription": "Trascrizione illimitata, più precisa e più veloce.",
@@ -4872,6 +4900,91 @@
     "details": {
       "provider": "Provider",
       "requestId": "ID richiesta"
+    }
+  },
+  "toneStyle": {
+    "title": "Tono e stile",
+    "description": "Imposta tono e stile per app diverse.",
+    "turnOnAndSetUp": "Attiva e configura",
+    "categories": {
+      "personal": {
+        "title": "Messaggi personali",
+        "inline": "i tuoi messaggi personali",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "work": {
+        "title": "Messaggi di lavoro",
+        "inline": "i tuoi messaggi di lavoro",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "email": {
+        "title": "Email",
+        "inline": "le tue email",
+        "question": "Come scrivi\n{{category}}?"
+      },
+      "other": {
+        "title": "Altre app",
+        "inline": "nelle altre app",
+        "question": "Come scrivi\n{{category}}?"
+      }
+    },
+    "tones": {
+      "formal": "Formale",
+      "casual": "Informale",
+      "very_casual": "Molto informale",
+      "excited": "Entusiasta!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Ciao, sei disponibile stasera? Pensavo potessimo prendere un caffè verso le 18. Fammi sapere.",
+        "casual": "Ciao, ci sei stasera? Pensavo a un caffè verso le 6, fammi sapere",
+        "very_casual": "ehi ci sei stasera? caffè verso le 6? fammi sapere"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "18:20",
+        "formal": "Ciao, potresti mandarmi la presentazione prima della call? I numeri della slide 3 sembrano superati. Nessuna fretta.",
+        "casual": "Ciao, mi mandi la presentazione prima della call? Mi sa che i numeri della slide 3 sono vecchi, nessuna fretta.",
+        "excited": "Ciao! Mi mandi la presentazione prima della call? Sono quasi sicuro che i numeri della slide 3 siano vecchi, nessuna fretta!"
+      },
+      "email": {
+        "to": "A Sarah",
+        "formal": "Ciao Sarah,\n\ngrazie per il tempo dedicatomi oggi. Ti invierò la proposta aggiornata entro giovedì. Fammi sapere se ti serve altro.\n\nCordiali saluti",
+        "casual": "Ciao Sarah,\n\ngrazie per oggi. Ti mando la proposta aggiornata entro giovedì, dimmi se ti serve qualcosa prima.\n\nGrazie",
+        "excited": "Ciao Sarah,\n\ngrazie mille per il tuo tempo oggi! Ti mando la proposta aggiornata entro giovedì. Fammi sapere se ti serve qualcosa prima!\n\nGrazie"
+      },
+      "other": {
+        "formal": "Note della call: hanno apprezzato la pagina dei prezzi e vorrebbero un onboarding più breve. Ricontattarli la prossima settimana.",
+        "casual": "Note call: piaciuta la pagina prezzi, vogliono onboarding più corto. Ricontattare settimana prossima",
+        "excited": "Note call: hanno adorato la pagina prezzi! Vogliono un onboarding più corto. Ricontattare la settimana prossima!"
+      }
+    },
+    "setup": {
+      "introTitle": "Fai scrivere OpenWhispr\ncome parli tu",
+      "introDescription": "Imposta tono e stile per app diverse.",
+      "personalize": "Personalizza",
+      "cleanupOffTitle": "Insegna a OpenWhispr\nil tuo stile",
+      "cleanupOffDescription": "Attiva la correzione testo, poi imposta tono e stile per app diverse.",
+      "stepDescription": "Scegli l'esempio che ti somiglia di più.",
+      "progress": "Passo {{current}} di {{total}}",
+      "finish": "Fine"
+    },
+    "banner": {
+      "title": "Insegna a OpenWhispr come scrivi",
+      "description": "Imposta il tuo tono preferito per lavoro, amici e tutto ciò che sta in mezzo.",
+      "start": "Inizia ora",
+      "cleanupOffTitle": "Insegna a OpenWhispr il tuo stile",
+      "cleanupOffDescription": "Attiva la correzione testo e scegli un tono per messaggi, email e altro.",
+      "notNow": "Non ora",
+      "decoration": "Le tue parole dovrebbero somigliarti. Qualunque cosa tu scriva, per chiunque sia."
+    },
+    "settings": {
+      "saveChanges": "Salva modifiche",
+      "saved": "Tono e stile salvati",
+      "cleanupOff": "La correzione testo è disattivata, quindi questi toni non vengono applicati alla dettatura. L'assistente e le chat li usano comunque.",
+      "turnOnCleanup": "Attiva correzione testo",
+      "enabled": "Toni e voci attivi",
+      "enabledDescription": "La correzione testo, l'assistente e le chat usano il tuo tono per ogni tipo di app. Se disattivato, usano il tono standard."
     }
   },
   "productHelp": {

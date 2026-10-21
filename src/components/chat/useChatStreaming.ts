@@ -34,6 +34,7 @@ import {
   getAgentSystemPrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
+import type { ToneAppCategory } from "../../config/toneStyle";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
@@ -175,6 +176,8 @@ export interface SendToAIOptions {
   suppressResponseContent?: boolean;
   /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
   plainTextResponse?: boolean;
+  /** Tone & Style: the kind of app a caret-destined answer will be typed into. */
+  destinationAppCategory?: ToneAppCategory;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
@@ -529,6 +532,9 @@ export function useChatStreaming({
             openNote: openNoteContext || undefined,
             openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
+            writingStyle: settings.toneStyleEnabled
+              ? { tones: settings.toneStyles, destination: options?.destinationAppCategory }
+              : undefined,
           }),
           getDictionaryHintWords(settings),
           settings.uiLanguage
@@ -663,8 +669,6 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
-              // So the server marks its memories as past conversations, not facts about the note.
-              ...(openNoteRef.current ? { noteChat: true } : {}),
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
@@ -692,6 +696,7 @@ export function useChatStreaming({
                 customApiKey:
                   isCustomAgent || isLanAgent ? llmConfig.customApiKey || undefined : undefined,
                 disableThinking: llmConfig.disableThinking,
+                reasoningEffort: llmConfig.reasoningEffort,
               },
               aiTools
             );

@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
+      "keyNotInKeymap": "GNOME can't use \"{{hotkey}}\" with your keyboard layout. Choose another key.",
+      "keyReservedByGnome": "GNOME already uses \"{{hotkey}}\" for one of its own shortcuts. Choose another key.",
       "rightModifierNeedsListener": "\"{{hotkey}}\" can't be used on this desktop, whose shortcuts need a regular key. Add a key, such as Control+Alt+Space.",
       "holdNeedsReleaseKey": "Hold-to-talk needs a key macOS can see you release: Globe, a right-side key like Right Option, or a shortcut with a modifier. Tap works with any key.",
       "holdNeedsRegularKey": "To use Hold, add a regular key to the shortcut, such as Control+Alt+Space. Your desktop can't report holding modifier keys alone.",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly limit",
+    "weeklyLimit": "You've reached your weekly Cloud limit",
     "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
     "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
     "updatePayment": "Update payment method",
@@ -410,15 +412,14 @@
         "optional": "Optional",
         "modelId": "Model ID",
         "modelIdPlaceholder": "Write your model ID",
-        "testConnection": "Test Connection",
         "proceed": "Proceed",
         "clinical": "FOR CLINICAL TRANSCRIPTION",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "Run Test",
         "testing": "Testing…",
         "connected": "Connected",
         "connectionFailed": "The connection could not be verified.",
+        "unverified": "Couldn't verify: {{reason}}",
         "errors": {
           "endpointRequired": "Enter an endpoint URL before testing.",
           "invalidUrl": "The endpoint must be a valid HTTP or HTTPS URL.",
@@ -427,6 +428,7 @@
           "apiKeyRequired": "Add an API key before testing.",
           "credentialsRejected": "The provider rejected these credentials.",
           "endpointNotFound": "The endpoint does not expose an OpenAI-compatible model list.",
+          "transcriptionEndpointNotFound": "Nothing takes transcriptions at this address.",
           "modelNotFound": "The selected model is not available from this provider.",
           "providerStatus": "The provider returned status {{status}}.",
           "timeout": "The connection test timed out.",
@@ -631,7 +633,7 @@
       "availableButton": "Update Available"
     },
     "limit": {
-      "weeklyTitle": "Weekly limit reached",
+      "weeklyTitle": "Weekly Cloud limit reached",
       "weeklyDescription": "Your limit resets on a rolling basis. Upgrade to Pro or use your own API key for unlimited use."
     },
     "accessibilityMissing": {
@@ -680,12 +682,17 @@
       "retrying": "Re-transcribing...",
       "retrySuccess": "Transcription updated",
       "retryError": "Failed to re-transcribe",
+      "retryErrors": {
+        "invalidResponse": "The transcription engine returned an unexpected response. Try again."
+      },
       "audioNotFound": "Audio file not found or expired",
       "noAiProcessing": "No AI processing was applied to this transcription",
       "transcriptionFailed": "Transcription failed",
       "failedCtaSettings": "Set up your transcription provider",
       "failedCtaAndRetry": "then click retry",
       "failedCtaSettingsOnly": "Set up your transcription provider in Settings",
+      "failedCtaAiSettings": "Check your Voice Assistant model in Settings",
+      "editFailedTranscriptKept": "Edit not applied · transcript kept",
       "failedLimitReached": "Daily limit reached",
       "failedOffline": "You're offline",
       "rawTranscript": "Raw Transcript",
@@ -767,6 +774,21 @@
       "noSearchResults": "No models match \"{{query}}\"",
       "selectModelHint": "No model selected yet — choose one from the list below.",
       "keyRequiredHint": "An API key is required for inference — add one to use this provider."
+    },
+    "effort": {
+      "title": "Reasoning effort",
+      "description": "How much the model thinks before it answers.",
+      "descriptionWithDefault": "How much the model thinks before it answers. Auto uses the provider's default ({{value}}).",
+      "auto": "Auto",
+      "options": {
+        "none": "None",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      }
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
@@ -853,8 +875,11 @@
         "apikeyHelp": "Vertex AI Express Mode API key from Google AI Studio."
       }
     },
+    "modelRetiredTitle": "Model no longer available",
+    "groq": {
+      "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
+    },
     "tinfoil": {
-      "modelRetiredTitle": "Model no longer available",
       "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
       "refreshingModels": "Refreshing models…"
     },
@@ -898,12 +923,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AI cleanup uses OpenWhispr Cloud, but you're signed out.",
+      "cleanupUnconfigured": "AI cleanup is on, but no cleanup model is set up.",
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
-        "dailyLimitReached": "Daily Limit Reached",
+        "cloudLimitReached": "Weekly Cloud Limit Reached",
         "providerRateLimited": "Provider Rate Limited"
       },
       "fallback": {
@@ -1624,6 +1651,10 @@
         "description": "Dictation hotkey & activation",
         "label": "Hotkeys"
       },
+      "toneStyle": {
+        "label": "Tone & Style",
+        "description": "How cleanup writes in each app"
+      },
       "speechToText": {
         "description": "Engines for dictation & note recording",
         "label": "Speech-to-Text"
@@ -1869,7 +1900,7 @@
     "account": {
       "badges": {
         "free": "Free",
-        "limitReached": "Limit reached",
+        "limitReached": "Cloud limit reached",
         "pastDue": "Past due",
         "pro": "Pro",
         "business": "Business",
@@ -1905,9 +1936,10 @@
         "title": "We couldn't process your payment"
       },
       "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} words this week",
+        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
+        "byokUnlimited": "Your own API keys and local models remain unlimited.",
         "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} free words this week - update payment to restore Pro",
+        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
         "unlimited": "Unlimited",
         "accessUntil": "Access until {{date}}",
@@ -2025,8 +2057,8 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} free words this week. Upgrade to Pro for unlimited use.",
-          "title": "Approaching weekly limit"
+          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Upgrade to Pro for unlimited use.",
+          "title": "Approaching Cloud word limit"
         }
       },
       "trialCta": {
@@ -2372,15 +2404,11 @@
             "step1Desc": "Start ydotoold and enable it so it runs on every login.",
             "step2Title": "Verify it's running"
           },
-          "xclip": {
-            "step1Title": "Install xclip"
-          },
           "wlCopy": {
             "step1Title": "Install wl-clipboard",
             "step2Title": "Verify installation"
           }
         },
-        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)",
         "nixos": {
           "intro": "You're on NixOS. Auto-paste needs ydotool and /dev/uinput access, which NixOS grants declaratively.",
           "detected": "Detected",
@@ -2759,9 +2787,8 @@
         "gemini_gemma_4_31b_it": "Google's largest Gemma 4, 31B dense, 256K context",
         "gemini_gemma_4_26b_a4b_it": "Google's Gemma 4 MoE, 4B active params, 256K context",
         "groq_openai_gpt_oss_120b": "OpenAI's open-source flagship, 500 T/sec",
+        "groq_qwen_qwen3_8_27b": "Fast Qwen model, 450 T/sec, 131K context",
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
-        "groq_compound": "Groq's compound system, 450 T/sec",
-        "groq_compound_mini": "Fast compound system, 3x lower latency",
         "openai_gpt_6_astra": "OpenAI's most capable model for coding and research",
         "openai_gpt_5_6_sol": "Flagship GPT-5.6 for complex coding and research",
         "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
@@ -2847,8 +2874,8 @@
     "inviteTeam": "Invite your team",
     "settings": "Settings",
     "support": "Support",
-    "limitReached": "Weekly limit reached",
-    "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
+    "limitReached": "Weekly Cloud limit reached",
+    "limitReachedDescription": "Upgrade to Pro or use your own API key for unlimited use.",
     "viewPlans": "View Plans",
     "upgradeTitle": "Upgrade to Pro",
     "upgradeDescription": "Unlimited, more accurate, faster transcription.",
@@ -3722,6 +3749,7 @@
       "typeNamePlaceholder": "Type a name",
       "nameOrEmailPlaceholder": "Type a name or email",
       "knownSpeakers": "Known speakers",
+      "thisIsMe": "This is me",
       "meetingAttendees": "Meeting attendees",
       "createNewPrefix": "Create",
       "addContact": "Add contact",
@@ -4872,6 +4900,91 @@
     "details": {
       "provider": "Provider",
       "requestId": "Request ID"
+    }
+  },
+  "toneStyle": {
+    "title": "Tone & Style",
+    "description": "Set your tone and style across different apps.",
+    "turnOnAndSetUp": "Turn on and set up",
+    "categories": {
+      "personal": {
+        "title": "Personal messages",
+        "inline": "personal messages",
+        "question": "How do you write\nyour {{category}}"
+      },
+      "work": {
+        "title": "Work messages",
+        "inline": "work messages",
+        "question": "How do you write\nyour {{category}}"
+      },
+      "email": {
+        "title": "Emails",
+        "inline": "emails",
+        "question": "How do you write\nyour {{category}}"
+      },
+      "other": {
+        "title": "Other apps",
+        "inline": "other apps",
+        "question": "How do you write\nin {{category}}"
+      }
+    },
+    "tones": {
+      "formal": "Formal",
+      "casual": "Casual",
+      "very_casual": "Very Casual",
+      "excited": "Excited!"
+    },
+    "samples": {
+      "personal": {
+        "formal": "Hey, are you around this evening? I was thinking we could grab a coffee around 6. Let me know.",
+        "casual": "Hey are you around this evening? Thinking coffee around 6ish, let me know",
+        "very_casual": "hey u around this evening? thinking coffee 6ish lmk"
+      },
+      "work": {
+        "sender": "Jimmy",
+        "time": "6:20 PM",
+        "formal": "Hey, could you send me the deck before the call? The numbers on slide 3 look out of date. No rush.",
+        "casual": "Hey can you send the deck before the call? Think slide 3 numbers are old, no rush.",
+        "excited": "Hey! Can you send me the deck before the call? Pretty sure slide 3 numbers are old, no rush!"
+      },
+      "email": {
+        "to": "To Sarah",
+        "formal": "Hi Sarah,\n\nThank you for your time today. I will send the updated proposal by Thursday. Please let me know if you need anything before then.\n\nBest regards",
+        "casual": "Hi Sarah,\n\nThanks for today. I'll send the updated proposal over by Thursday, let me know if you need anything before that.\n\nThanks",
+        "excited": "Hi Sarah,\n\nThanks so much for your time today! I'll send the updated proposal by Thursday. Let me know if you need anything before then!\n\nThanks"
+      },
+      "other": {
+        "formal": "Notes from the call: they liked the pricing page and would like a shorter onboarding. Follow up with them next week.",
+        "casual": "Call notes: liked the pricing page, want onboarding shorter. Follow up next week",
+        "excited": "Call notes: they loved the pricing page! Want onboarding shorter. Follow up next week!"
+      }
+    },
+    "setup": {
+      "introTitle": "Make OpenWhispr\ntype the way you talk",
+      "introDescription": "Set your tone and style across different apps.",
+      "personalize": "Let's Personalize",
+      "cleanupOffTitle": "Teach OpenWhispr\nyour voice",
+      "cleanupOffDescription": "Turn on AI cleanup, then set your tone and style across different apps.",
+      "stepDescription": "Pick the example that sounds most like you.",
+      "progress": "Step {{current}} of {{total}}",
+      "finish": "Finish"
+    },
+    "banner": {
+      "title": "Teach OpenWhispr how you write",
+      "description": "Set your preferred tone for work, friends, and everything in between.",
+      "start": "Start Now",
+      "cleanupOffTitle": "Teach OpenWhispr your voice",
+      "cleanupOffDescription": "Turn on AI cleanup and pick a tone for messages, email, and more.",
+      "notNow": "Not now",
+      "decoration": "Your words should sound like you. Whatever you're writing, whoever it's for."
+    },
+    "settings": {
+      "saveChanges": "Save Changes",
+      "saved": "Tone & Style saved",
+      "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation. The assistant and chats still use them.",
+      "turnOnCleanup": "Turn on AI cleanup",
+      "enabled": "Tones & voices enabled",
+      "enabledDescription": "AI cleanup, the assistant and chats use your tone for each kind of app. When this is off, they use the standard tone."
     }
   },
   "productHelp": {

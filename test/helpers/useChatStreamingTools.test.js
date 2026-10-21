@@ -6,6 +6,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const {
   SIGNED_OUT_AUTH_MOCK,
+  addTeardown,
   createRendererServer,
   installBrowserGlobals,
 } = require("../lib/rendererTestHarness");
@@ -51,7 +52,7 @@ async function renderChatStreaming(
   // The app's i18n module (loaded with the tools) follows the machine's locale.
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
-  t.after(() => reasoningService.destroy());
+  addTeardown(t, () => reasoningService.destroy());
 
   const offeredTools = [];
   const sentMessages = [];
@@ -723,8 +724,8 @@ test("a note's chat answers from its note and adds no other notes up front", asy
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, []);
-  // So the server marks its memories as past conversations.
-  assert.equal(configs[0].noteChat, true);
+  // The API no longer keeps memories, so a note chat's request is an ordinary one.
+  assert.equal("noteChat" in configs[0], false);
   assert.match(prompts[0], /inside the note below\.[^\n]*\n\nNote ID: 7\nTitle: Kickoff/);
   assert.doesNotMatch(prompts[0], /notes from the user's library/);
 });
@@ -739,7 +740,7 @@ test("a chat that isn't about a note still lists the library notes a question fi
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
-  assert.equal(configs[0].noteChat, undefined);
+  assert.equal("noteChat" in configs[0], false);
   assert.match(
     prompts[0],
     /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/
@@ -1285,4 +1286,26 @@ test("with no account name the prompt asks for no signature rather than a placeh
   const prompts = await promptsFor(t);
   assert.doesNotMatch(prompts[0], /The user's name is/);
   assert.match(prompts[0], /You don't know the user's name/);
+});
+
+test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+  const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: true, toneStyles: tones },
+  });
+  await captured.sendToAI("Email Josh that I'm in", []);
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+
+  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
+  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
+  assert.match(pasted, /typed at the user's cursor in a work chat app/);
+  assert.match(pasted, /work message style: casual and friendly/);
+});
+
+test("without Tone & Style no send carries a writing style", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: false },
+  });
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });

@@ -6,10 +6,12 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { BRAND } from '@/config/colors';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
-import { cloudAccessFor, unsetSelection } from '@/lib/aiWorkflows';
-import { canRunLocalReasoning, getLocalReasoningReadiness } from '@/lib/localReasoning';
+import {
+  canRunLocalReasoning,
+  getLocalReasoningLanguageNote,
+  getLocalReasoningReadiness,
+} from '@/lib/localReasoning';
 import { chooseOnboardingMode } from '@/lib/onboardingMode';
-import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useModelDownloadStore } from '@/store/useModelDownloadStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
@@ -19,12 +21,12 @@ type ModeChoice = 'cloud' | 'private';
 
 type CleanupLine = { included: boolean; text: string; hint?: string };
 
-// What cleanup does in Local Mode: the mode saved for cleanup, or with nothing saved, OpenWhispr
-// Cloud for a signed-in account and Apple Intelligence or nothing otherwise (unsetSelection). On an
-// iPhone the On-Device line waits for the readiness check.
+// What cleanup does once Local Mode is chosen here: a provider saved for it keeps cleaning, and
+// otherwise it runs on Apple Intelligence or not at all (holdOnDeviceConfig). On an iPhone the
+// On-Device line waits for the readiness check.
 function privateCleanupLine(
   readiness: LocalReasoningReadiness | null,
-  cleanup: InferenceMode,
+  cleanup: InferenceMode | undefined,
 ): CleanupLine | null {
   if (cleanup === 'providers') {
     return {
@@ -33,7 +35,6 @@ function privateCleanupLine(
       hint: 'Your transcription is sent to the provider you chose in AI Models.',
     };
   }
-  if (cleanup === 'openwhispr') return { included: true, text: 'Cleanup with OpenWhispr Cloud' };
   if (Platform.OS !== 'ios') {
     return {
       included: false,
@@ -48,7 +49,9 @@ function privateCleanupLine(
       hint:
         readiness?.status === 'appleIntelligenceOff'
           ? 'Starts once it’s on in Settings → Apple Intelligence & Siri.'
-          : undefined,
+          : readiness?.status === 'unsupportedLanguage'
+            ? `${getLocalReasoningLanguageNote(readiness)} Starts once that's changed in Settings.`
+            : undefined,
     };
   }
   if (readiness?.status === 'unsupportedDevice') {
@@ -86,12 +89,8 @@ export function PrivacyModeStep(): ReactElement {
       cancelled = true;
     };
   }, []);
-  const cloudAccess = useAuthStore((state) => cloudAccessFor(state.user));
-  const savedCleanup = useConfigStore((state) => state.config?.inference?.cleanup);
-  const cleanupLine = privateCleanupLine(
-    readiness,
-    (savedCleanup ?? unsetSelection('cleanup', 'private', cloudAccess)).mode,
-  );
+  const savedCleanup = useConfigStore((state) => state.config?.inference?.cleanup?.mode);
+  const cleanupLine = privateCleanupLine(readiness, savedCleanup);
 
   const handleContinue = async (): Promise<void> => {
     if (choice === 'private') {

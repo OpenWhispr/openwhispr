@@ -147,13 +147,27 @@ export const useActionProcessingStore = create<ActionProcessingStoreState>()(() 
 // part is asked for condensed working notes rather than the final product.
 // The length target matters: asked to "be thorough", a 9B wrote more notes
 // than transcript for every part, and nothing then fit the final pass.
-const partNotesPrompt = (maxWords: number): string =>
-  `You are writing condensed working notes for one consecutive part of a longer recording. The material is either a transcript, where each line is prefixed with the speaker's label (a real name when known, otherwise "You" for the note owner, "Them", or "Speaker N"), or working notes already written from an earlier pass. A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce.
+// A plain-text transcript has no labels to attribute by, and an owner a part
+// guessed would reach the merge as if the material had stated it (#2666).
+const partNotesPrompt = (maxWords: number, hasSpeakerLabels: boolean): string =>
+  `You are writing condensed working notes for one consecutive part of a longer recording. ${
+    hasSpeakerLabels
+      ? `The material is either a transcript, where each line is prefixed with the speaker's label (a real name when known, otherwise "You" for the note owner, "Them", or "Speaker N"), or working notes already written from an earlier pass. A "## Meeting Context" block may identify the note owner and the invited participants; it is reference material, never something to reproduce.`
+      : "The material is either a transcript in plain text, whose lines carry no speaker labels, or working notes already written from an earlier pass."
+  }
 
-Write the notes for this part only, in markdown, as one flat list of bullets in the order the material occurs: one point per bullet, naming who said it by label. Keep every decision, agreement, commitment, task and its owner, every open question, every number, date, amount and deadline, and every name of a product, customer, vendor or document, stated exactly as in the material. Leave out greetings, filler and repetition. Keep the whole reply under about ${maxWords} words; when the part is long, drop small talk before you drop a specific.
+Write the notes for this part only, in markdown, as one flat list of bullets in the order the material occurs: ${
+    hasSpeakerLabels
+      ? "one point per bullet, naming who said it by label. Keep every decision, agreement, commitment, task and its owner,"
+      : "one point per bullet. Keep every decision, agreement, commitment and task, with its owner only where the material names one,"
+  } every open question, every number, date, amount and deadline, and every name of a product, customer, vendor or document, stated exactly as in the material. Leave out greetings, filler and repetition. Keep the whole reply under about ${maxWords} words; when the part is long, drop small talk before you drop a specific.
 
 Rules:
-- Refer to people only by the labels used in the material. NEVER guess or invent an identity.
+- ${
+    hasSpeakerLabels
+      ? "Refer to people only by the labels used in the material. NEVER guess or invent an identity."
+      : "Name a person only where the material names them. NEVER guess or invent who said something or who owns a task."
+  }
 - Do NOT include a title, a preamble, or a summary of the whole recording; you have only seen this part.
 - Do NOT use headings, tables, horizontal rules, or block quotes.
 
@@ -268,8 +282,8 @@ async function runInParts(
   material: NoteMaterial
 ): Promise<string> {
   const { transcript, meetingContext: context, notes: manualNotes } = material;
-  // Only a diarised transcript carries "Label:" lines; a live recording's text
-  // is one plain paragraph whose first colon is not a speaker.
+  // Only a diarised transcript carries "Label:" lines; a plain-text transcript
+  // is one paragraph whose first colon is not a speaker.
   const hasSpeakerLabels = run.options.isMeetingNote === true;
   const mergeSystemPrompt = run.systemPrompt + MERGE_ADDENDUM;
 
@@ -292,7 +306,7 @@ async function runInParts(
   // Parts are planned against the largest allowance so they stay small enough
   // for the exact tokenizer to accept them whatever share they end up with.
   const fixedTokens =
-    estimateNoteTokens(partNotesPrompt(PART_NOTES_MAX_TOKENS / 2)) +
+    estimateNoteTokens(partNotesPrompt(PART_NOTES_MAX_TOKENS / 2, hasSpeakerLabels)) +
     estimateNoteTokens(context) +
     PART_NOTES_MAX_TOKENS +
     CONTEXT_RESERVE_TOKENS;
@@ -323,7 +337,7 @@ async function runInParts(
     try {
       notes = await reasoningService.processText(content, run.modelId, null, {
         ...run.requestConfig,
-        systemPrompt: partNotesPrompt(Math.floor(maxTokens / 2)),
+        systemPrompt: partNotesPrompt(Math.floor(maxTokens / 2), hasSpeakerLabels),
         maxTokens,
         // Working notes are scaffolding: reasoning would spend the part's whole
         // output budget before a line of them is written.
@@ -425,6 +439,8 @@ export interface RunActionOptions {
   isCloudMode: boolean;
   modelId: string;
   isMeetingNote?: boolean;
+  /** The transcript is plain text, with no speaker segments to label its lines (#2666). */
+  hasPlainTranscript?: boolean;
   /** Opt-in so enhancement never renames a note the user has titled. */
   allowTitleGeneration?: boolean;
   /** People whose names in generated action-item owners become mention tags. */
@@ -485,12 +501,17 @@ export function runBackgroundAction(
         ? compileSummaryActionPrompt(action, {
             fromSummary: !!options.fromSummary,
             isMeetingNote: options.isMeetingNote,
+            hasPlainTranscript: options.hasPlainTranscript,
           })
-        : compileTemplatePrompt(action, { isMeetingNote: options.isMeetingNote });
+        : compileTemplatePrompt(action, {
+            isMeetingNote: options.isMeetingNote,
+            hasPlainTranscript: options.hasPlainTranscript,
+          });
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(
         instructions,
-        options.isMeetingNote ? settings.customDictionary : undefined,
+        // Any transcript is speech-to-text, which misspells names.
+        options.isMeetingNote || options.hasPlainTranscript ? settings.customDictionary : undefined,
         settings.uiLanguage
       );
       const requestConfig: ReasoningConfig = {
@@ -499,6 +520,7 @@ export function runBackgroundAction(
         maxTokens: rewritesSummary ? 2 * NOTE_OUTPUT_MAX_TOKENS : NOTE_OUTPUT_MAX_TOKENS,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
+        reasoningEffort: settings.noteFormattingReasoningEffort,
         // A local model that shrinks the reply to fit the prompt refuses a reply
         // that fills the shrunken allowance, so a recording is summarised in
         // parts rather than saved clipped. A plain note has no parts route, so

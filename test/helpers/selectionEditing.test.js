@@ -189,3 +189,19 @@ test("a question verdict is recognised in every shape the edit paths return it",
     assert.equal(isSelectionQuestionResponse(response, marker), false, String(response));
   }
 });
+
+test("a local edit takes a tone sentence as a style preference beside the custom prompt", async () => {
+  const { buildLocalSelectionEditSystemPrompt } = await load();
+  const prompt = buildLocalSelectionEditSystemPrompt({
+    customPrompt: "Keep it short.",
+    toneSentence: "If the instruction asks you to rewrite, use the Work messages style.",
+  });
+  assert.match(
+    prompt,
+    /style preferences[^\n]*:\nKeep it short\.\nIf the instruction asks you to rewrite, use the Work messages style\.\n/
+  );
+  assert.equal(
+    buildLocalSelectionEditSystemPrompt({ toneSentence: "" }),
+    buildLocalSelectionEditSystemPrompt()
+  );
+});

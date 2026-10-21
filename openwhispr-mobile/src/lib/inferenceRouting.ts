@@ -9,7 +9,7 @@ import {
 } from '@/lib/mobileProviders';
 import type { TranscriptionProvider, TranscriptionRequest, TextInferenceSnapshot } from '@/types';
 import { isLocalModelKey, type LocalModelKey } from '@/lib/localModelCatalog';
-import { cloudAccessFor, unsetSelection } from '@/lib/aiWorkflows';
+import { cloudAccessFor, unsetSelection, workflowSelection } from '@/lib/aiWorkflows';
 import type { CloudAccess } from '@/lib/inferenceModes';
 
 export type ProviderRoute = Extract<InferenceRoute, { mode: 'providers' }>;
@@ -35,13 +35,17 @@ function currentCloudAccess(): CloudAccess {
 export function getTranscriptionProvider(scope: InferenceScope): TranscriptionProvider {
   const { activeMode } = useProcessingModeStore.getState();
   // Local Mode keeps dictation on this iPhone. Uploads run what is saved for them, or with nothing
-  // saved, OpenWhispr Cloud when there is a session (unsetSelection).
+  // saved or Cloud held automatically, OpenWhispr Cloud when there is a session (workflowSelection).
   if (activeMode === 'private' && scope !== 'upload') return 'local';
   const selection =
-    getInferenceSelection(scope) ??
-    (activeMode === 'private'
-      ? unsetSelection('upload', activeMode, currentCloudAccess())
-      : undefined);
+    activeMode === 'private'
+      ? workflowSelection(
+          useConfigStore.getState().config,
+          'upload',
+          activeMode,
+          currentCloudAccess(),
+        )
+      : getInferenceSelection(scope);
   if (selection?.mode === 'providers') return 'byok';
   if (selection?.mode === 'local') return 'local';
   // Bring Your Own Key mode without a dictation choice must refuse (see
@@ -102,11 +106,18 @@ export async function resolveMobileProviderRoute(
 export type TranscriptionJobRoute = Pick<TranscriptionRequest, 'provider' | 'inferenceRoute'> &
   TextInferenceSnapshot;
 
-export function snapshotTextInference(provider: TranscriptionProvider): TextInferenceSnapshot {
+type TextScope = 'cleanup' | 'agent';
+
+// Dictation and uploads take only the cleanup route. A keyboard recording also takes the voice
+// assistant's, since the same snapshot serves a wand job.
+export function snapshotTextInference(
+  provider: TranscriptionProvider,
+  scopes: readonly TextScope[] = ['cleanup'],
+): TextInferenceSnapshot {
   const result: TextInferenceSnapshot = {};
   const { activeMode } = useProcessingModeStore.getState();
   const cloudAccess = provider === 'local' ? currentCloudAccess() : 'none';
-  for (const scope of ['cleanup', 'agent'] as const) {
+  for (const scope of scopes) {
     const routeKey = scope === 'cleanup' ? 'cleanupRoute' : 'agentRoute';
     const errorKey = scope === 'cleanup' ? 'cleanupUnavailable' : 'agentUnavailable';
     const selection = getInferenceSelection(scope);
@@ -119,11 +130,11 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
         ? unsetSelection('cleanup', activeMode, cloudAccess)
         : selection;
     const cleanupMode = localCleanup?.mode ?? 'local';
+    // The voice assistant runs its own selection, wherever the spoken instruction was transcribed.
     if (
       provider === 'local' &&
-      (scope === 'agent' ||
-        cleanupMode === 'local' ||
-        (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
+      scope === 'cleanup' &&
+      (cleanupMode === 'local' || (cleanupMode === 'openwhispr' && cloudAccess !== 'account'))
     ) {
       result[routeKey] = { mode: 'local', scope };
     } else if (!selection && provider === 'byok') {
@@ -146,9 +157,12 @@ export function snapshotTextInference(provider: TranscriptionProvider): TextInfe
   return result;
 }
 
-export function snapshotTranscriptionJob(scope: 'dictation' | 'upload'): TranscriptionJobRoute {
+export function snapshotTranscriptionJob(
+  scope: 'dictation' | 'upload',
+  textScopes?: readonly TextScope[],
+): TranscriptionJobRoute {
   const provider = getTranscriptionProvider(scope);
-  const job: TranscriptionJobRoute = { provider, ...snapshotTextInference(provider) };
+  const job: TranscriptionJobRoute = { provider, ...snapshotTextInference(provider, textScopes) };
   if (provider === 'byok') {
     const selection = getInferenceSelection(scope);
     if (!selection)

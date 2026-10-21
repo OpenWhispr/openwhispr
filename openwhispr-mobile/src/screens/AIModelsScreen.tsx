@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 import { router } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
@@ -29,7 +29,8 @@ const WORKFLOW_ICONS: Record<MobileInferenceScope, { icon: string; mdIcon: Lucid
   upload: { icon: 'square.and.arrow.up', mdIcon: 'Upload' },
   cleanup: { icon: 'sparkles', mdIcon: 'Sparkles' },
   notes: { icon: 'doc.text', mdIcon: 'FileText' },
-  agent: { icon: 'bubble.left.and.bubble.right', mdIcon: 'MessagesSquare' },
+  noteChat: { icon: 'bubble.left.and.bubble.right', mdIcon: 'MessagesSquare' },
+  agent: { icon: 'person.wave.2', mdIcon: 'UserRoundCog' },
 };
 
 function localReasoningStatusLabel(readiness: LocalReasoningReadiness | null): string {
@@ -41,7 +42,9 @@ function localReasoningStatusLabel(readiness: LocalReasoningReadiness | null): s
     case 'appleIntelligenceOff':
       return 'Apple Intelligence off';
     case 'modelNotReady':
-      return 'Model not ready';
+      return 'Downloading model';
+    case 'unsupportedLanguage':
+      return 'Language not supported';
     case 'unavailable':
       return 'Not eligible';
     case 'unsupportedDevice':
@@ -112,11 +115,19 @@ export default function AIModelsScreen(): React.JSX.Element {
         cancelled = true;
       };
     }
-    getLocalReasoningReadiness({ refresh: true }).then((readiness) => {
-      if (!cancelled) setLocalReadiness(readiness);
+    const check = (): void => {
+      getLocalReasoningReadiness({ refresh: true }).then((readiness) => {
+        if (!cancelled) setLocalReadiness(readiness);
+      });
+    };
+    check();
+    // Apple Intelligence is turned on, or finishes its model, outside the app.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
     });
     return () => {
       cancelled = true;
+      subscription.remove();
     };
   }, [localIntelligenceEnabled]);
 

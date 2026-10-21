@@ -21,7 +21,6 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
 jest.mock('@/lib/cleanupTranscript', () => ({
   cleanupTranscript: jest.fn(async (text: string) => `cleaned:${text}`),
   CLEANUP_TIMEOUT_MS: 12_000,
-  AGENT_ACTION_TIMEOUT_MS: 30_000,
 }));
 jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),

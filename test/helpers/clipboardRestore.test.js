@@ -17,13 +17,14 @@ const fakeClipboard = {
   readText() {
     return this.text;
   },
-  writeText(text) {
+  writeText(text, type) {
+    this.writes.push(["writeText", text, type]);
+    if (type === "selection") return;
     this.text = text;
     this.html = "";
     this.rtf = "";
     this.image = null;
     this.formats = ["text/plain"];
-    this.writes.push(["writeText", text]);
   },
   readHTML() {
     return this.html;
@@ -142,6 +143,13 @@ function createSpawn(calls, exitCodes, { stdout = [] } = {}) {
       pasteProcess.emit("close", code);
     });
     return pasteProcess;
+  };
+}
+
+function createSpawnSync(calls) {
+  return function mockedSpawnSync(command, args = []) {
+    calls.push({ command, args });
+    return { status: 0, stdout: Buffer.from("") };
   };
 }
 
@@ -290,9 +298,139 @@ test("a clipboard XWayland can read is saved without asking wl-paste", async (t)
   const manager = new Manager();
   manager.commandExists = (command) => command === "wl-paste";
 
-  const snapshot = await withWaylandEnvironment("KDE", () => manager._saveClipboard());
+  const snapshot = await withWaylandEnvironment("GNOME", () => manager._saveClipboard());
 
   assert.deepEqual(snapshot, { type: "text", data: "readable over X11" });
+  assert.deepEqual(spawnSyncCalls, []);
+});
+
+// KWin can leave an older X11 owner in place after a Wayland app copies, so
+// the X11 clipboard can be older than the Wayland one the KDE restore writes. A current
+// X11 owner's text is what wl-paste reads, and an image has no plain text to read, even
+// with the html Chromium offers beside it.
+const WAYLAND_COPY = "copied in a Wayland app";
+const IMAGE_MARKUP = '<img src="https://example.com/a.png">';
+for (const { owner, x11, wayland, saved } of [
+  {
+    owner: "a stale X11 text owner",
+    x11: { text: "stale X11 text" },
+    wayland: { plain: WAYLAND_COPY },
+    saved: { type: "text", data: WAYLAND_COPY },
+  },
+  {
+    owner: "a stale X11 rich-text owner",
+    x11: { formats: ["text/html", "text/plain"], text: "stale X11 text", html: "<b>stale</b>" },
+    wayland: { plain: WAYLAND_COPY },
+    saved: { type: "text", data: WAYLAND_COPY },
+  },
+  {
+    owner: "a stale X11 image owner",
+    x11: { formats: ["image/png"], image: nonEmptyImage },
+    wayland: { plain: WAYLAND_COPY },
+    saved: { type: "text", data: WAYLAND_COPY },
+  },
+  {
+    owner: "a current rich-text owner",
+    x11: { formats: ["text/html", "text/plain"], text: "current", html: "<b>current</b>" },
+    wayland: { plain: "current" },
+    saved: { type: "formats", data: { text: "current", html: "<b>current</b>" } },
+  },
+  {
+    owner: "a current image owner",
+    x11: { formats: ["image/png"], image: nonEmptyImage },
+    wayland: {},
+    saved: { type: "image", data: nonEmptyImage },
+  },
+  {
+    owner: "a Chromium copied image",
+    x11: { formats: ["image/png", "text/html"], html: IMAGE_MARKUP, image: nonEmptyImage },
+    wayland: { html: IMAGE_MARKUP },
+    saved: { type: "formats", data: { html: IMAGE_MARKUP, image: nonEmptyImage } },
+  },
+]) {
+  test(`a KDE clipboard held by ${owner} is saved as ${saved.type}`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    resetClipboard(x11);
+    // `--type text` falls back to any text type; an exact type matches only itself.
+    const Manager = loadClipboardManager({
+      spawnSync: (command, args) => {
+        const text = args.at(-1) === "text" ? (wayland.plain ?? wayland.html) : wayland.plain;
+        return { status: text === undefined ? 1 : 0, stdout: Buffer.from(text ?? "") };
+      },
+    });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "wl-paste";
+
+    const snapshot = await withWaylandEnvironment("KDE", () => manager._saveClipboard());
+
+    assert.deepEqual(snapshot, saved);
+  });
+}
+
+// A rich or image restore writes X11 only, so on KWin before 6.0.3 the text the app put on
+// Wayland stays there, and the next KDE save would take it for a newer copy.
+const RICH_COPY = { formats: ["text/html", "text/plain"], text: "user copy", html: "<b>user</b>" };
+for (const { original, x11, when, writeAppText } of [
+  {
+    original: "rich",
+    x11: RICH_COPY,
+    when: "a dictation",
+    writeAppText: (manager) => manager._writeClipboardWayland("dictated text"),
+  },
+  {
+    original: "rich",
+    x11: RICH_COPY,
+    when: "a selection capture",
+    writeAppText: (manager) => manager._writeClipboardTextAll("__OPENWHISPR_SELECTION_test__"),
+  },
+  {
+    original: "image",
+    x11: { formats: ["image/png"], image: nonEmptyImage },
+    when: "a dictation",
+    writeAppText: (manager) => manager._writeClipboardWayland("dictated text"),
+  },
+]) {
+  test(`a KDE ${original} clipboard restored after ${when} is saved again unchanged`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    resetClipboard(x11);
+    let waylandText = x11.text ?? null;
+    const Manager = loadClipboardManager({
+      spawnSync: (command, args) => {
+        if (command === "wl-copy" && !args.includes("--primary")) waylandText = args.at(-1);
+        return waylandText === null
+          ? { status: 1, stdout: Buffer.from("") }
+          : { status: 0, stdout: Buffer.from(waylandText) };
+      },
+    });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "wl-copy" || command === "wl-paste";
+
+    await withWaylandEnvironment("KDE", () => {
+      const saved = manager._saveClipboard();
+      writeAppText(manager);
+      manager._restoreClipboard(saved);
+
+      assert.deepEqual(manager._saveClipboard(), saved);
+    });
+  });
+}
+
+test("a rich or image restore off KDE writes X11 only", async () => {
+  const spawnSyncCalls = [];
+  const Manager = loadClipboardManager({ spawnSync: createSpawnSync(spawnSyncCalls) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "wl-copy";
+  resetClipboard();
+
+  await withWaylandEnvironment("GNOME", () => {
+    manager._restoreClipboard({ type: "formats", data: RICH_COPY });
+    manager._restoreClipboard({ type: "image", data: nonEmptyImage });
+  });
+
   assert.deepEqual(spawnSyncCalls, []);
 });
 
@@ -1605,4 +1743,69 @@ test("clipboard write failure is never classified as an Accessibility denial", a
     assert.equal(error.clipboardCopied, undefined);
     return true;
   });
+});
+
+test("_writeClipboardWayland on KDE writes wl-copy (Wayland) and Electron's X11 clipboard", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => ["wl-copy", "xclip"].includes(cmd);
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writeClipboardWayland("dictated KDE text");
+  });
+
+  assert.deepEqual(
+    spawnSyncCalls.map((call) => [call.command, call.args]),
+    [["wl-copy", ["--", "dictated KDE text"]]]
+  );
+  assert.equal(fakeClipboard.text, "dictated KDE text");
+});
+
+test("_writeClipboardWayland on KDE uses renderer fallback when wl-copy is unavailable", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => cmd === "xclip";
+  resetClipboard();
+
+  let rendererWritten = null;
+  const webContents = {
+    isDestroyed: () => false,
+    executeJavaScript: async (code) => {
+      rendererWritten = code;
+    },
+  };
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writeClipboardWayland("dictated KDE text", webContents);
+  });
+
+  assert.equal(rendererWritten.includes("dictated KDE text"), true);
+  assert.equal(fakeClipboard.text, "dictated KDE text");
+});
+
+test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection", async () => {
+  const spawnSyncCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawnSync: createSpawnSync(spawnSyncCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (cmd) => ["wl-copy", "xclip"].includes(cmd);
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", async () => {
+    manager._writePrimarySelection("selection text");
+  });
+
+  assert.deepEqual(
+    spawnSyncCalls.map((call) => [call.command, call.args]),
+    [["wl-copy", ["--primary", "--", "selection text"]]]
+  );
+  assert.deepEqual(fakeClipboard.writes, [["writeText", "selection text", "selection"]]);
 });

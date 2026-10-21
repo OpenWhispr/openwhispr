@@ -232,10 +232,13 @@ it('keeps an On-Device transcript raw when cleanup is turned off', async () => {
 it.each([
   [
     'appleIntelligenceOff',
-    "Apple Intelligence is turned off in iOS Settings, so this can't run on-device.",
+    "Apple Intelligence is turned off, so this can't run on-device. Turn it on in Settings → Apple Intelligence & Siri. If that page shows only Siri, set Siri to the same language as your iPhone.",
   ],
   ['disabled', 'Local Apple Intelligence is turned off in AI Models.'],
-  ['modelNotReady', 'Apple Intelligence is still preparing its local model. Try again later.'],
+  [
+    'modelNotReady',
+    'Apple Intelligence is still downloading its model. Check Settings → Apple Intelligence & Siri, and keep your iPhone on Wi-Fi and charging.',
+  ],
   ['unavailable', 'Local Apple Intelligence is unavailable on this device.'],
 ])('says why On-Device cleanup could not run when readiness is %s', async (status, reason) => {
   mockReadiness.mockResolvedValue({ status, tokenCounting: false });
@@ -298,6 +301,36 @@ describe('in Local Mode with nothing of its own saved for cleanup', () => {
 
     expect(mockReadiness).toHaveBeenCalledWith({ refresh: true });
     expect(result.text).toBe('cleaned:um hello there');
+  });
+
+  // A dictation change from Cloud holds cleanup there, which Local Mode can't run without an
+  // account, so it cleans on this phone like an unsaved one (workflowSelection).
+  describe('with Cloud held automatically', () => {
+    beforeEach(() => {
+      mockConfig = {
+        ...mockConfig,
+        inference: { dictation: { mode: 'local' }, cleanup: { mode: 'openwhispr' } },
+        pinnedInference: ['cleanup'],
+      };
+    });
+
+    it('cleans on this phone', async () => {
+      mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: true });
+
+      const result = await transcribeOnDevice();
+
+      expect(result.text).toBe('cleaned:um hello there');
+    });
+
+    it('skips quietly when Apple Intelligence cannot run', async () => {
+      mockReadiness.mockResolvedValue({ status: 'unsupportedDevice', tokenCounting: false });
+
+      const result = await transcribeOnDevice();
+
+      expect(mockReason).not.toHaveBeenCalled();
+      expect(result.text).toBe('um hello there');
+      expect(result.transcription.cleanupWarning).toBeUndefined();
+    });
   });
 });
 

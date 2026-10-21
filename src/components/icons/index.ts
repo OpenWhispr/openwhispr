@@ -17,6 +17,7 @@ export {
   Quote,
   Square,
   SquareSlash,
+  SquareSparkle,
   Strikethrough,
   Table,
 } from "./primitives";

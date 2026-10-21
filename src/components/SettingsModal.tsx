@@ -12,6 +12,7 @@ import {
   Shield,
   ShieldCheck,
   Users,
+  SquareSparkle,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
@@ -99,6 +100,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.app"),
       },
       {
+        id: "toneStyle",
+        label: t("settingsModal.sections.toneStyle.label"),
+        icon: SquareSparkle,
+        description: t("settingsModal.sections.toneStyle.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
         id: "speechToText",
         label: t("settingsModal.sections.speechToText.label"),
         icon: Mic,
@@ -152,9 +160,9 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     if (!open) setInitialSubTab(undefined);
   }
 
-  const handleSectionChange = (section: SettingsSectionType) => {
+  const handleSectionChange = (section: SettingsSectionType, subTab?: string) => {
     setActiveSection(section);
-    setInitialSubTab(undefined);
+    setInitialSubTab(subTab);
   };
 
   return (

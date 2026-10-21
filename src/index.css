@@ -916,18 +916,21 @@ h1 {
   background-color: var(--onboarding-surface-secondary) !important;
 }
 
+/* The shared credential field (ui/ProviderCheckField.tsx). Outside onboarding these names
+   are unset, so each falls back to the app theme: the mapping .onboarding-embedded-auth
+   gives the control panel's sign-in dialog. Onboarding defines them, so it keeps its own. */
 .onboarding-provider-input,
 .onboarding-provider-input:hover,
 .onboarding-provider-input:focus-visible,
 .onboarding-provider-input:disabled {
-  border-color: var(--onboarding-control-border) !important;
-  background-color: var(--onboarding-surface-secondary) !important;
-  color: var(--onboarding-text-primary) !important;
+  border-color: var(--onboarding-control-border, var(--color-border)) !important;
+  background-color: var(--onboarding-surface-secondary, var(--color-muted)) !important;
+  color: var(--onboarding-text-primary, var(--color-foreground)) !important;
   opacity: 1 !important;
 }
 
 .onboarding-provider-input::placeholder {
-  color: var(--onboarding-text-secondary) !important;
+  color: var(--onboarding-text-secondary, var(--color-muted-foreground)) !important;
 }
 
 .onboarding-provider-icon-monochrome {

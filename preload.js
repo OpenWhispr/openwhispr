@@ -101,6 +101,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
+  captureDictationAppCategory: () => ipcRenderer.invoke("capture-dictation-app-category"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
@@ -479,9 +480,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => () => callback()
   ),
 
-  // One-time "GPU pack needs re-downloading" notice from the legacy-layout migration
-  getGpuPackMigrationNotice: () => ipcRenderer.invoke("get-gpu-pack-migration-notice"),
-  dismissGpuPackMigrationNotice: () => ipcRenderer.invoke("dismiss-gpu-pack-migration-notice"),
+  // One-time "GPU pack needs re-downloading" notice
+  takeGpuPackMigrationNotice: () => ipcRenderer.invoke("take-gpu-pack-migration-notice"),
+  onGpuPackMigrationNoticeReady: registerListener(
+    "gpu-pack-migration-notice-ready",
+    (callback) => () => callback()
+  ),
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>

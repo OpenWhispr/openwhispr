@@ -116,6 +116,7 @@ import {
 } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
+import { TabPanel } from "./ui/TabPanel";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
@@ -159,6 +160,7 @@ import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
+import ToneStyleSection from "./settings/ToneStyleSection";
 import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -170,6 +172,7 @@ export type SettingsSectionType =
   | "workspace"
   | "general"
   | "hotkeys"
+  | "toneStyle"
   | "speechToText"
   | "llms"
   | "privacyData"
@@ -177,7 +180,7 @@ export type SettingsSectionType =
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
-  onNavigateToSection?: (section: SettingsSectionType) => void;
+  onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
 }
@@ -925,10 +928,6 @@ function VADLabelWithInfo({ label, description }: { label: string; description: 
   );
 }
 
-function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? undefined : "hidden"}>{children}</div>;
-}
-
 // "Gabriel Stein" → "GS"; single names fall back to their first letter.
 function nameInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -1385,8 +1384,6 @@ export default function SettingsPage({
     isWlroots: boolean;
     isCosmic: boolean;
     requiresWlCopy: boolean;
-    hasXclip: boolean;
-    hasXsel: boolean;
     isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
@@ -2487,6 +2484,9 @@ export default function SettingsPage({
                                   <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
                                 )}
                               </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.planDescriptions.byokUnlimited")}
+                              </p>
                             </div>
                           </SettingsPanelRow>
                         )}
@@ -3052,6 +3052,13 @@ export default function SettingsPage({
 
       case "workspace":
         return <WorkspaceSection initialSubTab={initialSubTab} />;
+
+      case "toneStyle":
+        return (
+          <ToneStyleSection
+            onOpenCleanupSettings={() => onNavigateToSection?.("llms", "dictationCleanup")}
+          />
+        );
 
       case "general":
         return (
@@ -3803,35 +3810,12 @@ EOF`,
                     },
                   ];
 
-                  if (ydotoolStatus.isKde) {
-                    checks.push({
-                      key: "hasXclip",
-                      label: "xclip",
-                      ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
-                      required: true,
-                      desc: t("settingsPage.general.waylandPaste.xclipDesc", {
-                        defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
-                      }),
-                      steps: [
-                        {
-                          title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
-                            defaultValue: "Install xclip",
-                          }),
-                          cmds: [
-                            { cmd: "sudo dnf install xclip  # Fedora" },
-                            { cmd: "sudo apt install xclip  # Debian/Ubuntu" },
-                          ],
-                        },
-                      ],
-                    });
-                  }
-
-                  if (ydotoolStatus.requiresWlCopy) {
+                  if (ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde) {
                     checks.push({
                       key: "hasWlCopy",
                       label: "wl-copy",
                       ok: ydotoolStatus.hasWlCopy,
-                      required: true,
+                      required: ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde,
                       desc: t("settingsPage.general.waylandPaste.wlCopyDesc"),
                       steps: [
                         {

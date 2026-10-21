@@ -121,6 +121,8 @@
       "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
+      "keyNotInKeymap": "GNOME は現在のキーボードレイアウトでは \"{{hotkey}}\" を使用できません。別のキーを選んでください。",
+      "keyReservedByGnome": "GNOME はすでに \"{{hotkey}}\" を独自のショートカットに使用しています。別のキーを選んでください。",
       "rightModifierNeedsListener": "\"{{hotkey}}\" はこのデスクトップでは使用できません。ショートカットには通常のキーが必要です。Control+Alt+Space のようにキーを追加してください。",
       "holdNeedsReleaseKey": "ホールドして話すには、macOS が離したことを検知できるキーが必要です。Globe、右 Option のような右側のキー、または修飾キー付きのショートカットです。タップならどのキーでも使えます。",
       "holdNeedsRegularKey": "ホールドを使うには、Control+Alt+Space のようにショートカットに通常のキーを追加してください。デスクトップは修飾キーだけを押し続けていることを検知できません。",
@@ -142,7 +144,7 @@
   },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
-    "weeklyLimit": "週間の利用上限に達しました",
+    "weeklyLimit": "週間のクラウド上限に達しました",
     "pastDueDescription": "現在は無料プランをご利用中です。ご安心ください、週 {{limit}} ワードまで引き続きご利用いただけます。\nお支払い方法を更新して、無制限の Pro に戻しましょう。",
     "limitDescription": "{{used}} / {{limit}} ワード使用済み。\n文字起こしは保存・貼り付けされました。",
     "updatePayment": "お支払い方法を更新",
@@ -410,15 +412,14 @@
         "optional": "任意",
         "modelId": "モデル ID",
         "modelIdPlaceholder": "モデル ID を入力",
-        "testConnection": "接続をテスト",
         "proceed": "次へ進む",
         "clinical": "臨床文字起こし向け",
         "clientId": "Client ID",
         "clientSecret": "Client secret",
-        "runTest": "テストを実行",
         "testing": "テスト中…",
         "connected": "接続済み",
         "connectionFailed": "接続を確認できませんでした。",
+        "unverified": "確認できませんでした：{{reason}}",
         "errors": {
           "endpointRequired": "テストの前にエンドポイント URL を入力してください。",
           "invalidUrl": "エンドポイントは有効な HTTP または HTTPS の URL である必要があります。",
@@ -427,6 +428,7 @@
           "apiKeyRequired": "テストの前に API キーを追加してください。",
           "credentialsRejected": "プロバイダーがこの認証情報を拒否しました。",
           "endpointNotFound": "このエンドポイントは OpenAI 互換のモデル一覧を公開していません。",
+          "transcriptionEndpointNotFound": "このアドレスでは文字起こしを受け付けていません。",
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
@@ -631,7 +633,7 @@
       "availableButton": "アップデートあり"
     },
     "limit": {
-      "weeklyTitle": "週間の利用上限に達しました",
+      "weeklyTitle": "週間のクラウド上限に達しました",
       "weeklyDescription": "利用上限はローリング方式でリセットされます。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。"
     },
     "accessibilityMissing": {
@@ -672,6 +674,8 @@
       "failedCtaSettings": "文字起こしプロバイダーを設定してください",
       "failedCtaAndRetry": "その後、再試行をクリックしてください",
       "failedCtaSettingsOnly": "設定で文字起こしプロバイダーを設定してください",
+      "failedCtaAiSettings": "設定で音声アシスタントのモデルを確認してください",
+      "editFailedTranscriptKept": "編集は適用されませんでした · 文字起こしは保存済み",
       "failedLimitReached": "1日の上限に達しました",
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
@@ -693,6 +697,9 @@
       "retrying": "再文字起こし中…",
       "retrySuccess": "文字起こしが更新されました",
       "retryError": "再文字起こしに失敗しました",
+      "retryErrors": {
+        "invalidResponse": "文字起こしエンジンから予期しない応答が返されました。もう一度お試しください。"
+      },
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
       "rawTranscript": "生の文字起こし",
@@ -767,6 +774,21 @@
       "noSearchResults": "「{{query}}」に一致するモデルはありません",
       "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
       "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
+    },
+    "effort": {
+      "title": "推論の深さ",
+      "description": "モデルが回答する前にどれだけ考えるかを設定します。",
+      "descriptionWithDefault": "モデルが回答する前にどれだけ考えるかを設定します。自動ではプロバイダーの既定値（{{value}}）を使用します。",
+      "auto": "自動",
+      "options": {
+        "none": "なし",
+        "minimal": "最小",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "非常に高い",
+        "max": "最大"
+      }
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -853,8 +875,11 @@
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
     },
+    "modelRetiredTitle": "モデルが利用できません",
+    "groq": {
+      "modelRetired": "Groq は {{from}} を提供終了しました。{{to}} に切り替えました。"
+    },
     "tinfoil": {
-      "modelRetiredTitle": "モデルが利用できません",
       "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
       "refreshingModels": "モデルを更新しています…"
     },
@@ -898,12 +923,14 @@
   },
   "hooks": {
     "audioRecording": {
+      "cleanupSignedOut": "AIクリーンアップはOpenWhispr Cloudを使用しますが、サインインしていません。",
+      "cleanupUnconfigured": "AIクリーンアップはオンですが、クリーンアップモデルが設定されていません。",
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
-        "dailyLimitReached": "1 日の上限に達しました",
+        "cloudLimitReached": "週間のクラウド上限に達しました",
         "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
@@ -1526,6 +1553,10 @@
         "description": "ディクテーションホットキーと起動モード",
         "label": "ホットキー"
       },
+      "toneStyle": {
+        "label": "トーンとスタイル",
+        "description": "アプリごとの補正の書き方"
+      },
       "speechToText": {
         "description": "ディクテーションとノート録音用エンジン",
         "label": "音声認識"
@@ -1575,7 +1606,7 @@
     "account": {
       "badges": {
         "free": "無料",
-        "limitReached": "上限到達",
+        "limitReached": "クラウド上限到達",
         "pastDue": "支払い遅延",
         "pro": "Pro",
         "business": "Business",
@@ -1611,9 +1642,10 @@
         "title": "お支払いを処理できませんでした"
       },
       "planDescriptions": {
-        "freeUsage": "今週 {{used}} / {{limit}} ワード使用済み",
+        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
+        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
         "nextBilling": "次の請求日: {{date}}",
-        "pastDue": "今週 {{used}} / {{limit}} 無料ワード使用済み - お支払い方法を更新して Pro を復元",
+        "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
         "unlimited": "無制限",
         "accessUntil": "{{date}} まで利用可能",
@@ -1734,8 +1766,8 @@
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週 {{used}} / {{limit}} 無料ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
-          "title": "週間利用上限に近づいています"
+          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
+          "title": "クラウドのワード上限に近づいています"
         }
       },
       "trialCta": {
@@ -2078,15 +2110,11 @@
             "step1Desc": "ydotoold を起動し、毎回のログイン時に実行されるよう有効化します。",
             "step2Title": "実行中か確認"
           },
-          "xclip": {
-            "step1Title": "xclipをインストール"
-          },
           "wlCopy": {
             "step1Title": "wl-clipboard をインストール",
             "step2Title": "インストールの確認"
           }
         },
-        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
         "nixos": {
           "intro": "NixOSをお使いです。自動貼り付けにはydotoolと/dev/uinputへのアクセスが必要で、NixOSでは宣言的に設定できます。",
           "detected": "検出済み",
@@ -2661,9 +2689,8 @@
         "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
         "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
+        "groq_qwen_qwen3_8_27b": "高速 Qwen モデル、450 T/秒、131K コンテキスト",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
-        "groq_compound": "Groq の Compound システム、450 T/秒",
-        "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "openai_gpt_6_astra": "コーディングと研究のための OpenAI の最も高性能なモデル",
         "openai_gpt_5_6_sol": "複雑なコーディングと研究のためのフラッグシップ GPT-5.6",
         "openai_gpt_5_6_terra": "日常業務向けのバランス型 GPT-5.6",
@@ -3298,6 +3325,7 @@
       "speakersIdentified": "話者を識別しました",
       "typeNamePlaceholder": "名前を入力",
       "knownSpeakers": "登録済みの話者",
+      "thisIsMe": "これは自分です",
       "meetingAttendees": "会議の参加者",
       "assignName": "名前を割り当て",
       "isThisPerson": "{{name}}さんですか？",
@@ -3632,8 +3660,8 @@
     "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
-    "limitReached": "週間の利用上限に達しました",
-    "limitReachedDescription": "Pro にアップグレードして無制限の文字起こしをご利用ください。",
+    "limitReached": "週間のクラウド上限に達しました",
+    "limitReachedDescription": "Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。",
     "viewPlans": "プランを見る",
     "upgradeTitle": "Pro にアップグレード",
     "upgradeDescription": "無制限・高精度・高速の文字起こし。",
@@ -4872,6 +4900,91 @@
     "details": {
       "provider": "プロバイダー",
       "requestId": "リクエストID"
+    }
+  },
+  "toneStyle": {
+    "title": "トーンとスタイル",
+    "description": "アプリごとにトーンとスタイルを設定します。",
+    "turnOnAndSetUp": "オンにして設定",
+    "categories": {
+      "personal": {
+        "title": "個人のメッセージ",
+        "inline": "個人のメッセージ",
+        "question": "{{category}}、\nどう書きますか？"
+      },
+      "work": {
+        "title": "仕事のメッセージ",
+        "inline": "仕事のメッセージ",
+        "question": "{{category}}、\nどう書きますか？"
+      },
+      "email": {
+        "title": "メール",
+        "inline": "メール",
+        "question": "{{category}}、\nどう書きますか？"
+      },
+      "other": {
+        "title": "その他のアプリ",
+        "inline": "その他のアプリ",
+        "question": "{{category}}、\nどう書きますか？"
+      }
+    },
+    "tones": {
+      "formal": "フォーマル",
+      "casual": "カジュアル",
+      "very_casual": "とてもカジュアル",
+      "excited": "元気に！"
+    },
+    "samples": {
+      "personal": {
+        "formal": "こんばんは。今夜はお時間ありますか？6時ごろにコーヒーでもいかがでしょうか。ご都合を教えてください。",
+        "casual": "今夜ひま？6時ごろコーヒーどうかなって思ってる、教えて",
+        "very_casual": "今夜ひま？6時くらいにカフェいこ 連絡して"
+      },
+      "work": {
+        "sender": "ジミー",
+        "time": "18:20",
+        "formal": "お疲れさまです。打ち合わせの前に資料を送っていただけますか？3枚目の数字が古いようです。急ぎではありません。",
+        "casual": "打ち合わせ前に資料送ってもらえる？3枚目の数字、古いかも。急ぎじゃないです。",
+        "excited": "お疲れさまです！打ち合わせ前に資料を送ってもらえますか？3枚目の数字、たぶん古いです。急ぎではないです！"
+      },
+      "email": {
+        "to": "宛先: サラ",
+        "formal": "サラ様\n\n本日はありがとうございました。木曜日までに提案書の更新版をお送りします。何かあればお知らせください。\n\nよろしくお願いいたします",
+        "casual": "サラさん\n\n今日はありがとうございました。更新した提案書は木曜までに送りますね。その前に何か必要なら言ってください。\n\nよろしく",
+        "excited": "サラさん\n\n今日は本当にありがとうございました！木曜までに更新した提案書を送ります。その前に何か必要なら、いつでも言ってください！\n\nよろしくお願いします"
+      },
+      "other": {
+        "formal": "通話メモ：料金ページは好評で、オンボーディングを短くしてほしいとのこと。来週フォローアップする。",
+        "casual": "通話メモ：料金ページ好評、オンボーディングは短めがいい。来週フォロー",
+        "excited": "通話メモ：料金ページがすごく好評！オンボーディングは短めがいいとのこと。来週フォロー！"
+      }
+    },
+    "setup": {
+      "introTitle": "OpenWhispr を\nあなたの話し方に",
+      "introDescription": "アプリごとにトーンとスタイルを設定します。",
+      "personalize": "パーソナライズする",
+      "cleanupOffTitle": "あなたの書き方を\nOpenWhispr に",
+      "cleanupOffDescription": "テキスト補正をオンにして、アプリごとにトーンとスタイルを設定します。",
+      "stepDescription": "いちばん自分らしい例を選んでください。",
+      "progress": "ステップ {{current}}/{{total}}",
+      "finish": "完了"
+    },
+    "banner": {
+      "title": "あなたの書き方を OpenWhispr に教えましょう",
+      "description": "仕事にも、友だちにも、その間のすべてにも、好みのトーンを設定できます。",
+      "start": "始める",
+      "cleanupOffTitle": "あなたの書き方を OpenWhispr に",
+      "cleanupOffDescription": "テキスト補正をオンにして、メッセージやメールなどのトーンを選びましょう。",
+      "notNow": "後で",
+      "decoration": "言葉は、あなたらしく。何を書くときも、誰に書くときも。"
+    },
+    "settings": {
+      "saveChanges": "変更を保存",
+      "saved": "トーンとスタイルを保存しました",
+      "cleanupOff": "テキスト補正がオフのため、これらのトーンは音声入力に反映されません。アシスタントとチャットでは引き続き使われます。",
+      "turnOnCleanup": "テキスト補正をオンにする",
+      "enabled": "トーンとボイスを有効化",
+      "enabledDescription": "テキスト補正、アシスタント、チャットがアプリの種類ごとにあなたのトーンを使います。オフのときは標準のトーンになります。"
     }
   },
   "productHelp": {

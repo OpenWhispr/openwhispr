@@ -21,7 +21,7 @@ const declines = () =>
 
 const originalLoad = Module._load;
 
-function loadSelectionManager({ spawn } = {}) {
+function loadSelectionManager({ spawn, execFile } = {}) {
   delete require.cache[selectionManagerPath];
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     if (request === "electron") {
@@ -30,8 +30,8 @@ function loadSelectionManager({ spawn } = {}) {
     if (request === "./debugLogger") {
       return debugLoggerStub;
     }
-    if (request === "child_process" && spawn) {
-      return { ...childProcess, spawn };
+    if (request === "child_process" && (spawn || execFile)) {
+      return { ...childProcess, ...(spawn && { spawn }), ...(execFile && { execFile }) };
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -219,6 +219,91 @@ test("a Linux AT-SPI terminal pid never becomes a caret delivery target", async 
     "editable"
   );
   assert.equal(probes.length, 1);
+});
+
+test("a Linux caret probe is bound to the target's process", async () => {
+  const probes = [];
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {
+      isFocusedEditable: async (target) => {
+        probes.push(target);
+        return target.pid ? "editable" : "not_editable";
+      },
+    },
+    platform: "linux",
+    now: () => 1000,
+  });
+  const windowPids = { "xdotool 7": "111", "kdotool {kde}": "222" };
+  manager._readWindowPid = async (tool, id) => windowPids[`${tool} ${id}`] ?? null;
+  const mark = (target) => manager._markEditableCaret({ status: "none", target }, target, true);
+
+  const cases = [
+    [{ kind: "atspi-pid", id: "333" }, "333"],
+    [{ kind: "x11-window", id: "7", windowClass: "gedit" }, "111"],
+    [{ kind: "kde-window", id: "{kde}", windowClass: "kate" }, "222"],
+    [{ kind: "hyprland-window", id: "0xabc", windowClass: "gedit", pid: 444 }, 444],
+  ];
+  for (const [target, pid] of cases) {
+    const result = await mark(target);
+    assert.equal(result.status, "editable", target.kind);
+    assert.deepEqual(result.target, target, "the stored target is unchanged");
+    assert.equal(probes.at(-1).pid, pid, target.kind);
+  }
+
+  // A window whose process can't be read is never a caret.
+  for (const target of [
+    { kind: "x11-window", id: "8", windowClass: "gedit" },
+    { kind: "hyprland-window", id: "0xdef", windowClass: "gedit", pid: null },
+  ]) {
+    assert.equal((await mark(target)).status, "none", target.kind);
+    assert.ok(!probes.at(-1).pid, target.kind);
+  }
+});
+
+// Answers keyed by the command line; anything else fails like a missing tool.
+function loadWithExecFile(outputs) {
+  return loadSelectionManager({
+    execFile: (command, args, options, callback) => {
+      const stdout = outputs[[command, ...args].join(" ")];
+      callback(stdout === undefined ? new Error("failed") : null, stdout ?? "", "");
+    },
+  });
+}
+
+test("a Linux window's pid is read by its window id", async () => {
+  const Manager = loadWithExecFile({
+    "xdotool getwindowpid 7": "111\n",
+    "kdotool getwindowpid {kde}": "222\n",
+    "xdotool getwindowpid 9": "0\n",
+  });
+  const manager = new Manager({ clipboardManager: {}, platform: "linux", now: () => 1000 });
+
+  assert.equal(await manager._readWindowPid("xdotool", "7"), "111");
+  assert.equal(await manager._readWindowPid("kdotool", "{kde}"), "222");
+  assert.equal(await manager._readWindowPid("xdotool", "9"), null);
+  assert.equal(await manager._readWindowPid("xdotool", "8"), null);
+});
+
+test("a Hyprland target carries the pid hyprctl reports", async () => {
+  const activeWindow = (fields) => ({
+    "hyprctl activewindow -j": JSON.stringify({ address: "0xabc", class: "Gedit", ...fields }),
+  });
+  const read = (outputs) =>
+    new (loadWithExecFile(outputs))({
+      clipboardManager: { commandExists: (command) => command === "hyprctl" },
+      platform: "linux",
+      now: () => 1000,
+    })._getLinuxTarget();
+
+  assert.deepEqual(await read(activeWindow({ pid: 444 })), {
+    kind: "hyprland-window",
+    id: "0xabc",
+    windowClass: "gedit",
+    pid: 444,
+  });
+  assert.equal((await read(activeWindow({}))).pid, null);
+  assert.equal((await read(activeWindow({ pid: -1 }))).pid, null);
 });
 
 test("treats a clipboard-only fallback as a failed targeted paste", async () => {
@@ -773,6 +858,131 @@ test("getWinTarget returns the hex HWND a win32 probe captured (#859)", async ()
     { command: "/tmp/windows-fast-paste.exe", args: ["--detect-only"] },
   ]);
   assert.equal((await manager.getWinTarget())?.id, "00001A2B");
+});
+
+test("the app context of a win32 target carries its exe, class and window title", async () => {
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const probe = new EventEmitter();
+      probe.stdout = new EventEmitter();
+      probe.stderr = new EventEmitter();
+      process.nextTick(() => {
+        probe.stdout.emit(
+          "data",
+          "TARGET 00001A2B\nWINDOW_CLASS Chrome_WidgetWin_1\nEXE_NAME chrome.exe\n" +
+            "WINDOW_TITLE Inbox - Gmail - Google Chrome\nIS_TERMINAL false\n"
+        );
+        probe.emit("close", 0);
+      });
+      return probe;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveWindowsFastPasteBinary: () => "/tmp/windows-fast-paste.exe" },
+    textEditMonitor: {},
+    platform: "win32",
+    now: () => 1000,
+  });
+
+  const capture = manager.captureTarget();
+  const context = manager.getTargetAppContext();
+  await capture;
+
+  assert.deepEqual(await context, {
+    appSignature: "chrome.exe Chrome_WidgetWin_1",
+    windowTitle: "Inbox - Gmail - Google Chrome",
+  });
+  // The title stays in the main process: the target itself never carries it.
+  assert.equal(JSON.stringify(manager.lastTarget).includes("Inbox"), false);
+});
+
+test("the app context of a macOS target names the app from its pid", async () => {
+  const manager = new SelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {
+      lastTargetPid: 42,
+      getAppContext: async (pid) =>
+        pid === 42
+          ? { appName: "Google Chrome", bundleId: "com.google.Chrome", urlHost: "mail.google.com" }
+          : null,
+    },
+    platform: "darwin",
+    now: () => 1000,
+  });
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "Google Chrome com.google.Chrome",
+    windowTitle: undefined,
+    urlHost: "mail.google.com",
+  });
+});
+
+test("an X11 target's window title is read only when the app context is asked for", async () => {
+  const calls = [];
+  const ExecSelectionManager = loadSelectionManager({
+    execFile: (command, args, _options, callback) => {
+      calls.push([command, ...args]);
+      callback(null, "Inbox - Gmail - Mozilla Firefox\n", "");
+    },
+  });
+  const manager = new ExecSelectionManager({
+    clipboardManager: {},
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager.lastTarget = { kind: "x11-window", id: "7", windowClass: "firefox" };
+
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "firefox",
+    windowTitle: "Inbox - Gmail - Mozilla Firefox",
+  });
+  assert.deepEqual(calls, [["xdotool", "getwindowname", "7"]]);
+});
+
+test("an AT-SPI target is named from its pid and titled from its window", async () => {
+  let stdout = "";
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = () => {};
+      process.nextTick(() => {
+        child.stdout.emit("data", stdout);
+        child.emit("close", 0);
+      });
+      return child;
+    },
+  });
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveLinuxFastPasteBinary: () => "/tmp/linux-fast-paste" },
+    textEditMonitor: {},
+    platform: "linux",
+    now: () => 1000,
+  });
+  manager._readTargetNames = async (pid) => (pid === "42" ? "chrome" : "");
+  const title = "Inbox - Gmail - Google Chrome";
+
+  stdout = `TARGET ATSPI 42\nWINDOW_TITLE_B64 ${Buffer.from(title).toString("base64")}\n`;
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(manager.lastTarget, { kind: "atspi-pid", id: "42" });
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "chrome",
+    windowTitle: title,
+  });
+
+  // An older helper prints no title.
+  stdout = "TARGET ATSPI 42\n";
+  manager.lastTarget = await manager._getLinuxAtspiTarget();
+  assert.deepEqual(await manager.getTargetAppContext(), {
+    appSignature: "chrome",
+    windowTitle: null,
+  });
+  assert.equal(
+    await new SelectionManager({ platform: "linux", textEditMonitor: {} }).getTargetAppContext(),
+    null
+  );
 });
 
 // captureTarget() nulls lastTarget while its probe runs; a paste racing the
