@@ -5,10 +5,11 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { FileText, FolderOpen, MoreHorizontal, Search, X } from "../icons";
 import { defaultFolderDisplayName } from "./shared";
-import { normalizeDbDate } from "../../utils/dateFormatting";
+import { formatRelativeTime } from "../../utils/dateFormatting";
 import { folderContainerKey, loadContainerNotes } from "../../stores/noteStore";
 import { cn } from "../lib/utils";
 import type { FolderItem, NoteItem } from "../../types/electron";
+import type { RowA11yProps } from "./SpacesTree";
 
 interface Props {
   folder: FolderItem;
@@ -18,12 +19,7 @@ interface Props {
   level: 2 | 3;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  a11y: {
-    tabIndex: number;
-    rowRef: (el: HTMLDivElement | null) => void;
-    onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
-    onFocus: () => void;
-  };
+  a11y: RowA11yProps;
   onPick: (note: NoteItem, keyboard: boolean) => void;
   onOpenFolder: () => void;
 }
@@ -70,7 +66,7 @@ export function FolderNotesPopover({
     return () => {
       stale = true;
     };
-  }, [open, folder.id, total, reload]);
+  }, [open, folder.id, reload]);
 
   const filtered = (allNotes ?? []).filter((note) =>
     note.title
@@ -97,25 +93,6 @@ export function FolderNotesPopover({
     pickedNoteRef.current = true;
     onPick(note, keyboard);
     onOpenChange(false);
-  };
-  const relativeTime = (value: string) => {
-    const hours = Math.max(
-      0,
-      Math.floor((Date.now() - normalizeDbDate(value).getTime()) / 3600000)
-    );
-    if (!Number.isFinite(hours)) return "";
-    const unit = hours < 1 ? "minute" : hours < 24 ? "hour" : "day";
-    const amount =
-      unit === "minute"
-        ? Math.max(0, Math.floor((Date.now() - normalizeDbDate(value).getTime()) / 60000))
-        : unit === "hour"
-          ? hours
-          : Math.floor(hours / 24);
-    return new Intl.NumberFormat(i18n.language, {
-      style: "unit",
-      unit,
-      unitDisplay: "narrow",
-    }).format(amount);
   };
 
   return (
@@ -193,6 +170,7 @@ export function FolderNotesPopover({
             placeholder={t("notes.folderMore.search", { count: total, folder: name })}
             className="input-inline h-8 rounded-full bg-foreground/5 ps-9 pe-8 text-xs dark:bg-white/5"
             onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 listRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
@@ -282,7 +260,7 @@ export function FolderNotesPopover({
                   dateTime={note.updated_at}
                   className="shrink-0 text-[11px] text-muted-foreground"
                 >
-                  {relativeTime(note.updated_at)}
+                  {formatRelativeTime(note.updated_at, t, i18n.language)}
                 </time>
               </button>
             ))

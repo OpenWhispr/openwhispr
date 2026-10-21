@@ -153,7 +153,7 @@ interface DropHandlers {
   onDrop: (e: React.DragEvent) => void;
 }
 
-interface RowA11yProps {
+export interface RowA11yProps {
   tabIndex: number;
   rowRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -1463,22 +1463,23 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, level: 1 });
           if (expanded.has(folderKey)) {
-            sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).forEach(
-              (note) => {
-                rows.push({
-                  type: "note",
-                  key: `n:${note.id}`,
-                  note,
-                  parentKey: folderKey,
-                  level: 2,
-                });
-              }
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
             );
-            if (
-              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) > 5 &&
-              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) >
-                sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).length
-            ) {
+            shownNotes.forEach((note) => {
+              rows.push({
+                type: "note",
+                key: `n:${note.id}`,
+                note,
+                parentKey: folderKey,
+                level: 2,
+              });
+            });
+            if (hiddenCount > 0) {
               rows.push({
                 type: "more",
                 key: `more:${folder.id}`,
@@ -1503,22 +1504,23 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
-            sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).forEach(
-              (note) => {
-                rows.push({
-                  type: "note",
-                  key: `n:${note.id}`,
-                  note,
-                  parentKey: folderKey,
-                  level: 3,
-                });
-              }
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
             );
-            if (
-              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) > 5 &&
-              (folderCounts[folder.id] ?? notesByContainer[folderKey]?.length ?? 0) >
-                sidebarFolderNotes(notesByContainer[folderKey] ?? [], activeNote, folder.id).length
-            ) {
+            shownNotes.forEach((note) => {
+              rows.push({
+                type: "note",
+                key: `n:${note.id}`,
+                note,
+                parentKey: folderKey,
+                level: 3,
+              });
+            });
+            if (hiddenCount > 0) {
               rows.push({
                 type: "more",
                 key: `more:${folder.id}`,
@@ -1790,9 +1792,13 @@ export default function SpacesTree({
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
     const folderNotes = notesByContainer[folderKey] ?? [];
-    const shownNotes = sidebarFolderNotes(folderNotes, activeNote, folder.id);
     const total = folderCounts[folder.id] ?? folderNotes.length;
-    const hiddenCount = total > 5 ? Math.max(0, total - shownNotes.length) : 0;
+    const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+      folderNotes,
+      activeNote,
+      folder.id,
+      total
+    );
 
     if (isRenaming) {
       return (
