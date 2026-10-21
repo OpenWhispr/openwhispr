@@ -254,7 +254,7 @@ export function FolderNotesPopover({
               >
                 <FileText size={13} aria-hidden="true" className="shrink-0" />
                 <span dir="auto" className="truncate flex-1">
-                  {highlightTitle(note.title || t("notes.list.untitledNote"))}
+                  {highlightTitle(note.title || t("notes.list.untitled"))}
                 </span>
                 <time
                   dateTime={note.updated_at}
