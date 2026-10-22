@@ -239,6 +239,25 @@ test("Send sends the edit, freezes the fields and keeps focus on the card", asyn
   assert.equal(globalThis.document.activeElement?.getAttribute("data-approval-card"), key);
 });
 
+test("Send moves focus to the card without scrolling the chat", async (t) => {
+  const { container, key, toolResult } = await mountPendingCard(t);
+  const card = findElement(
+    container,
+    (element) => element.getAttribute?.("data-approval-card") === key
+  );
+  const focusCalls = [];
+  const focus = card.focus;
+  card.focus = function (options) {
+    focusCalls.push(options);
+    return focus.call(this, options);
+  };
+
+  await React.act(async () => click(button(container, "connectors.approval.send")));
+  await toolResult();
+
+  assert.deepEqual(focusCalls, [{ preventScroll: true }]);
+});
+
 test("Esc on a card's button stays in the card too", async (t) => {
   const { container, store, key, calls } = await mountPendingCard(t);
 

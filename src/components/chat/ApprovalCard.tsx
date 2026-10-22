@@ -162,7 +162,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   // Send and Cancel remove the button that had focus; the card keeps it, so
   // keyboard and screen-reader users land on the result.
   const focusCardAnd = (action: () => unknown): void => {
-    cardRef.current?.focus();
+    cardRef.current?.focus({ preventScroll: true });
     void action();
   };
   // Esc in a field or on a button must not reach the agent window, whose Esc
