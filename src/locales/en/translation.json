@@ -4103,6 +4103,8 @@
       "request_connectionStatus": "Asking to connect...",
       "request_accessName": "Access",
       "request_accessStatus": "Asking for access...",
+      "look_at_screenName": "Look at screen",
+      "look_at_screenStatus": "Looking at your screen...",
       "request_api_keyName": "API key",
       "request_api_keyStatus": "Asking for an API key...",
       "open_settingsName": "Settings",

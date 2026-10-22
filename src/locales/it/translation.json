@@ -3933,6 +3933,8 @@
       "request_connectionStatus": "Richiesta di connessione...",
       "request_accessName": "Accesso",
       "request_accessStatus": "Richiesta di accesso...",
+      "look_at_screenName": "Guarda lo schermo",
+      "look_at_screenStatus": "Lettura dello schermo...",
       "request_api_keyName": "Chiave API",
       "request_api_keyStatus": "Richiesta di una chiave API...",
       "open_settingsName": "Impostazioni",

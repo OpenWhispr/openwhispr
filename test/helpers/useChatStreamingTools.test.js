@@ -1371,3 +1371,58 @@ test("open_settings carries the model scope of the chat that asked", async (t) =
     assert.equal(payload?.scope, inferenceScope ?? "chatIntelligence");
   }
 });
+
+test("in the agent window a Cloud screenshot is read through look_at_screen, not sent", async (t) => {
+  const { LOOK_AT_SCREEN_PROMPT } = await import("../../src/services/tools/lookAtScreenTool.ts");
+  const { captured, reasoningService, offeredTools } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    allowInteractions: true,
+  });
+  const configs = [];
+  let lookResult;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
+    configs.push(config);
+    offeredTools.push((config.tools ?? []).map((tool) => tool.name));
+    return (async function* () {
+      if (config.tools.some((tool) => tool.name === "look_at_screen")) {
+        lookResult = await config.executeToolCall(
+          "look_at_screen",
+          '{"question":"What does the error say?"}',
+          "c1"
+        );
+      }
+      yield { type: "done", finishReason: "stop" };
+    })();
+  });
+  const asked = [];
+  t.mock.method(reasoningService, "askAboutScreen", async (...args) => {
+    asked.push(args);
+    return "  The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.  ";
+  });
+
+  const screenshot = { image: "base64-image", mediaType: "image/jpeg" };
+  const question = "What's this error?";
+  await captured.sendToAI(question, [{ id: "u1", role: "user", content: question }], {
+    attachment: screenshot,
+  });
+
+  assert.equal(configs[0].screenContext, undefined, "the image never rides with the request");
+  assert.ok(offeredTools[0].includes("look_at_screen"));
+  assert.doesNotMatch(configs[0].systemPrompt, /SCREEN CONTEXT:/);
+  assert.match(configs[0].systemPrompt, /available only through look_at_screen/);
+  assert.deepEqual(asked, [
+    [
+      "What does the error say?",
+      { data: "base64-image", mediaType: "image/jpeg" },
+      LOOK_AT_SCREEN_PROMPT,
+    ],
+  ]);
+  assert.deepEqual(JSON.parse(lookResult.data), {
+    answer: "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.",
+  });
+  // What the screen showed reaches the model, not the saved conversation.
+  assert.equal(lookResult.displayText, "Read the screen.");
+
+  await captured.sendToAI("Thanks!", [{ id: "u2", role: "user", content: "Thanks!" }]);
+  assert.ok(!offeredTools[1].includes("look_at_screen"), "only the turn with a screenshot has it");
+});

@@ -3933,6 +3933,8 @@
       "request_connectionStatus": "Pedindo para conectar...",
       "request_accessName": "Acesso",
       "request_accessStatus": "Pedindo acesso...",
+      "look_at_screenName": "Ver a tela",
+      "look_at_screenStatus": "Vendo sua tela...",
       "request_api_keyName": "Chave de API",
       "request_api_keyStatus": "Pedindo uma chave de API...",
       "open_settingsName": "Configurações",

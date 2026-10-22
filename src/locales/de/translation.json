@@ -4103,6 +4103,8 @@
       "request_connectionStatus": "Bitte um Verbindung...",
       "request_accessName": "Zugriff",
       "request_accessStatus": "Bitte um Zugriff...",
+      "look_at_screenName": "Bildschirm ansehen",
+      "look_at_screenStatus": "Bildschirm wird angesehen...",
       "request_api_keyName": "API-Schlüssel",
       "request_api_keyStatus": "Bitte um einen API-Schlüssel...",
       "open_settingsName": "Einstellungen",

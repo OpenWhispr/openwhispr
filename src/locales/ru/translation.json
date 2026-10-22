@@ -3977,6 +3977,8 @@
       "request_connectionStatus": "Запрашиваю подключение...",
       "request_accessName": "Доступ",
       "request_accessStatus": "Запрашиваю доступ...",
+      "look_at_screenName": "Посмотреть на экран",
+      "look_at_screenStatus": "Смотрю на ваш экран...",
       "request_api_keyName": "Ключ API",
       "request_api_keyStatus": "Запрашиваю ключ API...",
       "open_settingsName": "Настройки",

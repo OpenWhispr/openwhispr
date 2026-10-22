@@ -3985,6 +3985,8 @@
       "request_connectionStatus": "Pidiendo conectar...",
       "request_accessName": "Acceso",
       "request_accessStatus": "Pidiendo acceso...",
+      "look_at_screenName": "Mirar la pantalla",
+      "look_at_screenStatus": "Mirando tu pantalla...",
       "request_api_keyName": "Clave de API",
       "request_api_keyStatus": "Pidiendo una clave de API...",
       "open_settingsName": "Ajustes",

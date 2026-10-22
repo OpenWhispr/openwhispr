@@ -44,6 +44,7 @@ export const toolIcons: Record<string, typeof Search> = {
   ask_user: HelpCircle,
   request_connection: Link2,
   request_access: Monitor,
+  look_at_screen: Monitor,
   request_api_key: KeyRound,
   open_settings: Settings,
 };

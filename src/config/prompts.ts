@@ -109,6 +109,7 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
+  look_at_screen: "The user's screen",
   ask_user: "Asking the user",
   request_connection: "Asking the user",
   request_access: "Asking the user",

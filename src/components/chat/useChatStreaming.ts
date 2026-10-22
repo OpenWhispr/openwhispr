@@ -38,6 +38,10 @@ import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import {
+  createLookAtScreenTool,
+  LOOK_AT_SCREEN_PROMPT,
+} from "../../services/tools/lookAtScreenTool";
 import { executeTool, type ToolRegistry } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
@@ -629,10 +633,26 @@ export function useChatStreaming({
             : !isCloudAgent && (isLocalProvider || isLanAgent || isCustomAgent)
               ? "text"
               : "parts";
+        // In the agent window, a Cloud screenshot is read through look_at_screen
+        // instead of riding with the request: the chat's own model keeps the
+        // turn and reads the screen only when the request is about it.
+        const cloudScreen =
+          requestedAttachment && isCloudAgent
+            ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
+            : null;
+        const lookAtScreen =
+          cloudScreen && registry && allowInteractions
+            ? createLookAtScreenTool((question) =>
+                ReasoningService.askAboutScreen(question, cloudScreen, LOOK_AT_SCREEN_PROMPT)
+              )
+            : null;
+        const offeredTools = registry
+          ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
+          : undefined;
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
+          getAgentSystemPrompt(offeredTools, libraryContext || undefined, {
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             ...(toolHistory !== "none" ? { toolHistory } : {}),
             openNote: openNoteContext || undefined,
@@ -663,15 +683,13 @@ export function useChatStreaming({
         }
 
         // A screenshot the resolver kept rides with the command it came with:
-        // BYOK models get it as an image part, the cloud agent as a dedicated
-        // field the server vision-routes. A dropped one costs nothing but the
-        // image — the command still runs.
+        // BYOK models get it as an image part, the cloud agent (outside the
+        // agent window's look_at_screen) as a dedicated field the server
+        // vision-routes. A dropped one costs nothing but the image — the
+        // command still runs.
         const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
-        const cloudScreenContext =
-          requestedAttachment && isCloudAgent
-            ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
-            : null;
-        if (requestedAttachment) {
+        const cloudScreenContext = lookAtScreen ? null : cloudScreen;
+        if (requestedAttachment && !lookAtScreen) {
           // Either way it needs its grounding instruction, as the dictation path
           // pairs the suffix with an attached image.
           systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
@@ -857,7 +875,8 @@ export function useChatStreaming({
           if (isCloudAgent) {
             const executeToolCall = registry
               ? async (name: string, argsJson: string, toolCallId: string) => {
-                  const tool = registry.get(name);
+                  const tool =
+                    registry.get(name) ?? (name === lookAtScreen?.name ? lookAtScreen : undefined);
                   if (!tool)
                     return {
                       data: `Unknown tool: ${name}`,
@@ -899,7 +918,7 @@ export function useChatStreaming({
 
             stream = ReasoningService.processTextStreamingCloud(llmMessages, {
               systemPrompt,
-              tools: registry?.getAll().map((t) => ({
+              tools: offeredTools?.map((t) => ({
                 name: t.name,
                 description: t.description,
                 parameters: t.parameters,
