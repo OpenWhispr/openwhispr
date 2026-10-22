@@ -732,12 +732,13 @@ class MeetingDetectionEngine {
     this._userRecording = active;
     this.audioActivityDetector.setUserRecording(active);
 
-    if (active) {
-      if (this._postRecordingCooldown) {
-        clearTimeout(this._postRecordingCooldown);
-        this._postRecordingCooldown = null;
-      }
-    } else {
+    // Dictation reports both processing and idle as not recording, so an end
+    // can arrive twice; a replaced timer must not flush during the next one.
+    if (this._postRecordingCooldown) {
+      clearTimeout(this._postRecordingCooldown);
+      this._postRecordingCooldown = null;
+    }
+    if (!active) {
       this._postRecordingCooldown = setTimeout(() => {
         this._postRecordingCooldown = null;
         this._flushNotificationQueue();
