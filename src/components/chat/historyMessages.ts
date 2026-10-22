@@ -20,7 +20,7 @@ const TRACE_ARG_MAX_CHARS = 80;
 // Providers differ on call ids, and one may replay to another: Anthropic takes
 // letters, digits, _ and -, OpenAI Chat Completions at most 40 characters.
 const CALL_ID_MAX_CHARS = 36;
-const TRACE_OPENING = "[Tools used:";
+export const TRACE_OPENING = "[Tools used:";
 const ECHOED_TRACE = /^\s*\[Tools used:[^\]\n]*\]\s*/;
 
 // The one argument a trace may show per tool: a search query, a name, a

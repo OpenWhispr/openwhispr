@@ -60,7 +60,7 @@ import {
   type HistoryMessage,
   type ToolHistory,
 } from "./historyMessages";
-import { backsActionClaim, claimsAction } from "./actionClaims";
+import { isUnbackedClaim } from "./actionClaims";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import {
@@ -829,14 +829,23 @@ export function useChatStreaming({
         // again (an unbacked claim) can be withdrawn.
         let stepTextStart = 0;
         let unbackedClaim = false;
-        // A final answer that says it did something needs a call of this turn
-        // (not one a regenerate carried over) that did.
-        const isUnbackedClaim = registry
+        // A final answer that says it did something needs a tool result that
+        // did: this turn's (not one a regenerate carried over) for what it says
+        // it did now, any recorded one for what it reports was done.
+        const isUnbacked = registry
           ? (text: string) =>
-              claimsAction(text) &&
-              !toolCalls
-                .slice(carriedCallCount)
-                .some((call) => backsActionClaim(call, registry.get(call.name)?.readOnly !== false))
+              isUnbackedClaim(text, {
+                turnCalls: toolCalls.slice(carriedCallCount),
+                earlierCalls: [
+                  ...allMessages.flatMap((message) => message.toolCalls ?? []),
+                  ...toolCalls.slice(0, carriedCallCount),
+                ],
+                isReadOnly: (name) => registry.get(name)?.readOnly !== false,
+                request: {
+                  text: userText,
+                  selectedText: selectedContext?.text ?? lastUserMessage?.selectedContext,
+                },
+              })
           : undefined;
 
         try {
@@ -897,7 +906,7 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
-              isUnbackedClaim,
+              isUnbackedClaim: isUnbacked,
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
@@ -927,7 +936,7 @@ export function useChatStreaming({
                 disableThinking: llmConfig.disableThinking,
                 reasoningEffort: llmConfig.reasoningEffort,
                 stepImages,
-                isUnbackedClaim,
+                isUnbackedClaim: isUnbacked,
               },
               aiTools
             );

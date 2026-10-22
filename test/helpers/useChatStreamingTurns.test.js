@@ -243,6 +243,44 @@ test("an answer that claims what its turn's tools did is left alone", async (t) 
   assert.equal(harness.completed[0][3].turn.unbackedClaim, undefined);
 });
 
+test("a report on an earlier recorded send, or a rewrite of the selection, is not an unbacked claim", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const verdicts = [];
+  harness.setStream((_tools, config) =>
+    (async function* () {
+      verdicts.push(config.isUnbackedClaim("Yes, it was sent."));
+      verdicts.push(config.isUnbackedClaim("I have emailed the client and they agreed."));
+      yield { type: "content", text: "Yes, it was sent." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const earlier = [
+    { id: "u0", role: "user", content: "Email Gabe the update", isStreaming: false },
+    {
+      id: "a0",
+      role: "assistant",
+      content: "Sent.",
+      isStreaming: false,
+      toolCalls: [
+        {
+          id: "c0",
+          name: "email_draft",
+          arguments: "{}",
+          status: "completed",
+          metadata: { status: "sent" },
+        },
+      ],
+    },
+    { id: "u1", role: "user", content: "Is it sent?", isStreaming: false },
+  ];
+  await harness.captured.sendToAI("Is it sent?", earlier, {
+    selectedContext: { text: "emailed the client, they agreed", sourceMessageId: "" },
+  });
+  await harness.captured.sendToAI("Is it sent?", earlier.slice(2));
+
+  assert.deepEqual(verdicts, [false, false, true, true]);
+});
+
 test("a turn waiting on a question is saved as waiting, as answered, then completed in place", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
   const store = await harness.vite.ssrLoadModule("/stores/agentInteractionStore.ts");
