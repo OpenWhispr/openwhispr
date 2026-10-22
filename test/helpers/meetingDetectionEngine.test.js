@@ -538,3 +538,25 @@ test("coalesced audio detections cannot suppress the next meeting after a queued
   engine._handleDetection("audio", "sustained-audio", {});
   assert.equal(shown.length, 2);
 });
+
+test("a dictation's end cooldown cannot show a queued prompt during the next dictation", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { engine, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "standup", summary: "Standup" });
+  // The dictation lifecycle reports recording -> processing -> idle, and
+  // both later states mean "not recording".
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
+  engine.setUserRecording(true);
+  t.mock.timers.tick(5000);
+
+  assert.equal(shown.length, 0, "the reminder must wait until the next dictation ends");
+  engine.setUserRecording(false);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 1);
+});
