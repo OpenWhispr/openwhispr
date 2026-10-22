@@ -1125,14 +1125,18 @@ for (const [surface, hookOptions] of [
     ]) {
       await captured.sendToAI(
         prompt,
-        [previous, { id: "question", role: "user", content: prompt }],
+        [
+          { id: "earlier", role: "user", content: "How do I change the hotkey?" },
+          previous,
+          { id: "question", role: "user", content: prompt },
+        ],
         {
           onComplete: (result) => delivered.push(result.content),
         }
       );
       assert.equal(sentMessages.at(-1).at(-1).content, prompt);
-      assert.match(sentMessages.at(-1)[1].content, /Earlier built-in shortcut guidance/);
-      assert.doesNotMatch(sentMessages.at(-1)[1].content, /Tools used|grounded_product_help/);
+      assert.match(sentMessages.at(-1)[2].content, /Earlier built-in shortcut guidance/);
+      assert.doesNotMatch(sentMessages.at(-1)[2].content, /Tools used|grounded_product_help/);
       assert.equal(getMessages().at(-1).content, "Antwort in der Sprache der Frage.");
       assert.equal(delivered.at(-1), "Antwort in der Sprache der Frage.");
     }

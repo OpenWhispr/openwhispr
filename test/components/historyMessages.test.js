@@ -291,8 +291,13 @@ test("historical built-in help remains readable without inventing a model tool",
     '[Tools used: web_search ("official docs")]'
   );
   assert.deepEqual(
-    toHistoryMessages([assistant("Earlier guidance.", [help])], { toolHistory: "text" }),
-    [{ role: "assistant", content: "Earlier guidance." }]
+    toHistoryMessages([user("Hotkeys?"), assistant("Earlier guidance.", [help])], {
+      toolHistory: "text",
+    }),
+    [
+      { role: "user", content: "Hotkeys?" },
+      { role: "assistant", content: "Earlier guidance." },
+    ]
   );
 });
 
@@ -380,7 +385,9 @@ test("a saved API key is traced as saved", async () => {
       },
     }
   );
-  const [answer] = toHistoryMessages([assistant("Saved.", [saved])], { toolHistory: "text" });
+  const [, answer] = toHistoryMessages([user("Use my key"), assistant("Saved.", [saved])], {
+    toolHistory: "text",
+  });
   assert.equal(answer.content, '[Tools used: request_api_key ("openai") (saved)]\n\nSaved.');
 });
 
@@ -631,10 +638,14 @@ test("with parts, a question's answers and a connection come back as the result"
       },
     }
   );
-  const history = toHistoryMessages([assistant("Posting now.", [asked, connected])], {
-    toolHistory: "parts",
-  });
+  const history = toHistoryMessages(
+    [user("Post it"), assistant("Posting now.", [asked, connected])],
+    {
+      toolHistory: "parts",
+    }
+  );
   assert.deepEqual(history, [
+    { role: "user", content: "Post it" },
     ...pair(
       "call-ask_user",
       "ask_user",
@@ -661,6 +672,7 @@ test("with parts, call ids are ones every provider takes, unique and paired", as
   const { toHistoryMessages } = await load();
   const history = toHistoryMessages(
     [
+      user("first"),
       assistant("One.", [call("web_search", { query: "a" }, { id: "call:0/äb" })]),
       user("again"),
       assistant("Two.", [
@@ -703,4 +715,36 @@ test("with parts, a reply with no text adds no empty message, and help evidence 
       { role: "assistant", content: "Earlier guidance." },
     ]
   );
+});
+
+test("history always starts with the user, however the window or the cap cuts it", async () => {
+  const { toHistoryMessages } = await load();
+  // 21 messages: the 20-message window starts on a reply that used a tool,
+  // which Gemini would get as a conversation opening with a function call.
+  const messages = [
+    user("u0"),
+    ...Array.from({ length: 10 }, (_, i) => [
+      assistant(`a${i}`, [call("web_search", { query: `q${i}` }, { id: `c${i}` })]),
+      user(`u${i + 1}`),
+    ]).flat(),
+  ];
+  for (const toolHistory of ["parts", "text", "none"]) {
+    const history = toHistoryMessages(messages, { toolHistory });
+    assert.equal(history[0].role, "user", toolHistory);
+    assert.equal(history[0].content, "u1", toolHistory);
+  }
+
+  // A long tool turn is kept within 40 entries, still starting with the user
+  // and with every call beside its result.
+  const busy = [
+    user("Do a lot"),
+    assistant(
+      "Done.",
+      Array.from({ length: 30 }, (_, i) => call("web_search", { query: `q${i}` }, { id: `c${i}` }))
+    ),
+    user("Thanks"),
+  ];
+  const capped = toHistoryMessages(busy, { toolHistory: "parts" });
+  assert.ok(capped.length <= 40, String(capped.length));
+  assert.deepEqual(capped, [{ role: "user", content: "Thanks" }]);
 });
