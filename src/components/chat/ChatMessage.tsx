@@ -156,7 +156,7 @@ interface ToolCallProps {
 function useToolCallCard(
   { messageId, toolCall }: ToolCallProps,
   /** Where steps don't show: the card's last height, which its outcome row eases down from. */
-  outcome?: { cardHeightRef: MutableRefObject<number> }
+  cardHeightRef?: MutableRefObject<number>
 ): ReactElement | null {
   const key = approvalKey(messageId, toolCall.id);
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
@@ -164,7 +164,7 @@ function useToolCallCard(
   // An open question goes first: after Retry, the Slack picker waits under the
   // key of the answer card it settled.
   if (interaction && interaction.state !== "settled")
-    return <InteractionCard entry={interaction} heightRef={outcome?.cardHeightRef} />;
+    return <InteractionCard entry={interaction} heightRef={cardHeightRef} />;
   if (approval) return <ApprovalCard entry={approval} />;
   if (!interaction) return null;
   // A saved key stays visible as saved; every other settled card gives way to
@@ -172,15 +172,15 @@ function useToolCallCard(
   if (interaction.payload.kind === "apiKey" && interaction.result?.status === "saved") {
     return <ApiKeySavedRow payload={interaction.payload} />;
   }
-  return outcome ? (
-    <InteractionOutcomeRow entry={interaction} fromHeight={outcome.cardHeightRef.current} />
+  return cardHeightRef ? (
+    <InteractionOutcomeRow entry={interaction} fromHeight={cardHeightRef.current} />
   ) : null;
 }
 
 /** The agent window's card for a call; its steps show in the progress row instead. */
 export function ToolCallCard(props: ToolCallProps): ReactElement | null {
   const cardHeightRef = useRef(0);
-  return useToolCallCard(props, { cardHeightRef });
+  return useToolCallCard(props, cardHeightRef);
 }
 
 function ToolCallItem(props: ToolCallProps) {
