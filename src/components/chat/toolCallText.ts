@@ -4,7 +4,10 @@ import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import type { ToolCallInfo } from "./types";
 
 // What a call that asked the user came to, on its step once it stopped.
-function interactionOutcome({ result }: InteractionRecord, t: TFunction): string {
+export function interactionOutcome(
+  { result }: Pick<InteractionRecord, "result">,
+  t: TFunction
+): string {
   if (!result || result.status === "not_answered") {
     return t("agentMode.interactions.status.notAnswered");
   }

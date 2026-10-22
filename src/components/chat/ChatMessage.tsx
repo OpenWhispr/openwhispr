@@ -1,4 +1,4 @@
-import { memo, useState, type ReactElement } from "react";
+import { memo, useRef, useState, type MutableRefObject, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Copy,
@@ -23,7 +23,7 @@ import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
-import { InteractionCard } from "./InteractionCard";
+import { InteractionCard, InteractionOutcomeRow } from "./InteractionCard";
 import { ApiKeySavedRow } from "./interactions/ApiKeyCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
@@ -153,24 +153,34 @@ interface ToolCallProps {
 // The card a call is waiting on the user with: an approval, or a question,
 // connection or other interaction. Subscribes to its own entries only, so
 // editing one card doesn't re-render every message in the thread.
-function useToolCallCard({ messageId, toolCall }: ToolCallProps): ReactElement | null {
+function useToolCallCard(
+  { messageId, toolCall }: ToolCallProps,
+  /** Where steps don't show: the card's last height, which its outcome row eases down from. */
+  outcome?: { cardHeightRef: MutableRefObject<number> }
+): ReactElement | null {
   const key = approvalKey(messageId, toolCall.id);
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
   const interaction = useAgentInteractionStore((state) => state.entries[key]);
   // An open question goes first: after Retry, the Slack picker waits under the
   // key of the answer card it settled.
   if (interaction && interaction.state !== "settled")
-    return <InteractionCard entry={interaction} />;
+    return <InteractionCard entry={interaction} heightRef={outcome?.cardHeightRef} />;
   if (approval) return <ApprovalCard entry={approval} />;
   if (!interaction) return null;
-  // A saved key stays visible as saved; every other settled card gives way to its step.
-  return interaction.payload.kind === "apiKey" && interaction.result?.status === "saved" ? (
-    <ApiKeySavedRow payload={interaction.payload} />
+  // A saved key stays visible as saved; every other settled card gives way to
+  // its step, or where steps don't show, to its outcome row.
+  if (interaction.payload.kind === "apiKey" && interaction.result?.status === "saved") {
+    return <ApiKeySavedRow payload={interaction.payload} />;
+  }
+  return outcome ? (
+    <InteractionOutcomeRow entry={interaction} fromHeight={outcome.cardHeightRef.current} />
   ) : null;
 }
 
+/** The agent window's card for a call; its steps show in the progress row instead. */
 export function ToolCallCard(props: ToolCallProps): ReactElement | null {
-  return useToolCallCard(props);
+  const cardHeightRef = useRef(0);
+  return useToolCallCard(props, { cardHeightRef });
 }
 
 function ToolCallItem(props: ToolCallProps) {

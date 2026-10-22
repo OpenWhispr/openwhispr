@@ -2,15 +2,21 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  type CSSProperties,
   type KeyboardEvent,
+  type MutableRefObject,
   type ReactElement,
   type RefObject,
 } from "react";
+import { useTranslation } from "react-i18next";
+import { Check } from "../icons";
 import {
   CARDS_WITHOUT_DISMISS,
   cancelInteraction,
   type InteractionEntry,
 } from "../../stores/agentInteractionStore";
+import { answerText } from "../../utils/interactionAnswers";
+import { interactionOutcome } from "./toolCallText";
 import { QuestionsCard } from "./interactions/QuestionsCard";
 import { ConnectionCard } from "./interactions/ConnectionCard";
 import { AccessCard } from "./interactions/AccessCard";
@@ -101,8 +107,18 @@ function useCardFocus(
 }
 
 /** A question, connection, access, key or settings card the turn is waiting on. */
-export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactElement {
+export function InteractionCard({
+  entry,
+  heightRef,
+}: {
+  entry: InteractionEntry;
+  /** Kept up to date with the card's height, for the outcome row that replaces it. */
+  heightRef?: MutableRefObject<number>;
+}): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (heightRef && rootRef.current) heightRef.current = rootRef.current.offsetHeight;
+  });
   useCardFocus(
     rootRef,
     [entry.step, entry.state, entry.settingsOpened, entry.error].map(String).join("|"),
@@ -129,5 +145,41 @@ export function InteractionCard({ entry }: { entry: InteractionEntry }): ReactEl
     >
       <CardBody entry={entry} />
     </div>
+  );
+}
+
+const DONE_STATUSES = new Set(["answered", "connected", "granted", "saved", "done"]);
+
+/**
+ * One line for a settled card, in its place: what the user answered or did.
+ * It starts at the card's height and eases down, so the chat doesn't drop at once.
+ */
+export function InteractionOutcomeRow({
+  entry,
+  fromHeight,
+}: {
+  entry: InteractionEntry;
+  fromHeight: number;
+}): ReactElement {
+  const { t } = useTranslation();
+  const { payload, result } = entry;
+  const answers =
+    result?.status === "answered" && payload.kind === "questions"
+      ? payload.questions.map((question) => answerText(question, result.answers[question.id]))
+      : [];
+  return (
+    <p
+      data-interaction-outcome={entry.key}
+      // Unset for a row that mounts without a card before it (the chat reopened): it doesn't grow in.
+      style={fromHeight > 0 ? ({ "--card-height": `${fromHeight}px` } as CSSProperties) : undefined}
+      className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground transition-[height] duration-200 ease-out [interpolate-size:allow-keywords] starting:h-(--card-height) motion-reduce:transition-none agent:text-[13px]"
+    >
+      {result && DONE_STATUSES.has(result.status) && (
+        <Check size={13} className="shrink-0 text-success" />
+      )}
+      <span dir="auto" className="truncate">
+        {[interactionOutcome(entry, t), ...answers].join(" · ")}
+      </span>
+    </p>
   );
 }
