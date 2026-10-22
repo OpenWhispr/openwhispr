@@ -63,9 +63,10 @@ A default must pass dictation speed, dictation accuracy and every deal-breaker; 
 models that pass, the most accurate wins. Cleanup and the agent may fail without ruling a
 model out: they are then marked as not done well locally.
 
-- **Speed:** a wait of 2–3 s after a typical 60-word dictation, first after loading and warm.
-  Under 1 s is the goal; long dictations may take longer. For comparison, cloud dictation
-  today waits 1.3 s at 15 and 60 words, 4.4 s at 250 and 6.7 s at 600.
+- **Speed:** a wait of at most 3 s after a typical 60-word dictation, first after loading and
+  warm; 2 s or less is good and under 1 s is the goal. With cleanup on (the default), the 3 s
+  covers speech and cleanup together. Long dictations may take longer, so the other lengths
+  are information only.
 - **Accuracy:** at most 2 more errors per 100 words than the cloud model on the same clips,
   per language, against the mean of 3 cloud runs per clip. Chinese, Japanese, Korean and
   Thai are scored by characters.

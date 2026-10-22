@@ -94,7 +94,14 @@ const MACHINES = [
     source: "#4167: M4, 10-core graphics, 120 GB/s",
   },
 ];
-const CLOUD_ANCHOR_MS = { 15: 1300, 60: 1300, 250: 4400, 600: 6700 };
+// Good speed (2026-10-22): a wait of at most 3 s after a typical 60-word
+// dictation, 2 s or less being good (under 1 s is the goal). With cleanup on,
+// the default, the 3 s covers speech and cleanup together. Longer dictations
+// may take longer, so other lengths are information only.
+const BAR_WORDS = 60;
+const BAR_MS = 3000;
+const GOOD_MS = 2000;
+const verdict = (ms) => (ms <= GOOD_MS ? "good" : ms <= BAR_MS ? "passes" : "fails");
 
 const speechDir = args.speech;
 const speech =
@@ -140,7 +147,7 @@ out();
 out(`## Predicted cleanup time on each machine type`);
 out();
 out(
-  `Cleanup alone, before the speech wait is added. Warm = the model is loaded and the instructions are reused; first = the first cleanup after the model loads (load time measured here: slower disks add more). Bar for the whole dictation: 1.3 s under 100 words, 4.4 s at 250.`
+  `Cleanup alone, before the speech wait is added. Warm = the model is loaded and the instructions are reused; first = the first cleanup after the model loads (load time measured here: slower disks add more). The 250-word time is information only.`
 );
 out();
 const textIds = Object.keys(rates).filter((id) => textModels[id]);
@@ -170,12 +177,29 @@ for (const machine of [
         otherMs: c.fullRequestMs - c.readMs - c.writeMs,
       });
     const p = { warm60: warm(c60), first60: first(c60), warm250: warm(c250) };
+    p.leftForSpeech = { warm: BAR_MS - p.warm60, first: BAR_MS - p.first60 };
     ((predictions.text[id] ||= {}).cleanup ||= {})[machine.type] = p;
     return `${fmtS(p.warm60)} / ${fmtS(p.first60)} / ${fmtS(p.warm250)}`;
   });
-  out(
-    `| ${machine.type === "here" ? "Measuring machine (measured parts, summed)" : `${machine.type}. ${machine.name}`} | ${cells.join(" | ")} |`
-  );
+  out(`| ${machineLabel(machine, "measured parts, summed")} | ${cells.join(" | ")} |`);
+}
+out();
+
+out(`## Time left for the speech wait within the ${BAR_MS / 1000} s bar, cleanup on`);
+out();
+out(
+  `Cleanup is on by default, so the ${BAR_MS / 1000} s after a typical ${BAR_WORDS}-word dictation covers the speech wait and cleanup together. Each cell is ${BAR_MS / 1000} s minus the predicted ${BAR_WORDS}-word cleanup, warm / first after the model loads: a speech model passes with this cleanup model when its own wait on that machine (speech table below) fits in what is left. "None" means cleanup alone takes (nearly) the whole ${BAR_MS / 1000} s.`
+);
+out();
+out(`| Machine type | ${textIds.map((id) => `${id}: warm / first`).join(" | ")} |`);
+out(`|---|${textIds.map(() => "---").join("|")}|`);
+for (const machine of [{ type: "here", name: "measured here" }, ...MACHINES]) {
+  const left = (ms) => (ms >= 50 ? fmtS(ms) : "none");
+  const cells = textIds.map((id) => {
+    const { warm, first } = predictions.text[id].cleanup[machine.type].leftForSpeech;
+    return `${left(warm)} / ${left(first)}`;
+  });
+  out(`| ${machineLabel(machine, "measured parts, summed")} | ${cells.join(" | ")} |`);
 }
 out();
 
@@ -205,37 +229,34 @@ for (const machine of [
     ((predictions.text[id] ||= {}).agent ||= {})[machine.type] = p;
     return `${fmtS(p.firstWords)} / ${fmtS(p.twoStep)}`;
   });
-  out(
-    `| ${machine.type === "here" ? "Measuring machine (measured)" : `${machine.type}. ${machine.name}`} | ${cells.join(" | ")} |`
-  );
+  out(`| ${machineLabel(machine, "measured")} | ${cells.join(" | ")} |`);
 }
 out();
 
 if (speech) {
-  out(`## Speech: how much speed every other machine would need`);
-  out();
   out(
-    `Offline models decode the whole recording after you stop, so their wait grows with length. The table gives the slower of the warm and first-after-loading waits here, at a normal 150 words a minute, and how much slower than the measuring machine a machine can be before one length misses the cloud's bar. A model that fails here fails on every slower machine. Streaming models finish about a tenth of a second after you stop at any length; for them the question is whether a slower machine keeps up live, which the share of real time used here answers.`
+    `## Speech: the wait after a ${BAR_WORDS}-word dictation, and how much slower a machine can be`
   );
   out();
   out(
-    `| Model | Kind | 15 words | 60 words | 250 words | 600 words | A machine can be up to … slower and still pass every length | Share of real time used here |`
+    `Each wait is the slower of the warm and first-after-loading waits measured here, at a normal 150 words a minute. A model passes at ${BAR_MS / 1000} s or less after a typical ${BAR_WORDS}-word dictation and is good at ${GOOD_MS / 1000} s or less; longer dictations may take longer, so the 15-, 250- and 600-word waits are information only. With cleanup on, the speech wait has to fit in the time cleanup leaves (table above). Offline models decode the whole recording after you stop, so their wait grows on a slower machine: the headroom is ${BAR_MS / 1000} s divided by the ${BAR_WORDS}-word wait here, and a model that fails here fails on every slower machine. Streaming models finish about a tenth of a second after you stop at any length; for them the question is whether a slower machine keeps up live, which the share of real time used here answers.`
+  );
+  out();
+  out(
+    `| Model | Kind | ${BAR_WORDS} words | A machine can be up to … slower and still pass | 15 words | 250 words | 600 words | Share of real time used here |`
   );
   out(`|---|---|---|---|---|---|---|---|`);
   for (const [id, m] of Object.entries(speech.models)) {
-    const slack = [];
-    const cells = [15, 60, 250, 600].map((w) => {
-      const v = m.speed?.[w];
-      if (!v) return "–";
-      const wait = Math.max(
+    const waitAt = (words) => {
+      const v = m.speed?.[words];
+      if (!v) return null;
+      return Math.max(
         v.estimatedAt150wpm?.warmMs ?? v.warmMedianMs,
         v.estimatedAt150wpm?.coldMs ?? v.coldMs ?? 0
       );
-      const need = wait / CLOUD_ANCHOR_MS[w];
-      slack.push(1 / need);
-      return `${fmtS(wait)} (${need <= 1 ? "passes" : `needs ${need.toFixed(1)}× faster`})`;
-    });
-    const headroom = slack.length ? Math.min(...slack) : null;
+    };
+    const barWait = waitAt(BAR_WORDS);
+    const headroom = barWait ? BAR_MS / barWait : null;
     // Share of real time: decode time over audio length across the accuracy clips.
     const acc = speechRecords.filter(
       (r) => r.task === "accuracy" && r.model === id && r.ok && r.ms != null
@@ -244,7 +265,13 @@ if (speech) {
     const totalMs = acc.reduce((a, r) => a + r.ms, 0);
     const totalAudio = acc.reduce((a, r) => a + (secondsOfClip(r) || 0), 0);
     const share = totalAudio ? totalMs / (totalAudio * 1000) : null;
-    predictions.speech[id] = { kind: m.kind, shareOfRealTime: share, headroom };
+    predictions.speech[id] = {
+      kind: m.kind,
+      barWaitMs: barWait,
+      verdict: barWait == null ? null : verdict(barWait),
+      headroom,
+      shareOfRealTime: share,
+    };
     const kind =
       m.kind === "sherpa-online"
         ? "streaming (processor)"
@@ -256,11 +283,15 @@ if (speech) {
         ? share
           ? `${(1 / share).toFixed(0)}× (keeps up live)`
           : "–"
-        : headroom >= 1
-          ? `${headroom.toFixed(1)}×`
-          : "fails here";
+        : headroom == null
+          ? "–"
+          : headroom >= 1
+            ? `${headroom.toFixed(1)}×`
+            : "fails here";
+    const bar = barWait == null ? "–" : `${fmtS(barWait)} (${verdict(barWait)})`;
+    const info = [15, 250, 600].map((words) => fmtS(waitAt(words)));
     out(
-      `| ${id} | ${kind} | ${cells.join(" | ")} | ${room} | ${share == null ? "–" : `${(share * 100).toFixed(1)}%`} |`
+      `| ${id} | ${kind} | ${bar} | ${room} | ${info.join(" | ")} | ${share == null ? "–" : `${(share * 100).toFixed(1)}%`} |`
     );
   }
   out();
@@ -295,6 +326,12 @@ if (speech) {
 out(
   `Reference speeds (llama 7B Q4_0, reading / writing tokens per second): measuring machine (${MEASURED.chip}) ${MEASURED.read} / ${MEASURED.write} (${MEASURED.source}); ${MACHINES.map((m) => `type ${m.type} ${m.read.toFixed(0)} / ${m.write.toFixed(1)} (${m.source}${m.note ? `; ${m.note}` : ""})`).join("; ")}.`
 );
+
+function machineLabel(machine, measuredNote) {
+  return machine.type === "here"
+    ? `Measuring machine (${measuredNote})`
+    : `${machine.type}. ${machine.name}`;
+}
 
 function clipSeconds(clipId) {
   const match = /^(fleurs|tts)-([a-z]+)-(\d+)$/.exec(clipId || "");
