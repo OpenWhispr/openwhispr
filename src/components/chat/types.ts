@@ -14,6 +14,8 @@ export interface ToolCallInfo {
   /** Epoch milliseconds. */
   startedAt?: number;
   finishedAt?: number;
+  /** How much of the reply's text came before the call; its card shows there. */
+  textOffset?: number;
   /** What this call asked of the user (ask_user, request_connection, …). */
   interaction?: InteractionRecord;
   /** Set on a send that happened (or may have), so the conversation never repeats it. */

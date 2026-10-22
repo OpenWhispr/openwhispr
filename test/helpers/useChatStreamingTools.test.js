@@ -251,6 +251,39 @@ test("on the AI SDK path a tool step shows the tool's own text, not a bare Done"
   assert.equal(assistant.toolCalls[0].result, "Contacts found: 2");
 });
 
+test("each tool call keeps how much of the reply's text came before it", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: BYOK_SETTINGS,
+    }
+  );
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "Let me check your notes." };
+      yield {
+        type: "tool_calls",
+        calls: [{ id: "call-1", name: "search_notes", arguments: "{}" }],
+      };
+      yield {
+        type: "tool_result",
+        callId: "call-1",
+        toolName: "search_notes",
+        displayText: "1 note",
+      };
+      yield { type: "content", text: "Found it." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  await captured.sendToAI("What did I write about the launch?", []);
+
+  const assistant = getMessages().find((message) => message.role === "assistant");
+  assert.equal(assistant.content, "Let me check your notes.\n\nFound it.");
+  assert.equal(assistant.toolCalls[0].textOffset, "Let me check your notes.".length);
+});
+
 test("a search's items reach the model but are never kept with the conversation", async (t) => {
   const { captured, reasoningService, getMessages } = await renderChatStreaming(
     t,
