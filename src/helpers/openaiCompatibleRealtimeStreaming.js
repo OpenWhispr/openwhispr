@@ -77,13 +77,22 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
         break;
       // After stop's commit is answered, speech_stopped only closes the turn
       // that commit already took.
-      case "input_audio_buffer.speech_stopped":
-        if (!event.item_id && !this._stop?.acked) {
-          this._turns.push({ kind: "vad", id: null, startedAt: this._openTurn?.startedAt ?? null });
+      case "input_audio_buffer.speech_stopped": {
+        const id = event.item_id ?? null;
+        if (!this._stop?.acked && !(id && this._turns.some((turn) => turn.id === id))) {
+          const startedAt = (id && this._startsById.get(id)) ?? this._openTurn?.startedAt ?? null;
+          this._turns.push({ kind: "vad", id, startedAt });
         }
         this._openTurn = null;
         break;
+      }
       case "input_audio_buffer.committed": {
+        // A named turn already queued is committed by VAD, never by stop.
+        if (event.item_id && this._turns.some((turn) => turn.id === event.item_id)) {
+          if (!this._stop) this._vadCommitShape = true;
+          this._openTurn = null;
+          break;
+        }
         const id = this._nameTurn(event.item_id);
         const unbound = this._turns.find((turn) => turn.kind === "vad" && !turn.id);
         if (!this._stop || (this._vadCommitShape && unbound)) {
