@@ -206,7 +206,6 @@ export function requestApproval(
         [key]: { key, messageId, toolCallId, ...request, draft, state: "pending" },
       },
     }));
-    context.onApprovalRequested();
   });
 }
 

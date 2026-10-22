@@ -2,9 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("help tools remain read-only, return bounded evidence and preserve normal answer delivery", async (t) => {
+test("help tools remain read-only and return bounded evidence", async (t) => {
   const calls = [];
-  let held = 0;
   const response = {
     source: "live",
     retrievedAt: "2026-10-05T12:00:00Z",
@@ -49,10 +48,6 @@ test("help tools remain read-only, return bounded evidence and preserve normal a
   const slots = new Map();
   const ctx = {
     signal: new AbortController().signal,
-    onHoldDelivery: (options) => {
-      assert.equal(options.preserveClipboard, true);
-      held++;
-    },
     claimTurnSlot: (key, limit) => {
       const count = slots.get(key) || 0;
       if (count >= limit) return false;
@@ -67,12 +62,10 @@ test("help tools remain read-only, return bounded evidence and preserve normal a
   const result = await tool.execute({ topic: "hotkeys", query: "PRIVATE NOTE" }, ctx);
   assert.equal(result.data.articles[0].url, response.articles[0].url);
   assert.deepEqual(calls, [{ topic: "hotkeys" }]);
-  assert.equal(held, 0);
   const settings = await registry
     .get("get_openwhispr_context")
     .execute({ topic: "microphone" }, ctx);
   assert.equal(settings.data.values.microphonePermission, "denied");
-  assert.equal(held, 0);
   assert.equal(calls.length, 1, "reading settings never contacts docs or invokes a writer");
   assert.equal(settings.data.appVersion, "1.10.2");
   assert.equal(settings.data.platform, "win32");

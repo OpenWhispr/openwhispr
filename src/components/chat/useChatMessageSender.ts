@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 interface PersistedMessageContext {
   conversationId: number;
@@ -63,15 +64,24 @@ export function useChatMessageSender({
           const convId = conversationId ?? (await createConversation(text));
           if (!isCurrent()) return;
           const previousMessages = persistence.messages;
+          const context = normalizeAgentSelectionContext(options?.selectedContext);
+          const selectedContext = context?.text;
+          const selectedContextSource = context?.source === "external" ? "external" : undefined;
           const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: text,
             isStreaming: false,
+            ...(selectedContext ? { selectedContext } : {}),
+            ...(selectedContextSource ? { selectedContextSource } : {}),
           };
 
           persistence.setMessages((messages) => [...messages, userMessage]);
-          await persistence.saveUserMessage(text);
+          await persistence.saveUserMessage(text, {
+            messageId: userMessage.id,
+            selectedContext,
+            ...(selectedContextSource ? { selectedContextSource } : {}),
+          });
           if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
@@ -80,7 +90,10 @@ export function useChatMessageSender({
           });
           if (!isCurrent()) return;
           submitted = true;
-          await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+          await streaming.sendToAI(text, [...previousMessages, userMessage], {
+            ...options,
+            conversationId: convId,
+          });
         } catch (error) {
           if (isCurrent()) throw error;
         } finally {

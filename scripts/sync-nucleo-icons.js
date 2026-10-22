@@ -92,18 +92,23 @@ export {
   Circle,
   CopyRounded,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
   List,
   ListChecks,
   ListEnd,
   ListOrdered,
+  Maximize,
+  Minimize,
   Quote,
   Square,
   SquareSlash,
   SquareSparkle,
   Strikethrough,
   Table,
+  TextSelect,
+  Volume,
 } from "./primitives";
 
 ${exportLines.join("\n")}

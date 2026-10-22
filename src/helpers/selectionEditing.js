@@ -125,7 +125,6 @@ const STANDALONE_CAPTURE_CODES = new Set([
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
-  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
   if (STANDALONE_CAPTURE_CODES.has(capture.code)) return "standalone";

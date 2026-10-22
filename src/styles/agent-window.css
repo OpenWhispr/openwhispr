@@ -1,0 +1,40 @@
+/* The agent window (?agent=true): a transparent window the size of what it
+   shows, plus an 8px margin for the shadow (agentWindowPlacement.js). */
+@layer base {
+  body:has(.agent-window),
+  body:has(.agent-window) #root {
+    background: transparent;
+    overflow: hidden;
+  }
+}
+
+.agent-window {
+  position: fixed;
+  inset: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Transparent while the native window resizes (a stale frame then shows
+   nothing), faded back in once it has the new size (useAgentSurface). */
+.agent-window-content {
+  opacity: 0;
+  transition: none;
+}
+
+.agent-window-content[data-shown="true"] {
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}
+
+.agent-modal-glow {
+  background: radial-gradient(
+    120% 90% at 50% 100%,
+    color-mix(in oklab, var(--color-primary) 34%, transparent) 0%,
+    color-mix(in oklab, var(--color-primary) 10%, transparent) 45%,
+    transparent 75%
+  );
+}
