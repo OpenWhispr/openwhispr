@@ -4,6 +4,7 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
+const { OpenAICompatibleRealtimeStreaming } = require("./openaiCompatibleRealtimeStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -13,6 +14,9 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "corti-realtime": CortiStreaming,
   "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
+  // Self-hosted servers speaking the OpenAI Realtime protocol; reached only
+  // from Note Recording's Self-Hosted mode, with the user's own WebSocket URL.
+  "openai-compatible-realtime": OpenAICompatibleRealtimeStreaming,
 };
 
 // Derived from the registry so an allowed provider can never lack a client
@@ -26,7 +30,12 @@ const getMeetingStreamingClient = (provider) => {
 };
 
 // These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
+const SAVED_KEY_PROVIDERS = new Set([
+  "corti-realtime",
+  "tinfoil-realtime",
+  "elevenlabs-realtime",
+  "openai-compatible-realtime",
+]);
 
 // A connection that authenticates with a saved key also records the count of key
 // saves it opened under, so a start never reuses one opened before a save.
@@ -34,6 +43,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
   JSON.stringify({
     provider: options.provider,
     model: options.model,
+    url: options.url,
     language: options.language,
     mode: options.mode,
     environment: options.environment,
