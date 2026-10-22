@@ -4402,7 +4402,7 @@
         "asLabel": "От имени",
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
-          "replyInThread": "Ответ в ветке"
+          "replyInThread": "Ответ в ветке, начатой {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         }
       },
       "sentLabel": "Отправлено",

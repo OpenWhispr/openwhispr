@@ -29,7 +29,6 @@ const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
 const MESSAGE_TS = /^\d{10}\.\d{6}$/;
-const REPLY_IN_THREAD_NOTE = { key: "connectors.approval.slack.notes.replyInThread" };
 
 // Escaping &, < and > makes a message post exactly as the card showed it:
 // no channel-wide mention or link the user didn't see.
@@ -86,6 +85,15 @@ function parseSlackLink(value) {
   const threadTs = url.searchParams.get("thread_ts");
   if (threadTs !== null && !MESSAGE_TS.test(threadTs)) return null;
   return { channelId, threadTs: threadTs ?? (ts ? `${ts[1]}.${ts[2]}` : null) };
+}
+
+// The card says which thread by when it started; the copy formats the time
+// (ms) in the UI's language and the user's time zone.
+function replyInThreadNote(threadTs) {
+  return {
+    key: "connectors.approval.slack.notes.replyInThread",
+    values: { started: String(Math.round(Number(threadTs) * 1000)) },
+  };
 }
 
 // A person's DM is known only once Send opens it, which checks the thread
@@ -383,7 +391,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           accountLabel: credential.userName,
           workspaceLabel: credential.teamName,
           body: text,
-          ...(thread ? { notes: [REPLY_IN_THREAD_NOTE] } : {}),
+          ...(thread ? { notes: [replyInThreadNote(thread.threadTs)] } : {}),
         },
       };
     },

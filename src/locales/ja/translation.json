@@ -4354,7 +4354,7 @@
         "asLabel": "送信者",
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
-          "replyInThread": "スレッドに返信"
+          "replyInThread": "{{started, datetime(dateStyle: medium; timeStyle: short)}}に始まったスレッドに返信"
         }
       },
       "sentLabel": "送信済み",

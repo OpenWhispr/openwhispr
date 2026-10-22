@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   NOW,
   FIXTURES,
@@ -720,7 +722,11 @@ const ENG_MESSAGE = "https://acme-test.slack.com/archives/C0ENG0001/p17272000001
 const ENG_REPLY =
   "https://acme-test.slack.com/archives/C0ENG0001/p1727200009000200?thread_ts=1727200000.123456&cid=C0ENG0001";
 const GABE_DM_MESSAGE = "https://acme-test.slack.com/archives/D0GABE001/p1727200001000100";
-const REPLY_NOTE = { key: "connectors.approval.slack.notes.replyInThread" };
+// The card's note names when the thread started (ms), so it says which thread.
+const replyNote = (started) => ({
+  key: "connectors.approval.slack.notes.replyInThread",
+  values: { started },
+});
 
 test("a thread link posts the reply in that thread, and the result links the reply in it", async () => {
   const { connector, slack } = await setupSlack({
@@ -734,12 +740,7 @@ test("a thread link posts the reply in that thread, and the result links the rep
     BOUND
   );
   assert.equal(prepared.status, "ready");
-  assert.deepEqual(prepared.preview.notes, [REPLY_NOTE]);
-  assert.equal(
-    typeof require("../../../src/locales/en/translation.json").connectors.approval.slack.notes
-      ?.replyInThread,
-    "string"
-  );
+  assert.deepEqual(prepared.preview.notes, [replyNote("1727200000123")]);
   assert.deepEqual(slack.methods(), ["users.conversations"]);
 
   const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
@@ -748,6 +749,36 @@ test("a thread link posts the reply in that thread, and the result links the rep
   assert.equal(posts(slack)[0].params.thread_ts, "1727200000.123456");
   // Slack's own link to a reply, so replying to it again stays in the thread.
   assert.deepEqual(result, { state: "sent", url: ENG_REPLY });
+});
+
+test("the Reply in thread note shows when the thread started, in every language", async () => {
+  const i18next = (await import("i18next")).default.createInstance();
+  const languages = fs
+    .readdirSync(path.join(__dirname, "../../../src/locales"))
+    .filter((name) =>
+      fs.existsSync(path.join(__dirname, "../../../src/locales", name, "translation.json"))
+    );
+  await i18next.init({
+    lng: "en",
+    resources: Object.fromEntries(
+      languages.map((language) => [
+        language,
+        { translation: require(`../../../src/locales/${language}/translation.json`) },
+      ])
+    ),
+    interpolation: { escapeValue: false },
+  });
+  const key = "connectors.approval.slack.notes.replyInThread";
+  assert.ok(languages.length >= 11);
+  for (const language of languages) {
+    const note = i18next.t(key, { lng: language, started: "1727200000123" });
+    assert.notEqual(note, key, language);
+    assert.doesNotMatch(note, /\{\{|datetime/, language);
+  }
+  assert.match(
+    i18next.t(key, { started: "1727200000123" }),
+    /^Reply in thread started Sep 2\d, 2024/
+  );
 });
 
 test("a reply's link replies in its thread, not under the reply", async () => {
@@ -819,7 +850,7 @@ test("a DM thread for a person is checked against the DM opened at Send", async 
     BOUND
   );
   assert.equal(prepared.status, "ready");
-  assert.deepEqual(prepared.preview.notes, [REPLY_NOTE]);
+  assert.deepEqual(prepared.preview.notes, [replyNote("1727200001000")]);
 
   const refused = await other.connector.commit("send_message", prepared.payload, {}, BOUND);
 
