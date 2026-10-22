@@ -15,8 +15,9 @@ const DEFAULT_CAPTURE_RATE = 24000;
 // The base class refuses to connect without a key; a keyless local server is
 // sent no Authorization header at all, so this value never leaves the process.
 const NO_API_KEY = "no-api-key";
-// A local server can take seconds for the last turn, so stop waits while the
-// server is still sending something for it, not a fixed 3 s.
+// A slow local server can take seconds to finish the last turn, which the base
+// class's fixed 3 s commit wait drops. Stop waits while the server shows
+// progress on a turn, up to a cap.
 const STOP_IDLE_MS = 5000;
 const STOP_MAX_MS = 30000;
 
@@ -24,6 +25,15 @@ const MODEL_MISSING = "selfHostedRealtimeModelMissing";
 
 const COMPLETED = "conversation.item.input_audio_transcription.completed";
 const FAILED = "conversation.item.input_audio_transcription.failed";
+// Only these restart the stop idle timer; VAD and other events do not.
+const STOP_PROGRESS_EVENTS = new Set([
+  "conversation.item.input_audio_transcription.delta",
+  COMPLETED,
+  FAILED,
+  "input_audio_buffer.committed",
+  "input_audio_buffer.cleared",
+  "error",
+]);
 
 // Mirrors Tinfoil's check. It reads the raw event because the base class
 // hands onError only the message, which some servers word differently.
@@ -74,7 +84,7 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
       return super.handleMessage(data);
     }
     if (!event || typeof event !== "object") return super.handleMessage(data);
-    if (this._stop) this._restartStopIdle();
+    if (this._stop && STOP_PROGRESS_EVENTS.has(event.type)) this._restartStopIdle();
 
     // An empty commit while stopping is the answer to stop's commit, not an
     // error to show.
