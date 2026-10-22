@@ -99,7 +99,7 @@ test("buildRealtimeUrl rejects empty, non-WebSocket and public cleartext URLs", 
   }
 });
 
-test("buildRealtimeUrl puts the model in the query and keeps the rest of it", async () => {
+test("buildRealtimeUrl puts the model and transcription intent in the query", async () => {
   const { buildRealtimeUrl } = await load();
 
   const built = new URL(buildRealtimeUrl(LAN_URL, " whisper-large-v3-turbo "));
@@ -109,7 +109,7 @@ test("buildRealtimeUrl puts the model in the query and keeps the rest of it", as
 
   const kept = new URL(buildRealtimeUrl(`${LAN_URL}?token=abc&intent=conversation`, "whisper"));
   assert.equal(kept.searchParams.get("token"), "abc");
-  assert.equal(kept.searchParams.get("intent"), "conversation");
+  assert.equal(kept.searchParams.get("intent"), "transcription");
   assert.equal(kept.searchParams.get("model"), "whisper");
 
   // The typed model wins over one already in the URL; an empty one leaves it alone.
