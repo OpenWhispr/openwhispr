@@ -41,20 +41,31 @@ const EMAIL_DRAFT_INSTRUCTION =
 // Both paths send the body as it is written, so Markdown shows up as symbols.
 const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or [text](link)).";
 
+const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+const URL_TOKEN = /\bhttps?:\/\/\S+/g;
+// Both pairs of ** need a line edge or a non-word character outside them, so
+// x**2 + y**2 stays as it is.
+const BOLD = /(^|[^\w*])\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*(?=$|[^\w*])/gm;
+const HEADING = /^(#{1,6})[ \t]+(?=\w)(.*?)(?:[ \t]+#+)?[ \t]*$/gm;
+
 /**
  * The body with the Markdown models write anyway made plain, before the card
- * or the draft shows it, so the user sees exactly what is sent: bold and
- * `__` emphasis lose their markers, a heading line keeps its text, a link
- * becomes "text (url)". Single asterisks, list dashes and numbers stay.
+ * or the draft shows it, so the user sees exactly what is sent: **bold** loses
+ * its markers, a heading line keeps its text, a link becomes "text (url)".
+ * Links are left alone otherwise, and so are a count like "# of attendees",
+ * single asterisks, underscores, list dashes and numbers.
  */
 function plainTextBody(value: unknown): string {
   if (typeof value !== "string") return "";
+  const urls: string[] = [];
   return value
-    .replace(/\*\*([^*\n]+)\*\*|__([^_\n]+)__/g, (_, bold, underscored) => bold ?? underscored)
-    .replace(/^([ \t]*)#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/gm, "$1$2")
-    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, text, url) =>
-      text === url ? url : `${text} (${url})`
-    );
+    .replace(LINK, (_, text, url) => (text === url ? url : `${text} (${url})`))
+    .replace(URL_TOKEN, (url) => `\u0000${urls.push(url) - 1}\u0000`)
+    .replace(BOLD, "$1$2")
+    .replace(HEADING, (line, hashes: string, text: string) =>
+      hashes.length === 1 && /^[a-z]/.test(text) ? line : text
+    )
+    .replace(/\u0000(\d+)\u0000/g, (_, index) => urls[Number(index)]);
 }
 
 const EMAIL_PARAMETERS: ToolDefinition["parameters"] = {

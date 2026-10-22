@@ -2035,16 +2035,20 @@ const MARKDOWN_BODY = [
   "## Schedule",
   "**Thursday, Oct 22**",
   "- Team Standup, 5:45 PM *(tentative)*",
-  "1. __Friday__: OW Design Review",
+  "- **Design review** at 6 PM",
   "Join: [the call](https://meet.example/abc) or [https://x.dev](https://x.dev)",
+  "# of attendees: 12",
+  "See __init__.py and x**2 + y**2 at https://e.com/a__b__c and https://e.com/**x**",
   "#hashtag stays, and so does 2 * 3.",
 ].join("\n");
 const PLAIN_BODY = [
   "Schedule",
   "Thursday, Oct 22",
   "- Team Standup, 5:45 PM *(tentative)*",
-  "1. Friday: OW Design Review",
+  "- Design review at 6 PM",
   "Join: the call (https://meet.example/abc) or https://x.dev",
+  "# of attendees: 12",
+  "See __init__.py and x**2 + y**2 at https://e.com/a__b__c and https://e.com/**x**",
   "#hashtag stays, and so does 2 * 3.",
 ].join("\n");
 
