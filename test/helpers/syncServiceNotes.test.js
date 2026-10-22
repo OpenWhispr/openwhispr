@@ -569,6 +569,66 @@ test("signing out and back in as the same account keeps its cursors for deletes 
   );
 });
 
+test("an account returning after another account synced gets its cursors back", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const cloudA = createFakeCloud();
+  const seeded = cloudA.seedNote({
+    client_note_id: "a-note",
+    title: "A's note",
+    content: "deleted on A's laptop while B used this device",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+  });
+  const firstA = await signInAs(t, db, cloudA, "account-a");
+  await firstA.syncAll(true);
+  const cursorA = localStorageStub.getItem("lastSyncedAt.notes");
+  await firstA.purgeTeamSpacesForSignOut();
+
+  const accountB = await signInAs(t, db, createFakeCloud(), "account-b");
+  await accountB.syncAll(true);
+  await accountB.purgeTeamSpacesForSignOut();
+  await cloudA.request({ method: "DELETE", path: "/api/notes/delete", body: { id: seeded.id } });
+
+  const secondA = await signInAs(t, db, cloudA, "account-a");
+  await secondA.syncAll(true);
+  const pulls = cloudA.logFor("/api/notes/list");
+  assert.equal(queryParam(pulls[pulls.length - 1].path, "since"), cursorA);
+  assert.deepEqual(
+    db.getNotes(null, 100, null).map((note) => note.title),
+    [],
+    "a note A deleted elsewhere while B used this device must leave it"
+  );
+});
+
+test("a dictionary or snippet edit before the new account's first pass skips the old account's cursors", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  localStorageStub.setItem("lastSyncedAt.dictionary", "2026-02-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.dictionary.id", "dict-a");
+  localStorageStub.setItem("lastSyncedAt.snippets", "2026-02-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.snippets.id", "snippet-a");
+  await accountA.syncAll(true);
+  await accountA.purgeTeamSpacesForSignOut();
+
+  const cloudB = createFakeCloud();
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncDictionaryNow();
+  await accountB.syncSnippetsNow();
+  for (const path of ["/api/dictionary/list", "/api/snippets/list"]) {
+    assert.equal(queryParam(cloudB.logFor(path)[0].path, "since"), null, path);
+  }
+});
+
 test("canSync gating: sign-out blocks every call; plan and backup gates protect personal notes", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
