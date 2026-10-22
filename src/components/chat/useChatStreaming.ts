@@ -829,9 +829,9 @@ export function useChatStreaming({
         // again (an unbacked claim) can be withdrawn.
         let stepTextStart = 0;
         let unbackedClaim = false;
-        // A final answer that says it did something needs a tool result that
-        // did: this turn's (not one a regenerate carried over) for what it says
-        // it did now, any recorded one for what it reports was done.
+        // A final answer that says it did something needs a tool result of
+        // that kind: this turn's (not one a regenerate carried over), or for a
+        // report on what was done, one recorded for an earlier turn.
         const isUnbacked = registry
           ? (text: string) =>
               isUnbackedClaim(text, {
@@ -840,7 +840,7 @@ export function useChatStreaming({
                   ...allMessages.flatMap((message) => message.toolCalls ?? []),
                   ...toolCalls.slice(0, carriedCallCount),
                 ],
-                isReadOnly: (name) => registry.get(name)?.readOnly !== false,
+                isOffered: (name) => registry.get(name) !== undefined,
                 request: {
                   text: userText,
                   selectedText: selectedContext?.text ?? lastUserMessage?.selectedContext,
