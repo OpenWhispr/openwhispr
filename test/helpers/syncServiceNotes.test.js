@@ -457,6 +457,118 @@ test("a mid-pagination failure leaves the pull cursor unstamped", async (t) => {
   );
 });
 
+// What useAuth leaves behind on an account boundary: the main process scopes the
+// local rows to the account and the renderer holds a validated session for it.
+async function signInAs(t, db, cloud, accountId) {
+  db.setActiveAccountId(accountId);
+  windowStub.electronAPI = createElectronApi(db, { cloud });
+  await establishValidatedAuth(accountId);
+  const service = new SyncService();
+  t.after(() => stopSyncTimers(service));
+  return service;
+}
+
+const LIST_PATHS = [
+  "/api/folders/list",
+  "/api/notes/list",
+  "/api/conversations/list",
+  "/api/transcriptions/list",
+  "/api/dictionary/list",
+  "/api/snippets/list",
+];
+
+test("the first pass after an account switch pulls the new account's older notes and conversations", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  // Dictionary and snippet cursors only move when a pull sees entries, which
+  // the fake cloud never serves; stamp them as such a pull would have.
+  localStorageStub.setItem("lastSyncedAt.dictionary", "2026-02-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.dictionary.id", "dict-a");
+  localStorageStub.setItem("lastSyncedAt.snippets", "2026-02-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.snippets.id", "snippet-a");
+  await accountA.syncAll(true);
+  assert.ok(
+    Date.parse(localStorageStub.getItem("lastSyncedAt.notes")) > 0,
+    "account A's pass stamps its notes cursor"
+  );
+
+  // Written on account B's other devices before A's pass stamped its cursors.
+  const cloudB = createFakeCloud();
+  cloudB.seedNote({
+    client_note_id: "b-note",
+    title: "B's note",
+    content: "written on B's laptop",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+  });
+  cloudB.seedConversation({
+    client_conversation_id: "b-conversation",
+    title: "B's chat",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+    messages: [{ role: "user", content: "hello from B", created_at: "2026-01-05T09:00:00.000Z" }],
+  });
+
+  await accountA.purgeTeamSpacesForSignOut();
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncAll(true);
+
+  assert.deepEqual(
+    db.getNotes(null, 100, null).map((note) => note.title),
+    ["B's note"],
+    "account B's existing cloud note must reach this device"
+  );
+  assert.equal(db.getConversationByClientId("b-conversation")?.title, "B's chat");
+  for (const path of LIST_PATHS) {
+    assert.equal(
+      queryParam(cloudB.logFor(path)[0].path, "since"),
+      null,
+      `${path} must not carry account A's cursor`
+    );
+  }
+});
+
+test("signing out and back in as the same account keeps its cursors for deletes made meanwhile", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const cloud = createFakeCloud();
+  const seeded = cloud.seedNote({
+    client_note_id: "a-note",
+    title: "A's note",
+    content: "deleted on another device later",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+  });
+  const firstSession = await signInAs(t, db, cloud, "account-a");
+  await firstSession.syncAll(true);
+  assert.deepEqual(
+    db.getNotes(null, 100, null).map((note) => note.title),
+    ["A's note"]
+  );
+
+  await firstSession.purgeTeamSpacesForSignOut();
+  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: seeded.id } });
+
+  // A cursor-less pull lists live rows only, so the tombstone arrives through
+  // the kept delta cursor or not at all.
+  const secondSession = await signInAs(t, db, cloud, "account-a");
+  await secondSession.syncAll(true);
+  assert.deepEqual(
+    db.getNotes(null, 100, null).map((note) => note.title),
+    [],
+    "a note deleted elsewhere while signed out must leave this device"
+  );
+});
+
 test("canSync gating: sign-out blocks every call; plan and backup gates protect personal notes", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
