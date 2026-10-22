@@ -9,7 +9,8 @@ const URL_INVALID = "selfHostedRealtimeUrlInvalid";
 // public internet unencrypted. Kept free of Electron so the token provider can
 // validate a URL before it releases the saved key. The model goes in the query
 // because these servers ignore the session's transcription model (Speaches
-// refuses the upgrade without it); the rest of the query is kept.
+// refuses the upgrade without it). The intent is always transcription, the
+// only session this client handles; the rest of the query is kept.
 function buildRealtimeUrl(url, model) {
   const raw = typeof url === "string" ? url.trim() : "";
   if (!raw) throw new Error(URL_MISSING);
@@ -27,7 +28,7 @@ function buildRealtimeUrl(url, model) {
 
   const trimmedModel = typeof model === "string" ? model.trim() : "";
   if (trimmedModel) parsed.searchParams.set("model", trimmedModel);
-  if (!parsed.searchParams.has("intent")) parsed.searchParams.set("intent", "transcription");
+  parsed.searchParams.set("intent", "transcription");
   return parsed.toString();
 }
 
