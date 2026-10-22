@@ -186,12 +186,24 @@ const SquareSparkleMark = glyph(
   </>
 );
 
+// The chat's Fork action (Lucide's git-fork shape).
+const GitForkMark = glyph(
+  <>
+    <circle cx="12" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+    <path d="M12 12v3" />
+  </>
+);
+
 export const Circle = createIcon("circle", CircleMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
 export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
 export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
+export const GitFork = createIcon("git-fork", GitForkMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);
 export const List = createIcon("list", ListMark);

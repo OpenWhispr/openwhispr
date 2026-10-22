@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Copy,
   CopyRounded,
@@ -9,19 +10,24 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
+  GitFork,
 } from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
 import { openProviderSettings } from "../../utils/describeProviderError";
-import type { MessageError, ToolCallInfo } from "./types";
+import type { AssistantTurn, MessageError, ToolCallInfo } from "./types";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
 import { extractNoteCards } from "./noteCards";
 import { helpAnswerPlainText } from "./helpEvidenceText";
 import { HelpEvidence } from "./GroundedHelpEvidence";
 import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
+import { InteractionCard } from "./InteractionCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 
 interface ChatMessageProps {
   messageId: string;
@@ -32,6 +38,26 @@ interface ChatMessageProps {
   error?: MessageError;
   onOpenNote?: (noteId: number) => void;
   plain?: boolean;
+  turn?: AssistantTurn;
+  /** Saved messages only: a fork's history runs through a saved row. */
+  dbId?: number;
+  onFork?: (messageId: string) => void;
+  /** Offered on a reply that stopped at the step limit. */
+  onContinue?: () => void;
+}
+
+// What a call that asked the user came to, on its step once it stopped.
+function interactionOutcome({ result }: InteractionRecord, t: TFunction): string {
+  if (!result || result.status === "not_answered") {
+    return t("agentMode.interactions.status.notAnswered");
+  }
+  if (result.status === "connected") {
+    return t("agentMode.interactions.status.connected", {
+      name: CONNECTION_TARGET_NAMES[result.target],
+    });
+  }
+  if (result.status === "unavailable") return t("connectors.toolStatus.unavailable");
+  return t(`agentMode.interactions.status.${result.status}`);
 }
 
 function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
@@ -40,8 +66,15 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   const Icon = toolIcons[toolCall.name] || Search;
   const isExecuting = toolCall.status === "executing";
   const isError = toolCall.status === "error";
-  const isCompleted = toolCall.status === "completed";
-  const isClipboard = toolCall.name === "copy_to_clipboard" && isCompleted;
+  // A stopped call reads like a finished one, with what it came to.
+  const isCompleted = toolCall.status === "completed" || toolCall.status === "stopped";
+  const stoppedText =
+    toolCall.status === "stopped"
+      ? toolCall.interaction
+        ? interactionOutcome(toolCall.interaction, t)
+        : t("agentMode.turn.stopped")
+      : null;
+  const isClipboard = toolCall.name === "copy_to_clipboard" && toolCall.status === "completed";
 
   const resultLines = toolCall.result?.split("\n") ?? [];
   const hasDetail = resultLines.length > 1 && !isClipboard;
@@ -107,7 +140,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           </div>
         ) : (
           <span className="text-[11px] text-muted-foreground/70">
-            {toolCall.result || toolCall.name}
+            {stoppedText ?? (toolCall.result || toolCall.name)}
           </span>
         )}
 
@@ -139,13 +172,62 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
-// Subscribes to its own approval entry only, so editing one card doesn't
-// re-render every message in the thread.
+// Subscribes to its own approval and interaction entries only, so editing
+// one card doesn't re-render every message in the thread.
 function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: ToolCallInfo }) {
-  const approval = useConnectorApprovalStore(
-    (state) => state.entries[approvalKey(messageId, toolCall.id)]
+  const key = approvalKey(messageId, toolCall.id);
+  const approval = useConnectorApprovalStore((state) => state.entries[key]);
+  const interaction = useAgentInteractionStore((state) => state.entries[key]);
+  if (approval) return <ApprovalCard entry={approval} />;
+  if (interaction && interaction.state !== "settled")
+    return <InteractionCard entry={interaction} />;
+  return <ToolCallStep toolCall={toolCall} />;
+}
+
+// How the turn ended, when that needs saying, and the model's reasoning.
+function TurnNotes({
+  turn,
+  failedHere,
+  onContinue,
+}: {
+  turn: AssistantTurn;
+  /** The failure is already on screen (this session); a saved one shows only this note. */
+  failedHere: boolean;
+  onContinue?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {turn.reasoning && (
+        <details className="mt-1.5 text-[11px] text-muted-foreground/80">
+          <summary className="cursor-pointer select-none">{t("agentMode.turn.reasoning")}</summary>
+          <p className="mt-1 whitespace-pre-wrap" dir="auto">
+            {turn.reasoning}
+          </p>
+        </details>
+      )}
+      {turn.status === "stopped" && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground/80">{t("agentMode.turn.stopped")}</p>
+      )}
+      {turn.status === "error" && !failedHere && (
+        <p className="mt-1.5 text-[11px] text-destructive/80">{t("agentMode.turn.failed")}</p>
+      )}
+      {turn.status === "step_limit" && (
+        <p className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground/80">
+          {t("agentMode.turn.stepLimit")}
+          {onContinue && (
+            <button
+              type="button"
+              onClick={onContinue}
+              className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+            >
+              {t("agentMode.turn.continue")}
+            </button>
+          )}
+        </p>
+      )}
+    </>
   );
-  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
 }
 
 function NoteCard({
@@ -201,6 +283,10 @@ export const ChatMessage = memo(function ChatMessage({
   error,
   onOpenNote,
   plain = false,
+  turn,
+  dbId,
+  onFork,
+  onContinue,
 }: ChatMessageProps) {
   const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -306,6 +392,10 @@ export const ChatMessage = memo(function ChatMessage({
         )}
         {error?.technicalDetails && <TechnicalErrorDetails details={error.technicalDetails} />}
 
+        {turn && !isStreaming && (
+          <TurnNotes turn={turn} failedHere={!!error} onContinue={onContinue} />
+        )}
+
         {noteCards.length > 0 && !isStreaming && (
           <div>
             {noteCards.map((card) => (
@@ -342,6 +432,17 @@ export const ChatMessage = memo(function ChatMessage({
                 <Copy size={12} />
               )}
             </button>
+            {onFork && dbId != null && (
+              <button
+                type="button"
+                onClick={() => onFork(messageId)}
+                aria-label={t("chat.fork")}
+                title={t("chat.fork")}
+                className="p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:opacity-100"
+              >
+                <GitFork size={12} />
+              </button>
+            )}
           </div>
         )}
       </div>

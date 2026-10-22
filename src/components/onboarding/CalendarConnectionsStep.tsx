@@ -5,18 +5,23 @@ import { Button } from "../ui/button";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { connectCalendar, type CalendarProvider } from "../../utils/calendarConnect";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.webp";
 import meetingDetectedPanel from "../../assets/onboarding-notes-meeting-detected.webp";
 
-type ProviderId = "google" | "microsoft" | "apple";
+const CALENDAR_I18N_KEYS: Record<CalendarProvider, string> = {
+  google: "integrations.googleCalendar",
+  microsoft: "integrations.microsoftCalendar",
+  apple: "integrations.appleCalendar",
+};
 
 export default function CalendarConnectionsStep() {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const systemAudio = useSystemAudioPermission();
-  const [connecting, setConnecting] = useState<ProviderId | null>(null);
+  const [connecting, setConnecting] = useState<CalendarProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleDenied, setAppleDenied] = useState(false);
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
@@ -27,7 +32,7 @@ export default function CalendarConnectionsStep() {
   }, [systemAudio]);
 
   const connect = useCallback(
-    async (provider: ProviderId) => {
+    async (provider: CalendarProvider) => {
       setConnecting(provider);
       setError(null);
       setAppleDenied(false);
@@ -38,47 +43,20 @@ export default function CalendarConnectionsStep() {
         // declined the prompt unable to connect any calendar at all.
         await ensureSystemAudio();
 
-        if (provider === "google") {
-          const result = await window.electronAPI?.gcalStartOAuth?.();
-          if (result?.success && result.email) {
-            const current = useSettingsStore.getState().gcalAccounts;
-            store.setGcalAccounts([
-              ...current.filter((account) => account.email !== result.email),
-              { email: result.email },
-            ]);
-          } else if (!result?.error?.includes("access_denied")) {
-            setError(t("integrations.googleCalendar.connectFailedDescription"));
-          }
-        } else if (provider === "microsoft") {
-          const result = await window.electronAPI?.mcalStartOAuth?.();
-          if (result?.success && result.email) {
-            const current = useSettingsStore.getState().mcalAccounts;
-            store.setMcalAccounts([
-              ...current.filter((account) => account.email !== result.email),
-              { email: result.email, tenantId: result.tenantId },
-            ]);
-          } else if (!result?.error?.includes("access_denied")) {
-            setError(t("integrations.microsoftCalendar.connectFailedDescription"));
-          }
-        } else {
-          const result = await window.electronAPI?.acalConnect?.();
-          if (result?.success) {
-            store.setAppleCalendarConnected(true);
-          } else if (result?.reason === "denied") {
-            // Same distinction CalendarsPane draws: only a real permission
-            // denial sends the user to Privacy settings; helper-missing /
-            // snapshot-failed are not permission problems.
-            setAppleDenied(true);
-            setError(t("integrations.appleCalendar.permissionDeniedDescription"));
-          } else {
-            setError(t("integrations.appleCalendar.connectFailedDescription"));
-          }
+        const result = await connectCalendar(provider);
+        if (result === "denied") {
+          // Same distinction CalendarsPane draws: only a real permission
+          // denial sends the user to Privacy settings.
+          setAppleDenied(true);
+          setError(t("integrations.appleCalendar.permissionDeniedDescription"));
+        } else if (result === "failed") {
+          setError(t(`${CALENDAR_I18N_KEYS[provider]}.connectFailedDescription`));
         }
       } finally {
         setConnecting(null);
       }
     },
-    [ensureSystemAudio, store, t]
+    [ensureSystemAudio, t]
   );
 
   useEffect(() => {

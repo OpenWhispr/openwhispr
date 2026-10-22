@@ -1,4 +1,6 @@
 import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "./types";
 
 export interface ToolContextRequest {
   /** The assistant message the tool call belongs to. */
@@ -16,6 +18,13 @@ export interface ToolExecutionScope {
 interface ToolExecutionHandlers {
   onApprovalRequested?: () => void;
   onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
+  /** A call now waits on the user's answer, or no longer does. */
+  onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
+  onImageAttached?: (image: ChatImageAttachment) => void;
+  /** A send happened (or may have); the key belongs on its tool call. */
+  onActionCompleted?: (request: { toolCallId: string; actionKey: string }) => void;
+  /** Sends earlier requests in the conversation made, from its saved tool calls. */
+  completedActions?: Iterable<string>;
 }
 
 /**
@@ -23,11 +32,16 @@ interface ToolExecutionHandlers {
  * conversation-ending path (Esc, new chat, unmount) aborts, so tools waiting
  * on the user (approval cards) are released no matter how the turn ended.
  * Notices from a tool that finishes after that are dropped, so a late result
- * cannot reopen a panel the user dismissed.
+ * cannot reopen a panel the user dismissed. A completed send is the exception:
+ * a card already committing when the turn stopped still sends, and the
+ * conversation must know it did.
  */
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
   const turnSlots = new Map<string, number>();
+  const earlierActions = new Set(handlers.completedActions);
+  // This request's sends: made, or running now.
+  const claimedActions = new Set<string>();
   const notify =
     <Args extends unknown[]>(handler?: (...args: Args) => void) =>
     (...args: Args): void => {
@@ -58,6 +72,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       hold(options);
     };
   };
+  const interaction = notify(handlers.onInteraction);
   return {
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
@@ -69,6 +84,18 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
+      onInteraction: (record) => interaction({ toolCallId, record }),
+      attachImage: notify(handlers.onImageAttached),
+      claimAction: (actionKey) => {
+        if (claimedActions.has(actionKey)) return false;
+        claimedActions.add(actionKey);
+        return true;
+      },
+      releaseAction: (actionKey) => {
+        claimedActions.delete(actionKey);
+      },
+      recordCompletedAction: (actionKey) => handlers.onActionCompleted?.({ toolCallId, actionKey }),
+      sentEarlier: (actionKey) => earlierActions.has(actionKey),
     }),
     abort: () => controller.abort(),
   };

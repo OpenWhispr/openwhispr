@@ -154,6 +154,10 @@ function countingContext(signal = new AbortController().signal) {
       if (options?.preserveClipboard) context.preservesClipboard = true;
     },
     claimTurnSlot: () => true,
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
     releaseTurnSlot() {},
   };
   return context;
@@ -169,6 +173,10 @@ function toolContext(messageId, toolCallId, held = { count: 0 }) {
       held.count += 1;
     },
     claimTurnSlot: () => true,
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
     releaseTurnSlot() {},
   };
 }
@@ -315,9 +323,10 @@ test("email_draft opens at most three drafts per turn", async (t) => {
   const { createToolExecutionScope } = await loadScope();
   const scope = createToolExecutionScope();
   const tool = createEmailDraftTool("gmail");
+  // Four different drafts: the same one twice would be one draft.
   const draft = (id) =>
     tool.execute(
-      { to: ["a@example.com"], subject: "s", body: "b" },
+      { to: ["a@example.com"], subject: "s", body: `b${id}` },
       scope.createContext({ messageId: "m1", toolCallId: id })
     );
 
@@ -336,6 +345,71 @@ test("email_draft opens at most three drafts per turn", async (t) => {
     (await tool.execute({ to: ["a@example.com"], subject: "s", body: "b" }, next)).data.status,
     "draft_opened"
   );
+});
+
+test("the same draft asked for twice in one step opens once", async (t) => {
+  let opened = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          opened += 1;
+          return { state: "not_sent", reason: "cancelled_by_user" };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const scope = createToolExecutionScope();
+  const tool = createEmailDraftTool("gmail");
+  const draft = (id) =>
+    tool.execute(
+      { to: ["a@example.com"], subject: "s", body: "b" },
+      scope.createContext({ messageId: "m1", toolCallId: id })
+    );
+
+  const results = await Promise.all(["1", "2"].map(draft));
+  assert.equal(opened, 1);
+  assert.deepEqual(
+    results.map((result) => result.data.status),
+    ["not_sent", "already_sent"]
+  );
+  // That one never opened, so asking again opens it.
+  assert.equal((await draft("3")).data.status, "not_sent");
+  assert.equal(opened, 2);
+});
+
+test("a draft an earlier request opened opens again: opening one sends nothing", async (t) => {
+  let opened = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async () => {
+          opened += 1;
+          return { state: "sent", destinationLabel: "a@example.com", bodyCopied: false };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const { createToolExecutionScope } = await loadScope();
+  const tool = createEmailDraftTool("gmail");
+  const draft = { to: ["a@example.com"], subject: "s", body: "b" };
+  const keys = [];
+  const first = createToolExecutionScope({
+    onActionCompleted: ({ actionKey }) => keys.push(actionKey),
+  });
+  await tool.execute(draft, first.createContext({ messageId: "m1", toolCallId: "1" }));
+  assert.equal(keys.length, 1);
+
+  const later = createToolExecutionScope({ completedActions: keys });
+  const result = await tool.execute(
+    draft,
+    later.createContext({ messageId: "m2", toolCallId: "2" })
+  );
+  assert.equal(result.data.status, "draft_opened");
+  assert.equal(opened, 2);
 });
 
 test("only one draft per turn may put its text on the clipboard", async (t) => {
@@ -456,8 +530,9 @@ test("a draft whose outcome is unknown says so, and keeps the clipboard claimed"
     draft,
     scope.createContext({ messageId: "m1", toolCallId: "1" })
   );
+  // Another draft: the same one again would be refused as already done.
   const second = await tool.execute(
-    draft,
+    { ...draft, subject: "Recap, part 2" },
     scope.createContext({ messageId: "m1", toolCallId: "2" })
   );
 
@@ -524,6 +599,10 @@ test("email_draft reports an uncertain direct result as unknown, and still holds
       held += 1;
     },
     claimTurnSlot: () => true,
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
   };
 
   const result = await createEmailDraftTool("mailto").execute(
@@ -588,7 +667,7 @@ test("a draft whose text couldn't be copied gives the clipboard back to the turn
   const draft = { to: ["a@example.com"], subject: "Recap", body: "word ".repeat(600) };
 
   await tool.execute(draft, scope.createContext("1"));
-  const second = await tool.execute(draft, scope.createContext("2"));
+  const second = await tool.execute({ ...draft, subject: "Recap 2" }, scope.createContext("2"));
 
   // Nothing of the first draft reached the clipboard, so the second may use it.
   assert.equal(second.data.status, "draft_opened");
@@ -622,8 +701,11 @@ test("malformed text or a failed call never leaks the turn's slots", async (t) =
   const failedCall = await tool.execute(draft, scope.createContext("1"));
   assert.equal(failedCall.data.status, "unavailable");
   const results = [];
+  // Distinct drafts: an identical one that opened would be refused as already done.
   for (const id of ["2", "3", "4"])
-    results.push(await tool.execute(draft, scope.createContext(id)));
+    results.push(
+      await tool.execute({ ...draft, body: `${id} ${draft.body}` }, scope.createContext(id))
+    );
 
   // The rejected call gave back its draft and clipboard slots.
   assert.equal(results[0].data.status, "draft_opened");
@@ -929,6 +1011,10 @@ function gmailContext(messageId, toolCallId, { slotsLeft = 3 } = {}) {
       slotsLeft -= 1;
       return true;
     },
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
     releaseTurnSlot(key) {
       context.releases.push(key);
     },

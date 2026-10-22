@@ -92,6 +92,7 @@ export {
   Circle,
   CopyRounded,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
   List,

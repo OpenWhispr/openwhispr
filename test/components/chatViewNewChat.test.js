@@ -17,7 +17,8 @@ const MOCKS = {
         globalThis.__cancelCount += 1;
         setAgentState("idle");
       }, []);
-      const sendToAI = useCallback(() => {
+      const sendToAI = useCallback((...args) => {
+        (globalThis.__sends ??= []).push(args);
         setAgentState("tool-executing");
         return globalThis.__pendingSend;
       }, []);
@@ -25,19 +26,27 @@ const MOCKS = {
     }
   `,
   "/useChatPersistence": `
+    import { useState } from "react";
     export function useChatPersistence() {
+      const [messages, setMessages] = useState(globalThis.__initialMessages ?? []);
       return {
         conversationId: null,
-        messages: [],
-        setMessages() {},
+        messages,
+        setMessages,
+        forkOrigin: globalThis.__forkOrigin ?? null,
         createConversation: async () => {
           globalThis.__createCount += 1;
           return 1;
         },
-        saveUserMessage: async () => {},
+        saveUserMessage: async (text, options) => {
+          (globalThis.__savedUserMessages ??= []).push(options);
+        },
         saveAssistantMessage() {},
         loadConversation: async () => globalThis.__loadResult,
-        handleNewChat() {},
+        forkConversation: async () => globalThis.__forkResult,
+        handleNewChat() {
+          globalThis.__newChatCount = (globalThis.__newChatCount ?? 0) + 1;
+        },
       };
     }
   `,
@@ -54,7 +63,17 @@ const MOCKS = {
       return null;
     }
   `,
-  "/ChatMessages": `export function ChatMessages() { return null; }`,
+  "/ChatMessages": `
+    export function ChatMessages(props) {
+      globalThis.__chatMessages = props;
+      return null;
+    }
+  `,
+  "/ui/useToast": `
+    export function useToast() {
+      return { toast: (toast) => (globalThis.__toasts ??= []).push(toast) };
+    }
+  `,
   "/ui/dialog": `export function ConfirmDialog() { return null; }`,
   "/hooks/useDialogs": `
     export function useDialogs() {
@@ -63,10 +82,22 @@ const MOCKS = {
   `,
 };
 
-async function renderChatView(t) {
+const GLOBALS = [
+  "__sends",
+  "__initialMessages",
+  "__forkOrigin",
+  "__savedUserMessages",
+  "__forkResult",
+  "__newChatCount",
+  "__chatMessages",
+  "__toasts",
+];
+
+async function renderChatView(t, props = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
+    for (const name of GLOBALS) delete globalThis[name];
     delete globalThis.__pendingSend;
     delete globalThis.__chatInput;
     delete globalThis.__conversationList;
@@ -96,7 +127,9 @@ async function renderChatView(t) {
   const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(ChatView)));
+  const render = (next) => React.act(async () => root.render(React.createElement(ChatView, next)));
+  await render(props);
+  return { rerender: render };
 }
 
 test("typed chat offers the connector tools", async (t) => {
@@ -159,3 +192,56 @@ for (const [way, startNewChat] of Object.entries(START_NEW_CHAT)) {
     assert.equal(globalThis.document.activeElement?.tagName, "TEXTAREA");
   });
 }
+
+test("a fork made from selected text sends it with its first request only", async (t) => {
+  globalThis.__forkOrigin = {
+    parentConversationId: 3,
+    parentTitle: "Plan",
+    context: " Draft one. ",
+  };
+  await renderChatView(t);
+
+  await React.act(async () => globalThis.__chatInput.onTextSubmit("Shorter"));
+  await React.act(async () => globalThis.__chatInput.onTextSubmit("Again"));
+
+  assert.deepEqual(
+    globalThis.__sends.map(([, , options]) => options.selectedContext?.text),
+    ["Draft one.", undefined]
+  );
+  assert.deepEqual(
+    globalThis.__savedUserMessages.map((options) => options.selectedContext),
+    ["Draft one.", undefined],
+    "the user message keeps the text it was about"
+  );
+});
+
+test("a fork the user left for another chat first shows no error", async (t) => {
+  globalThis.__initialMessages = [
+    { id: "m1", role: "assistant", content: "Draft", isStreaming: false, dbId: 1 },
+  ];
+  globalThis.__forkResult = false;
+  await renderChatView(t);
+  await React.act(async () => globalThis.__chatMessages.onForkMessage("m1"));
+  assert.equal(globalThis.__toasts, undefined);
+  assert.equal(globalThis.__conversationList.activeConversationId, null, "nothing opens");
+
+  globalThis.__forkResult = null;
+  await React.act(async () => globalThis.__chatMessages.onForkMessage("m1"));
+  assert.equal(globalThis.__toasts.length, 1);
+});
+
+test("a chat kept open behind another view ignores the New chat shortcut until shown", async (t) => {
+  const view = await renderChatView(t, { active: false });
+  assert.equal(globalThis.__keydown, undefined, "no shortcut while hidden");
+
+  await view.rerender({ active: true });
+  await React.act(async () => globalThis.__keydown({ key: "n", metaKey: true, ctrlKey: true }));
+  assert.equal(globalThis.__newChatCount, 1);
+});
+
+test("New chat from the menu starts a new chat in a chat that stayed open", async (t) => {
+  const view = await renderChatView(t, { newChatRequest: 1 });
+  assert.equal(globalThis.__newChatCount, undefined, "a chat opened by it is new already");
+  await view.rerender({ newChatRequest: 2 });
+  assert.equal(globalThis.__newChatCount, 1);
+});

@@ -107,7 +107,34 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
+  ask_user: "Asking the user",
+  request_connection: "Asking the user",
+  request_access: "Asking the user",
+  request_api_key: "Asking the user",
+  open_settings: "Asking the user",
 };
+
+// The interaction tools are there to finish a task, never to add steps to it.
+// What to look up with which tool before asking, for the tools this turn has.
+// Smaller models skip the lookups unless the tools are named.
+const LOOKUPS: ReadonlyArray<[tool: string, lookup: string]> = [
+  ["find_contact", "people and their email addresses with find_contact, then search_notes"],
+  ["search_notes", "names, addresses, channels, plans and facts with search_notes"],
+  ["github_search_issues", "pull requests and issues with github_search_issues"],
+  ["linear_search_issues", "Linear issues with linear_search_issues"],
+  ["get_calendar_events", "meetings with get_calendar_events"],
+];
+
+function askOnlyWhenNecessaryRule(tools: readonly PromptTool[]): string {
+  const lookups = LOOKUPS.filter(([name]) => tools.some((tool) => tool.name === name)).map(
+    ([, lookup]) => lookup
+  );
+  return (
+    "Ask the user something only when you really can't decide it yourself. A simple request gets a direct answer with no questions. " +
+    (lookups.length > 0 ? `Before asking, look it up: ${lookups.join("; ")}. ` : "") +
+    "Take reasonable defaults for the rest, and ask only about what is still missing, everything in one ask_user call. Carry a request with several parts through to the end in this turn: never finish by saying you will do something, do it. While a question or card waits for the user, the task is paused; when they answer, carry on with the original request and do only what is still outstanding."
+  );
+}
 
 const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
@@ -211,6 +238,9 @@ export function getAgentSystemPrompt(
     }
     if (tools.some((tool) => tool.connectorId)) {
       prompt += "\n\n" + CONNECTOR_TOOL_RULES;
+    }
+    if (tools.some((tool) => tool.name === "ask_user")) {
+      prompt += "\n\n" + askOnlyWhenNecessaryRule(tools);
     }
     if (tools.some((tool) => tool.name === "get_calendar_availability")) {
       prompt += "\n\n" + getLocalCalendarContext();

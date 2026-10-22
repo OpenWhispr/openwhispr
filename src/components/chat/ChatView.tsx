@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
 import { useChatMessageSender } from "./useChatMessageSender";
+import { useInterruptedInteractions } from "./useInterruptedInteractions";
+import type { SendToAIOptions } from "./useChatStreaming";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import ConversationList from "./ConversationList";
@@ -12,12 +14,25 @@ import { NewChatEmptyState } from "./NewChatEmptyState";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
+import { useToast } from "../ui/useToast";
+import { GitFork } from "../icons";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
 const platform = getCachedPlatform();
 
-export default function ChatView() {
+interface ChatViewProps {
+  /**
+   * False while another Control Panel view shows. The chat stays mounted so a
+   * turn waiting on the user (a trip to Settings) survives.
+   */
+  active?: boolean;
+  /** Bumped to start a new chat from outside (the New chat menu). */
+  newChatRequest?: number;
+}
+
+export default function ChatView({ active = true, newChatRequest = 0 }: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
@@ -25,6 +40,7 @@ export default function ChatView() {
   const [showSearch, setShowSearch] = useState(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
+  const { toast } = useToast();
 
   const persistence = useChatPersistence({
     conversationId: activeConversationId,
@@ -35,12 +51,11 @@ export default function ChatView() {
   });
 
   const streaming = useChatStreaming({
-    messages: persistence.messages,
     setMessages: persistence.setMessages,
     allowConnectors: true,
-    onStreamComplete: (_id, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
-    },
+    allowInteractions: true,
+    onStreamComplete: persistence.saveAssistantMessage,
+    onTurnCheckpoint: persistence.saveAssistantMessage,
   });
   // useChatStreaming returns a fresh object every render; cancelStream is
   // stable, so the callbacks below depend on it rather than on `streaming`.
@@ -92,13 +107,63 @@ export default function ChatView() {
     },
     [persistence]
   );
-  const handleTextSubmit = useChatMessageSender({
+  const sendMessage = useChatMessageSender({
     conversationId: activeConversationId,
     persistence,
     streaming,
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  // A fork made from selected text sends it with its first request.
+  const { forkOrigin } = persistence;
+  const forkSelection = normalizeAgentSelectionContext({
+    text: forkOrigin?.context ?? undefined,
+  })?.text;
+  const forkContext =
+    forkSelection &&
+    !persistence.messages.some(
+      (message) => message.role === "user" && message.selectedContext === forkSelection
+    )
+      ? forkSelection
+      : null;
+  const handleTextSubmit = useCallback(
+    (text: string, options?: SendToAIOptions) =>
+      sendMessage(
+        text,
+        forkContext
+          ? { ...options, selectedContext: { text: forkContext, sourceMessageId: "" } }
+          : options
+      ),
+    [forkContext, sendMessage]
+  );
+  useInterruptedInteractions(persistence, handleTextSubmit);
+
+  // Read through a ref, so the handler stays the same while a reply streams
+  // and every message's memo holds.
+  const messagesRef = useRef(persistence.messages);
+  messagesRef.current = persistence.messages;
+  const { forkConversation } = persistence;
+  const handleForkMessage = useCallback(
+    async (messageId: string) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (!message) return;
+      cancelStream();
+      const forkId = await forkConversation(message);
+      if (forkId === false) return;
+      if (forkId === null) {
+        toast({ title: t("chat.forkFailed"), variant: "destructive" });
+        return;
+      }
+      setActiveConversationId(forkId);
+      setIsNewChat(false);
+      setRefreshKey((k) => k + 1);
+    },
+    [cancelStream, forkConversation, t, toast]
+  );
+
+  const handleContinue = useCallback(() => {
+    void handleTextSubmit(t("agentMode.turn.continueMessage"));
+  }, [handleTextSubmit, t]);
 
   const handleArchive = useCallback(
     async (id: number) => {
@@ -130,6 +195,7 @@ export default function ChatView() {
   );
 
   useEffect(() => {
+    if (!active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
       if (mod && e.key === "n") {
@@ -139,7 +205,21 @@ export default function ChatView() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [startNewChat]);
+  }, [active, startNewChat]);
+
+  // Back from another view: chats may have been added meanwhile.
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) setRefreshKey((k) => k + 1);
+    wasActiveRef.current = active;
+  }, [active]);
+
+  const handledNewChatRequestRef = useRef(newChatRequest);
+  useEffect(() => {
+    if (newChatRequest === handledNewChatRequestRef.current) return;
+    handledNewChatRequestRef.current = newChatRequest;
+    startNewChat();
+  }, [newChatRequest, startNewChat]);
 
   return (
     <>
@@ -174,8 +254,24 @@ export default function ChatView() {
           />
         </div>
         <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
+          {forkOrigin?.parentTitle && (
+            <div className="px-3 pt-2">
+              <button
+                type="button"
+                onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
+                className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                <GitFork size={11} className="shrink-0" />
+                <span dir="auto" className="truncate">
+                  {t("chat.forkedFrom", { title: forkOrigin.parentTitle })}
+                </span>
+              </button>
+            </div>
+          )}
           <ChatMessages
             messages={persistence.messages}
+            onForkMessage={handleForkMessage}
+            onContinue={handleContinue}
             emptyState={
               <NewChatEmptyState
                 onPrompt={(prompt) => {
@@ -213,6 +309,7 @@ export default function ChatView() {
               placeholder={t("chat.inputPlaceholder")}
               variant="assistant"
               expandOnFocus
+              active={active}
             />
           </div>
         </div>

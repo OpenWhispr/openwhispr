@@ -100,6 +100,10 @@ async function mountCard(t, { connectorId, preview, language = "en" }) {
       onApprovalRequested() {},
       onHoldDelivery() {},
       claimTurnSlot: () => true,
+      claimAction: () => true,
+      releaseAction() {},
+      sentEarlier: () => false,
+      recordCompletedAction() {},
       releaseTurnSlot() {},
     },
     { actionId: "a1", connectorId, preview }

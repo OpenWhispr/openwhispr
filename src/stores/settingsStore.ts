@@ -2773,6 +2773,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
   state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
 
+// The calendar tools read the shared provider-deduped events table, so any
+// connected provider enables them.
+export const selectCalendarConnected = (state: SettingsState) =>
+  state.gcalConnected || state.mcalConnected || state.appleCalendarConnected;
+
 export const selectEffectiveCleanupProvider = (state: SettingsState) =>
   selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;
 
