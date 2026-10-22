@@ -77,7 +77,7 @@ const QT_KEYS = {
   tab: 0x01000001,
   escape: 0x01000000,
   backspace: 0x01000003,
-  enter: 0x01000005,
+  enter: 0x01000004,
   return: 0x01000004,
   insert: 0x01000006,
   delete: 0x01000007,
