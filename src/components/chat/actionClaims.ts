@@ -1,4 +1,5 @@
 import type { ToolCallInfo } from "./types";
+import { connectsFirst } from "./historyMessages";
 
 // What a final answer claims to have done, in English only: a reply in another
 // language never matches, so it is shown as written, never asked again or
@@ -58,13 +59,16 @@ const INTERACTION_DONE = new Set(["connected", "saved", "granted"]);
  */
 export function backsActionClaim(call: ToolCallInfo, readOnly: boolean): boolean {
   if (call.status !== "completed") return false;
-  const status = call.metadata && !Array.isArray(call.metadata) ? call.metadata.status : undefined;
-  if (typeof status === "string") return ACTION_DONE.has(status);
-  const result = call.interaction?.result;
-  if (result) {
+  // An interaction's result also sits in its metadata ("connected", "saved"),
+  // so the card's answer is read first; a send that connected first is judged by the send.
+  if (call.interaction && !connectsFirst(call)) {
+    const result = call.interaction.result;
     return (
-      INTERACTION_DONE.has(result.status) || (result.status === "done" && result.ready !== false)
+      !!result &&
+      (INTERACTION_DONE.has(result.status) || (result.status === "done" && result.ready !== false))
     );
   }
+  const status = call.metadata && !Array.isArray(call.metadata) ? call.metadata.status : undefined;
+  if (typeof status === "string") return ACTION_DONE.has(status);
   return !readOnly;
 }
