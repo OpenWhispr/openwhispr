@@ -164,6 +164,18 @@ test("meeting connects forward the credential mode", () => {
   }
 });
 
+test("meeting connects forward the self-hosted server URL, on reconnect too", () => {
+  // The self-hosted client dials options.url and fails closed without it, so a
+  // connectOpts that drops the key would end a meeting at its first reconnect
+  // with selfHostedRealtimeUrlMissing.
+  const connectOptsBlocks =
+    source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,\s*\};/g) ?? [];
+  assert.equal(connectOptsBlocks.length, 2, "initial connect and reconnect each build connectOpts");
+  for (const block of connectOptsBlocks) {
+    assert.match(block, /^\s*url: options\.url,$/m);
+  }
+});
+
 test("a mid-meeting renewal refused for the session reports the sign-in sentinel", () => {
   // The 55-minute renewal and reconnects mint new tokens; a stale session used to
   // reach the toast as the API's bare "Invalid session" (#2427).
