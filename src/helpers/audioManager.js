@@ -811,10 +811,14 @@ class PCMStreamingProcessor extends AudioWorkletProcessor {
   }
   process(inputs) {
     if (this._stopped) return false;
-    const input = inputs[0]?.[0];
+    const channels = inputs[0];
+    const input = channels?.[0];
     if (!input) return true;
     for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]));
+      // Mono like FFmpeg's -ac 1: a stereo mic may carry speech on one side only.
+      let sum = 0;
+      for (let c = 0; c < channels.length; c++) sum += channels[c][i];
+      const s = Math.max(-1, Math.min(1, sum / channels.length));
       this._buffer[this._offset++] = s < 0 ? s * 0x8000 : s * 0x7fff;
       if (this._offset >= BUFFER_SIZE) {
         this.port.postMessage(this._buffer.buffer, [this._buffer.buffer]);
