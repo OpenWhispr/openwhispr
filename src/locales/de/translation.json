@@ -2683,11 +2683,11 @@
       "selfHostedRealtime": {
         "urlLabel": "Realtime-WebSocket-URL",
         "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
-        "urlInvalid": "Verwende wss:// oder ws:// für einen Server in deinem lokalen Netzwerk.",
+        "urlInvalid": "Verwenden Sie wss:// oder ws:// für einen Server in Ihrem lokalen Netzwerk.",
         "modelPlaceholder": "Whisper-Large-v3-Turbo",
-        "modelRequired": "Erforderlich: das Modell, das dein Server laden soll, z. B. Whisper-Large-v3-Turbo.",
+        "modelRequired": "Erforderlich: das Modell, das Ihr Server laden soll, z. B. Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "API-Schlüssel (optional)",
-        "help": "Dein Server muss das OpenAI-Realtime-Transkriptionsprotokoll über WebSocket sprechen. Es gibt keinen HTTP-Fallback."
+        "help": "Ihr Server muss das OpenAI-Realtime-Transkriptionsprotokoll über WebSocket sprechen. Es gibt keinen HTTP-Fallback."
       }
     },
     "intelligence": {

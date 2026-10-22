@@ -4068,7 +4068,7 @@
         "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "مطلوب: النموذج الذي يجب أن يحمّله خادمك، مثل Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "مفتاح API (اختياري)",
-        "help": "يجب أن يدعم خادمك بروتوكول النسخ OpenAI Realtime عبر WebSocket. لا يوجد بديل عبر HTTP."
+        "help": "يجب أن يدعم خادمك بروتوكول التفريغ OpenAI Realtime عبر WebSocket. لا يوجد بديل عبر HTTP."
       }
     },
     "intelligence": {
