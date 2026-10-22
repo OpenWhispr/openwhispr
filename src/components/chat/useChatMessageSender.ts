@@ -4,9 +4,10 @@ import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
 import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
-interface PersistedMessageContext {
+export interface PersistedMessageContext {
   conversationId: number;
   text: string;
+  /** The conversation's first message of its own: a fork's copied history doesn't count. */
   isFirstMessage: boolean;
 }
 
@@ -86,7 +87,8 @@ export function useChatMessageSender({
           await onMessagePersisted?.({
             conversationId: convId,
             text,
-            isFirstMessage: previousMessages.length === 0,
+            isFirstMessage:
+              previousMessages.length === (persistence.forkOrigin?.copiedMessageCount ?? 0),
           });
           if (!isCurrent()) return;
           submitted = true;
