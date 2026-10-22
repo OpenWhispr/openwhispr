@@ -50,8 +50,16 @@ writes to `results/<time>/` unless you pass `--out <dir>`; `results/` is not com
   scaled by published llama.cpp speeds. Every number for another machine is a prediction.
   `--measured-chip`, `--measured-read` and `--measured-write` give the measuring machine's own
   llama 7B Q4_0 speeds (default: the Apple M5 Pro of the first run).
-- `report.mjs --speech <dir> --text <dir>[,<dir>] [--judge <file>] --out <file.md>`: a
-  markdown report of one machine's runs, rescored with the current scoring.
+- `cloud-baseline.mjs --speech <dir> [--runs 3] [--parallel 1] [--limit n] [--gap-ms 1500]`:
+  sends the accuracy clips of a speech run through OpenWhispr Cloud's dictation route, the
+  one the app uses (raw transcript, no cleanup), each clip `--runs` times, and scores them
+  like the local models. `OW_CLOUD_TOKEN_FILE` points at a file holding a sign-in token; the
+  token is read, never printed. `--score-only` rescores the saved transcripts. The baseline
+  belongs to one test set: a run with a different clip set (another `--clips`) needs its own,
+  and the script refuses a mismatch.
+- `report.mjs --speech <dir> --text <dir>[,<dir>] [--judge <file>] [--cloud <file>] --out <file.md>`:
+  a markdown report of one machine's runs, rescored with the current scoring, with the gap to
+  the cloud baseline (default `<speech dir>/cloud-baseline.json`).
 - `canary.mjs [--models a,b] [--out dir]`: the weekly slice (below); `--models` picks a subset.
 
 Meaning changes in cleanup are judged outside these scripts, blind, by a reviewer model and
