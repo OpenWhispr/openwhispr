@@ -5283,14 +5283,16 @@ class DatabaseManager {
     }
   }
 
-  // includeAllDay adds all-day events on a local day the window touches (the
-  // assistant's calendar tool; reminders and the meeting list skip them).
+  // includeAllDay adds all-day events from today up to the day the window
+  // ends in, not that day itself: the assistant's calendar tool rounds its
+  // windows up to just past a midnight (reminders and the meeting list skip
+  // all-day events).
   getUpcomingEvents(windowMinutes = 1440, { includeAllDay = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const timed =
         "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0";
-      const allDay = `is_all_day = 1 AND ${ALL_DAY_FIRST_DAY} <= date('now', '+' || ? || ' minutes', 'localtime') AND ${ALL_DAY_END_DAY} > date('now', 'localtime')`;
+      const allDay = `is_all_day = 1 AND ${ALL_DAY_FIRST_DAY} < date('now', '+' || ? || ' minutes', 'localtime') AND ${ALL_DAY_END_DAY} > date('now', 'localtime')`;
       return this.db
         .prepare(
           dedupedEventsQuery(
