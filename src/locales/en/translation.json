@@ -4114,7 +4114,8 @@
       "stepLimit": "Paused after the maximum number of steps.",
       "continue": "Continue",
       "continueMessage": "Continue",
-      "failed": "This reply failed."
+      "failed": "This reply failed.",
+      "unbackedClaim": "Not actually done: nothing ran for what this reply says it did."
     },
     "interactions": {
       "notNow": "Not now",

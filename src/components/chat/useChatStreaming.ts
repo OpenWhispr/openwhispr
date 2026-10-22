@@ -60,6 +60,7 @@ import {
   type HistoryMessage,
   type ToolHistory,
 } from "./historyMessages";
+import { backsActionClaim, claimsAction } from "./actionClaims";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import {
@@ -826,6 +827,19 @@ export function useChatStreaming({
         let afterToolCall = false;
         let reasoningAfterToolCall = false;
         let stepLimitReached = false;
+        // Where the text of the step now streaming starts, so an answer asked
+        // again (an unbacked claim) can be withdrawn.
+        let stepTextStart = 0;
+        let unbackedClaim = false;
+        // A final answer that says it did something needs a call of this turn
+        // (not one a regenerate carried over) that did.
+        const isUnbackedClaim = registry
+          ? (text: string) =>
+              claimsAction(text) &&
+              !toolCalls
+                .slice(carriedCallCount)
+                .some((call) => backsActionClaim(call, registry.get(call.name)?.readOnly !== false))
+          : undefined;
 
         try {
           let stream: AsyncGenerator<AgentStreamChunk>;
@@ -885,6 +899,7 @@ export function useChatStreaming({
               })),
               executeToolCall,
               ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              isUnbackedClaim,
             });
           } else {
             const aiTools = registry?.toAISDKFormat(
@@ -914,6 +929,7 @@ export function useChatStreaming({
                 disableThinking: llmConfig.disableThinking,
                 reasoningEffort: llmConfig.reasoningEffort,
                 stepImages,
+                isUnbackedClaim,
               },
               aiTools
             );
@@ -938,9 +954,19 @@ export function useChatStreaming({
               reasoningAfterToolCall = false;
               reasoning += chunk.text;
               scheduleContentFlush();
+            } else if (chunk.type === "unbacked_claim") {
+              if (chunk.retry) {
+                rawContent = rawContent.slice(0, stepTextStart);
+                fullContent = withoutEchoedToolTrace(rawContent);
+                afterToolCall = true;
+                flushContentNow();
+              } else {
+                unbackedClaim = true;
+              }
             } else if (chunk.type === "tool_calls") {
               afterToolCall = true;
               reasoningAfterToolCall = true;
+              stepTextStart = rawContent.length;
               // Text that arrived before a tool step must be on screen before the
               // step appears, not an interval after it.
               flushContentNow();
@@ -1034,6 +1060,7 @@ export function useChatStreaming({
             ...turn,
             finishedAt: Date.now(),
             status: stepLimitReached ? "step_limit" : "complete",
+            ...(unbackedClaim ? { unbackedClaim: true } : {}),
           };
           flushContentNow();
           setMessages((prev) =>
