@@ -313,3 +313,58 @@ test("a model given only in the URL query is the one the session declares", asyn
   assert.doesNotMatch(JSON.stringify(socket.sent), /gpt-4o/);
   streaming.cleanup();
 });
+
+test("stop waits for a turn the server acked without an item_id (Lemonade)", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  assert.equal(streaming.sendAudio(Buffer.alloc(4800)), true);
+
+  // A VAD turn mid-recording, all without item ids.
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.committed" }));
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "first turn",
+    })
+  );
+
+  let settled = false;
+  const stopped = streaming.disconnect().then((result) => {
+    settled = true;
+    return result;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 1);
+
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.committed" }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "the ack alone must not end the wait");
+
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "last turn",
+    })
+  );
+  const result = await stopped;
+  assert.match(result.text, /first turn/);
+  assert.match(result.text, /last turn/);
+});
+
+test("a server that names its items is tracked by those names", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  const stopped = streaming.disconnect();
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.committed", item_id: "a" }));
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      item_id: "a",
+      transcript: "named turn",
+    })
+  );
+  assert.match((await stopped).text, /named turn/);
+});
