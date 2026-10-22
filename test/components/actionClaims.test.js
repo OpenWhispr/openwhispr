@@ -86,25 +86,101 @@ test("a claim is backed by an action that happened, or may have", async () => {
   assert.equal(backsActionClaim(call("create_note", { status: "stopped" }), false), false);
 });
 
+// Interaction tools also save their result as metadata, as the chat does.
+const asked = (name, payload, result, metadata) =>
+  call(name, {
+    metadata,
+    interaction: { payload, state: "settled", ...(result ? { result } : {}) },
+  });
+
 test("a finished connection or saved key backs a claim; a dismissed card doesn't", async () => {
   const { backsActionClaim } = await load();
-  const asked = (result) =>
-    call("request_connection", {
-      interaction: { payload: { kind: "connection", target: "gmail" }, state: "settled", result },
-    });
-  assert.equal(backsActionClaim(asked({ status: "connected", target: "gmail" }), true), true);
-  assert.equal(backsActionClaim(asked({ status: "saved" }), true), true);
-  assert.equal(backsActionClaim(asked({ status: "done" }), true), true);
-  assert.equal(backsActionClaim(asked({ status: "done", ready: false }), true), false);
-  assert.equal(backsActionClaim(asked({ status: "cancelled" }), true), false);
-  assert.equal(backsActionClaim(asked({ status: "answered", answers: {} }), true), false);
+  const connection = { kind: "connection", target: "gmail" };
+  assert.equal(
+    backsActionClaim(
+      asked(
+        "request_connection",
+        connection,
+        { status: "connected", target: "gmail" },
+        { status: "connected", target: "gmail", guidance: "Gmail is connected now." }
+      ),
+      true
+    ),
+    true
+  );
+  assert.equal(
+    backsActionClaim(
+      asked(
+        "request_api_key",
+        { kind: "apiKey", provider: "openai" },
+        { status: "saved" },
+        { status: "saved", provider: "openai", guidance: "Say only that it is saved." }
+      ),
+      true
+    ),
+    true
+  );
+  const settings = { kind: "settings", target: "llms" };
+  assert.equal(
+    backsActionClaim(
+      asked("open_settings", settings, { status: "done" }, { status: "done" }),
+      true
+    ),
+    true
+  );
+  assert.equal(
+    backsActionClaim(
+      asked(
+        "open_settings",
+        settings,
+        { status: "done", ready: false },
+        { status: "done", ready: false }
+      ),
+      true
+    ),
+    false
+  );
+  assert.equal(
+    backsActionClaim(
+      asked(
+        "request_connection",
+        connection,
+        { status: "cancelled" },
+        { status: "cancelled_by_user" }
+      ),
+      true
+    ),
+    false
+  );
+  assert.equal(
+    backsActionClaim(
+      asked(
+        "ask_user",
+        { kind: "questions", questions: [] },
+        { status: "answered", answers: {} },
+        {
+          status: "answered",
+          answers: {},
+        }
+      ),
+      true
+    ),
+    false
+  );
   // A send that connected first is judged by the send.
-  const connectedThenFailed = {
-    ...asked({ status: "connected", target: "slack" }),
-    name: "slack_send_message",
+  const connectedThenFailed = call("slack_send_message", {
     metadata: { status: "failed" },
-  };
+    interaction: {
+      payload: { kind: "connection", target: "slack" },
+      state: "settled",
+      result: { status: "connected", target: "slack" },
+    },
+  });
   assert.equal(backsActionClaim(connectedThenFailed, false), false);
+  assert.equal(
+    backsActionClaim({ ...connectedThenFailed, metadata: { status: "sent" } }, false),
+    true
+  );
 });
 
 test("a tool that changes something backs a claim; a lookup doesn't", async () => {
