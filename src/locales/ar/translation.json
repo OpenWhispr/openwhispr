@@ -4063,9 +4063,7 @@
       "meetingCloudSignedOut": "لا يمكن بدء تسجيل الملاحظات عبر OpenWhispr Cloud وأنت غير مسجل الدخول. اختر محركًا آخر أعلاه.",
       "selfHostedRealtime": {
         "urlLabel": "عنوان WebSocket للوقت الفعلي",
-        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "استخدم wss://، أو ws:// لخادم على شبكتك المحلية.",
-        "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "مطلوب: النموذج الذي يجب أن يحمّله خادمك، مثل Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "مفتاح API (اختياري)",
         "help": "يجب أن يدعم خادمك بروتوكول التفريغ OpenAI Realtime عبر WebSocket. لا يوجد بديل عبر HTTP."
@@ -4298,7 +4296,6 @@
     "managedByOrg": "مُدار بواسطة مؤسستك",
     "signInRequired": "تسجيل الدخول مطلوب",
     "signIn": "تسجيل الدخول",
-    "comingSoon": "قريبًا",
     "cloud": "سحابي",
     "local": "محلي",
     "apiKey": "مفتاح API",

@@ -183,7 +183,6 @@
     "managedByOrg": "Von Ihrer Organisation verwaltet",
     "signInRequired": "Anmeldung erforderlich",
     "signIn": "Anmelden",
-    "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
     "apiKey": "API-Schlüssel",
@@ -2682,9 +2681,7 @@
       "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine.",
       "selfHostedRealtime": {
         "urlLabel": "Realtime-WebSocket-URL",
-        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Verwenden Sie wss:// oder ws:// für einen Server in Ihrem lokalen Netzwerk.",
-        "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "Erforderlich: das Modell, das Ihr Server laden soll, z. B. Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "API-Schlüssel (optional)",
         "help": "Ihr Server muss das OpenAI-Realtime-Transkriptionsprotokoll über WebSocket sprechen. Es gibt keinen HTTP-Fallback."

@@ -183,7 +183,6 @@
     "managedByOrg": "組織によって管理されています",
     "signInRequired": "サインインが必要です",
     "signIn": "サインイン",
-    "comingSoon": "近日公開",
     "cloud": "クラウド",
     "local": "ローカル",
     "apiKey": "API キー",
@@ -2388,9 +2387,7 @@
       "meetingCloudSignedOut": "サインアウト中は OpenWhispr Cloud でノート録音を開始できません。上で別のエンジンを選択してください。",
       "selfHostedRealtime": {
         "urlLabel": "リアルタイム WebSocket URL",
-        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "wss:// を使用するか、ローカルネットワーク上のサーバーには ws:// を使用してください。",
-        "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "必須：サーバーが読み込むモデル（例：Whisper-Large-v3-Turbo）。",
         "apiKeyLabel": "API キー（任意）",
         "help": "サーバーは WebSocket 経由で OpenAI Realtime 文字起こしプロトコルに対応している必要があります。HTTP へのフォールバックはありません。"

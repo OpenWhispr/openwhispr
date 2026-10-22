@@ -88,7 +88,7 @@ function MeetingSelfHostedRealtimePanel() {
           className="h-8"
           value={meetingRealtimeUrl}
           onChange={(e) => setMeetingRealtimeUrl(e.target.value)}
-          placeholder={t("settingsPage.transcription.selfHostedRealtime.urlPlaceholder")}
+          placeholder="ws://192.168.1.20:9000/v1/realtime"
           aria-invalid={urlInvalid || undefined}
           autoComplete="off"
           spellCheck={false}
@@ -112,7 +112,7 @@ function MeetingSelfHostedRealtimePanel() {
           className="h-8"
           value={meetingRealtimeModel}
           onChange={(e) => setMeetingRealtimeModel(e.target.value)}
-          placeholder={t("settingsPage.transcription.selfHostedRealtime.modelPlaceholder")}
+          placeholder="Whisper-Large-v3-Turbo"
           aria-required
           autoComplete="off"
           spellCheck={false}

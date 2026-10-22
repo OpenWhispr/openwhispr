@@ -183,7 +183,6 @@
     "managedByOrg": "Géré par votre organisation",
     "signInRequired": "Connexion requise",
     "signIn": "Se connecter",
-    "comingSoon": "Bientôt disponible",
     "cloud": "Cloud",
     "local": "Local",
     "apiKey": "Clé API",
@@ -2682,9 +2681,7 @@
       "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec OpenWhispr Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus.",
       "selfHostedRealtime": {
         "urlLabel": "URL WebSocket temps réel",
-        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Utilisez wss://, ou ws:// pour un serveur sur votre réseau local.",
-        "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "Obligatoire : le modèle que votre serveur doit charger, par exemple Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "Clé API (facultative)",
         "help": "Votre serveur doit parler le protocole de transcription OpenAI Realtime via WebSocket. Il n'y a pas de repli HTTP."

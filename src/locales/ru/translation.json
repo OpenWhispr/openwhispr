@@ -183,7 +183,6 @@
     "managedByOrg": "Управляется вашей организацией",
     "signInRequired": "Требуется вход",
     "signIn": "Войти",
-    "comingSoon": "Скоро",
     "cloud": "Облако",
     "local": "Локально",
     "apiKey": "API-ключ",
@@ -2394,9 +2393,7 @@
       "meetingCloudSignedOut": "Пока вы не вошли в аккаунт, запись заметок через OpenWhispr Cloud не запустится. Выберите другой движок выше.",
       "selfHostedRealtime": {
         "urlLabel": "URL WebSocket для realtime",
-        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Используйте wss:// или ws:// для сервера в вашей локальной сети.",
-        "modelPlaceholder": "Whisper-Large-v3-Turbo",
         "modelRequired": "Обязательно: модель, которую должен загрузить ваш сервер, например Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "API-ключ (необязательно)",
         "help": "Ваш сервер должен поддерживать протокол транскрипции OpenAI Realtime через WebSocket. Резервного варианта через HTTP нет."
