@@ -247,3 +247,25 @@ test("cerebras hosts are strict like groq: family effort only, no chat_template_
   suppressThinking(unknown, "cerebras", "llama-4-maverick");
   assert.deepEqual(unknown, {});
 });
+
+test("minimax hosts switch M3 thinking off natively, never reasoning_effort none", async () => {
+  const { suppressThinking, detectEndpointDialect } = await load();
+
+  assert.deepEqual(detectEndpointDialect("https://api.minimax.io/v1"), {
+    key: "minimax",
+    tokenParam: "max_tokens",
+    supportsTemperature: true,
+  });
+
+  const body = {};
+  suppressThinking(body, "minimax", "MiniMax-M3");
+  assert.deepEqual(body, { thinking: { type: "disabled" } });
+});
+
+test("minimax-m3.1-flash has no off switch: lowest effort instead of a 400", async () => {
+  const { suppressThinking } = await load();
+
+  const body = {};
+  suppressThinking(body, "minimax", "MiniMax-M3.1-Flash");
+  assert.deepEqual(body, { reasoning_effort: "low" });
+});
