@@ -395,7 +395,7 @@ test("a send refused as a repeat is noted, so the model doesn't try it again", a
   );
   assert.equal(
     toolTrace([repeat]),
-    "[Tools used: slack_send_message (already done earlier, not repeated)]"
+    '[Tools used: slack_send_message ("#eng") (already done earlier, not repeated)]'
   );
 });
 
@@ -454,7 +454,7 @@ test("a tool that asked to connect first is traced by what it then did", async (
   );
   assert.equal(
     toolTrace([sent, cutOff]),
-    "[Tools used: slack_send_message (sent), slack_send_message (outcome not recorded)]"
+    '[Tools used: slack_send_message ("#eng") (sent), slack_send_message (outcome not recorded)]'
   );
 });
 

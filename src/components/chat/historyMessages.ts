@@ -13,9 +13,10 @@ const TRACE_ARG_MAX_CHARS = 80;
 const TRACE_OPENING = "[Tools used:";
 const ECHOED_TRACE = /^\s*\[Tools used:[^\]\n]*\]\s*/;
 
-// The one argument a trace may show per tool: a search query, a name or a
-// title. Anything else (email and message bodies, issue text, note content,
-// dictionary edits) is the user's drafted content and is never replayed.
+// The one argument a trace may show per tool: a search query, a name, a
+// title or where a message went. Anything else (email and message bodies,
+// issue text, note content, dictionary edits) is the user's drafted content
+// and is never replayed.
 const TRACE_ARGUMENT: Record<string, string> = {
   web_search: "query",
   search_notes: "query",
@@ -23,6 +24,7 @@ const TRACE_ARGUMENT: Record<string, string> = {
   github_search_issues: "query",
   find_contact: "name",
   create_note: "title",
+  slack_send_message: "destination",
 };
 
 // A connector action's status (its saved result), as the model reads it. Without
