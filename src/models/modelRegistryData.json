@@ -876,6 +876,30 @@
           "supportsTemperature": true
         }
       ]
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "models": [
+        {
+          "id": "MiniMax-M3.1-Flash",
+          "name": "MiniMax M3.1 Flash",
+          "description": "Fast model with 1M-token context, always reasons",
+          "descriptionKey": "models.descriptions.cloud.minimax_m3_1_flash",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
+        },
+        {
+          "id": "MiniMax-M3",
+          "name": "MiniMax M3",
+          "description": "Most capable MiniMax model, 1M-token context",
+          "descriptionKey": "models.descriptions.cloud.minimax_m3",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
+        }
+      ]
     }
   ],
   "enterpriseProviders": [

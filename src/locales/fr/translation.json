@@ -2808,6 +2808,8 @@
         "tinfoil_gpt_oss_120b": "Modèle privé de raisonnement à poids ouverts avec usage d'outils, contexte 131K",
         "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K",
         "corti_corti_s1_instant": "Modèle de santé rapide, sans trace de raisonnement",
+        "minimax_m3_1_flash": "Modèle rapide, contexte de 1M de tokens, raisonne toujours",
+        "minimax_m3": "Le modèle MiniMax le plus performant, contexte de 1M de tokens",
         "corti_corti_s1": "Modèle clinique le plus performant avec raisonnement",
         "corti_corti_s1_mini_instant": "Modèle de santé compact, le plus rapide et le moins cher",
         "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix"

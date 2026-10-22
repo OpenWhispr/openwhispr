@@ -88,6 +88,10 @@ export function applyChatCompletionsParams(
   if (!suppressed && !effort && familyEffort?.defaultValue) {
     requestBody.reasoning_effort ??= familyEffort.defaultValue;
   }
+  // MiniMax-M3 otherwise returns its thinking inside content as <think> tags.
+  if (providerKey === "minimax" || detectEndpointDialect(endpoint)?.key === "minimax") {
+    requestBody.reasoning_split = true;
+  }
 }
 
 /**

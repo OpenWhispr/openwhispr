@@ -2710,6 +2710,8 @@
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
         "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
         "corti_corti_s1_instant": "快速医疗模型，无推理过程",
+        "minimax_m3_1_flash": "快速模型，100万 token 上下文，始终推理",
+        "minimax_m3": "MiniMax 最强模型，100万 token 上下文",
         "corti_corti_s1": "功能最强的临床模型，带推理",
         "corti_corti_s1_mini_instant": "紧凑型医疗模型，最快且成本最低",
         "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理"
