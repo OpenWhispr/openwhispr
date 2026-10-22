@@ -41,6 +41,22 @@ const EMAIL_DRAFT_INSTRUCTION =
 // Both paths send the body as it is written, so Markdown shows up as symbols.
 const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or [text](link)).";
 
+/**
+ * The body with the Markdown models write anyway made plain, before the card
+ * or the draft shows it, so the user sees exactly what is sent: bold and
+ * `__` emphasis lose their markers, a heading line keeps its text, a link
+ * becomes "text (url)". Single asterisks, list dashes and numbers stay.
+ */
+function plainTextBody(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/\*\*([^*\n]+)\*\*|__([^_\n]+)__/g, (_, bold, underscored) => bold ?? underscored)
+    .replace(/^([ \t]*)#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/gm, "$1$2")
+    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (_, text, url) =>
+      text === url ? url : `${text} (${url})`
+    );
+}
+
 const EMAIL_PARAMETERS: ToolDefinition["parameters"] = {
   type: "object",
   properties: {
@@ -182,7 +198,7 @@ function createGmailSendTool(canConnect: boolean): ToolDefinition {
           to: recipients.to,
           cc: recipients.cc,
           subject: typeof args.subject === "string" ? args.subject : "",
-          body: typeof args.body === "string" ? args.body : "",
+          body: plainTextBody(args.body),
         },
         { unknownGuidance: GMAIL_UNKNOWN_GUIDANCE }
       );
@@ -222,7 +238,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         to,
         cc,
         subject: typeof args.subject === "string" ? args.subject : "",
-        body: typeof args.body === "string" ? args.body : "",
+        body: plainTextBody(args.body),
       };
       // Main builds the same request; checking it here claims the clipboard
       // before any await, so a second overflowing draft in the turn can't
