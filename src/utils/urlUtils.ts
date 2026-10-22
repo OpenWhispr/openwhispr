@@ -61,7 +61,8 @@ export function isSecureHttpEndpoint(url: string): boolean {
 
 // The WebSocket counterpart: wss anywhere, cleartext ws only on a private host,
 // so a self-hosted realtime key never crosses the public internet unencrypted.
-// Mirrored for the main process in openaiCompatibleRealtimeStreaming.js.
+// Mirrored for the main process by buildRealtimeUrl in selfHostedRealtimeUrl.js,
+// whose isPrivateHost copy lives in providerConnectionTest.js.
 export function isSecureWebSocketEndpoint(url: string): boolean {
   try {
     const parsed = new URL(url);
