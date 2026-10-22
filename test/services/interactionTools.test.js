@@ -236,11 +236,11 @@ test("a key typed on the card reaches only the secure saver: never the model, th
       isStreaming: false,
       toolCalls: [toolCall],
     };
-    const history = toHistoryMessages(
-      [{ id: "u1", role: "user", content: "Use my key", isStreaming: false }, message],
-      {
-        includeToolTrace: true,
-      }
+    const history = ["text", "parts"].map((toolHistory) =>
+      toHistoryMessages(
+        [{ id: "u1", role: "user", content: "Use my key", isStreaming: false }, message],
+        { toolHistory }
+      )
     );
     for (const [what, value] of Object.entries({
       result,

@@ -798,28 +798,76 @@ for (const [mode, settings] of Object.entries({
 
 const systemPromptOf = (messages) => messages.find((m) => m.role === "system").content;
 
-test("an earlier turn's tool use reaches the model as a note on that answer", async (t) => {
+const EARLIER_TOOL_TURN = [
+  { id: "u1", role: "user", content: "Weather in Lisbon?" },
+  {
+    id: "a1",
+    role: "assistant",
+    content: "Sunny, 24°C.",
+    toolCalls: [
+      {
+        id: "c1",
+        name: "web_search",
+        arguments: JSON.stringify({ query: "Lisbon weather today" }),
+        status: "completed",
+        result: 'Found web results for "Lisbon weather today"',
+      },
+    ],
+  },
+  { id: "u2", role: "user", content: "And tomorrow?" },
+];
+
+test("an earlier turn's tool use reaches the model as its own call and outcome", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t);
-  const earlier = [
-    { id: "u1", role: "user", content: "Weather in Lisbon?" },
+
+  await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
+
+  const [system, ...history] = sentMessages[0];
+  assert.match(system.content, /Earlier turns keep each tool call with its outcome only/);
+  assert.doesNotMatch(system.content, /Tools used/);
+  assert.deepEqual(history, [
+    { role: "user", content: "Weather in Lisbon?" },
     {
-      id: "a1",
       role: "assistant",
-      content: "Sunny, 24°C.",
-      toolCalls: [
+      content: [
         {
-          id: "c1",
-          name: "web_search",
-          arguments: JSON.stringify({ query: "Lisbon weather today" }),
-          status: "completed",
-          result: 'Found web results for "Lisbon weather today"',
+          type: "tool-call",
+          toolCallId: "c1",
+          toolName: "web_search",
+          input: { query: "Lisbon weather today" },
         },
       ],
     },
-    { id: "u2", role: "user", content: "And tomorrow?" },
-  ];
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "c1",
+          toolName: "web_search",
+          output: { type: "text", value: '{"status":"done"}' },
+        },
+      ],
+    },
+    { role: "assistant", content: "Sunny, 24°C." },
+    { role: "user", content: "And tomorrow?" },
+  ]);
+});
 
-  await captured.sendToAI("And tomorrow?", earlier);
+test("a self-hosted server gets earlier tool use as a note on that answer", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: {
+        chatAgentMode: "providers",
+        chatAgentProvider: "custom",
+        chatAgentModel: "qwen3",
+      },
+    }
+  );
+
+  await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
 
   const [system, ...history] = sentMessages[0];
   assert.match(system.content, /Never write such a note yourself/);

@@ -209,8 +209,12 @@ for (const surface of ["note chat", "agent window"]) {
           /previous email interaction does not authorize another email action/
         );
         assert.match(request.config.systemPrompt, /ask which document before acting/);
+        // The earlier draft replays as the call it was, with its outcome.
         if (priorEmail)
-          assert.match(JSON.stringify(request.messages), /email_draft \(draft opened\)/);
+          assert.match(
+            JSON.stringify(request.messages),
+            /"toolName":"email_draft","output":\{"type":"text","value":"\{\\"status\\":\\"draft opened\\"\}"\}/
+          );
         if (surface === "note chat") {
           assert.match(request.config.systemPrompt, /Note fields \(JSON\)/);
           assert.equal("noteChat" in request.config, false);
