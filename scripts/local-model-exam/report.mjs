@@ -23,7 +23,10 @@ const CLOUD_WAIT_MS = { 15: 1300, 60: 1300, 250: 4400, 600: 6700 };
 const cloudWait = (words) => `${CLOUD_WAIT_MS[words] / 1000} s`;
 const CLEANUP_MAX_CHANGE_RATE = 1 / 50;
 const AGENT = { minCorrect: 0.9, firstWordsMs: 3000, twoStepMs: 15000 };
-const ACCURACY_MAX_GAP = 2;
+// Accuracy, set 2026-10-22: at most 10.5 errors per 100 words, checked language
+// by language. Group averages and the gap to cloud are information only.
+const ACCURACY_MAX_ERRORS = 10.5;
+const withinAccuracyBar = (rate) => rate != null && Number(rate.toFixed(1)) <= ACCURACY_MAX_ERRORS;
 
 const speechDir = args.speech;
 const textDirs = (args.text || "").split(",").filter(Boolean);
@@ -143,17 +146,14 @@ if (speech) {
   const movedList = Object.entries(moved).map(
     ([id, spread]) => `${id} (up to ${fmtN(spread)} apart)`
   );
-  const localRepeatNote = `Local models ran once per clip. Decoding the same dictation again gave identical errors for ${movedList.length ? `every local model except ${movedList.join(", ")}` : "every local model"}, but streaming models change their errors when the same speech starts a fraction of a second later, so a local gap near the bar is not settled either.`;
+  const localRepeatNote = `Local models ran once per clip. Decoding the same dictation again gave identical errors for ${movedList.length ? `every local model except ${movedList.join(", ")}` : "every local model"}, but streaming models change their errors when the same speech starts a fraction of a second later, so a rate near the bar is not settled either.`;
   const realSpeechNote = `Real speech is FLEURS (25 European languages, about 12 clips each, so a single language can move by several points). The other languages use the Mac's built-in voices, which are cleaner than real speech, so their error rates flatter every model.`;
-  if (cloud) {
-    out(
-      `Pooled errors per 100 words, with the number of clips in brackets, then the gap to ${cloudName} on exactly the same clips. The bar: at most ${ACCURACY_MAX_GAP} more errors per 100 words than cloud. The cloud ran every clip ${cloudRuns} times on ${cloud.createdAt.slice(0, 10)} through the desktop's own route (raw transcript, no cleanup, the clip's language set as for the local models; test set ${cloud.testSet.fingerprint}), because it can answer the same audio differently each time. The gap is measured from the cloud's average, and "±" is half the spread between its runs. "pass" means within the bar against every cloud run, "fail" means outside it against every run, and anything in between is "too close to call": the cloud's own noise decides it. ${localRepeatNote} ${realSpeechNote} The last column scores the bar language by language; with about 12 clips each it is a guide, not the verdict.`
-    );
-  } else {
-    out(
-      `Pooled errors per 100 words, with the number of clips in brackets. ${realSpeechNote} No cloud baseline yet, so the "within 2 of cloud" bar cannot be scored; these are raw error rates.`
-    );
-  }
+  const cloudNote = cloud
+    ? ` After each figure, the gap to ${cloudName} on exactly the same clips, for information: the cloud ran every clip ${cloudRuns} times on ${cloud.createdAt.slice(0, 10)} through the desktop's own route (raw transcript, no cleanup, the clip's language set as for the local models; test set ${cloud.testSet.fingerprint}), and the gap is taken from its average.`
+    : "";
+  out(
+    `Pooled errors per 100 words, with the number of clips in brackets.${cloudNote} The bar is at most ${ACCURACY_MAX_ERRORS} errors per 100 words in each language, so the group figures are information only; the last column counts the languages within it. ${localRepeatNote} ${realSpeechNote}`
+  );
   out();
   const groupFilters = [
     (r) => r.language === "en" && r.set === "fleurs",
@@ -174,36 +174,32 @@ if (speech) {
   };
   const cloudRateRuns = (recs) =>
     Array.from({ length: cloudRuns }, (_, i) => rateOf(recs, (r) => cloudCounts.get(r.clip)[i]));
+  const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
   // Taken on exactly the clips both were scored on, so a clip the cloud failed
-  // on never counts against a model; one gap per cloud run.
+  // on never counts against a model.
   const gapToCloud = (recs) => {
     const shared = recs.filter((r) => cloudCounts.has(r.clip));
-    if (!shared.length) return null;
-    const local = rateOf(shared);
-    const gaps = cloudRateRuns(shared).map((c) => local - c);
-    return {
-      gap: gaps.reduce((a, b) => a + b, 0) / gaps.length,
-      min: Math.min(...gaps),
-      max: Math.max(...gaps),
-    };
+    return shared.length ? rateOf(shared) - mean(cloudRateRuns(shared)) : null;
   };
-  const within = (gap) => Number(gap.toFixed(1)) <= ACCURACY_MAX_GAP;
-  const verdict = (g) => (within(g.max) ? "pass" : within(g.min) ? "too close to call" : "fail");
-  const fmtGap = (g) =>
-    `${g.gap >= 0 ? "+" : ""}${fmtN(g.gap)} ±${fmtN((g.max - g.min) / 2)} ${verdict(g)}`;
+  const fmtGap = (gap) => `cloud ${gap >= 0 ? "+" : ""}${fmtN(gap)}`;
   const accuracyRecords = speechRecords.filter((r) => r.task === "accuracy");
   out(
-    `| Model | English (FLEURS) | English dictation (voice) | Major European | Other European | Asian and other (voice) |${cloud ? " Languages within 2 of cloud |" : ""}`
+    `| Model | English (FLEURS) | English dictation (voice) | Major European | Other European | Asian and other (voice) | Languages within ${ACCURACY_MAX_ERRORS} |`
   );
-  out(`|---|---|---|---|---|---|${cloud ? "---|" : ""}`);
+  out(`|---|---|---|---|---|---|---|`);
   if (cloud) {
     const cells = groupFilters.map((f) => {
       const recs = cloud.clips.filter(f);
       if (!recs.length) return "–";
       const rates = cloudRateRuns(recs);
-      return `${fmtN(rates.reduce((a, b) => a + b, 0) / rates.length)} (${recs.length}), runs ${fmtN(Math.min(...rates))}–${fmtN(Math.max(...rates))}`;
+      return `${fmtN(mean(rates))} (${recs.length}), runs ${fmtN(Math.min(...rates))}–${fmtN(Math.max(...rates))}`;
     });
-    out(`| ${cloudName} | ${cells.join(" | ")} | – |`);
+    const languages = Object.values(
+      Object.groupBy(cloud.clips, (c) => `${c.language}:${c.set}`)
+    ).map((list) => mean(cloudRateRuns(list)));
+    out(
+      `| ${cloudName} | ${cells.join(" | ")} | ${languages.filter(withinAccuracyBar).length} of ${languages.length} |`
+    );
   }
   for (const id of Object.keys(speech.models)) {
     const mine = accuracyRecords.filter((r) => r.model === id);
@@ -214,24 +210,19 @@ if (speech) {
       const gap = gapToCloud(recs);
       return `${fmtN(rate)} (${recs.length})${gap == null ? "" : `, ${fmtGap(gap)}`}`;
     });
-    let languages = "";
-    if (cloud) {
-      const byLanguage = Object.groupBy(mine, (r) => `${r.language}:${r.set}`);
-      const verdicts = Object.values(byLanguage)
-        .map(gapToCloud)
-        .filter((g) => g != null)
-        .map(verdict);
-      const close = verdicts.filter((v) => v === "too close to call").length;
-      languages = ` ${verdicts.filter((v) => v === "pass").length} of ${verdicts.length}${close ? ` (${close} too close to call)` : ""} |`;
-    }
-    out(`| ${id} | ${cells.join(" | ")} |${languages}`);
+    const languages = Object.values(Object.groupBy(mine, (r) => `${r.language}:${r.set}`)).map(
+      (list) => rateOf(list)
+    );
+    out(
+      `| ${id} | ${cells.join(" | ")} | ${languages.filter(withinAccuracyBar).length} of ${languages.length} |`
+    );
   }
   out();
 
   out(`### Accuracy by language`);
   out();
   out(
-    `Errors per 100 words (characters for Chinese, Japanese, Korean and Thai), FLEURS real speech unless marked "voice". The best local model in each row is in bold; "–" means the model does not support the language.${cloud ? ` The cloud column is the baseline the bar is measured from, averaged over its ${cloudRuns} runs.` : ""}`
+    `Errors per 100 words (characters for Chinese, Japanese, Korean and Thai), FLEURS real speech unless marked "voice". The best local model in each row is in bold; "–" means the model does not support the language. The last column lists the local models within the bar of ${ACCURACY_MAX_ERRORS}; speed, silence and download size are judged in their own tables.${cloud ? ` The cloud column, averaged over its ${cloudRuns} runs, is for comparison.` : ""}`
   );
   out();
   const ids = Object.keys(speech.models);
@@ -252,8 +243,10 @@ if (speech) {
     cloud
       ? `${byLang[key][cloudName]?.n ? fmtN((100 * byLang[key][cloudName].e) / byLang[key][cloudName].n) : "–"} | `
       : "";
-  out(`| Language (clips) | ${cloud ? `${cloudName} | ` : ""}${ids.join(" | ")} |`);
-  out(`|---|${cloud ? "---|" : ""}${ids.map(() => "---").join("|")}|`);
+  out(
+    `| Language (clips) | ${cloud ? `${cloudName} | ` : ""}${ids.join(" | ")} | Within ${ACCURACY_MAX_ERRORS} |`
+  );
+  out(`|---|${cloud ? "---|" : ""}${ids.map(() => "---").join("|")}|---|`);
   const groupRank = (key) =>
     ["english", "major-european", "other-european", "asian-other"].indexOf(
       GROUP_OF[key.split(" ")[0]]
@@ -267,7 +260,7 @@ if (speech) {
     const best = Math.min(...rates.filter((x) => x != null));
     const clips = Math.max(...ids.map((id) => byLang[key][id]?.clips || 0));
     out(
-      `| ${key} (${clips}) | ${cloudCell(key)}${rates.map((v) => (v == null ? "–" : v === best ? `**${fmtN(v)}**` : fmtN(v))).join(" | ")} |`
+      `| ${key} (${clips}) | ${cloudCell(key)}${rates.map((v) => (v == null ? "–" : v === best ? `**${fmtN(v)}**` : fmtN(v))).join(" | ")} | ${ids.filter((id, i) => withinAccuracyBar(rates[i])).join(", ") || "none"} |`
     );
   }
   out();

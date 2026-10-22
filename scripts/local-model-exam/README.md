@@ -75,9 +75,9 @@ model out: they are then marked as not done well locally.
   warm; 2 s or less is good and under 1 s is the goal. With cleanup on (the default), the 3 s
   covers speech and cleanup together. Long dictations may take longer, so the other lengths
   are information only.
-- **Accuracy:** at most 2 more errors per 100 words than the cloud model on the same clips,
-  per language, against the mean of 3 cloud runs per clip. Chinese, Japanese, Korean and
-  Thai are scored by characters.
+- **Accuracy:** at most 10.5 errors per 100 words in each language; Chinese, Japanese, Korean
+  and Thai are scored by characters. The gap to the cloud model on the same clips (the mean
+  of 3 cloud runs per clip) is shown for information.
 - **Silence (deal-breaker):** no made-up words in any of 10 runs per clip, on the path the
   app ships (speech gate on). After speech, only words written where nobody spoke count.
 - **Memory (deal-breaker):** the speech and text model together use at most half the

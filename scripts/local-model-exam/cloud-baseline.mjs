@@ -1,5 +1,5 @@
-// Cloud baseline for the accuracy bar ("at most 2 more errors per 100 words than
-// cloud"): sends the exam's accuracy clips through OpenWhispr Cloud's
+// Cloud baseline, the reference the local models' accuracy is compared with:
+// sends the exam's accuracy clips through OpenWhispr Cloud's
 // dictation route, the one the desktop uses (/api/transcribe, raw transcript,
 // no cleanup), and scores the transcripts the way the local models are scored.
 // The cloud model can answer the same audio differently from one request to the
