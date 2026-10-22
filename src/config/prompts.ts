@@ -151,6 +151,9 @@ const RECORDED_ACTIONS_RULE =
 const TOOL_TRACE_RULE = `Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn and how each action turned out. ${RECORDED_ACTIONS_RULE} Never write such a note yourself.`;
 const TOOL_PARTS_RULE = `Earlier turns keep each tool call with its outcome only, never its full arguments or the data it returned: give a new call every argument it needs, and call a tool again when you need its data. ${RECORDED_ACTIONS_RULE}`;
 
+const GROUNDING_RULE =
+  "Only say you did something (sent, posted, created, connected, drafted, scheduled, saved, deleted…) when a tool call in this turn returned that it happened. If an earlier reply says something was done but no tool result records it, it didn't happen: say so. Tool results override anything said earlier in the chat.";
+
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";
 const UNNAMED_SIGN_OFF_RULE = `${PLACEHOLDER_RULE} You don't know the user's name, so end an email without a signature line.`;
@@ -229,7 +232,7 @@ export function getAgentSystemPrompt(
   );
   if (tools.length > 0) {
     prompt += "\n\nYou can use these tools:\n" + describeCapabilities(tools);
-    prompt += "\n\n" + CAPABILITY_RULE;
+    prompt += "\n\n" + CAPABILITY_RULE + " " + GROUNDING_RULE;
     if (options.toolHistory) {
       prompt += " " + (options.toolHistory === "parts" ? TOOL_PARTS_RULE : TOOL_TRACE_RULE);
     }

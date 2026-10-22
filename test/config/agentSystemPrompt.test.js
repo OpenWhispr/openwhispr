@@ -100,6 +100,15 @@ test("earlier tool use gets the rule for the form history carries it in", async 
   assert.doesNotMatch(getAgentSystemPrompt(["web_search"]), /Tools used|Earlier turns keep/);
 });
 
+test("with tools, the model claims only what a tool returned in this turn", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt(["web_search"]);
+  assert.match(prompt, /Only say you did something .* when a tool call in this turn returned/);
+  assert.match(prompt, /an earlier reply says something was done but no tool result records it/);
+  assert.match(prompt, /Tool results override anything said earlier in the chat/);
+  assert.doesNotMatch(getAgentSystemPrompt([]), /Only say you did something/);
+});
+
 test("without tools there is no capability block, but unavailable capabilities are still named", async () => {
   const { getAgentSystemPrompt } = await load();
   const bare = getAgentSystemPrompt([]);
