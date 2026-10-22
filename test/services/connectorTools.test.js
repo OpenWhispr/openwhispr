@@ -438,6 +438,9 @@ test("slack_send_message refuses empty text without preparing", async (t) => {
 
 test("slack_send_message passes a thread link to main and tells the model the reply went in the thread", async (t) => {
   const prepared = [];
+  const reply = "https://acme.slack.com/archives/C0ENG/p1727200009000200";
+  // Main links a threaded reply with its thread; one Slack didn't thread, without.
+  const links = [`${reply}?thread_ts=1727200000.123456&cid=C0ENG`, reply, reply];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -455,10 +458,7 @@ test("slack_send_message passes a thread link to main and tells the model the re
             },
           };
         },
-        connectorCommit: async () => ({
-          state: "sent",
-          url: "https://acme.slack.com/archives/C0ENG/p1727200009000200?thread_ts=1727200000.123456&cid=C0ENG",
-        }),
+        connectorCommit: async () => ({ state: "sent", url: links.shift() }),
         connectorCancel: async () => ({ cancelled: true }),
       },
     },
@@ -474,19 +474,23 @@ test("slack_send_message passes a thread link to main and tells the model the re
   };
   const thread = "https://acme.slack.com/archives/C0ENG/p1727200000123456";
 
-  const reply = await send("call-40", {
+  const threaded = await send("call-40", {
     destination: "#eng",
     text: "On it",
     thread: ` ${thread} `,
   });
-  const plain = await send("call-41", { destination: "#eng", text: "On it", thread: null });
+  const unthreaded = await send("call-41", { destination: "#eng", text: "Again", thread });
+  const plain = await send("call-42", { destination: "#eng", text: "On it", thread: null });
 
   assert.deepEqual(prepared, [
     ["slack", "send_message", { destination: "#eng", text: "On it", thread }],
+    ["slack", "send_message", { destination: "#eng", text: "Again", thread }],
     ["slack", "send_message", { destination: "#eng", text: "On it" }],
   ]);
-  assert.equal(reply.data.status, "sent");
-  assert.equal(reply.data.repliedInThread, true);
+  assert.equal(threaded.data.status, "sent");
+  assert.equal(threaded.data.repliedInThread, true);
+  assert.equal(unthreaded.data.status, "sent");
+  assert.equal(unthreaded.data.repliedInThread, false, "never claims a thread Slack didn't use");
   assert.equal(plain.data.status, "sent");
   assert.equal("repliedInThread" in plain.data, false);
   const { properties, required } = slackSendMessageTool.parameters;
