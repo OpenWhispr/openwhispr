@@ -419,8 +419,9 @@ export default function AgentWindow() {
   }, [dropTake, startNewChat, stopReading]);
 
   const { hide: hideSurface } = surface;
-  // A close starts a new chat, before the hide so that a command arriving
-  // meanwhile goes to it; the old chat stays in the list. Minimize keeps the chat.
+  // A close starts a new chat (the old one stays in the list); Minimize keeps
+  // the chat. It starts before the hide, so a command that reaches the window
+  // meanwhile goes to the new chat, though the window still ends hidden.
   const close = useCallback(async () => {
     newChat();
     pressRef.current += 1;
