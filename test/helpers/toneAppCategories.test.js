@@ -141,6 +141,12 @@ test("without a host, a browser is judged by the site name its title ends with",
     ["msedge.exe Chrome_WidgetWin_1", "Inbox - me@gmail.com - Gmail - Microsoft Edge", "email"],
     ["microsoft-edge", "Inbox - Gmail - Microsoft Edge", "email"],
     ["librewolf", "Inbox - Gmail \u2014 LibreWolf", "email"],
+    [
+      "firefox.exe MozillaWindowClass",
+      "Inbox (3) - me@gmail.com - Gmail \u2014 Firefox Developer Edition",
+      "email",
+    ],
+    ["firefox", "engineering (Channel) - OpenWhispr - Slack \u2014 Firefox Nightly", "work"],
     ["Google Chrome com.google.Chrome", "Slack pricing - Google Search", "other"],
     [
       "Google Chrome com.google.Chrome",
