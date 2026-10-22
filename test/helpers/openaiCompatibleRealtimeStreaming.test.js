@@ -422,3 +422,39 @@ test("a cleared commit still waits for a silence-closed turn in flight", async (
   );
   assert.match((await stopped).text, /late turn/);
 });
+
+test("each transcript keeps its own turn's start time when turns overlap", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  const stamps = [];
+  streaming.onFinalTranscript = (_text, timestamp) => stamps.push(timestamp);
+
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+
+  // Continuous speech: the second turn starts before the first is transcribed.
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  now = 4000;
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_stopped" }));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  now = 4600;
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "first speaker",
+    })
+  );
+  now = 7000;
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_stopped" }));
+  now = 7600;
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "second speaker",
+    })
+  );
+
+  assert.deepEqual(stamps, [1000, 4000]);
+  await streaming.disconnect();
+});
