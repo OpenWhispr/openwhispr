@@ -208,16 +208,23 @@ test("an answered question leaves a line with the answer in place of its card", 
   ]);
   assert.ok(host.querySelector("[data-interaction-card]"));
 
+  // A question left blank says nothing in the line.
+  const questions = [
+    ...QUESTION.payload.questions,
+    { id: "note", kind: "text", prompt: "Anything to add?" },
+    { id: "when", kind: "text", prompt: "When?" },
+  ];
   await setInteractions({
     [QUESTION.key]: {
       ...QUESTION,
+      payload: { kind: "questions", questions },
       state: "settled",
-      result: { status: "answered", answers: { who: "sam" } },
+      result: { status: "answered", answers: { who: "sam", note: "", when: "Friday" } },
     },
   });
   assert.equal(host.querySelector("[data-interaction-card]"), null);
   const outcome = host.querySelector('[data-interaction-outcome="m2::c1"]');
-  assert.equal(outcome?.textContent, "agentMode.interactions.status.answered · Sam");
+  assert.equal(outcome?.textContent, "agentMode.interactions.status.answered · Sam · Friday");
 });
 
 test("text written before a card stays above it, and what follows goes below", async (t) => {
