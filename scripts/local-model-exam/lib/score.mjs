@@ -24,7 +24,7 @@ export function normalizeTranscript(text) {
     .trim();
 }
 
-export function scoringUnit(language) {
+function scoringUnit(language) {
   return CHAR_LANGUAGES.has(baseLanguage(language)) ? "char" : "word";
 }
 
@@ -152,7 +152,7 @@ export function canonicalEnglishNumbers(tokens) {
   return merged;
 }
 
-export function toUnits(text, language) {
+function toUnits(text, language) {
   const normalized = normalizeTranscript(text);
   if (!normalized) return [];
   if (scoringUnit(language) === "char") return [...normalized.replace(/\s+/g, "")];
@@ -162,7 +162,7 @@ export function toUnits(text, language) {
 }
 
 // Levenshtein alignment that keeps substitution, deletion and insertion counts.
-export function editCounts(reference, hypothesis) {
+function editCounts(reference, hypothesis) {
   const cols = hypothesis.length + 1;
   let prev = Array.from({ length: cols }, (_, j) => ({ cost: j, s: 0, d: 0, i: j }));
   for (let r = 1; r <= reference.length; r++) {

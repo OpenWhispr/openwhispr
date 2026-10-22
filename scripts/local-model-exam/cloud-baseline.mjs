@@ -189,7 +189,8 @@ if (!args["score-only"]) {
 
 // Scored from the saved transcripts, like report.mjs does for the local models.
 // A clip counts only when every run of it came back.
-const latest = new Map(readJsonl(recordsPath).map((r) => [runKey(r.clip, r.run), r]));
+const cloudRecords = readJsonl(recordsPath);
+const latest = new Map(cloudRecords.map((r) => [runKey(r.clip, r.run), r]));
 const runNumbers = Array.from({ length: runs }, (_, i) => i + 1);
 const complete = (c) => runNumbers.every((run) => latest.get(runKey(c.id, run))?.ok);
 const results = clips.filter(complete).map((c) => {
@@ -242,7 +243,8 @@ const perLanguage = Object.fromEntries(
   ])
 );
 const baseline = {
-  createdAt: new Date().toISOString(),
+  // When the last cloud reply came back, so --score-only leaves it unchanged.
+  createdAt: cloudRecords.at(-1)?.at ?? new Date().toISOString(),
   route: `${api}/api/transcribe`,
   runs,
   models,

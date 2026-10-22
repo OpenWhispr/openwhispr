@@ -1,7 +1,8 @@
 // Speech half of the local model exam, run on one machine.
 //   node --import tsx scripts/local-model-exam/run-speech.mjs [--models a,b] [--clips 12] [--out dir]
 // Writes one JSON line per measurement to <out>/records.jsonl and a summary to
-// <out>/speech-summary.json. Quit OpenWhispr first: it shares these engines.
+// <out>/speech-summary.json. Quit OpenWhispr for speed runs: it competes for the
+// processor and graphics chip.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";

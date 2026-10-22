@@ -77,6 +77,11 @@ export async function downloadTextModel(modelId) {
   return modelManager.downloadModel(modelId);
 }
 
+export async function cancelTextDownload(modelId) {
+  const { modelManager } = await load();
+  return modelManager.cancelDownload(modelId);
+}
+
 export async function ensureServer(modelId) {
   const { modelManager } = await load();
   modelManager.ensureInitialized();

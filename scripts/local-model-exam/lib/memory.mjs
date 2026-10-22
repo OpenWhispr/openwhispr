@@ -40,9 +40,14 @@ async function peakMiB(pid) {
   // model files memory-mapped from disk, which llama.cpp and sherpa-onnx use;
   // resident size counts those pages, so the larger of the two is what the
   // machine actually has to hold.
-  const { stdout } = await execFileAsync("vmmap", ["-summary", String(pid)], {
-    maxBuffer: 1024 * 1024 * 32,
-  });
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync("vmmap", ["-summary", String(pid)], {
+      maxBuffer: 1024 * 1024 * 32,
+    }));
+  } catch {
+    return rssMiB;
+  }
   const now = parseKiB(/Physical footprint:\s+(\S+)/.exec(stdout)?.[1]);
   const peak = parseKiB(/Physical footprint \(peak\):\s+(\S+)/.exec(stdout)?.[1]);
   return Math.max((peak ?? now) / 1024, rssMiB);

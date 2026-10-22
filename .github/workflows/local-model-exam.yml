@@ -1,12 +1,12 @@
 # Weekly re-run of a small slice of the local model exam on GitHub's runners.
 # Every speech and text model in the slice is downloaded with the app's own
-# download code and run by the app's own engines on the processor: silence and
+# download code and run by the app's own engines: silence and
 # pauses through the app's speech gate, a few public FLEURS clips, and a few
 # dictations through cleanup (scripts/local-model-exam/canary.mjs; pass marks
 # in scripts/local-model-exam/lib/canary.mjs). No keys and no cloud calls. A
-# failed check, crash, skip or timeout fails the job and files or updates an
-# issue per runner OS. Pull requests that change the exam run it too, without
-# filing an issue. Same pattern as llm-canary.yml and stt-canary.yml.
+# failed check, crash, skip or timeout fails the job and, on main, files or
+# updates an issue per runner OS. Pull requests that change the exam run it too,
+# without filing an issue. Same pattern as llm-canary.yml and stt-canary.yml.
 name: local-model-exam
 
 on:
@@ -22,6 +22,11 @@ permissions:
   contents: read
   issues: write
 
+# A new push to an exam pull request replaces its running check.
+concurrency:
+  group: local-model-exam-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   canary:
     strategy:
@@ -35,12 +40,16 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
       - name: Download the app's engines
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run download:whisper-cpp && npm run download:sherpa-onnx && npm run download:llama-server
       # Models download fresh every run, which also checks the registry's URLs.
       # A fresh runner has no app cache, so the app has nothing to move here.
@@ -58,14 +67,14 @@ jobs:
           name: local-model-exam-${{ runner.os }}
           path: canary-out
           if-no-files-found: ignore
-      # Also when setup failed or the job ran out of time: nothing was checked.
+      # Also when setup failed or the job ran out of time: then nothing was checked.
       - name: File or update failure issue
-        if: (failure() || cancelled()) && github.event_name != 'pull_request'
+        if: (failure() || cancelled()) && steps.canary.outcome != 'success' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="Local model exam canary failing on ${{ runner.os }}"
-          body="$(cat canary-report.md 2>/dev/null || echo 'The canary did not finish.')
+          body="$([ -s canary-report.md ] && cat canary-report.md || echo 'The canary did not finish.')
 
           _Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
           gh label create local-model-exam --color D93F0B \

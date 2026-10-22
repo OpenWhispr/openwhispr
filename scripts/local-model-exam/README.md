@@ -92,7 +92,7 @@ model out: they are then marked as not done well locally.
 
 `.github/workflows/local-model-exam.yml` runs `canary.mjs` every Monday on GitHub's Linux,
 Windows and macOS runners, and on pull requests that change this folder. It downloads each
-model in the slice with the app's own download code and runs it on the processor:
+model in the slice with the app's own download code and runs it with the app's own engines:
 
 - Speech: `small` (Whisper), `parakeet-tdt-0.6b-v3`, `nemotron-speech-streaming-en-0.6b` and
   `nemotron-3.5-asr-streaming-0.6b`. Each must download, load, write nothing where nobody spoke (silence, noise, speech followed by
@@ -106,8 +106,8 @@ model in the slice with the app's own download code and runs it on the processor
   reported, not scored: a runner is no reference machine.
 
 Any failed check, crash, skip or timeout fails the run, and so does a run that checked
-nothing. A failing scheduled run opens or updates one issue per runner OS, labelled
-`local-model-exam`. Speed is reported but not scored there: shared runners are too noisy
+nothing. A failing run on `main` opens or updates one issue per runner OS, labelled
+`local-model-exam`; pull requests only show the failed check. Speed is reported but not scored there: shared runners are too noisy
 for the speed bar. The agent is left out: on a runner's processor one request takes minutes.
 The slice and its pass marks live in `lib/canary.mjs`.
 

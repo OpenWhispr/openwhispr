@@ -66,6 +66,17 @@ function withTimeout(promise, ms, what) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+// A download that times out is cancelled, or the manager would refuse the
+// next model's download while this one still runs.
+async function downloadWithin(download, cancel) {
+  try {
+    await withTimeout(download(), TIMEOUT_MS.download, "download");
+  } catch (error) {
+    if (error.timedOut) await Promise.resolve(cancel()).catch(() => {});
+    throw error;
+  }
+}
+
 const checks = [];
 // A timeout leaves the engine in an unknown state, so the rest of that model's
 // checks fail without running instead of each waiting out its own timeout.
@@ -105,7 +116,7 @@ async function runSpeech(modelId, measured, clipsByLanguage, silenceClips) {
   let engine = null;
   const downloaded = await check(modelId, "download", async () => {
     engine = speech.createSpeechEngine(modelId);
-    await withTimeout(engine.download(), TIMEOUT_MS.download, "download");
+    await downloadWithin(engine.download, engine.cancelDownload);
     return { pass: true };
   });
   if (!downloaded) return;
@@ -186,7 +197,10 @@ async function runSpeech(modelId, measured, clipsByLanguage, silenceClips) {
 
 async function runText(modelId, caseIds, casesById, markers) {
   const downloaded = await check(modelId, "download", async () => {
-    await withTimeout(text.downloadTextModel(modelId), TIMEOUT_MS.download, "download");
+    await downloadWithin(
+      () => text.downloadTextModel(modelId),
+      () => text.cancelTextDownload(modelId)
+    );
     return { pass: true };
   });
   if (!downloaded) return;
@@ -230,7 +244,8 @@ try {
   let silenceClips = [];
   if (languages.length) {
     await check("test material", "FLEURS clips", async () => {
-      for (const language of new Set(["en", ...languages])) {
+      // The silence clips are built from English and German speech.
+      for (const language of new Set(["en", "de", ...languages])) {
         clipsByLanguage[language] = await loadFleurs(language, CLIPS_PER_LANGUAGE);
       }
       silenceClips = buildSilenceSet(clipsByLanguage).filter((c) => SILENCE_CLIPS.includes(c.id));
@@ -285,6 +300,8 @@ const lines = [
       `| ${c.model} | ${c.check} | ${c.pass ? "pass" : "**fail**"} | ${cell(c.detail)} | ${c.ms == null ? "" : `${(c.ms / 1000).toFixed(1)} s`} |`
   ),
 ];
-process.stdout.write(lines.join("\n") + "\n");
 progress("records in", outDir);
-process.exit(!checks.length || failed.length ? 1 : 0);
+// Exit only once the report is written: stdout to a pipe is asynchronous.
+process.stdout.write(lines.join("\n") + "\n", () =>
+  process.exit(!checks.length || failed.length ? 1 : 0)
+);

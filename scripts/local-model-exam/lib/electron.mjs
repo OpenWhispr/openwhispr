@@ -47,6 +47,15 @@ let installedBase = null;
 export function installElectronStub({ baseDir } = {}) {
   if (installedBase) return installedBase;
   const base = baseDir || fs.mkdtempSync(path.join(os.tmpdir(), "ow-local-exam-"));
+  if (!baseDir) {
+    process.on("exit", () => {
+      try {
+        fs.rmSync(base, { recursive: true, force: true });
+      } catch {
+        // A file still held open (Windows) only leaves the folder behind.
+      }
+    });
+  }
   fs.mkdirSync(path.join(base, "userData"), { recursive: true });
   const originalLoad = Module._load;
   Module._load = function loadWithElectronStub(request, parent, isMain) {

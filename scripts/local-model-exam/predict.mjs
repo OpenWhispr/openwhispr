@@ -12,6 +12,7 @@ import path from "node:path";
 import { EXAM_DIR, listArg, parseArgs, readJson, readJsonl } from "./lib/cli.mjs";
 
 const args = parseArgs();
+if (!String(args.out || "").endsWith(".md")) throw new Error("--out <file.md> is required");
 const fmtS = (ms) =>
   ms == null || Number.isNaN(ms) ? "–" : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)} s`;
 

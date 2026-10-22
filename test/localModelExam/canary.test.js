@@ -60,7 +60,7 @@ test("a cleanup fails the canary on an error or any broken rule", async () => {
   assert.match(cleanupFailure({ ok: true }, { ...clean, emptied: true }), /empty/);
 });
 
-test("the weekly workflow runs the canary keyless and files an issue only off pull requests", () => {
+test("the weekly workflow runs the canary keyless and files issues only from main", () => {
   const workflow = fs.readFileSync(
     path.join(ROOT, ".github/workflows/local-model-exam.yml"),
     "utf8"
@@ -68,6 +68,9 @@ test("the weekly workflow runs the canary keyless and files an issue only off pu
   assert.match(workflow, /cron: "0 7 \* \* 1"/);
   assert.match(workflow, /scripts\/local-model-exam\/canary\.mjs/);
   assert.match(workflow, /--label local-model-exam/);
-  assert.match(workflow, /github\.event_name != 'pull_request'/);
+  assert.match(
+    workflow,
+    /steps\.canary\.outcome != 'success' && github\.ref == 'refs\/heads\/main'/
+  );
   assert.doesNotMatch(workflow, /secrets\./);
 });

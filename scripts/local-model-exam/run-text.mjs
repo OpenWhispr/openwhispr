@@ -1,7 +1,8 @@
 // Text half of the local model exam, run on one machine.
 //   node --import tsx scripts/local-model-exam/run-text.mjs [--models a,b] [--out dir] [--cases N] [--tasks N]
 // Cleanup runs through the app's dictation chain; the agent through its local
-// tool path with recorded fake tools. Quit OpenWhispr's local models first.
+// tool path with recorded fake tools. Quit OpenWhispr for speed runs: it
+// competes for the processor and graphics chip.
 import fs from "node:fs";
 import path from "node:path";
 import {

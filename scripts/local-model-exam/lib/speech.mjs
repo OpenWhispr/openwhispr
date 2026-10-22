@@ -54,7 +54,7 @@ export async function speechGateSkips(pcm, engineKind) {
   return decision.skip && (decision.reason === "silence" || engineKind === "whisper");
 }
 
-export function speechModelKind(modelId) {
+function speechModelKind(modelId) {
   const { registry, getModelRuntime } = loadManagers();
   if (registry.whisperModels[modelId]) return "whisper";
   if (!registry.parakeetModels[modelId]) throw new Error(`Unknown speech model: ${modelId}`);
@@ -79,6 +79,7 @@ export function createSpeechEngine(modelId) {
     kind === "whisper"
       ? m.whisper.downloadWhisperModel(modelId)
       : m.parakeet.downloadParakeetModel(modelId);
+  const cancelDownload = () => (kind === "whisper" ? m.whisper : m.parakeet).cancelDownload();
 
   // One whole-recording decode, as after the dictation key is released.
   async function transcribe(pcm, { language = null, vad = false } = {}) {
@@ -211,7 +212,7 @@ export function createSpeechEngine(modelId) {
     else await m.parakeet.stopServer().catch(() => {});
   }
 
-  return { id: modelId, kind, download, transcribe, stream, preview, unload };
+  return { id: modelId, kind, download, cancelDownload, transcribe, stream, preview, unload };
 }
 
 export async function stopAllSpeechEngines() {
