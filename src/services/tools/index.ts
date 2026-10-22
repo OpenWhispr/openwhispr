@@ -15,6 +15,12 @@ import {
   registerConnectorTools,
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
+import {
+  createInteractionTools,
+  requireConnection,
+  type InteractionToolOptions,
+} from "./interactionTools";
+import { getSettings, selectCalendarConnected } from "../../stores/settingsStore";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -35,6 +41,8 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
+  /** Present only on surfaces that can show interactions (questions, connect cards). */
+  interactions?: InteractionToolOptions;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -64,9 +72,19 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.calendarConnected) {
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
+  } else if (settings.interactions?.connectionTargets.includes("calendar")) {
+    for (const tool of [calendarTool, calendarAvailabilityTool]) {
+      registry.register(
+        requireConnection(tool, "calendar", () => selectCalendarConnected(getSettings()))
+      );
+    }
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+
+  if (settings.interactions) {
+    for (const tool of createInteractionTools(settings.interactions)) registry.register(tool);
+  }
 
   return registry;
 }

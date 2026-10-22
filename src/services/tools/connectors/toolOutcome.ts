@@ -6,6 +6,7 @@ import type { ToolResult } from "../ToolRegistry";
 import type {
   ApprovalEdits,
   ApprovalOutcome,
+  ConnectorChoice,
   ConnectorPrepareResult,
 } from "../../../types/connectors";
 
@@ -15,10 +16,21 @@ const NO_RETRY = "Do not retry this action unless the user asks you to.";
 // structured status (the AI SDK path turns failures into a bare error string).
 // data is for the model; displayText is the user's tool step, so it is
 // localized and never carries codes.
-export function needsClarificationResult(message: string, candidates: string[] = []): ToolResult {
+export function needsClarificationResult(
+  message: string,
+  candidates: string[] = [],
+  choices?: ConnectorChoice[],
+  edits: ApprovalEdits = {}
+): ToolResult {
   return {
     success: true,
-    data: { status: "needs_clarification", message, candidates },
+    data: {
+      status: "needs_clarification",
+      message,
+      candidates,
+      ...(choices ? { choices } : {}),
+      ...userEdits(edits),
+    },
     displayText: i18n.t("connectors.toolStatus.needsDetails"),
   };
 }
@@ -34,6 +46,20 @@ export function unavailableResult(
     displayText: i18n.t(
       reason === "policy_blocked" ? "connectors.policyOff" : "connectors.toolStatus.unavailable"
     ),
+  };
+}
+
+// A resumed or regenerated turn can't be told apart from the user asking
+// again, so the same send stays refused for the rest of the conversation.
+export function alreadySentResult(): ToolResult {
+  return {
+    success: true,
+    data: {
+      status: "already_sent",
+      guidance:
+        "This exact action was already done (or may have been) earlier in this request, so it was not done again. Tell the user it was already done.",
+    },
+    displayText: i18n.t("connectors.toolStatus.alreadySent"),
   };
 }
 
@@ -94,11 +120,13 @@ export function unknownResult(
 
 export function prepareFailureResult(
   result: Exclude<ConnectorPrepareResult, { status: "ready" }>,
-  connectorId?: string
+  connectorId?: string,
+  /** What the user changed on a card that had to be prepared again. */
+  edits: ApprovalEdits = {}
 ): ToolResult {
   switch (result.status) {
     case "needs_clarification":
-      return needsClarificationResult(result.message, result.candidates);
+      return needsClarificationResult(result.message, result.candidates, result.choices, edits);
     case "failed":
       return failedResult(result.errorCode, result.message, connectorId);
     case "unavailable":
@@ -142,7 +170,7 @@ function sentDisplayText(destination: string, resultLabel?: string, verbKey?: st
 
 // What the user changed on the card, so the model describes (or proposes
 // again) the email the user settled on, not the one it drafted.
-export function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
+function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
   return {
     ...(finalText !== undefined ? { finalText } : {}),
     ...(final !== undefined ? { final } : {}),
@@ -174,11 +202,15 @@ export function approvalOutcomeResult(
         data: {
           status: "cancelled_by_user",
           guidance: `The user cancelled this action. ${NO_RETRY} Ask what they would like to change if it is unclear.`,
+          ...userEdits(outcome),
         },
         displayText: i18n.t("connectors.approval.cancelled"),
       };
-    case "not_sent":
-      return notSentResult(outcome.reason);
+    case "not_sent": {
+      // With what the user wrote on the card, so a later draft starts from it.
+      const result = notSentResult(outcome.reason);
+      return { ...result, data: { ...(result.data as object), ...userEdits(outcome) } };
+    }
     case "failed":
       return failedResult(
         outcome.errorCode,
@@ -194,7 +226,7 @@ export function approvalOutcomeResult(
           destination,
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
-          guidance: `It may or may not have been sent. ${NO_RETRY} ${
+          guidance: `It may or may not have gone through. Say you tried and couldn't confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". ${NO_RETRY} ${
             options.unknownGuidance ?? `Tell the user to check ${destination}.`
           }`,
         },

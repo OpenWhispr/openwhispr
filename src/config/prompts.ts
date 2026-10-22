@@ -1,6 +1,6 @@
 import { resolvePrompt } from "./prompts/index";
 import { appendToneStyleSuffix, buildWritingStyleBlock } from "./prompts/toneStyle";
-import type { DictationToneStyle, ToneAppCategory, ToneStyles } from "./toneStyle";
+import type { DictationToneStyle, ToneStyles } from "./toneStyle";
 import { SOURCE_FIDELITY_RULE } from "../helpers/sourceFidelity.js";
 import {
   CONNECTOR_NAMES,
@@ -14,7 +14,6 @@ export {
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,
-  appendPlainTextResponseSuffix,
   wrapCleanupTranscript,
 } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
@@ -60,7 +59,7 @@ const TOOL_INSTRUCTIONS: Record<string, string> = {
   update_dictionary:
     "Use update_dictionary when the user asks to add, remove, or fix the spelling of words in their custom dictionary; the current words are listed under Custom Dictionary. When asked to clean up the dictionary, list the exact removals you propose (duplicates, misspellings, casing variants, ordinary words) and wait for confirmation before removing anything the user did not name.",
   get_calendar_events:
-    "Use get_calendar_events to check the user's schedule, upcoming meetings, or calendar events.",
+    "Use get_calendar_events to check the user's schedule, upcoming meetings, or calendar events. Tell the user each event's date, weekday, startTime, endTime and timeZoneName exactly as returned; start and end are only for passing to other tools, never to work times out from. An event with allDay set lasts the whole day (through endDate, when given).",
   get_calendar_availability:
     "Use get_calendar_availability when the user asks when they are free or requests open time slots. Pass timezone-aware RFC3339 start and end timestamps, deriving the correct offset for each future date from the IANA time zone rather than assuming the current offset across a daylight-saving transition. Treat the returned slotCount and each slot's localized date, weekday, times, and duration as authoritative: use them exactly and never recalculate, add, omit, merge, or invent slots. For a broad multi-day request without daily-hour bounds, ask which hours of each day to consider, then make a separate call for each day. Results reflect the local calendar cache across the user's selected connected calendars, so describe free results as no scheduled conflicts found rather than guaranteed real-time availability, and never infer event details from availability facts.",
 };
@@ -78,10 +77,13 @@ function formatLocalRfc3339(date: Date): string {
   );
 }
 
-function getLocalCalendarContext(): string {
+// With the weekday spelled out: a model left to work it out from the date
+// gets it wrong.
+function getLocalDateContext(): string {
   const now = new Date();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  return `Current local date and time: ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+  return `Current local date and time: ${weekday}, ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
 }
 
 // Each result that must not be retried says so in its own guidance, so the
@@ -107,7 +109,35 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
+  look_at_screen: "The user's screen",
+  ask_user: "Asking the user",
+  request_connection: "Asking the user",
+  request_access: "Asking the user",
+  request_api_key: "Asking the user",
+  open_settings: "Asking the user",
 };
+
+// The interaction tools are there to finish a task, never to add steps to it.
+// What to look up with which tool before asking, for the tools this turn has.
+// Smaller models skip the lookups unless the tools are named.
+const LOOKUPS: ReadonlyArray<[tool: string, lookup: string]> = [
+  ["find_contact", "people and their email addresses with find_contact, then search_notes"],
+  ["search_notes", "names, addresses, channels, plans and facts with search_notes"],
+  ["github_search_issues", "pull requests and issues with github_search_issues"],
+  ["linear_search_issues", "Linear issues with linear_search_issues"],
+  ["get_calendar_events", "meetings with get_calendar_events"],
+];
+
+function askOnlyWhenNecessaryRule(tools: readonly PromptTool[]): string {
+  const lookups = LOOKUPS.filter(([name]) => tools.some((tool) => tool.name === name)).map(
+    ([, lookup]) => lookup
+  );
+  return (
+    "Ask the user something only when you really can't decide it yourself. A simple request gets a direct answer with no questions. " +
+    (lookups.length > 0 ? `Before asking, look it up: ${lookups.join("; ")}. ` : "") +
+    "Take reasonable defaults for the rest, and ask only about what is still missing, everything in one ask_user call. Carry a request with several parts through to the end in this turn: never finish by saying you will do something, do it. While a question or card waits for the user, the task is paused; when they answer, carry on with the original request and do only what is still outstanding."
+  );
+}
 
 const CAPABILITY_RULE =
   "Use a tool when the request needs what it provides, rather than guessing from memory; don't call one when the conversation or the context provided here already has the answer. Never tell the user you can't do something one of these tools covers (for example, never say you can't browse the web when web search is listed). If a tool call fails, say that it failed rather than claiming you lack the ability.";
@@ -120,8 +150,21 @@ const OPEN_NOTE_TRANSCRIPT_RULE = `Its transcript is too long to include, so onl
 const OPEN_NOTE_SEARCH_RULE =
   'In this chat, this rule overrides the search_notes guidance above: use search_notes only when the user asks you to look beyond this note (for example "check my other notes" or "did this come up in another meeting"), and name the note your answer comes from. When this note doesn\'t cover a question, offer to search their other notes rather than searching them yourself.';
 
-const TOOL_TRACE_RULE =
-  "Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn and how each action turned out. An action marked sent or draft opened already happened: never do it again unless the user asks, and use its reference or link when you need it. One that may have been sent must not be retried. When the user answers your question or asks you to retry, do only what is still outstanding. Never write such a note yourself.";
+const RECORDED_ACTIONS_RULE =
+  "An action marked sent or draft opened already happened: never do it again unless the user asks, and use its reference or link when you need it. One that may have been sent must not be retried. When the user answers your question or asks you to retry, do only what is still outstanding.";
+const TOOL_TRACE_RULE = `Earlier assistant messages may begin with a [Tools used: …] note that the app added to record the tools you called in that turn and how each action turned out. ${RECORDED_ACTIONS_RULE} Never write such a note yourself.`;
+const TOOL_PARTS_RULE = `Earlier turns keep each tool call with its outcome only, never its full arguments or the data it returned: give a new call every argument it needs, and call a tool again when you need its data. ${RECORDED_ACTIONS_RULE}`;
+
+const GROUNDING_RULE =
+  "Only say something was done (sent, posted, created, connected, drafted, scheduled, saved, deleted…) when a tool result shows it: one from this turn for what you do now, or one recorded for an earlier turn when you report on that. If an earlier reply says something was done but no tool result records it, it didn't happen: say so. Tool results override anything said earlier in the chat.";
+
+/** Asks again, as the user, after a final answer that claims an action no tool result shows. */
+export const CLAIM_CHECK_NOTE =
+  "Automatic check, not from the user: your reply says something was done, but no tool result shows it. If the user asked for that action, do it with the tool; if your text is a draft or a quote, keep it; otherwise correct the reply.";
+
+/** Asks for the answer, as the user, once a turn has used every tool step it may. */
+export const STEP_LIMIT_NOTE =
+  "Automatic note, not from the user: you have used every tool call this turn allows. Answer now with what you have, without calling tools, and say plainly what is unfinished.";
 
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";
@@ -163,16 +206,16 @@ export interface PromptTool {
 export interface AgentSystemPromptOptions {
   /** Capabilities that exist but aren't usable here, with what the user can do about it. */
   unavailable?: ReadonlyArray<UnavailableCapability>;
-  /** History carries [Tools used: …] notes on earlier assistant turns. */
-  toolTrace?: boolean;
+  /** How history carries earlier turns' tool use (see ToolHistory); none when absent. */
+  toolHistory?: "parts" | "text";
   /** The note a note's chat was opened from (with its attendees), answered from before any other note. */
   openNote?: string;
   /** The open note carries only the start of its transcript, which get_note reads further. */
   openNoteTranscriptPreview?: boolean;
   /** The signed-in user's name, so drafts are signed with it instead of a placeholder. */
   userName?: string | null;
-  /** Tone & Style: the user's tones, and the kind of app a pasted answer lands in. */
-  writingStyle?: { tones: ToneStyles; destination?: ToneAppCategory | null };
+  /** Tone & Style: the user's tones. */
+  writingStyle?: { tones: ToneStyles };
 }
 
 function toolGroup(tool: PromptTool): string {
@@ -191,7 +234,6 @@ function describeCapabilities(tools: ReadonlyArray<PromptTool>): string {
 
 export function getAgentSystemPrompt(
   availableTools?: ReadonlyArray<string | PromptTool>,
-  noteContext?: string,
   options: AgentSystemPromptOptions = {}
 ): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });
@@ -201,8 +243,10 @@ export function getAgentSystemPrompt(
   );
   if (tools.length > 0) {
     prompt += "\n\nYou can use these tools:\n" + describeCapabilities(tools);
-    prompt += "\n\n" + CAPABILITY_RULE;
-    if (options.toolTrace) prompt += " " + TOOL_TRACE_RULE;
+    prompt += "\n\n" + CAPABILITY_RULE + " " + GROUNDING_RULE;
+    if (options.toolHistory) {
+      prompt += " " + (options.toolHistory === "parts" ? TOOL_PARTS_RULE : TOOL_TRACE_RULE);
+    }
     const toolLines = tools
       .map((tool) => tool.promptInstruction ?? TOOL_INSTRUCTIONS[tool.name])
       .filter(Boolean);
@@ -212,18 +256,16 @@ export function getAgentSystemPrompt(
     if (tools.some((tool) => tool.connectorId)) {
       prompt += "\n\n" + CONNECTOR_TOOL_RULES;
     }
-    if (tools.some((tool) => tool.name === "get_calendar_availability")) {
-      prompt += "\n\n" + getLocalCalendarContext();
+    if (tools.some((tool) => tool.name === "ask_user")) {
+      prompt += "\n\n" + askOnlyWhenNecessaryRule(tools);
     }
   }
-
   const unavailable = describeUnavailable(options.unavailable ?? []);
   if (unavailable) prompt += "\n\n" + unavailable;
 
   prompt += "\n\n" + signOffRule(options.userName);
   if (options.writingStyle) {
-    prompt +=
-      "\n\n" + buildWritingStyleBlock(options.writingStyle.tones, options.writingStyle.destination);
+    prompt += "\n\n" + buildWritingStyleBlock(options.writingStyle.tones);
   }
   prompt += "\n\n" + SOURCE_FIDELITY_RULE;
 
@@ -232,12 +274,23 @@ export function getAgentSystemPrompt(
     prompt += `\n\n${OPEN_NOTE_RULE}${options.openNoteTranscriptPreview ? ` ${OPEN_NOTE_TRANSCRIPT_RULE}` : ""}${canSearch ? ` ${OPEN_NOTE_SEARCH_RULE}` : ""}\n\n${options.openNote}`;
   }
 
-  if (noteContext) {
-    prompt +=
-      "\n\nBelow are notes from the user's library that may be relevant. " +
-      "Reference them naturally if they help answer the question.\n\n" +
-      noteContext;
-  }
-
   return prompt;
+}
+
+/**
+ * What changes with every message (the time, the library notes that match
+ * it), sent at the end of the message instead of in the system prompt: the
+ * prompt, the tools and earlier turns then stay a prefix providers can cache.
+ */
+export function buildMessageContext(libraryNotes?: string): string {
+  return [
+    "Context from the app for this message (not written by the user):",
+    getLocalDateContext(),
+    ...(libraryNotes
+      ? [
+          "Notes from the user's library that may be relevant. Reference them naturally if they help answer the question.\n\n" +
+            libraryNotes,
+        ]
+      : []),
+  ].join("\n\n");
 }

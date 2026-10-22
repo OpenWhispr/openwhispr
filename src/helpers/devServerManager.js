@@ -16,6 +16,11 @@ const parseDevServerPort = () => {
 const DEV_SERVER_PORT = parseDevServerPort();
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}/`;
 
+const appQuery = (isControlPanel, query) => ({
+  ...(isControlPanel ? { panel: "true" } : {}),
+  ...query,
+});
+
 class DevServerManager {
   static async waitForDevServer(url = DEV_SERVER_URL, maxAttempts = 30, delay = 1000) {
     for (let i = 0; i < maxAttempts; i++) {
@@ -54,9 +59,11 @@ class DevServerManager {
     return false;
   }
 
-  static getAppUrl(isControlPanel = false) {
+  // `query` adds route flags beyond the control panel's (the agent window's `agent=true`).
+  static getAppUrl(isControlPanel = false, query = {}) {
     if (process.env.NODE_ENV === "development") {
-      return isControlPanel ? `${DEV_SERVER_URL}?panel=true` : DEV_SERVER_URL;
+      const search = new URLSearchParams(appQuery(isControlPanel, query)).toString();
+      return search ? `${DEV_SERVER_URL}?${search}` : DEV_SERVER_URL;
     } else {
       // For production, return null - caller should use loadFile() instead
       return null;
@@ -67,9 +74,10 @@ class DevServerManager {
    * Get the path to the index.html file for production builds.
    * In Electron 36+, loadFile() is preferred over loadURL() with file:// protocol.
    * @param {boolean} isControlPanel - Whether this is for the control panel
+   * @param {Record<string, string>} query - Extra route flags (see getAppUrl)
    * @returns {{ path: string, query: object } | null} - Path info for loadFile() or null for dev
    */
-  static getAppFilePath(isControlPanel = false) {
+  static getAppFilePath(isControlPanel = false, query = {}) {
     if (process.env.NODE_ENV === "development") {
       return null; // Use getAppUrl() for dev server
     }
@@ -83,7 +91,7 @@ class DevServerManager {
 
     return {
       path: htmlPath,
-      query: isControlPanel ? { panel: "true" } : {},
+      query: appQuery(isControlPanel, query),
     };
   }
 }

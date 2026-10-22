@@ -128,10 +128,10 @@ export function resolveDictationAgentVisionInference(settings, { isSignedIn = fa
 /**
  * What a chat conversation streams on, and whether its screenshot rides along.
  *
- * Typed chat surfaces resolve the Chat scope. The voice assistant panel resolves
+ * Typed chat surfaces resolve the Chat scope. The agent window resolves
  * the Voice Assistant scope — the tab that also governs selection edits — so the
  * model picked there answers spoken commands; while that scope is unreachable
- * (assistant toggled off, a BYOK mode with no model) the panel falls back to
+ * (assistant toggled off, a BYOK mode with no model) the window falls back to
  * Chat, its previous home. Profiles from before onboarding fanned selections out
  * are seeded from Chat on upgrade (settingsStore), so the fallback is not what
  * keeps them off the cloud default.

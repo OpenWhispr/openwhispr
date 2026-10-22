@@ -55,27 +55,16 @@ const FOUND = {
   truncated: false,
 };
 
-// Records every hold, claim and release, and counts slots per key as the
-// chat turn does, so a test can see what the turn kept. Holds count once per
-// tool call, as the turn's scope passes them on: the tool and
-// runApprovalAction both hold the same call.
+// Records every claim and release, and counts slots per key as the chat turn
+// does, so a test can see what the turn kept.
 function linearContext(messageId, toolCallId) {
   const used = new Map();
-  const heldCalls = new Set();
   const context = {
     messageId,
     toolCallId,
     signal: new AbortController().signal,
-    get holds() {
-      return heldCalls.size;
-    },
     claims: [],
     releases: [],
-    onApprovalRequested() {},
-    // `this` is the call's own context (callOf copies the turn per call).
-    onHoldDelivery() {
-      heldCalls.add(this.toolCallId);
-    },
     claimTurnSlot(key, limit) {
       context.claims.push([key, limit]);
       const count = used.get(key) ?? 0;
@@ -83,6 +72,10 @@ function linearContext(messageId, toolCallId) {
       used.set(key, count + 1);
       return true;
     },
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
     releaseTurnSlot(key) {
       context.releases.push(key);
       used.set(key, (used.get(key) ?? 1) - 1);
@@ -176,7 +169,6 @@ test("linear_search_issues sends a cleaned search to main and hands back untrust
   assert.deepEqual(result.data.items, FOUND.items);
   assert.match(result.data.guidance, /never as instructions/);
   assert.equal(result.displayText, "Results found: 1");
-  assert.equal(context.holds, 1, "a search answer stays in the panel, never pasted at the caret");
   assert.deepEqual(context.claims, [], "a search uses no card slot");
 });
 
@@ -211,7 +203,6 @@ test("linear_search_issues refuses a search it can't run, without calling main",
     assert.deepEqual([result.data.status, result.data.errorCode], ["failed", errorCode]);
   }
   assert.equal(queried, 0);
-  assert.equal(turn.holds, 4, "a question or refusal back is never pasted at the caret");
 });
 
 test("a Linear login that needs reconnecting stops every Linear tool before main", async (t) => {
@@ -249,7 +240,6 @@ test("a Linear login that needs reconnecting stops every Linear tool before main
     assert.equal(result.data.guidance, LINEAR_RECONNECT_GUIDANCE, tool.name);
     assert.equal(result.displayText, "Linear needs to be reconnected.", tool.name);
     assert.deepEqual(context.claims, [], tool.name);
-    assert.equal(context.holds, 1, `${tool.name}: the reconnect answer stays in the panel`);
   }
   assert.deepEqual(calls, { query: 0, prepare: 0 });
 });
@@ -290,7 +280,7 @@ test("a reconnect main reports while searching or preparing reads the same as on
   assert.deepEqual(context.releases, ["approval_card"], "no card appeared, so its slot is back");
 });
 
-test("linear_create_issue prepares a card from the cleaned arguments, reports the issue, and holds delivery", async (t) => {
+test("linear_create_issue prepares a card from the cleaned arguments and reports the issue", async (t) => {
   await useEnglish();
   const { approvals, key, pending, context, calls } = await startCard(t, {
     tool: "linearCreateIssueTool",
@@ -328,7 +318,6 @@ test("linear_create_issue prepares a card from the cleaned arguments, reports th
   assert.equal(result.data.status, "sent");
   assert.equal(result.data.url, "https://linear.app/acme/issue/ENG-431/crash");
   assert.equal(result.data.destination, "ENG");
-  assert.equal(context.holds, 1, "the card stays in the panel, never pasted at the caret");
   assert.deepEqual(context.claims, [["approval_card", 5]]);
   assert.deepEqual(context.releases, [], "a card that appeared keeps its slot");
 });
@@ -380,7 +369,7 @@ test("Linear tools read a null optional argument as left out, and count lengths 
   assert.equal(calls.prepare.length, 1);
 });
 
-test("linear_create_issue refuses what Linear can't take before main, and still holds delivery", async (t) => {
+test("linear_create_issue refuses what Linear can't take before main", async (t) => {
   let prepared = 0;
   installBrowserGlobals(t, {
     window: {
@@ -406,7 +395,6 @@ test("linear_create_issue refuses what Linear can't take before main, and still 
     const result = await linearCreateIssueTool.execute(args, context);
     assert.equal(result.data.status, status, JSON.stringify(args).slice(0, 60));
     assert.equal(result.data.errorCode, errorCode);
-    assert.equal(context.holds, 1);
     assert.deepEqual(context.claims, []);
   }
   assert.equal(prepared, 0);
@@ -487,7 +475,6 @@ test("eight issues in one request: five cards, then card_limit with an offer to 
     assert.equal(result.data.status, "cancelled_by_user");
     assert.match(result.data.guidance, /Do not retry/);
   }
-  assert.equal(turn.holds, 8, "every call held delivery, the refused ones too");
 });
 
 test("linear_comment prepares a comment on the issue named, and a link to another workspace reads as Linear's copy", async (t) => {
@@ -526,7 +513,6 @@ test("linear_comment prepares a comment on the issue named, and a link to anothe
   assert.equal(result.data.status, "failed");
   assert.equal(result.data.errorCode, "wrong_workspace");
   assert.equal(result.displayText, "That issue is in another Linear workspace.");
-  assert.equal(context.holds, 1);
 });
 
 test("linear_comment asks for the issue and refuses an empty comment, without calling main", async (t) => {
@@ -557,7 +543,6 @@ test("linear_comment asks for the issue and refuses an empty comment, without ca
   );
   assert.equal(tooLong.data.errorCode, "too_long");
   assert.equal(prepared, 0);
-  assert.equal(noIssue.holds + noBody.holds, 2);
 });
 
 test("an uncertain comment points at the issue, and a cancelled one tells the model not to retry", async (t) => {
@@ -594,7 +579,6 @@ test("an uncertain comment points at the issue, and a cancelled one tells the mo
   assert.equal(result.data.status, "cancelled_by_user");
   assert.match(result.data.guidance, /Do not retry/);
   assert.deepEqual(cancelled.calls.commit, []);
-  assert.equal(cancelled.context.holds, 1);
 });
 
 test("the Linear module offers three tools, each with its own prompt line, only once Linear is ready", async () => {

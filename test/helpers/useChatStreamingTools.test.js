@@ -9,6 +9,7 @@ const {
   addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 
 // Drives the real useChatStreaming hook (one synchronous render, then its
@@ -244,13 +245,43 @@ test("on the AI SDK path a tool step shows the tool's own text, not a bare Done"
       })()
   );
 
-  let holds = 0;
-  await captured.sendToAI("Who is Gab?", [], { onHoldDelivery: () => (holds += 1) });
+  await captured.sendToAI("Who is Gab?", []);
 
   const assistant = getMessages().find((message) => message.role === "assistant");
   assert.equal(assistant.toolCalls[0].result, "Contacts found: 2");
-  // The AI SDK tools carry the turn's scope, so a tool's hold reaches the caller.
-  assert.equal(holds, 1);
+});
+
+test("each tool call keeps how much of the reply's text came before it", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: BYOK_SETTINGS,
+    }
+  );
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "Let me check your notes." };
+      yield {
+        type: "tool_calls",
+        calls: [{ id: "call-1", name: "search_notes", arguments: "{}" }],
+      };
+      yield {
+        type: "tool_result",
+        callId: "call-1",
+        toolName: "search_notes",
+        displayText: "1 note",
+      };
+      yield { type: "content", text: "Found it." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+
+  await captured.sendToAI("What did I write about the launch?", []);
+
+  const assistant = getMessages().find((message) => message.role === "assistant");
+  assert.equal(assistant.content, "Let me check your notes.\n\nFound it.");
+  assert.equal(assistant.toolCalls[0].textOffset, "Let me check your notes.".length);
 });
 
 test("a search's items reach the model but are never kept with the conversation", async (t) => {
@@ -298,33 +329,6 @@ test("a search's items reach the model but are never kept with the conversation"
   const [search, note] = getMessages().find((message) => message.role === "assistant").toolCalls;
   assert.equal(search.metadata, undefined, "the saved and synced message holds no items");
   assert.deepEqual(note.metadata, { id: 7, title: "Standup" }, "a note card still gets its data");
-});
-
-test("on the cloud path a tool's hold reaches the caller through the turn's scope", async (t) => {
-  const { captured, reasoningService } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
-    electronAPI: { connectorFindContacts: async () => ({ contacts: [] }) },
-  });
-  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
-    (async function* () {
-      yield {
-        type: "tool_calls",
-        calls: [{ id: "srv-1", name: "find_contact", arguments: '{"name":"Zed"}' }],
-      };
-      const result = await config.executeToolCall("find_contact", '{"name":"Zed"}', "srv-1");
-      yield {
-        type: "tool_result",
-        callId: "srv-1",
-        toolName: "find_contact",
-        displayText: result.displayText,
-      };
-      yield { type: "done", finishReason: "stop" };
-    })()
-  );
-
-  let holds = 0;
-  await captured.sendToAI("Who is Zed?", [], { onHoldDelivery: () => (holds += 1) });
-
-  assert.equal(holds, 1);
 });
 
 test("Esc settles a send whose tool never finishes, and a late result is dropped", async (t) => {
@@ -606,16 +610,18 @@ async function renderNoteChat(
   );
   const prompts = [];
   const configs = [];
+  const requests = [];
   rendered.reasoningService.processTextStreamingCloud.mock.mockImplementation(
-    (_messages, config) => {
+    (messages, config) => {
       prompts.push(config.systemPrompt);
       configs.push(config);
+      requests.push(messages);
       return (async function* () {
         yield { type: "done", finishReason: "stop" };
       })();
     }
   );
-  return { ...rendered, lookups, prompts, configs };
+  return { ...rendered, lookups, prompts, configs, requests };
 }
 
 test("a note chat with connectors lists the note's attendees and how to read 'everyone'", async (t) => {
@@ -732,20 +738,22 @@ test("a note's chat answers from its note and adds no other notes up front", asy
 
 test("a chat that isn't about a note still lists the library notes a question finds", async (t) => {
   const searches = [];
-  const { captured, prompts, configs } = await renderNoteChat(
+  const { captured, prompts, configs, requests } = await renderNoteChat(
     t,
     { openNote: undefined, noteMeeting: undefined },
     { electronAPI: libraryWithOneHit(searches) }
   );
-  await captured.sendToAI("What price are we testing?", []);
+  const question = "What price are we testing?";
+  await captured.sendToAI(question, [{ id: "u1", role: "user", content: question }]);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
   assert.equal("noteChat" in configs[0], false);
+  // They ride on the message, which changes every turn, not the system prompt.
   assert.match(
-    prompts[0],
-    /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/
+    requests[0].at(-1).content,
+    /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/i
   );
-  assert.doesNotMatch(prompts[0], /inside the note below/);
+  assert.doesNotMatch(prompts[0], /notes from the user's library|inside the note below/i);
 });
 
 test("a note action sends its prompt in place of the visible message", async (t) => {
@@ -754,10 +762,16 @@ test("a note action sends its prompt in place of the visible message", async (t)
   const requestText = "Using the note I'm viewing, draft the follow-up email.";
 
   await captured.sendToAI(visible.content, [visible], { requestText });
-  assert.equal(sentMessages[0].filter((m) => m.role === "user").at(-1).content, requestText);
+  assert.equal(
+    userTextOf(sentMessages[0].filter((m) => m.role === "user").at(-1).content),
+    requestText
+  );
 
   await captured.sendToAI(visible.content, [visible]);
-  assert.equal(sentMessages[1].filter((m) => m.role === "user").at(-1).content, visible.content);
+  assert.equal(
+    userTextOf(sentMessages[1].filter((m) => m.role === "user").at(-1).content),
+    visible.content
+  );
 });
 
 for (const [mode, settings] of Object.entries({
@@ -801,7 +815,7 @@ for (const [mode, settings] of Object.entries({
         assert.equal(request.split(SOURCE_FIDELITY_RULE).length - 1, 1);
         assert.ok(system.content.includes(SOURCE_FIDELITY_RULE));
         assert.ok(system.content.endsWith(openNote), "source text is preserved as note material");
-        assert.equal(sentHistory.at(-1).content, requestText);
+        assert.equal(userTextOf(sentHistory.at(-1).content), requestText);
         assert.deepEqual(
           history,
           beforeSend,
@@ -828,30 +842,84 @@ for (const [mode, settings] of Object.entries({
 
 const systemPromptOf = (messages) => messages.find((m) => m.role === "system").content;
 
-test("an earlier turn's tool use reaches the model as a note on that answer", async (t) => {
+const EARLIER_TOOL_TURN = [
+  { id: "u1", role: "user", content: "Weather in Lisbon?" },
+  {
+    id: "a1",
+    role: "assistant",
+    content: "Sunny, 24°C.",
+    toolCalls: [
+      {
+        id: "c1",
+        name: "web_search",
+        arguments: JSON.stringify({ query: "Lisbon weather today" }),
+        status: "completed",
+        result: 'Found web results for "Lisbon weather today"',
+      },
+    ],
+  },
+  { id: "u2", role: "user", content: "And tomorrow?" },
+];
+
+test("an earlier turn's tool use reaches the model as its own call and outcome", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t);
-  const earlier = [
-    { id: "u1", role: "user", content: "Weather in Lisbon?" },
+
+  await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
+
+  const [system, ...sent] = sentMessages[0];
+  const history = sent.map((message, i) =>
+    i === sent.length - 1 ? { ...message, content: userTextOf(message.content) } : message
+  );
+  assert.match(system.content, /Earlier turns keep each tool call with its outcome only/);
+  assert.doesNotMatch(system.content, /Tools used/);
+  assert.deepEqual(history, [
+    { role: "user", content: "Weather in Lisbon?" },
     {
-      id: "a1",
       role: "assistant",
-      content: "Sunny, 24°C.",
-      toolCalls: [
+      content: [
         {
-          id: "c1",
-          name: "web_search",
-          arguments: JSON.stringify({ query: "Lisbon weather today" }),
-          status: "completed",
-          result: 'Found web results for "Lisbon weather today"',
+          type: "tool-call",
+          toolCallId: "c1",
+          toolName: "web_search",
+          input: { query: "Lisbon weather today" },
         },
       ],
     },
-    { id: "u2", role: "user", content: "And tomorrow?" },
-  ];
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "c1",
+          toolName: "web_search",
+          output: { type: "text", value: '{"status":"done"}' },
+        },
+      ],
+    },
+    { role: "assistant", content: "Sunny, 24°C." },
+    { role: "user", content: "And tomorrow?" },
+  ]);
+});
 
-  await captured.sendToAI("And tomorrow?", earlier);
+test("a self-hosted server gets earlier tool use as a note on that answer", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      settings: {
+        chatAgentMode: "providers",
+        chatAgentProvider: "custom",
+        chatAgentModel: "qwen3",
+      },
+    }
+  );
 
-  const [system, ...history] = sentMessages[0];
+  await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
+
+  const [system, ...sent] = sentMessages[0];
+  const history = sent.map((message, i) =>
+    i === sent.length - 1 ? { ...message, content: userTextOf(message.content) } : message
+  );
   assert.match(system.content, /Never write such a note yourself/);
   assert.deepEqual(history, [
     { role: "user", content: "Weather in Lisbon?" },
@@ -1004,11 +1072,8 @@ test("a reply that imitates the tool notes is shown, saved and delivered without
   assert.equal(delivered, "Done.");
 });
 
-test("a reply that is only a tool note settles as an empty response, announced once", async (t) => {
-  let announced = 0;
-  const { captured, reasoningService, getMessages } = await renderChatStreaming(t, {
-    onResponseContent: () => announced++,
-  });
+test("a reply that is only a tool note settles as an empty response", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(t);
   reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
     (async function* () {
       yield { type: "content", text: "[Tools used: web_" };
@@ -1023,7 +1088,6 @@ test("a reply that is only a tool note settles as an empty response, announced o
     getMessages().find((m) => m.role === "assistant").content,
     "The model returned no response."
   );
-  assert.equal(announced, 1);
 });
 
 test("the onboarding demo isn't told to send the user off to enable anything", async (t) => {
@@ -1111,15 +1175,18 @@ for (const [surface, hookOptions] of [
     ]) {
       await captured.sendToAI(
         prompt,
-        [previous, { id: "question", role: "user", content: prompt }],
+        [
+          { id: "earlier", role: "user", content: "How do I change the hotkey?" },
+          previous,
+          { id: "question", role: "user", content: prompt },
+        ],
         {
           onComplete: (result) => delivered.push(result.content),
-          onHoldDelivery: () => assert.fail("ordinary replies must keep normal delivery"),
         }
       );
-      assert.equal(sentMessages.at(-1).at(-1).content, prompt);
-      assert.match(sentMessages.at(-1)[1].content, /Earlier built-in shortcut guidance/);
-      assert.doesNotMatch(sentMessages.at(-1)[1].content, /Tools used|grounded_product_help/);
+      assert.equal(userTextOf(sentMessages.at(-1).at(-1).content), prompt);
+      assert.match(sentMessages.at(-1)[2].content, /Earlier built-in shortcut guidance/);
+      assert.doesNotMatch(sentMessages.at(-1)[2].content, /Tools used|grounded_product_help/);
       assert.equal(getMessages().at(-1).content, "Antwort in der Sprache der Frage.");
       assert.equal(delivered.at(-1), "Antwort in der Sprache der Frage.");
     }
@@ -1152,11 +1219,12 @@ test("product questions retain note, scoped search, selected text and screenshot
     attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
   });
   assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
-  assert.match(systemPromptOf(sentMessages[0]), /next Tuesday/);
-  assert.match(systemPromptOf(sentMessages[0]), /Follow up with Alex/);
+  assert.doesNotMatch(systemPromptOf(sentMessages[0]), /next Tuesday|Follow up with Alex/);
   const content = sentMessages[0].at(-1).content;
   assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
   assert.match(content[0].text, /Selected OpenWhispr passage/);
+  assert.match(content[0].text, /next Tuesday[^]*Follow up with Alex/);
+  assert.match(content[0].text, /Current local date and time: /);
   assert.equal(content[1].type, "image");
   assert.equal(content[1].image, "data:image/png;base64,c3ludGhldGlj");
 });
@@ -1288,24 +1356,124 @@ test("with no account name the prompt asks for no signature rather than a placeh
   assert.match(prompts[0], /You don't know the user's name/);
 });
 
-test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+test("Tone & Style gives every send the user's writing style", async (t) => {
   const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: { toneStyleEnabled: true, toneStyles: tones },
   });
   await captured.sendToAI("Email Josh that I'm in", []);
-  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
 
-  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
-  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
-  assert.match(pasted, /typed at the user's cursor in a work chat app/);
-  assert.match(pasted, /work message style: casual and friendly/);
+  assert.match(
+    sentMessages[0][0].content,
+    /WRITING STYLE: When you write something the user will send/
+  );
 });
 
 test("without Tone & Style no send carries a writing style", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: { toneStyleEnabled: false },
   });
-  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  await captured.sendToAI("Tell them it's shipped", []);
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
+});
+
+test("open_settings carries the model scope of the chat that asked", async (t) => {
+  for (const inferenceScope of ["dictationAgent", undefined]) {
+    const { captured, reasoningService, vite } = await renderChatStreaming(
+      t,
+      { allowInteractions: true, ...(inferenceScope ? { inferenceScope } : {}) },
+      {
+        // Both scopes on the user's own OpenAI key, so the tools run on the AI SDK path.
+        settings: {
+          ...BYOK_SETTINGS,
+          useDictationAgent: true,
+          dictationAgentMode: "providers",
+          dictationAgentProvider: "openai",
+          dictationAgentModel: "gpt-5-mini",
+        },
+      }
+    );
+    const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+    let payload = null;
+    reasoningService.processTextStreamingAI.mock.mockImplementation(
+      (_messages, _model, _provider, _config, tools) =>
+        (async function* () {
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "call-1", name: "open_settings", arguments: "{}" }],
+          };
+          const running = tools.open_settings.execute(
+            { target: "llms", message: "Add your key" },
+            { toolCallId: "call-1", messages: [] }
+          );
+          let entry;
+          while (
+            !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+          ) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+          payload = entry.payload;
+          interactions.cancelInteraction(entry.key);
+          await running;
+          yield { type: "done", finishReason: "stop" };
+        })()
+    );
+    await captured.sendToAI("My model keeps failing", []);
+    assert.equal(payload?.scope, inferenceScope ?? "chatIntelligence");
+  }
+});
+
+test("in the agent window a Cloud screenshot is read through look_at_screen, not sent", async (t) => {
+  const { LOOK_AT_SCREEN_PROMPT } = await import("../../src/services/tools/lookAtScreenTool.ts");
+  const { captured, reasoningService, offeredTools } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    allowInteractions: true,
+  });
+  const configs = [];
+  let lookResult;
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
+    configs.push(config);
+    offeredTools.push((config.tools ?? []).map((tool) => tool.name));
+    return (async function* () {
+      if (config.tools.some((tool) => tool.name === "look_at_screen")) {
+        lookResult = await config.executeToolCall(
+          "look_at_screen",
+          '{"question":"What does the error say?"}',
+          "c1"
+        );
+      }
+      yield { type: "done", finishReason: "stop" };
+    })();
+  });
+  const asked = [];
+  t.mock.method(reasoningService, "askAboutScreen", async (...args) => {
+    asked.push(args);
+    return "  The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.  ";
+  });
+
+  const screenshot = { image: "base64-image", mediaType: "image/jpeg" };
+  const question = "What's this error?";
+  await captured.sendToAI(question, [{ id: "u1", role: "user", content: question }], {
+    attachment: screenshot,
+  });
+
+  assert.equal(configs[0].screenContext, undefined, "the image never rides with the request");
+  assert.ok(offeredTools[0].includes("look_at_screen"));
+  assert.doesNotMatch(configs[0].systemPrompt, /SCREEN CONTEXT:/);
+  assert.match(configs[0].systemPrompt, /available only through look_at_screen/);
+  assert.deepEqual(asked, [
+    [
+      "What does the error say?",
+      { data: "base64-image", mediaType: "image/jpeg" },
+      LOOK_AT_SCREEN_PROMPT,
+    ],
+  ]);
+  assert.deepEqual(JSON.parse(lookResult.data), {
+    answer: "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.",
+  });
+  // What the screen showed reaches the model, not the saved conversation.
+  assert.equal(lookResult.displayText, "Read the screen.");
+
+  await captured.sendToAI("Thanks!", [{ id: "u2", role: "user", content: "Thanks!" }]);
+  assert.ok(!offeredTools[1].includes("look_at_screen"), "only the turn with a screenshot has it");
 });

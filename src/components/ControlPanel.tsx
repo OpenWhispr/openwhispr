@@ -100,6 +100,8 @@ import {
 const platform = getCachedPlatform();
 
 const SIDEBAR_WIDTH_PX = 192;
+// open-settings-section names an Integrations section as "integrations.<section>".
+const INTEGRATIONS_TARGET_PREFIX = "integrations.";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
@@ -147,6 +149,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  // The chat stays mounted once opened, so a turn waiting on the user survives
+  // a trip to another view (Integrations, from an open_settings card).
+  const [chatOpened, setChatOpened] = useState(false);
+  if (activeView === "chat" && !chatOpened) setChatOpened(true);
+  const [newChatRequest, setNewChatRequest] = useState(0);
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
@@ -479,6 +486,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     // start); a bare request (app-menu Cmd+,) keeps an open modal where it is.
     const drain = async (showAnyway: boolean) => {
       const section = await window.electronAPI?.getPendingSettingsSection?.();
+      // Integrations is a view, not a Settings section.
+      if (section?.startsWith(INTEGRATIONS_TARGET_PREFIX)) {
+        setIntegrationsSection(
+          section.slice(INTEGRATIONS_TARGET_PREFIX.length) as IntegrationsSection
+        );
+        setActiveView("integrations");
+        setShowSettings(false);
+        return;
+      }
       if (section) {
         setSettingsSection(section);
         setSettingsRequest((count) => count + 1);
@@ -1109,7 +1125,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               actions={
                 <NewNoteMenu
                   onNewNote={handleNewNote}
-                  onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                  onNewChat={
+                    agentAllowedByPolicy
+                      ? () => {
+                          setNewChatRequest((count) => count + 1);
+                          setActiveView("chat");
+                        }
+                      : undefined
+                  }
                 />
               }
             />
@@ -1256,10 +1279,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   />
                 </Suspense>
               )}
-              {activeView === "chat" && agentAllowedByPolicy && (
-                <Suspense fallback={null}>
-                  <ChatView />
-                </Suspense>
+              {chatOpened && agentAllowedByPolicy && (
+                <div className={activeView === "chat" ? "contents" : "hidden"}>
+                  <Suspense fallback={null}>
+                    <ChatView active={activeView === "chat"} newChatRequest={newChatRequest} />
+                  </Suspense>
+                </div>
               )}
               {activeView === "personal-notes" && (
                 <Suspense fallback={null}>

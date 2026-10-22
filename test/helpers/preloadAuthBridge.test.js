@@ -102,45 +102,40 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
-test("assistant busy state is forwarded to the main-process hotkey guard", async () => {
-  const { api, invocations } = loadPreloadApi();
-
-  await api.setAssistantPanelBusy(true);
-
-  assert.deepEqual(invocations, [["set-assistant-panel-busy", true]]);
-});
-
-test("dictation lifecycle and audio levels preserve companion routing metadata", () => {
+test("dictation lifecycle reports reach main", () => {
   const { api, sends } = loadPreloadApi();
 
-  api.dictationLifecycleStateChanged("recording", "assistant");
-  api.dictationAudioLevelChanged(0.42);
+  api.dictationLifecycleStateChanged("recording");
 
-  assert.deepEqual(sends, [
-    ["dictation-lifecycle-state-changed", "recording", "assistant"],
-    ["dictation-audio-level-changed", 0.42],
-  ]);
+  assert.deepEqual(sends, [["dictation-lifecycle-state-changed", "recording"]]);
 });
 
-test("the Agent companion owns only its scoped window bridges", async () => {
-  const { api, invocations, sends } = loadPreloadApi();
+test("the agent window's bridges reach their channels and strip the Electron event", async () => {
+  const { api, invocations, listeners, sends } = loadPreloadApi();
+  const command = { text: "hi", attachment: null, selectedContext: null };
 
-  await api.resizeAgentDictationPillToContent(240);
-  await api.resizeAgentDictationPillToContent(null);
-  await api.setAgentDictationPillInteractivity(true);
-  await api.cancelAgentPanelDictation();
-  api.showAgentDictationFinalTranscript("recovered text");
+  api.agentWindowReady();
+  await api.agentWindowSetLayout({ layout: "modal", focus: true });
+  await api.agentWindowHide();
+  await api.agentWindowSetVoiceState("recording");
+  await api.openAgentWindow();
+  await api.submitAgentCommand(command);
 
+  assert.deepEqual(sends, [["agent-window-ready"]]);
   assert.deepEqual(invocations, [
-    ["resize-agent-dictation-pill-to-content", 240],
-    ["resize-agent-dictation-pill-to-content", null],
-    ["set-agent-dictation-pill-interactivity", true],
-    ["cancel-agent-panel-dictation"],
+    ["agent-window-set-layout", { layout: "modal", focus: true }],
+    ["agent-window-hide"],
+    ["agent-window-voice-state", "recording"],
+    ["open-agent-window"],
+    ["agent-window-submit-command", command],
   ]);
-  assert.deepEqual(
-    sends.filter(([channel]) => channel === "show-agent-dictation-final-transcript"),
-    [["show-agent-dictation-final-transcript", "recovered text"]]
-  );
+
+  let received;
+  const unsubscribe = api.onAgentWindowHotkey((payload) => (received = payload));
+  listeners.get("agent-window-hotkey")({ sender: {} }, { external: true });
+  assert.deepEqual(received, { external: true });
+  unsubscribe();
+  assert.equal(listeners.has("agent-window-hotkey"), false);
 });
 
 test("agent streaming forwards correlated start and cancel messages", () => {
@@ -213,14 +208,14 @@ test("agent streaming listeners strip Electron events and preserve correlation",
   assert.equal(listeners.has("cloud-agent-stream-end"), false);
 });
 
-test("prepare-dictation forwards the input kind without the Electron event", () => {
+test("prepare-dictation calls back without the Electron event", () => {
   const { api, listeners } = loadPreloadApi();
   const received = [];
-  const dispose = api.onPrepareDictation((options) => received.push(options));
+  const dispose = api.onPrepareDictation((...args) => received.push(args));
 
-  listeners.get("prepare-dictation")?.({ senderId: 1 }, { inputKind: "assistant" });
+  listeners.get("prepare-dictation")?.({ senderId: 1 });
 
   dispose();
-  assert.deepEqual(received, [{ inputKind: "assistant" }]);
+  assert.deepEqual(received, [[]]);
   assert.equal(listeners.has("prepare-dictation"), false);
 });

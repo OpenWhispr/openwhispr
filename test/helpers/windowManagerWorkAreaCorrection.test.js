@@ -168,9 +168,12 @@ test("creating the pill starts watching Plasma, and a change re-anchors it", asy
   await manager.createMainWindow();
   assert.equal(bottomOf(manager.mainWindow.bounds), DISPLAYS[1].workArea.height - 4);
 
+  let agentRefits = 0;
+  manager.agentWindow = { refit: () => (agentRefits += 1) };
   plasmaAnswered = true;
   await workAreasChanged();
   assert.equal(bottomOf(manager.mainWindow.bounds), PLASMA_WORK_AREAS[35].height - 4);
+  assert.equal(agentRefits, 1, "the agent window re-anchors too");
 });
 
 test("work areas that arrive after placement re-anchor an auto-placed pill", async () => {

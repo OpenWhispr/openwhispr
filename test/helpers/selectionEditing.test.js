@@ -32,7 +32,6 @@ test("builds a structured prompt that keeps instruction and selection separate",
     code: "SELECTION_EDIT_INVALID_RESPONSE",
   });
 
-  assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),

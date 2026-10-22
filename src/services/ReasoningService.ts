@@ -13,7 +13,7 @@ import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../con
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
-import { wrapCleanupTranscript } from "../config/prompts";
+import { CLAIM_CHECK_NOTE, STEP_LIMIT_NOTE, wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
   getLlmRequestTimeoutSeconds,
@@ -58,6 +58,7 @@ import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
+import type { ChatImageAttachment } from "../components/chat/types";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -65,6 +66,8 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
+  /** The tool failed (a thrown error or a failed result), not merely reported a status. */
+  isError?: boolean;
 }
 
 const BYOK_STREAM_PROVIDERS = [
@@ -87,8 +90,17 @@ function toByokStreamProvider(provider: string): ByokStreamProvider {
   return provider as ByokStreamProvider;
 }
 
+/**
+ * A run that ends with finishReason "tool-calls" stopped at the step cap while
+ * the model still wanted to call tools; one more step, with no tools, gave
+ * its answer (STEP_LIMIT_NOTE). "unbacked_claim" follows a final
+ * answer that claims an action no tool call in its turn did: with `retry`, its
+ * text is withdrawn and the model asked once more (CLAIM_CHECK_NOTE).
+ */
 export type AgentStreamChunk =
   | { type: "content"; text: string }
+  | { type: "unbacked_claim"; retry: boolean }
+  | { type: "reasoning"; text: string }
   | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
   | {
       type: "tool_result";
@@ -96,8 +108,37 @@ export type AgentStreamChunk =
       toolName: string;
       displayText: string;
       metadata?: ToolMetadata;
+      isError?: boolean;
     }
   | { type: "done"; finishReason?: string };
+
+// Some providers stream a failure as a plain object ({ message, code }), not an Error.
+function streamErrorMessage(cause: unknown): string {
+  const message = (cause as { message?: unknown } | null | undefined)?.message;
+  return typeof message === "string" && message ? message : String(cause ?? "Stream failed");
+}
+
+// Screenshots the user allowed during the turn, shown to every later step.
+function withStepImages(
+  messages: import("ai").ModelMessage[],
+  images: readonly ChatImageAttachment[] | undefined
+): import("ai").ModelMessage[] {
+  if (!images?.length) return messages;
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "The screenshot the user allowed:" },
+        ...images.map((image) => ({
+          type: "image" as const,
+          image: image.image,
+          mediaType: image.mediaType,
+        })),
+      ],
+    },
+  ];
+}
 
 function resolveLlmDispatchMode(
   provider: string,
@@ -834,7 +875,13 @@ class ReasoningService extends BaseReasoningService {
     messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
     model: string,
     provider: string,
-    config: ReasoningConfig & { systemPrompt: string },
+    config: ReasoningConfig & {
+      systemPrompt: string;
+      /** Images tools attach mid-turn; read before every step. */
+      stepImages?: readonly ChatImageAttachment[];
+      /** Whether a final answer claims an action no tool call in its turn did. */
+      isUnbackedClaim?: (text: string) => boolean;
+    },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     ({ model, provider, config } = this.resolveManagedScope(
@@ -982,20 +1029,31 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanChat || apiConfig.supportsTemperature;
 
-    const result = streamText({
-      model: aiModel,
-      messages: messages.map((m) => ({
-        role: m.role as "system" | "user" | "assistant",
-        content: m.content,
-      })) as import("ai").ModelMessage[],
-      tools: tools || undefined,
-      stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
-      prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
-      abortSignal: abortController.signal,
-      ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
-      maxOutputTokens: config.maxTokens || 4096,
-      ...(hasProviderOptions ? { providerOptions } : {}),
-    });
+    // The step that answers at the cap keeps the tools but may not call them:
+    // providers that check a conversation's tool use need the tools defined.
+    const run = (prompt: import("ai").ModelMessage[], maxSteps: number, answer: boolean) =>
+      streamText({
+        model: aiModel,
+        messages: prompt,
+        tools: tools || undefined,
+        ...(answer && tools ? { toolChoice: "none" as const } : {}),
+        stopWhen: stepCountIs(maxSteps),
+        prepareStep: ({ messages }) => ({
+          messages: withStepImages(compactTranscriptHistory(messages), config.stepImages),
+        }),
+        abortSignal: abortController.signal,
+        ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
+        maxOutputTokens: config.maxTokens || 4096,
+        ...(hasProviderOptions ? { providerOptions } : {}),
+      });
+    let prompt = messages.map((m) => ({
+      role: m.role as "system" | "user" | "assistant" | "tool",
+      content: m.content,
+    })) as import("ai").ModelMessage[];
+    let stepsLeft = tools ? ReasoningService.MAX_TOOL_STEPS : 1;
+    let claimRetried = false;
+    // Once the cap stops a run that still wanted tools, one last step with no tools answers.
+    let answeringAtCap = false;
 
     let canFlushFilteredText = true;
     const finishFilteredText = (): string => {
@@ -1004,74 +1062,117 @@ class ReasoningService extends BaseReasoningService {
     };
 
     try {
-      for await (const chunk of result.fullStream) {
-        if (chunk.type === "text-delta") {
-          const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
-          if (text) yield { type: "content", text };
-        } else if (chunk.type === "text-end" || chunk.type === "finish-step") {
-          const trailing = finishFilteredText();
-          if (trailing) yield { type: "content", text: trailing };
-        } else if (chunk.type === "tool-call") {
-          yield {
-            type: "tool_calls",
-            calls: [
-              {
-                id: chunk.toolCallId,
-                name: chunk.toolName,
-                arguments: JSON.stringify(chunk.input),
-              },
-            ],
-          };
-        } else if (chunk.type === "tool-result") {
-          const output = chunk.output;
-          const displayText =
-            typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
-          // Mirror the cloud path: successful object outputs become metadata so
-          // tool-result cards (note cards) render on BYOK/local too. Only the
-          // registry's bare { error } wrapper is a failure: a connector's own
-          // "failed" result carries `error` beside its status, and the history
-          // reads that status.
-          const isToolFailure =
-            output && typeof output === "object" && "error" in output && !("status" in output);
-          const metadata =
-            output && typeof output === "object" && !isToolFailure
-              ? (output as ToolMetadata)
-              : undefined;
-          yield {
-            type: "tool_result",
-            callId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            displayText,
-            ...(metadata ? { metadata } : {}),
-          };
-        } else if (chunk.type === "tool-error") {
-          // A call the SDK rejected (unknown tool, invalid input) never ran; without
-          // a result it would read as cut off mid-send in the chat and its history.
-          const cause = chunk.error;
-          yield {
-            type: "tool_result",
-            callId: chunk.toolCallId,
-            toolName: chunk.toolName,
-            displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
-          };
-        } else if (chunk.type === "abort") {
-          canFlushFilteredText = false;
-          finishFilteredText();
-        } else if (chunk.type === "error") {
-          // streamText reports provider failures as error parts and then ends
-          // the stream; swallowing them leaves callers with an empty reply and
-          // no terminal signal. Re-throw unless we aborted on purpose.
-          canFlushFilteredText = false;
-          finishFilteredText();
-          if (!abortController.signal.aborted) {
-            const cause = (chunk as { error?: unknown }).error;
-            throw cause instanceof Error ? cause : new Error(String(cause ?? "Stream failed"));
+      // One run, or two when the final answer of the first claims an action no
+      // tool call did, or the first hit the step cap: the second starts from
+      // everything the first said.
+      for (;;) {
+        const result = run(prompt, stepsLeft, answeringAtCap);
+        let stepText = "";
+        let stepsTaken = 0;
+        let retry = false;
+        let capped = false;
+        for await (const chunk of result.fullStream) {
+          if (chunk.type === "text-delta") {
+            const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
+            if (text) {
+              stepText += text;
+              yield { type: "content", text };
+            }
+          } else if (chunk.type === "reasoning-delta") {
+            if (chunk.text) yield { type: "reasoning", text: chunk.text };
+          } else if (chunk.type === "start-step") {
+            stepText = "";
+          } else if (chunk.type === "text-end" || chunk.type === "finish-step") {
+            if (chunk.type === "finish-step") stepsTaken += 1;
+            const trailing = finishFilteredText();
+            if (trailing) {
+              stepText += trailing;
+              yield { type: "content", text: trailing };
+            }
+          } else if (chunk.type === "tool-call") {
+            yield {
+              type: "tool_calls",
+              calls: [
+                {
+                  id: chunk.toolCallId,
+                  name: chunk.toolName,
+                  arguments: JSON.stringify(chunk.input),
+                },
+              ],
+            };
+          } else if (chunk.type === "tool-result") {
+            const output = chunk.output;
+            const displayText =
+              typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
+            // Mirror the cloud path: successful object outputs become metadata so
+            // tool-result cards (note cards) render on BYOK/local too. Only the
+            // registry's bare { error } wrapper is a failure: a connector's own
+            // "failed" result carries `error` beside its status, and the history
+            // reads that status.
+            const isToolFailure =
+              output && typeof output === "object" && "error" in output && !("status" in output);
+            const metadata =
+              output && typeof output === "object" && !isToolFailure
+                ? (output as ToolMetadata)
+                : undefined;
+            yield {
+              type: "tool_result",
+              callId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              displayText,
+              ...(metadata ? { metadata } : {}),
+              ...(isToolFailure ? { isError: true } : {}),
+            };
+          } else if (chunk.type === "tool-error") {
+            // A call the SDK rejected (unknown tool, invalid input) never ran; without
+            // a result it would read as cut off mid-send in the chat and its history.
+            const cause = chunk.error;
+            yield {
+              type: "tool_result",
+              callId: chunk.toolCallId,
+              toolName: chunk.toolName,
+              displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
+              isError: true,
+            };
+          } else if (chunk.type === "abort") {
+            canFlushFilteredText = false;
+            finishFilteredText();
+          } else if (chunk.type === "error") {
+            // streamText reports provider failures as error parts and then ends
+            // the stream; swallowing them leaves callers with an empty reply and
+            // no terminal signal. Re-throw unless we aborted on purpose.
+            canFlushFilteredText = false;
+            finishFilteredText();
+            if (!abortController.signal.aborted) {
+              const cause = (chunk as { error?: unknown }).error;
+              throw cause instanceof Error ? cause : new Error(streamErrorMessage(cause));
+            }
+          } else if (chunk.type === "finish") {
+            const trailing = finishFilteredText();
+            if (trailing) {
+              stepText += trailing;
+              yield { type: "content", text: trailing };
+            }
+            if (chunk.finishReason === "stop" && config.isUnbackedClaim?.(stepText)) {
+              retry = !claimRetried && stepsTaken < stepsLeft;
+              yield { type: "unbacked_claim", retry };
+            }
+            capped = chunk.finishReason === "tool-calls" && !answeringAtCap && Boolean(tools);
+            if (answeringAtCap) yield { type: "done", finishReason: "tool-calls" };
+            else if (!retry && !capped) yield { type: "done", finishReason: chunk.finishReason };
           }
-        } else if (chunk.type === "finish") {
-          const trailing = finishFilteredText();
-          if (trailing) yield { type: "content", text: trailing };
-          yield { type: "done", finishReason: chunk.finishReason };
         }
+        if (!retry && !capped) break;
+        const { messages: answered } = await result.response;
+        if (capped) {
+          answeringAtCap = true;
+          stepsLeft = 1;
+          prompt = [...prompt, ...answered, { role: "user", content: STEP_LIMIT_NOTE }];
+          continue;
+        }
+        claimRetried = true;
+        stepsLeft -= stepsTaken;
+        prompt = [...prompt, ...answered, { role: "user", content: CLAIM_CHECK_NOTE }];
       }
     } catch (error) {
       canFlushFilteredText = false;
@@ -1239,6 +1340,21 @@ class ReasoningService extends BaseReasoningService {
     return { stream: generator, wasCancelled: () => cancelled };
   }
 
+  /** One Cloud request about a screenshot, with no tools: the vision chain's answer as text. */
+  async askAboutScreen(
+    question: string,
+    screenContext: { data: string; mediaType: string },
+    systemPrompt: string
+  ): Promise<string> {
+    const { stream } = this.streamFromIPC([{ role: "user", content: question }], {
+      systemPrompt,
+      screenContext,
+    });
+    let answer = "";
+    for await (const ev of stream) if (ev.type === "content") answer += ev.text as string;
+    return answer;
+  }
+
   processTextStreamingCloud(
     messages: Array<{ role: string; content: string | Array<unknown> }>,
     config: {
@@ -1250,6 +1366,8 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      /** Whether a final answer claims an action no tool call in its turn did. */
+      isUnbackedClaim?: (text: string) => boolean;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
@@ -1268,6 +1386,8 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      /** Whether a final answer claims an action no tool call in its turn did. */
+      isUnbackedClaim?: (text: string) => boolean;
     },
     operationGeneration: number
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
@@ -1283,6 +1403,7 @@ class ReasoningService extends BaseReasoningService {
     // Each call gets its own assistant/tool pair, so the results the model
     // hasn't seen yet start where the last step's pairs do.
     let latestStepStart = currentMessages.length;
+    let claimRetried = false;
 
     for (let step = 0; step < maxSteps; step++) {
       if (operationWasCancelled()) return;
@@ -1296,9 +1417,11 @@ class ReasoningService extends BaseReasoningService {
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+      let stepText = "";
 
       for await (const ev of ipcStream.stream) {
         if (ev.type === "content") {
+          stepText += ev.text as string;
           yield { type: "content", text: ev.text as string };
         } else if (ev.type === "tool_call") {
           const call = {
@@ -1314,11 +1437,29 @@ class ReasoningService extends BaseReasoningService {
       if (ipcStream.wasCancelled() || operationWasCancelled()) return;
 
       if (pendingToolCalls.length === 0 || !config.executeToolCall) {
+        if (config.isUnbackedClaim?.(stepText)) {
+          const retry = !claimRetried && step < maxSteps - 1;
+          yield { type: "unbacked_claim", retry };
+          if (retry) {
+            claimRetried = true;
+            currentMessages = [
+              ...currentMessages,
+              { role: "assistant", content: stepText },
+              { role: "user", content: CLAIM_CHECK_NOTE },
+            ];
+            continue;
+          }
+        }
         yield { type: "done", finishReason: "stop" };
         return;
       }
 
       latestStepStart = currentMessages.length;
+      // What the model said before calling its tools is part of its turn: the
+      // next step must see it, or the model repeats or contradicts itself.
+      if (stepText.trim()) {
+        currentMessages = [...currentMessages, { role: "assistant", content: stepText }];
+      }
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;
@@ -1326,7 +1467,7 @@ class ReasoningService extends BaseReasoningService {
           toolResult = await config.executeToolCall(call.name, call.arguments, call.id);
         } catch (error) {
           const errMsg = `Error: ${(error as Error).message}`;
-          toolResult = { data: errMsg, displayText: errMsg };
+          toolResult = { data: errMsg, displayText: errMsg, isError: true };
         }
         if (operationWasCancelled()) return;
         yield {
@@ -1335,6 +1476,7 @@ class ReasoningService extends BaseReasoningService {
           toolName: call.name,
           displayText: toolResult.displayText,
           ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
+          ...(toolResult.isError ? { isError: true } : {}),
         };
 
         currentMessages = [
@@ -1366,7 +1508,22 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (operationWasCancelled()) return;
-    yield { type: "done", finishReason: "stop" };
+    // Every step ended in tool calls: the cap stopped a run that wasn't done.
+    // One more step, with no tools, answers with what it has.
+    const answer = this.streamFromIPC(
+      [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
+      { systemPrompt: config.systemPrompt, screenContext: config.screenContext }
+    );
+    let answerText = "";
+    for await (const ev of answer.stream) {
+      if (ev.type !== "content") continue;
+      answerText += ev.text as string;
+      yield { type: "content", text: ev.text as string };
+    }
+    if (answer.wasCancelled() || operationWasCancelled()) return;
+    // Checked like any answer, but not asked again: the turn has no steps left.
+    if (config.isUnbackedClaim?.(answerText)) yield { type: "unbacked_claim", retry: false };
+    yield { type: "done", finishReason: "tool-calls" };
   }
 
   async isAvailable(): Promise<boolean> {

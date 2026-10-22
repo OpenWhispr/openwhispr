@@ -34,6 +34,11 @@ const SLACK_PRE_SEND_REJECTIONS = new Set([
   "markdown_text_conflict",
   "invalid_arguments",
   "rate_limited",
+  // A thread that takes no replies, or a channel that takes nothing else.
+  "cannot_reply_to_message",
+  "restricted_action_thread_locked",
+  "restricted_action_non_threadable_channel",
+  "restricted_action_thread_only_channel",
 ]);
 
 function createSlackApi({
