@@ -579,6 +579,15 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       return payload;
     },
   },
+  minimax: {
+    displayName: "MiniMax",
+    ipc: () => window.electronAPI?.proxyMinimaxTranscription,
+    // asr-1.0 takes no prompt or keyterms, so the dictionary only reaches cleanup.
+    buildPayload: ({ audioBuffer, language }) => ({
+      audioBuffer,
+      language: language !== "auto" ? language : undefined,
+    }),
+  },
   corti: {
     displayName: "Corti",
     ipc: () => window.electronAPI?.proxyCortiTranscription,
@@ -2801,6 +2810,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isValidApiKey(apiKey, "xai")) {
         const err = new Error(
           "xAI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "minimax") {
+      apiKey = s.minimaxApiKey;
+      if (!isValidApiKey(apiKey, "minimax")) {
+        apiKey = await window.electronAPI.getMinimaxKey?.();
+      }
+      if (!isValidApiKey(apiKey, "minimax")) {
+        const err = new Error(
+          "MiniMax API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

@@ -316,6 +316,19 @@
       ]
     },
     {
+      "id": "minimax",
+      "name": "MiniMax",
+      "baseUrl": "https://api.minimax.io/v1",
+      "models": [
+        {
+          "id": "asr-1.0",
+          "name": "MiniMax ASR",
+          "description": "Speech recognition by MiniMax, with speaker labels",
+          "descriptionKey": "models.descriptions.transcription.minimax_asr_1"
+        }
+      ]
+    },
+    {
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://api.mistral.ai/v1",

@@ -2,6 +2,7 @@ const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
   xai: "https://api.x.ai/v1/models",
+  minimax: "https://api.minimax.io/v1/models",
   mistral: "https://api.mistral.ai/v1/models",
   // The largest page each API allows, so a valid but older model is still listed.
   anthropic: "https://api.anthropic.com/v1/models?limit=1000",

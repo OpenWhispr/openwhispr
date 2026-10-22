@@ -2759,6 +2759,7 @@
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
+        "minimax_asr_1": "Spracherkennung von MiniMax mit Sprechererkennung",
         "tinfoil_voxtral": "Nachweisbar private Transkription",
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",

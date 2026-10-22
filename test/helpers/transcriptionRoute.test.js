@@ -456,3 +456,17 @@ test("Orukeet fallback preserves the custom Bearer key", async () => {
   assert.equal(route.endpoint, "https://orukeet.gizmovoice.ai/v1/audio/transcriptions");
   assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
 });
+
+test("minimax routes through the proxy with asr-1.0 and only its supported languages", async () => {
+  const fr = await resolve({ cloudTranscriptionProvider: "minimax", preferredLanguage: "fr" });
+  assert.equal(fr.transport, "proxied");
+  assert.equal(fr.provider, "minimax");
+  assert.equal(fr.model, "asr-1.0");
+  assert.equal(fr.language, "fr");
+
+  const unsupported = await resolve({
+    cloudTranscriptionProvider: "minimax",
+    preferredLanguage: "nl",
+  });
+  assert.equal(unsupported.language, undefined, "outside MiniMax's language list: auto-detect");
+});

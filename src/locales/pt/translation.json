@@ -2640,6 +2640,7 @@
         "gemini_3_5_transcribe_live": "Fala para texto em streaming em tempo real",
         "corti_transcribe": "Transcrição médica de nível clínico",
         "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
+        "minimax_asr_1": "Reconhecimento de voz da MiniMax, com identificação de falantes",
         "tinfoil_voxtral": "Transcrição verificavelmente privada",
         "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
         "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",

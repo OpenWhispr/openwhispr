@@ -2661,6 +2661,7 @@
         "gemini_3_5_transcribe_live": "实时流式语音转文字",
         "corti_transcribe": "临床级医疗转录",
         "xai_grok_stt": "xAI 高精度语音识别",
+        "minimax_asr_1": "MiniMax 语音识别，支持说话人区分",
         "tinfoil_voxtral": "可验证的私密转录",
         "deepgram_nova_3": "Deepgram 最精准的实时模型",
         "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",

@@ -2759,6 +2759,7 @@
         "gemini_3_5_transcribe_live": "Realtime streaming speech-to-text",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
+        "minimax_asr_1": "Speech recognition by MiniMax, with speaker labels",
         "tinfoil_voxtral": "Verifiably private transcription",
         "deepgram_nova_3": "Deepgram's most accurate realtime model",
         "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",

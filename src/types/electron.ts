@@ -2403,6 +2403,14 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      // MiniMax API key management
+      getMinimaxKey?: () => Promise<string | null>;
+      saveMinimaxKey?: (key: string) => Promise<void>;
+      proxyMinimaxTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+      }) => Promise<ProxyTranscriptionResult>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
