@@ -416,7 +416,7 @@ for (const withContent of [true, false]) {
     assert.equal(harness.getAgentState(), "tool-executing");
     // The fake clock stands at 1000 throughout.
     assert.deepEqual(harness.getCommittedMessages()[0].toolCalls, [
-      { ...call, status: "executing", startedAt: 1000 },
+      { ...call, status: "executing", startedAt: 1000, textOffset: content.length },
     ]);
 
     await harness.emit({
@@ -431,6 +431,7 @@ for (const withContent of [true, false]) {
         ...call,
         status: "completed",
         startedAt: 1000,
+        textOffset: content.length,
         finishedAt: 1000,
         result: "Found one note",
         metadata,

@@ -137,7 +137,8 @@ test("a streaming reply lays out its actions out of sight, so they don't push it
   assert.ok(actionRow(done) !== undefined && !/\binvisible\b/.test(actionRow(done)));
 });
 
-test("an answered question leaves a line with the answer in place of its card", async (t) => {
+// The list mounted in a DOM, with the real card stores.
+async function mountLiveList(t) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -146,70 +147,102 @@ test("an answered question leaves a line with the answer in place of its card", 
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-message-list-" });
   const { AgentMessageList } = await vite.ssrLoadModule("/components/agent/AgentMessages.tsx");
   const { useAgentInteractionStore } = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
-  const question = {
-    key: "m2::c1",
-    messageId: "m2",
-    toolCallId: "c1",
-    state: "pending",
-    draft: {},
-    typedAnswers: {},
-    step: 0,
-    payload: {
-      kind: "questions",
-      questions: [
-        {
-          id: "who",
-          kind: "single",
-          prompt: "Who should it go to?",
-          options: [
-            { id: "sam", label: "Sam" },
-            { id: "alex", label: "Alex" },
-          ],
-        },
-      ],
-    },
-  };
-  useAgentInteractionStore.setState({ entries: { [question.key]: question } });
   const { createRoot } = require("react-dom/client");
   const host = happyWindow.document.createElement("div");
   happyWindow.document.body.append(host);
   root = createRoot(host);
   const noop = () => {};
-  const reply = {
-    ...message("m2", "assistant", ""),
-    isStreaming: true,
-    toolCalls: [{ id: "c1", name: "ask_user", arguments: "{}", status: "executing" }],
-  };
-  await React.act(async () =>
-    root.render(
-      React.createElement(AgentMessageList, {
-        messages: [MESSAGES[0], reply],
-        forkOrigin: null,
-        onOpenParent: noop,
-        busy: true,
-        readAloud: { available: false, speakingId: null, toggle: noop },
-        onRegenerate: noop,
-        onFork: noop,
-        onFollowUp: noop,
-        onContinue: noop,
-        emptyState: null,
-      })
-    )
-  );
+  const render = (messages) =>
+    React.act(async () =>
+      root.render(
+        React.createElement(AgentMessageList, {
+          messages,
+          forkOrigin: null,
+          onOpenParent: noop,
+          busy: true,
+          readAloud: { available: false, speakingId: null, toggle: noop },
+          onRegenerate: noop,
+          onFork: noop,
+          onFollowUp: noop,
+          onContinue: noop,
+          emptyState: null,
+        })
+      )
+    );
+  const setInteractions = (entries) =>
+    React.act(async () => useAgentInteractionStore.setState({ entries }));
+  return { host, render, setInteractions };
+}
+
+const QUESTION = {
+  key: "m2::c1",
+  messageId: "m2",
+  toolCallId: "c1",
+  state: "pending",
+  draft: {},
+  typedAnswers: {},
+  step: 0,
+  payload: {
+    kind: "questions",
+    questions: [
+      {
+        id: "who",
+        kind: "single",
+        prompt: "Who should it go to?",
+        options: [
+          { id: "sam", label: "Sam" },
+          { id: "alex", label: "Alex" },
+        ],
+      },
+    ],
+  },
+};
+const askUser = { id: "c1", name: "ask_user", arguments: "{}", status: "executing" };
+
+test("an answered question leaves a line with the answer in place of its card", async (t) => {
+  const { host, render, setInteractions } = await mountLiveList(t);
+  await setInteractions({ [QUESTION.key]: QUESTION });
+  await render([
+    MESSAGES[0],
+    { ...message("m2", "assistant", ""), isStreaming: true, toolCalls: [askUser] },
+  ]);
   assert.ok(host.querySelector("[data-interaction-card]"));
 
-  await React.act(async () =>
-    useAgentInteractionStore.setState({
-      entries: {
-        [question.key]: {
-          ...question,
-          state: "settled",
-          result: { status: "answered", answers: { who: "sam" } },
-        },
-      },
-    })
-  );
+  await setInteractions({
+    [QUESTION.key]: {
+      ...QUESTION,
+      state: "settled",
+      result: { status: "answered", answers: { who: "sam" } },
+    },
+  });
   assert.equal(host.querySelector("[data-interaction-card]"), null);
   const outcome = host.querySelector('[data-interaction-outcome="m2::c1"]');
   assert.equal(outcome?.textContent, "agentMode.interactions.status.answered · Sam");
+});
+
+test("text written before a card stays above it, and what follows goes below", async (t) => {
+  const { host, render, setInteractions } = await mountLiveList(t);
+  await setInteractions({ [QUESTION.key]: QUESTION });
+  const before = "One question first.";
+  const after = "Sending it to Sam.";
+  const reply = (call) => ({
+    ...message("m2", "assistant", `${before}\n\n${after}`),
+    isStreaming: true,
+    toolCalls: [call],
+  });
+  const order = () => {
+    const text = host.textContent;
+    return [before, "Who should it go to?", after].map((part) => text.indexOf(part));
+  };
+
+  await render([MESSAGES[0], reply({ ...askUser, textOffset: before.length })]);
+  const [textBefore, card, textAfter] = order();
+  assert.ok(textBefore < card && card < textAfter, "the card between the two");
+  assert.equal(host.querySelectorAll("[data-agent-answer]").length, 2);
+
+  // A reply saved before calls kept their place: the card first, as it always showed.
+  await render([MESSAGES[0], reply(askUser)]);
+  const [oldBefore, oldCard, oldAfter] = order();
+  assert.ok(oldCard < oldBefore && oldBefore < oldAfter);
+  assert.equal(host.querySelectorAll("[data-agent-answer]").length, 1);
 });

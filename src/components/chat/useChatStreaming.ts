@@ -1022,6 +1022,7 @@ export function useChatStreaming({
                     arguments: call.arguments,
                     status: "executing",
                     startedAt: Date.now(),
+                    textOffset: fullContent.length,
                     ...annotations.get(call.id),
                   },
                 ];

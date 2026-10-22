@@ -25,10 +25,12 @@ import { extractHelpEvidence } from "../chat/helpEvidence";
 import { helpAnswerPlainText } from "../chat/helpEvidenceText";
 import { ToolCallCard, TurnNotes } from "../chat/ChatMessage";
 import { visibleToolCalls } from "../chat/toolCallText";
-import type { Message } from "../chat/types";
+import type { Message, ToolCallInfo } from "../chat/types";
 import type { ForkOrigin } from "../chat/useChatPersistence";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 import { openProviderSettings } from "../../utils/describeProviderError";
 import { getSelectionInside } from "../../utils/assistantSelection";
 import { AgentProgressRow } from "./AgentProgressRow";
@@ -139,25 +141,69 @@ function ResponseActions({
   );
 }
 
+// The calls of a reply that show a card, or what one came to. Joined into a
+// string, so each selector returns the same value until a card comes or goes.
+function useStepsWithCards(messageId: string, steps: ToolCallInfo[]): Set<string> {
+  const withCards = (entries: Record<string, unknown>) =>
+    steps
+      .filter((step) => entries[approvalKey(messageId, step.id)])
+      .map((step) => step.id)
+      .join("\n");
+  const approvals = useConnectorApprovalStore((state) => withCards(state.entries));
+  const interactions = useAgentInteractionStore((state) => withCards(state.entries));
+  return new Set(`${approvals}\n${interactions}`.split("\n").filter(Boolean));
+}
+
+type AnswerPart = { step: ToolCallInfo } | { text: string; start: number };
+
+/**
+ * The reply's text with each card where its call came in it. A call saved
+ * without its place, or carried from an earlier turn (a regenerated reply
+ * keeps its sends), shows its card before the text.
+ */
+function answerParts(message: Message, cards: ToolCallInfo[]): AnswerPart[] {
+  const { content } = message;
+  const turnStart = message.turn?.startedAt;
+  const parts: AnswerPart[] = [];
+  let start = 0;
+  for (const step of cards) {
+    const thisTurn = turnStart == null || step.startedAt == null || step.startedAt >= turnStart;
+    const at = Math.min(Math.max(thisTurn ? (step.textOffset ?? 0) : 0, start), content.length);
+    const text = content.slice(start, at);
+    if (text.trim()) parts.push({ text, start });
+    parts.push({ step });
+    start = at;
+  }
+  const rest = content.slice(start);
+  if (rest.trim()) parts.push({ text: rest, start });
+  return parts;
+}
+
 // Memoized: only the streaming reply's props change while it streams.
 const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageProps) {
   const { t } = useTranslation();
   const { message, onContinue } = props;
   const helpEvidence = extractHelpEvidence(message.toolCalls);
   const steps = visibleToolCalls(message.toolCalls);
+  const withCards = useStepsWithCards(message.id, steps);
+  const parts = answerParts(
+    message,
+    steps.filter((step) => withCards.has(step.id))
+  );
   return (
     <div data-agent-message={message.id} className="flex flex-col gap-2">
       <AgentProgressRow message={message} />
-      {steps.map((step) => (
-        <ToolCallCard key={step.id} messageId={message.id} toolCall={step} />
-      ))}
-      {message.content && (
-        <div data-agent-answer>
-          <MarkdownRenderer
-            content={message.content}
-            className="text-[15px] leading-snug text-foreground selection:bg-primary selection:text-primary-foreground [&_li]:text-[15px] [&_ol]:space-y-0 [&_p]:text-[15px] [&_ul]:space-y-0"
-          />
-        </div>
+      {parts.map((part) =>
+        "step" in part ? (
+          <ToolCallCard key={part.step.id} messageId={message.id} toolCall={part.step} />
+        ) : (
+          <div key={`text-${part.start}`} data-agent-answer>
+            <MarkdownRenderer
+              content={part.text}
+              className="text-[15px] leading-snug text-foreground selection:bg-primary selection:text-primary-foreground [&_li]:text-[15px] [&_ol]:space-y-0 [&_p]:text-[15px] [&_ul]:space-y-0"
+            />
+          </div>
+        )
       )}
       {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
       {message.error?.settingsTarget && (
