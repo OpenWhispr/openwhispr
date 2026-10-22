@@ -4226,6 +4226,7 @@
         "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
         "dm_failed": "{{destination}}とのダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "{{destination}}は読み取り専用か、あなたには制限されています。",
+        "wrong_workspace": "そのリンクは別のSlackワークスペースのものです。何も送信されていません。",
         "generic": "問題が発生しました。何も送信されていません。",
         "github": {
           "reconnect_needed": "設定でGitHubを再接続する必要があります。",
@@ -4578,6 +4579,7 @@
         "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。",
         "dm_failed": "ダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "そのチャンネルは読み取り専用か、制限されています。",
+        "wrong_workspace": "そのリンクは別のSlackワークスペースのものです。",
         "generic": "うまくいきませんでした。",
         "github": {
           "reconnect_needed": "GitHubを再接続する必要があります。",

@@ -713,3 +713,88 @@ test("a list cut off at the page cap still finds an exact @username", async () =
   );
   assert.equal(named.status, "needs_clarification", "a name alone still isn't enough");
 });
+
+// Links to FIXTURES.posted and FIXTURES.postedDm.
+const ENG_MESSAGE = "https://acme-test.slack.com/archives/C0ENG/p1727200000123456";
+const GABE_DM_MESSAGE = "https://acme-test.slack.com/archives/D0GABE/p1727200001000100";
+
+test("a channel, person or DM named by id, or by a link, resolves exactly", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.info": [ok(FIXTURES.lookupGabe)],
+    "chat.postMessage": [ok(FIXTURES.postedDm)],
+  });
+  const target = async (destination) => {
+    const prepared = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(prepared.status, "ready", destination);
+    return prepared.payload.target;
+  };
+
+  assert.deepEqual(await target("C0ENGBE"), {
+    kind: "channel",
+    id: "C0ENGBE",
+    label: "#eng-backend",
+  });
+  assert.deepEqual(await target("G0LEADS"), { kind: "channel", id: "G0LEADS", label: "#leads" });
+  assert.deepEqual(await target(ENG_MESSAGE), { kind: "channel", id: "C0ENG", label: "#eng" });
+  assert.deepEqual(await target("U0GABE"), { kind: "user", id: "U0GABE", label: "Gabe Smith" });
+  assert.deepEqual(slack.calls.at(-1), {
+    method: "users.info",
+    params: { user: "U0GABE" },
+    authorization: "Bearer xoxe.xoxp-1-test-access",
+    contentType: "application/x-www-form-urlencoded",
+  });
+  assert.equal(slack.methods().includes("users.list"), false, "an id needs no directory");
+
+  // Without im:read Slack won't say whose DM it is, so the card says what it is.
+  const dm = await target("D0GABE");
+  assert.deepEqual(dm, { kind: "dm", id: "D0GABE", label: "Direct message (D0GABE)" });
+  assert.deepEqual(await target(GABE_DM_MESSAGE), dm);
+
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "D0GABE", text: "hi" },
+    BOUND
+  );
+  const sent = await connector.commit("send_message", prepared.payload, {}, BOUND);
+  assert.equal(sent.state, "sent");
+  assert.equal(posts(slack)[0].params.channel, "D0GABE");
+  assert.equal(slack.methods().includes("conversations.open"), false);
+});
+
+test("an id or link that finds nothing asks, and a link from another workspace is refused", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.info": [slackError("user_not_found")],
+  });
+  for (const destination of [
+    "C0NOPE",
+    "U0NOPE",
+    "https://acme-test.slack.com/archives/C0NOPE/p1727200000123456",
+  ]) {
+    const asked = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(asked.status, "needs_clarification", destination);
+  }
+  const elsewhere = await connector.prepare(
+    "send_message",
+    { destination: "https://other-team.slack.com/archives/C0ENG/p1727200000123456", text: "hi" },
+    BOUND
+  );
+  assert.equal(elsewhere.errorCode, "wrong_workspace");
+  assert.equal(posts(slack).length, 0);
+});
+
+test("a name that only looks a bit like an id is still a name", async () => {
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+  // No digit: a display name, not an id.
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "GABE", text: "hi" },
+    BOUND
+  );
+  assert.equal(prepared.status, "ready");
+  assert.equal(prepared.payload.target.id, "U0GABE");
+});

@@ -4226,6 +4226,7 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息，未发送任何内容。请重试。",
         "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
         "restricted": "{{destination}} 对您是只读或受限的。",
+        "wrong_workspace": "该链接来自另一个 Slack 工作区，未发送任何内容。",
         "generic": "出了点问题，未发送任何内容。",
         "github": {
           "reconnect_needed": "需要在设置中重新连接 GitHub。",
@@ -4578,6 +4579,7 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息。未发送任何内容。",
         "dm_failed": "无法打开私信。未发送任何内容。",
         "restricted": "该频道为只读或受限。",
+        "wrong_workspace": "该链接来自另一个 Slack 工作区。",
         "generic": "操作未成功。",
         "github": {
           "reconnect_needed": "需要重新连接 GitHub。",

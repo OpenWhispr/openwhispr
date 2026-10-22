@@ -4226,6 +4226,7 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado. Tente novamente.",
         "dm_failed": "Não foi possível abrir a mensagem direta para {{destination}}. Nada foi enviado.",
         "restricted": "{{destination}} é somente leitura ou restrito para você.",
+        "wrong_workspace": "Esse link é de outro workspace do Slack. Nada foi enviado.",
         "generic": "Algo deu errado. Nada foi enviado.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado nas Configurações.",
@@ -4578,6 +4579,7 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado.",
         "dm_failed": "Não foi possível abrir a mensagem direta. Nada foi enviado.",
         "restricted": "Esse canal é somente leitura ou restrito.",
+        "wrong_workspace": "Esse link é de outro workspace do Slack.",
         "generic": "Não funcionou.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado.",
