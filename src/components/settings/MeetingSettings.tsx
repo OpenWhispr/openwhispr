@@ -113,12 +113,13 @@ function MeetingSelfHostedRealtimePanel() {
           value={meetingRealtimeModel}
           onChange={(e) => setMeetingRealtimeModel(e.target.value)}
           placeholder="Whisper-Large-v3-Turbo"
-          aria-required
+          aria-required={!urlHasModel(trimmedUrl) || undefined}
+          aria-describedby={modelMissing ? "meeting-realtime-model-hint" : undefined}
           autoComplete="off"
           spellCheck={false}
         />
         {modelMissing && (
-          <p className="text-xs text-muted-foreground">
+          <p id="meeting-realtime-model-hint" className="text-xs text-muted-foreground">
             {t("settingsPage.transcription.selfHostedRealtime.modelRequired")}
           </p>
         )}
