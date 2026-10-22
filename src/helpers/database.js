@@ -2786,6 +2786,14 @@ class DatabaseManager {
           .get(word);
 
       if (existing) {
+        // A local edit can follow the push ACK within the same SQLite second.
+        // Its timestamp cannot safely order it against the server's echo.
+        if (existing.sync_status === "pending") {
+          this.db
+            .prepare("UPDATE custom_dictionary SET cloud_id = COALESCE(cloud_id, ?) WHERE id = ?")
+            .run(cloudEntry.id, existing.id);
+          return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
+        }
         // Manual is sticky — a pull never demotes a local manual row to learned.
         const mergedSource =
           existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
@@ -2820,18 +2828,33 @@ class DatabaseManager {
     }
   }
 
-  markDictionaryEntrySynced(id, cloudId) {
+  markDictionaryEntrySynced(
+    id,
+    cloudId,
+    serverUpdatedAt = null,
+    expectedWord = null,
+    expectedSource = null
+  ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      // Guard on deleted_at so a delete or tombstone that raced the push isn't
-      // flipped back to 'synced' (which would strand the deletion). changes=0
-      // signals that race to SyncService, which reconciles the cloud row.
-      const result = this.db
-        .prepare(
-          "UPDATE custom_dictionary SET sync_status = 'synced', cloud_id = ? WHERE id = ? AND deleted_at IS NULL"
-        )
-        .run(cloudId, id);
-      return { success: result.changes > 0, changes: result.changes };
+      return this.db.transaction(() => {
+        const current = this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(id);
+        if (!current || current.deleted_at) return { success: false, changes: 0 };
+
+        const unchanged =
+          (expectedWord === null || current.word === expectedWord) &&
+          (expectedSource === null || current.source === expectedSource);
+        // Edited rows still adopt the cloud identity, so they can PATCH next
+        // pass. Only missing/deleted rows authorize orphan cleanup (changes=0).
+        const result = this.db
+          .prepare(
+            `UPDATE custom_dictionary
+             SET cloud_id = ?, sync_status = ?, updated_at = COALESCE(?, updated_at)
+             WHERE id = ?`
+          )
+          .run(cloudId, unchanged ? "synced" : "pending", unchanged ? serverUpdatedAt : null, id);
+        return { success: result.changes > 0, changes: result.changes };
+      })();
     } catch (error) {
       debugLogger.error(
         "Error marking dictionary entry synced",

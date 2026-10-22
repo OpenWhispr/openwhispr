@@ -2567,11 +2567,17 @@ export class SyncService {
 
     for (const entry of updates) {
       try {
-        await DictionaryService.update(entry.cloud_id!, {
+        const server = await DictionaryService.update(entry.cloud_id!, {
           word: entry.word,
           source: entry.source,
         });
-        await window.electronAPI.markDictionarySynced?.(entry.id, entry.cloud_id!);
+        await window.electronAPI.markDictionarySynced?.(
+          entry.id,
+          server.id,
+          server.updated_at,
+          entry.word,
+          entry.source
+        );
       } catch (err) {
         // 404: another device purged the cloud row. Clear the stale cloud_id so
         // the next push re-creates it via batchCreate instead of retrying PATCH.
@@ -2605,7 +2611,13 @@ export class SyncService {
           }
           // 0 changes means the local row was deleted between snapshot and ack —
           // delete the freshly-created server row so we don't orphan it.
-          const result = await window.electronAPI.markDictionarySynced?.(local.id, server.id);
+          const result = await window.electronAPI.markDictionarySynced?.(
+            local.id,
+            server.id,
+            server.updated_at,
+            local.word,
+            local.source
+          );
           if (result && result.changes === 0) {
             try {
               await DictionaryService.delete(server.id);
