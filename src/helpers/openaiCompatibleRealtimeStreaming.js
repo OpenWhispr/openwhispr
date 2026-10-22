@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
-const { isPrivateHost } = require("./providerConnectionTest");
+const { buildRealtimeUrl } = require("./selfHostedRealtimeUrl");
 
 // Servers that speak the OpenAI Realtime transcription protocol on the user's
 // own network (Lemonade, Speaches). Scoped to that protocol, not to "any URL":
@@ -15,35 +15,7 @@ const DEFAULT_CAPTURE_RATE = 24000;
 // sent no Authorization header at all, so this value never leaves the process.
 const NO_API_KEY = "no-api-key";
 
-// Sentinels MeetingRecordingMount translates; the resolver throws the same ones.
-const URL_MISSING = "selfHostedRealtimeUrlMissing";
-const URL_INVALID = "selfHostedRealtimeUrlInvalid";
 const MODEL_MISSING = "selfHostedRealtimeModelMissing";
-
-// Mirrors isSecureHttpEndpoint: wss anywhere, cleartext ws only on a private
-// host, so a key never crosses the public internet unencrypted. The model goes
-// in the query because these servers ignore the session's transcription model
-// (Speaches refuses the upgrade without it); the rest of the query is kept.
-function buildRealtimeUrl(url, model) {
-  const raw = typeof url === "string" ? url.trim() : "";
-  if (!raw) throw new Error(URL_MISSING);
-
-  let parsed;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new Error(URL_INVALID);
-  }
-  const secure = parsed.protocol === "wss:";
-  if (!secure && !(parsed.protocol === "ws:" && isPrivateHost(parsed.hostname))) {
-    throw new Error(URL_INVALID);
-  }
-
-  const trimmedModel = typeof model === "string" ? model.trim() : "";
-  if (trimmedModel) parsed.searchParams.set("model", trimmedModel);
-  if (!parsed.searchParams.has("intent")) parsed.searchParams.set("intent", "transcription");
-  return parsed.toString();
-}
 
 const createCompatibleRealtimeSocket = ({ url, apiKey }) =>
   new WebSocket(url, apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {});
