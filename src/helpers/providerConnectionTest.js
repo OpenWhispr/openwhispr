@@ -545,4 +545,9 @@ function describeCortiTokenFailure(error) {
   };
 }
 
-module.exports = { describeCortiTokenFailure, resolveProviderRequest, testProviderConnection };
+module.exports = {
+  describeCortiTokenFailure,
+  isPrivateHost,
+  resolveProviderRequest,
+  testProviderConnection,
+};
