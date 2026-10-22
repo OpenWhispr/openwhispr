@@ -1458,6 +1458,13 @@ test("the Gmail email_draft says the user sends it from a card; the compose one 
   assert.match(description("gmailSend"), /nothing is sent until they press Send/);
   assert.doesNotMatch(description("gmailSend"), /never sends/);
   assert.match(description("gmail"), /This never sends email/);
+  // Either way the body goes out exactly as written.
+  for (const target of ["gmailSend", "gmail", "outlookWork", "mailto"]) {
+    assert.match(
+      description(target),
+      /plain text, not Markdown \(no \*\*, # or \[text\]\(link\)\)/
+    );
+  }
 });
 
 test("the prompt never claims email_draft can't send, and forbids claiming a send that didn't happen", async (t) => {

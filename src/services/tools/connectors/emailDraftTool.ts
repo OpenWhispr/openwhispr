@@ -38,6 +38,8 @@ const GMAIL_UNKNOWN_GUIDANCE = "Tell the user to check their Gmail Sent folder."
 // or the user's mail app sends it.
 const EMAIL_DRAFT_INSTRUCTION =
   "Use email_draft to draft an email to full email addresses; its description says whether the user sends it from a card in the chat or from their own email app.";
+// Both paths send the body as it is written, so Markdown shows up as symbols.
+const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or [text](link)).";
 
 const EMAIL_PARAMETERS: ToolDefinition["parameters"] = {
   type: "object",
@@ -139,7 +141,8 @@ function createGmailSendTool(canConnect: boolean): ToolDefinition {
   return {
     name: "email_draft",
     description:
-      "Write an email for the user to send from their connected Gmail account. It appears on a card in the chat where the user reviews, edits and sends it themselves; nothing is sent until they press Send. `to` and `cc` must be full email addresses; call find_contact first when you only have a name.",
+      "Write an email for the user to send from their connected Gmail account. It appears on a card in the chat where the user reviews, edits and sends it themselves; nothing is sent until they press Send. `to` and `cc` must be full email addresses; call find_contact first when you only have a name. " +
+      PLAIN_TEXT_BODY,
     parameters: EMAIL_PARAMETERS,
     readOnly: false,
     connectorId: "email",
@@ -198,7 +201,8 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
   return {
     name: "email_draft",
     description:
-      "Open a pre-filled email draft in the user's email app so they can review and send it themselves. This never sends email. `to` and `cc` must be full email addresses; call find_contact first when you only have a name.",
+      "Open a pre-filled email draft in the user's email app so they can review and send it themselves. This never sends email. `to` and `cc` must be full email addresses; call find_contact first when you only have a name. " +
+      PLAIN_TEXT_BODY,
     parameters: EMAIL_PARAMETERS,
     readOnly: false,
     connectorId: "email",
