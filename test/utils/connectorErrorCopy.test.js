@@ -29,7 +29,6 @@ test("codes with their own copy map to themselves", () => {
     "draft_too_long",
     "invalid_address",
     "thread_mismatch",
-    "wrong_workspace",
     "invalid_thread",
   ]) {
     assert.equal(connectorErrorCopyKey(code), code);
@@ -133,7 +132,6 @@ test("every key the card and the tool step can show has English copy", () => {
     "dm_failed",
     "restricted",
     "thread_mismatch",
-    "wrong_workspace",
     "invalid_thread",
     "thread_closed",
     "thread_only",

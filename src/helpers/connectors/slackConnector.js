@@ -61,9 +61,13 @@ function messageUrl(teamUrl, channel, ts, threadTs) {
 }
 
 // A link to a conversation, or to a message in it:
-// https://<workspace>.slack.com/archives/<C…|G…|D…>[/p<ts>]. A reply can't
-// start a thread, and its link names the one it is in (?thread_ts=), so
-// threadTs is that thread. Null for anything else.
+// https://<…>.slack.com/archives/<C…|G…|D…>[/p<ts>]. Any Slack host:
+// Enterprise Grid and Slack Connect links aren't on the workspace's own
+// domain, and the conversation is pinned by its id (among the user's
+// channels, or against the destination) either way. A reply can't start a
+// thread, and its link names the one it is in (?thread_ts=), so threadTs is
+// that thread. Null for anything else, a cid naming another conversation
+// included.
 function parseSlackLink(value) {
   let url;
   try {
@@ -71,27 +75,17 @@ function parseSlackLink(value) {
   } catch {
     return null;
   }
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".slack.com")) return null;
   const [archives, channelId, message, ...rest] = url.pathname.split("/").filter(Boolean);
-  if (url.protocol !== "https:" || archives !== "archives" || rest.length > 0) return null;
+  if (archives !== "archives" || rest.length > 0) return null;
   if (!/^[CDG][A-Z0-9]+$/.test(channelId ?? "")) return null;
+  const cid = url.searchParams.get("cid");
+  if (cid !== null && cid !== channelId) return null;
   const ts = message === undefined ? null : LINK_MESSAGE.exec(message);
   if (message !== undefined && !ts) return null;
   const threadTs = url.searchParams.get("thread_ts");
   if (threadTs !== null && !MESSAGE_TS.test(threadTs)) return null;
-  return {
-    host: url.hostname,
-    channelId,
-    threadTs: threadTs ?? (ts ? `${ts[1]}.${ts[2]}` : null),
-  };
-}
-
-// auth.test's url is the workspace's own: https://<workspace>.slack.com/.
-function inWorkspace(link, teamUrl) {
-  try {
-    return new URL(teamUrl).hostname === link.host;
-  } catch {
-    return false;
-  }
+  return { channelId, threadTs: threadTs ?? (ts ? `${ts[1]}.${ts[2]}` : null) };
 }
 
 // A person's DM is known only once Send opens it, which checks the thread
@@ -127,8 +121,6 @@ function failureMessage(errorCode, label = "", fallback = "Slack didn't accept t
       return "The message is empty.";
     case "thread_mismatch":
       return `That thread is in a different conversation from ${label}, so nothing was sent. To reply there, pass the thread's link as the destination too.`;
-    case "wrong_workspace":
-      return "That Slack link is from another workspace than the one connected. Nothing was sent.";
     case "invalid_thread":
       return "The thread must be a link to a Slack message, like https://<workspace>.slack.com/archives/C0123ABCD/p1712345678901234. Nothing was sent.";
     case "cannot_reply_to_message":
@@ -154,7 +146,7 @@ function parseDestination(raw) {
   if (isValidEmailAddress(value)) return { kind: "email", query: value };
   if (value.startsWith("@")) return { kind: "person", query: value.slice(1) };
   const link = parseSlackLink(value);
-  if (link) return { kind: "id", query: link.channelId, link };
+  if (link) return { kind: "id", query: link.channelId };
   if (SLACK_ID.test(value)) return { kind: "id", query: value };
   return { kind: "any", query: value };
 }
@@ -360,9 +352,6 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       }
       const { credential } = access;
       const parsed = parseDestination(destination);
-      if ([thread, parsed.link].some((link) => link && !inWorkspace(link, credential.teamUrl))) {
-        return prepareFailed("wrong_workspace", failureMessage("wrong_workspace"));
-      }
       const cacheKey = `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
       const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
       if (found.clarify) return found.clarify;

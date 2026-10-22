@@ -22,7 +22,6 @@ export type ConnectorErrorCopyKey =
   | "dm_failed"
   | "restricted"
   | "thread_mismatch"
-  | "wrong_workspace"
   | "invalid_thread"
   | "thread_closed"
   | "thread_only"
@@ -47,7 +46,6 @@ const OWN_COPY: ReadonlySet<string> = new Set<ConnectorErrorCopyKey>([
   "draft_too_long",
   "invalid_address",
   "thread_mismatch",
-  "wrong_workspace",
   "invalid_thread",
 ]);
 

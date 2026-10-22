@@ -847,17 +847,17 @@ test("a DM thread for a person is checked against the DM opened at Send", async 
   });
 });
 
-test("a link from another workspace, or one that isn't a message link, is refused before calling Slack", async () => {
+test("a link that isn't to a Slack message, or whose cid disagrees with it, is refused before calling Slack", async () => {
   const { connector, slack } = await setupSlack(channelsOnly);
-  for (const [thread, errorCode] of [
-    ["https://other-team.slack.com/archives/C0ENG0001/p1727200000123456", "wrong_workspace"],
-    ["https://acme-test.slack.com/archives/C0ENG0001", "invalid_thread"],
-    [
-      "https://acme-test.slack.com/archives/C0ENG0001/p1727200000123456?thread_ts=soon",
-      "invalid_thread",
-    ],
-    ["https://example.com/eng/1727200000.123456", "invalid_thread"],
-    ["1727200000.123456", "invalid_thread"],
+  for (const thread of [
+    "https://acme-test.slack.com/archives/C0ENG0001",
+    "https://acme-test.slack.com/archives/C0ENG0001/p1727200000123456?thread_ts=soon",
+    `${ENG_MESSAGE}?cid=C0OTHER01`,
+    `${ENG_REPLY.replace("cid=C0ENG0001", "cid=C0OTHER01")}`,
+    "https://example.com/archives/C0ENG0001/p1727200000123456",
+    "https://slack.com.example.net/archives/C0ENG0001/p1727200000123456",
+    "http://acme-test.slack.com/archives/C0ENG0001/p1727200000123456",
+    "1727200000.123456",
   ]) {
     const refused = await connector.prepare(
       "send_message",
@@ -865,10 +865,34 @@ test("a link from another workspace, or one that isn't a message link, is refuse
       BOUND
     );
     assert.equal(refused.status, "failed", thread);
-    assert.equal(refused.errorCode, errorCode, thread);
+    assert.equal(refused.errorCode, "invalid_thread", thread);
     assert.equal(typeof refused.message, "string");
   }
   assert.deepEqual(slack.calls, []);
+});
+
+// Enterprise Grid and Slack Connect links aren't on the workspace's own
+// domain; the conversation is pinned by its id either way.
+test("a link on another Slack domain is taken by its conversation", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.postedReply)],
+  });
+
+  const prepared = await connector.prepare(
+    "send_message",
+    {
+      destination: "https://partner.slack.com/archives/C0ENG0001",
+      text: "hi",
+      thread: "https://acme.enterprise.slack.com/archives/C0ENG0001/p1727200000123456",
+    },
+    BOUND
+  );
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.payload.target, { kind: "channel", id: "C0ENG0001", label: "#eng" });
+  await connector.commit("send_message", prepared.payload, {}, BOUND);
+
+  assert.equal(posts(slack)[0].params.thread_ts, "1727200000.123456");
 });
 
 test("Slack refusing a reply in that thread is failed, not unknown", async () => {
@@ -945,7 +969,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
   assert.equal(slack.methods().includes("conversations.open"), false);
 });
 
-test("an id or link that finds nothing asks, and a link from another workspace is refused", async () => {
+test("an id or link that finds nothing asks", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,
     "users.info": [slackError("user_not_found")],
@@ -954,19 +978,12 @@ test("an id or link that finds nothing asks, and a link from another workspace i
     "C0NOPE001",
     "U0NOPE001",
     "https://acme-test.slack.com/archives/C0NOPE001/p1727200000123456",
+    // Another workspace's channel isn't among the user's.
+    "https://other-team.slack.com/archives/C0THEIRS1/p1727200000123456",
   ]) {
     const asked = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
     assert.equal(asked.status, "needs_clarification", destination);
   }
-  const elsewhere = await connector.prepare(
-    "send_message",
-    {
-      destination: "https://other-team.slack.com/archives/C0ENG0001/p1727200000123456",
-      text: "hi",
-    },
-    BOUND
-  );
-  assert.equal(elsewhere.errorCode, "wrong_workspace");
   assert.equal(posts(slack).length, 0);
 });
 
