@@ -23,9 +23,9 @@ const SLACK_ESCAPE_SPECIALS = true;
 const TOO_LARGE_FOR_NAMES =
   "This Slack workspace is too large to look people up by name. Ask the user for the person's email address, or the exact #channel name.";
 // A channel (C…, or G… for an older private one), a DM (D…) or a person (U…,
-// or W… on Enterprise Grid). Slack's ids carry digits, so a name typed in
-// capitals ("GABE") is still a name.
-const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{2,}$/;
+// or W… on Enterprise Grid). Slack's ids are nine or more characters with a
+// digit, so a name typed in capitals ("GABE", "D2C") is still a name.
+const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
 const MESSAGE_TS = /^\d{10}\.\d{6}$/;
@@ -183,8 +183,9 @@ function prepareFailed(errorCode, message) {
 }
 
 function createSlackConnector({ api, auth, directory, credentials }) {
-  // An id names exactly one channel, person or DM, so it needs no list to be
-  // sure, not even a complete one.
+  // An id names exactly one channel, person or DM. A person's is looked up
+  // directly; a channel's must be among the user's channels, which a list
+  // cut off at the page cap may not show.
   async function findById(id, token, cacheKey) {
     if (id.startsWith("D")) {
       // Whose DM it is takes im:read, which the app doesn't ask for. Send
@@ -207,7 +208,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     if (channel) return { candidate: channel };
     return {
       clarify: clarify(
-        `Couldn't find a channel with the id ${id} that the user is in. Ask the user where to send it.`
+        channels.truncated
+          ? `The user is in more Slack channels than can be listed, and none of those read has the id ${id}. Ask the user where to send it.`
+          : `Couldn't find a channel with the id ${id} that the user is in. Ask the user where to send it.`
       ),
     };
   }
