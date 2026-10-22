@@ -784,3 +784,127 @@ test("a look at the screen isn't replayed: later turns don't offer the tool", as
     });
   }
 });
+
+const LEDGER_NOTE =
+  "Earlier messages in this conversation were left out to save space. The requests in them that led to an action, each with what the action did:";
+const smallTalk = (n) => Array.from({ length: n }, (_, i) => user(`m${i}`));
+const sent = (id, extra = {}) =>
+  call(
+    "email_draft",
+    { to: [`${id}@example.com`], subject: "Roadmap", body: "the body text" },
+    { id, metadata: { status: "sent", url: `https://mail.google.com/mail/#sent/${id}` }, ...extra }
+  );
+
+// A chat whose first turn sent an email (and searched), whose second cancelled
+// a draft, then enough small talk to push both out of the history.
+const longChat = () => [
+  user("Email Gabe the roadmap"),
+  assistant("Sent.", [call("search_notes", { query: "roadmap" }, { id: "search" }), sent("gabe")]),
+  user("And Dana?"),
+  assistant("You cancelled it.", [
+    call(
+      "email_draft",
+      { to: ["dana@example.com"] },
+      { id: "dana", metadata: { status: "cancelled_by_user" } }
+    ),
+  ]),
+  ...smallTalk(40),
+];
+
+test("a send that left the history stays known with its request, call and outcome", async () => {
+  const { toHistoryMessages } = await load();
+  const history = toHistoryMessages(longChat(), { toolHistory: "parts" });
+
+  assert.deepEqual(history.slice(0, 3), [
+    { role: "user", content: `${LEDGER_NOTE}\n\nEmail Gabe the roadmap` },
+    {
+      role: "assistant",
+      content: [{ type: "tool-call", toolCallId: "gabe", toolName: "email_draft", input: {} }],
+    },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "gabe",
+          toolName: "email_draft",
+          output: {
+            type: "text",
+            value: JSON.stringify({
+              status: "sent",
+              link: "https://mail.google.com/mail/#sent/gabe",
+            }),
+          },
+        },
+      ],
+    },
+  ]);
+  // The ledger's room comes out of the 40 entries.
+  assert.equal(history[3].content, "m10");
+  assert.ok(history.length <= 40, String(history.length));
+});
+
+test("with a text trace, the sends left out open the first message, never a message of their own", async () => {
+  const { toHistoryMessages } = await load();
+  const [first, second] = toHistoryMessages(longChat(), { toolHistory: "text" });
+  assert.equal(
+    first.content,
+    `${LEDGER_NOTE}\n- "Email Gabe the roadmap": [Tools used: email_draft (sent: https://mail.google.com/mail/#sent/gabe)]\n\nm10`
+  );
+  assert.equal(second.content, "m11");
+  assert.equal(toHistoryMessages(longChat(), { toolHistory: "none" })[0].content, "m0");
+});
+
+test("a send cut off before its result is kept as one that may have gone out", async () => {
+  const { toHistoryMessages } = await load();
+  const cutOff = call(
+    "slack_send_message",
+    { destination: "#eng" },
+    {
+      id: "slack",
+      status: "stopped",
+      actionKey: "slack.send:abc",
+    }
+  );
+  const history = toHistoryMessages(
+    [user("Post it in #eng"), assistant("", [cutOff]), ...smallTalk(40)],
+    { toolHistory: "parts" }
+  );
+  assert.equal(history[0].content, `${LEDGER_NOTE}\n\nPost it in #eng`);
+  assert.equal(
+    history[2].content[0].output.value,
+    JSON.stringify({ status: "outcome not recorded" })
+  );
+});
+
+test("only the latest sends that fit ten entries are kept, and the request always ends the history", async () => {
+  const { toHistoryMessages } = await load();
+  // Five turns of four sends each, then a long tail: far more than the cap.
+  const turns = Array.from({ length: 5 }, (_, t) => [
+    user(`Post round ${t}`),
+    assistant(
+      "Posted.",
+      Array.from({ length: 4 }, (_, i) => sent(`t${t}s${i}`))
+    ),
+  ]).flat();
+  const history = toHistoryMessages([...turns, ...smallTalk(40), user("Now what?")], {
+    toolHistory: "parts",
+  });
+
+  assert.ok(history.length <= 40, String(history.length));
+  assert.deepEqual(history.at(-1), { role: "user", content: "Now what?" });
+  const ledgerIds = history
+    .filter((m) => m.role === "assistant")
+    .map((m) => m.content[0].toolCallId);
+  assert.deepEqual(ledgerIds, ["t4s0", "t4s1", "t4s2", "t4s3"]);
+  assert.equal(history[0].content, `${LEDGER_NOTE}\n\nPost round 4`);
+});
+
+test("a long request kept with its send is cut at 500 characters", async () => {
+  const { toHistoryMessages } = await load();
+  const history = toHistoryMessages(
+    [user("é".repeat(600)), assistant("Sent.", [sent("a")]), ...smallTalk(40)],
+    { toolHistory: "parts" }
+  );
+  assert.equal(history[0].content, `${LEDGER_NOTE}\n\n${"é".repeat(500)}…`);
+});

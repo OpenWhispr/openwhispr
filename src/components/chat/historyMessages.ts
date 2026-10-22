@@ -57,6 +57,18 @@ const ACTION_OUTCOME: Record<string, string> = {
 };
 const OUTCOME_URL_MAX_CHARS = 200;
 
+// Sends, opened drafts and sends that may have happened stay known after
+// their turn leaves the history, each after the request that led to it, so a
+// long chat never repeats one or denies it. A call cut off before its result
+// counts when it had claimed a send. Only the latest that fit
+// LEDGER_MAX_ENTRIES (a request is one entry, an action two): they count
+// toward the history's cap.
+const LEDGER_STATUSES = new Set(["sent", "draft_opened", "unknown"]);
+const LEDGER_MAX_ENTRIES = 10;
+const LEDGER_REQUEST_MAX_CHARS = 500;
+const LEDGER_NOTE =
+  "Earlier messages in this conversation were left out to save space. The requests in them that led to an action, each with what the action did:";
+
 function traceArgument(call: ToolCallInfo): string | null {
   const field = TRACE_ARGUMENT[call.name];
   if (!field) return null;
@@ -270,13 +282,74 @@ export function withoutEchoedToolTrace(content: string): string {
   return content.replace(ECHOED_TRACE, "");
 }
 
+interface LedgerTurn {
+  request: string;
+  actions: ToolCallInfo[];
+}
+
+function isLedgerAction(call: ToolCallInfo): boolean {
+  const data = call.metadata && !Array.isArray(call.metadata) ? call.metadata : null;
+  if (typeof data?.status === "string") return LEDGER_STATUSES.has(data.status);
+  return Boolean(call.actionKey);
+}
+
+// By code point, so a cut never splits a surrogate pair.
+function clipped(text: string): string {
+  const chars = Array.from(text.trim());
+  return chars.length > LEDGER_REQUEST_MAX_CHARS
+    ? `${chars.slice(0, LEDGER_REQUEST_MAX_CHARS).join("")}…`
+    : chars.join("");
+}
+
+function ledgerTurns(dropped: ReadonlyArray<Message>): LedgerTurn[] {
+  const turns: LedgerTurn[] = [];
+  let request = "";
+  for (const m of dropped) {
+    if (m.role === "user") request = clipped(m.content);
+    const actions = m.role === "assistant" ? replayedCalls(m.toolCalls).filter(isLedgerAction) : [];
+    if (actions.length > 0) turns.push({ request, actions });
+  }
+  // The newest first, while they fit; the note takes one entry.
+  const kept: LedgerTurn[] = [];
+  let size = 1;
+  for (const turn of turns.reverse()) {
+    const room = Math.floor((LEDGER_MAX_ENTRIES - size - (turn.request ? 1 : 0)) / 2);
+    if (room < 1) break;
+    const actions = turn.actions.slice(-room);
+    kept.unshift({ request: turn.request, actions });
+    size += (turn.request ? 1 : 0) + actions.length * 2;
+    if (actions.length < turn.actions.length) break;
+  }
+  return kept;
+}
+
+// As tool calls, the note opening the first request: some chat templates
+// refuse two user messages in a row.
+function ledgerParts(turns: LedgerTurn[], callIds: Set<string>): HistoryMessage[] {
+  return turns.flatMap(({ request, actions }, i) => {
+    const text = i === 0 ? [LEDGER_NOTE, request].filter(Boolean).join("\n\n") : request;
+    return [
+      ...(text ? [{ role: "user", content: text }] : []),
+      ...actions.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+    ];
+  });
+}
+
+function ledgerText(turns: LedgerTurn[]): string {
+  const lines = turns.map(
+    ({ request, actions }) => `- ${JSON.stringify(request)}: ${toolTrace(actions)}`
+  );
+  return [LEDGER_NOTE, ...lines].join("\n");
+}
+
 /**
  * The last messages as the model sees them, with earlier tool use on assistant
  * turns (see ToolHistory) and the selected text a request was about kept with
  * it. A failed reply with nothing in it is left out, and so is a reply's empty
  * text after its tool calls: some providers reject an empty assistant message.
  * It starts with a user message: Gemini, Vertex and Bedrock refuse one that
- * starts with a reply or its tool calls, which a cut window can.
+ * starts with a reply or its tool calls, which a cut window can. The sends of
+ * the messages it leaves out come first, with the requests that led to them.
  */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
@@ -286,17 +359,30 @@ export function toHistoryMessages(
   let request = messages.length - 1;
   while (request >= 0 && messages[request].role !== "user") request--;
   if (request < 0) return [];
-  let first = messages.length;
-  for (let entries = 0, tokens = 0; first > 0; first--) {
-    const replay = replayed(messages[first - 1], toolHistory, new Set());
-    entries += replay.length;
-    tokens += estimateNoteTokens(JSON.stringify(replay));
-    const full = entries > HISTORY_MAX_ENTRIES || tokens > HISTORY_MAX_TOKENS;
-    if (full && first - 1 < request) break;
-  }
-  while (messages[first].role !== "user") first++;
+  const keptFrom = (maxEntries: number): number => {
+    let first = messages.length;
+    for (let entries = 0, tokens = 0; first > 0; first--) {
+      const replay = replayed(messages[first - 1], toolHistory, new Set());
+      entries += replay.length;
+      tokens += estimateNoteTokens(JSON.stringify(replay));
+      const full = entries > maxEntries || tokens > HISTORY_MAX_TOKENS;
+      if (full && first - 1 < request) break;
+    }
+    while (messages[first].role !== "user") first++;
+    return first;
+  };
+  let first = keptFrom(HISTORY_MAX_ENTRIES);
+  const sendsLeftOut = toolHistory !== "none" && ledgerTurns(messages.slice(0, first)).length > 0;
+  if (sendsLeftOut) first = keptFrom(HISTORY_MAX_ENTRIES - LEDGER_MAX_ENTRIES);
+  const turns = sendsLeftOut ? ledgerTurns(messages.slice(0, first)) : [];
   const callIds = new Set<string>();
-  return messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds));
+  const ledger = toolHistory === "parts" ? ledgerParts(turns, callIds) : [];
+  const kept = messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds));
+  if (toolHistory === "text" && turns.length > 0) {
+    const [head, ...rest] = kept;
+    return [{ ...head, content: `${ledgerText(turns)}\n\n${head.content}` }, ...rest];
+  }
+  return [...ledger, ...kept];
 }
 
 /** One message as the model sees it (see toHistoryMessages). */
