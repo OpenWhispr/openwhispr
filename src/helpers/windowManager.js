@@ -117,6 +117,8 @@ class WindowManager {
     this._panelStartPosition = "bottom-right";
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
+    // Polish and Prompt Engineer hotkey callbacks by slot, set in main.js.
+    this._transformHotkeyCallbacks = {};
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
     this._dictationInputKind = DICTATION_INPUT_KIND.DICTATION;
     this._assistantPanelOpen = false;
@@ -1216,6 +1218,22 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // Polish and Prompt Engineer rewrite the text selected in the focused app.
+  // Like a dictation toggle, the target is captured here, before the pill
+  // shows; there is no recording, so the mic is never prepared. A press while
+  // a dictation or the assistant panel is busy is dropped rather than queued.
+  sendRunTransform(kind) {
+    if (!this._isOnboardingInputAllowed("transform")) return;
+    if (this.hotkeyManager.isInListeningMode()) return;
+    if (this._assistantPanelOpen || this._isDictatingToggle) return;
+    if (shouldIgnoreDictationHotkey(this._dictationLifecycleState)) return;
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
+    void this.selectionManager?.captureTarget?.({ force: true });
+    this.showDictationPanel({ reposition: true, targetPidPromise });
+    this.mainWindow.webContents.send("run-transform", { kind });
   }
 
   // The tray's Ask assistant. Only the renderer can open the panel, and only it

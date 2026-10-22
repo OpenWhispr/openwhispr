@@ -162,6 +162,12 @@ import {
   isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
+  buildLocalTransformSystemPrompt,
+  buildLocalTransformUserPrompt,
+  buildTransformInstruction,
+  TRANSFORM_SYSTEM_PROMPT,
+} from "./transforms";
+import {
   REALTIME_MODELS,
   defaultStreamingProviderName,
   orukeetDetectedLanguageFields,
@@ -602,6 +608,16 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
 
+// A transform (Polish, Prompt Engineer) that can't run or whose reply is
+// unusable; `detail` names its transforms.errors.* copy.
+function transformError(code, detail, cause) {
+  return Object.assign(new Error(`Transform failed: ${code}`), {
+    code,
+    messageKey: `transforms.errors.${detail}`,
+    ...(cause ? { cause } : {}),
+  });
+}
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -727,6 +743,8 @@ class AudioManager {
     this.toneStylePromise = null;
     this.lastToneAppCategory = null;
     this.toneStyleStartDeadline = 0;
+    // The tone the current dictation's cleanup read, kept for auto-apply.
+    this.consumedToneStyle = null;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -1081,6 +1099,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // is classified while the user speaks. Only a dictation that captured its
   // app gets a tone: a retried or re-run transcription has no target.
   beginToneStyleCapture() {
+    this.consumedToneStyle = null;
     this.toneStylePromise =
       window.electronAPI?.captureDictationAppCategory?.()?.catch(() => null) ?? null;
     // An Orukeet start waits at most 250 ms from here for the app, so the wait
@@ -1105,7 +1124,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     ]);
     const toneStyle = resolveDictationToneStyle(settings.toneStyles, appCategory);
     logger.logReasoning("TONE_STYLE", toneStyle);
+    this.consumedToneStyle = toneStyle;
     return toneStyle;
+  }
+
+  // Auto-apply runs after cleanup, which may already have read this
+  // dictation's tone; reuse it rather than reading the app as unknown.
+  async consumeTransformToneStyle() {
+    if (this.toneStylePromise) return this.consumeToneStyle();
+    return getSettings().toneStyleEnabled ? this.consumedToneStyle : null;
   }
 
   // An agent-route failure pastes the spoken command verbatim into the focused
@@ -3132,6 +3159,118 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this._bankPanelAgentCommand(text, agentName, config, {
       selectedText: capture.text,
     });
+  }
+
+  // Rewrites text with a transform on the dictation cleanup model. The prompts
+  // are the selection edit's, with the transform's instruction in place of a
+  // spoken one, so the reply is checked the same way before anything is pasted.
+  async runTransform(kind, text, { toneStyle = null } = {}) {
+    const settings = getSettings();
+    const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
+    const model = getEffectiveCleanupModel();
+    if (!isCloudCleanupMode() && !model?.trim()) {
+      throw transformError("TRANSFORM_UNCONFIGURED", "noModel");
+    }
+    const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
+    const polishStrength = settings.polishStrength;
+    const isLocal = cleanup.mode === "local";
+    const config = {
+      inferenceScope: /** @type {const} */ ("dictationCleanup"),
+      disableThinking: isLocal || settings.cleanupDisableThinking,
+      reasoningEffort: settings.cleanupReasoningEffort,
+      // Direct Gemini owns its defaults, as on the cleanup route.
+      temperature: cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0.2,
+      maxTokens: 8192,
+      contextSize: 16384,
+      requireCompleteOutput: true,
+    };
+    let userPrompt;
+    let completionMarker;
+    if (isLocal) {
+      config.systemPrompt = buildLocalTransformSystemPrompt(kind, {
+        toneSentence,
+        polishStrength,
+        dictionary: getDictionaryHintWords(settings),
+      });
+      config.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
+      userPrompt = buildLocalTransformUserPrompt(text);
+    } else {
+      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+      config.systemPrompt = buildSelectionEditSystemPrompt(
+        TRANSFORM_SYSTEM_PROMPT,
+        completionMarker
+      );
+      userPrompt = buildSelectionEditUserPrompt(
+        buildTransformInstruction(kind, { toneSentence, polishStrength }),
+        text
+      );
+    }
+
+    logger.logReasoning("TRANSFORM_START", {
+      kind,
+      polishStrength: kind === "polish" ? polishStrength : undefined,
+      textLength: text.length,
+      isLocal,
+      hasToneStyle: !!toneStyle,
+    });
+    let result;
+    try {
+      result = await this.processWithReasoningModel(userPrompt, model, getAgentName(), config);
+    } catch (cause) {
+      const failure =
+        SELECTION_EDIT_FAILURE_COPY[cause.messageKey] || SELECTION_EDIT_FAILURE_COPY[cause.code];
+      if (failure) throw transformError(cause.code || "TRANSFORM_FAILED", failure, cause);
+      throw Object.assign(new Error(`Transform failed: ${cause.message}`), {
+        code: cause.code || "TRANSFORM_FAILED",
+        messageKey: cause.messageKey || "transforms.errors.failed",
+        messageParams: cause.messageParams,
+        cause,
+      });
+    }
+    // Never the question verdict for a fixed instruction; a model that gives
+    // it anyway has not rewritten anything.
+    if (isSelectionQuestionResponse(result, completionMarker)) {
+      throw transformError("TRANSFORM_INVALID_RESPONSE", "invalidResponse");
+    }
+    try {
+      return isLocal
+        ? extractLocalSelectionEditReplacement(result)
+        : extractSelectionEditReplacement(result, completionMarker);
+    } catch (cause) {
+      throw transformError(
+        cause.code,
+        SELECTION_EDIT_FAILURE_COPY[cause.code] || "invalidResponse"
+      );
+    }
+  }
+
+  // The hotkey path: reads the text selected in the app that had focus when
+  // the hotkey fired (main captured it first) and rewrites it. The caller
+  // replaces it through the returned session, which main revalidates.
+  async transformSelection(kind) {
+    if (getSettings().toneStyleEnabled) this.beginToneStyleCapture();
+    let capture;
+    try {
+      capture = await window.electronAPI?.captureSelectedText?.({ probeEditable: false });
+    } catch (cause) {
+      this.toneStylePromise = null;
+      throw transformError("TRANSFORM_CAPTURE_FAILED", "unavailable", cause);
+    }
+    if (capture?.status !== "selected") {
+      this.toneStylePromise = null;
+      if (capture?.status === "too_large") throw transformError("TRANSFORM_TOO_LARGE", "tooLarge");
+      if (!capture || capture.status === "none" || capture.status === "editable") {
+        throw transformError("TRANSFORM_NO_SELECTION", "nothingSelected");
+      }
+      throw transformError(
+        "TRANSFORM_CAPTURE_FAILED",
+        capture.status === "target_changed" ? "changed" : "unavailable"
+      );
+    }
+    const toneStyle = kind === "polish" ? await this.consumeToneStyle() : null;
+    this.toneStylePromise = null;
+    const text = await this.runTransform(kind, capture.text, { toneStyle });
+    return { sessionId: capture.sessionId, text };
   }
 
   async isReasoningAvailable() {

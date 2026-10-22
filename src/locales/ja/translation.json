@@ -2184,6 +2184,14 @@
       "translationHotkey": {
         "title": "翻訳ホットキー",
         "description": "どの言語で話しても、貼り付けられるテキストは翻訳済みになります"
+      },
+      "polishHotkey": {
+        "title": "整えるホットキー",
+        "description": "任意のアプリでテキストを選択してこのキーを押すと、その場で書き直します。文法を直し、言いよどみを取り除き、より明確に、トーンとスタイルで選んだトーンで仕上げます。ディクテーションのクリーンアップモデルを使用します。"
+      },
+      "promptEngineerHotkey": {
+        "title": "プロンプトエンジニアホットキー",
+        "description": "任意のアプリでテキストを選択してこのキーを押すと、AI アシスタント向けの詳しいプロンプトにその場で書き直します。ディクテーションのクリーンアップモデルを使用します。"
       }
     },
     "permissions": {
@@ -2625,6 +2633,30 @@
       "upgradeCta": "今すぐアップグレード",
       "upgradedTitle": "Enterpriseにアップグレードしました",
       "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
+    },
+    "transforms": {
+      "title": "整える・プロンプトエンジニア",
+      "description": "テキストのクリーンアップがオフでも、上のディクテーションのクリーンアップモデルでテキストを書き直します。テキストを選択して「設定 → ホットキー」で設定したキーを押すか、毎回のディクテーションに適用します。",
+      "autoApply": {
+        "label": "ディクテーションのたびに適用",
+        "description": "貼り付ける前にディクテーションを書き直します。アシスタントへのコマンドと翻訳はそのままです。",
+        "options": {
+          "off": "オフ",
+          "polish": "整える",
+          "promptEngineer": "プロンプトエンジニア"
+        }
+      },
+      "polishStrength": {
+        "label": "整える強さ",
+        "options": {
+          "light": "控えめ",
+          "strong": "しっかり"
+        },
+        "descriptions": {
+          "light": "文法、言いよどみ、句読点を直し、文はそのまま残します。小さなローカルモデルでも安全です。",
+          "strong": "編集者のように書き直します。要点を先に出し、冗長な部分を削り、箇条書きにします。大きなモデルやクラウドのモデルに最適です。"
+        }
+      }
     }
   },
   "models": {
@@ -5071,5 +5103,28 @@
     "permissionDenied": "拒否",
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
+  },
+  "transforms": {
+    "names": {
+      "polish": "整える",
+      "promptEngineer": "プロンプトエンジニア"
+    },
+    "errors": {
+      "title": "{{name}}を実行できませんでした",
+      "notAppliedTitle": "{{name}}を適用できませんでした",
+      "onClipboard": "結果はクリップボードにあります。",
+      "noModel": "先に「設定 → 言語モデル」でディクテーションのクリーンアップモデルを設定してください。",
+      "nothingSelected": "先にテキストを選択してから、ホットキーを押してください。",
+      "tooLarge": "選択範囲が長すぎます。6,000 文字以内で選択してください。",
+      "changed": "OpenWhispr が読み取る前に、選択したテキストまたはアプリが変わりました。何も変更されていません。",
+      "unavailable": "OpenWhispr は選択したテキストを読み取れませんでした。アクセシビリティまたは入力自動化の権限を確認して、もう一度お試しください。",
+      "failed": "AI が完了できませんでした。テキストは変更されていません。",
+      "invalidResponse": "AI が無効な結果を返しました。テキストは変更されていません。",
+      "emptyResponse": "AI が空の結果を返しました。テキストは変更されていません。",
+      "truncatedResponse": "AI が途中で止まりました。テキストは変更されていません。テキストを短くしてお試しください。"
+    },
+    "autoApply": {
+      "failedTitle": "このディクテーションでは{{name}}を実行できませんでした"
+    }
   }
 }

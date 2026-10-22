@@ -2163,6 +2163,14 @@
       "translationHotkey": {
         "title": "Atalho de Tradução",
         "description": "Dite em qualquer idioma: o texto colado sai traduzido"
+      },
+      "polishHotkey": {
+        "title": "Atalho de Refinar",
+        "description": "Selecione texto em qualquer app e pressione este atalho para reescrevê-lo no lugar: gramática corrigida, vícios de linguagem removidos, mais claro e no seu tom de Tom e estilo. Usa seu modelo de Limpeza do ditado."
+      },
+      "promptEngineerHotkey": {
+        "title": "Atalho de Engenheiro de prompts",
+        "description": "Selecione texto em qualquer app e pressione este atalho para reescrevê-lo no lugar como um prompt detalhado para um assistente de IA. Usa seu modelo de Limpeza do ditado."
       }
     },
     "permissions": {
@@ -2604,6 +2612,30 @@
       "upgradeCta": "Fazer upgrade agora",
       "upgradedTitle": "Upgrade concluído",
       "upgradedDescription": "{{workspace}} agora está no Enterprise."
+    },
+    "transforms": {
+      "title": "Refinar e Engenheiro de prompts",
+      "description": "Reescreva texto com o modelo de Limpeza do ditado acima, mesmo com a limpeza de texto desativada. Selecione texto e pressione os atalhos definidos em Configurações → Atalhos, ou aplique um a cada ditado.",
+      "autoApply": {
+        "label": "Aplicar após cada ditado",
+        "description": "Reescreve cada ditado antes de colá-lo. Comandos do assistente e traduções não são alterados.",
+        "options": {
+          "off": "Desativado",
+          "polish": "Refinar",
+          "promptEngineer": "Engenheiro de prompts"
+        }
+      },
+      "polishStrength": {
+        "label": "Intensidade de Refinar",
+        "options": {
+          "light": "Leve",
+          "strong": "Forte"
+        },
+        "descriptions": {
+          "light": "Corrige gramática, vícios de linguagem e pontuação, e mantém suas frases como estão. Segura com modelos locais pequenos.",
+          "strong": "Reescreve como um editor: começa pelo ponto principal, corta excessos e cria listas. Melhor com um modelo grande ou hospedado."
+        }
+      }
     }
   },
   "models": {
@@ -5071,5 +5103,28 @@
     "permissionDenied": "Negada",
     "permissionRestricted": "Restrita",
     "permissionNotDetermined": "Não solicitada"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Refinar",
+      "promptEngineer": "Engenheiro de prompts"
+    },
+    "errors": {
+      "title": "{{name}} não foi executado",
+      "notAppliedTitle": "{{name}} não aplicado",
+      "onClipboard": "O resultado está na sua área de transferência.",
+      "noModel": "Primeiro configure um modelo de Limpeza do ditado em Configurações → Modelos de linguagem.",
+      "nothingSelected": "Selecione algum texto primeiro e depois pressione o atalho.",
+      "tooLarge": "A seleção é muito longa. Selecione 6.000 caracteres ou menos.",
+      "changed": "O texto selecionado ou o app mudou antes que o OpenWhispr pudesse lê-lo. Nada foi alterado.",
+      "unavailable": "O OpenWhispr não conseguiu ler o texto selecionado. Verifique as permissões de acessibilidade ou de automação de entrada e tente novamente.",
+      "failed": "A IA não conseguiu terminar. Seu texto não foi alterado.",
+      "invalidResponse": "A IA retornou um resultado inválido. Seu texto não foi alterado.",
+      "emptyResponse": "A IA retornou um resultado vazio. Seu texto não foi alterado.",
+      "truncatedResponse": "A IA parou antes de terminar. Seu texto não foi alterado. Tente com menos texto."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} não foi executado neste ditado"
+    }
   }
 }

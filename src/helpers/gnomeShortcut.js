@@ -24,6 +24,14 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
     name: "OpenWhispr Translation",
   },
+  polish: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-polish/",
+    name: "OpenWhispr Polish",
+  },
+  promptEngineer: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-prompt-engineer/",
+    name: "OpenWhispr Prompt Engineer",
+  },
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
@@ -198,6 +206,8 @@ class GnomeShortcutManager {
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    this.polishCallback = null;
+    this.promptEngineerCallback = null;
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
@@ -229,6 +239,16 @@ class GnomeShortcutManager {
   setTranslationCallback(callback) {
     this.translationCallback = callback;
     debugLogger.log("[GnomeShortcut] Translation callback registered");
+  }
+
+  setPolishCallback(callback) {
+    this.polishCallback = callback;
+    debugLogger.log("[GnomeShortcut] Polish callback registered");
+  }
+
+  setPromptEngineerCallback(callback) {
+    this.promptEngineerCallback = callback;
+    debugLogger.log("[GnomeShortcut] Prompt Engineer callback registered");
   }
 
   // Older builds persisted a gsettings keybinding for the removed chat-agent
@@ -298,6 +318,16 @@ class GnomeShortcutManager {
               this.translationCallback();
             }
           },
+          RunPolish: () => {
+            if (this.polishCallback) {
+              this.polishCallback();
+            }
+          },
+          RunPromptEngineer: () => {
+            if (this.promptEngineerCallback) {
+              this.promptEngineerCallback();
+            }
+          },
         },
         DBUS_OBJECT_PATH,
         {
@@ -307,6 +337,8 @@ class GnomeShortcutManager {
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
+            RunPolish: ["", ""],
+            RunPromptEngineer: ["", ""],
           },
         }
       );
@@ -397,6 +429,8 @@ class GnomeShortcutManager {
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",
+      polish: "RunPolish",
+      promptEngineer: "RunPromptEngineer",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${getDBusServiceName()} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;

@@ -2184,6 +2184,14 @@
       "translationHotkey": {
         "title": "翻譯快捷鍵",
         "description": "用任何語言聽寫——貼上的文字會自動翻譯"
+      },
+      "polishHotkey": {
+        "title": "潤飾快捷鍵",
+        "description": "在任何應用程式中選取文字後按下此快捷鍵，即可就地改寫：修正文法、去除贅詞、表達更清楚，並採用語氣與風格中設定的語氣。使用你的聽寫清理模型。"
+      },
+      "promptEngineerHotkey": {
+        "title": "提示詞工程師快捷鍵",
+        "description": "在任何應用程式中選取文字後按下此快捷鍵，即可將其就地改寫為給 AI 助理的詳細提示詞。使用你的聽寫清理模型。"
       }
     },
     "permissions": {
@@ -2625,6 +2633,30 @@
       "upgradeCta": "立即升級",
       "upgradedTitle": "已升級至 Enterprise",
       "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
+    },
+    "transforms": {
+      "title": "潤飾與提示詞工程師",
+      "description": "使用上方的聽寫清理模型改寫文字，即使關閉了文字清理也可以。選取文字後按下「設定 → 快捷鍵」中設定的快捷鍵，或在每次聽寫後自動執行其中一項。",
+      "autoApply": {
+        "label": "每次語音輸入後套用",
+        "description": "在貼上前改寫每次聽寫的內容。助理指令和翻譯維持不變。",
+        "options": {
+          "off": "關閉",
+          "polish": "潤飾",
+          "promptEngineer": "提示詞工程師"
+        }
+      },
+      "polishStrength": {
+        "label": "潤飾強度",
+        "options": {
+          "light": "輕度",
+          "strong": "強力"
+        },
+        "descriptions": {
+          "light": "修正文法、贅詞和標點，保持你的句子不變。適合小型本機模型。",
+          "strong": "像編輯一樣改寫：先說重點、刪去冗詞並整理成清單。最適合大型或雲端模型。"
+        }
+      }
     }
   },
   "models": {
@@ -5071,5 +5103,28 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "transforms": {
+    "names": {
+      "polish": "潤飾",
+      "promptEngineer": "提示詞工程師"
+    },
+    "errors": {
+      "title": "{{name}}未能執行",
+      "notAppliedTitle": "{{name}}未套用",
+      "onClipboard": "結果已複製到剪貼簿。",
+      "noModel": "請先在「設定 → 語言模型」中設定聽寫清理模型。",
+      "nothingSelected": "請先選取一些文字，然後再按快捷鍵。",
+      "tooLarge": "選取的內容過長。請選取不超過 6,000 個字元。",
+      "changed": "在 OpenWhispr 讀取之前，選取的文字或應用程式已變更。未做任何更改。",
+      "unavailable": "OpenWhispr 無法讀取選取的文字。請檢查輔助使用或輸入自動化權限後再試一次。",
+      "failed": "AI 未能完成。你的文字未被更改。",
+      "invalidResponse": "AI 傳回了無效的結果。你的文字未被更改。",
+      "emptyResponse": "AI 傳回了空的結果。你的文字未被更改。",
+      "truncatedResponse": "AI 在完成前停止了。你的文字未被更改。請嘗試減少文字。"
+    },
+    "autoApply": {
+      "failedTitle": "{{name}}未能在本次聽寫中執行"
+    }
   }
 }
