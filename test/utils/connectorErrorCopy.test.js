@@ -199,6 +199,22 @@ test("a connector's own copy wins, by exact code first, then by shared copy key"
   );
 });
 
+test("a channel that takes only thread replies is named on the card", async () => {
+  const { connectorErrorText } = await import("../../src/utils/connectorErrorCopy.ts");
+  const i18next = (await import("i18next")).default.createInstance();
+  await i18next.init({
+    lng: "en",
+    resources: { en: { translation: { connectors: en } } },
+    interpolation: { escapeValue: false },
+  });
+  assert.equal(
+    connectorErrorText(i18next.t, "approval", "slack", "restricted_action_thread_only_channel", {
+      destination: "#eng",
+    }),
+    "#eng only takes replies in threads. Nothing was sent."
+  );
+});
+
 test("a code named after an object property gets the generic copy, not the property", async () => {
   const { connectorErrorText } = await import("../../src/utils/connectorErrorCopy.ts");
   const i18next = (await import("i18next")).default.createInstance();
