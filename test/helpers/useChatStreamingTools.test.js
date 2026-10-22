@@ -9,6 +9,7 @@ const {
   addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 
 // Drives the real useChatStreaming hook (one synchronous render, then its
@@ -576,16 +577,18 @@ async function renderNoteChat(
   );
   const prompts = [];
   const configs = [];
+  const requests = [];
   rendered.reasoningService.processTextStreamingCloud.mock.mockImplementation(
-    (_messages, config) => {
+    (messages, config) => {
       prompts.push(config.systemPrompt);
       configs.push(config);
+      requests.push(messages);
       return (async function* () {
         yield { type: "done", finishReason: "stop" };
       })();
     }
   );
-  return { ...rendered, lookups, prompts, configs };
+  return { ...rendered, lookups, prompts, configs, requests };
 }
 
 test("a note chat with connectors lists the note's attendees and how to read 'everyone'", async (t) => {
@@ -702,20 +705,22 @@ test("a note's chat answers from its note and adds no other notes up front", asy
 
 test("a chat that isn't about a note still lists the library notes a question finds", async (t) => {
   const searches = [];
-  const { captured, prompts, configs } = await renderNoteChat(
+  const { captured, prompts, configs, requests } = await renderNoteChat(
     t,
     { openNote: undefined, noteMeeting: undefined },
     { electronAPI: libraryWithOneHit(searches) }
   );
-  await captured.sendToAI("What price are we testing?", []);
+  const question = "What price are we testing?";
+  await captured.sendToAI(question, [{ id: "u1", role: "user", content: question }]);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
   assert.equal("noteChat" in configs[0], false);
+  // They ride on the message, which changes every turn, not the system prompt.
   assert.match(
-    prompts[0],
-    /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/
+    requests[0].at(-1).content,
+    /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/i
   );
-  assert.doesNotMatch(prompts[0], /inside the note below/);
+  assert.doesNotMatch(prompts[0], /notes from the user's library|inside the note below/i);
 });
 
 test("a note action sends its prompt in place of the visible message", async (t) => {
@@ -724,10 +729,16 @@ test("a note action sends its prompt in place of the visible message", async (t)
   const requestText = "Using the note I'm viewing, draft the follow-up email.";
 
   await captured.sendToAI(visible.content, [visible], { requestText });
-  assert.equal(sentMessages[0].filter((m) => m.role === "user").at(-1).content, requestText);
+  assert.equal(
+    userTextOf(sentMessages[0].filter((m) => m.role === "user").at(-1).content),
+    requestText
+  );
 
   await captured.sendToAI(visible.content, [visible]);
-  assert.equal(sentMessages[1].filter((m) => m.role === "user").at(-1).content, visible.content);
+  assert.equal(
+    userTextOf(sentMessages[1].filter((m) => m.role === "user").at(-1).content),
+    visible.content
+  );
 });
 
 for (const [mode, settings] of Object.entries({
@@ -771,7 +782,7 @@ for (const [mode, settings] of Object.entries({
         assert.equal(request.split(SOURCE_FIDELITY_RULE).length - 1, 1);
         assert.ok(system.content.includes(SOURCE_FIDELITY_RULE));
         assert.ok(system.content.endsWith(openNote), "source text is preserved as note material");
-        assert.equal(sentHistory.at(-1).content, requestText);
+        assert.equal(userTextOf(sentHistory.at(-1).content), requestText);
         assert.deepEqual(
           history,
           beforeSend,
@@ -822,7 +833,10 @@ test("an earlier turn's tool use reaches the model as its own call and outcome",
 
   await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
 
-  const [system, ...history] = sentMessages[0];
+  const [system, ...sent] = sentMessages[0];
+  const history = sent.map((message, i) =>
+    i === sent.length - 1 ? { ...message, content: userTextOf(message.content) } : message
+  );
   assert.match(system.content, /Earlier turns keep each tool call with its outcome only/);
   assert.doesNotMatch(system.content, /Tools used/);
   assert.deepEqual(history, [
@@ -869,7 +883,10 @@ test("a self-hosted server gets earlier tool use as a note on that answer", asyn
 
   await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
 
-  const [system, ...history] = sentMessages[0];
+  const [system, ...sent] = sentMessages[0];
+  const history = sent.map((message, i) =>
+    i === sent.length - 1 ? { ...message, content: userTextOf(message.content) } : message
+  );
   assert.match(system.content, /Never write such a note yourself/);
   assert.deepEqual(history, [
     { role: "user", content: "Weather in Lisbon?" },
@@ -1134,7 +1151,7 @@ for (const [surface, hookOptions] of [
           onComplete: (result) => delivered.push(result.content),
         }
       );
-      assert.equal(sentMessages.at(-1).at(-1).content, prompt);
+      assert.equal(userTextOf(sentMessages.at(-1).at(-1).content), prompt);
       assert.match(sentMessages.at(-1)[2].content, /Earlier built-in shortcut guidance/);
       assert.doesNotMatch(sentMessages.at(-1)[2].content, /Tools used|grounded_product_help/);
       assert.equal(getMessages().at(-1).content, "Antwort in der Sprache der Frage.");
@@ -1169,11 +1186,12 @@ test("product questions retain note, scoped search, selected text and screenshot
     attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
   });
   assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
-  assert.match(systemPromptOf(sentMessages[0]), /next Tuesday/);
-  assert.match(systemPromptOf(sentMessages[0]), /Follow up with Alex/);
+  assert.doesNotMatch(systemPromptOf(sentMessages[0]), /next Tuesday|Follow up with Alex/);
   const content = sentMessages[0].at(-1).content;
   assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
   assert.match(content[0].text, /Selected OpenWhispr passage/);
+  assert.match(content[0].text, /next Tuesday[^]*Follow up with Alex/);
+  assert.match(content[0].text, /Current local date and time: /);
   assert.equal(content[1].type, "image");
   assert.equal(content[1].image, "data:image/png;base64,c3ludGhldGlj");
 });

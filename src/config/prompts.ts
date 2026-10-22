@@ -234,7 +234,6 @@ function describeCapabilities(tools: ReadonlyArray<PromptTool>): string {
 
 export function getAgentSystemPrompt(
   availableTools?: ReadonlyArray<string | PromptTool>,
-  noteContext?: string,
   options: AgentSystemPromptOptions = {}
 ): string {
   let prompt = resolvePrompt("chatAgent", { agentName: null });
@@ -261,8 +260,6 @@ export function getAgentSystemPrompt(
       prompt += "\n\n" + askOnlyWhenNecessaryRule(tools);
     }
   }
-  prompt += "\n\n" + getLocalDateContext();
-
   const unavailable = describeUnavailable(options.unavailable ?? []);
   if (unavailable) prompt += "\n\n" + unavailable;
 
@@ -277,12 +274,23 @@ export function getAgentSystemPrompt(
     prompt += `\n\n${OPEN_NOTE_RULE}${options.openNoteTranscriptPreview ? ` ${OPEN_NOTE_TRANSCRIPT_RULE}` : ""}${canSearch ? ` ${OPEN_NOTE_SEARCH_RULE}` : ""}\n\n${options.openNote}`;
   }
 
-  if (noteContext) {
-    prompt +=
-      "\n\nBelow are notes from the user's library that may be relevant. " +
-      "Reference them naturally if they help answer the question.\n\n" +
-      noteContext;
-  }
-
   return prompt;
+}
+
+/**
+ * What changes with every message (the time, the library notes that match
+ * it), sent at the end of the message instead of in the system prompt: the
+ * prompt, the tools and earlier turns then stay a prefix providers can cache.
+ */
+export function buildMessageContext(libraryNotes?: string): string {
+  return [
+    "Context from the app for this message (not written by the user):",
+    getLocalDateContext(),
+    ...(libraryNotes
+      ? [
+          "Notes from the user's library that may be relevant. Reference them naturally if they help answer the question.\n\n" +
+            libraryNotes,
+        ]
+      : []),
+  ].join("\n\n");
 }

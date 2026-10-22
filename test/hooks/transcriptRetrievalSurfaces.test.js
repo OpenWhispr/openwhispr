@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   SIGNED_OUT_AUTH_MOCK,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const noop = () => {};
@@ -149,7 +150,7 @@ for (const surface of ["note chat", "agent window"]) {
         surface === "note chat" ? chat.sendMessage(REQUEST) : agentChat.send(REQUEST)
       );
       assert.equal(stored.transcript, TRANSCRIPT);
-      assert.equal(request.messages.at(-1).content, REQUEST);
+      assert.equal(userTextOf(request.messages.at(-1).content), REQUEST);
       assert.ok(savedMessages.some((m) => m[1] === "assistant" && m[2].includes("violet heron")));
       if (surface === "note chat") {
         await React.act(async () => chat.startNewChat());

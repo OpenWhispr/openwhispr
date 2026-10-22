@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   SIGNED_OUT_AUTH_MOCK,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
@@ -203,7 +204,7 @@ for (const surface of ["note chat", "agent window"]) {
         assert.ok(
           savedMessages.some((m) => m[1] === "assistant" && m[2].includes("saved summary"))
         );
-        assert.equal(request.messages.at(-1).content, REQUEST);
+        assert.equal(userTextOf(request.messages.at(-1).content), REQUEST);
         assert.match(
           request.config.systemPrompt,
           /previous email interaction does not authorize another email action/
