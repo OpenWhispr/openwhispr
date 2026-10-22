@@ -771,3 +771,22 @@ test("an empty-commit error known only by its code settles stop with no error", 
   assert.deepEqual(errors, []);
   await streaming.disconnect();
 });
+
+test("an event that shows no progress on a turn does not extend the stop wait", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, completed("kept turn"));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  t.mock.timers.tick(4000);
+  emit(socket, { type: "rate_limits.updated", rate_limits: [] });
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  t.mock.timers.tick(1000);
+  await tickImmediate();
+  assert.equal(stop.settled, true, "only deltas, transcripts, acks and errors restart idle");
+  assert.equal((await stop.stopped).text, "kept turn");
+  await streaming.disconnect();
+});
