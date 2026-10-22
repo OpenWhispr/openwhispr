@@ -400,7 +400,7 @@ test("cancelling a tool-ineligible raw stream after reading starts shows no erro
   assert.equal(message.isStreaming, false);
 });
 
-test("cloud screen context is sent without claiming the screenshot is already attached", async (t) => {
+test("cloud screen context is sent with its grounding instruction", async (t) => {
   let streamEndListener;
   let streamOptions;
   const electronAPI = {
@@ -439,5 +439,15 @@ test("cloud screen context is sent without claiming the screenshot is already at
     data: "base64-image",
     mediaType: "image/png",
   });
+  // Background only: no narrating it on small talk, no guessing from cut-off text.
+  assert.match(
+    streamOptions.systemPrompt,
+    /SCREEN CONTEXT: .*attached as background\. Use it only when the request refers to something on the screen .*Otherwise answer as if there were no screenshot: never describe it, mention it or offer help with what is on it, greetings and small talk included\. Never infer names, causes or other details from text that is cut off or partly hidden\./
+  );
+
+  await captured.sendToAI("And now?", [
+    { id: "user-2", role: "user", content: "And now?", isStreaming: false },
+  ]);
+  assert.equal(streamOptions.screenContext, undefined);
   assert.doesNotMatch(streamOptions.systemPrompt, /SCREEN CONTEXT:/);
 });

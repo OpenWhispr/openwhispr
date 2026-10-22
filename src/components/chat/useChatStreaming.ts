@@ -664,18 +664,16 @@ export function useChatStreaming({
 
         // A screenshot the resolver kept rides with the command it came with:
         // BYOK models get it as an image part, the cloud agent as a dedicated
-        // field the server vision-routes (older servers strip the unknown field,
-        // which degrades to a plain command). A dropped one costs nothing but the
+        // field the server vision-routes. A dropped one costs nothing but the
         // image — the command still runs.
         const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
         const cloudScreenContext =
           requestedAttachment && isCloudAgent
             ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
             : null;
-        if (attachment) {
-          // The screenshot needs its grounding instruction, exactly like the
-          // dictation path pairs the suffix with an attached image. Restore it
-          // for cloud context once openwhispr-api#157 vision-routes that field.
+        if (requestedAttachment) {
+          // Either way it needs its grounding instruction, as the dictation path
+          // pairs the suffix with an attached image.
           systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
         }
         if (attachment) {
