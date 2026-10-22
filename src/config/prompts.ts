@@ -77,10 +77,13 @@ function formatLocalRfc3339(date: Date): string {
   );
 }
 
-function getLocalCalendarContext(): string {
+// With the weekday spelled out: a model left to work it out from the date
+// gets it wrong.
+function getLocalDateContext(): string {
   const now = new Date();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  return `Current local date and time: ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
+  const weekday = now.toLocaleDateString("en-US", { weekday: "long" });
+  return `Current local date and time: ${weekday}, ${formatLocalRfc3339(now)}. IANA time zone: ${timeZone}.`;
 }
 
 // Each result that must not be retried says so in its own guidance, so the
@@ -252,10 +255,8 @@ export function getAgentSystemPrompt(
     if (tools.some((tool) => tool.name === "ask_user")) {
       prompt += "\n\n" + askOnlyWhenNecessaryRule(tools);
     }
-    if (tools.some((tool) => tool.name === "get_calendar_availability")) {
-      prompt += "\n\n" + getLocalCalendarContext();
-    }
   }
+  prompt += "\n\n" + getLocalDateContext();
 
   const unavailable = describeUnavailable(options.unavailable ?? []);
   if (unavailable) prompt += "\n\n" + unavailable;
