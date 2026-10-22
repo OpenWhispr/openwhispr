@@ -64,7 +64,7 @@ test("buildRealtimeUrl accepts wss anywhere and ws only on a private host", asyn
     "ws://10.1.2.3/api/v1/realtime",
     "ws://172.16.0.4:9000/v1/realtime",
     "ws://box.local:9000/v1/realtime",
-    "ws://ai2.tailnet.ts.net:9000/v1/realtime",
+    "ws://box.tailnet.ts.net:9000/v1/realtime",
     "ws://[::1]:9000/v1/realtime",
   ]) {
     const built = new URL(buildRealtimeUrl(url, "m"));
