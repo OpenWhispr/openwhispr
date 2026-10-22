@@ -4226,7 +4226,11 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla. Riprova.",
         "dm_failed": "Impossibile aprire il messaggio diretto a {{destination}}. Non è stato inviato nulla.",
         "restricted": "{{destination}} è di sola lettura o limitato per te.",
+        "thread_mismatch": "Quel thread è in una conversazione diversa da {{destination}}. Non è stato inviato nulla.",
         "wrong_workspace": "Quel link proviene da un altro workspace di Slack. Non è stato inviato nulla.",
+        "invalid_thread": "Non è un link a un messaggio di Slack. Non è stato inviato nulla.",
+        "thread_closed": "Slack non consente risposte in quel thread. Non è stato inviato nulla.",
+        "thread_only": "{{destination}} accetta solo risposte nei thread. Non è stato inviato nulla.",
         "generic": "Qualcosa è andato storto. Non è stato inviato nulla.",
         "github": {
           "reconnect_needed": "GitHub deve essere ricollegato nelle Impostazioni.",
@@ -4349,7 +4353,10 @@
       "slack": {
         "channelLabel": "Canale",
         "asLabel": "Come",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Risposta nel thread"
+        }
       },
       "sentLabel": "Inviato",
       "identityChanged": "Ora verrà inviato come {{account}}. Premi Invia per inviarlo.",
@@ -4579,7 +4586,11 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla.",
         "dm_failed": "Impossibile aprire il messaggio diretto. Non è stato inviato nulla.",
         "restricted": "Quel canale è di sola lettura o limitato.",
+        "thread_mismatch": "Quel thread è in un'altra conversazione. Non è stato inviato nulla.",
         "wrong_workspace": "Quel link proviene da un altro workspace di Slack.",
+        "invalid_thread": "Non è un link a un messaggio di Slack.",
+        "thread_closed": "Slack non consente risposte in quel thread.",
+        "thread_only": "Quel canale accetta solo risposte nei thread.",
         "generic": "Non ha funzionato.",
         "github": {
           "reconnect_needed": "GitHub deve essere ricollegato.",

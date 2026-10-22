@@ -4226,7 +4226,11 @@
         "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊，未傳送任何內容。請再試一次。",
         "dm_failed": "無法開啟與 {{destination}} 的私訊，未傳送任何內容。",
         "restricted": "{{destination}} 對您是唯讀或受限的。",
+        "thread_mismatch": "該討論串位於與 {{destination}} 不同的對話中，未傳送任何內容。",
         "wrong_workspace": "該連結來自另一個 Slack 工作區，未傳送任何內容。",
+        "invalid_thread": "這不是指向 Slack 訊息的連結，未傳送任何內容。",
+        "thread_closed": "Slack 不允許在該討論串中回覆，未傳送任何內容。",
+        "thread_only": "{{destination}} 只接受討論串中的回覆，未傳送任何內容。",
         "generic": "發生問題，未傳送任何內容。",
         "github": {
           "reconnect_needed": "需要在設定中重新連接 GitHub。",
@@ -4349,7 +4353,10 @@
       "slack": {
         "channelLabel": "頻道",
         "asLabel": "身分",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "在討論串中回覆"
+        }
       },
       "sentLabel": "已傳送",
       "identityChanged": "現在將以 {{account}} 身分傳送。按「傳送」即可傳送。",
@@ -4579,7 +4586,11 @@
         "credential_save_failed": "無法在這台電腦上儲存 Slack 登入資訊。未傳送任何內容。",
         "dm_failed": "無法開啟私訊。未傳送任何內容。",
         "restricted": "該頻道為唯讀或受限。",
+        "thread_mismatch": "該討論串位於另一個對話中。未傳送任何內容。",
         "wrong_workspace": "該連結來自另一個 Slack 工作區。",
+        "invalid_thread": "不是指向 Slack 訊息的連結。",
+        "thread_closed": "Slack 不允許在該討論串中回覆。",
+        "thread_only": "該頻道只接受討論串中的回覆。",
         "generic": "操作未成功。",
         "github": {
           "reconnect_needed": "需要重新連接 GitHub。",

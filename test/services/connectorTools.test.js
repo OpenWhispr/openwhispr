@@ -436,6 +436,65 @@ test("slack_send_message refuses empty text without preparing", async (t) => {
   assert.equal(prepared, 0);
 });
 
+test("slack_send_message passes a thread link to main and tells the model the reply went in the thread", async (t) => {
+  const prepared = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (...args) => {
+          prepared.push(args);
+          return {
+            status: "ready",
+            actionId: `a-${prepared.length}`,
+            preview: {
+              verbKey: "slackPost",
+              destinationLabel: "#eng",
+              accountLabel: "chad",
+              workspaceLabel: "Acme",
+              body: "On it",
+            },
+          };
+        },
+        connectorCommit: async () => ({
+          state: "sent",
+          url: "https://acme.slack.com/archives/C0ENG/p1727200009000200?thread_ts=1727200000.123456&cid=C0ENG",
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const [{ slackSendMessageTool }, approvals] = await Promise.all([loadSlack(), loadApprovals()]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  const send = async (call, args) => {
+    const key = approvals.approvalKey("m40", call);
+    const pending = slackSendMessageTool.execute(args, toolContext("m40", call));
+    await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
+    await approvals.approveAction(key);
+    return pending;
+  };
+  const thread = "https://acme.slack.com/archives/C0ENG/p1727200000123456";
+
+  const reply = await send("call-40", {
+    destination: "#eng",
+    text: "On it",
+    thread: ` ${thread} `,
+  });
+  const plain = await send("call-41", { destination: "#eng", text: "On it", thread: null });
+
+  assert.deepEqual(prepared, [
+    ["slack", "send_message", { destination: "#eng", text: "On it", thread }],
+    ["slack", "send_message", { destination: "#eng", text: "On it" }],
+  ]);
+  assert.equal(reply.data.status, "sent");
+  assert.equal(reply.data.repliedInThread, true);
+  assert.equal(plain.data.status, "sent");
+  assert.equal("repliedInThread" in plain.data, false);
+  const { properties, required } = slackSendMessageTool.parameters;
+  assert.equal(properties.thread.type, "string");
+  assert.equal(required.includes("thread"), false);
+  assert.match(slackSendMessageTool.promptInstruction, /\bthread\b/);
+});
+
 test("slack_send_message registers only when Slack is ready", async () => {
   const { createToolRegistry } = await loadRegistry();
   const base = {

@@ -800,7 +800,11 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء. حاول مرة أخرى.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة إلى {{destination}}. لم يُرسل شيء.",
         "restricted": "{{destination}} للقراءة فقط أو مقيّدة بالنسبة لك.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة غير {{destination}}. لم يُرسل شيء.",
         "wrong_workspace": "هذا الرابط من مساحة عمل Slack أخرى. لم يُرسل شيء.",
+        "invalid_thread": "هذا ليس رابطًا لرسالة في Slack. لم يُرسل شيء.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه. لم يُرسل شيء.",
+        "thread_only": "لا تقبل {{destination}} إلا الردود في سلاسل الرسائل. لم يُرسل شيء.",
         "generic": "حدث خطأ ما. لم يُرسل شيء.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub من الإعدادات.",
@@ -923,7 +927,10 @@
       "slack": {
         "channelLabel": "القناة",
         "asLabel": "بصفتك",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "رد في سلسلة الرسائل"
+        }
       },
       "sentLabel": "تم الإرسال",
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
@@ -1153,7 +1160,11 @@
         "credential_save_failed": "تعذّر حفظ تسجيل الدخول إلى Slack على هذا الكمبيوتر. لم يُرسل شيء.",
         "dm_failed": "تعذّر فتح الرسالة المباشرة. لم يُرسل شيء.",
         "restricted": "تلك القناة للقراءة فقط أو مقيّدة.",
+        "thread_mismatch": "سلسلة الرسائل هذه في محادثة أخرى. لم يُرسل شيء.",
         "wrong_workspace": "هذا الرابط من مساحة عمل Slack أخرى.",
+        "invalid_thread": "ليس رابطًا لرسالة في Slack.",
+        "thread_closed": "لا يسمح Slack بالرد في سلسلة الرسائل هذه.",
+        "thread_only": "لا تقبل هذه القناة إلا الردود في سلاسل الرسائل.",
         "generic": "لم ينجح ذلك.",
         "github": {
           "reconnect_needed": "يلزم إعادة ربط GitHub.",

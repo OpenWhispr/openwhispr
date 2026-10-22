@@ -28,7 +28,9 @@ test("codes with their own copy map to themselves", () => {
     "open_failed",
     "draft_too_long",
     "invalid_address",
+    "thread_mismatch",
     "wrong_workspace",
+    "invalid_thread",
   ]) {
     assert.equal(connectorErrorCopyKey(code), code);
   }
@@ -85,6 +87,17 @@ test("a read-only or restricted channel reads as restricted", () => {
   }
 });
 
+test("a thread Slack takes no replies in reads as thread_closed, a channel that takes only replies as thread_only", () => {
+  for (const code of [
+    "cannot_reply_to_message",
+    "restricted_action_thread_locked",
+    "restricted_action_non_threadable_channel",
+  ]) {
+    assert.equal(connectorErrorCopyKey(code), "thread_closed", code);
+  }
+  assert.equal(connectorErrorCopyKey("restricted_action_thread_only_channel"), "thread_only");
+});
+
 test("everything else, including a missing code, reads as generic", () => {
   for (const code of [
     "invalid_arguments",
@@ -119,7 +132,11 @@ test("every key the card and the tool step can show has English copy", () => {
     "network",
     "dm_failed",
     "restricted",
+    "thread_mismatch",
     "wrong_workspace",
+    "invalid_thread",
+    "thread_closed",
+    "thread_only",
     "generic",
   ];
   const emailOnlyKeys = ["open_failed", "draft_too_long", "invalid_address"];

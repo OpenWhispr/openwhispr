@@ -139,6 +139,18 @@ const FIXTURES = {
     ts: "1727200001.000100",
     message: { type: "message", user: "U0CHAD", ts: "1727200001.000100" },
   },
+  // A reply in the thread FIXTURES.posted started.
+  postedReply: {
+    ok: true,
+    channel: "C0ENG",
+    ts: "1727200009.000200",
+    message: {
+      type: "message",
+      user: "U0CHAD",
+      ts: "1727200009.000200",
+      thread_ts: "1727200000.123456",
+    },
+  },
 };
 
 const CONNECTED = {

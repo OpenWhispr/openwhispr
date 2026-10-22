@@ -4278,7 +4278,11 @@
         "credential_save_failed": "No se pudo guardar el inicio de sesión de Slack en este equipo. No se envió nada. Inténtalo de nuevo.",
         "dm_failed": "No se pudo abrir el mensaje directo a {{destination}}. No se envió nada.",
         "restricted": "{{destination}} es de solo lectura o está restringido para ti.",
+        "thread_mismatch": "Ese hilo está en una conversación distinta de {{destination}}. No se envió nada.",
         "wrong_workspace": "Ese enlace es de otro espacio de trabajo de Slack. No se envió nada.",
+        "invalid_thread": "Eso no es un enlace a un mensaje de Slack. No se envió nada.",
+        "thread_closed": "Slack no permite respuestas en ese hilo. No se envió nada.",
+        "thread_only": "{{destination}} solo admite respuestas en hilos. No se envió nada.",
         "generic": "Algo salió mal. No se envió nada.",
         "github": {
           "reconnect_needed": "GitHub debe reconectarse en Configuración.",
@@ -4401,7 +4405,10 @@
       "slack": {
         "channelLabel": "Canal",
         "asLabel": "Como",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Respuesta en el hilo"
+        }
       },
       "sentLabel": "Enviado",
       "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",
@@ -4631,7 +4638,11 @@
         "credential_save_failed": "No se pudo guardar el inicio de sesión de Slack en este equipo. No se envió nada.",
         "dm_failed": "No se pudo abrir el mensaje directo. No se envió nada.",
         "restricted": "Ese canal es de solo lectura o está restringido.",
+        "thread_mismatch": "Ese hilo está en otra conversación. No se envió nada.",
         "wrong_workspace": "Ese enlace es de otro espacio de trabajo de Slack.",
+        "invalid_thread": "No es un enlace a un mensaje de Slack.",
+        "thread_closed": "Slack no permite respuestas en ese hilo.",
+        "thread_only": "Ese canal solo admite respuestas en hilos.",
         "generic": "No funcionó.",
         "github": {
           "reconnect_needed": "GitHub debe reconectarse.",

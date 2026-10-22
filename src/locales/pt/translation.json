@@ -4226,7 +4226,11 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado. Tente novamente.",
         "dm_failed": "Não foi possível abrir a mensagem direta para {{destination}}. Nada foi enviado.",
         "restricted": "{{destination}} é somente leitura ou restrito para você.",
+        "thread_mismatch": "Essa thread está em uma conversa diferente de {{destination}}. Nada foi enviado.",
         "wrong_workspace": "Esse link é de outro workspace do Slack. Nada foi enviado.",
+        "invalid_thread": "Isso não é um link para uma mensagem do Slack. Nada foi enviado.",
+        "thread_closed": "O Slack não permite respostas nessa thread. Nada foi enviado.",
+        "thread_only": "{{destination}} só aceita respostas em threads. Nada foi enviado.",
         "generic": "Algo deu errado. Nada foi enviado.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado nas Configurações.",
@@ -4349,7 +4353,10 @@
       "slack": {
         "channelLabel": "Canal",
         "asLabel": "Como",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Resposta na thread"
+        }
       },
       "sentLabel": "Enviado",
       "identityChanged": "Agora será enviado como {{account}}. Pressione Enviar para enviar.",
@@ -4579,7 +4586,11 @@
         "credential_save_failed": "Não foi possível salvar o login do Slack neste computador. Nada foi enviado.",
         "dm_failed": "Não foi possível abrir a mensagem direta. Nada foi enviado.",
         "restricted": "Esse canal é somente leitura ou restrito.",
+        "thread_mismatch": "Essa thread está em outra conversa. Nada foi enviado.",
         "wrong_workspace": "Esse link é de outro workspace do Slack.",
+        "invalid_thread": "Não é um link para uma mensagem do Slack.",
+        "thread_closed": "O Slack não permite respostas nessa thread.",
+        "thread_only": "Esse canal só aceita respostas em threads.",
         "generic": "Não funcionou.",
         "github": {
           "reconnect_needed": "O GitHub precisa ser reconectado.",

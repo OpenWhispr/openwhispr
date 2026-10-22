@@ -4396,7 +4396,11 @@
         "credential_save_failed": "The Slack login couldn't be saved on this computer. Nothing was sent. Try again.",
         "dm_failed": "The direct message to {{destination}} couldn't be opened. Nothing was sent.",
         "restricted": "{{destination}} is read-only or restricted for you.",
+        "thread_mismatch": "That thread is in a different conversation from {{destination}}. Nothing was sent.",
         "wrong_workspace": "That link is from a different Slack workspace. Nothing was sent.",
+        "invalid_thread": "That isn't a link to a Slack message. Nothing was sent.",
+        "thread_closed": "Slack doesn't allow replies in that thread. Nothing was sent.",
+        "thread_only": "{{destination}} only takes replies in threads. Nothing was sent.",
         "generic": "Something went wrong. Nothing was sent.",
         "github": {
           "reconnect_needed": "GitHub needs to be reconnected in Settings.",
@@ -4519,7 +4523,10 @@
       "slack": {
         "channelLabel": "Channel",
         "asLabel": "As",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Reply in thread"
+        }
       },
       "sentLabel": "Sent",
       "identityChanged": "Now sending as {{account}}. Press Send to send it.",
@@ -4749,7 +4756,11 @@
         "credential_save_failed": "Couldn't save the Slack login on this computer. Nothing was sent.",
         "dm_failed": "Couldn't open the direct message. Nothing was sent.",
         "restricted": "That channel is read-only or restricted.",
+        "thread_mismatch": "That thread is in a different conversation. Nothing was sent.",
         "wrong_workspace": "That link is from a different Slack workspace.",
+        "invalid_thread": "Not a link to a Slack message.",
+        "thread_closed": "Slack doesn't allow replies in that thread.",
+        "thread_only": "That channel only takes replies in threads.",
         "generic": "That didn't work.",
         "github": {
           "reconnect_needed": "GitHub needs to be reconnected.",

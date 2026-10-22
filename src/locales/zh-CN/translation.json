@@ -4226,7 +4226,11 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息，未发送任何内容。请重试。",
         "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
         "restricted": "{{destination}} 对您是只读或受限的。",
+        "thread_mismatch": "该话题位于与 {{destination}} 不同的对话中，未发送任何内容。",
         "wrong_workspace": "该链接来自另一个 Slack 工作区，未发送任何内容。",
+        "invalid_thread": "这不是指向 Slack 消息的链接，未发送任何内容。",
+        "thread_closed": "Slack 不允许在该话题中回复，未发送任何内容。",
+        "thread_only": "{{destination}} 只接受话题中的回复，未发送任何内容。",
         "generic": "出了点问题，未发送任何内容。",
         "github": {
           "reconnect_needed": "需要在设置中重新连接 GitHub。",
@@ -4349,7 +4353,10 @@
       "slack": {
         "channelLabel": "频道",
         "asLabel": "身份",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "在话题中回复"
+        }
       },
       "sentLabel": "已发送",
       "identityChanged": "现在将以 {{account}} 身份发送。按“发送”即可发送。",
@@ -4579,7 +4586,11 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息。未发送任何内容。",
         "dm_failed": "无法打开私信。未发送任何内容。",
         "restricted": "该频道为只读或受限。",
+        "thread_mismatch": "该话题位于另一个对话中。未发送任何内容。",
         "wrong_workspace": "该链接来自另一个 Slack 工作区。",
+        "invalid_thread": "不是指向 Slack 消息的链接。",
+        "thread_closed": "Slack 不允许在该话题中回复。",
+        "thread_only": "该频道只接受话题中的回复。",
         "generic": "操作未成功。",
         "github": {
           "reconnect_needed": "需要重新连接 GitHub。",
