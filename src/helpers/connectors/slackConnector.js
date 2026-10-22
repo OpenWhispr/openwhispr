@@ -22,6 +22,12 @@ const RETRY_AFTER_REFRESH = new Set([
 const SLACK_ESCAPE_SPECIALS = true;
 const TOO_LARGE_FOR_NAMES =
   "This Slack workspace is too large to look people up by name. Ask the user for the person's email address, or the exact #channel name.";
+// A channel (C…, or G… for an older private one), a DM (D…) or a person (U…,
+// or W… on Enterprise Grid). Slack's ids carry digits, so a name typed in
+// capitals ("GABE") is still a name.
+const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{2,}$/;
+// A message in a link: p, then its ts without the dot.
+const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
 
 // Escaping &, < and > makes a message post exactly as the card showed it:
 // no channel-wide mention or link the user didn't see.
@@ -43,6 +49,32 @@ function messageParams(channel, text) {
 function messageUrl(teamUrl, channel, ts) {
   if (typeof teamUrl !== "string" || typeof ts !== "string") return undefined;
   return `${teamUrl.replace(/\/?$/, "/")}archives/${channel}/p${ts.replace(".", "")}`;
+}
+
+// A link to a conversation, or to a message in it:
+// https://<workspace>.slack.com/archives/<C…|G…|D…>[/p<ts>]. Null for
+// anything else.
+function parseSlackLink(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const [archives, channelId, message, ...rest] = url.pathname.split("/").filter(Boolean);
+  if (url.protocol !== "https:" || archives !== "archives" || rest.length > 0) return null;
+  if (!/^[CDG][A-Z0-9]+$/.test(channelId ?? "")) return null;
+  if (message !== undefined && !LINK_MESSAGE.test(message)) return null;
+  return { host: url.hostname, channelId };
+}
+
+// auth.test's url is the workspace's own: https://<workspace>.slack.com/.
+function inWorkspace(link, teamUrl) {
+  try {
+    return new URL(teamUrl).hostname === link.host;
+  } catch {
+    return false;
+  }
 }
 
 function failureMessage(errorCode, label = "", fallback = "Slack didn't accept the message.") {
@@ -70,6 +102,8 @@ function failureMessage(errorCode, label = "", fallback = "Slack didn't accept t
       return "The message is too long for Slack (12,000 characters at most, once formatted).";
     case "no_text":
       return "The message is empty.";
+    case "wrong_workspace":
+      return "That Slack link is from another workspace than the one connected. Nothing was sent.";
     default:
       return fallback;
   }
@@ -86,6 +120,9 @@ function parseDestination(raw) {
   if (value.startsWith("#")) return { kind: "channel", query: value.slice(1) };
   if (isValidEmailAddress(value)) return { kind: "email", query: value };
   if (value.startsWith("@")) return { kind: "person", query: value.slice(1) };
+  const link = parseSlackLink(value);
+  if (link) return { kind: "id", query: link.channelId, link };
+  if (SLACK_ID.test(value)) return { kind: "id", query: value };
   return { kind: "any", query: value };
 }
 
@@ -113,7 +150,37 @@ function prepareFailed(errorCode, message) {
 }
 
 function createSlackConnector({ api, auth, directory, credentials }) {
+  // An id names exactly one channel, person or DM, so it needs no list to be
+  // sure, not even a complete one.
+  async function findById(id, token, cacheKey) {
+    if (id.startsWith("D")) {
+      // Whose DM it is takes im:read, which the app doesn't ask for. Send
+      // posts there, and Slack refuses a DM the user isn't in.
+      return { candidate: { id, kind: "dm", label: `Direct message (${id})` } };
+    }
+    if (id.startsWith("U") || id.startsWith("W")) {
+      const found = await directory.personById(token, id);
+      if (!found.ok) return { error: found.errorCode };
+      if (found.candidate) return { candidate: found.candidate };
+      return {
+        clarify: clarify(
+          `No one in this Slack workspace has the id ${id}. Ask the user who they meant.`
+        ),
+      };
+    }
+    const channels = await directory.channels(token, cacheKey);
+    if (!channels.ok) return { error: channels.errorCode };
+    const channel = channels.items.find((candidate) => candidate.id === id);
+    if (channel) return { candidate: channel };
+    return {
+      clarify: clarify(
+        `Couldn't find a channel with the id ${id} that the user is in. Ask the user where to send it.`
+      ),
+    };
+  }
+
   async function findTarget(parsed, token, cacheKey) {
+    if (parsed.kind === "id") return findById(parsed.query, token, cacheKey);
     if (parsed.kind === "email") {
       const found = await directory.personByEmail(token, parsed.query);
       if (!found.ok) return { error: found.errorCode };
@@ -251,13 +318,12 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         );
       }
       const { credential } = access;
+      const parsed = parseDestination(destination);
+      if (parsed.link && !inWorkspace(parsed.link, credential.teamUrl)) {
+        return prepareFailed("wrong_workspace", failureMessage("wrong_workspace"));
+      }
       const cacheKey = `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
-      const found = await findTargetWithRefresh(
-        parseDestination(destination),
-        binding,
-        access,
-        cacheKey
-      );
+      const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
       if (found.clarify) return found.clarify;
       if (found.error) {
         return prepareFailed(

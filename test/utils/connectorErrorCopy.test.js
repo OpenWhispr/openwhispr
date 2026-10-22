@@ -28,6 +28,7 @@ test("codes with their own copy map to themselves", () => {
     "open_failed",
     "draft_too_long",
     "invalid_address",
+    "wrong_workspace",
   ]) {
     assert.equal(connectorErrorCopyKey(code), code);
   }
@@ -118,6 +119,7 @@ test("every key the card and the tool step can show has English copy", () => {
     "network",
     "dm_failed",
     "restricted",
+    "wrong_workspace",
     "generic",
   ];
   const emailOnlyKeys = ["open_failed", "draft_too_long", "invalid_address"];

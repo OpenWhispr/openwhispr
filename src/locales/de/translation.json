@@ -4396,6 +4396,7 @@
         "credential_save_failed": "Die Slack-Anmeldung konnte auf diesem Computer nicht gespeichert werden. Es wurde nichts gesendet. Versuche es erneut.",
         "dm_failed": "Die Direktnachricht an {{destination}} konnte nicht geöffnet werden. Es wurde nichts gesendet.",
         "restricted": "{{destination}} ist für dich schreibgeschützt oder eingeschränkt.",
+        "wrong_workspace": "Dieser Link stammt aus einem anderen Slack-Workspace. Es wurde nichts gesendet.",
         "generic": "Etwas ist schiefgelaufen. Es wurde nichts gesendet.",
         "github": {
           "reconnect_needed": "GitHub muss in den Einstellungen erneut verbunden werden.",
@@ -4748,6 +4749,7 @@
         "credential_save_failed": "Slack-Anmeldung konnte auf diesem Computer nicht gespeichert werden. Nichts wurde gesendet.",
         "dm_failed": "Direktnachricht konnte nicht geöffnet werden. Nichts wurde gesendet.",
         "restricted": "Dieser Kanal ist schreibgeschützt oder eingeschränkt.",
+        "wrong_workspace": "Dieser Link stammt aus einem anderen Slack-Workspace.",
         "generic": "Das hat nicht funktioniert.",
         "github": {
           "reconnect_needed": "GitHub muss erneut verbunden werden.",

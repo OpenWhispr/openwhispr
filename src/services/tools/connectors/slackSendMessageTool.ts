@@ -26,13 +26,14 @@ function askAboutVanishedChannel(result: ToolResult, destination: string): ToolR
 export const slackSendMessageTool: ToolDefinition = {
   name: "slack_send_message",
   description:
-    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, or an email address. `text` is the message in Markdown.",
+    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, an email address, a Slack id (C…, U… or D…) or a Slack link to the conversation. `text` is the message in Markdown.",
   parameters: {
     type: "object",
     properties: {
       destination: {
         type: "string",
-        description: "#channel, a person's name, @handle, or email address",
+        description:
+          "#channel, a person's name, @handle, email address, Slack id, or a Slack link to the conversation",
       },
       text: { type: "string", description: "The message, in Markdown" },
     },

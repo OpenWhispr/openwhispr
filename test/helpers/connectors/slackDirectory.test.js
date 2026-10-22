@@ -114,6 +114,22 @@ test("an email finds a person; an unknown email is no match, not an error", asyn
   });
 });
 
+test("an id finds that person; an unknown id is no match, not an error", async () => {
+  const found = await setup({ "users.info": [ok(FIXTURES.lookupGabe)] });
+  assert.equal((await found.directory.personById("t", "U0GABE")).candidate.label, "Gabe Smith");
+  assert.deepEqual(found.slack.calls[0].params, { user: "U0GABE" });
+
+  const missing = await setup({ "users.info": [slackError("user_not_found")] });
+  assert.deepEqual(await missing.directory.personById("t", "U0NOPE"), {
+    ok: true,
+    candidate: null,
+  });
+  const bot = await setup({
+    "users.info": [ok({ ok: true, user: { id: "B0HELPER", name: "helper", is_bot: true } })],
+  });
+  assert.equal((await bot.directory.personById("t", "B0HELPER")).candidate, null);
+});
+
 test("a new login never reads the old login's cache", async () => {
   const { directory, slack } = await setup({ "users.list": [ok(FIXTURES.people)] });
   await directory.people("t", "acct-1:T0TEST:U0CHAD:1");

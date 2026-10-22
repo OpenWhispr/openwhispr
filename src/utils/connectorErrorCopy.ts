@@ -21,6 +21,7 @@ export type ConnectorErrorCopyKey =
   | "network"
   | "dm_failed"
   | "restricted"
+  | "wrong_workspace"
   | "generic"
   // Email drafts fail in a tool step only, never on a card.
   | "open_failed"
@@ -41,6 +42,7 @@ const OWN_COPY: ReadonlySet<string> = new Set<ConnectorErrorCopyKey>([
   "open_failed",
   "draft_too_long",
   "invalid_address",
+  "wrong_workspace",
 ]);
 
 const ALIASES: ReadonlyMap<string, ConnectorErrorCopyKey> = new Map([

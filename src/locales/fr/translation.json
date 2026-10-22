@@ -4396,6 +4396,7 @@
         "credential_save_failed": "La connexion Slack n'a pas pu être enregistrée sur cet ordinateur. Rien n'a été envoyé. Réessayez.",
         "dm_failed": "Le message direct à {{destination}} n'a pas pu être ouvert. Rien n'a été envoyé.",
         "restricted": "{{destination}} est en lecture seule ou restreint pour vous.",
+        "wrong_workspace": "Ce lien provient d'un autre espace de travail Slack. Rien n'a été envoyé.",
         "generic": "Un problème est survenu. Rien n'a été envoyé.",
         "github": {
           "reconnect_needed": "GitHub doit être reconnecté dans les Paramètres.",
@@ -4748,6 +4749,7 @@
         "credential_save_failed": "Impossible d'enregistrer la connexion Slack sur cet ordinateur. Rien n'a été envoyé.",
         "dm_failed": "Impossible d'ouvrir le message direct. Rien n'a été envoyé.",
         "restricted": "Ce canal est en lecture seule ou restreint.",
+        "wrong_workspace": "Ce lien provient d'un autre espace de travail Slack.",
         "generic": "Cela n'a pas fonctionné.",
         "github": {
           "reconnect_needed": "GitHub doit être reconnecté.",
