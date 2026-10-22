@@ -12168,11 +12168,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-get-upcoming-events", async (_event, windowMinutes) => {
+    ipcMain.handle("gcal-get-upcoming-events", async (_event, windowMinutes, options) => {
       try {
         return {
           success: true,
-          events: await this.googleCalendarManager.getUpcomingEvents(windowMinutes),
+          events: await this.googleCalendarManager.getUpcomingEvents(windowMinutes, {
+            includeAllDay: options?.includeAllDay === true,
+          }),
         };
       } catch (error) {
         return { success: false, events: [] };

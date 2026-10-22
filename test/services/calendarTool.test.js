@@ -8,15 +8,26 @@ const load = () => import("../../src/services/tools/calendarTool.ts");
 function stubEvents(events, calls = []) {
   global.window = {
     electronAPI: {
-      gcalGetUpcomingEvents: async (windowMinutes) => {
-        calls.push(windowMinutes);
+      gcalGetUpcomingEvents: async (windowMinutes, options) => {
+        calls.push([windowMinutes, options]);
         return { success: true, events };
       },
     },
   };
 }
 
-test("events map the real DB columns and survive serialization", async () => {
+// The device's time zone, for the length of one test.
+function inTimeZone(t, timeZone) {
+  const previous = process.env.TZ;
+  process.env.TZ = timeZone;
+  t.after(() => {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  });
+}
+
+test("events map the real DB columns and survive serialization", async (t) => {
+  inTimeZone(t, "Asia/Kolkata");
   const { calendarTool } = await load();
   stubEvents([
     {
@@ -37,8 +48,111 @@ test("events map the real DB columns and survive serialization", async () => {
       summary: "Standup",
       start: "2026-08-12 16:00:00",
       end: "2026-08-12 16:15:00",
+      date: "2026-08-12",
+      weekday: "Wednesday",
+      startTime: "4:00 PM",
+      endTime: "4:15 PM",
+      timeZoneName: "GMT+5:30",
       joinUrl: "https://meet.google.com/abc-defg-hij",
     },
+  ]);
+});
+
+test("each event gets its local date, weekday and times, across midnight and a DST change", async (t) => {
+  inTimeZone(t, "America/Los_Angeles");
+  const { calendarTool } = await load();
+  stubEvents([
+    // Stored in UTC, as Microsoft and Apple rows are: Friday evening in Los Angeles.
+    { summary: "Late sync", start_time: "2026-10-31T06:30:00Z", end_time: "2026-10-31T07:15:00Z" },
+    // Saturday 23:30 to Sunday 00:15, the night the clocks go back.
+    {
+      summary: "Cutover",
+      start_time: "2026-10-31T23:30:00-07:00",
+      end_time: "2026-11-01T00:15:00-07:00",
+    },
+    {
+      summary: "After the change",
+      start_time: "2026-11-02T17:00:00Z",
+      end_time: "2026-11-02T18:00:00Z",
+    },
+  ]);
+
+  const { data } = await calendarTool.execute({ timeRange: "week" });
+
+  const facts = data.map(({ date, weekday, startTime, endTime, endDate, timeZoneName }) => ({
+    date,
+    weekday,
+    startTime,
+    endTime,
+    endDate,
+    timeZoneName,
+  }));
+  assert.deepEqual(facts, [
+    {
+      date: "2026-10-30",
+      weekday: "Friday",
+      startTime: "11:30 PM",
+      endTime: "12:15 AM",
+      endDate: "2026-10-31",
+      timeZoneName: "GMT-7",
+    },
+    {
+      date: "2026-10-31",
+      weekday: "Saturday",
+      startTime: "11:30 PM",
+      endTime: "12:15 AM",
+      endDate: "2026-11-01",
+      timeZoneName: "GMT-7",
+    },
+    {
+      date: "2026-11-02",
+      weekday: "Monday",
+      startTime: "9:00 AM",
+      endTime: "10:00 AM",
+      endDate: undefined,
+      timeZoneName: "GMT-8",
+    },
+  ]);
+});
+
+test("all-day events are asked for and come back as their days", async (t) => {
+  inTimeZone(t, "America/Los_Angeles");
+  const { calendarTool } = await load();
+  const calls = [];
+  stubEvents(
+    [
+      // Google and Microsoft store plain dates, the end exclusive.
+      {
+        summary: "Out of office",
+        start_time: "2026-10-26",
+        end_time: "2026-10-31",
+        is_all_day: 1,
+      },
+      // The Apple helper stores local midnight as a UTC instant.
+      {
+        summary: "Holiday",
+        start_time: "2026-10-23T07:00:00Z",
+        end_time: "2026-10-24T07:00:00Z",
+        is_all_day: 1,
+        hangout_link: null,
+      },
+    ],
+    calls
+  );
+
+  const { data } = await calendarTool.execute({ timeRange: "week" });
+
+  assert.deepEqual(calls, [[10080, { includeAllDay: true }]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(data)), [
+    {
+      summary: "Out of office",
+      allDay: true,
+      date: "2026-10-26",
+      weekday: "Monday",
+      endDate: "2026-10-30",
+      joinUrl: null,
+    },
+    { summary: "Holiday", allDay: true, date: "2026-10-23", weekday: "Friday", joinUrl: null },
   ]);
 });
 
@@ -93,5 +207,5 @@ test("the week range forwards a 7-day window", async () => {
 
   await calendarTool.execute({ timeRange: "week" });
 
-  assert.deepEqual(calls, [10080]);
+  assert.deepEqual(calls, [[10080, { includeAllDay: true }]]);
 });
