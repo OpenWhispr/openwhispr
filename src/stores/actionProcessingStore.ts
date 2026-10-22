@@ -495,7 +495,7 @@ export interface RunActionOptions {
   /** The transcript is plain text, with no speaker segments to label its lines (#2666). */
   hasPlainTranscript?: boolean;
   /** Opt-in so enhancement never renames a note the user has titled. */
-  allowTitleGeneration?: boolean;
+  titleGeneration?: { expectedTitle: string };
   /** People whose names in generated action-item owners become mention tags. */
   knownPeople?: MentionPerson[];
   /** Structured pieces of `noteContent`; only its transcript is ever split into parts. */
@@ -612,7 +612,7 @@ export function runBackgroundAction(
       if (isCancelled()) return;
 
       let title: string | undefined;
-      if (!editsSummary && options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
+      if (!editsSummary && options.titleGeneration && getSettings().autoGenerateNoteTitle) {
         const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
         if (generated) title = generated;
       }
@@ -637,7 +637,13 @@ export function runBackgroundAction(
           ? { enhanced_content: enhancedContent }
           : { enhanced_content: enhancedContent, enhanced_at_content_hash: contentHash };
       if (title) updates.title = title;
-      const result = await window.electronAPI.updateNote(noteId, updates);
+      const result = await window.electronAPI.updateNote(
+        noteId,
+        updates,
+        title && options.titleGeneration
+          ? { titleIfUnchanged: options.titleGeneration.expectedTitle }
+          : undefined
+      );
       if (!result?.success) throw new Error(labels.actionFailed);
       const previousSummary = before?.enhanced_content ?? null;
       pushAppliedEvent({
@@ -648,7 +654,8 @@ export function runBackgroundAction(
           enhancement_prompt: before?.enhancement_prompt ?? null,
           enhancement_template_id: before?.enhancement_template_id ?? null,
           enhanced_at_content_hash: before?.enhanced_at_content_hash ?? null,
-          ...(title && before && { title: before.title }),
+          ...(result.generatedTitleApplied &&
+            options.titleGeneration && { title: options.titleGeneration.expectedTitle }),
           // Undoing a first summary is a deliberate clear, so it syncs to every
           // device; a bare blank stays local and the summary would come back.
           ...(!previousSummary?.trim() && { clear_fields: ["enhanced_content"] }),

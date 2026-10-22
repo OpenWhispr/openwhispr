@@ -805,11 +805,13 @@ export default function PersonalNotesView({
       knownPeople,
       fromSummary,
       material,
-      allowTitleGeneration: isRegenerableNoteTitle(
+      titleGeneration: isRegenerableNoteTitle(
         editorNote.title,
         [t("notes.list.untitledNote"), t("notes.list.newNote"), t("notes.sidebar.newNote")],
         calendarEventName
-      ),
+      )
+        ? { expectedTitle: editorNote.title }
+        : undefined,
     });
   };
 

@@ -3469,6 +3469,19 @@ class DatabaseManager {
     }
     try {
       if (!this.db) throw new Error("Database not initialized");
+      if (options && "titleIfUnchanged" in options) {
+        return this.db.transaction(() => {
+          const previous = this.getNote(id);
+          const generatedTitleApplied =
+            !!previous &&
+            updates.title !== undefined &&
+            previous.title === options.titleIfUnchanged;
+          const conditionalUpdates = { ...updates };
+          if (!generatedTitleApplied) delete conditionalUpdates.title;
+          const result = this.updateNote(id, conditionalUpdates);
+          return { ...result, generatedTitleApplied: result.success && generatedTitleApplied };
+        })();
+      }
       const previous = this.getNote(id);
       if (!previous) return { success: false, error: "Note not found" };
       updates = { ...updates };
