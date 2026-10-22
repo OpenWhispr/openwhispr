@@ -26,6 +26,7 @@ const mockHandoffStoreState = {
   setCheckingInitialUrl: jest.fn(),
   setNoSpeechDetected: jest.fn(),
   setTranscribing: jest.fn(),
+  setReturnState: jest.fn(),
   reset: jest.fn(),
 };
 const mockSubscription = { remove: jest.fn() };
@@ -51,6 +52,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     startNativeRecording: jest.fn(() => true),
     returnToPreviousApp: jest.fn(),
     stopNativeRecording: jest.fn(),
+    markHotkeyJsReady: jest.fn(),
   },
   APP_GROUP_KEYS: {
     KEYBOARD_RECORDING_JOB_ID: 'keyboard_recording_job_id',
@@ -64,6 +66,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
     KEYBOARD_CANCEL_REQUESTED: 'keyboard_cancel_requested',
     KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED: 'keyboard_compressed_audio_unsupported',
     KEYBOARD_COMPRESSED_AUDIO_UNSUPPORTED_AT_MS: 'keyboard_compressed_audio_unsupported_at_ms',
+    HOTKEY_JS_READY_AT_MS: 'hotkey_js_ready_at_ms',
   },
   addRecordingStoppedListener: (listener: (event: RecordingStoppedEvent) => Promise<void>) => {
     mockRecordingStoppedListener = listener;
@@ -180,6 +183,7 @@ const storage = AppGroupStorage as unknown as {
   startNativeRecording: jest.Mock;
   stopNativeRecording: jest.Mock;
   returnToPreviousApp: jest.Mock;
+  markHotkeyJsReady: jest.Mock;
 };
 
 function mountWithInitialUrl(url: string) {
@@ -205,6 +209,7 @@ beforeEach(() => {
   storage.getItem.mockReturnValue(null);
   storage.setItem.mockReset().mockReturnValue(true);
   storage.startNativeRecording.mockReturnValue(true);
+  storage.returnToPreviousApp.mockResolvedValue({ status: 'opened', hostName: 'Slack' });
   mockCleanupTranscript.mockResolvedValue('clean transcript');
   mockTranscribeAndCleanup.mockResolvedValue({
     text: 'clean transcript',
@@ -768,5 +773,62 @@ describe('provider job lifecycle', () => {
     expect(mockTranscribe).not.toHaveBeenCalled();
     expect(generateForJob).not.toHaveBeenCalled();
     expect(storage.setKeyboardStatus).toHaveBeenCalledWith('agent_error', 'agent_setup_required');
+  });
+});
+
+describe('useKeyboardHandoff — return to the host app', () => {
+  it('returns to the host after starting a recording and records the outcome', async () => {
+    storage.returnToPreviousApp.mockResolvedValue({ status: 'failed', hostName: 'Slack' });
+    mountWithInitialUrl('openwhispr://keyboard-dictation?source=keyboard');
+
+    await waitFor(() =>
+      expect(mockHandoffStoreState.setReturnState).toHaveBeenCalledWith('manual', 'Slack'),
+    );
+    expect(storage.startNativeRecording).toHaveBeenCalled();
+    expect(storage.returnToPreviousApp).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the swipe screen when there is no host to return to', async () => {
+    storage.returnToPreviousApp.mockResolvedValue({ status: 'no_target' });
+    mountWithInitialUrl('openwhispr://keyboard-dictation?source=keyboard');
+
+    await waitFor(() =>
+      expect(mockHandoffStoreState.setReturnState).toHaveBeenCalledWith('manual', null),
+    );
+  });
+
+  // The keyboard inside OpenWhispr records in place; there is nowhere to return to.
+  it('never returns when the keyboard is hosted by OpenWhispr itself', async () => {
+    mountWithInitialUrl(
+      'openwhispr://keyboard-dictation?source=keyboard&hostBundle=com.gizmolabs.openwhispr',
+    );
+
+    await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalled());
+    expect(storage.returnToPreviousApp).not.toHaveBeenCalled();
+  });
+});
+
+describe('useKeyboardHandoff — hotkey readiness', () => {
+  // The hotkey's cold start waits for this key before it records, so it must
+  // only appear once both recording listeners exist.
+  it('marks JS ready only after the recording listeners are subscribed', () => {
+    mockBackgroundStartedListener = undefined;
+    let listenersAtReady: [boolean, boolean] | undefined;
+    // The native side stamps the process id, so a stamp left by a dead process
+    // never makes a fresh launch look ready.
+    storage.markHotkeyJsReady.mockImplementation(() => {
+      listenersAtReady = [!!mockRecordingStoppedListener, !!mockBackgroundStartedListener];
+    });
+
+    mountWithInitialUrl('');
+
+    expect(storage.markHotkeyJsReady).toHaveBeenCalledTimes(1);
+    expect(listenersAtReady).toEqual([true, true]);
+  });
+
+  it('clears the ready key on unmount', () => {
+    const { unmount } = mountWithInitialUrl('');
+    unmount();
+    expect(storage.removeItem).toHaveBeenCalledWith('hotkey_js_ready_at_ms');
   });
 });

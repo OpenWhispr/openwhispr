@@ -31,6 +31,7 @@ async function loadStore(
           updates.push({ noteId, payload });
           return { success: true };
         },
+        getNote: async () => null,
         getLocalContextBudget: async (modelId) => {
           budgetCalls.push(modelId);
           if (budget instanceof Error) throw budget;
@@ -153,6 +154,7 @@ test("refused material is summarised in parts, then merged with the action promp
       /this part only/i.test(call.config.systemPrompt),
       "part prompt is the part-notes prompt"
     );
+    assert.match(call.config.systemPrompt, /naming who said it by label/);
     assert.ok(call.config.maxTokens <= 2048);
   });
   assert.ok(
@@ -173,6 +175,37 @@ test("refused material is summarised in parts, then merged with the action promp
     updates[0].payload.enhanced_content,
     `# Part notes ${calls.length}\n- decided things`
   );
+});
+
+test("a summary action writing a first summary splits a refused recording like a template", async (t) => {
+  const { store, calls, updates } = await loadStore(t, { failFirst: true });
+  const tldr = {
+    id: 2,
+    client_id: "notes.actions.builtin.lengthen",
+    kind: "action",
+    output: "summary",
+    name: "Add TL;DR",
+    prompt: "Add supported detail.",
+  };
+  run(store, 30, longMaterial(400), { fromSummary: false }, tldr);
+  await waitFor(() => updates.length > 0, "save");
+
+  // A first summary has nothing to lose, so no request, part or not, demands a
+  // complete reply: a verbose part is kept clipped, as for a template.
+  assert.equal(calls[0].config.refuseClippedByWindow, true, "a long recording can split");
+  const parts = calls.slice(1, -1);
+  assert.ok(parts.length >= 2, "the recording ran in parts");
+  for (const part of parts) {
+    assert.ok(isPart(part.config));
+    assert.equal(part.config.requireCompleteOutput, undefined);
+    assert.equal(part.config.refuseClippedByWindow, false);
+  }
+  assert.equal(calls.at(-1).config.requireCompleteOutput, undefined);
+  assert.match(calls.at(-1).config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\./);
+  assert.deepEqual(Object.keys(updates[0].payload), [
+    "enhanced_content",
+    "enhanced_at_content_hash",
+  ]);
 });
 
 test("a refusal whose budget cannot be read is reported without splitting", async (t) => {
@@ -474,7 +507,8 @@ test("a shorter consolidation is usable even when its section count stays the sa
     },
   });
   const material = {
-    notes: "manual note ".repeat(2325),
+    // Leave room for the shared fidelity instructions while still forcing two reductions.
+    notes: "manual note ".repeat(2250),
     meetingContext: "",
     transcript: LINE.repeat(1400),
   };
@@ -582,29 +616,15 @@ test("an unbroken CJK part rejected by the tokenizer is split and merged without
   assert.equal(accepted.join(""), body);
 });
 
-test("the merge preserves a follow-up email action without imposing exhaustive notes", async (t) => {
-  const { BUILTIN_ACTIONS } = await import("../../src/helpers/builtinActions.js");
-  const email = BUILTIN_ACTIONS.find(
-    (action) => action.translationKey === "notes.actions.builtin.followUpEmail"
-  );
+test("the merge preserves a custom template's instructions without imposing exhaustive notes", async (t) => {
+  const prompt = "Write the follow-up email I would send to the other participants.";
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
-  run(
-    store,
-    16,
-    longMaterial(20),
-    {},
-    {
-      id: 2,
-      name: email.name,
-      prompt: email.prompt,
-      translation_key: email.translationKey,
-    }
-  );
+  run(store, 16, longMaterial(20), {}, { id: 2, kind: "template", name: "Follow-up", prompt });
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
-  const prompt = calls.at(-1).config.systemPrompt;
-  assert.ok(prompt.includes(email.prompt));
-  assert.doesNotMatch(prompt, /Completeness outranks brevity|as long as that requires/);
+  const systemPrompt = calls.at(-1).config.systemPrompt;
+  assert.ok(systemPrompt.includes(prompt));
+  assert.doesNotMatch(systemPrompt, /Completeness outranks brevity|as long as that requires/);
 });
 
 test("a local model reached through dictation cleanup is summarised in parts too", async (t) => {
@@ -669,12 +689,17 @@ test("only the whole-note request refuses a reply the window clipped", async (t)
 
 test("a transcript without speaker labels is packed without a prose prefix", async (t) => {
   const { store, calls, updates } = await loadStore(t, { failFirst: true });
-  // A note summarised while it is still recording carries the live transcript:
-  // one space-joined paragraph, no "Label:" lines, and a colon in the first clause.
+  // A transcript stored as plain text (a recording that captured no speaker
+  // segments): one space-joined paragraph, no "Label:" lines, and a colon in the first clause.
   const transcript =
     "Meeting at 10:30 we discussed the rollout plan. " +
     "Then we covered the budget and the hiring plan. ".repeat(600).trim();
-  run(store, 21, { notes: "", meetingContext: "", transcript }, { isMeetingNote: false });
+  run(
+    store,
+    21,
+    { notes: "", meetingContext: "", transcript },
+    { isMeetingNote: false, hasPlainTranscript: true }
+  );
   await waitForResult(store, updates);
   assert.deepEqual(store.consumeErrorEvents(), []);
   assert.equal(updates.length, 1);
@@ -687,17 +712,116 @@ test("a transcript without speaker labels is packed without a prose prefix", asy
       .split("Meeting at 10:").length - 1,
     1
   );
+  // A part told every line has a label would attribute by guess, and the merge
+  // would take its guessed owner as stated (#2666).
+  for (const part of parts) {
+    assert.match(
+      part.config.systemPrompt,
+      /a transcript in plain text, whose lines carry no speaker labels/
+    );
+    assert.match(part.config.systemPrompt, /with its owner only where the material names one/);
+    assert.match(
+      part.config.systemPrompt,
+      /NEVER guess or invent who said something or who owns a task/
+    );
+    assert.doesNotMatch(part.config.systemPrompt, /speaker's label|by label|Meeting Context/);
+  }
+  const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
+  assert.ok(
+    calls
+      .at(-1)
+      .config.systemPrompt.startsWith(compileTemplatePrompt(ACTION, { hasPlainTranscript: true })),
+    "the merge pass carries the plain-transcript rule"
+  );
+});
+
+test("a transcript in plain text gets its own prompt and the dictionary, and owners it names become mentions", async (t) => {
+  const { compileTemplatePrompt, compileSummaryActionPrompt } =
+    await import("../../src/helpers/templatePrompts.js");
+  const reply = [
+    "## Action Items",
+    "- [ ] Fix the build by Friday — Alice",
+    "- [ ] Book the room — Priya",
+    "- [ ] Send the revised proposal",
+  ].join("\n");
+  const { store, calls, updates } = await loadStore(t, {
+    budget: BIG_BUDGET,
+    storage: { customDictionary: JSON.stringify(["Alice Ng"]) },
+    processText: () => reply,
+  });
+  const plainOptions = { isMeetingNote: false, hasPlainTranscript: true };
+  const plainMaterial = {
+    notes: "",
+    meetingContext: "",
+    transcript: "Alice, can you fix the build by Friday? Sure.",
+  };
+
+  run(store, 40, plainMaterial, {
+    ...plainOptions,
+    knownPeople: [{ name: "Alice Ng", email: "alice@example.com" }],
+  });
+  await waitFor(() => updates.length === 1, "the plain transcript's save");
+  const instructions = compileTemplatePrompt(ACTION, plainOptions);
+  assert.equal(updates[0].payload.enhancement_prompt, instructions);
+  assert.ok(calls[0].config.systemPrompt.startsWith(instructions));
+  assert.ok(
+    calls[0].config.systemPrompt.endsWith("Alice Ng"),
+    "a transcript gets the custom dictionary"
+  );
+  assert.equal(
+    updates[0].payload.enhanced_content,
+    [
+      "## Action Items",
+      "- [ ] Fix the build by Friday — [@Alice Ng](mention:alice%40example.com)",
+      "- [ ] Book the room — Priya",
+      "- [ ] Send the revised proposal",
+    ].join("\n")
+  );
+
+  run(store, 41, longMaterial(2));
+  await waitFor(() => updates.length === 2, "the meeting's save");
+  assert.ok(
+    calls.at(-1).config.systemPrompt.endsWith("Alice Ng"),
+    "a meeting keeps the dictionary"
+  );
+
+  run(
+    store,
+    42,
+    { notes: "My notes", meetingContext: "", transcript: "" },
+    { isMeetingNote: false }
+  );
+  await waitFor(() => updates.length === 3, "the personal note's save");
+  assert.equal(
+    calls.at(-1).config.systemPrompt,
+    compileTemplatePrompt(ACTION),
+    "a personal note is unchanged"
+  );
+
+  // A summary action on a note with no summary yet writes one from the material.
+  const shorten = { id: 2, kind: "action", output: "summary", prompt: "Make it shorter." };
+  run(store, 43, plainMaterial, { ...plainOptions, fromSummary: false }, shorten);
+  await waitFor(() => updates.length === 4, "the summary action's save");
+  assert.ok(
+    calls
+      .at(-1)
+      .config.systemPrompt.startsWith(
+        compileSummaryActionPrompt(shorten, { fromSummary: false, ...plainOptions })
+      ),
+    "a first summary from a summary action gets the plain-transcript preamble"
+  );
 });
 
 test("parts never spend their output budget on thinking", async (t) => {
   const { store, calls, updates } = await loadStore(t, {
     failFirst: true,
-    storage: { noteFormattingDisableThinking: "false" },
+    storage: { noteFormattingDisableThinking: "false", noteFormattingReasoningEffort: "high" },
   });
   run(store, 22, longMaterial(400));
   await waitForResult(store, updates);
   assert.equal(updates.length, 1);
   assert.equal(calls[0].config.disableThinking, false);
+  assert.equal(calls[0].config.reasoningEffort, "high");
   assert.equal(calls.at(-1).config.disableThinking, false);
   for (const call of calls.slice(1, -1)) assert.equal(call.config.disableThinking, true);
 });

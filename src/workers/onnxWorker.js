@@ -38,7 +38,8 @@ let speakerSession = null;
 let speakerInputName = null;
 let textSession = null;
 let textTokenizer = null;
-let textQueue = Promise.resolve();
+// One queue per session, keyed by method prefix ("text.", "speaker.").
+const sessionQueues = { text: Promise.resolve(), speaker: Promise.resolve() };
 
 function log(level, message, extra) {
   if (!logStream) return;
@@ -222,6 +223,17 @@ async function speakerExtract({ samplesBuffer }) {
   return { embeddingBuffer: data.buffer };
 }
 
+// Unloads clear the session before releasing it, so a release that throws can't leave ping
+// reporting a loaded session and keep releaseIfIdle from ever exiting the worker.
+async function speakerUnload() {
+  const session = speakerSession;
+  speakerSession = null;
+  speakerInputName = null;
+  if (session) await session.release();
+  log("info", "speaker session unloaded");
+  return { ok: true };
+}
+
 function buildTextTokenizer(tokenizerData) {
   const tokenToId = new Map();
   for (const [token, id] of Object.entries(tokenizerData.model.vocab)) {
@@ -341,9 +353,10 @@ async function textEmbed({ text }) {
 }
 
 async function textUnload() {
-  if (textSession) await textSession.release();
+  const session = textSession;
   textSession = null;
   textTokenizer = null;
+  if (session) await session.release();
   log("info", "text session unloaded");
   return { ok: true };
 }
@@ -352,6 +365,7 @@ const handlers = {
   ping: () => ({ ok: true, sessions: { speaker: !!speakerSession, text: !!textSession } }),
   "speaker.load": speakerLoad,
   "speaker.extract": speakerExtract,
+  "speaker.unload": speakerUnload,
   "text.load": textLoad,
   "text.embed": textEmbed,
   "text.unload": textUnload,
@@ -369,10 +383,11 @@ async function dispatch({ id, method, payload }) {
   }
   try {
     let result;
-    if (method.startsWith("text.")) {
+    const queueKey = method.split(".")[0];
+    if (Object.hasOwn(sessionQueues, queueKey)) {
       // Message callbacks overlap; never release a session during native inference.
-      const operation = textQueue.then(() => handler(payload || {}));
-      textQueue = operation.catch(() => {});
+      const operation = sessionQueues[queueKey].then(() => handler(payload || {}));
+      sessionQueues[queueKey] = operation.catch(() => {});
       result = await operation;
     } else {
       result = await handler(payload || {});

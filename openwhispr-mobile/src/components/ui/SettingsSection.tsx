@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, TextInput, type TextInputProps } from 'rea
 import { Text } from '@/components/ui/Text';
 import { SystemIcon, type LucideIconName } from './SystemIcon';
 import { BRAND, iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 type SettingsRowProps = {
   icon: string;
@@ -20,6 +20,8 @@ type SettingsRowProps = {
   selected?: boolean;
   // Shown right after the description, such as a help button.
   descriptionAccessory?: React.ReactNode;
+  // Dims the icon and title and ignores taps; the description stays legible to say why.
+  disabled?: boolean;
 };
 
 export function SettingsRow({
@@ -36,13 +38,15 @@ export function SettingsRow({
   showChevron = true,
   selected = false,
   descriptionAccessory,
+  disabled = false,
 }: SettingsRowProps) {
   const isLine = iconStyle === 'line';
+  const dimmed = disabled ? 'opacity-40' : '';
   return (
     <Pressable
-      onPress={onPress}
-      disabled={!onPress && !rightElement}
-      accessibilityState={{ selected }}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled || (!onPress && !rightElement)}
+      accessibilityState={{ selected, disabled }}
       className={selected ? 'bg-brand/10 active:bg-brand/20' : 'active:bg-tertiarySystemFill'}
     >
       <View
@@ -53,7 +57,7 @@ export function SettingsRow({
         }
       >
         {isLine ? (
-          <View className="h-6 w-6 items-center justify-center">
+          <View className={`h-6 w-6 items-center justify-center ${dimmed}`}>
             <SystemIcon
               name={icon}
               mdName={mdIcon}
@@ -73,7 +77,7 @@ export function SettingsRow({
         <View className="flex-1">
           <Text
             numberOfLines={1}
-            className={destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'}
+            className={`${destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'} ${dimmed}`}
           >
             {title}
           </Text>
@@ -131,7 +135,7 @@ export function SettingsTextFieldRow({
         autoCorrect={false}
         editable={editable}
         className={`flex-1 py-3 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
-        style={[{ fontFamily: SpaceGrotesk.regular }, style]}
+        style={[{ fontFamily: AppFont.regular }, style]}
         {...inputProps}
       />
       {trailing}

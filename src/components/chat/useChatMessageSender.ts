@@ -14,7 +14,6 @@ interface UseChatMessageSenderOptions {
   persistence: ChatPersistence;
   streaming: Pick<ChatStreaming, "sendToAI">;
   createConversation: (text: string) => Promise<number>;
-  onBeforeSend?: () => void;
   onMessagePersisted?: (context: PersistedMessageContext) => void | Promise<void>;
   onSendingChange?: (sending: boolean) => void;
 }
@@ -45,7 +44,6 @@ export function useChatMessageSender({
   persistence,
   streaming,
   createConversation,
-  onBeforeSend,
   onMessagePersisted,
   onSendingChange,
 }: UseChatMessageSenderOptions): (text: string, options?: SendToAIOptions) => Promise<boolean> {
@@ -56,11 +54,14 @@ export function useChatMessageSender({
 
   return useCallback(
     async (text: string, options?: SendToAIOptions) => {
-      return await submissionLockRef.current!.run(async () => {
+      const version = persistence.getSessionVersion?.();
+      const isCurrent = () => version === persistence.getSessionVersion?.();
+      let submitted = false;
+      const accepted = await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
         try {
-          onBeforeSend?.();
           const convId = conversationId ?? (await createConversation(text));
+          if (!isCurrent()) return;
           const previousMessages = persistence.messages;
           const userMessage: Message = {
             id: crypto.randomUUID(),
@@ -71,21 +72,26 @@ export function useChatMessageSender({
 
           persistence.setMessages((messages) => [...messages, userMessage]);
           await persistence.saveUserMessage(text);
+          if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
             text,
             isFirstMessage: previousMessages.length === 0,
           });
+          if (!isCurrent()) return;
+          submitted = true;
           await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+        } catch (error) {
+          if (isCurrent()) throw error;
         } finally {
           onSendingChange?.(false);
         }
       });
+      return accepted && submitted;
     },
     [
       conversationId,
       createConversation,
-      onBeforeSend,
       onMessagePersisted,
       onSendingChange,
       persistence,

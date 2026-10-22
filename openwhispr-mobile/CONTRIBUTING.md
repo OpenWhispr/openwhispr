@@ -43,6 +43,8 @@ Install the locked Ruby dependencies before the first iOS build:
 bundle install
 ```
 
+The app's brand font, Yowza, is commercially licensed, so its files are not in the repository. `npm install` fetches them from a private release when your GitHub account has access (`npm run download:brand-fonts` fetches them again); without access the app uses Space Grotesk and works the same. The fonts are embedded when the native project is built, so rebuild with `npm run ios` after fetching them.
+
 If you plan to build on a physical iOS device, configure a unique local identity and signing team first. See [Physical iOS Devices and Forks](#physical-ios-devices-and-forks).
 
 ## Development Workflow
@@ -75,6 +77,8 @@ Use [.env.example](./.env.example) as the canonical variable reference. It group
 - local bundle identifiers, URL schemes, and display names.
 
 Variables prefixed with `EXPO_PUBLIC_` are embedded in the application bundle and must never contain secrets. Keep contributor-specific values in `.env.local`, which is ignored by Git.
+
+Note sharing uses `https://notes.openwhispr.com` with the hosted production API. When setting a custom `EXPO_PUBLIC_API_URL`, also set `EXPO_PUBLIC_NOTES_URL` to the matching notes viewer before creating links. The viewer URL must use HTTPS, except HTTP on loopback for local development. Configure the backend's `SHARE_VIEWER_BASE_URL` to the same viewer so invitation emails open in the correct environment.
 
 ## Physical iOS Devices and Forks
 

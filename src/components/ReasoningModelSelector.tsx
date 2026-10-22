@@ -9,7 +9,6 @@ import type {
 } from "../types/electron";
 import { Button } from "./ui/button";
 import { CircleAlert, Cloud, Lock, Zap } from "./icons";
-import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs, type ProviderTabItem } from "./ui/ProviderTabs";
@@ -24,6 +23,13 @@ import {
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
+import { ProviderCheckField } from "./ui/ProviderCheckField";
+import { usePanelVisible } from "./ui/usePanelVisible";
+import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { useFocusHold } from "../hooks/useFocusHold";
+import { useTypingPause } from "../hooks/useTypingPause";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
@@ -407,6 +413,76 @@ export default function ReasoningModelSelector({
       ? selectedMode
       : (modeTabs[0]?.id as "cloud" | "local" | undefined));
 
+  // One key per hosted provider, shared with every other panel. OpenRouter and Custom check
+  // themselves in OpenAICompatiblePanel.
+  const hostedKeys: Partial<
+    Record<string, { value: string; set: (key: string) => void; url: string }>
+  > = {
+    openai: {
+      value: openaiApiKey,
+      set: setOpenaiApiKey,
+      url: "https://platform.openai.com/api-keys",
+    },
+    anthropic: {
+      value: anthropicApiKey,
+      set: setAnthropicApiKey,
+      url: "https://console.anthropic.com/settings/keys",
+    },
+    gemini: {
+      value: geminiApiKey,
+      set: setGeminiApiKey,
+      url: "https://aistudio.google.com/app/api-keys",
+    },
+    groq: { value: groqApiKey, set: setGroqApiKey, url: "https://console.groq.com/keys" },
+    tinfoil: {
+      value: tinfoilApiKey,
+      set: setTinfoilApiKey,
+      url: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
+    },
+    corti: {
+      value: cortiApiKey,
+      set: setCortiApiKey,
+      url: "https://www.corti.ai/?utm_source=referral&utm_campaign=openwhispr",
+    },
+  };
+  const hostedKey = hostedKeys[displayedCloudProvider];
+  const keyDraft = useCredentialDraft();
+  const typedKey = keyDraft.value(displayedCloudProvider, hostedKey?.value ?? "");
+  const visible = usePanelVisible();
+  const editing = useFocusHold();
+  // A tab that is only being browsed has no model of this panel's: the key alone is checked.
+  const checkedModel = localReasoningProvider === displayedCloudProvider ? reasoningModel : "";
+  const delayMs = useTypingPause({
+    typed: typedKey,
+    context: JSON.stringify([displayedCloudProvider, effectiveMode, visible, checkedModel]),
+    held: editing.held,
+  });
+  const check = useConnectionAutoCheck({
+    config: {
+      scope: "reasoning",
+      provider: displayedCloudProvider,
+      apiKey: typedKey,
+      model: checkedModel,
+    },
+    // A hidden panel is not ready to ask; a shown one asks again, and the main process answers
+    // a check it remembers at once.
+    ready:
+      effectiveMode === "cloud" &&
+      providerAllowed(displayedCloudProvider) &&
+      Boolean(typedKey.trim()) &&
+      visible,
+    delayMs,
+  });
+  const followKeyDraft = keyDraft.follow;
+  const refused = check.failure?.errorCode === "credentialsRejected";
+  useEffect(() => {
+    followKeyDraft({
+      phase: check.phase,
+      checked: { [displayedCloudProvider]: typedKey },
+      refused,
+    });
+  }, [check.phase, displayedCloudProvider, typedKey, refused, followKeyDraft]);
+
   const localProviders = useMemo<LocalProvider[]>(() => {
     return modelRegistry.getAllProviders().map((provider) => ({
       id: provider.id,
@@ -517,6 +593,7 @@ export default function ReasoningModelSelector({
 
   return (
     <div className="space-y-4">
+      <ConnectionCheckAnnouncer announcement={check.announcement} />
       {!mode && (
         <div className="space-y-2">
           {modeTabs.length > 0 ? (
@@ -568,6 +645,7 @@ export default function ReasoningModelSelector({
                     setLocalReasoningProvider(OPENROUTER_TAB);
                     setReasoningModel(m);
                   }}
+                  provider="openrouter"
                   lockedBaseUrl
                   apiKeyRequired
                   getKeyUrl={OPENROUTER_KEYS_URL}
@@ -588,93 +666,34 @@ export default function ReasoningModelSelector({
                 />
               ) : (
                 <>
-                  {displayedCloudProvider === "openai" && (
-                    <div className="space-y-2">
+                  {hostedKey && (
+                    <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
+                      {displayedCloudProvider === "corti" && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("reasoning.corti.euOnly")}
+                        </p>
+                      )}
                       <div className="flex items-baseline justify-between">
                         <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://platform.openai.com/api-keys" />
+                        <GetApiKeyLink url={hostedKey.url} />
                       </div>
-                      <ApiKeyInput
-                        apiKey={openaiApiKey}
-                        setApiKey={setOpenaiApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "anthropic" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://console.anthropic.com/settings/keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={anthropicApiKey}
-                        setApiKey={setAnthropicApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "gemini" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://aistudio.google.com/app/api-keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={geminiApiKey}
-                        setApiKey={setGeminiApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "groq" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://console.groq.com/keys" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={groqApiKey}
-                        setApiKey={setGroqApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "tinfoil" && (
-                    <div className="space-y-2">
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={tinfoilApiKey}
-                        setApiKey={setTinfoilApiKey}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                  )}
-
-                  {displayedCloudProvider === "corti" && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">{t("reasoning.corti.euOnly")}</p>
-                      <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                        <GetApiKeyLink url="https://www.corti.ai/?utm_source=referral&utm_campaign=openwhispr" />
-                      </div>
-                      <ApiKeyInput
-                        apiKey={cortiApiKey}
-                        setApiKey={setCortiApiKey}
-                        label=""
-                        helpText=""
+                      <ProviderCheckField
+                        aria-label={t("common.apiKey")}
+                        check={check}
+                        invalidOn="credentialsRejected"
+                        type="password"
+                        value={typedKey}
+                        onChange={(event) =>
+                          keyDraft.change(
+                            displayedCloudProvider,
+                            event.target.value.trim(),
+                            hostedKey.set
+                          )
+                        }
+                        onBlur={keyDraft.save}
+                        placeholder={t("apiKeyInput.placeholder")}
+                        autoComplete="off"
+                        spellCheck={false}
                       />
                     </div>
                   )}

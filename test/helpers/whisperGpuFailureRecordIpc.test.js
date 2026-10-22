@@ -1,0 +1,336 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const Module = require("node:module");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+// Runs the real GPU-failure handlers from ipcHandlers.js outside Electron. The
+// saved reason must follow WHISPER_GPU_FAILED everywhere the flag is set,
+// cleared or reported (#1736).
+const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+// Loaded through the mock hook below, never at the top level, so its server
+// manager gets the electron stub
+const whisperModulePath = require.resolve("../../src/helpers/whisper");
+const originalLoad = Module._load;
+const handlers = new Map();
+const broadcasts = [];
+// A private userData, so nothing (e.g. tokenStore's auth-token.bin) is read from a shared temp dir
+const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-gpu-ipc-"));
+const electronStub = {
+  app: {
+    getPath: () => userDataDir,
+    getName: () => "test",
+    getVersion: () => "0.0.0",
+    isPackaged: false,
+    on() {},
+    requestSingleInstanceLock: () => true,
+  },
+  ipcMain: {
+    handle: (channel, handler) => handlers.set(channel, handler),
+    on() {},
+    removeHandler() {},
+  },
+  net: { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) },
+  BrowserWindow: class {
+    // The dictation window (fallback pop-up) and the control panel (Settings).
+    // Each send records what .env held at that moment.
+    static getAllWindows() {
+      return ["dictation", "control-panel"].map((window) => ({
+        isDestroyed: () => false,
+        webContents: {
+          send: (channel, data) =>
+            broadcasts.push({ window, channel, data, failed: process.env.WHISPER_GPU_FAILED }),
+        },
+      }));
+    }
+    static fromWebContents() {
+      return null;
+    }
+  },
+  shell: {},
+  dialog: {},
+  screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
+  systemPreferences: { getMediaAccessStatus: () => "granted" },
+  session: { fromPartition: () => ({}) },
+  clipboard: {},
+  nativeImage: {},
+  globalShortcut: {},
+  utilityProcess: {},
+  MessageChannelMain: class {},
+};
+
+Module._load = function loadWithMocks(request, parent, isMain) {
+  if (request === "electron") return electronStub;
+  // Never reach the OS keychain (tokenStore and environment.js load secretCrypto)
+  if (request === "./secretCrypto") return { isAvailable: () => false };
+  if (parent?.filename === handlersModulePath) {
+    if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
+    // The status handlers probe the machine's GPUs; the answer is irrelevant here
+    if (request === "../utils/gpuDetection") {
+      return { detectNvidiaGpu: async () => ({ hasNvidiaGpu: false }) };
+    }
+    if (request === "../utils/vulkanDetection") {
+      return { detectVulkanGpu: async () => ({ available: true }) };
+    }
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+test.after(() => {
+  Module._load = originalLoad;
+  fs.rmSync(userDataDir, { recursive: true, force: true });
+});
+
+const FAILURE_KEYS = [
+  "WHISPER_GPU_FAILED",
+  "WHISPER_GPU_FAILED_REASON_CUDA",
+  "WHISPER_GPU_FAILED_REASON_VULKAN",
+];
+const ENV_KEYS = [
+  ...FAILURE_KEYS,
+  "WHISPER_CUDA_ENABLED",
+  "WHISPER_VULKAN_ENABLED",
+  "WHISPER_VULKAN_DEVICE",
+];
+const savedEnv = {};
+test.beforeEach(() => {
+  for (const key of ENV_KEYS) {
+    savedEnv[key] = process.env[key];
+    delete process.env[key];
+  }
+  broadcasts.length = 0;
+});
+test.afterEach(() => {
+  for (const key of ENV_KEYS) {
+    if (savedEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEnv[key];
+  }
+});
+
+const DEVICE_LOST = "vk::PhysicalDevice::createDevice: ErrorDeviceLost";
+const KERNEL_IMAGE = "CUDA error: no kernel image is available for execution on the device";
+
+function anything() {
+  return new Proxy(function () {}, {
+    get: (_target, property) => {
+      if (property === Symbol.toPrimitive || property === "toString") return () => "";
+      if (property === "then") return undefined;
+      return anything();
+    },
+    apply: () => anything(),
+  });
+}
+
+function createHandlers({ downloadError = null } = {}) {
+  const IPCHandlers = require(handlersModulePath);
+  const WhisperManager = require(whisperModulePath);
+  // The real manager, so the status reports the pack main has in use from the
+  // same rule every server start uses. No server is ever started here.
+  const whisperManager = Object.assign(new WhisperManager(), {
+    stopServer: async () => {},
+    restartServerWithGpuPreference: async () => ({ success: true, restarted: false }),
+  });
+  const { serverManager } = whisperManager;
+  const download = async () => {
+    if (downloadError) throw downloadError;
+  };
+  const whisperCudaManager = {
+    isDownloaded: () => true,
+    needsUpdate: () => false,
+    isDownloading: () => false,
+    getCudaBinaryPath: () => null,
+    download,
+    delete: async () => ({ success: true }),
+  };
+  const whisperVulkanManager = {
+    isDownloaded: () => true,
+    needsUpdate: () => false,
+    isDownloading: () => false,
+    download,
+    delete: async () => ({ success: true, deletedCount: 1 }),
+  };
+  whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
+  // What each .env rewrite would persist, captured at the moment of the write
+  const envWrites = [];
+  const target = Object.assign(Object.create(IPCHandlers.prototype), {
+    environmentManager: {
+      saveAllKeysToEnvFile: async () => {
+        envWrites.push(Object.fromEntries(FAILURE_KEYS.map((key) => [key, process.env[key]])));
+        return { success: true };
+      },
+    },
+    whisperManager,
+    whisperCudaManager,
+    whisperVulkanManager,
+  });
+  const context = new Proxy(target, {
+    get: (value, property) => (property in value ? value[property] : anything()),
+  });
+  IPCHandlers.prototype.setupHandlers.call(context);
+  context._attachWhisperServerListeners(serverManager);
+  const invoke = (channel) => handlers.get(channel)({ sender: { isDestroyed: () => true } });
+  return { serverManager, invoke, envWrites };
+}
+
+test("a Vulkan fallback saves its reason with the flag", () => {
+  const { serverManager, envWrites } = createHandlers();
+
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+
+  assert.equal(process.env.WHISPER_GPU_FAILED, "vulkan");
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, DEVICE_LOST);
+  assert.deepEqual(envWrites.at(-1), {
+    WHISPER_GPU_FAILED: "vulkan",
+    WHISPER_GPU_FAILED_REASON_CUDA: undefined,
+    WHISPER_GPU_FAILED_REASON_VULKAN: DEVICE_LOST,
+  });
+  // Announced once per window, by its own notification, after the save
+  assert.deepEqual(
+    broadcasts.map(({ window, channel, failed }) => [window, channel, failed]),
+    [
+      ["dictation", "gpu-fallback-notification", "vulkan"],
+      ["control-panel", "gpu-fallback-notification", "vulkan"],
+    ]
+  );
+});
+
+test("the status IPC reports each backend's own saved reason", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+
+  const vulkan = await invoke("get-vulkan-whisper-status");
+  const cuda = await invoke("get-cuda-whisper-status");
+
+  assert.equal(vulkan.gpuFailed, true);
+  assert.equal(vulkan.gpuFailReason, DEVICE_LOST);
+  assert.equal(cuda.gpuFailed, true);
+  assert.equal(cuda.gpuFailReason, KERNEL_IMAGE);
+});
+
+test("a failure with no readable reason clears the older one instead of showing it", async () => {
+  const { serverManager, invoke } = createHandlers();
+  process.env.WHISPER_GPU_FAILED_REASON_CUDA = KERNEL_IMAGE;
+
+  serverManager.emit("cuda-fallback", { reason: null });
+
+  assert.equal(process.env.WHISPER_GPU_FAILED, "cuda");
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, undefined);
+  assert.equal((await invoke("get-cuda-whisper-status")).gpuFailReason, null);
+});
+
+test("no reason is reported for a backend that is not marked failed", async () => {
+  const { invoke } = createHandlers();
+  // A leftover reason without its flag, e.g. from a hand-edited .env
+  process.env.WHISPER_GPU_FAILED_REASON_VULKAN = DEVICE_LOST;
+
+  const vulkan = await invoke("get-vulkan-whisper-status");
+
+  assert.equal(vulkan.gpuFailed, false);
+  assert.equal(vulkan.gpuFailReason, null);
+});
+
+test("Retry clears every saved reason with the flag", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, DEVICE_LOST);
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, KERNEL_IMAGE);
+
+  await invoke("whisper-gpu-retry");
+
+  for (const key of FAILURE_KEYS) assert.equal(process.env[key], undefined, key);
+});
+
+test("deleting or re-downloading one pack clears only that pack's reason", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+
+  await invoke("delete-vulkan-whisper-binary");
+  assert.equal(process.env.WHISPER_GPU_FAILED, "cuda");
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, undefined);
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, KERNEL_IMAGE);
+
+  await invoke("download-cuda-whisper-binary");
+  assert.equal(process.env.WHISPER_GPU_FAILED, undefined);
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, undefined);
+});
+
+test("deleting the CUDA pack and re-downloading Vulkan clear their reasons too", async () => {
+  const { serverManager, invoke } = createHandlers();
+
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, KERNEL_IMAGE);
+  await invoke("delete-cuda-whisper-binary");
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_CUDA, undefined);
+
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, DEVICE_LOST);
+  await invoke("download-vulkan-whisper-binary");
+  assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, undefined);
+});
+
+test("each pack's status says whether it is the pack main has in use", async () => {
+  // Both packs installed
+  const { serverManager, invoke } = createHandlers();
+  const inUse = async () => [
+    (await invoke("get-cuda-whisper-status")).inUse,
+    (await invoke("get-vulkan-whisper-status")).inUse,
+  ];
+  assert.deepEqual(await inUse(), [true, false], "CUDA, as every server start picks");
+
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+  assert.deepEqual(await inUse(), [false, true], "the next start runs Vulkan");
+
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  assert.deepEqual(await inUse(), [true, false], "both failed: CUDA first, with its reason");
+});
+
+const STATUS_CHANGED = "whisper-gpu-status-changed";
+// Which windows were told to re-read the GPU status, and what .env held then
+const toldToReread = () =>
+  broadcasts.filter((b) => b.channel === STATUS_CHANGED).map((b) => [b.window, b.failed]);
+
+test("Retry on the fallback pop-up tells every open window, once it is cleared", async () => {
+  const { serverManager, invoke } = createHandlers();
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  broadcasts.length = 0;
+
+  await invoke("whisper-gpu-retry");
+
+  // Settings is another window, still showing the failure until it re-reads
+  assert.deepEqual(toldToReread(), [
+    ["dictation", undefined],
+    ["control-panel", undefined],
+  ]);
+});
+
+test("downloading or deleting either pack tells every open window, once saved", async () => {
+  const { serverManager, invoke } = createHandlers();
+  for (const [channel, stillFailed] of [
+    ["download-cuda-whisper-binary", "vulkan"],
+    ["delete-cuda-whisper-binary", "vulkan"],
+    ["download-vulkan-whisper-binary", "cuda"],
+    ["delete-vulkan-whisper-binary", "cuda"],
+  ]) {
+    serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE });
+    serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+    broadcasts.length = 0;
+
+    await invoke(channel);
+
+    const told = [
+      ["dictation", stillFailed],
+      ["control-panel", stillFailed],
+    ];
+    assert.deepEqual(toldToReread(), told, channel);
+  }
+});
+
+test("a pack download that fails changes nothing and announces nothing", async () => {
+  const { invoke } = createHandlers({ downloadError: new Error("network down") });
+
+  assert.equal((await invoke("download-vulkan-whisper-binary")).success, false);
+  assert.deepEqual(toldToReread(), []);
+});

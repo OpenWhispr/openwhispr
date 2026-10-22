@@ -295,23 +295,24 @@ class DeepgramStreaming {
         resolve();
       };
 
+      const socket = new WebSocket(url, {
+        headers: { Authorization: authorizationHeader(this.mode, token) },
+      });
+      this.warmConnection = socket;
+
       const warmupTimeout = setTimeout(() => {
-        this.cleanupWarmConnection();
+        if (this.warmConnection === socket) this.cleanupWarmConnection();
         reject(new Error("Deepgram warmup connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.warmConnection = new WebSocket(url, {
-        headers: { Authorization: authorizationHeader(this.mode, token) },
-      });
-
-      this.warmConnection.on("open", () => {
+      socket.on("open", () => {
         debugLogger.debug("Deepgram warm connection socket opened");
         // Consider the socket warm as soon as it's open. Deepgram may not emit
         // Metadata until audio starts, which would make startup warmup appear broken.
         resolveWarmup({ via: "open" });
       });
 
-      this.warmConnection.on("message", (data) => {
+      socket.on("message", (data) => {
         try {
           const message = JSON.parse(data.toString());
           if (message.type === "Metadata") {
@@ -323,7 +324,7 @@ class DeepgramStreaming {
         }
       });
 
-      this.warmConnection.on("error", (error) => {
+      socket.on("error", (error) => {
         clearTimeout(warmupTimeout);
         debugLogger.error("Deepgram warmup connection error", { error: error.message });
         // Invalidate cached token on auth failure so next attempt fetches fresh
@@ -331,15 +332,23 @@ class DeepgramStreaming {
           this.cachedToken = null;
           this.tokenFetchedAt = null;
         }
-        this.cleanupWarmConnection();
+        if (this.warmConnection === socket) this.cleanupWarmConnection();
         if (!settled) {
           settled = true;
           reject(error);
         }
       });
 
-      this.warmConnection.on("close", (code, reason) => {
+      socket.on("close", (code, reason) => {
         clearTimeout(warmupTimeout);
+        // A dropped socket closes after its replacement may have opened; leave that one be.
+        if (this.warmConnection !== socket) {
+          if (!settled) {
+            settled = true;
+            reject(new Error(`Deepgram warmup connection closed (code: ${code})`));
+          }
+          return;
+        }
         this.stopKeepAlive();
         const wasReady = this.warmConnectionReady;
         const savedOptions = this.warmConnectionOptions ? { ...this.warmConnectionOptions } : null;

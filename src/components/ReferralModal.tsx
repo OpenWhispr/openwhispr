@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "./icons";
 import { cn } from "./lib/utils";
+import { blurBehindOverlays } from "./ui/overlayBlur";
 import { ReferralDashboard } from "./ReferralDashboard";
 
 interface ReferralModalProps {
@@ -17,7 +18,8 @@ export default function ReferralModal({ open, onOpenChange }: ReferralModalProps
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-black/60 backdrop-blur-lg",
+            "fixed inset-0 z-50 bg-black/60",
+            blurBehindOverlays && "backdrop-blur-lg",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           )}

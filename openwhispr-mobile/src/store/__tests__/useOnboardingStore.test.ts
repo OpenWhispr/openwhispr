@@ -44,6 +44,8 @@ it('ignores a late callback from a step that has already advanced', async () => 
 it.each([
   ['get-started', 'get-started'],
   ['unknown-old-step', 'get-started'],
+  // The security screen was merged into welcome.
+  ['security-first', 'welcome'],
   ['keyboard-switch', 'keyboard-switch'],
 ] as const)('resumes %s at %s without replaying earlier content', async (step, expected) => {
   service.getProgress.mockResolvedValue({
@@ -78,7 +80,7 @@ it('does not leave a step when persisting the transition fails', async () => {
   await expect(useOnboardingStore.getState().goNext('get-started')).rejects.toThrow();
   expect(useOnboardingStore.getState().currentStep).toBe('get-started');
   await useOnboardingStore.getState().goNext('get-started');
-  expect(useOnboardingStore.getState().currentStep).toBe('security-first');
+  expect(useOnboardingStore.getState().currentStep).toBe('welcome');
 });
 
 it('shows the paywall immediately for Cloud, then resumes languages only once', async () => {
@@ -329,4 +331,28 @@ it('preserves the tracking request marker when resetting setup', async () => {
     paywallHandled: false,
     trackingAuthorizationRequestAttempted: true,
   });
+});
+
+it('marks a reset setup as a replay, across a relaunch', async () => {
+  useOnboardingStore.setState({ finished: true });
+  await useOnboardingStore.getState().reset();
+  expect(useOnboardingStore.getState().replaying).toBe(true);
+
+  service.getProgress.mockResolvedValue(service.setProgress.mock.calls.at(-1)![0]);
+  useOnboardingStore.setState(useOnboardingStore.getInitialState());
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState()).toMatchObject({
+    currentStep: 'get-started',
+    replaying: true,
+  });
+});
+
+it('does not treat a first setup as a replay', async () => {
+  service.getProgress.mockResolvedValue({
+    step: 'keyboard-intro',
+    keyboardInstalled: false,
+    permissionsGranted: { microphone: false, notifications: false },
+  });
+  await useOnboardingStore.getState().hydrate();
+  expect(useOnboardingStore.getState().replaying).toBe(false);
 });

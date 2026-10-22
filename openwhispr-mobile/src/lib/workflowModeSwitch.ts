@@ -3,20 +3,27 @@ import { router } from 'expo-router';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
-import { workflowSaveConfig } from '@/lib/inferenceModes';
 import {
+  accountRequiredForCloud,
+  requiresRealAccount,
+  showAccountRequiredAlert,
+} from '@/lib/accountAccess';
+import { cloudAccessFor, workflowSelection, workflowSummary } from '@/lib/aiWorkflows';
+import { localSelection, workflowSaveConfig } from '@/lib/inferenceModes';
+import {
+  canRunLocalReasoning,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
 } from '@/lib/localReasoning';
 import type { LocalModelKey } from '@/lib/localModelCatalog';
-import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProviders';
+import { type InferenceSelection, type MobileInferenceScope } from '@/lib/mobileProviders';
 import { getPrivateModeReadiness, getPrivateModeUnavailableMessage } from '@/lib/privateMode';
 
 type SpeechScope = 'dictation' | 'upload';
 
 // 'needs-model' means the model list was opened because nothing on this phone can run it yet.
-export type ModeSwitchResult = 'switched' | 'needs-model' | 'refused';
+// 'not-ready' means Apple Intelligence is off in iOS Settings or still downloading its model.
+export type ModeSwitchResult = 'switched' | 'needs-model' | 'not-ready' | 'refused';
 
 function isSpeechScope(scope: MobileInferenceScope): scope is SpeechScope {
   return scope === 'dictation' || scope === 'upload';
@@ -33,7 +40,7 @@ async function transcriptionModelReady(): Promise<ModeSwitchResult | null> {
     return 'refused';
   }
   // Nothing to run yet: open the model list, where every on-device model can be
-  // downloaded, as the Home toggle does.
+  // downloaded.
   if (readiness.status === 'missing') {
     router.push('/(account)/model-download');
     return 'needs-model';
@@ -41,29 +48,74 @@ async function transcriptionModelReady(): Promise<ModeSwitchResult | null> {
   return null;
 }
 
-async function appleIntelligenceReady(): Promise<boolean> {
+async function appleIntelligenceReady(): Promise<ModeSwitchResult | null> {
   const readiness = await getLocalReasoningReadiness({ refresh: true });
-  if (readiness.status === 'ready') return true;
-  Alert.alert('On-Device Unavailable', getLocalReasoningUnavailableMessage(readiness));
-  return false;
+  if (readiness.status === 'ready') return null;
+  const message = getLocalReasoningUnavailableMessage(readiness);
+  if (!canRunLocalReasoning(readiness)) {
+    Alert.alert('On-Device Unavailable', message);
+    return 'refused';
+  }
+  // Changing the iPhone's language restarts every app, so this page can't wait for it.
+  if (readiness.status === 'unsupportedLanguage') {
+    Alert.alert('On-Device Unavailable', `${message} Then come back and choose On-Device again.`);
+    return 'refused';
+  }
+  Alert.alert(
+    'On-Device Unavailable',
+    `${message} Keep this page open and On-Device turns on once Apple Intelligence is ready.`,
+  );
+  return 'not-ready';
 }
 
-// Applies OpenWhispr Cloud or On-Device to a workflow as soon as it is tapped, after the same
-// sign-in and model checks the Home toggle runs.
+// On-Device dictation keeps only dictation on this iPhone, so turning it on offers to move note
+// formatting here too, while Apple Intelligence can run it.
+async function offerOnDeviceNoteFormatting(): Promise<void> {
+  const { config } = useConfigStore.getState();
+  const cloudAccess = cloudAccessFor(useAuthStore.getState().user);
+  if (workflowSelection(config, 'notes', 'private', cloudAccess).mode === 'local') return;
+  if ((await getLocalReasoningReadiness()).status !== 'ready') return;
+  const current = workflowSummary(config, 'notes', 'private', { cloudAccess });
+  Alert.alert(
+    'Format notes on this iPhone too?',
+    `Dictation now stays on this iPhone. Note formatting and titles still use ${current}.`,
+    [
+      { text: 'Not Now', style: 'cancel' },
+      {
+        text: 'Use On-Device',
+        onPress: (): void => {
+          switchWorkflowMode('notes', 'local').catch(() => undefined);
+        },
+      },
+    ],
+  );
+}
+
+// Applies OpenWhispr Cloud or On-Device to a workflow as soon as it is tapped, after its sign-in
+// and model checks. Dictation carries the app mode with it: On-Device turns Local Mode on.
 export async function switchWorkflowMode(
   scope: MobileInferenceScope,
   mode: 'openwhispr' | 'local',
 ): Promise<ModeSwitchResult> {
-  if (mode === 'openwhispr' && accountRequiredForCloud(useAuthStore.getState().user)) {
+  const { user } = useAuthStore.getState();
+  if (mode === 'openwhispr' && accountRequiredForCloud(user)) {
     showAccountRequiredAlert(isSpeechScope(scope) ? 'cloud transcription' : 'cloud AI');
+    return 'refused';
+  }
+  // Outside Cloud dictation, Cloud cleanup is a separate pass that needs an account.
+  if (
+    mode === 'openwhispr' &&
+    scope === 'cleanup' &&
+    useProcessingModeStore.getState().activeMode !== 'cloud' &&
+    requiresRealAccount(user)
+  ) {
+    showAccountRequiredAlert('cloud cleanup');
     return 'refused';
   }
   if (mode === 'local') {
     const blocked = isSpeechScope(scope)
       ? await transcriptionModelReady()
-      : (await appleIntelligenceReady())
-        ? null
-        : 'refused';
+      : await appleIntelligenceReady();
     if (blocked) return blocked;
   }
 
@@ -71,15 +123,17 @@ export async function switchWorkflowMode(
   const { activeMode, setActiveMode } = useProcessingModeStore.getState();
   if (scope === 'dictation') setActiveMode(mode === 'local' ? 'private' : 'cloud', true);
   const selection: InferenceSelection =
-    mode === 'local'
-      ? (config?.rememberedInference?.[scope]?.local ?? { mode: 'local' })
-      : { mode: 'openwhispr' };
-  await updateConfig(workflowSaveConfig(config, scope, selection, activeMode));
+    mode === 'local' ? localSelection(config, scope) : { mode: 'openwhispr' };
+  await updateConfig(
+    workflowSaveConfig(config, scope, selection, activeMode, cloudAccessFor(user)),
+  );
+  if (scope === 'dictation' && mode === 'local' && activeMode !== 'private')
+    offerOnDeviceNoteFormatting().catch(() => undefined);
   return 'switched';
 }
 
 // Saves the on-device model for a workflow; undefined means Automatic. The pick is also
-// remembered so switching back to On-Device, from here or the Home toggle, restores it.
+// remembered so switching back to On-Device restores it.
 export async function pickLocalModel(
   scope: SpeechScope,
   model: LocalModelKey | undefined,
@@ -94,7 +148,7 @@ export async function pickLocalModel(
       ...config?.rememberedInference,
       [scope]: { ...config?.rememberedInference?.[scope], local: selection },
     },
-    // A picked model is the user's own choice, so leaving Bring Your Own Key keeps it.
+    // A picked model is the user's own choice, so onboarding never releases it.
     ...(config?.pinnedInference
       ? { pinnedInference: config.pinnedInference.filter((pinned) => pinned !== scope) }
       : {}),

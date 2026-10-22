@@ -1,0 +1,66 @@
+{
+  "status": "Provider acceptance cases; no live inference performed by unit tests.",
+  "cases": [
+    {
+      "id": "authorization-and-task-timing",
+      "source": "The workshop is Saturday. No paid room has been authorized; the team will decide after checking the free room. Sam brings supplies before Saturday's session. Lee counts leftovers on Monday. Alex sends the availability poll this weekend.",
+      "requests": [
+        "Draft a follow-up email here in chat.",
+        "List the to-dos.",
+        "Make the saved summary shorter."
+      ],
+      "requiredMeaning": [
+        "Paid room authorization is unresolved, not a decision never to book.",
+        "Supply delivery precedes Saturday's workshop; Monday belongs only to the leftover count.",
+        "Alex's poll deadline remains this weekend, with no placeholder."
+      ],
+      "rejectExamples": [
+        "No paid venue will be booked.",
+        "Sam delivers supplies on Monday.",
+        "Alex sends the poll [date to confirm]."
+      ]
+    },
+    {
+      "id": "suggestions-before-voting",
+      "source": "During Thursday's design meeting, collect suggestions for the next prototype. Voting happens in a separate poll next week, after the meeting. The prototype and budget remain undecided.",
+      "requests": [
+        "Make the saved summary about half as long.",
+        "Write a follow-up email here in chat."
+      ],
+      "requiredMeaning": [
+        "Thursday is for suggestions, not voting.",
+        "Voting remains next week, after the meeting.",
+        "Prototype and budget remain undecided."
+      ],
+      "rejectExamples": [
+        "Vote for the next prototype during Thursday's meeting.",
+        "The team chose the prototype."
+      ]
+    },
+    {
+      "id": "section-edit-after-email",
+      "source": {
+        "content": "Bring a notebook.",
+        "summary": "## Overview\nWorkshop planning.\n\n## Decisions Made\nUse the small room.\n\n## Next steps\nAlex sends the poll by Sunday.",
+        "transcript": "Alex: I will send the poll by Sunday."
+      },
+      "surfaces": ["note chat", "assistant panel"],
+      "histories": ["fresh", "email_draft completed with draft_opened"],
+      "requests": [
+        "Remove the Decisions Made section from the note.",
+        "Remove decision notes section."
+      ],
+      "requiredMeaning": [
+        "Use get_note to read distinct fields and update_note.summary when the note is the clear target.",
+        "After email, ask which document when the target is ambiguous; do not inherit the email action.",
+        "Retain Overview and Next steps exactly. Keep personal content and transcript unchanged.",
+        "Only report a saved edit after successful persistence. No email action for a note edit."
+      ],
+      "controls": [
+        "Remove Decisions Made from the email and open a revised draft.",
+        "Rename the note to Workshop recap.",
+        "Change my personal reminder to Bring two notebooks."
+      ]
+    }
+  ]
+}

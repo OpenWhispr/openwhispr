@@ -108,9 +108,15 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import logger from "../utils/logger";
-import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
+import {
+  SettingsRow,
+  SettingsPanel,
+  SettingsPanelRow,
+  InferenceModeSelector,
+} from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
+import { TabPanel } from "./ui/TabPanel";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { GRADIENT_CIRCLE } from "./ui/gradientCircle";
@@ -128,10 +134,11 @@ import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
+  type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { highestPlan } from "../lib/usageStore";
-import { decideProPlanCardCta } from "../lib/upsell";
+import { decideProPlanCardCta, resolveAccountPlan, storeSubscriptionsUrl } from "../lib/upsell";
 import {
   canChangeCloudBackupPreference,
   effectiveAudioRetentionDays,
@@ -153,6 +160,7 @@ import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import ProfileSection from "./settings/ProfileSection";
+import ToneStyleSection from "./settings/ToneStyleSection";
 import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
@@ -164,6 +172,7 @@ export type SettingsSectionType =
   | "workspace"
   | "general"
   | "hotkeys"
+  | "toneStyle"
   | "speechToText"
   | "llms"
   | "privacyData"
@@ -171,7 +180,7 @@ export type SettingsSectionType =
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
-  onNavigateToSection?: (section: SettingsSectionType) => void;
+  onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
 }
@@ -193,39 +202,9 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
 const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
 
 const RETENTION_SELECT_CLASS =
-  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
+  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
-
-function SettingsPanel({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SettingsPanelRow({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const { isCompact } = useSettingsLayout();
-
-  return (
-    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
-  );
-}
 
 function SectionHeader({
   title,
@@ -574,7 +553,7 @@ function TranscriptionSection({
         description: t("settingsPage.transcription.modes.openwhisprDesc"),
         icon: <Cloud className="w-4 h-4" />,
         disabled: !isSignedIn,
-        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+        signInRequired: !isSignedIn,
       },
       {
         id: "providers",
@@ -947,10 +926,6 @@ function VADLabelWithInfo({ label, description }: { label: string; description: 
       </Popover>
     </div>
   );
-}
-
-function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? undefined : "hidden"}>{children}</div>;
 }
 
 // "Gabriel Stein" → "GS"; single names fall back to their first letter.
@@ -1399,6 +1374,7 @@ export default function SettingsPage({
     hasYdotool: boolean;
     hasYdotoold: boolean;
     hasWtype: boolean;
+    hasWlCopy: boolean;
     daemonRunning: boolean;
     hasService: boolean;
     hasUinput: boolean;
@@ -1406,8 +1382,8 @@ export default function SettingsPage({
     hasGroup: boolean;
     isKde: boolean;
     isWlroots: boolean;
-    hasXclip: boolean;
-    hasXsel: boolean;
+    isCosmic: boolean;
+    requiresWlCopy: boolean;
     isNixOS: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
@@ -1502,17 +1478,17 @@ export default function SettingsPage({
   // surface it and return the result so HotkeyListInput rolls the row back.
   const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
   const commitAgentHotkey = useCallback(
-    async (setter: (key: string) => Promise<boolean>, key: string) => {
+    async (setter: (key: string) => Promise<HotkeyRegistrationResult>, key: string) => {
       setIsAgentHotkeyCommitting(true);
       try {
-        const ok = await setter(key);
-        if (!ok) {
+        const result = await setter(key);
+        if (!result.success) {
           showAlertDialog({
             title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-            description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+            description: result.message || t("hooks.hotkeyRegistration.errors.failedToRegister"),
           });
         }
-        return ok;
+        return result.success;
       } finally {
         setIsAgentHotkeyCommitting(false);
       }
@@ -1580,7 +1556,6 @@ export default function SettingsPage({
     isUsingNativeShortcut,
     isUsingHyprland,
     hyprlandConfigStatus,
-    supportsPushToTalk,
     pushToTalkUnavailableReason,
     linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
@@ -1875,10 +1850,29 @@ export default function SettingsPage({
     isSignedIn,
     planStateKnown,
     isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    isStoreBilled: Boolean(usage?.storeBilling),
     plan: usage?.plan ?? "free",
     isTrial: usage?.isTrial ?? false,
     isWorkspaceCovered,
   });
+  const storeBilling = usage?.storeBilling ?? null;
+  const accountPlan = resolveAccountPlan({
+    isTrial: usage?.isTrial ?? false,
+    isPastDue: usage?.isPastDue ?? false,
+    isPersonallySubscribed: usage?.isPersonallySubscribed ?? false,
+    storeBilling,
+    isWorkspaceCovered,
+    hasPeriodEnd: Boolean(usage?.currentPeriodEnd),
+    hasCoveringWorkspaceNames: coveringWorkspaceNames.length > 0,
+  });
+  const storeUrl = storeBilling?.store ? storeSubscriptionsUrl(storeBilling.store) : null;
+  const periodEndDate = usage?.currentPeriodEnd
+    ? new Date(usage.currentPeriodEnd).toLocaleDateString(i18n.language, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : null;
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isDeleteAccountDialogOpen, setIsDeleteAccountDialogOpen] = useState(false);
@@ -2010,7 +2004,8 @@ export default function SettingsPage({
           deleteLocalAccountData: async () => {
             const cleanup = await window.electronAPI?.deleteAccountData?.(
               accountId,
-              authGeneration
+              authGeneration,
+              { erasingDevice: eraseDeviceData }
             );
             if (!cleanup?.success) {
               throw new Error(cleanup?.error ?? "Could not remove local account data");
@@ -2214,22 +2209,20 @@ export default function SettingsPage({
                   }}
                 />
 
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <Button
-                      onClick={handleSignOut}
-                      variant="outline"
-                      disabled={isSigningOut}
-                      size="sm"
-                      className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-                    >
-                      <LogOut className="me-1.5 h-3.5 w-3.5" />
-                      {isSigningOut
-                        ? t("settingsPage.account.signOut.signingOut")
-                        : t("settingsPage.account.signOut.signOut")}
-                    </Button>
-                  </SettingsPanelRow>
-                </SettingsPanel>
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSignOut}
+                    variant="outline"
+                    disabled={isSigningOut}
+                    size="sm"
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                  >
+                    <LogOut className="me-1.5 h-3.5 w-3.5" />
+                    {isSigningOut
+                      ? t("settingsPage.account.signOut.signingOut")
+                      : t("settingsPage.account.signOut.signOut")}
+                  </Button>
+                </div>
 
                 <SettingsPanel>
                   <SettingsPanelRow>
@@ -2388,11 +2381,11 @@ export default function SettingsPage({
                         <SettingsPanelRow>
                           <SettingsRow
                             label={
-                              usage.isTrial
+                              accountPlan.row === "trial"
                                 ? t("settingsPage.account.planLabels.trial")
-                                : usage.isPastDue
+                                : accountPlan.row === "pastDue"
                                   ? t("settingsPage.account.planLabels.free")
-                                  : usage.isPersonallySubscribed
+                                  : accountPlan.row === "personal" || accountPlan.row === "store"
                                     ? usage.plan === "business"
                                       ? t("settingsPage.account.planLabels.business")
                                       : t("settingsPage.account.planLabels.pro")
@@ -2400,45 +2393,44 @@ export default function SettingsPage({
                                       t("settingsPage.account.planLabels.free"))
                             }
                             description={
-                              usage.isTrial
+                              accountPlan.description === "trial"
                                 ? t("settingsPage.account.planDescriptions.trial", {
                                     days: usage.trialDaysLeft,
                                   })
-                                : usage.isPastDue
+                                : accountPlan.description === "pastDue"
                                   ? t("settingsPage.account.planDescriptions.pastDue", {
                                       used: usage.wordsUsed.toLocaleString(i18n.language),
                                       limit: usage.limit.toLocaleString(i18n.language),
                                     })
-                                  : usage.isPersonallySubscribed
-                                    ? usage.currentPeriodEnd
-                                      ? t("settingsPage.account.planDescriptions.nextBilling", {
-                                          date: new Date(usage.currentPeriodEnd).toLocaleDateString(
-                                            i18n.language,
-                                            { month: "short", day: "numeric", year: "numeric" }
-                                          ),
+                                  : accountPlan.description === "storePaymentIssue"
+                                    ? t("settingsPage.account.planDescriptions.storePaymentIssue")
+                                    : accountPlan.description === "accessUntil"
+                                      ? t("settingsPage.account.planDescriptions.accessUntil", {
+                                          date: periodEndDate,
                                         })
-                                      : t("settingsPage.account.planDescriptions.unlimited")
-                                    : coveringWorkspaceNames.length > 0
-                                      ? t("settingsPage.unifiedBilling.providedBy", {
-                                          workspaces: coveringWorkspaceNames.join(", "),
-                                        })
-                                      : // usage.limit is -1 once subscribed, which the
-                                        // free-usage copy would print as "-1 words".
-                                        isWorkspaceCovered
-                                        ? t("settingsPage.account.planDescriptions.unlimited")
-                                        : t("settingsPage.account.planDescriptions.freeUsage", {
-                                            used: usage.wordsUsed.toLocaleString(i18n.language),
-                                            limit: usage.limit.toLocaleString(i18n.language),
+                                      : accountPlan.description === "nextBilling"
+                                        ? t("settingsPage.account.planDescriptions.nextBilling", {
+                                            date: periodEndDate,
                                           })
+                                        : accountPlan.description === "unlimited"
+                                          ? t("settingsPage.account.planDescriptions.unlimited")
+                                          : accountPlan.description === "providedBy"
+                                            ? t("settingsPage.unifiedBilling.providedBy", {
+                                                workspaces: coveringWorkspaceNames.join(", "),
+                                              })
+                                            : t("settingsPage.account.planDescriptions.freeUsage", {
+                                                used: usage.wordsUsed.toLocaleString(i18n.language),
+                                                limit: usage.limit.toLocaleString(i18n.language),
+                                              })
                             }
                           >
-                            {usage.isTrial ? (
+                            {accountPlan.row === "trial" ? (
                               <Badge variant="info">{t("settingsPage.account.badges.trial")}</Badge>
-                            ) : usage.isPastDue ? (
+                            ) : accountPlan.row === "pastDue" ? (
                               <Badge variant="destructive">
                                 {t("settingsPage.account.badges.pastDue")}
                               </Badge>
-                            ) : usage.isPersonallySubscribed ? (
+                            ) : accountPlan.row === "personal" || accountPlan.row === "store" ? (
                               <Badge variant="success">
                                 {usage.plan === "business"
                                   ? t("settingsPage.account.badges.business")
@@ -2492,12 +2484,15 @@ export default function SettingsPage({
                                   <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
                                 )}
                               </div>
+                              <p className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.planDescriptions.byokUnlimited")}
+                              </p>
                             </div>
                           </SettingsPanelRow>
                         )}
 
                         <SettingsPanelRow>
-                          {usage.isPastDue ? (
+                          {accountPlan.action === "updatePayment" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               disabled={isOpeningBilling}
@@ -2513,7 +2508,22 @@ export default function SettingsPage({
                                 t("settingsPage.account.billing.updatePaymentMethod")
                               )}
                             </Button>
-                          ) : usage.isPersonallySubscribed && !usage.isTrial ? (
+                          ) : accountPlan.action === "manageInStore" && storeUrl ? (
+                            <Button
+                              onClick={() => void window.electronAPI?.openExternal?.(storeUrl)}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {storeBilling?.store === "play_store"
+                                ? t("settingsPage.account.billing.manageInGooglePlay")
+                                : t("settingsPage.account.billing.manageInAppStore")}
+                            </Button>
+                          ) : accountPlan.action === "storeNote" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("settingsPage.account.billing.managedInMobileStore")}
+                            </p>
+                          ) : accountPlan.action === "manageBilling" ? (
                             <Button
                               onClick={() => void openBillingPortal()}
                               variant="outline"
@@ -2525,7 +2535,7 @@ export default function SettingsPage({
                                 ? t("settingsPage.account.billing.opening")
                                 : t("settingsPage.account.billing.manageBilling")}
                             </Button>
-                          ) : isWorkspaceCovered ? null : (
+                          ) : accountPlan.action === "none" ? null : (
                             <Button
                               onClick={async () => {
                                 setCheckoutTier("plan-upgrade");
@@ -2567,6 +2577,7 @@ export default function SettingsPage({
                         "rounded-md p-2.5 flex flex-col",
                         planStateKnown &&
                           !usage?.isPersonallySubscribed &&
+                          !storeBilling &&
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
@@ -2629,7 +2640,7 @@ export default function SettingsPage({
                             ? t("settingsPage.account.billing.opening")
                             : t("settingsPage.account.pricing.downgrade")}
                         </Button>
-                      ) : planStateKnown && !isWorkspaceCovered ? (
+                      ) : planStateKnown && !isWorkspaceCovered && !storeBilling ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary/70">
                             {t("settingsPage.account.pricing.currentPlan")}
@@ -2641,7 +2652,8 @@ export default function SettingsPage({
                     <div
                       className={cn(
                         "rounded-md border-2 p-2.5 flex flex-col",
-                        usage?.isPersonallySubscribed && usage?.plan === "pro"
+                        (usage?.isPersonallySubscribed || (storeBilling && !isWorkspaceCovered)) &&
+                          usage?.plan === "pro"
                           ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
                           : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
                       )}
@@ -3041,6 +3053,13 @@ export default function SettingsPage({
       case "workspace":
         return <WorkspaceSection initialSubTab={initialSubTab} />;
 
+      case "toneStyle":
+        return (
+          <ToneStyleSection
+            onOpenCleanupSettings={() => onNavigateToSection?.("llms", "dictationCleanup")}
+          />
+        );
+
       case "general":
         return (
           <div className="space-y-6">
@@ -3289,7 +3308,7 @@ export default function SettingsPage({
                           e.target.value as "bottom-right" | "center" | "bottom-left"
                         )
                       }
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
                     >
                       <option value="bottom-right">
                         {t("settingsPage.general.floatingIcon.bottomRight")}
@@ -3493,7 +3512,7 @@ export default function SettingsPage({
                       key: "hasWtype",
                       label: "wtype",
                       ok: ydotoolStatus.hasWtype,
-                      required: ydotoolStatus.isWlroots,
+                      required: ydotoolStatus.isWlroots || ydotoolStatus.isCosmic,
                       desc: t("settingsPage.general.waylandPaste.wtypeDesc"),
                       steps: [
                         {
@@ -3791,24 +3810,21 @@ EOF`,
                     },
                   ];
 
-                  if (ydotoolStatus.isKde) {
+                  if (ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde) {
                     checks.push({
-                      key: "hasXclip",
-                      label: "xclip",
-                      ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
-                      required: true,
-                      desc: t("settingsPage.general.waylandPaste.xclipDesc", {
-                        defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
-                      }),
+                      key: "hasWlCopy",
+                      label: "wl-copy",
+                      ok: ydotoolStatus.hasWlCopy,
+                      required: ydotoolStatus.requiresWlCopy || ydotoolStatus.isKde,
+                      desc: t("settingsPage.general.waylandPaste.wlCopyDesc"),
                       steps: [
                         {
-                          title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
-                            defaultValue: "Install xclip",
-                          }),
-                          cmds: [
-                            { cmd: "sudo dnf install xclip  # Fedora" },
-                            { cmd: "sudo apt install xclip  # Debian/Ubuntu" },
-                          ],
+                          title: t("settingsPage.general.waylandPaste.guide.wlCopy.step1Title"),
+                          cmds: getLinuxPasteInstallCommands(t, "wl-clipboard"),
+                        },
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.wlCopy.step2Title"),
+                          cmds: [{ cmd: "which wl-copy" }],
                         },
                       ],
                     });
@@ -4035,13 +4051,15 @@ EOF`,
                       <ActivationModeSelector
                         value={activationMode}
                         onChange={setActivationMode}
-                        pushDisabledReason={
-                          !supportsPushToTalk
-                            ? pushToTalkUnavailableReason || t("windows.pttUnavailable")
-                            : undefined
-                        }
+                        pushDisabledReason={pushToTalkUnavailableReason ?? undefined}
                       />
                     </div>
+                    {/* Denied input access gets the setup box below instead. */}
+                    {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {pushToTalkUnavailableReason}
+                      </p>
+                    )}
                     {getCachedPlatform() === "linux" &&
                       (activationMode === "push" || linuxInputAccessDenied) && (
                         <LinuxPttSetupInfo
@@ -4615,156 +4633,158 @@ EOF`,
                   </SettingsPanelRow>
                 )}
 
-                <SettingsPanelRow>
-                  <div className="space-y-2.5">
-                    <Button
-                      onClick={async () => {
-                        try {
-                          const result = await checkForUpdates();
-                          if (result && !result.updateAvailable) {
-                            toast({
-                              title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.noUpdates.description"
-                              ),
-                            });
-                          }
-                        } catch {
-                          showAlertDialog({
-                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.checkFailed.description"
-                            ),
-                          });
-                        }
-                      }}
-                      disabled={
-                        checkingForUpdates ||
-                        updateStatus.isDevelopment ||
-                        !updateStatus.isSupported
-                      }
-                      variant="outline"
-                      className="w-full"
-                      size="sm"
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
-                      />
-                      {checkingForUpdates
-                        ? t("settingsPage.general.updates.checking")
-                        : t("settingsPage.general.updates.checkForUpdates")}
-                    </Button>
-
-                    {isUpdateAvailable && !updateStatus.updateDownloaded && (
-                      <div className="space-y-2">
-                        <Button
-                          onClick={async () => {
-                            try {
-                              await downloadUpdate();
-                            } catch {
-                              showAlertDialog({
-                                title: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.title"
-                                ),
-                                description: t(
-                                  "settingsPage.general.updates.dialogs.downloadFailed.description"
-                                ),
-                              });
-                            }
-                          }}
-                          disabled={downloadingUpdate}
-                          variant="success"
-                          className="w-full"
-                          size="sm"
-                        >
-                          <Download
-                            size={13}
-                            className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
-                          />
-                          {downloadingUpdate
-                            ? t("settingsPage.general.updates.downloading", {
-                                progress: Math.round(updateDownloadProgress),
-                              })
-                            : t("settingsPage.general.updates.downloadUpdate", {
-                                version: updateInfo?.version || "",
-                              })}
-                        </Button>
-
-                        {downloadingUpdate && (
-                          <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
-                            <div
-                              className="h-full bg-success transition-[width] duration-200 rounded-full"
-                              style={{
-                                width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {updateStatus.updateDownloaded && (
-                      <Button
-                        onClick={() => {
-                          showConfirmDialog({
-                            title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.description",
-                              { version: updateInfo?.version || "" }
-                            ),
-                            confirmText: t(
-                              "settingsPage.general.updates.dialogs.installUpdate.confirmText"
-                            ),
-                            onConfirm: async () => {
+                {(isUpdateAvailable ||
+                  updateStatus.updateDownloaded ||
+                  updateInfo?.releaseNotes) && (
+                  <SettingsPanelRow>
+                    <div className="space-y-2.5">
+                      {isUpdateAvailable && !updateStatus.updateDownloaded && (
+                        <div className="space-y-2">
+                          <Button
+                            onClick={async () => {
                               try {
-                                await installUpdateAction();
+                                await downloadUpdate();
                               } catch {
                                 showAlertDialog({
                                   title: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.title"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.title"
                                   ),
                                   description: t(
-                                    "settingsPage.general.updates.dialogs.installFailed.description"
+                                    "settingsPage.general.updates.dialogs.downloadFailed.description"
                                   ),
                                 });
                               }
-                            },
-                          });
-                        }}
-                        disabled={installInitiated}
-                        className="w-full"
-                        size="sm"
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
-                        />
-                        {installInitiated
-                          ? t("settingsPage.general.updates.restarting")
-                          : t("settingsPage.general.updates.installAndRestart")}
-                      </Button>
-                    )}
-                  </div>
+                            }}
+                            disabled={downloadingUpdate}
+                            variant="success"
+                            className="w-full"
+                            size="sm"
+                          >
+                            <Download
+                              size={13}
+                              className={`me-1.5 ${downloadingUpdate ? "animate-pulse" : ""}`}
+                            />
+                            {downloadingUpdate
+                              ? t("settingsPage.general.updates.downloading", {
+                                  progress: Math.round(updateDownloadProgress),
+                                })
+                              : t("settingsPage.general.updates.downloadUpdate", {
+                                  version: updateInfo?.version || "",
+                                })}
+                          </Button>
 
-                  {updateInfo?.releaseNotes && (
-                    <div className="mt-4 pt-4 border-t border-border/70">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                        <BidiInterpolatedText
-                          text={t("settingsPage.general.updates.whatsNew", {
-                            version: BIDI_VALUE_TOKEN,
-                          })}
-                          value={updateInfo.version}
-                        />
-                      </p>
-                      <div
-                        className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-                      />
+                          {downloadingUpdate && (
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
+                              <div
+                                className="h-full bg-success transition-[width] duration-200 rounded-full"
+                                style={{
+                                  width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {updateStatus.updateDownloaded && (
+                        <Button
+                          onClick={() => {
+                            showConfirmDialog({
+                              title: t("settingsPage.general.updates.dialogs.installUpdate.title"),
+                              description: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.description",
+                                { version: updateInfo?.version || "" }
+                              ),
+                              confirmText: t(
+                                "settingsPage.general.updates.dialogs.installUpdate.confirmText"
+                              ),
+                              onConfirm: async () => {
+                                try {
+                                  await installUpdateAction();
+                                } catch {
+                                  showAlertDialog({
+                                    title: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.title"
+                                    ),
+                                    description: t(
+                                      "settingsPage.general.updates.dialogs.installFailed.description"
+                                    ),
+                                  });
+                                }
+                              },
+                            });
+                          }}
+                          disabled={installInitiated}
+                          className="w-full"
+                          size="sm"
+                        >
+                          <RefreshCw
+                            size={14}
+                            className={`me-2 ${installInitiated ? "animate-spin" : ""}`}
+                          />
+                          {installInitiated
+                            ? t("settingsPage.general.updates.restarting")
+                            : t("settingsPage.general.updates.installAndRestart")}
+                        </Button>
+                      )}
                     </div>
-                  )}
-                </SettingsPanelRow>
+
+                    {updateInfo?.releaseNotes && (
+                      <div className="mt-4 pt-4 border-t border-border/70">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.updates.whatsNew", {
+                              version: BIDI_VALUE_TOKEN,
+                            })}
+                            value={updateInfo.version}
+                          />
+                        </p>
+                        <div
+                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                          dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
+                        />
+                      </div>
+                    )}
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
+              <div className="mt-5 flex justify-end">
+                <Button
+                  onClick={async () => {
+                    try {
+                      const result = await checkForUpdates();
+                      if (result && !result.updateAvailable) {
+                        toast({
+                          title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
+                          description: t(
+                            "settingsPage.general.updates.dialogs.noUpdates.description"
+                          ),
+                        });
+                      }
+                    } catch {
+                      showAlertDialog({
+                        title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
+                        description: t(
+                          "settingsPage.general.updates.dialogs.checkFailed.description"
+                        ),
+                      });
+                    }
+                  }}
+                  disabled={
+                    checkingForUpdates || updateStatus.isDevelopment || !updateStatus.isSupported
+                  }
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={`me-1.5 ${checkingForUpdates ? "animate-spin" : ""}`}
+                  />
+                  {checkingForUpdates
+                    ? t("settingsPage.general.updates.checking")
+                    : t("settingsPage.general.updates.checkForUpdates")}
+                </Button>
+              </div>
             </div>
 
             {/* Developer Tools */}

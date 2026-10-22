@@ -5,7 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { saveOnboardingConfig } from '@/lib/onboardingMode';
 import { useConfigStore } from '@/store/useConfigStore';
 import { detectPreferredLanguages } from '@/lib/deviceLanguages';
@@ -273,7 +273,9 @@ function AddLanguageSheet({
     >
       <View className="flex-1 bg-systemBackground">
         <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text className="text-[22px] font-bold text-label">Add a language</Text>
+          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+            Add a language
+          </Text>
           <Pressable
             onPress={onClose}
             hitSlop={8}
@@ -294,7 +296,7 @@ function AddLanguageSheet({
             autoCorrect={false}
             autoCapitalize="none"
             className="h-11 rounded-lg bg-secondarySystemGroupedBackground px-4 text-[15px] text-label"
-            style={{ fontFamily: SpaceGrotesk.regular }}
+            style={{ fontFamily: AppFont.regular }}
           />
         </View>
 

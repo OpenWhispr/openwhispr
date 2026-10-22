@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
-import { NodeSelection, type EditorState } from "@tiptap/pm/state";
+import { NodeSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { isInTable } from "@tiptap/pm/tables";
 import { useEditorState } from "@tiptap/react";
 import {
@@ -118,10 +118,14 @@ const canFormat = (editor: Editor, state: EditorState): boolean =>
 const shouldShowOnSelection: BubbleMenuProps["shouldShow"] = ({ editor, state }) =>
   canFormat(editor, state) && !state.selection.empty && !(state.selection instanceof NodeSelection);
 
-// On an empty top-level line, where a list, heading or table can start. The
-// menu sits on the line itself, beside the caret, so it covers no text.
+// On an empty top-level line, where a list, heading or table can start.
 const shouldShowOnEmptyLine: FloatingMenuProps["shouldShow"] = ({ editor, state }) =>
   canFormat(editor, state) && isOnEmptyLine(state.selection);
+
+// Below the caret, so it covers neither the line being typed on (Tiptap's
+// default puts it beside the caret) nor the text written above it. It flips
+// above only when there's no room below.
+const LINE_MENU_OPTIONS: FloatingMenuProps["options"] = { placement: "bottom-start" };
 
 /** A toggle when `active` is set, a plain button otherwise. */
 function ToolbarButton({
@@ -253,11 +257,48 @@ function FormatToolbar({
   );
 }
 
-/** Marks, text style, lists and tables for selected text or an empty line. */
-export function RichTextEditorFormatMenu({ editor }: { editor: Editor }) {
+/**
+ * Marks, text style, lists and tables for selected text or an empty line.
+ * `lineMenuPadding` is space at the editor's edges that leaves the empty-line
+ * toolbar no room, such as the note's bottom bar: it flips above the caret instead.
+ */
+export function RichTextEditorFormatMenu({
+  editor,
+  lineMenuPadding,
+}: {
+  editor: Editor;
+  lineMenuPadding: Record<"top" | "right" | "bottom" | "left", number>;
+}) {
   const onSelection = useMenuDropdown();
-  const onEmptyLine = useMenuDropdown();
+  const lineMenuOptions = useMemo(
+    () => ({ ...LINE_MENU_OPTIONS, flip: { padding: lineMenuPadding } }),
+    [lineMenuPadding]
+  );
+  const onEmptyLine = useMenuDropdown(lineMenuOptions);
   useHideOnFocusLeave(editor, MENU_KEYS);
+  // ProseMirror scrolls the caret into view after the menus measured it, so a line
+  // menu placed by a transaction that scrolled the note sits off by the scroll.
+  // Tiptap's `scrollTarget` option would re-place it only 60 ms after the scroll,
+  // so place it again in the next frame, before it is painted. The selection menu
+  // waits for the selection to settle before it measures.
+  useEffect(() => {
+    let frame = 0;
+    // Tiptap hides a menu by detaching its element.
+    const isShown = (): boolean => !!onEmptyLine.menuRef.current?.isConnected;
+    const onTransaction = ({ transaction }: { transaction: Transaction }): void => {
+      if (!transaction.scrolledIntoView || !isShown()) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (editor.isDestroyed || !isShown()) return;
+        editor.view.dispatch(editor.state.tr.setMeta(LINE_MENU, "updatePosition"));
+      });
+    };
+    editor.on("transaction", onTransaction);
+    return () => {
+      cancelAnimationFrame(frame);
+      editor.off("transaction", onTransaction);
+    };
+  }, [editor, onEmptyLine.menuRef]);
   return (
     <>
       <BubbleMenu

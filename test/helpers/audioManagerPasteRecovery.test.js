@@ -24,7 +24,7 @@ test("safePaste preserves exact final text only for confirmed permission recover
       clipboardCopied: true,
     };
   };
-  assert.equal(await manager.safePaste(text, options), false);
+  assert.deepEqual(await manager.safePaste(text, options), { pasted: false });
   assert.deepEqual(calls, [[text, options]]);
   assert.deepEqual(errors, [
     {
@@ -38,13 +38,13 @@ test("safePaste preserves exact final text only for confirmed permission recover
   for (const pasted of [true, false]) {
     errors.length = 0;
     window.electronAPI.pasteText = async () => ({ success: true, pasted });
-    assert.equal(await manager.safePaste(text), pasted);
+    assert.deepEqual(await manager.safePaste(text), { pasted });
     assert.deepEqual(errors, []);
   }
   window.electronAPI.pasteText = async () => {
     throw new Error("accessibility in an unrelated error");
   };
-  assert.equal(await manager.safePaste(text), false);
+  assert.deepEqual(await manager.safePaste(text), { pasted: false });
   assert.deepEqual(errors, [
     {
       title: "Paste Error",
@@ -59,7 +59,7 @@ test("safePaste preserves exact final text only for confirmed permission recover
       "Error invoking remote method 'paste-text': Error: Please install xdotool or paste manually with Ctrl+V."
     );
   };
-  assert.equal(await manager.safePaste(text), false);
+  assert.deepEqual(await manager.safePaste(text), { pasted: false });
   assert.equal(errors[0].description, "Please install xdotool or paste manually with Ctrl+V.");
 
   window.electronAPI.pasteText = async () => {

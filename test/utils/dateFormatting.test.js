@@ -13,3 +13,22 @@ test("future timestamps use a calendar date instead of the now label", async (t)
     formatShortDate(futureTimestamp)
   );
 });
+
+test("formatEventWhen labels all-day events and shows a time range otherwise", async () => {
+  const { formatEventWhen, formatTimeRange } = await load();
+  assert.equal(
+    formatEventWhen(
+      { start_time: "2026-10-20", end_time: "2026-10-21", is_all_day: 1 },
+      "en-US",
+      "All day"
+    ),
+    "Tue, Oct 20 · All day"
+  );
+
+  const start = new Date(2026, 9, 20, 14, 15).toISOString();
+  const end = new Date(2026, 9, 20, 15, 15).toISOString();
+  assert.equal(
+    formatEventWhen({ start_time: start, end_time: end, is_all_day: 0 }, "en-US", "All day"),
+    `Tue, Oct 20 · ${formatTimeRange("en-US", start, end)}`
+  );
+});

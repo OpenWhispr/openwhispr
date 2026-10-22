@@ -20,7 +20,7 @@ type MockOnboardingState = { hydrated: boolean; finished: boolean; currentStep: 
 let mockOnboardingState: MockOnboardingState = {
   hydrated: true,
   finished: false,
-  currentStep: 'security-first',
+  currentStep: 'welcome',
 };
 jest.mock('@/store/useOnboardingStore', () => ({
   useOnboardingStore: (selector: (state: MockOnboardingState) => unknown) =>
@@ -47,7 +47,7 @@ beforeEach(() => {
     user: null,
     ensureAnonymousSession: mockEnsureAnonymousSession,
   };
-  mockOnboardingState = { hydrated: true, finished: false, currentStep: 'security-first' };
+  mockOnboardingState = { hydrated: true, finished: false, currentStep: 'welcome' };
   mockHasRealAccountHistory = false;
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
     appStateHandlers.push(handler as AppStateHandler);
@@ -85,7 +85,7 @@ describe('useAnonymousOnboardingSession', () => {
   });
 
   it('does nothing for a device that already finished onboarding', () => {
-    mockOnboardingState = { hydrated: true, finished: true, currentStep: 'security-first' };
+    mockOnboardingState = { hydrated: true, finished: true, currentStep: 'welcome' };
 
     renderHook(() => useAnonymousOnboardingSession());
     foreground();
@@ -117,7 +117,7 @@ describe('useAnonymousOnboardingSession', () => {
   });
 
   it('waits for onboarding state to hydrate', () => {
-    mockOnboardingState = { hydrated: false, finished: false, currentStep: 'security-first' };
+    mockOnboardingState = { hydrated: false, finished: false, currentStep: 'welcome' };
 
     renderHook(() => useAnonymousOnboardingSession());
 

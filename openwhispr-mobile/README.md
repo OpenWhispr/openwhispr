@@ -6,10 +6,21 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 
 ## Highlights
 
-- **Cloud, Private, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
+- **Cloud, Local Mode, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
+- **Note sharing** — web links, email invitations, organization domains, and viewer/editor access; Markdown and plain-text exports remain available offline
 - **Native iOS feel** — Liquid Glass tab bar and headers on iOS 26+, blur fallback on iOS 18
+
+## Sharing notes
+
+Open a note’s menu and choose **Share**. Creating a link or inviting someone uploads the latest saved draft through normal cloud sync, then uses the existing notes website for recipients. Opening the sheet does not publish a note. Private notes require an explicit cloud-sync opt-in; exports work without an account or cloud sync.
+
+Full link tokens stay in account-scoped secure storage on the device that creates them. They survive sign-out and guest mode, and are removed when a different account signs in on the device or the account is deleted. **Invited only** sharing offers the same sign-in link invitation emails carry, so it works on any device. For link and organization sharing, a link created on another device may require **Replace link**, which invalidates the previous link, including links already sent in invitation emails. Sharing modes your organization's policy blocks are hidden, and sharing a personal note that has never been uploaded requires Pro. **Disable external sharing** permanently invalidates the link and pauses invitations and people added to the note; sharing again creates a new link and restores people added (resend invitations so their emailed links work). Access through a team space or workspace is unaffected, and grant records are kept. If cloud deletion is pending after making a note private, **Disable previous link** can revoke its old external link separately.
+
+Sharing changes do not advance the note's content version on the server, so they never turn later edits into sync conflicts. This requires an `openwhispr-api` release that stops sharing changes from updating `notes.updated_at`; against an older API, editing a note with unsynced changes right after a sharing change can still show a sync conflict. Native device and cross-device acceptance are still required before release.
+
+For a custom API, configure its paired notes viewer as described in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Tech stack
 
@@ -50,7 +61,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configurati
 
 ## Personal provider setup (iOS)
 
-Open **AI Models** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model, and save. The list shows what each workflow currently runs. OpenWhispr Cloud and On-Device apply as soon as you tap them, and On-Device dictation and uploads can each use a specific downloaded model or Automatic. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers are not offered on mobile yet.
+Open **AI Models** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, note chat, and the keyboard's voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model, and save. The list shows what each workflow currently runs. OpenWhispr Cloud and On-Device apply as soon as you tap them, and On-Device dictation and uploads can each use a specific downloaded model or Automatic. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers are not offered on mobile yet.
 
 Enter a provider API key and save. No OpenWhispr account or Pro subscription is required for personal provider use; your provider bills requests separately. Hosted inference and sync retain their existing account requirements. Provider credentials live in device-local secure storage, are not synced, and survive sign-out. Deleting your OpenWhispr account removes them. Remove credential deletes one key; Remove all provider keys deletes every saved key, including keys for Custom endpoints you no longer use. Deleting the app leaves them in the Keychain until the app is installed again; the first launch after a reinstall erases them. After a member of a managed organization signs out, that organization's provider policy keeps applying until another account (not a guest session) signs in and its policy loads, or until Remove all provider keys is used. Removing keys one at a time does not lift it.
 

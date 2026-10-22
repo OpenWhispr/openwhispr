@@ -81,16 +81,12 @@
           "name": "GPT-OSS 120B"
         },
         {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B"
+        },
+        {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B"
-        },
-        {
-          "id": "groq/compound",
-          "name": "Compound"
-        },
-        {
-          "id": "groq/compound-mini",
-          "name": "Compound Mini"
         }
       ]
     }

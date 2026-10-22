@@ -16,11 +16,11 @@ interface VoiceProfileListProps {
   onDeleteAll?: () => void;
 }
 
-const formatEnrolledAt = (value: string | null): string => {
-  if (!value) return 'Enrolled on this device';
+const formatAddedAt = (value: string | null): string => {
+  if (!value) return 'Added on this device';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Enrolled on this device';
-  return `Enrolled ${date.toLocaleDateString(undefined, {
+  if (Number.isNaN(date.getTime())) return 'Added on this device';
+  return `Added ${date.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   })}`;
@@ -28,7 +28,7 @@ const formatEnrolledAt = (value: string | null): string => {
 
 const formatMeta = (profile: SpeakerProfile): string => {
   const samples = `${profile.sampleCount} ${profile.sampleCount === 1 ? 'sample' : 'samples'}`;
-  return `${samples} · ${formatEnrolledAt(profile.createdAt)}`;
+  return `${samples} · ${formatAddedAt(profile.createdAt)}`;
 };
 
 export function VoiceProfileList({
@@ -51,20 +51,24 @@ export function VoiceProfileList({
               color="quaternaryLabel"
             />
             <View className="items-center gap-1">
-              <Text className="text-[17px] font-semibold text-label">No voice profiles</Text>
+              <Text className="text-[17px] font-semibold text-label">
+                Label speakers automatically
+              </Text>
               <Text className="text-center text-[15px] leading-5 text-tertiaryLabel">
-                Voice profiles stay on this device and can be deleted anytime.
+                Record a short voice sample and OpenWhispr will recognize you in future meeting
+                transcripts instead of showing "Speaker 1". Works with on-device transcription.
+                Voice samples stay on this device and can be deleted anytime.
               </Text>
             </View>
             <Pressable
               onPress={onEnrollOwner}
               accessibilityRole="button"
-              accessibilityLabel="Enroll Me"
+              accessibilityLabel="Teach Your Voice"
               testID="voice-profile-enroll-owner-empty"
               className="mt-1 h-10 items-center justify-center rounded-[10px] bg-brand px-4"
               style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderCurve: 'continuous' })}
             >
-              <Text className="text-[15px] font-semibold text-white">Enroll Me</Text>
+              <Text className="text-[15px] font-semibold text-white">Teach Your Voice</Text>
             </Pressable>
           </View>
         </GroupedList.Row>
@@ -101,7 +105,7 @@ export function VoiceProfileList({
                         className="rounded-md bg-tertiarySystemFill px-2 py-0.5"
                         testID={`voice-profile-owner-badge-${profile.id}`}
                       >
-                        <Text className="text-[12px] font-semibold text-secondaryLabel">Owner</Text>
+                        <Text className="text-[12px] font-semibold text-secondaryLabel">You</Text>
                       </View>
                     ) : null}
                   </View>
@@ -127,23 +131,23 @@ export function VoiceProfileList({
             <GroupedList.Row
               onPress={onEnrollOwner}
               accessibilityRole="button"
-              accessibilityLabel="Enroll Me"
+              accessibilityLabel="Teach Your Voice"
               testID="voice-profile-enroll-owner"
               contentInsetLeft={16}
             >
-              <Text className="text-[17px] font-medium text-brand">Enroll Me</Text>
+              <Text className="text-[17px] font-medium text-brand">Teach Your Voice</Text>
             </GroupedList.Row>
           )}
           <GroupedList.Row
             onPress={onEnrollSpeaker}
             accessibilityRole="button"
-            accessibilityLabel="Add Speaker"
+            accessibilityLabel="Add Someone's Voice"
             testID="voice-profile-enroll-speaker"
             contentInsetLeft={16}
           >
             <View className="flex-row items-center gap-2">
               <SystemIcon name="plus" mdName="Plus" size={17} color="brand" />
-              <Text className="text-[17px] font-medium text-brand">Add Speaker</Text>
+              <Text className="text-[17px] font-medium text-brand">Add Someone's Voice</Text>
             </View>
           </GroupedList.Row>
         </GroupedList>

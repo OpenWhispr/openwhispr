@@ -41,6 +41,7 @@ export const openwhisprProvider: InferenceProvider = {
           ? INFERENCE_SCOPES[config.inferenceScope].cloudPurpose
           : undefined,
         screenContext: config.screenContext,
+        ...config.toneStyle,
         language: config.language || ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),
       });

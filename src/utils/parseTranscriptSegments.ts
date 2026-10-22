@@ -38,3 +38,25 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
     return [];
   }
 }
+
+const isJsonArray = (raw: string): boolean => {
+  try {
+    return Array.isArray(JSON.parse(raw));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Segments to seed a recording into a note with. Every save of that recording
+ * writes its segments over the stored transcript, so a plain-text one (v1.6.0–
+ * v1.6.5 meetings, or a recording with no segments) is carried as one segment.
+ * It has no timestamp or speaker: live speaker identification skips it, new
+ * finals sort after it, and export keeps rebasing on the new segments' times.
+ */
+export function parseSeedSegments(raw: string | null | undefined): TranscriptSegment[] {
+  const text = raw?.trim();
+  if (!text) return [];
+  if (isJsonArray(text)) return parseTranscriptSegments(text);
+  return [{ id: "stored-plain", text, source: "system" }];
+}

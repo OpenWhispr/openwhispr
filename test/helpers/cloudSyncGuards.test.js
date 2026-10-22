@@ -59,6 +59,7 @@ const localNote = {
   content: "REAL MEETING NOTES",
   enhanced_content: "ENHANCED NOTES",
   enhancement_prompt: "prompt",
+  enhancement_template_id: "notes.actions.builtin.detailedNotes",
   enhanced_at_content_hash: "hash-1",
   note_type: "meeting",
   source_file: null,
@@ -86,6 +87,7 @@ test("the note update payload carries the full content, not just identifiers", a
   assert.equal(payload.enhanced_content, "ENHANCED NOTES");
   assert.equal(payload.transcript, '[{"text":"hello"}]');
   assert.equal(payload.enhancement_prompt, "prompt");
+  assert.equal(payload.enhancement_template_id, "notes.actions.builtin.detailedNotes");
   assert.equal(payload.enhanced_at_content_hash, "hash-1");
   assert.equal(payload.note_type, "meeting");
   assert.equal(payload.audio_duration_seconds, 3130);

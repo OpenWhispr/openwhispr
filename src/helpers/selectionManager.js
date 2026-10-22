@@ -11,6 +11,8 @@ const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
 const COPY_TIMEOUT_MS = 1200;
 const CLIPBOARD_POLL_MS = 20;
 const ATSPI_TARGET_TIMEOUT_MS = 2000;
+const TARGET_CAPTURE_FRESHNESS_MS = 250;
+const ATSPI_COOLDOWN_MS = 2000;
 
 // Editors that copy the whole current line when Ctrl+C (⌘C on macOS) lands with
 // an empty selection (VS Code's editor.emptySelectionClipboard, Scintilla,
@@ -61,19 +63,20 @@ function runFile(command, args, options = {}) {
 
 function runSpawn(command, args, options = {}) {
   return new Promise((resolve) => {
+    const { timeout = COPY_TIMEOUT_MS, ...spawnOptions } = options;
     const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      ...options,
+      ...spawnOptions,
     });
     let stdout = "";
     let stderr = "";
     let settled = false;
-    const finish = (success) => {
+    const finish = (success, timedOut = false) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ success, stdout, stderr });
+      resolve({ success, timedOut, stdout, stderr });
     };
     child.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
     child.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
@@ -84,9 +87,22 @@ function runSpawn(command, args, options = {}) {
     child.on("close", (code) => finish(code === 0));
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      finish(false);
-    }, options.timeout || COPY_TIMEOUT_MS);
+      finish(false, true);
+    }, timeout);
   });
+}
+
+// Keys still held past the modifier wait (#2113) and a Wayland clipboard wl-copy
+// didn't write (#2621) get their own code, so the renderer can say so instead of
+// blaming permissions or a changed target.
+const HELD_BACK_CODES = {
+  "modifiers-held": "modifiers_held",
+  "wl-copy-missing": "wl_copy_missing",
+  "wl-copy-failed": "wl_copy_failed",
+};
+
+function heldBackCode(fallback, { code, reason } = {}) {
+  return code === "modifiers_held" ? code : HELD_BACK_CODES[reason] || fallback;
 }
 
 class SelectionManager {
@@ -102,11 +118,26 @@ class SelectionManager {
     this.now = now;
     this.sessions = new Map();
     this.lastTarget = null;
+    // Window titles sit beside their target, never on it, so a capture
+    // result handed to the renderer can't carry one.
+    this._targetTitles = new WeakMap();
     this._captureTargetPromise = null;
+    this._lastTargetCaptureAt = 0;
+    this._atspiCooldownUntil = 0;
+    this._atspiProbeGeneration = 0;
   }
 
-  async captureTarget() {
+  async captureTarget({ force = false } = {}) {
     if (this.platform === "darwin") return;
+    if (!force) {
+      if (this._captureTargetPromise) return this._captureTargetPromise;
+      if (
+        this.lastTarget !== null &&
+        this.now() - this._lastTargetCaptureAt < TARGET_CAPTURE_FRESHNESS_MS
+      ) {
+        return;
+      }
+    }
     this.lastTarget = null;
     const probe = this._probeTarget();
     this._captureTargetPromise = probe;
@@ -115,6 +146,7 @@ class SelectionManager {
     // only the latest probe's result may land in lastTarget.
     if (this._captureTargetPromise === probe) {
       this.lastTarget = target;
+      this._lastTargetCaptureAt = this.now();
       this._captureTargetPromise = null;
     }
   }
@@ -125,15 +157,17 @@ class SelectionManager {
       if (!binary) return null;
       const result = await runSpawn(binary, ["--detect-only"], { timeout: 700 });
       const match = result.stdout.match(/TARGET\s+(\S+)/);
-      return result.success && match
-        ? {
-            kind: "win-hwnd",
-            id: match[1],
-            windowClass: result.stdout.match(/^WINDOW_CLASS (.+)$/m)?.[1]?.trim() || null,
-            exeName: result.stdout.match(/^EXE_NAME (.+)$/m)?.[1]?.trim() || null,
-            isTerminal: /^IS_TERMINAL true$/m.test(result.stdout),
-          }
-        : null;
+      if (!result.success || !match) return null;
+      const target = {
+        kind: "win-hwnd",
+        id: match[1],
+        windowClass: result.stdout.match(/^WINDOW_CLASS (.+)$/m)?.[1]?.trim() || null,
+        exeName: result.stdout.match(/^EXE_NAME (.+)$/m)?.[1]?.trim() || null,
+        isTerminal: /^IS_TERMINAL true$/m.test(result.stdout),
+      };
+      const title = result.stdout.match(/^WINDOW_TITLE (.+)$/m)?.[1]?.trim();
+      if (title) this._targetTitles.set(target, title);
+      return target;
     }
     if (this.platform === "linux") {
       return this._getLinuxTarget();
@@ -151,6 +185,43 @@ class SelectionManager {
       await this._captureTargetPromise;
     }
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
+  }
+
+  // The dictation target as the Tone & Style classifier reads it: the app's
+  // identity, its window title and, for a macOS browser page, the URL's host.
+  // Titles stay in the main process; only the resulting category leaves it.
+  async getTargetAppContext() {
+    if (this.platform === "darwin") {
+      const pid = this.textEditMonitor?.lastTargetPid;
+      const context = pid ? await this.textEditMonitor.getAppContext(pid) : null;
+      if (!context) return null;
+      return {
+        appSignature: `${context.appName || ""} ${context.bundleId || ""}`.trim(),
+        windowTitle: context.windowTitle,
+        urlHost: context.urlHost,
+      };
+    }
+    while (this._captureTargetPromise) {
+      await this._captureTargetPromise;
+    }
+    const target = this.lastTarget;
+    if (!target) return null;
+    return {
+      appSignature:
+        target.kind === "atspi-pid"
+          ? await this._readTargetNames(target.id)
+          : this._targetSignature(target),
+      windowTitle: this._targetTitles.get(target) ?? (await this._readWindowTitle(target)),
+    };
+  }
+
+  // X11 and KDE titles are read on demand rather than at capture, which also
+  // runs before every paste.
+  async _readWindowTitle(target) {
+    const command = { "x11-window": "xdotool", "kde-window": "kdotool" }[target.kind];
+    if (!command) return null;
+    const result = await runFile(command, ["getwindowname", target.id], { timeout: 500 });
+    return (result.success && result.stdout.trim()) || null;
   }
 
   async captureSelectedText(options = {}) {
@@ -232,7 +303,7 @@ class SelectionManager {
         return { success: false, code: "target_changed" };
       }
       if (current.status === "unavailable") {
-        return { success: false, code: "selection_unavailable" };
+        return { success: false, code: heldBackCode("selection_unavailable", current) };
       }
       if (current.status !== "selected" || current.text !== session.text) {
         return { success: false, code: "selection_changed" };
@@ -245,7 +316,7 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return { success: false, code: "paste_failed" };
+          return { success: false, code: heldBackCode("paste_failed", pasteResult) };
         }
         return { success: true };
       } catch (error) {
@@ -279,7 +350,7 @@ class SelectionManager {
 
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
       if (current.status !== "editable") {
-        return this._declineAssistantPaste("target_changed", {
+        return this._declineAssistantPaste(heldBackCode("target_changed", current), {
           sessionFound: true,
           sessionKind: "caret",
           probeStatus: current.status,
@@ -295,7 +366,7 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return this._declineAssistantPaste("paste_failed", {
+          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult), {
             sessionFound: true,
             sessionKind: "caret",
             probeStatus: "editable",
@@ -451,6 +522,21 @@ class SelectionManager {
       );
     }
 
+    // Capture runs right after the voice assistant hotkey press, so its keys are
+    // often still down; a Ctrl+C sent into them copies nothing.
+    const modifiers = await this.clipboardManager._awaitModifierRelease();
+    if (modifiers.state === "held") {
+      return { status: "unavailable", code: "modifiers_held" };
+    }
+    // The checks above approved the window focused before the wait. If focus
+    // moved while a key was held, the chord would reach an unchecked window,
+    // and a plain Ctrl+C in a terminal interrupts whatever is running there.
+    // `focus_moved` lets a fresh capture run the command on its own; a session
+    // being revalidated still declines as a changed target.
+    if (modifiers.waitedMs > 0 && !this._sameTarget(await this._getLinuxTarget(), target)) {
+      return { status: "target_changed", code: "focus_moved" };
+    }
+
     const capture = await this._captureViaClipboard(async () => {
       if (binary) {
         if (target.kind === "x11-window") {
@@ -530,9 +616,7 @@ class SelectionManager {
     if (target.kind === "atspi-pid" && (await this._isTerminalPid(target.id))) return capture;
     // macOS targets normally carry the copier's NSWorkspace app name, already
     // matched above; only an unnamed target needs its executable resolved so a
-    // terminal cannot become a caret destination. Never resolve a
-    // named one — `ps` reports bundle paths like "Visual Studio Code" whose
-    // "st" substring would misread editors as terminals.
+    // terminal cannot become a caret destination.
     if (
       target.kind === "mac-pid" &&
       !this._targetSignature(target) &&
@@ -540,12 +624,37 @@ class SelectionManager {
     ) {
       return capture;
     }
-    const verdict = await this.textEditMonitor?.isFocusedEditable?.(target);
+    const pid = await this._linuxTargetPid(target);
+    const verdict = await this.textEditMonitor?.isFocusedEditable?.(
+      pid ? { ...target, pid } : target
+    );
+    debugLogger.debug(
+      "Editable caret probe",
+      { kind: target.kind, pid: target.pid ?? pid, verdict },
+      "clipboard"
+    );
     if (verdict === "editable") return { status: "editable", target };
     // An empty copy cannot distinguish a caret from an integrated terminal or
     // a page without an input; it can also hide a selection matching the clipboard.
     // Unknown accessibility must keep the panel fallback, including on revalidation.
     return capture;
+  }
+
+  // The Linux editable probe answers only for a focused field in this process's
+  // active window, so a focus left behind in another app can't vouch for the
+  // target. null for other target kinds, or when the process can't be read.
+  async _linuxTargetPid(target) {
+    if (target.kind === "atspi-pid") return target.id;
+    if (target.kind === "hyprland-window") return target.pid;
+    if (target.kind === "x11-window") return this._readWindowPid("xdotool", target.id);
+    if (target.kind === "kde-window") return this._readWindowPid("kdotool", target.id);
+    return null;
+  }
+
+  async _readWindowPid(tool, windowId) {
+    const result = await runFile(tool, ["getwindowpid", windowId], { timeout: 500 });
+    const pid = result.success ? result.stdout.trim() : "";
+    return /^[1-9]\d*$/.test(pid) ? pid : null;
   }
 
   _isTerminalTarget(...targets) {
@@ -571,8 +680,8 @@ class SelectionManager {
   async _readTargetNames(pid) {
     const executablePath = await this._readExecutablePath(pid);
     if (!executablePath) return "";
-    // Match the bundle and executable names, not the whole path — segments
-    // like "/System/" would collide with short signatures such as "st".
+    // Match the bundle and executable names, not the whole path, so a directory
+    // name can't read as a terminal signature.
     const bundleName = executablePath.match(/\/([^/]+)\.app\//)?.[1] ?? "";
     const executableName = executablePath.split("/").pop() ?? "";
     return `${bundleName} ${executableName}`.trim();
@@ -601,8 +710,16 @@ class SelectionManager {
 
   async _readLinuxAtspiSelection(binary, expectedTarget) {
     if (!binary) return { status: "unavailable", code: "copy_helper_unavailable" };
+    if (this.now() < this._atspiCooldownUntil) {
+      return { status: "unavailable", code: "accessibility_unavailable" };
+    }
 
+    const generation = ++this._atspiProbeGeneration;
     const result = await runSpawn(binary, ["--atspi-selection"], { timeout: COPY_TIMEOUT_MS });
+    if (result.timedOut && generation === this._atspiProbeGeneration) {
+      this._atspiCooldownUntil = this.now() + ATSPI_COOLDOWN_MS;
+      debugLogger.warn("AT-SPI selection probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
+    }
     if (!result.success) return { status: "unavailable", code: "accessibility_unavailable" };
 
     const selected = result.stdout.match(/^ATSPI_SELECTED\s+(\d+)\s+([A-Za-z0-9+/=]+)$/m);
@@ -631,7 +748,8 @@ class SelectionManager {
     // On native Wayland, xdotool can report a stale XWayland window. Prefer
     // AT-SPI when available so the target and selected text come from the
     // compositor's actual focused accessibility object.
-    if (this.clipboardManager._isWayland?.()) {
+    const isWayland = this.clipboardManager._isWayland?.() === true;
+    if (isWayland) {
       const atspiTarget = await this._getLinuxAtspiTarget();
       if (atspiTarget) return atspiTarget;
     }
@@ -667,27 +785,40 @@ class SelectionManager {
         try {
           const active = JSON.parse(result.stdout);
           if (active.address) {
-            return {
+            const target = {
               kind: "hyprland-window",
               id: active.address,
               windowClass: typeof active.class === "string" ? active.class.toLowerCase() : null,
+              pid: Number.isInteger(active.pid) && active.pid > 0 ? active.pid : null,
             };
+            if (typeof active.title === "string") this._targetTitles.set(target, active.title);
+            return target;
           }
         } catch {}
       }
     }
 
-    return this._getLinuxAtspiTarget();
+    return isWayland ? null : this._getLinuxAtspiTarget();
   }
 
   async _getLinuxAtspiTarget() {
+    if (this.now() < this._atspiCooldownUntil) return null;
     const binary = this.clipboardManager.resolveLinuxFastPasteBinary();
     if (!binary) return null;
+    const generation = ++this._atspiProbeGeneration;
     const result = await runSpawn(binary, ["--atspi-target"], {
       timeout: ATSPI_TARGET_TIMEOUT_MS,
     });
+    if (result.timedOut && generation === this._atspiProbeGeneration) {
+      this._atspiCooldownUntil = this.now() + ATSPI_COOLDOWN_MS;
+      debugLogger.warn("AT-SPI target probe timed out", { cooldownMs: ATSPI_COOLDOWN_MS });
+    }
     const match = result.stdout.match(/^TARGET\s+ATSPI\s+(\d+)$/m);
-    return result.success && match ? { kind: "atspi-pid", id: match[1] } : null;
+    if (!result.success || !match) return null;
+    const target = { kind: "atspi-pid", id: match[1] };
+    const title = result.stdout.match(/^WINDOW_TITLE_B64 ([A-Za-z0-9+/=]+)$/m)?.[1];
+    if (title) this._targetTitles.set(target, Buffer.from(title, "base64").toString("utf8"));
+    return target;
   }
 
   async _captureViaClipboard(sendCopy, expectedTarget) {

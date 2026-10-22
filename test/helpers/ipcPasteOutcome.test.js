@@ -126,6 +126,52 @@ test("paste-text preserves a clipboard-only fallback as not pasted", async () =>
   assert.deepEqual(result, { success: true, pasted: false });
 });
 
+test("paste-text on Linux hands back the keyboard the assistant panel took before pasting", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["linux", ["blur", "return", "paste"]],
+      ["win32", ["blur", "paste"]],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const order = [];
+      target.windowManager = {
+        isOnboardingDemoActive: () => false,
+        mainWindow: {
+          isDestroyed: () => false,
+          isFocused: () => true,
+          blur: () => order.push("blur"),
+        },
+        // blur() leaves X focus on the Linux pill, so the paste would land in
+        // the panel instead of the user's app.
+        returnLinuxKeyboardFocus: () => order.push("return"),
+      };
+      target.clipboardManager = {
+        pasteText: async () => {
+          order.push("paste");
+        },
+      };
+
+      await handlers.get("paste-text")({ sender: { id: 1 } }, "dictated with the panel open");
+
+      assert.deepEqual(order, expected, platform);
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("paste-text tells the renderer why a paste was held back", async () => {
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async () => ({ pasted: false, reason: "modifiers-held" }),
+  };
+
+  const result = await handlers.get("paste-text")({ sender: { id: 1 } }, "held transcript");
+
+  assert.deepEqual(result, { success: true, pasted: false, reason: "modifiers-held" });
+});
+
 test("paste-text does not schedule AutoLearn monitoring after a clipboard-only fallback", async (t) => {
   const originalSetTimeout = global.setTimeout;
   t.after(() => {

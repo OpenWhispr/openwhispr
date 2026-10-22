@@ -1,10 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const Module = require("node:module");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
+const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-server-sync-ipc-"));
 
 const MODEL = "qwen3.5-4b-q4_k_m";
 const modelManager = {
@@ -14,11 +18,17 @@ const modelManager = {
   stopServer: async () => {
     modelManager.stops += 1;
   },
+  serverManager: {
+    keepResident: null,
+    setKeepResident: (keepResident) => {
+      modelManager.serverManager.keepResident = keepResident;
+    },
+  },
 };
 
 const electronStub = {
   app: {
-    getPath: () => "",
+    getPath: () => userDataDirectory,
     getName: () => "test",
     getVersion: () => "0.0.0",
     isPackaged: false,
@@ -93,7 +103,9 @@ test.before(() => {
 });
 
 test.after(() => {
+  target.metaActivation?.dispose();
   Module._load = originalLoad;
+  fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
 
 function sync({ loaded, signedIn = false, policySettled = true, ...scopes }) {
@@ -140,4 +152,12 @@ test("a signed-in window waits for its workspace policy before touching the serv
 test("signed out, the policy never loads, so an unresolved policy does not block the stop", async () => {
   await sync({ loaded: MODEL, signedIn: false, policySettled: false });
   assert.equal(modelManager.stops, 1);
+});
+
+test("Keep model loaded applies before the workspace policy settles", async () => {
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false, keepLocalModelLoaded: true });
+  assert.equal(modelManager.serverManager.keepResident, true);
+
+  await sync({ loaded: MODEL, signedIn: true, policySettled: false });
+  assert.equal(modelManager.serverManager.keepResident, false, "missing means off");
 });

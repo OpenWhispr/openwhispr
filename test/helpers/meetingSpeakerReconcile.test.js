@@ -162,6 +162,14 @@ test("roster changes refresh an auto-derived speaker config", () => {
   assert.deepEqual(broadcasts[0].payload, { enabled: true, expectedCount: 4 });
 });
 
+test("a room on the note doesn't raise the speaker config", () => {
+  const { fakeThis } = refreshConfig(false, {
+    attendees: [...THREE_ATTENDEES, { email: "room@example.com", resource: true }],
+  });
+
+  assert.equal(fakeThis.activeMeetingSpeakerConfig.expectedCount, 4);
+});
+
 test("an explicit stepper count is never overridden by roster changes", () => {
   const { fakeThis, broadcasts } = refreshConfig(true);
 
@@ -247,4 +255,128 @@ test("mic mode counts the user among the expected speakers", () => {
     { numSpeakers: -1, cap: 2 },
     "the no-signal fallback caps at the default expected total, user included"
   );
+});
+
+// A resumed note's mappings and embeddings can hold ids no transcript row
+// carries any more; the session's base must clear them too, or a new voice
+// would inherit that stored name.
+test("a resumed meeting's speaker base clears the note's stored ids", () => {
+  const { IPCHandlers } = loadHandlers();
+  const resolveBase = IPCHandlers.prototype._resolveMeetingSpeakerIndexBase;
+  const handlers = {
+    _diarizationSpeakerReservations: new Map(),
+    databaseManager: {
+      getSpeakerMappings: () => [{ speaker_id: "speaker_0" }, { speaker_id: "speaker_3" }],
+      getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_1" }],
+    },
+  };
+
+  assert.equal(resolveBase.call(handlers, NOTE_ID, 2), 4);
+  assert.equal(resolveBase.call(handlers, NOTE_ID, 6), 6);
+  assert.equal(resolveBase.call(handlers, null, 2), 2);
+
+  const failing = {
+    _diarizationSpeakerReservations: new Map(),
+    databaseManager: {
+      getSpeakerMappings: () => {
+        throw new Error("db closed");
+      },
+    },
+  };
+  assert.equal(resolveBase.call(failing, NOTE_ID, 2), 2);
+});
+
+function loadDiarizationManager() {
+  const diarizationPath = require.resolve("../../src/helpers/diarization");
+  delete require.cache[diarizationPath];
+  Module._load = function loadWithElectronStub(request, parent, isMain) {
+    if (request === "electron") return electronStub;
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  try {
+    return require(diarizationPath);
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+// "Record more" can start while the previous session's diarization still runs:
+// its clusters are in neither the seeded transcript nor the stored embeddings
+// yet, so the next session's base must clear every id the result can name.
+test("a stopped session's diarization reserves its speaker ids until its result lands", async (t) => {
+  const { IPCHandlers } = loadHandlers();
+  const DiarizationManager = loadDiarizationManager();
+  const speakerEmbeddings = require("../../src/helpers/speakerEmbeddings");
+  t.mock.method(speakerEmbeddings, "isAvailable", () => true);
+  t.mock.method(speakerEmbeddings, "extractEmbedding", async () => new Float32Array([1, 0]));
+  t.mock.method(speakerEmbeddings, "computeCentroid", (embeddings) => embeddings[0]);
+
+  let releaseDiarization;
+  const diarizationGate = new Promise((resolve) => {
+    releaseDiarization = resolve;
+  });
+  const diarizationManager = new DiarizationManager();
+  Object.assign(diarizationManager, {
+    isAvailable: () => true,
+    convertRawPcmToWav: async () => "/nonexistent/ow-reserve-test.wav",
+    diarize: async () => {
+      await diarizationGate;
+      return [
+        { start: 0, end: 4, speaker: "speaker_00" },
+        { start: 5, end: 9, speaker: "speaker_01" },
+      ];
+    },
+  });
+
+  const sent = [];
+  const win = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+  };
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
+    _diarizationSpeakerReservations: new Map(),
+    speakerDiarizationEnabled: true,
+    diarizationManager,
+    databaseManager: {
+      // Four expected speakers: up to three remote clusters.
+      getNote: () => ({ expected_speaker_count: 4 }),
+      getSpeakerProfiles: () => [],
+      getSpeakerMappings: () => [],
+      getNoteSpeakerEmbeddings: () => [],
+    },
+  });
+
+  handlers._startOrSkipDiarization(
+    "diar-1",
+    "/nonexistent/ow-reserve-test.pcm",
+    0,
+    [
+      { id: "a", source: "system", timestamp: 1, text: "first", speaker: "speaker_2" },
+      { id: "b", source: "system", timestamp: 6, text: "second", speaker: "speaker_2" },
+    ],
+    win,
+    null,
+    null,
+    NOTE_ID,
+    "system",
+    2
+  );
+
+  // Pending: the base must clear speaker_2..speaker_4.
+  assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 3), 5);
+  assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID + 1, 0), 0);
+
+  releaseDiarization();
+  for (let i = 0; i < 50 && sent.length === 0; i += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  const { payload } = sent[0];
+  assert.deepEqual(
+    payload.segments.map((segment) => segment.speaker),
+    ["speaker_2", "speaker_3"]
+  );
+  assert.deepEqual(Object.keys(payload.speakerEmbeddings).sort(), ["speaker_2", "speaker_3"]);
+  // Landed: narrowed to the two ids the result actually names.
+  assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 0), 4);
 });

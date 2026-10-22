@@ -12,7 +12,7 @@ import Animated, {
 import * as SplashScreen from 'expo-splash-screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BRAND_GRADIENT } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const LOGO_SIZE = 120;
 const RING_THICKNESS = 6;
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     marginTop: 24,
-    fontFamily: SpaceGrotesk.semibold,
+    fontFamily: AppFont.semibold,
     fontSize: 24,
     fontWeight: '600',
     letterSpacing: 1,

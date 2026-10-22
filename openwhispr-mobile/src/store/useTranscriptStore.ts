@@ -37,9 +37,7 @@ export type FailedTranscriptInput = {
   provider: TranscriptionProvider;
   inferenceRoute?: Transcript['inferenceRoute'];
   cleanupRoute?: Transcript['cleanupRoute'];
-  agentRoute?: Transcript['agentRoute'];
   cleanupUnavailable?: string;
-  agentUnavailable?: string;
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
   jobId?: string;
@@ -308,9 +306,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           provider: transcript.provider,
           inferenceRoute: transcript.inferenceRoute,
           cleanupRoute: transcript.cleanupRoute,
-          agentRoute: transcript.agentRoute,
           cleanupUnavailable: transcript.cleanupUnavailable,
-          agentUnavailable: transcript.agentUnavailable,
           status: 'failed',
           errorMessage: transcript.errorMessage,
           requestContext: transcript.requestContext,
@@ -355,11 +351,14 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         throw new Error('The original provider route is unavailable. Start a new transcription.');
       }
       const { activeMode } = useProcessingModeStore.getState();
+      const scope = current.requestContext === 'file' ? 'upload' : 'dictation';
       // Provider recordings keep their original route. Cloud and On-Device
-      // recordings follow the current mode, including the provider it now selects.
+      // recordings follow the current mode, including the provider it now selects;
+      // in Local Mode, uploads follow what is chosen for them.
       const rerouted =
-        current.provider !== 'byok' && activeMode === 'providers'
-          ? snapshotTranscriptionJob(current.requestContext === 'file' ? 'upload' : 'dictation')
+        current.provider !== 'byok' &&
+        (activeMode === 'providers' || (activeMode === 'private' && scope === 'upload'))
+          ? snapshotTranscriptionJob(scope)
           : undefined;
       const provider =
         rerouted?.provider ??
@@ -367,9 +366,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       const inferenceRoute = rerouted ? rerouted.inferenceRoute : current.inferenceRoute;
       const textRoutes =
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
-      if (provider !== 'local' && activeMode === 'private') {
+      if (provider !== 'local' && activeMode === 'private' && scope === 'dictation') {
         throw new Error(
-          'This recording used a remote provider. Leave private mode to retry its original route.',
+          'This recording used a remote provider. Change Dictation from On-Device in Account → AI Models to retry its original route.',
         );
       }
       const retryCount = (current.retryCount ?? 0) + 1;
@@ -398,20 +397,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             (provider !== 'byok'
               ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'cleanup' }
               : undefined),
-          agentRoute:
-            textRoutes.agentRoute ??
-            (provider !== 'byok'
-              ? { mode: provider === 'local' ? 'local' : 'openwhispr', scope: 'agent' }
-              : undefined),
           cleanupUnavailable:
             textRoutes.cleanupUnavailable ??
             (provider === 'byok' && !textRoutes.cleanupRoute
               ? 'The original cleanup route is unavailable. Your raw transcript is saved.'
-              : undefined),
-          agentUnavailable:
-            textRoutes.agentUnavailable ??
-            (provider === 'byok' && !textRoutes.agentRoute
-              ? 'The original agent route is unavailable. Your raw transcript is saved.'
               : undefined),
           language: getPreferredTranscriptionLanguage(),
           fileName,
@@ -429,9 +418,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           provider: processed.transcription.provider,
           inferenceRoute: processed.transcription.inferenceRoute,
           cleanupRoute: processed.transcription.cleanupRoute,
-          agentRoute: processed.transcription.agentRoute,
           cleanupUnavailable: processed.transcription.cleanupUnavailable,
-          agentUnavailable: processed.transcription.agentUnavailable,
           cleanupWarning: processed.transcription.cleanupWarning,
           // Retry succeeded: the row is completed and no longer retryable.
           audioUrl: undefined,
@@ -470,9 +457,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
                 provider,
                 inferenceRoute,
                 cleanupRoute: textRoutes.cleanupRoute,
-                agentRoute: textRoutes.agentRoute,
                 cleanupUnavailable: textRoutes.cleanupUnavailable,
-                agentUnavailable: textRoutes.agentUnavailable,
               }),
           status: 'failed',
           errorMessage: toFriendlyTranscriptionErrorMessage(error),

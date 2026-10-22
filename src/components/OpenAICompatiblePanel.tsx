@@ -1,13 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import SearchableModelList, { MODEL_SEARCH_THRESHOLD } from "./ui/SearchableModelList";
 import { buildApiUrl, getModelListBaseCandidates, normalizeBaseUrl } from "../config/constants";
 import { isSecureHttpEndpoint } from "../utils/urlUtils";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
+import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
+import { ProviderCheckField } from "./ui/ProviderCheckField";
+import { usePanelVisible } from "./ui/usePanelVisible";
+import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
+import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
+import { useCredentialDraft } from "../hooks/useCredentialDraft";
+import { useTypingPause } from "../hooks/useTypingPause";
 
 interface ModelOption {
   value: string;
@@ -31,12 +44,14 @@ interface OpenAICompatiblePanelProps {
   // Providers whose /models is public but whose inference needs a key.
   apiKeyRequired?: boolean;
   getKeyUrl?: string;
+  // The connection the panel checks: the user's own server, or OpenRouter.
+  provider?: "custom" | "openrouter";
 }
 
 export default function OpenAICompatiblePanel({
   baseUrl,
   setBaseUrl,
-  apiKey,
+  apiKey: savedApiKey,
   setApiKey,
   model,
   setModel,
@@ -46,6 +61,7 @@ export default function OpenAICompatiblePanel({
   lockedBaseUrl = false,
   apiKeyRequired = false,
   getKeyUrl,
+  provider = "custom",
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -54,8 +70,20 @@ export default function OpenAICompatiblePanel({
   const [modelsError, setModelsError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const lastLoadedBaseRef = useRef<string | null>(null);
+  // The trimmed key the last list load was sent with.
+  const lastLoadedKeyRef = useRef<string | null>(null);
   const pendingBaseRef = useRef<string | null>(null);
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
+  const keyDraft = useCredentialDraft();
+  const apiKey = keyDraft.value("apiKey", savedApiKey);
+  // The list reads the key and the address setter through refs, so neither a key change nor
+  // a parent's new setter on each render reloads it.
+  const apiKeyRef = useRef(apiKey);
+  const setBaseUrlRef = useRef(setBaseUrl);
+  useEffect(() => {
+    apiKeyRef.current = apiKey;
+    setBaseUrlRef.current = setBaseUrl;
+  }, [apiKey, setBaseUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -69,6 +97,37 @@ export default function OpenAICompatiblePanel({
   }, [baseUrl]);
 
   const normalizedBase = useMemo(() => normalizeBaseUrl(baseUrl), [baseUrl]);
+  const visible = usePanelVisible();
+  const editing = useFocusHold();
+  // An address with no http:// or https:// is left to the model list, which says so.
+  const checkReady =
+    provider === "openrouter" ? Boolean(apiKey.trim()) : normalizedBase.includes("://");
+  // The address applies when its field is left, so it is never half-typed here.
+  const delayMs = useTypingPause({
+    typed: apiKey,
+    context: JSON.stringify([provider, normalizedBase, model, visible]),
+    held: editing.held,
+  });
+  const check = useConnectionAutoCheck({
+    // The model is this panel's own (or "" under a tab that is only browsed), so a saved model
+    // the server no longer lists fails as modelNotFound.
+    config: { scope: "reasoning", provider, baseUrl: normalizedBase, apiKey, model },
+    // A hidden panel is not ready to ask; a shown one asks again, and the main process answers
+    // a check it remembers at once.
+    ready: checkReady && visible,
+    delayMs,
+  });
+  const followKeyDraft = keyDraft.follow;
+  const refused = check.failure?.errorCode === "credentialsRejected";
+  useEffect(() => {
+    followKeyDraft({
+      phase: check.phase,
+      checked: { apiKey },
+      // Someone's own server may refuse a key for other reasons, so only OpenRouter's refusal
+      // holds a key back.
+      refused: refused && provider === "openrouter",
+    });
+  }, [check.phase, apiKey, refused, provider, followKeyDraft]);
 
   useEffect(() => {
     latestBaseRef.current = normalizedBase;
@@ -78,6 +137,14 @@ export default function OpenAICompatiblePanel({
   const trimmedDraft = draftBase.trim();
   const hasSavedBase = Boolean((baseUrl || "").trim());
   const isDraftDirty = trimmedDraft !== (baseUrl || "").trim();
+  // The status describes the applied address, so it waits while another one is typed.
+  const endpointCheck = isDraftDirty ? { ...check, phase: "idle" as const, failure: null } : check;
+  const failureReason =
+    !apiKey.trim() && refused ? t("reasoning.custom.endpointUnauthorized") : undefined;
+  // While the check covers the address, its reason under the field replaces the list's line.
+  const listErrorShown =
+    Boolean(modelsError) && (lockedBaseUrl || !checkReady || check.phase === "connected");
+  const keyLabel = t(apiKeyRequired ? "common.apiKey" : "reasoning.custom.apiKeyOptional");
 
   const loadRemoteModels = useCallback(
     async (baseOverride?: string, force = false) => {
@@ -109,8 +176,9 @@ export default function OpenAICompatiblePanel({
         setModelsError(null);
       }
 
-      const trimmedKey = apiKey?.trim();
-      const effectiveKey = trimmedKey && trimmedKey.length > 0 ? trimmedKey : undefined;
+      const trimmedKey = apiKeyRef.current.trim();
+      const effectiveKey = trimmedKey.length > 0 ? trimmedKey : undefined;
+      lastLoadedKeyRef.current = effectiveKey ?? "";
       let activeBase = normalized;
 
       try {
@@ -199,7 +267,7 @@ export default function OpenAICompatiblePanel({
             activeBase = resolvedBase;
             latestBaseRef.current = resolvedBase;
             setDraftBase(resolvedBase);
-            setBaseUrl(resolvedBase);
+            setBaseUrlRef.current(resolvedBase);
           }
           setModelOptions(mapped);
           // `/models` is a discovery aid, not an allowlist — keep the user's
@@ -229,7 +297,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, apiKey, lockedBaseUrl, setBaseUrl, t]
+    [baseUrl, lockedBaseUrl, t]
   );
 
   useEffect(() => {
@@ -246,6 +314,21 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels();
   }, [hasBase, normalizedBase, loadRemoteModels]);
 
+  // A key change retries a failed list load once the check for that key has settled, so the
+  // list never gets a half-typed key, and a hidden panel asks nothing: its check is not ready,
+  // so it never settles. It also runs when a load that was in flight settles (`modelsLoading`
+  // drops), since a key typed during that load has a check that settled before the load did.
+  useEffect(() => {
+    if (check.phase !== "connected" && check.phase !== "unverified" && check.phase !== "failed") {
+      return;
+    }
+    if (!hasBase) return;
+    if (lastLoadedBaseRef.current === normalizedBase) return;
+    if (pendingBaseRef.current === normalizedBase) return;
+    if (apiKey.trim() === lastLoadedKeyRef.current) return;
+    loadRemoteModels();
+  }, [check.phase, apiKey, hasBase, normalizedBase, modelsLoading, loadRemoteModels]);
+
   const applyBase = useCallback(() => {
     const normalized = trimmedDraft ? normalizeBaseUrl(trimmedDraft) : trimmedDraft;
     setDraftBase(normalized);
@@ -254,12 +337,17 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels(normalized, true);
   }, [trimmedDraft, setBaseUrl, loadRemoteModels]);
 
-  const handleBlur = useCallback(() => {
-    if (!trimmedDraft) return;
-    if (trimmedDraft !== (baseUrl || "").trim()) {
-      applyBase();
-    }
-  }, [trimmedDraft, baseUrl, applyBase]);
+  const handleBlur = useCallback(
+    (event: FocusEvent<HTMLInputElement>) => {
+      // Switching to another app blurs the field mid-edit; the address applies once it is left.
+      if (isWindowSwitchBlur(event)) return;
+      if (!trimmedDraft) return;
+      if (trimmedDraft !== (baseUrl || "").trim()) {
+        applyBase();
+      }
+    },
+    [trimmedDraft, baseUrl, applyBase]
+  );
 
   const handleReset = useCallback(() => {
     const target = defaultBaseUrl ?? "";
@@ -283,16 +371,20 @@ export default function OpenAICompatiblePanel({
 
   return (
     <>
+      <ConnectionCheckAnnouncer announcement={check.announcement} />
       {!lockedBaseUrl && (
-        <div className="space-y-2">
+        <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
           <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
-          <Input
-            dir="ltr"
+          <ProviderCheckField
+            aria-label={t("reasoning.custom.endpointTitle")}
+            check={endpointCheck}
+            failureReason={failureReason}
             value={draftBase}
             onChange={(event) => setDraftBase(event.target.value)}
             onBlur={handleBlur}
             placeholder={baseUrlPlaceholder}
-            className="text-sm"
+            autoComplete="off"
+            spellCheck={false}
           />
           {helpExamples ?? (
             <p className="text-xs text-muted-foreground">
@@ -310,20 +402,30 @@ export default function OpenAICompatiblePanel({
         </div>
       )}
 
-      <div className="space-y-2 pt-3">
+      <div className="space-y-2 pt-3" onFocus={editing.onFocus} onBlur={editing.onBlur}>
         <div className="flex items-baseline justify-between">
-          <h4 className="font-medium text-foreground">
-            {t(apiKeyRequired ? "common.apiKey" : "reasoning.custom.apiKeyOptional")}
-          </h4>
+          <h4 className="font-medium text-foreground">{keyLabel}</h4>
           {getKeyUrl && <GetApiKeyLink url={getKeyUrl} />}
         </div>
-        <ApiKeyInput
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          label=""
-          helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
+        <ProviderCheckField
+          aria-label={keyLabel}
+          // At a fixed address the key completes the connection, so it carries the status.
+          check={lockedBaseUrl ? check : undefined}
+          invalidOn="credentialsRejected"
+          type="password"
+          value={apiKey}
+          onChange={(event) => keyDraft.change("apiKey", event.target.value.trim(), setApiKey)}
+          onBlur={keyDraft.save}
+          placeholder={t("apiKeyInput.placeholder")}
+          autoComplete="off"
+          spellCheck={false}
         />
-        {apiKeyRequired && !apiKey?.trim() && (
+        {!apiKeyRequired && (
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            {t("reasoning.custom.apiKeyHelp")}
+          </p>
+        )}
+        {apiKeyRequired && !apiKey.trim() && (
           <p className="text-xs text-warning">{t("reasoning.custom.keyRequiredHint")}</p>
         )}
       </div>
@@ -375,7 +477,7 @@ export default function OpenAICompatiblePanel({
             {modelsLoading && (
               <p className="text-xs text-primary">{t("reasoning.custom.fetchingModels")}</p>
             )}
-            {modelsError && <p className="text-xs text-destructive">{modelsError}</p>}
+            {listErrorShown && <p className="text-xs text-destructive">{modelsError}</p>}
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
               <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
             )}

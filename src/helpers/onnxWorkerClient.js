@@ -36,7 +36,7 @@ class OnnxWorkerClient {
     this.shuttingDown = false;
     this.gaveUp = false;
     this.spawnPromise = null;
-    this.respawnTimer = null;
+    this.backoffTimer = null;
     this.generation = 0;
     this.killedForTimeout = false;
   }
@@ -167,20 +167,19 @@ class OnnxWorkerClient {
       }
       const delay =
         RESPAWN_BACKOFF_MS[Math.min(this.crashCount - 1, RESPAWN_BACKOFF_MS.length - 1)];
-      debugLogger.info("onnx worker respawn scheduled", {
+      debugLogger.info("onnx worker respawn backoff", {
         delayMs: delay,
         crashCount: this.crashCount,
       });
-      this.respawnTimer = setTimeout(() => {
-        this.respawnTimer = null;
-        this._spawn().catch((spawnErr) => {
-          debugLogger.error("onnx worker respawn failed", { error: spawnErr?.message });
-        });
+      // The next request respawns the worker; spawning here would leave an empty worker
+      // running (e.g. after a crash during an unload) that nothing ever releases.
+      this.backoffTimer = setTimeout(() => {
+        this.backoffTimer = null;
       }, delay);
     }
   }
 
-  // Exits the worker once no session is loaded, so an idle text unload also frees
+  // Exits the worker once no session is loaded, so an idle unload also frees
   // the onnxruntime arena. Detaches before the kill so a racing request spawns fresh.
   async releaseIfIdle() {
     if (!this.child || this.shuttingDown || this.pending.size) return false;
@@ -205,9 +204,9 @@ class OnnxWorkerClient {
   }
 
   async request(method, payload, transferList) {
-    // Releasing text must never start a worker just to free an absent session; a
-    // worker that is shutting down takes its session with it.
-    if (method === "text.unload" && (!this.child || this.shuttingDown)) return { ok: true };
+    // An unload must never start a worker just to free an absent session; a
+    // worker that is shutting down takes its sessions with it.
+    if (method.endsWith(".unload") && (!this.child || this.shuttingDown)) return { ok: true };
     if (this.shuttingDown) {
       throw new WorkerCrashedError("worker shutting down");
     }
@@ -216,8 +215,8 @@ class OnnxWorkerClient {
       throw new WorkerCrashedError("worker unavailable");
     }
 
-    if (this.respawnTimer) {
-      throw new WorkerCrashedError("worker restarting");
+    if (this.backoffTimer) {
+      throw new WorkerCrashedError("worker in crash backoff");
     }
 
     if (this.pending.size >= MAX_PENDING_REQUESTS) {
@@ -237,7 +236,7 @@ class OnnxWorkerClient {
       const timeout = setTimeout(() => {
         if (!this.pending.delete(id)) return;
         reject(new Error(`onnx worker request timeout: ${method}`));
-        // The worker serializes text work, so one hung request wedges every later one.
+        // The worker serializes each session's calls, so one hung request blocks every later call on that session.
         debugLogger.warn("onnx worker request timeout; killing worker", { method });
         this.killedForTimeout = true;
         try {
@@ -259,9 +258,9 @@ class OnnxWorkerClient {
 
   async stop() {
     this.shuttingDown = true;
-    if (this.respawnTimer) {
-      clearTimeout(this.respawnTimer);
-      this.respawnTimer = null;
+    if (this.backoffTimer) {
+      clearTimeout(this.backoffTimer);
+      this.backoffTimer = null;
     }
     if (!this.child) return;
 

@@ -19,7 +19,7 @@ interface NoteActionsMenuProps {
   onAskNote?: () => void;
   askNoteDisabled?: boolean;
   onCopyGeneratedNote?: () => void;
-  onCopyTranscript?: () => void;
+  onViewTranscript?: () => void;
   onShare: () => void;
   onDelete: () => void;
 }
@@ -27,7 +27,7 @@ interface NoteActionsMenuProps {
 const MANAGE_ID = '__manage';
 const ASK_NOTE_ID = '__ask_note';
 const COPY_GENERATED_NOTE_ID = '__copy_generated_note';
-const COPY_TRANSCRIPT_ID = '__copy_transcript';
+const VIEW_TRANSCRIPT_ID = '__view_transcript';
 const SHARE_ID = '__share';
 const PRIVACY_ID = '__privacy';
 const DELETE_ID = '__delete';
@@ -43,7 +43,7 @@ export function NoteActionsMenu({
   onAskNote,
   askNoteDisabled = false,
   onCopyGeneratedNote,
-  onCopyTranscript,
+  onViewTranscript,
   onShare,
   onDelete,
 }: NoteActionsMenuProps) {
@@ -76,7 +76,8 @@ export function NoteActionsMenu({
             title: 'Ask about this note',
             image: 'message',
             imageColor: iconColor,
-            attributes: { disabled: !hasContent || askNoteDisabled },
+            // Chat also reads the generated notes, so the caller decides when there is context.
+            attributes: { disabled: askNoteDisabled },
           },
         ]
       : []),
@@ -90,14 +91,13 @@ export function NoteActionsMenu({
           },
         ]
       : []),
-    ...(onCopyTranscript
+    ...(onViewTranscript
       ? [
           {
-            id: COPY_TRANSCRIPT_ID,
-            title: 'Copy Transcript',
-            image: 'doc.on.doc',
+            id: VIEW_TRANSCRIPT_ID,
+            title: 'View Transcript',
+            image: 'text.quote',
             imageColor: iconColor,
-            attributes: { disabled: !hasContent },
           },
         ]
       : []),
@@ -106,7 +106,6 @@ export function NoteActionsMenu({
       title: 'Share',
       image: 'square.and.arrow.up',
       imageColor: iconColor,
-      attributes: { disabled: !hasContent },
     },
     {
       id: PRIVACY_ID,
@@ -141,8 +140,8 @@ export function NoteActionsMenu({
       onCopyGeneratedNote?.();
       return;
     }
-    if (id === COPY_TRANSCRIPT_ID) {
-      onCopyTranscript?.();
+    if (id === VIEW_TRANSCRIPT_ID) {
+      onViewTranscript?.();
       return;
     }
     if (id === SHARE_ID) {

@@ -46,6 +46,7 @@ import {
 } from '../../modules/app-group-storage/src';
 import { LiveActivity } from '../../modules/live-activity/src';
 import { isNoSpeechError } from '@/lib/permissions';
+import { returnToHost } from '@/lib/handoffReturn';
 
 const NO_SPEECH_DISPLAY_MS = 2200;
 
@@ -432,9 +433,7 @@ export function useKeyboardHandoff() {
             ? rawText
             : await cleanupTranscript(rawText, {
                 inferenceRoute: recoveredRoute.cleanupRoute,
-                agentRoute: recoveredRoute.agentRoute,
                 cleanupUnavailable: recoveredRoute.cleanupUnavailable,
-                agentUnavailable: recoveredRoute.agentUnavailable,
                 requireProvider: recoveredRoute.provider === 'byok',
                 onSkipped: (reason): void => {
                   cleanupWarning = reason;
@@ -487,9 +486,7 @@ export function useKeyboardHandoff() {
           provider: recoveredRoute?.provider ?? 'cloud',
           inferenceRoute: recoveredRoute?.inferenceRoute,
           cleanupRoute: recoveredRoute?.cleanupRoute,
-          agentRoute: recoveredRoute?.agentRoute,
           cleanupUnavailable: recoveredRoute?.cleanupUnavailable,
-          agentUnavailable: recoveredRoute?.agentUnavailable,
           cleanupWarning,
           requestContext: 'keyboard',
         });
@@ -573,7 +570,7 @@ export function useKeyboardHandoff() {
       if (intent === 'agent-action') {
         runAgentAction(`url:${intent}`);
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -585,7 +582,7 @@ export function useKeyboardHandoff() {
           // in OpenWhispr either. Bounce back so the keyboard shows the live
           // recording/transcribing state instead of a dead tap.
           if (!selfHosted) {
-            AppGroupStorage.returnToPreviousApp();
+            void returnToHost();
           }
           return;
         }
@@ -608,7 +605,7 @@ export function useKeyboardHandoff() {
         setKeyboardStatus('setup_required', 'Complete provider setup in AI Models.');
         cleanup({ resetStatus: false });
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -642,7 +639,7 @@ export function useKeyboardHandoff() {
         // surfaces the error state there. Leaving them in OpenWhispr with no
         // visible failure is the worst outcome.
         if (!selfHosted) {
-          AppGroupStorage.returnToPreviousApp();
+          void returnToHost();
         }
         return;
       }
@@ -650,7 +647,7 @@ export function useKeyboardHandoff() {
       LiveActivity.startSession();
 
       if (!selfHosted) {
-        AppGroupStorage.returnToPreviousApp();
+        void returnToHost();
       }
     };
 
@@ -788,9 +785,8 @@ export function useKeyboardHandoff() {
         };
 
         // Agent job path: the recorded audio is a *spoken instruction*, not
-        // dictation to insert. Transcribe it RAW (no cleanup — so the wake-word
-        // agentName detection that lives in cleanupTranscript never fires — no
-        // snippets, no history/pending-transcript write, no insert) and hand the
+        // dictation to insert. Transcribe it RAW (no cleanup, no snippets, no
+        // history/pending-transcript write, no insert) and hand the
         // instruction to the composer, which writes the result and the terminal
         // agent_ready/agent_error status itself and validates job currency. As
         // with the normal path, endProcessingTask (via cleanup) is deferred to
@@ -888,9 +884,7 @@ export function useKeyboardHandoff() {
               provider,
               inferenceRoute: jobRoute.inferenceRoute,
               cleanupRoute: jobRoute.cleanupRoute,
-              agentRoute: jobRoute.agentRoute,
               cleanupUnavailable: jobRoute.cleanupUnavailable,
-              agentUnavailable: jobRoute.agentUnavailable,
               requestContext: 'keyboard',
               keyboardTone,
               jobId,
@@ -950,9 +944,11 @@ export function useKeyboardHandoff() {
           let cleanupStartedAt = Date.now();
           const processed = await transcribeAndCleanup(
             {
-              ...jobRoute,
               audioUri: retainedAudioUrl,
               provider,
+              inferenceRoute: jobRoute.inferenceRoute,
+              cleanupRoute: jobRoute.cleanupRoute,
+              cleanupUnavailable: jobRoute.cleanupUnavailable,
               language: getPreferredTranscriptionLanguage(),
               fileName,
               mimeType,
@@ -1068,9 +1064,7 @@ export function useKeyboardHandoff() {
             provider: processed.transcription.provider,
             inferenceRoute: processed.transcription.inferenceRoute,
             cleanupRoute: processed.transcription.cleanupRoute,
-            agentRoute: processed.transcription.agentRoute,
             cleanupUnavailable: processed.transcription.cleanupUnavailable,
-            agentUnavailable: processed.transcription.agentUnavailable,
             cleanupWarning: processed.transcription.cleanupWarning,
             requestContext: 'keyboard',
             keyboardTone,
@@ -1170,6 +1164,11 @@ export function useKeyboardHandoff() {
     // dropped poke is handled by handlePendingHandoffIntent.
     const agentActionSub = addAgentActionListener(() => runAgentAction('poke'));
 
+    // The hardware-keyboard hotkey (plugins/hotkey-dictation) waits for this
+    // before a cold-start recording, so native never records before the
+    // started/stopped listeners above exist.
+    AppGroupStorage.markHotkeyJsReady();
+
     runOrphanCleanup('mount');
     const orphanPoll = setInterval(() => {
       runOrphanCleanup('watchdog');
@@ -1205,6 +1204,7 @@ export function useKeyboardHandoff() {
       bgStartedSub?.remove();
       statusSub?.remove();
       agentActionSub?.remove();
+      AppGroupStorage.removeItem(APP_GROUP_KEYS.HOTKEY_JS_READY_AT_MS);
       urlSub.remove();
       appStateSub.remove();
       clearInterval(orphanPoll);

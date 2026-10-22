@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/services/uploadNotes.ts");
 const { MAX_SPEAKER_COUNT } = require("../../src/constants/speakerDetection.json");
 
-test("maps the diarizer invocation onto the note columns", async () => {
+test("maps the diarization settings onto the note columns", async () => {
   const { buildUploadNoteMetadata } = await load();
 
   const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
@@ -13,30 +13,29 @@ test("maps the diarizer invocation onto the note columns", async () => {
   );
 
   assert.equal(audioDurationSeconds, 4359.87);
-  assert.deepEqual(noteUpdates, { diarization_enabled: 1, expected_speaker_count: 2 });
+  assert.deepEqual(noteUpdates, { diarization_enabled: 1 });
 });
 
-test("auto speaker detection stores no explicit count", async () => {
+// The upload caps detected speakers at the entered count, but recording into
+// the note later forces expected_speaker_count as the exact count.
+test("the speaker count entered for an upload is never stored on the note", async () => {
   const { buildUploadNoteMetadata } = await load();
 
-  const { noteUpdates } = buildUploadNoteMetadata(
-    { enabled: true, localModelsReady: true, numSpeakers: null },
-    60
-  );
-
-  // isExplicitSpeakerCount treats any positive integer as the user's own
-  // choice, so auto detection must land as null, never a default.
-  assert.equal(noteUpdates.expected_speaker_count, null);
-  assert.equal(noteUpdates.diarization_enabled, 1);
+  for (const numSpeakers of [null, 2, MAX_SPEAKER_COUNT]) {
+    const { noteUpdates } = buildUploadNoteMetadata(
+      { enabled: true, localModelsReady: true, numSpeakers },
+      60
+    );
+    assert.equal(Object.hasOwn(noteUpdates, "expected_speaker_count"), false);
+    assert.equal(noteUpdates.diarization_enabled, 1);
+  }
 });
 
 test("disabled diarization writes no columns at all", async () => {
   const { buildUploadNoteMetadata } = await load();
 
   // A null diarization_enabled defers to the global speaker setting when the
-  // user records into the note later (a 0 would force it off), and writing no
-  // count keeps the numSpeakers value lingering in localStorage while its
-  // input is hidden from being stamped onto the note as an explicit choice.
+  // user records into the note later (a 0 would force it off).
   const { audioDurationSeconds, noteUpdates } = buildUploadNoteMetadata(
     { enabled: false, localModelsReady: false, numSpeakers: 3 },
     120
@@ -44,22 +43,6 @@ test("disabled diarization writes no columns at all", async () => {
 
   assert.equal(noteUpdates, null);
   assert.equal(audioDurationSeconds, 120);
-});
-
-test("speaker counts reuse the stored-count clamp", async () => {
-  const { buildUploadNoteMetadata } = await load();
-
-  const above = buildUploadNoteMetadata(
-    { enabled: true, localModelsReady: true, numSpeakers: MAX_SPEAKER_COUNT + 5 },
-    null
-  );
-  assert.equal(above.noteUpdates.expected_speaker_count, MAX_SPEAKER_COUNT);
-
-  const unusable = buildUploadNoteMetadata(
-    { enabled: true, localModelsReady: true, numSpeakers: 0 },
-    null
-  );
-  assert.equal(unusable.noteUpdates.expected_speaker_count, null);
 });
 
 test("unusable durations degrade to null", async () => {
@@ -183,7 +166,6 @@ test("segments and diarization metadata share one noteUpdates write", async () =
 
   assert.deepEqual(noteUpdates, {
     diarization_enabled: 1,
-    expected_speaker_count: 2,
     transcript: JSON.stringify([
       { text: "Hi.", timestamp: anchorMs + 1000, speakerName: "Speaker 1" },
     ]),
@@ -199,22 +181,4 @@ test("upload titles fall back to the transcript, then the file name", async () =
     "one two three four five six..."
   );
   assert.equal(uploadTitleFallback("   ", "board-meeting.m4a"), "board-meeting");
-});
-
-// uploadNotes.ts carries a renderer twin of the main-process
-// normalizeStoredSpeakerCount (CJS, unloadable from renderer source). Hold the
-// two implementations to identical outputs so they cannot drift apart.
-test("speaker-count normalization matches the main-process implementation", async () => {
-  const { buildUploadNoteMetadata } = await load();
-  const { normalizeStoredSpeakerCount } = require("../../src/helpers/speakerCount");
-
-  const inputs = [1, 2, 3, MAX_SPEAKER_COUNT, MAX_SPEAKER_COUNT + 1, MAX_SPEAKER_COUNT + 5];
-  for (const value of [...inputs, 0, -1, 1.5, NaN, Infinity, -Infinity, null, undefined, "", {}]) {
-    assert.equal(
-      buildUploadNoteMetadata({ enabled: true, numSpeakers: value }).noteUpdates
-        .expected_speaker_count,
-      normalizeStoredSpeakerCount(value),
-      `diverged from normalizeStoredSpeakerCount for ${JSON.stringify(value)}`
-    );
-  }
 });

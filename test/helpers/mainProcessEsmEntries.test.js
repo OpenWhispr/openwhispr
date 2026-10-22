@@ -8,7 +8,10 @@ const { spawnSync } = require("node:child_process");
 // rejects JSON imports without `with { type: "json" }`. The suite runs under
 // tsx, which resolves them anyway, so importing these from a normal test proves
 // nothing — each entry needs a child process with no loader hooks (#1908).
-const MAIN_PROCESS_ESM_ENTRIES = ["src/helpers/transcriptionRoute.ts"];
+const MAIN_PROCESS_ESM_ENTRIES = [
+  "src/helpers/transcriptionRoute.ts",
+  "src/helpers/markdownToPlainText.ts",
+];
 
 const repoRoot = path.resolve(__dirname, "../..");
 const bareEnv = { ...process.env };
