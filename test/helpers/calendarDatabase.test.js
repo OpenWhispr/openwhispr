@@ -761,3 +761,37 @@ test("the assistant's upcoming events add all-day ones on the local days its win
   ]);
   db.db.close();
 });
+
+test("today's window, rounded up past midnight as the calendar tool does, keeps tomorrow's all-day events out", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  db.upsertCalendarEvents([
+    restEvent("google", "google-calendar", "today", {
+      start_time: localDate(day(0)),
+      end_time: localDate(day(1)),
+      is_all_day: true,
+    }),
+    restEvent("google", "google-calendar", "tomorrow", {
+      start_time: localDate(day(1)),
+      end_time: localDate(day(2)),
+      is_all_day: true,
+    }),
+  ]);
+  // calendarTool's "today": the minutes to 23:59:59.999, rounded up.
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const today = Math.max(1, Math.ceil((endOfToday.getTime() - now.getTime()) / 60000));
+  const ids = (events) => events.map((event) => event.id).sort();
+
+  assert.deepEqual(ids(db.getUpcomingEvents(today, { includeAllDay: true })), ["today"]);
+  assert.deepEqual(ids(db.getUpcomingEvents(today + 1440, { includeAllDay: true })), [
+    "today",
+    "tomorrow",
+  ]);
+  db.db.close();
+});
