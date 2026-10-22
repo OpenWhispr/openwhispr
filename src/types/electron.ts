@@ -1464,18 +1464,12 @@ declare global {
             clipboardCopied: true;
           }
       >;
-      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
+      captureSelectedText?: () => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
-          }
-        | {
-            status: "editable";
-            sessionId: string;
-            /** True when the captured app keeps markdown (spec Appendix A); false means plain text. */
-            acceptsMarkdown: boolean;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1515,17 +1509,14 @@ declare global {
       onToggleTranslation?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
-      onPrepareDictation?: (
-        callback: (options?: { inputKind?: "dictation" | "assistant" | "translation" }) => void
-      ) => () => void;
+      onPrepareDictation?: (callback: () => void) => () => void;
       onCancelDictationPreparation?: (callback: () => void) => () => void;
       onDictationForceStopped?: (
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
-        state: "idle" | "preparing" | "recording" | "processing",
-        inputKind?: "dictation" | "assistant" | "translation"
+        state: "idle" | "preparing" | "recording" | "processing"
       ) => void;
 
       // STT config

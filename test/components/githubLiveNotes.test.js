@@ -97,8 +97,6 @@ async function mountCard(t, { connectorId, preview, language = "en" }) {
       messageId: "m1",
       toolCallId: "call-1",
       signal: new AbortController().signal,
-      onApprovalRequested() {},
-      onHoldDelivery() {},
       claimTurnSlot: () => true,
       claimAction: () => true,
       releaseAction() {},

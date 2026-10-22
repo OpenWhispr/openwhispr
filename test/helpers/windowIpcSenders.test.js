@@ -120,8 +120,8 @@ function makeWindowManagerStub() {
   const mainContents = makeContents();
   const stub = {
     mainWindow: { isDestroyed: () => false, webContents: mainContents },
-    setDictationLifecycleState: (state, kind) => {
-      calls.lifecycle.push([state, kind]);
+    setDictationLifecycleState: (state) => {
+      calls.lifecycle.push(state);
     },
     openAgentWindow: () => calls.agent.push(["open"]),
     agentWindow: {
@@ -179,10 +179,10 @@ test("lifecycle reports are accepted only from the dictation renderer", () => {
   installWindowManager(stub);
   const lifecycleHandler = onHandlers.get("dictation-lifecycle-state-changed");
 
-  lifecycleHandler({ sender: {} }, "recording", "dictation");
+  lifecycleHandler({ sender: {} }, "recording");
   assert.deepEqual(calls.lifecycle, []);
-  lifecycleHandler({ sender: mainContents }, "recording", "dictation");
-  assert.deepEqual(calls.lifecycle, [["recording", "dictation"]]);
+  lifecycleHandler({ sender: mainContents }, "recording");
+  assert.deepEqual(calls.lifecycle, ["recording"]);
 });
 
 test("only the dictation window opens the agent window or hands it a wake-word command", async () => {

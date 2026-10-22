@@ -102,12 +102,12 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
-test("dictation lifecycle reports keep their input kind", () => {
+test("dictation lifecycle reports reach main", () => {
   const { api, sends } = loadPreloadApi();
 
-  api.dictationLifecycleStateChanged("recording", "assistant");
+  api.dictationLifecycleStateChanged("recording");
 
-  assert.deepEqual(sends, [["dictation-lifecycle-state-changed", "recording", "assistant"]]);
+  assert.deepEqual(sends, [["dictation-lifecycle-state-changed", "recording"]]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {
@@ -208,14 +208,14 @@ test("agent streaming listeners strip Electron events and preserve correlation",
   assert.equal(listeners.has("cloud-agent-stream-end"), false);
 });
 
-test("prepare-dictation forwards the input kind without the Electron event", () => {
+test("prepare-dictation calls back without the Electron event", () => {
   const { api, listeners } = loadPreloadApi();
   const received = [];
-  const dispose = api.onPrepareDictation((options) => received.push(options));
+  const dispose = api.onPrepareDictation((...args) => received.push(args));
 
-  listeners.get("prepare-dictation")?.({ senderId: 1 }, { inputKind: "assistant" });
+  listeners.get("prepare-dictation")?.({ senderId: 1 });
 
   dispose();
-  assert.deepEqual(received, [{ inputKind: "assistant" }]);
+  assert.deepEqual(received, [[]]);
   assert.equal(listeners.has("prepare-dictation"), false);
 });

@@ -34,9 +34,6 @@ export async function runApprovalAction(
   options: { unknownGuidance?: string } = {}
 ): Promise<ToolResult> {
   if (!context) return unavailableResult("no_chat_context");
-  // Whatever happens next (a card, a question, a refusal), the answer belongs
-  // in the panel: a voice turn must never paste it at the caret.
-  context.onHoldDelivery();
   // A step can make the same call twice, and a resumed tool can repeat a send
   // this request already made; either is refused before any card appears.
   const actionKey = connectorActionKey(connectorId, action, args);

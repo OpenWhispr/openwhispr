@@ -23,7 +23,6 @@ import {
 } from "../utils/transcriptionPreview";
 import { canStartDictation } from "../utils/dictationReadiness";
 import { waitForVisualFrames } from "../utils/visualFrame";
-import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
@@ -123,17 +122,10 @@ export const useAudioRecording = (toast, options = {}) => {
   // instance is safe to share between the mount effect (recording/processing
   // transitions) and performStartRecording (the toggle path's own "preparing"
   // report).
-  const reportLifecycle = useCallback((state, inputKindOverride) => {
-    const inputKind =
-      inputKindOverride ??
-      resolveLifecycleInputKind({
-        voiceAgentRequested: audioManagerRef.current?.voiceAgentRequested,
-        translationRequested: audioManagerRef.current?.translationRequested,
-      });
-    const signature = `${state}:${inputKind}`;
-    if (reportedLifecycleRef.current === signature) return;
-    reportedLifecycleRef.current = signature;
-    window.electronAPI?.dictationLifecycleStateChanged?.(state, inputKind);
+  const reportLifecycle = useCallback((state) => {
+    if (reportedLifecycleRef.current === state) return;
+    reportedLifecycleRef.current = state;
+    window.electronAPI?.dictationLifecycleStateChanged?.(state);
   }, []);
 
   const performStartRecording = useCallback(
@@ -297,7 +289,7 @@ export const useAudioRecording = (toast, options = {}) => {
           // fires onError, never the onStateChange that normally reports
           // "idle". The signature dedup makes this a no-op when
           // onStateChange already reported it first.
-          if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
+          if (reportedLifecycleRef.current === "preparing") reportLifecycle("idle");
         }
       }
     },
@@ -1042,16 +1034,13 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
-    const disposePrepare = window.electronAPI.onPrepareDictation?.(async (options) => {
+    const disposePrepare = window.electronAPI.onPrepareDictation?.(async () => {
       if (!audioManagerRef.current || startLockRef.current) return;
       if (!canStartDictation(audioManagerRef.current.getState())) return;
       const generation = ++preparationGenerationRef.current;
       setIsAssistantVoice(false);
       setIsPreparing(true);
-      // The prepare event precedes the flag-setting start, so the kind must come
-      // from the payload — the audioManager flags still describe the PREVIOUS
-      // recording at this point.
-      reportLifecycle("preparing", options?.inputKind);
+      reportLifecycle("preparing");
       await waitForVisualFrames();
       if (generation !== preparationGenerationRef.current || startLockRef.current) return;
       void audioManagerRef.current.prepareMicCapture?.();
@@ -1061,7 +1050,7 @@ export const useAudioRecording = (toast, options = {}) => {
       preparationGenerationRef.current += 1;
       setIsPreparing(false);
       audioManagerRef.current?.cancelPreparedMicCapture?.();
-      if (reportedLifecycleRef.current?.startsWith("preparing:")) reportLifecycle("idle");
+      if (reportedLifecycleRef.current === "preparing") reportLifecycle("idle");
     });
 
     const disposeStop = window.electronAPI.onStopDictation?.(() => {

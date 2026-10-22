@@ -96,8 +96,6 @@ async function mountApprovalTurn(t) {
         messageId: "m1",
         toolCallId: "call-1",
         signal: controller.signal,
-        onApprovalRequested() {},
-        onHoldDelivery() {},
         claimTurnSlot: () => true,
         claimAction: () => true,
         releaseAction() {},

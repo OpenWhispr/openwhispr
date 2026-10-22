@@ -2958,7 +2958,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw error;
     }
 
-    if (captureDisposition === "standalone" || captureDisposition === "caret") {
+    if (captureDisposition === "standalone") {
       return this._bankPanelAgentCommand(text, agentName, config);
     }
 

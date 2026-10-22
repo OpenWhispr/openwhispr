@@ -151,8 +151,6 @@ export function requestInteraction(
         },
       }
     );
-    context.onHoldDelivery();
-    context.onApprovalRequested();
     context.onInteraction({ payload, state: "pending" });
   });
 }

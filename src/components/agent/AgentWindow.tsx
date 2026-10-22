@@ -183,7 +183,7 @@ export default function AgentWindow() {
     const press = ++pressRef.current;
     const isCurrent = () => press === pressRef.current;
     const selection = Promise.resolve(
-      window.electronAPI?.captureSelectedText?.({ probeEditable: false })
+      window.electronAPI?.captureSelectedText?.()
     )
       .then((capture) => {
         if (isCurrent() && capture?.status === "selected") {

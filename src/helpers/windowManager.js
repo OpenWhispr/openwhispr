@@ -27,9 +27,7 @@ const { i18nMain } = require("./i18nMain");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const {
   DICTATION_LIFECYCLE,
-  DICTATION_INPUT_KIND,
   normalizeDictationLifecycle,
-  normalizeDictationInputKind,
   shouldIgnoreDictationHotkey,
   isDictationRecording,
 } = require("./dictationLifecycle");
@@ -111,7 +109,6 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
-    this._dictationInputKind = DICTATION_INPUT_KIND.DICTATION;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
     this._pendingSettingsSection = null;
@@ -1007,15 +1004,11 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state, inputKind = DICTATION_INPUT_KIND.DICTATION) {
+  setDictationLifecycleState(state) {
     const nextState = normalizeDictationLifecycle(state);
-    const nextInputKind = normalizeDictationInputKind(inputKind);
-    if (nextState === this._dictationLifecycleState && nextInputKind === this._dictationInputKind) {
-      return;
-    }
+    if (nextState === this._dictationLifecycleState) return;
 
     this._dictationLifecycleState = nextState;
-    this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
     this.onDictationStateChanged?.();
@@ -1107,7 +1100,7 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("prepare-dictation", { inputKind });
+      this.mainWindow.webContents.send("prepare-dictation");
     }
   }
 

@@ -161,19 +161,10 @@ export function resolveWakeWordLanguage(
   return typeof uiLanguage === "string" ? uiLanguage : undefined;
 }
 
-// The renderer-side source of truth for the input kind the dictation lifecycle
-// reports. Assistant wins over translation: a voice-agent request is
-// explicit user intent even if a stale translation flag survived.
-export function resolveLifecycleInputKind({ voiceAgentRequested, translationRequested }) {
-  if (voiceAgentRequested) return "assistant";
-  if (translationRequested) return "translation";
-  return "dictation";
-}
-
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice assistant
 // hotkey always takes the agent path — no wake word needed, and it wins over
-// translation, as in resolveLifecycleInputKind. Standalone commands stream into
+// a stale translation flag. Standalone commands stream into
 // the agent window (which resolves the Voice Assistant scope itself and
 // reports configuration problems in-conversation), so the dictation
 // agent's reachability only gates selection edits — that check happens at the

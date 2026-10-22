@@ -92,102 +92,11 @@ test("getSelectedText skips the native binary for a cached PID", darwinOnly, asy
   assert.deepEqual(await m.getSelectedText(42), { state: "none" });
 });
 
-test("getSelectedText identifies an empty writable field", darwinOnly, async () => {
+test("getSelectedText reads an empty writable field as no selection", darwinOnly, async () => {
   const m = new TextEditMonitor();
   m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE_NONE:"'] });
 
-  assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
-});
-
-test("isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN", darwinOnly, async () => {
-  const withOutput = (line) => {
-    const m = new TextEditMonitor();
-    m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", `echo "${line}"`] });
-    return m;
-  };
-
-  assert.equal(
-    await withOutput("EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "editable"
-  );
-  assert.equal(
-    await withOutput("NOT_EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "not_editable"
-  );
-  assert.equal(
-    await withOutput("UNKNOWN").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "unknown"
-  );
-});
-
-test("isFocusedEditable answers from a stale binary's first monitor line", darwinOnly, async () => {
-  const m = new TextEditMonitor();
-  // A binary that predates the probe flag falls into monitor mode: one
-  // initial-value line, then it keeps running. The probe must settle on that
-  // first line instead of hanging until the timeout.
-  m.resolveBinary = () => ({
-    command: "/bin/sh",
-    args: ["-c", 'echo "INITIAL_VALUE:stale"; sleep 2'],
-  });
-
-  const startedAt = Date.now();
-  assert.equal(await m.isFocusedEditable({ kind: "mac-pid", pid: 42 }), "not_editable");
-  assert.ok(Date.now() - startedAt < 900, "must resolve on the first output line");
-});
-
-async function withLinuxPlatform(run) {
-  const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
-  try {
-    return await run();
-  } finally {
-    Object.defineProperty(process, "platform", original);
-  }
-}
-
-// The -c script sees the appended --probe-editable as $0 and the pid as $1.
-const linuxProbe = (script) => {
-  const m = new TextEditMonitor();
-  m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", script] });
-  return m;
-};
-const posixOnly = { skip: process.platform === "win32" };
-
-const LINUX_TARGET = { kind: "x11-window", id: "7", pid: "4242" };
-
-test("isFocusedEditable passes the target pid to the Linux probe", posixOnly, async () => {
-  const m = linuxProbe(
-    '[ "$0" = "--probe-editable" ] && [ "$1" = "4242" ] && echo EDITABLE || echo NOT_EDITABLE'
-  );
-  assert.equal(await withLinuxPlatform(() => m.isFocusedEditable(LINUX_TARGET)), "editable");
-});
-
-// The probe answers only for the target process's active window; without a
-// pid it would have nothing to tie the focused field to.
-test("isFocusedEditable never probes a Linux target without a pid", posixOnly, async () => {
-  const m = linuxProbe("echo EDITABLE");
-  const withoutPid = { kind: "x11-window", id: "7" };
-  assert.equal(await withLinuxPlatform(() => m.isFocusedEditable(withoutPid)), "not_editable");
-  assert.equal(await withLinuxPlatform(() => m.isFocusedEditable(null)), "not_editable");
-});
-
-// linux-text-monitor-v1.0.0 predates --probe-editable and shipped in every
-// Linux build until the probe compiled. It ignores its arguments and runs
-// monitor mode, so a field whose text is literally "EDITABLE" must still not
-// read as a writable caret.
-test("isFocusedEditable fails closed on a pre-probe Linux binary", posixOnly, async () => {
-  const m = linuxProbe('echo "INITIAL_VALUE:EDITABLE"; sleep 2');
-  const startedAt = Date.now();
-  assert.equal(await withLinuxPlatform(() => m.isFocusedEditable(LINUX_TARGET)), "not_editable");
-  assert.ok(Date.now() - startedAt < 900, "must resolve on the first output line");
-
-  for (const line of ["NO_ELEMENT", "NO_VALUE"]) {
-    const exiting = linuxProbe(`echo ${line}; exit 1`);
-    assert.equal(
-      await withLinuxPlatform(() => exiting.isFocusedEditable(LINUX_TARGET)),
-      "not_editable"
-    );
-  }
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
 });
 
 // The bare window as the focused element is the dormant-Chromium signature —

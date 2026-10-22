@@ -116,7 +116,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
-  captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
+  captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
@@ -129,10 +129,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
-  onPrepareDictation: registerListener(
-    "prepare-dictation",
-    (callback) => (_event, options) => callback(options)
-  ),
+  onPrepareDictation: registerListener("prepare-dictation", (callback) => () => callback()),
   onCancelDictationPreparation: registerListener(
     "cancel-dictation-preparation",
     (callback) => () => callback()
@@ -142,8 +139,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, inputKind) =>
-    ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
+  dictationLifecycleStateChanged: (state) =>
+    ipcRenderer.send("dictation-lifecycle-state-changed", state),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>

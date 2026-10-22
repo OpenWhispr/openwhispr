@@ -26,7 +26,7 @@ async function loadStore(electronAPI = {}) {
 }
 
 function context(toolCallId, { messageId = "m1", controller = new AbortController() } = {}) {
-  const calls = { requested: 0, held: 0, interactions: [] };
+  const calls = { interactions: [] };
   return {
     calls,
     controller,
@@ -34,8 +34,6 @@ function context(toolCallId, { messageId = "m1", controller = new AbortControlle
       messageId,
       toolCallId,
       signal: controller.signal,
-      onApprovalRequested: () => (calls.requested += 1),
-      onHoldDelivery: () => (calls.held += 1),
       onInteraction: (record) => calls.interactions.push(record),
       attachImage() {},
       claimTurnSlot: () => true,
@@ -82,11 +80,7 @@ test("a question waits, keeps its draft, and resolves only once every answer is 
   const entry = store.useAgentInteractionStore.getState().entries[key];
   assert.equal(entry.state, "pending");
   assert.deepEqual(entry.draft, {}, "a recommended option is never preselected");
-  assert.deepEqual(ctx.calls, {
-    requested: 1,
-    held: 1,
-    interactions: [{ payload: QUESTIONS, state: "pending" }],
-  });
+  assert.deepEqual(ctx.calls, { interactions: [{ payload: QUESTIONS, state: "pending" }] });
 
   store.updateInteractionDraft(key, { goal: "speed" });
   assert.equal(store.answerQuestions(key), false, "unanswered questions keep it open");
@@ -132,7 +126,7 @@ test("the turn ending withdraws an open interaction", async () => {
     status: "not_answered",
     reason: "conversation_ended",
   });
-  assert.equal(late.calls.requested, 0, "an aborted turn shows nothing new");
+  assert.deepEqual(late.calls.interactions, [], "an aborted turn shows nothing new");
 });
 
 test("an unanswered interaction expires after the approval TTL", async (t) => {

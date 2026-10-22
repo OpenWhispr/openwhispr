@@ -56,32 +56,6 @@ test("a standalone command banks a panel directive and returns the transcript", 
   assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
 });
 
-// Answers are no longer pasted at the caret: with auto-paste on or off, a caret
-// capture sends the plain command to the agent window.
-test("a verified caret sends the plain command to the assistant", async (t) => {
-  const { createManager } = await loadAudioManagerHarness(t, {
-    cachePrefix: "openwhispr-assistant-caret-panel-",
-    settingsKey: "__assistantCaretPanelSettings",
-    settings: { autoPasteEnabled: true },
-    mockModules: {
-      "/services/ReasoningService": 'export default { processText: async () => "" };',
-    },
-  });
-  const { manager } = managerWithCapture(createManager, {
-    status: "editable",
-    sessionId: "caret-session",
-  });
-
-  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
-    selectionEditReachable: true,
-  });
-
-  assert.deepEqual(manager.pendingAssistantConversation, {
-    transcript: "draft a reply",
-    screenContext: null,
-  });
-});
-
 test("a wake-word command is banked without the address", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-wakeword-",

@@ -376,23 +376,25 @@ test("a real drag marks the pill as manually positioned", async () => {
   assert.equal(manager._mainWindowPlacementCoordinator._hasManualPosition, true);
 });
 
-test("prepare-dictation carries the toggle's input kind to the renderer", () => {
+test("prepare-dictation goes out only for a press the onboarding demo allows", () => {
   const manager = new WindowManager();
-  manager.setOnboardingActive(false);
   manager.hotkeyManager = { isInListeningMode: () => false };
   const sent = [];
   manager.mainWindow = {
     isDestroyed: () => false,
+    isMinimized: () => false,
+    isVisible: () => true,
+    showInactive: () => undefined,
+    hide: () => undefined,
     webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
   };
+  manager.beginOnboardingDemo("assistant");
+  sent.length = 0;
 
-  manager.sendPrepareDictation({ inputKind: "assistant" });
   manager.sendPrepareDictation();
+  manager.sendPrepareDictation({ inputKind: "assistant" });
 
-  assert.deepEqual(sent, [
-    { channel: "prepare-dictation", payload: { inputKind: "assistant" } },
-    { channel: "prepare-dictation", payload: { inputKind: "dictation" } },
-  ]);
+  assert.deepEqual(sent, [{ channel: "prepare-dictation", payload: undefined }]);
 });
 
 // The normal app: onboarding is over.

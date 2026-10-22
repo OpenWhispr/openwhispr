@@ -30,21 +30,15 @@ import {
 } from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
-  appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
 } from "../../config/prompts";
 import { calendarProviders, resolveUnavailableCapabilities } from "../../config/agentCapabilities";
-import type { ToneAppCategory } from "../../config/toneStyle";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
-import {
-  executeTool,
-  type HoldDeliveryOptions,
-  type ToolRegistry,
-} from "../../services/tools/ToolRegistry";
+import { executeTool, type ToolRegistry } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import type { InteractionToolOptions } from "../../services/tools/interactionTools";
@@ -250,22 +244,14 @@ export interface SendToAIOptions {
   requestText?: string;
   /** This turn isn't offered update_note, so it can't change a note (a note's chat action). */
   keepNotesUnchanged?: boolean;
-  /** Keeps a caret-destined voice response in the compact pill while it streams. */
+  /** Keeps the answer from announcing itself (the onboarding demo streams it elsewhere). */
   suppressResponseContent?: boolean;
-  /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
-  plainTextResponse?: boolean;
-  /** Tone & Style: the kind of app a caret-destined answer will be typed into. */
-  destinationAppCategory?: ToneAppCategory;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
     content: string;
     toolCalls?: ToolCallInfo[];
   }) => void | Promise<void>;
-  /** Fires when a tool shows an approval card, so a hidden panel can open. */
-  onApprovalRequested?: () => void;
-  /** Fires when this turn's answer must not be pasted at the caret (see ToolExecutionContext). */
-  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
   /**
    * Regenerates this reply in place (same message, same saved row) instead of
    * adding one. The sends it made stay on it: the conversation never forgets them.
@@ -420,8 +406,6 @@ export function useChatStreaming({
       } = {};
       const stepImages: ChatImageAttachment[] = [];
       const toolScope = createToolExecutionScope({
-        onApprovalRequested: options?.onApprovalRequested,
-        onHoldDelivery: options?.onHoldDelivery,
         onInteraction: ({ toolCallId, record }) =>
           turnHooks.annotate?.(toolCallId, { interaction: record }),
         onImageAttached: (image) => stepImages.push(image),
@@ -655,9 +639,7 @@ export function useChatStreaming({
             openNote: openNoteContext || undefined,
             openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
-            writingStyle: settings.toneStyleEnabled
-              ? { tones: settings.toneStyles, destination: options?.destinationAppCategory }
-              : undefined,
+            writingStyle: settings.toneStyleEnabled ? { tones: settings.toneStyles } : undefined,
           }),
           getDictionaryHintWords(settings),
           settings.uiLanguage
@@ -698,9 +680,6 @@ export function useChatStreaming({
           // dictation path pairs the suffix with an attached image. Restore it
           // for cloud context once openwhispr-api#157 vision-routes that field.
           systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
-        }
-        if (options?.plainTextResponse) {
-          systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
         }
         if (attachment) {
           transformLastUserMessage(history, (message) => ({

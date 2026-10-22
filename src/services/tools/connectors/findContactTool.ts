@@ -23,10 +23,6 @@ export const findContactTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // A lookup is almost always followed by a question for the user ("what
-    // should the email say?", "which Josh?"), and that must never be pasted
-    // into their document, so the answer stays in the panel whatever it finds.
-    context?.onHoldDelivery();
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) return needsClarificationResult("Ask the user whose email address to look up.");
 

@@ -148,9 +148,6 @@ function createGmailSendTool(): ToolDefinition {
       args: Record<string, unknown>,
       context?: ToolExecutionContext
     ): Promise<ToolResult> {
-      // Every outcome keeps the turn off the caret: a card, a question back
-      // and a receipt all belong in the panel, never in the user's document.
-      context?.onHoldDelivery();
       const recipients = recipientsOrQuestion(args);
       if (isToolResult(recipients)) return recipients;
       if (context?.signal.aborted) return notSentResult("cancelled");
@@ -207,9 +204,6 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       args: Record<string, unknown>,
       context?: ToolExecutionContext
     ): Promise<ToolResult> {
-      // Every outcome keeps the turn off the caret: an opened compose window
-      // takes focus, and a question back must not land in the user's document.
-      context?.onHoldDelivery();
       const recipients = recipientsOrQuestion(args);
       if (isToolResult(recipients)) return recipients;
       const { to, cc } = recipients;
@@ -286,14 +280,10 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         releaseSlots();
         return unavailableResult("connectors_unavailable");
       }
-      // Sticky for the turn once text may be on the clipboard, so the answer
-      // isn't copied over it.
-      const preserveClipboard = (): void => context?.onHoldDelivery({ preserveClipboard: true });
       // An unknown run may have opened a window and used the clipboard, so
       // it keeps its slots.
       if (result.state === "unknown") {
         context?.recordCompletedAction(actionKey);
-        if (clipboardReserved) preserveClipboard();
         return unknownResult(
           to.join(", "),
           `The draft to ${destination} may or may not have opened. Ask the user to check for a draft window.`,
@@ -309,7 +299,6 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
 
       const bodyCopied = Boolean(result.bodyCopied);
       const subjectCopied = Boolean(result.subjectCopied);
-      if (bodyCopied || subjectCopied) preserveClipboard();
 
       return {
         success: true,

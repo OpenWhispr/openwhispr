@@ -24,13 +24,10 @@ test("toAISDKFormat gives each call its own tool-call id and the shared scope", 
   const registry = new ToolRegistry();
   registry.register(recordingTool(seen));
   const controller = new AbortController();
-  const onApprovalRequested = () => {};
   const tools = registry.toAISDKFormat((toolCallId) => ({
     messageId: "m1",
     toolCallId,
     signal: controller.signal,
-    onApprovalRequested,
-    onHoldDelivery() {},
   }));
 
   await tools.record_context.execute({ a: 1 }, { toolCallId: "call-1", messages: [] });
@@ -41,7 +38,7 @@ test("toAISDKFormat gives each call its own tool-call id and the shared scope", 
     ["call-1", "call-2"]
   );
   assert.equal(seen[0].context.signal, controller.signal);
-  assert.equal(seen[1].context.onApprovalRequested, onApprovalRequested);
+  assert.equal(seen[1].context.messageId, "m1");
 });
 
 test("toAISDKFormat reports each call's display text next to the model's output", async () => {
@@ -72,26 +69,13 @@ test("toAISDKFormat without a context factory passes no context", async () => {
 
 test("a tool execution scope shares one signal and aborts it once", async () => {
   const { createToolExecutionScope } = await loadScope();
-  let approvals = 0;
-  const holds = [];
-  const scope = createToolExecutionScope({
-    onApprovalRequested: () => {
-      approvals += 1;
-    },
-    onHoldDelivery: (options) => {
-      holds.push(options);
-    },
-  });
+  const scope = createToolExecutionScope();
   const first = scope.createContext({ messageId: "m1", toolCallId: "call-a" });
   const second = scope.createContext({ messageId: "m1", toolCallId: "call-b" });
 
   assert.equal(first.toolCallId, "call-a");
   assert.equal(first.signal, second.signal);
   assert.equal(first.signal.aborted, false);
-  first.onApprovalRequested();
-  second.onHoldDelivery({ preserveClipboard: true });
-  assert.equal(approvals, 1);
-  assert.deepEqual(holds, [{ preserveClipboard: true }]);
 
   scope.abort();
   scope.abort();
@@ -102,39 +86,24 @@ test("a scope's notices do nothing once its turn has ended", async () => {
   const { createToolExecutionScope } = await loadScope();
   let notices = 0;
   const scope = createToolExecutionScope({
-    onApprovalRequested: () => {
+    onInteraction: () => {
       notices += 1;
     },
-    onHoldDelivery: () => {
+    onImageAttached: () => {
       notices += 1;
     },
   });
   const context = scope.createContext({ messageId: "m1", toolCallId: "call-d" });
 
-  // A slow tool result arriving after Esc must not reopen a dismissed panel.
+  // A slow tool result arriving after Esc must not reach the ended turn.
   scope.abort();
-  context.onApprovalRequested();
-  context.onHoldDelivery();
+  context.onInteraction({
+    payload: { kind: "access", resource: "screen", reason: "" },
+    state: "pending",
+  });
+  context.attachImage({ image: "AAAA", mediaType: "image/jpeg" });
 
   assert.equal(notices, 0);
-});
-
-test("a call's holds reach the caller once, and again only to keep the clipboard", async () => {
-  const { createToolExecutionScope } = await loadScope();
-  const holds = [];
-  const scope = createToolExecutionScope({ onHoldDelivery: (options) => holds.push(options) });
-  const first = scope.createContext({ messageId: "m1", toolCallId: "call-h" });
-  const second = scope.createContext({ messageId: "m1", toolCallId: "call-i" });
-
-  // A tool holds first, then runApprovalAction holds the same call again.
-  first.onHoldDelivery();
-  first.onHoldDelivery();
-  first.onHoldDelivery({ preserveClipboard: true });
-  first.onHoldDelivery({ preserveClipboard: true });
-  first.onHoldDelivery();
-  second.onHoldDelivery();
-
-  assert.deepEqual(holds, [undefined, { preserveClipboard: true }, undefined]);
 });
 
 test("turn slots are shared by a scope's calls and start over with each turn", async () => {
@@ -299,14 +268,19 @@ test("an aborted AI SDK turn ends even when a tool never settles", async () => {
   assert.equal(outcome, "ended");
 });
 
-test("a scope without handlers ignores approval and delivery notices", async () => {
+test("a scope without handlers ignores its notices", async () => {
   const { createToolExecutionScope } = await loadScope();
   const context = createToolExecutionScope().createContext({
     messageId: "m1",
     toolCallId: "call-c",
   });
-  assert.doesNotThrow(() => context.onApprovalRequested());
-  assert.doesNotThrow(() => context.onHoldDelivery());
+  assert.doesNotThrow(() =>
+    context.onInteraction({
+      payload: { kind: "access", resource: "screen", reason: "" },
+      state: "pending",
+    })
+  );
+  assert.doesNotThrow(() => context.attachImage({ image: "AAAA", mediaType: "image/jpeg" }));
 });
 
 test("the cloud tool loop passes each call's id to executeToolCall", async (t) => {
@@ -360,8 +334,6 @@ test("toAISDKFormat hands the SDK's own abort signal to the context factory", as
       messageId: "m1",
       toolCallId,
       signal: abortSignal ?? new AbortController().signal,
-      onApprovalRequested() {},
-      onHoldDelivery() {},
     };
   });
   const sdk = new AbortController();

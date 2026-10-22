@@ -78,8 +78,7 @@ async function mountRecording(t) {
           listeners.agentRecording = callback;
           return () => {};
         },
-        dictationLifecycleStateChanged: (state, inputKind) =>
-          reported.push(`${state}:${inputKind}`),
+        dictationLifecycleStateChanged: (state) => reported.push(state),
       },
     },
   });
@@ -126,7 +125,7 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
   });
 
   assert.equal(started, false);
-  assert.deepEqual(reported, ["preparing:dictation", "idle:dictation"]);
+  assert.deepEqual(reported, ["preparing", "idle"]);
 });
 
 // A pill click or the pill menu starts dictation without main's hotkey guard;
@@ -146,5 +145,5 @@ test("no dictation starts while the agent window records", async (t) => {
   await React.act(async () => {
     await api().startRecording();
   });
-  assert.deepEqual(reported, ["preparing:dictation", "idle:dictation"]);
+  assert.deepEqual(reported, ["preparing", "idle"]);
 });

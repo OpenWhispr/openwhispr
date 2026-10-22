@@ -1,4 +1,4 @@
-import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type { ToolExecutionContext } from "../../services/tools/ToolRegistry";
 import type { InteractionRecord } from "../../types/agentInteractions";
 import type { ChatImageAttachment } from "./types";
 
@@ -16,8 +16,6 @@ export interface ToolExecutionScope {
 }
 
 interface ToolExecutionHandlers {
-  onApprovalRequested?: () => void;
-  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
   /** A call now waits on the user's answer, or no longer does. */
   onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
   onImageAttached?: (image: ChatImageAttachment) => void;
@@ -57,21 +55,6 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
     const used = turnSlots.get(key) ?? 0;
     if (used > 0) turnSlots.set(key, used - 1);
   };
-  // A tool and runApprovalAction may both hold the same call; the caller
-  // hears it once, and again only when a later hold newly asks to keep the
-  // clipboard.
-  const holdOncePerCall = (): ((options?: HoldDeliveryOptions) => void) => {
-    const hold = notify(handlers.onHoldDelivery);
-    let held = false;
-    let clipboardPreserved = false;
-    return (options) => {
-      const preservesClipboard = options?.preserveClipboard === true;
-      if (held && (clipboardPreserved || !preservesClipboard)) return;
-      held = true;
-      clipboardPreserved ||= preservesClipboard;
-      hold(options);
-    };
-  };
   const interaction = notify(handlers.onInteraction);
   return {
     createContext: ({ messageId, toolCallId, signal }) => ({
@@ -80,8 +63,6 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       // Either the turn ending or the SDK abandoning this one call releases
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
-      onApprovalRequested: notify(handlers.onApprovalRequested),
-      onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
       onInteraction: (record) => interaction({ toolCallId, record }),

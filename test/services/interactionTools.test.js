@@ -26,8 +26,6 @@ function context(toolCallId, images = []) {
     messageId: "m1",
     toolCallId,
     signal: new AbortController().signal,
-    onApprovalRequested() {},
-    onHoldDelivery() {},
     onInteraction() {},
     attachImage: (image) => images.push(image),
     claimTurnSlot: () => true,

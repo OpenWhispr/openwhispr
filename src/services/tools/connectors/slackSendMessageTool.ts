@@ -40,9 +40,6 @@ export const slackSendMessageTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // Every outcome keeps the turn off the caret: a card, a question back and
-    // a receipt all belong in the panel, never in the user's document.
-    context?.onHoldDelivery();
     const destination = typeof args.destination === "string" ? args.destination.trim() : "";
     const text = typeof args.text === "string" ? args.text : "";
     if (!destination) {
