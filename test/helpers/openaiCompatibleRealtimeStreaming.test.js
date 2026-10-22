@@ -368,3 +368,57 @@ test("a server that names its items is tracked by those names", async () => {
   );
   assert.match((await stopped).text, /named turn/);
 });
+
+test("stop settles at once when the server clears an empty commit (Lemonade)", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+
+  // Silence closed the turn and its transcript arrived before stop.
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_stopped" }));
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "only turn",
+    })
+  );
+
+  let settled = false;
+  const stopped = streaming.disconnect().then((result) => {
+    settled = true;
+    return result;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.cleared" }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, true, "cleared must end the wait, not the 3 s timeout");
+  assert.match((await stopped).text, /only turn/);
+});
+
+test("a cleared commit still waits for a silence-closed turn in flight", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_started" }));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.speech_stopped" }));
+
+  let settled = false;
+  const stopped = streaming.disconnect().then((result) => {
+    settled = true;
+    return result;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.emit("message", JSON.stringify({ type: "input_audio_buffer.cleared" }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "the turn closed on silence has not been transcribed yet");
+
+  socket.emit(
+    "message",
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "late turn",
+    })
+  );
+  assert.match((await stopped).text, /late turn/);
+});
