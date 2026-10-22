@@ -426,8 +426,13 @@ async function testProviderConnection(
     const next = await probe(endpoint, request, fetchImpl, async (response) => {
       if (!response.ok) return describeResponseFailure(response, provider);
       if (provider === "openrouter") return describeOpenRouterKey(response);
-      // AssemblyAI's probe lists transcripts, not models, so a 200 is the whole signal.
-      if (provider === "assemblyai" || (await responseOffersModel(response, model, provider))) {
+      // AssemblyAI's probe lists transcripts, not models, and MiniMax's model list has
+      // only its text models (never asr-1.0), so for both a 200 is the whole signal.
+      if (
+        provider === "assemblyai" ||
+        provider === "minimax" ||
+        (await responseOffersModel(response, model, provider))
+      ) {
         return null;
       }
       return MODEL_NOT_FOUND;
