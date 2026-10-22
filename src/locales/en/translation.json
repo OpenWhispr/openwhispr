@@ -3863,8 +3863,6 @@
     "clearTitle": "Clear dictionary?",
     "clearDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
     "addWord": "Add word",
-    "addPlaceholder": "Add words separated by commas — OpenWhispr, Supabase, John Snow, ARR",
-    "removeWord": "Remove {{word}}",
     "clearAll": "Clear all",
     "add": "Add",
     "importWords": "Import words",
@@ -3872,8 +3870,6 @@
     "separateWithCommas": "One word per line, or comma-separated",
     "wordsReady_one": "{{count}} word ready",
     "wordsReady_other": "{{count}} words ready",
-    "import": "Import",
-    "yourDictionary": "Your dictionary",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
@@ -3908,7 +3904,152 @@
     "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "agentDefault": "Added by default"
+    "agentDefault": "Added by default",
+    "shared": {
+      "allWords": "All words",
+      "personal": "Personal",
+      "group": "Shared",
+      "allShared": "All shared",
+      "everyoneAt": "Everyone at {{workspace}}",
+      "hidden": "Hidden",
+      "add": {
+        "placeholder": "Add words separated by commas",
+        "to": "to {{list}}",
+        "chooseList": "Choose the list to add to",
+        "hiddenForYou": "Hidden for you in {{list}}"
+      },
+      "alreadyIn": "Already in {{list}}",
+      "importTo": "Import to {{list}}",
+      "actions": {
+        "share": "Share",
+        "edit": "Edit",
+        "delete": "Delete",
+        "hide": "Hide for me",
+        "deleteForEveryone": "Delete for everyone",
+        "unhide": "Unhide",
+        "shareWord": "Share {{word}}",
+        "deleteWord": "Delete {{word}}",
+        "hideWord": "Hide {{word}} for me",
+        "deleteForEveryoneWord": "Delete {{word}} for everyone",
+        "unhideWord": "Unhide {{word}}"
+      },
+      "attribution": {
+        "you": "You",
+        "former": "Former member"
+      },
+      "toolbar": {
+        "search": "Search",
+        "searchPlaceholder": "Search this list",
+        "closeSearch": "Close search",
+        "sort": "Sort",
+        "sync": "Sync now",
+        "syncedAgo": "Synced {{time}} ago",
+        "syncedJustNow": "Synced just now",
+        "notSynced": "Not synced yet"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "Newest first",
+        "oldest": "Oldest first"
+      },
+      "memberCount_one": "{{count}} member",
+      "memberCount_other": "{{count}} members",
+      "emptyList": "No words in {{list}} yet",
+      "allHiddenList": "All words in {{list}} are hidden for you",
+      "noMatches": "No words match \"{{query}}\"",
+      "deletedForEveryone": "Deleted \"{{word}}\" for everyone",
+      "undo": "Undo",
+      "errors": {
+        "generic": "Couldn't update {{list}}. Try again.",
+        "listFull": "{{list}} is full",
+        "planRequired": "Shared dictionaries need Business, so {{list}} wasn't changed",
+        "ssoRequired": "Sign in with company SSO to change {{list}}",
+        "notMember": "You no longer have access to {{list}}",
+        "invalid": "{{list}} only takes short terms: up to 64 characters and 6 words, with no commas, sentence punctuation or symbols like < > { } [ ] ` |",
+        "recentlyDeleted": "That word was just deleted from {{list}}. Add it again instead."
+      },
+      "deleteOneTitle": "Delete \"{{word}}\" for everyone in {{list}}?",
+      "deleteManyTitle_one": "Delete {{count}} word for everyone in {{list}}?",
+      "deleteManyTitle_other": "Delete {{count}} words for everyone in {{list}}?",
+      "deletedManyForEveryone_one": "Deleted {{count}} word for everyone",
+      "deletedManyForEveryone_other": "Deleted {{count}} words for everyone",
+      "deletedPersonalMany_one": "Deleted {{count}} word",
+      "deletedPersonalMany_other": "Deleted {{count}} words",
+      "selection": {
+        "count_one": "{{count}} selected",
+        "count_other": "{{count}} selected",
+        "selectAll": "Select all {{total}}",
+        "shareWith": "Share with…",
+        "clear": "Clear selection",
+        "selectWord": "Select {{word}}",
+        "label": "Selected words"
+      },
+      "share": {
+        "titleOne": "Share \"{{word}}\" with",
+        "titleMany_one": "Share {{count}} word with",
+        "titleMany_other": "Share {{count}} words with",
+        "alreadyShared": "Already shared",
+        "movesOutOne": "Moves it out of Personal",
+        "movesOutMany": "Moves them out of Personal",
+        "partial_one": "Shared {{moved}} of {{total}} words. {{count}} wasn't shared.",
+        "partial_other": "Shared {{moved}} of {{total}} words. {{count}} weren't shared.",
+        "reasons": {
+          "personalChanged": "A word changed on another device. Try again.",
+          "network": "Check your connection and try again.",
+          "aListFull": "A list is full"
+        }
+      },
+      "locked": {
+        "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
+        "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
+        "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
+        "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
+        "paused_other": "{{workspace}}'s {{count}} shared words are paused. Upgrade to Business to use them in dictation again.",
+        "workspaceTitle": "Everyone in your workspace",
+        "workspaceDescription": "Words for the whole company",
+        "spaceTitle": "A list per space",
+        "spaceDescription": "Words only one team needs",
+        "wordCount_one": "{{count}} word",
+        "wordCount_other": "{{count}} words",
+        "lockLabel": "Included with Business",
+        "ssoRequired": "{{workspace}} requires company SSO. Sign out, then sign in with SSO to use its shared words.",
+        "noAccess": "You no longer have access to {{workspace}}'s shared words. Ask an admin if this is a mistake.",
+        "pausedMember_one": "{{workspace}}'s {{count}} shared word is paused. Ask an admin or owner to upgrade to Business to use it in dictation again.",
+        "pausedMember_other": "{{workspace}}'s {{count}} shared words are paused. Ask an admin or owner to upgrade to Business to use them in dictation again."
+      },
+      "empty": {
+        "body": "Add the terms this team uses, or share some from your personal list. Everyone in {{list}} ({{count}}) will get them.",
+        "import": "Import a list",
+        "shareFromPersonal": "Share from Personal"
+      },
+      "arrival": {
+        "title_one": "{{count}} team word added",
+        "title_other": "{{count}} team words added",
+        "description": "{{workspace}}'s shared words now apply to your dictation and meeting notes.",
+        "descriptionNoWorkspace": "Your team's shared words now apply to your dictation and meeting notes.",
+        "viewWords": "View words"
+      },
+      "lockedEntry": "Locked",
+      "notTermLike": "Shared lists only take short terms: up to 64 characters and 6 words, with no commas, sentence punctuation, symbols like < > { } [ ] ` | or hidden characters",
+      "notUsed": "Not used in dictation",
+      "notUsedTooltip": "Dictation leaves out shared words over 64 characters or 6 words, or with commas, sentence punctuation, symbols like < > { } [ ] ` | or hidden characters",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "{{count}} word was left out: {{words}}",
+      "skipped_other": "{{count}} words were left out: {{words}}",
+      "partial": {
+        "add_one": "Added {{applied}} of {{total}} words to {{list}}. {{count}} wasn't added.",
+        "add_other": "Added {{applied}} of {{total}} words to {{list}}. {{count}} weren't added.",
+        "hide_one": "Hid {{applied}} of {{total}} words for you. {{count}} wasn't hidden.",
+        "hide_other": "Hid {{applied}} of {{total}} words for you. {{count}} weren't hidden.",
+        "unhide_one": "Unhid {{applied}} of {{total}} words. {{count}} is still hidden.",
+        "unhide_other": "Unhid {{applied}} of {{total}} words. {{count}} are still hidden.",
+        "delete_one": "Deleted {{applied}} of {{total}} words for everyone. {{count}} wasn't deleted.",
+        "delete_other": "Deleted {{applied}} of {{total}} words for everyone. {{count}} weren't deleted."
+      },
+      "hiddenWord": "Hid \"{{word}}\" for you",
+      "stillIn": "\"{{word}}\" is still in {{list}}"
+    }
   },
   "support": {
     "documentation": "Documentation",

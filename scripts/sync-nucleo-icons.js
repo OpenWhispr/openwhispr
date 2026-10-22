@@ -91,6 +91,7 @@ export {
   Bold,
   Circle,
   CopyRounded,
+  EyeOff,
   FolderRounded,
   Heading,
   Italic,

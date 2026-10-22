@@ -55,19 +55,26 @@ export function IntegrationsPane({
 
 interface UpsellBarProps {
   message: string;
-  onUpgrade: () => void;
+  // Without it the bar has no button, for someone who can't buy the plan themselves.
+  onUpgrade?: () => void;
+  // A bar for something a plan can't unlock (a sign-in, lost access) swaps the sparkle.
+  icon?: ReactNode;
 }
 
 /** Shown under a section's header when the user's plan doesn't include it. */
-export function UpsellBar({ message, onUpgrade }: UpsellBarProps): ReactElement {
+export function UpsellBar({ message, onUpgrade, icon }: UpsellBarProps): ReactElement {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-primary/20 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 ps-3.5 pe-2 py-2">
-      <Sparkles size={15} className="shrink-0 text-primary" />
+    <div
+      className={`flex items-center gap-3 rounded-lg border border-primary/20 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 ps-3.5 py-2 ${onUpgrade ? "pe-2" : "pe-3.5"}`}
+    >
+      {icon ?? <Sparkles size={15} className="shrink-0 text-primary" />}
       <p className="flex-1 min-w-0 text-xs text-foreground/85 leading-relaxed">{message}</p>
-      <Button size="sm" onClick={onUpgrade} className="shrink-0">
-        {t("integrations.api.viewPlans")}
-      </Button>
+      {onUpgrade && (
+        <Button size="sm" onClick={onUpgrade} className="shrink-0">
+          {t("integrations.api.viewPlans")}
+        </Button>
+      )}
     </div>
   );
 }

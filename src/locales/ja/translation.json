@@ -3438,18 +3438,14 @@
   },
   "dictionary": {
     "addWord": "単語を追加",
-    "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
     "add": "追加",
     "importWords": "単語をインポート",
     "importPlaceholder": "カンマまたは改行区切りの単語を貼り付け...",
     "separateWithCommas": "1行に1語、またはカンマ区切り",
     "wordsReady_other": "{{count}} 個の単語が準備完了",
-    "import": "インポート",
-    "yourDictionary": "あなたの辞書",
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
@@ -3485,7 +3481,152 @@
     "emptyTitle": "辞書に単語を追加しましょう",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
-    "agentDefault": "デフォルトで追加済み"
+    "agentDefault": "デフォルトで追加済み",
+    "shared": {
+      "allWords": "すべての単語",
+      "personal": "個人",
+      "group": "共有",
+      "allShared": "すべての共有",
+      "everyoneAt": "{{workspace}} の全員",
+      "hidden": "非表示",
+      "add": {
+        "placeholder": "カンマ区切りで単語を追加",
+        "to": "{{list}} に追加",
+        "chooseList": "追加先のリストを選択",
+        "hiddenForYou": "{{list}} で非表示にしています"
+      },
+      "alreadyIn": "{{list}} に追加済み",
+      "importTo": "{{list}} にインポート",
+      "actions": {
+        "share": "共有",
+        "edit": "編集",
+        "delete": "削除",
+        "hide": "自分には非表示",
+        "deleteForEveryone": "全員から削除",
+        "unhide": "再表示",
+        "shareWord": "{{word}} を共有",
+        "deleteWord": "{{word}} を削除",
+        "hideWord": "{{word}} を自分には非表示",
+        "deleteForEveryoneWord": "{{word}} を全員から削除",
+        "unhideWord": "{{word}} を再表示"
+      },
+      "attribution": {
+        "you": "あなた",
+        "former": "元メンバー"
+      },
+      "toolbar": {
+        "search": "検索",
+        "searchPlaceholder": "このリストを検索",
+        "closeSearch": "検索を閉じる",
+        "sort": "並べ替え",
+        "sync": "今すぐ同期",
+        "syncedAgo": "{{time}}前に同期",
+        "syncedJustNow": "たった今同期",
+        "notSynced": "まだ同期されていません"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "新しい順",
+        "oldest": "古い順"
+      },
+      "memberCount_one": "{{count}} 人のメンバー",
+      "memberCount_other": "{{count}} 人のメンバー",
+      "emptyList": "{{list}} にはまだ単語がありません",
+      "allHiddenList": "{{list}} の単語はすべて自分には非表示になっています",
+      "noMatches": "「{{query}}」に一致する単語はありません",
+      "deletedForEveryone": "「{{word}}」を全員から削除しました",
+      "undo": "元に戻す",
+      "errors": {
+        "generic": "{{list}} を更新できませんでした。もう一度お試しください。",
+        "listFull": "{{list}} がいっぱいです",
+        "planRequired": "共有辞書には Business プランが必要なため、{{list}} は変更されませんでした",
+        "ssoRequired": "{{list}} を変更するには、会社の SSO でサインインしてください",
+        "notMember": "{{list}} にアクセスできなくなりました",
+        "invalid": "{{list}} に追加できるのは短い用語だけです（64 文字・6 語まで。カンマ、文末の句読点、< > { } [ ] ` | などの記号は使えません）",
+        "recentlyDeleted": "この単語は {{list}} から削除されたばかりです。もう一度追加してください。"
+      },
+      "deleteOneTitle": "{{list}} の全員から「{{word}}」を削除しますか？",
+      "deleteManyTitle_one": "{{list}} の全員から {{count}} 個の単語を削除しますか？",
+      "deleteManyTitle_other": "{{list}} の全員から {{count}} 個の単語を削除しますか？",
+      "deletedManyForEveryone_one": "{{count}} 個の単語を全員から削除しました",
+      "deletedManyForEveryone_other": "{{count}} 個の単語を全員から削除しました",
+      "deletedPersonalMany_one": "{{count}} 個の単語を削除しました",
+      "deletedPersonalMany_other": "{{count}} 個の単語を削除しました",
+      "selection": {
+        "count_one": "{{count}} 件を選択中",
+        "count_other": "{{count}} 件を選択中",
+        "selectAll": "{{total}} 件すべてを選択",
+        "shareWith": "共有先…",
+        "clear": "選択を解除",
+        "selectWord": "{{word}} を選択",
+        "label": "選択した単語"
+      },
+      "share": {
+        "titleOne": "「{{word}}」の共有先",
+        "titleMany_one": "{{count}} 個の単語の共有先",
+        "titleMany_other": "{{count}} 個の単語の共有先",
+        "alreadyShared": "共有済み",
+        "movesOutOne": "個人から移動します",
+        "movesOutMany": "個人から移動します",
+        "partial_one": "{{total}} 個中 {{moved}} 個の単語を共有しました。{{count}} 個は共有されませんでした。",
+        "partial_other": "{{total}} 個中 {{moved}} 個の単語を共有しました。{{count}} 個は共有されませんでした。",
+        "reasons": {
+          "personalChanged": "別のデバイスで単語が変更されました。もう一度お試しください。",
+          "network": "接続を確認して、もう一度お試しください。",
+          "aListFull": "リストがいっぱいです"
+        }
+      },
+      "locked": {
+        "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
+        "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
+        "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
+        "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
+        "paused_other": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
+        "workspaceTitle": "ワークスペースの全員",
+        "workspaceDescription": "会社全体で使う単語",
+        "spaceTitle": "スペースごとのリスト",
+        "spaceDescription": "1 つのチームだけが必要とする単語",
+        "wordCount_one": "{{count}} 個の単語",
+        "wordCount_other": "{{count}} 個の単語",
+        "lockLabel": "Business プランに含まれます",
+        "ssoRequired": "{{workspace}} では会社の SSO が必要です。サインアウトしてから SSO でサインインし直すと、共有単語を使えます。",
+        "noAccess": "{{workspace}} の共有単語にアクセスできなくなりました。心当たりがない場合は管理者にお問い合わせください。",
+        "pausedMember_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。管理者またはオーナーに Business へのアップグレードを依頼すると、再び音声入力で使えます。",
+        "pausedMember_other": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。管理者またはオーナーに Business へのアップグレードを依頼すると、再び音声入力で使えます。"
+      },
+      "empty": {
+        "body": "このチームが使う用語を追加するか、個人リストから共有しましょう。{{list}} の全員（{{count}} 人）に届きます。",
+        "import": "リストをインポート",
+        "shareFromPersonal": "個人から共有"
+      },
+      "arrival": {
+        "title_one": "チームの単語を {{count}} 件追加しました",
+        "title_other": "チームの単語を {{count}} 件追加しました",
+        "description": "{{workspace}} の共有単語が、音声入力と会議ノートに適用されるようになりました。",
+        "descriptionNoWorkspace": "チームの共有単語が、音声入力と会議ノートに適用されるようになりました。",
+        "viewWords": "単語を表示"
+      },
+      "lockedEntry": "ロック中",
+      "notTermLike": "共有リストに追加できるのは短い用語だけです（64 文字・6 語まで。カンマ、文末の句読点、< > { } [ ] ` | などの記号、不可視文字は使えません）",
+      "notUsed": "音声入力では使われません",
+      "notUsedTooltip": "64 文字または 6 語を超える共有単語や、カンマ・文末の句読点・< > { } [ ] ` | などの記号・不可視文字を含む共有単語は音声入力で使われません",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "{{count}} 個の単語を除外しました：{{words}}",
+      "skipped_other": "{{count}} 個の単語を除外しました：{{words}}",
+      "partial": {
+        "add_one": "{{total}} 個中 {{applied}} 個の単語を {{list}} に追加しました。{{count}} 個は追加されませんでした。",
+        "add_other": "{{total}} 個中 {{applied}} 個の単語を {{list}} に追加しました。{{count}} 個は追加されませんでした。",
+        "hide_one": "{{total}} 個中 {{applied}} 個の単語を自分だけ非表示にしました。{{count}} 個は非表示になりませんでした。",
+        "hide_other": "{{total}} 個中 {{applied}} 個の単語を自分だけ非表示にしました。{{count}} 個は非表示になりませんでした。",
+        "unhide_one": "{{total}} 個中 {{applied}} 個の単語を再表示しました。{{count}} 個はまだ非表示です。",
+        "unhide_other": "{{total}} 個中 {{applied}} 個の単語を再表示しました。{{count}} 個はまだ非表示です。",
+        "delete_one": "{{total}} 個中 {{applied}} 個の単語を全員から削除しました。{{count}} 個は削除されませんでした。",
+        "delete_other": "{{total}} 個中 {{applied}} 個の単語を全員から削除しました。{{count}} 個は削除されませんでした。"
+      },
+      "hiddenWord": "「{{word}}」を自分だけ非表示にしました",
+      "stillIn": "「{{word}}」はまだ {{list}} にあります"
+    }
   },
   "referral": {
     "title": "紹介して特典をゲット",

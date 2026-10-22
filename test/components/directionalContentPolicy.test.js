@@ -18,7 +18,18 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[\s\S]*?\{item\.text\}/],
     ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{rawText\}/],
     ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{transcript\.text\}/],
-    ["src/components/DictionaryView.tsx", /<span\s+dir="auto"[^>]*>\s*\{word\}/],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.word\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.otherLists > 0[\s\S]*?: row\.badge\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryListPicker.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{entry\.label\}/,
+    ],
     ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.trigger\}/],
     ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.replacement\}/],
     [

@@ -701,6 +701,9 @@ class IPCHandlers {
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
+    // The active workspace's applying shared words, as the renderer last sent
+    // them (dictionary-set-shared-hints). Empty until the first send.
+    this._sharedDictionaryHints = { space: [], workspace: [] };
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
@@ -1262,12 +1265,20 @@ class IPCHandlers {
     return folder?.name || "Personal";
   }
 
+  // Every word that already reaches the transcription prompt: personal plus the
+  // active workspace's shared words that fit beside them. The renderer sends
+  // only those (sharedWordsReachingPrompt in settingsStore), so a team word cut
+  // from the prompt, or a hidden, paused or other workspace's word, can still
+  // be learned into Personal.
   _getDictionarySafe() {
+    let personal;
     try {
-      return this.databaseManager.getDictionary();
+      personal = this.databaseManager.getDictionary();
     } catch {
-      return [];
+      personal = [];
     }
+    const { space, workspace } = this._sharedDictionaryHints;
+    return [...personal, ...space, ...workspace];
   }
 
   _cleanupTextEditMonitor() {
@@ -2152,8 +2163,8 @@ class IPCHandlers {
       return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
     });
 
-    ipcMain.handle("db-mark-dictionary-synced", async (_event, id, cloudId) => {
-      return this.databaseManager.markDictionaryEntrySynced(id, cloudId);
+    ipcMain.handle("db-mark-dictionary-synced", async (_event, id, cloudId, pushed) => {
+      return this.databaseManager.markDictionaryEntrySynced(id, cloudId, pushed);
     });
 
     ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
@@ -2162,6 +2173,100 @@ class IPCHandlers {
 
     ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id) => {
       return this.databaseManager.clearDictionaryCloudId(id);
+    });
+
+    ipcMain.handle("db-get-dictionary-entries-by-words", async (_event, words) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.getDictionaryEntriesByWords(words);
+    });
+
+    ipcMain.handle("db-mark-dictionary-words-shared", async (_event, words, sharedAt, options) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      const pendingWords = options?.pendingWords ?? [];
+      if (!Array.isArray(pendingWords)) throw new Error("pendingWords must be an array");
+      return this.databaseManager.markDictionaryWordsShared(words, sharedAt, { pendingWords });
+    });
+
+    ipcMain.handle("db-retire-moved-dictionary-words", async (_event, words, options) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.retireMovedDictionaryWords(words, {
+        includeSynced: options?.includeSynced !== false,
+      });
+    });
+
+    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.reviveRetiredDictionaryWords(words);
+    });
+
+    ipcMain.handle("db-get-moved-dictionary-words", async () => {
+      return this.databaseManager.getMovedDictionaryWords();
+    });
+
+    const requireWorkspaceId = (workspaceId) => {
+      if (typeof workspaceId !== "string" || !workspaceId) {
+        throw new Error("workspaceId must be a non-empty string");
+      }
+    };
+
+    ipcMain.handle("db-shared-dictionary-get", async (_event, workspaceId) => {
+      requireWorkspaceId(workspaceId);
+      return this.databaseManager.getSharedDictionary(workspaceId);
+    });
+
+    ipcMain.handle("db-shared-dictionary-apply-pull", async (_event, workspaceId, change) => {
+      requireWorkspaceId(workspaceId);
+      const { upserts = [], deletedIds = [], meta } = change ?? {};
+      if (!Array.isArray(upserts) || !Array.isArray(deletedIds)) {
+        throw new Error("upserts and deletedIds must be arrays");
+      }
+      return this.databaseManager.applySharedDictionaryPull(workspaceId, {
+        upserts,
+        deletedIds,
+        meta,
+      });
+    });
+
+    ipcMain.handle("db-shared-dictionary-replace", async (_event, workspaceId, full) => {
+      requireWorkspaceId(workspaceId);
+      if (!Array.isArray(full?.entries)) throw new Error("entries must be an array");
+      return this.databaseManager.replaceSharedDictionary(workspaceId, {
+        entries: full.entries,
+        meta: full.meta,
+      });
+    });
+
+    ipcMain.handle("db-shared-dictionary-apply-hides", async (_event, workspaceId, change) => {
+      requireWorkspaceId(workspaceId);
+      const { hidden = [], unhidden = [] } = change ?? {};
+      if (!Array.isArray(hidden) || !Array.isArray(unhidden)) {
+        throw new Error("hidden and unhidden must be arrays");
+      }
+      return this.databaseManager.applySharedDictionaryHides(workspaceId, { hidden, unhidden });
+    });
+
+    ipcMain.handle("db-shared-dictionary-replace-hides", async (_event, workspaceId, hidden) => {
+      requireWorkspaceId(workspaceId);
+      if (!Array.isArray(hidden)) throw new Error("hidden must be an array");
+      return this.databaseManager.replaceSharedDictionaryHides(workspaceId, hidden);
+    });
+
+    ipcMain.handle("db-shared-dictionary-clear", async (_event, workspaceId) => {
+      if (workspaceId != null) requireWorkspaceId(workspaceId);
+      return this.databaseManager.clearSharedDictionary(workspaceId);
+    });
+
+    ipcMain.handle("db-shared-dictionary-prune", async (_event, keepWorkspaceIds) => {
+      if (!Array.isArray(keepWorkspaceIds)) throw new Error("keepWorkspaceIds must be an array");
+      keepWorkspaceIds.forEach(requireWorkspaceId);
+      return this.databaseManager.pruneSharedDictionary(keepWorkspaceIds);
+    });
+
+    ipcMain.handle("dictionary-set-shared-hints", async (_event, hints) => {
+      const isWordList = (value) =>
+        Array.isArray(value) && value.every((word) => typeof word === "string");
+      if (!isWordList(hints?.space) || !isWordList(hints?.workspace)) return;
+      this._sharedDictionaryHints = { space: [...hints.space], workspace: [...hints.workspace] };
     });
 
     ipcMain.handle("db-broadcast-dictionary-updated", async () => {
@@ -10118,6 +10223,8 @@ class IPCHandlers {
             model: opts.model,
             agentName: opts.agentName,
             customDictionary: opts.customDictionary,
+            // Teammates' words, which the API quotes as data; absent when none.
+            sharedDictionary: opts.sharedDictionary,
             customPrompt: opts.customPrompt,
             systemPrompt: opts.systemPrompt,
             requestPurpose: opts.requestPurpose,

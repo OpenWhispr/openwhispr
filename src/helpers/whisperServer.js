@@ -920,7 +920,12 @@ class WhisperServerManager extends EventEmitter {
           `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
           `${initialPrompt}\r\n`
       );
-      debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
+      // The prompt carries teammates' words, so only its size is logged at info.
+      debugLogger.info("Using custom dictionary prompt", {
+        promptLength: initialPrompt.length,
+        promptTerms: initialPrompt.split(",").filter((term) => term.trim()).length,
+      });
+      debugLogger.debug("Custom dictionary prompt", { prompt: initialPrompt });
     }
 
     parts.push(

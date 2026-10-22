@@ -5,6 +5,7 @@ const {
   canUpgradeWorkspaceToEnterprise,
   enterpriseTileCta,
   hasActiveWorkspaceSubscription,
+  hasSharedDictionaryPlan,
   isEnterpriseConsoleAvailable,
 } = require("../../src/lib/workspaceBilling.ts");
 
@@ -129,4 +130,18 @@ test("enterpriseTileCta: eligible owners get the dialog, first-timers get create
     action: "contactSales",
     ownerName: null,
   });
+});
+
+test("hasSharedDictionaryPlan: Business or Enterprise while entitled, nothing else", () => {
+  for (const plan of ["business", "enterprise"]) {
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "active" }), true);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "trialing" }), true);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "past_due" }), false);
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "canceled" }), false);
+  }
+  for (const plan of ["free", "pro"]) {
+    assert.equal(hasSharedDictionaryPlan({ plan, status: "active" }), false);
+  }
+  assert.equal(hasSharedDictionaryPlan(null), false);
+  assert.equal(hasSharedDictionaryPlan(undefined), false);
 });

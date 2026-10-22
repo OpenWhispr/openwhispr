@@ -221,9 +221,11 @@ test("stopping the mirror detaches both the broadcast and the storage listener",
   const { stop, events, listeningForBroadcasts } = await boot(t, {
     activeWorkspaceId: "workspace-a",
   });
-  assert.equal(events.count("storage"), 1);
+  // The workspace store keeps its own window-lifetime listener; only the
+  // mirror's comes and goes.
+  const storageListeners = events.count("storage");
   assert.equal(listeningForBroadcasts(), true);
   stop();
-  assert.equal(events.count("storage"), 0);
+  assert.equal(events.count("storage"), storageListeners - 1);
   assert.equal(listeningForBroadcasts(), false);
 });

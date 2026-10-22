@@ -88,6 +88,7 @@ import BackgroundActionToastListener from "./notes/BackgroundActionToastListener
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
 import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
+import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
@@ -223,6 +224,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     await createNote();
     setActiveView("personal-notes");
   }, [createNote]);
+  const showDictionary = useCallback(() => setActiveView("dictionary"), []);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -1277,7 +1279,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "dictionary" && (
                 <Suspense fallback={null}>
-                  <DictionaryView />
+                  <DictionaryView
+                    onUpgrade={() => {
+                      setSettingsSection("plansBilling");
+                      setShowSettings(true);
+                    }}
+                  />
                 </Suspense>
               )}
               {activeView === "upload" && policyActionsAllowed && (
@@ -1315,6 +1322,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       <BackgroundActionToastListener />
       <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
+      <SharedDictionaryArrivalToastListener onViewWords={showDictionary} />
     </div>
   );
 }

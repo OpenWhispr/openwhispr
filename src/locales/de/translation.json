@@ -3863,8 +3863,6 @@
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
     "addWord": "Wort hinzufügen",
-    "addPlaceholder": "Wörter durch Kommas getrennt hinzufügen – OpenWhispr, Supabase, John Snow, ARR",
-    "removeWord": "{{word}} entfernen",
     "clearAll": "Alle löschen",
     "add": "Hinzufügen",
     "importWords": "Wörter importieren",
@@ -3872,8 +3870,6 @@
     "separateWithCommas": "Ein Wort pro Zeile oder durch Kommas getrennt",
     "wordsReady_one": "{{count}} Wort bereit",
     "wordsReady_other": "{{count}} Wörter bereit",
-    "import": "Importieren",
-    "yourDictionary": "Dein Wörterbuch",
     "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle lesen davon nur die letzten paar hundert Zeichen – eine kürzere Liste funktioniert dort besser. Andere Modelle erhalten die vollständige Liste.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
@@ -3908,7 +3904,152 @@
     "emptyTitle": "Füge Wörter zu deinem Wörterbuch hinzu",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
-    "agentDefault": "Standardmäßig enthalten"
+    "agentDefault": "Standardmäßig enthalten",
+    "shared": {
+      "allWords": "Alle Wörter",
+      "personal": "Persönlich",
+      "group": "Geteilt",
+      "allShared": "Alle geteilten",
+      "everyoneAt": "Alle bei {{workspace}}",
+      "hidden": "Ausgeblendet",
+      "add": {
+        "placeholder": "Wörter durch Kommas getrennt hinzufügen",
+        "to": "zu {{list}}",
+        "chooseList": "Liste zum Hinzufügen wählen",
+        "hiddenForYou": "In {{list}} für dich ausgeblendet"
+      },
+      "alreadyIn": "Bereits in {{list}}",
+      "importTo": "In {{list}} importieren",
+      "actions": {
+        "share": "Teilen",
+        "edit": "Bearbeiten",
+        "delete": "Löschen",
+        "hide": "Für mich ausblenden",
+        "deleteForEveryone": "Für alle löschen",
+        "unhide": "Einblenden",
+        "shareWord": "{{word}} teilen",
+        "deleteWord": "{{word}} löschen",
+        "hideWord": "{{word}} für mich ausblenden",
+        "deleteForEveryoneWord": "{{word}} für alle löschen",
+        "unhideWord": "{{word}} einblenden"
+      },
+      "attribution": {
+        "you": "Du",
+        "former": "Ehemaliges Mitglied"
+      },
+      "toolbar": {
+        "search": "Suchen",
+        "searchPlaceholder": "Diese Liste durchsuchen",
+        "closeSearch": "Suche schließen",
+        "sort": "Sortieren",
+        "sync": "Jetzt synchronisieren",
+        "syncedAgo": "Vor {{time}} synchronisiert",
+        "syncedJustNow": "Gerade synchronisiert",
+        "notSynced": "Noch nicht synchronisiert"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "Neueste zuerst",
+        "oldest": "Älteste zuerst"
+      },
+      "memberCount_one": "{{count}} Mitglied",
+      "memberCount_other": "{{count}} Mitglieder",
+      "emptyList": "Noch keine Wörter in {{list}}",
+      "allHiddenList": "Alle Wörter in {{list}} sind für dich ausgeblendet",
+      "noMatches": "Keine Wörter passen zu „{{query}}“",
+      "deletedForEveryone": "„{{word}}“ für alle gelöscht",
+      "undo": "Rückgängig",
+      "errors": {
+        "generic": "{{list}} konnte nicht aktualisiert werden. Versuche es erneut.",
+        "listFull": "{{list}} ist voll",
+        "planRequired": "Geteilte Wörterbücher brauchen Business, daher wurde {{list}} nicht geändert",
+        "ssoRequired": "Melde dich mit dem SSO deines Unternehmens an, um {{list}} zu ändern",
+        "notMember": "Du hast keinen Zugriff mehr auf {{list}}",
+        "invalid": "{{list}} nimmt nur kurze Begriffe auf: höchstens 64 Zeichen und 6 Wörter, ohne Kommas, Satzzeichen oder Zeichen wie < > { } [ ] ` |",
+        "recentlyDeleted": "Dieses Wort wurde gerade aus {{list}} gelöscht. Füge es stattdessen erneut hinzu."
+      },
+      "deleteOneTitle": "„{{word}}“ für alle in {{list}} löschen?",
+      "deleteManyTitle_one": "{{count}} Wort für alle in {{list}} löschen?",
+      "deleteManyTitle_other": "{{count}} Wörter für alle in {{list}} löschen?",
+      "deletedManyForEveryone_one": "{{count}} Wort für alle gelöscht",
+      "deletedManyForEveryone_other": "{{count}} Wörter für alle gelöscht",
+      "deletedPersonalMany_one": "{{count}} Wort gelöscht",
+      "deletedPersonalMany_other": "{{count}} Wörter gelöscht",
+      "selection": {
+        "count_one": "{{count}} ausgewählt",
+        "count_other": "{{count}} ausgewählt",
+        "selectAll": "Alle {{total}} auswählen",
+        "shareWith": "Teilen mit…",
+        "clear": "Auswahl aufheben",
+        "selectWord": "{{word}} auswählen",
+        "label": "Ausgewählte Wörter"
+      },
+      "share": {
+        "titleOne": "„{{word}}“ teilen mit",
+        "titleMany_one": "{{count}} Wort teilen mit",
+        "titleMany_other": "{{count}} Wörter teilen mit",
+        "alreadyShared": "Bereits geteilt",
+        "movesOutOne": "Verschiebt es aus Persönlich",
+        "movesOutMany": "Verschiebt sie aus Persönlich",
+        "partial_one": "{{moved}} von {{total}} Wörtern geteilt. {{count}} wurde nicht geteilt.",
+        "partial_other": "{{moved}} von {{total}} Wörtern geteilt. {{count}} wurden nicht geteilt.",
+        "reasons": {
+          "personalChanged": "Ein Wort wurde auf einem anderen Gerät geändert. Versuche es erneut.",
+          "network": "Prüfe deine Verbindung und versuche es erneut.",
+          "aListFull": "Eine Liste ist voll"
+        }
+      },
+      "locked": {
+        "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
+        "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
+        "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
+        "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",
+        "paused_other": "Die {{count}} geteilten Wörter von {{workspace}} sind pausiert. Upgrade auf Business, um sie wieder beim Diktieren zu nutzen.",
+        "workspaceTitle": "Alle in deinem Workspace",
+        "workspaceDescription": "Wörter für das ganze Unternehmen",
+        "spaceTitle": "Eine Liste pro Space",
+        "spaceDescription": "Wörter, die nur ein Team braucht",
+        "wordCount_one": "{{count}} Wort",
+        "wordCount_other": "{{count}} Wörter",
+        "lockLabel": "In Business enthalten",
+        "ssoRequired": "{{workspace}} verlangt das SSO des Unternehmens. Melde dich ab und mit SSO wieder an, um die geteilten Wörter zu nutzen.",
+        "noAccess": "Du hast keinen Zugriff mehr auf die geteilten Wörter von {{workspace}}. Frag einen Admin, falls das ein Fehler ist.",
+        "pausedMember_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Bitte einen Admin oder Inhaber, auf Business upzugraden, um es wieder beim Diktieren zu nutzen.",
+        "pausedMember_other": "Die {{count}} geteilten Wörter von {{workspace}} sind pausiert. Bitte einen Admin oder Inhaber, auf Business upzugraden, um sie wieder beim Diktieren zu nutzen."
+      },
+      "empty": {
+        "body": "Füge die Begriffe hinzu, die dieses Team verwendet, oder teile einige aus deiner persönlichen Liste. Alle in {{list}} ({{count}}) bekommen sie.",
+        "import": "Liste importieren",
+        "shareFromPersonal": "Aus Persönlich teilen"
+      },
+      "arrival": {
+        "title_one": "{{count}} Teamwort hinzugefügt",
+        "title_other": "{{count}} Teamwörter hinzugefügt",
+        "description": "Die gemeinsamen Wörter von {{workspace}} gelten jetzt für dein Diktat und deine Meeting-Notizen.",
+        "descriptionNoWorkspace": "Die gemeinsamen Wörter deines Teams gelten jetzt für dein Diktat und deine Meeting-Notizen.",
+        "viewWords": "Wörter ansehen"
+      },
+      "lockedEntry": "Gesperrt",
+      "notTermLike": "Geteilte Listen nehmen nur kurze Begriffe auf: höchstens 64 Zeichen und 6 Wörter, ohne Kommas, Satzzeichen, Zeichen wie < > { } [ ] ` | oder unsichtbare Zeichen",
+      "notUsed": "Nicht beim Diktieren genutzt",
+      "notUsedTooltip": "Beim Diktieren werden geteilte Wörter mit mehr als 64 Zeichen oder 6 Wörtern ausgelassen, ebenso solche mit Kommas, Satzzeichen, Zeichen wie < > { } [ ] ` | oder unsichtbaren Zeichen",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "{{count}} Wort wurde ausgelassen: {{words}}",
+      "skipped_other": "{{count}} Wörter wurden ausgelassen: {{words}}",
+      "partial": {
+        "add_one": "{{applied}} von {{total}} Wörtern zu {{list}} hinzugefügt. {{count}} wurde nicht hinzugefügt.",
+        "add_other": "{{applied}} von {{total}} Wörtern zu {{list}} hinzugefügt. {{count}} wurden nicht hinzugefügt.",
+        "hide_one": "{{applied}} von {{total}} Wörtern für dich ausgeblendet. {{count}} wurde nicht ausgeblendet.",
+        "hide_other": "{{applied}} von {{total}} Wörtern für dich ausgeblendet. {{count}} wurden nicht ausgeblendet.",
+        "unhide_one": "{{applied}} von {{total}} Wörtern wieder eingeblendet. {{count}} ist noch ausgeblendet.",
+        "unhide_other": "{{applied}} von {{total}} Wörtern wieder eingeblendet. {{count}} sind noch ausgeblendet.",
+        "delete_one": "{{applied}} von {{total}} Wörtern für alle gelöscht. {{count}} wurde nicht gelöscht.",
+        "delete_other": "{{applied}} von {{total}} Wörtern für alle gelöscht. {{count}} wurden nicht gelöscht."
+      },
+      "hiddenWord": "„{{word}}“ für dich ausgeblendet",
+      "stillIn": "„{{word}}“ ist noch in {{list}}"
+    }
   },
   "support": {
     "documentation": "Dokumentation",

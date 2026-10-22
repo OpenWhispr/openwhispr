@@ -60,13 +60,16 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/AuthenticationStep.tsx": ["ltr", "auto", "ltr", "ltr", "ltr"],
   "src/components/CreateTeamDialog.tsx": ["auto"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
-  "src/components/DictionaryView.tsx": ["auto", "auto", "auto"],
+  "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
   "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
+  "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
+  "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
+  "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
@@ -172,8 +175,8 @@ test("representative prose, identity, secret, and rich-editor surfaces keep thei
     /<Input\s+dir="ltr"\s+\{\.\.\.inputProps\}/
   );
   assert.match(
-    source("src/components/DictionaryView.tsx"),
-    /<Input\s+dir="auto"\s+ref=\{addInputRef\}/
+    source("src/components/dictionary/DictionaryAddField.tsx"),
+    /<Input\s+dir="auto"\s+ref=\{inputRef\}/
   );
   assert.match(
     source("src/components/notes/UploadAudioView.tsx"),
