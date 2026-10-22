@@ -74,7 +74,9 @@ function ResponseActions({
   };
 
   return (
-    <div className="-ms-2 flex items-center gap-0.5">
+    // Laid out from the first words of the reply but shown once it ends, so
+    // the answer doesn't jump up when it does.
+    <div className={cn("-ms-2 flex items-center gap-0.5", message.isStreaming && "invisible")}>
       {latest && (
         <button
           type="button"
@@ -171,7 +173,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
         <TechnicalErrorDetails details={message.error.technicalDetails} />
       )}
       {message.turn && !message.isStreaming && (
-        <div className="text-end [&_p]:text-[13px]">
+        <div className="text-end empty:hidden [&_p]:text-[13px]">
           <TurnNotes
             turn={message.turn}
             failedHere={!!message.error}
@@ -180,7 +182,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
           />
         </div>
       )}
-      {message.content && !message.isStreaming && <ResponseActions {...props} />}
+      {message.content && <ResponseActions {...props} />}
     </div>
   );
 });
