@@ -243,6 +243,44 @@ class MarkdownMirror {
     }
   }
 
+  moveNotesToFolder(noteIds, folderName) {
+    if (!this._baseRealPath) return false;
+    try {
+      const destination = this._resolveFolderPath(folderName, { create: true });
+      if (!destination) return false;
+      let success = true;
+      for (const noteId of noteIds) {
+        const files = [...this._globNoteFiles(noteId), ...this._globTranscriptFiles(noteId)];
+        for (const source of files) {
+          const target = path.join(destination, path.basename(source));
+          if (source === target) continue;
+          try {
+            this._assertWritableFilePath(target);
+            if (fs.existsSync(target)) {
+              throw new Error("Markdown mirror destination file already exists");
+            }
+            fs.renameSync(source, target);
+          } catch (err) {
+            success = false;
+            debugLogger.error(
+              "Failed to move note file",
+              { noteId, file: source, error: err.message },
+              "note-files"
+            );
+          }
+        }
+      }
+      return success;
+    } catch (err) {
+      debugLogger.error(
+        "Failed to move note files",
+        { folderName, error: err.message },
+        "note-files"
+      );
+      return false;
+    }
+  }
+
   renameFolder(oldName, newName) {
     if (!this._baseRealPath) return;
     try {
@@ -261,12 +299,15 @@ class MarkdownMirror {
     }
   }
 
-  deleteFolder(folderName) {
+  deleteFolder(folderName, { onlyIfEmpty = false } = {}) {
     if (!this._baseRealPath) return;
     try {
       const dirPath = this._resolveFolderPath(folderName);
-      if (dirPath) fs.rmSync(dirPath, { recursive: true, force: true });
+      if (!dirPath) return;
+      if (onlyIfEmpty) fs.rmdirSync(dirPath);
+      else fs.rmSync(dirPath, { recursive: true, force: true });
     } catch (err) {
+      if (onlyIfEmpty && ["ENOTEMPTY", "EEXIST"].includes(err.code)) return;
       debugLogger.error(
         "Failed to delete folder",
         { folderName, error: err.message },
