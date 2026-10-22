@@ -27,6 +27,8 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._createSocketImpl = createSocketImpl;
     this._unnamedTurns = [];
     this._unnamedTurnCount = 0;
+    this._vadTurnsInFlight = 0;
+    this._settleWhenVadTurnsDrain = false;
   }
 
   // Lemonade acks a commit with input_audio_buffer.committed but no item_id,
@@ -58,6 +60,32 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
           JSON.stringify({ ...event, item_id: this._unnamedTurns.shift() })
         );
       }
+      // A turn the server closed on silence has speech_stopped but no committed.
+      // Count it until its transcript arrives, so a stop does not close early.
+      if (event.type === "input_audio_buffer.speech_stopped") {
+        this._vadTurnsInFlight += 1;
+      } else if (
+        event.type === "conversation.item.input_audio_transcription.completed" ||
+        event.type === "conversation.item.input_audio_transcription.failed"
+      ) {
+        this._vadTurnsInFlight = Math.max(0, this._vadTurnsInFlight - 1);
+        const result = super.handleMessage(data);
+        if (this._settleWhenVadTurnsDrain && this._vadTurnsInFlight === 0) {
+          this._settleWhenVadTurnsDrain = false;
+          this._onTurnSettled?.("committed");
+        }
+        return result;
+      }
+    }
+    // Lemonade answers a commit with input_audio_buffer.cleared, and no
+    // committed, when silence already closed the last turn. Nothing new is
+    // coming for the commit, so settle once any silence-closed turn has its
+    // transcript instead of waiting out the disconnect timeout.
+    if (event && event.type === "input_audio_buffer.cleared") {
+      const result = super.handleMessage(data);
+      if (this._vadTurnsInFlight === 0) this._onTurnSettled?.("committed");
+      else this._settleWhenVadTurnsDrain = true;
+      return result;
     }
     return super.handleMessage(data);
   }
