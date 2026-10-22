@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from "react";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
-import { useChatMessageSender, type PersistedMessageContext } from "../chat/useChatMessageSender";
+import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
+import type { SendToAIOptions } from "../chat/useChatStreaming";
 import type { Message } from "../chat/types";
 
 const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0, 50)}...` : text);
@@ -35,26 +36,15 @@ export function useAgentChat({
     (text: string) => createPersisted(conversationTitle(text)),
     [createPersisted]
   );
-  // A fork starts with its parent's title; its own first message names it, as a new chat's does.
-  const retitleFork = useCallback(
-    ({ conversationId, text, isFirstMessage }: PersistedMessageContext) => {
-      if (!isFirstMessage || !forkOrigin) return;
-      void window.electronAPI?.updateAgentConversationTitle?.(
-        conversationId,
-        conversationTitle(text)
-      );
-    },
-    [forkOrigin]
-  );
-  const send = useChatMessageSender({
+  const sendMessage = useChatMessageSender({
     conversationId: persistence.conversationId,
     persistence,
     streaming,
     createConversation,
-    onMessagePersisted: retitleFork,
     onSendingChange: setSubmissionInFlight,
   });
-  useInterruptedInteractions(persistence, send);
+  // An answer to a card left from an earlier turn goes on as a message of the app's.
+  useInterruptedInteractions(persistence, sendMessage);
 
   // Read through a ref, so these stay the same while a reply streams.
   const messagesRef = useRef(persistence.messages);
@@ -64,6 +54,26 @@ export function useAgentChat({
   busyRef.current = busy;
 
   const { loadConversation, handleNewChat, forkConversation, conversationId } = persistence;
+
+  // A message the user wrote. A fork starts with its parent's title; the first
+  // one written in it names it, as a new chat's does, unless it was renamed.
+  const send = useCallback(
+    (text: string, options?: SendToAIOptions) => {
+      if (
+        forkOrigin &&
+        conversationId != null &&
+        forkOrigin.title === forkOrigin.parentTitle &&
+        messagesRef.current.length === forkOrigin.copiedMessageCount
+      ) {
+        void window.electronAPI?.updateAgentConversationTitle?.(
+          conversationId,
+          conversationTitle(text)
+        );
+      }
+      return sendMessage(text, options);
+    },
+    [conversationId, forkOrigin, sendMessage]
+  );
 
   const switchChat = useCallback(
     async (id: number) => {

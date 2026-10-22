@@ -14,6 +14,8 @@ export interface ForkOrigin {
   parentConversationId: number;
   /** Null once the parent is deleted. */
   parentTitle: string | null;
+  /** The fork's own title as it loaded: its parent's until it is named or renamed. */
+  title: string;
   /** Text the fork was made from; it goes with the fork's next request. */
   context: string | null;
   /** How many of the fork's first messages are the parent's history. */
@@ -100,6 +102,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         ? {
             parentConversationId: conversation.parent_conversation_id,
             parentTitle: conversation.parent_title ?? null,
+            title: conversation.title,
             context: conversation.fork_context ?? null,
             copiedMessageCount: conversation.fork_message_count ?? 0,
           }

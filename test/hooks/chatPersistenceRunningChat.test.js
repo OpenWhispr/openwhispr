@@ -245,6 +245,7 @@ test("a fork opens a new chat through the chosen reply, with its origin", async 
   assert.deepEqual(current().forkOrigin, {
     parentConversationId: conversation.id,
     parentTitle: "Launch plan",
+    title: "Launch plan",
     context: "Draft one.",
     copiedMessageCount: 2,
   });
@@ -286,7 +287,12 @@ async function mountAgentChat(t) {
           return { agentState: "idle", cancelStream() {}, sendToAI: async () => {} };
         }
       `,
-      "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
+      // The send an answer to a card left from an earlier turn goes on with.
+      "/useInterruptedInteractions": `
+        export function useInterruptedInteractions(_persistence, send) {
+          globalThis.__sendFollowUp = send;
+        }
+      `,
     },
   });
   const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
@@ -302,19 +308,39 @@ async function mountAgentChat(t) {
   return { db, act, current: () => chat };
 }
 
-test("a fork takes its title from its own first message, as a new chat does", async (t) => {
-  const { db, act, current } = await mountAgentChat(t);
+// A chat with one reply, and a fork of it, open.
+async function openFork(db, act, current) {
   await act(() => current().send("Draft the launch plan"));
   const parentId = current().conversationId;
   await db.api.addAgentMessage(parentId, "assistant", "Draft one.");
   await act(() => current().switchChat(parentId));
   await act(() => current().fork(current().messages[1]));
-  const forkId = current().conversationId;
-  assert.notEqual(forkId, parentId);
+  assert.notEqual(current().conversationId, parentId);
+  return { parentId, forkId: current().conversationId };
+}
+
+test("a fork takes its title from the first message the user writes in it", async (t) => {
+  const { db, act, current } = await mountAgentChat(t);
+  const { parentId, forkId } = await openFork(db, act, current);
 
   await act(() => current().send("Make it shorter"));
   await act(() => current().send("And friendlier"));
 
   assert.deepEqual(db.calls.title, [{ id: forkId, title: "Make it shorter" }]);
   assert.equal(db.conversations.get(parentId).title, "Draft the launch plan");
+});
+
+test("a fork is never named by an answer the app sends on, nor once it was renamed", async (t) => {
+  const { db, act, current } = await mountAgentChat(t);
+  const { forkId } = await openFork(db, act, current);
+  await act(() => globalThis.__sendFollowUp("Who should it go to?\nSam"));
+  assert.deepEqual(db.calls.title, [], "the answer to a copied card");
+
+  await act(() => current().newChat());
+  const { forkId: renamedId } = await openFork(db, act, current);
+  assert.notEqual(renamedId, forkId);
+  db.conversations.get(renamedId).title = "Launch, short version";
+  await act(() => current().switchChat(renamedId));
+  await act(() => current().send("Make it shorter"));
+  assert.deepEqual(db.calls.title, [], "renamed before its first message");
 });
