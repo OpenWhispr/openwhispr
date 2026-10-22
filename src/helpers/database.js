@@ -3380,7 +3380,11 @@ class DatabaseManager {
         params.push(spaceId);
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
-      const stmt = this.db.prepare(`SELECT * FROM notes ${where} ORDER BY updated_at DESC LIMIT ?`);
+      // Sort by time, not text: pulled notes keep the cloud's ISO updated_at
+      // ("...T...Z") while local writes store "YYYY-MM-DD HH:MM:SS".
+      const stmt = this.db.prepare(
+        `SELECT * FROM notes ${where} ORDER BY julianday(updated_at) DESC LIMIT ?`
+      );
       params.push(limit);
       return stmt.all(...params);
     } catch (error) {
@@ -3399,7 +3403,7 @@ class DatabaseManager {
         .prepare(
           `SELECT * FROM notes
            WHERE space_id = ? AND deleted_at IS NULL AND ${accountScope.sql}
-           ORDER BY updated_at DESC LIMIT ?`
+           ORDER BY julianday(updated_at) DESC LIMIT ?`
         )
         .all(spaceId, ...accountScope.params, limit);
     } catch (error) {
