@@ -203,9 +203,11 @@ const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
 // the last second of the final day — one second later is the exclusive end
 // day in both cases. REST rows are never collapsed — Google and Microsoft are
 // never mirrors of each other.
-const MIRROR_SLOT = `CASE WHEN is_all_day THEN 'day:' || CASE WHEN length(start_time) = 10
-  THEN start_time || '|' || end_time
-  ELSE date(start_time, 'localtime') || '|' || date(end_time, '+1 second', 'localtime') END
+const ALL_DAY_FIRST_DAY = `CASE WHEN length(start_time) = 10 THEN start_time
+  ELSE date(start_time, 'localtime') END`;
+const ALL_DAY_END_DAY = `CASE WHEN length(end_time) = 10 THEN end_time
+  ELSE date(end_time, '+1 second', 'localtime') END`;
+const MIRROR_SLOT = `CASE WHEN is_all_day THEN 'day:' || ${ALL_DAY_FIRST_DAY} || '|' || ${ALL_DAY_END_DAY}
   ELSE datetime(start_time) || '|' || datetime(end_time) END`;
 
 function dedupedEventsQuery(where) {
@@ -5281,16 +5283,21 @@ class DatabaseManager {
     }
   }
 
-  getUpcomingEvents(windowMinutes = 1440) {
+  // includeAllDay adds all-day events on a local day the window touches (the
+  // assistant's calendar tool; reminders and the meeting list skip them).
+  getUpcomingEvents(windowMinutes = 1440, { includeAllDay = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const timed =
+        "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0";
+      const allDay = `is_all_day = 1 AND ${ALL_DAY_FIRST_DAY} <= date('now', '+' || ? || ' minutes', 'localtime') AND ${ALL_DAY_END_DAY} > date('now', 'localtime')`;
       return this.db
         .prepare(
           dedupedEventsQuery(
-            "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0 AND status IN ('confirmed', 'tentative')"
+            `(${includeAllDay ? `(${timed}) OR (${allDay})` : timed}) AND status IN ('confirmed', 'tentative')`
           )
         )
-        .all(windowMinutes)
+        .all(...(includeAllDay ? [windowMinutes, windowMinutes] : [windowMinutes]))
         .filter((event) => event.self_response_status !== "declined")
         .map(stripDedupeColumn);
     } catch (error) {

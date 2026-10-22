@@ -3200,7 +3200,8 @@ declare global {
       gcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
       gcalGetUpcomingEvents?: (
-        windowMinutes?: number
+        windowMinutes?: number,
+        options?: { includeAllDay?: boolean }
       ) => Promise<{ success: boolean; events: any[] }>;
       connectorStatus?: () => Promise<ConnectorStatus[]>;
       connectorPrepare?: (

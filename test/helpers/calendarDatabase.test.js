@@ -718,3 +718,46 @@ test("all-day mirrors pair whichever end EventKit reports, and a longer namesake
   );
   db.db.close();
 });
+
+test("the assistant's upcoming events add all-day ones on the local days its window touches", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const allDay = (id, first, after) =>
+    restEvent("google", "google-calendar", id, {
+      start_time: localDate(day(first)),
+      end_time: localDate(day(after)),
+      is_all_day: true,
+    });
+  db.upsertCalendarEvents([
+    allDay("yesterday", -1, 0),
+    allDay("today", 0, 1),
+    allDay("all-week", -2, 5),
+    allDay("in-three-days", 3, 4),
+    allDay("in-ten-days", 10, 11),
+    // Calendar.app writes local midnights as instants.
+    appleEvent("apple-tomorrow", {
+      start_time: day(1).toISOString(),
+      end_time: day(2).toISOString(),
+      is_all_day: true,
+    }),
+  ]);
+  const ids = (events) => events.map((event) => event.id).sort();
+
+  assert.deepEqual(
+    ids(db.getUpcomingEvents(10080)),
+    [],
+    "reminders and the meeting list skip them"
+  );
+  assert.deepEqual(ids(db.getUpcomingEvents(10080, { includeAllDay: true })), [
+    "all-week",
+    "apple-tomorrow",
+    "in-three-days",
+    "today",
+  ]);
+  db.db.close();
+});
