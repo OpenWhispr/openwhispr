@@ -144,6 +144,11 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._stop.idleTimer = setTimeout(() => this._stop?.finish("idle"), STOP_IDLE_MS);
   }
 
+  // Self-hosted sessions do not expire at 60 minutes, so the base class's
+  // proactive reconnect would only commit mid-utterance. A server-sent
+  // session_expired still takes the base reconnect path.
+  _startSessionTimer() {}
+
   async disconnect({ commit = true } = {}) {
     // A second call while stop is waiting shares that wait.
     if (this._stopping) return this._stopping;

@@ -707,3 +707,9 @@ test("connect starts a new session with no turns left from the last one", async 
   assert.equal(stop.settled, true, "the old session's open turn must not hold this stop");
   await stop.stopped;
 });
+
+test("a self-hosted session sets no proactive 55-minute reconnect", async () => {
+  const { streaming } = await connectWith({ model: "whisper", apiKey: "" });
+  assert.equal(streaming._sessionTimer, null);
+  await streaming.disconnect();
+});
