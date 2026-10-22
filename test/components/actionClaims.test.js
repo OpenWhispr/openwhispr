@@ -243,8 +243,12 @@ test("an earlier turn backs only a report of the same kind, to whoever it names"
     await unbacked("Yes, your email to Dana was sent.", { earlierCalls: [toGabe] }),
     true
   );
-  // A first-person claim about before reports on that earlier turn.
+  // A first-person claim about before, or in the simple past, reports on that
+  // earlier turn: a work-log line the user asked for is never "not done".
   assert.equal(await unbacked("I sent it to Gabe earlier.", { earlierCalls: [toGabe] }), false);
+  const workLog = "I sent Gabe a concise Q3 roadmap email covering the November launch.";
+  assert.equal(await unbacked(workLog, { earlierCalls: [toGabe] }), false);
+  assert.equal(await unbacked(workLog), true);
   // Another kind never backs it.
   assert.equal(await unbacked("Yes, it was sent.", { earlierCalls: [call("create_note")] }), true);
   assert.equal(await unbacked("Yes, it was sent.", {}), true);
