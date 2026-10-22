@@ -76,6 +76,32 @@ test("openai-compatible realtime never releases its key without the server URL",
     fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), { mode: "byok" }),
     { message: "selfHostedRealtimeUrlMissing" }
   );
+  // Nor for a URL the client would refuse to dial: the key is not handed out
+  // first and checked later.
+  for (const url of [
+    "ws://stt.example.com/v1/realtime",
+    "http://192.168.1.20:9000/v1/realtime",
+    "not a url",
+  ]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+        mode: "self-hosted",
+        url,
+      }),
+      { message: "selfHostedRealtimeUrlInvalid" },
+      url
+    );
+  }
+  for (const url of [42, {}, "   "]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+        mode: "self-hosted",
+        url,
+      }),
+      { message: "selfHostedRealtimeUrlMissing" },
+      JSON.stringify(url)
+    );
+  }
 });
 
 test("openai byok returns the key; dual-stream duplicates it", async () => {

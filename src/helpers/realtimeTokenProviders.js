@@ -6,6 +6,7 @@
 // table is unit-testable without Electron.
 
 const { readPolicyResponseError } = require("./policyResponseError");
+const { buildRealtimeUrl } = require("./selfHostedRealtimeUrl");
 
 const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
@@ -94,9 +95,11 @@ const REALTIME_TOKEN_PROVIDERS = {
 
   // The key is optional: a local server may run without one. It is released
   // only for a connection that names its own server, so a request without a URL
-  // (dictation, which would dial api.openai.com) never carries it.
+  // (dictation, which would dial api.openai.com) never carries it, and only for
+  // a URL the client would dial: cleartext ws to a public host is refused here
+  // too, not just later at connect time.
   "openai-compatible-realtime": async ({ environmentManager }, options, streams) => {
-    if (!options.url) throw new Error("selfHostedRealtimeUrlMissing");
+    buildRealtimeUrl(options.url, options.model);
     return duplicate(streams, environmentManager.getOpenAICompatibleRealtimeKey() || "");
   },
 
