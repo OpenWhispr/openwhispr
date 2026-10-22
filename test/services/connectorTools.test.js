@@ -2028,3 +2028,64 @@ test("a channel gone by Send asks where, with the user's rewrite", async (t) => 
   assert.equal(result.data.status, "needs_clarification");
   assert.equal(result.data.finalText, "Launch moved to Friday");
 });
+
+// ---- Markdown in email bodies ----
+
+const MARKDOWN_BODY = [
+  "## Schedule",
+  "**Thursday, Oct 22**",
+  "- Team Standup, 5:45 PM *(tentative)*",
+  "1. __Friday__: OW Design Review",
+  "Join: [the call](https://meet.example/abc) or [https://x.dev](https://x.dev)",
+  "#hashtag stays, and so does 2 * 3.",
+].join("\n");
+const PLAIN_BODY = [
+  "Schedule",
+  "Thursday, Oct 22",
+  "- Team Standup, 5:45 PM *(tentative)*",
+  "1. Friday: OW Design Review",
+  "Join: the call (https://meet.example/abc) or https://x.dev",
+  "#hashtag stays, and so does 2 * 3.",
+].join("\n");
+
+test("an email body loses its Markdown before the compose draft is built", async (t) => {
+  const calls = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async (...args) => {
+          calls.push(args);
+          return { state: "sent", destinationLabel: "gabe@example.com", bodyCopied: false };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  await createEmailDraftTool("gmail").execute({
+    to: ["gabe@example.com"],
+    subject: "Week",
+    body: MARKDOWN_BODY,
+  });
+  assert.equal(calls[0][2].body, PLAIN_BODY);
+});
+
+test("an email body loses its Markdown before the Gmail card is prepared", async (t) => {
+  const prepared = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => {
+          prepared.push(args);
+          return { status: "failed", errorCode: "network", message: "Offline." };
+        },
+      },
+    },
+  });
+  await setGmailStatus();
+  const { createEmailDraftTool } = await loadEmail();
+  await createEmailDraftTool("gmailSend").execute(
+    { ...GMAIL_DRAFT, body: MARKDOWN_BODY },
+    gmailContext("m-md", "call-md")
+  );
+  assert.equal(prepared[0].body, PLAIN_BODY);
+});
