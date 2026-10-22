@@ -28,6 +28,8 @@ const TOO_LARGE_FOR_NAMES =
 const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{2,}$/;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
+const MESSAGE_TS = /^\d{10}\.\d{6}$/;
+const REPLY_IN_THREAD_NOTE = { key: "connectors.approval.slack.notes.replyInThread" };
 
 // Escaping &, < and > makes a message post exactly as the card showed it:
 // no channel-wide mention or link the user didn't see.
@@ -41,19 +43,27 @@ function formatMessage(text) {
   return SLACK_ESCAPE_SPECIALS ? escapeSpecials(text) : text;
 }
 
-function messageParams(channel, text) {
-  return { channel, markdown_text: formatMessage(text) };
+function messageParams(channel, text, threadTs) {
+  return {
+    channel,
+    markdown_text: formatMessage(text),
+    ...(threadTs ? { thread_ts: threadTs } : {}),
+  };
 }
 
-// chat.postMessage returns no permalink; this is Slack's permalink format.
-function messageUrl(teamUrl, channel, ts) {
+// chat.postMessage returns no permalink; this is Slack's permalink format. A
+// reply's link names its thread, as Slack's own do, so replying to it again
+// stays in that thread.
+function messageUrl(teamUrl, channel, ts, threadTs) {
   if (typeof teamUrl !== "string" || typeof ts !== "string") return undefined;
-  return `${teamUrl.replace(/\/?$/, "/")}archives/${channel}/p${ts.replace(".", "")}`;
+  const url = `${teamUrl.replace(/\/?$/, "/")}archives/${channel}/p${ts.replace(".", "")}`;
+  return threadTs ? `${url}?thread_ts=${threadTs}&cid=${channel}` : url;
 }
 
 // A link to a conversation, or to a message in it:
-// https://<workspace>.slack.com/archives/<C…|G…|D…>[/p<ts>]. Null for
-// anything else.
+// https://<workspace>.slack.com/archives/<C…|G…|D…>[/p<ts>]. A reply can't
+// start a thread, and its link names the one it is in (?thread_ts=), so
+// threadTs is that thread. Null for anything else.
 function parseSlackLink(value) {
   let url;
   try {
@@ -64,8 +74,15 @@ function parseSlackLink(value) {
   const [archives, channelId, message, ...rest] = url.pathname.split("/").filter(Boolean);
   if (url.protocol !== "https:" || archives !== "archives" || rest.length > 0) return null;
   if (!/^[CDG][A-Z0-9]+$/.test(channelId ?? "")) return null;
-  if (message !== undefined && !LINK_MESSAGE.test(message)) return null;
-  return { host: url.hostname, channelId };
+  const ts = message === undefined ? null : LINK_MESSAGE.exec(message);
+  if (message !== undefined && !ts) return null;
+  const threadTs = url.searchParams.get("thread_ts");
+  if (threadTs !== null && !MESSAGE_TS.test(threadTs)) return null;
+  return {
+    host: url.hostname,
+    channelId,
+    threadTs: threadTs ?? (ts ? `${ts[1]}.${ts[2]}` : null),
+  };
 }
 
 // auth.test's url is the workspace's own: https://<workspace>.slack.com/.
@@ -75,6 +92,12 @@ function inWorkspace(link, teamUrl) {
   } catch {
     return false;
   }
+}
+
+// A person's DM is known only once Send opens it, which checks the thread
+// again; until then, a thread outside any DM can't be with them.
+function threadFits(target, thread) {
+  return target.kind === "user" ? thread.channelId.startsWith("D") : target.id === thread.channelId;
 }
 
 function failureMessage(errorCode, label = "", fallback = "Slack didn't accept the message.") {
@@ -102,8 +125,18 @@ function failureMessage(errorCode, label = "", fallback = "Slack didn't accept t
       return "The message is too long for Slack (12,000 characters at most, once formatted).";
     case "no_text":
       return "The message is empty.";
+    case "thread_mismatch":
+      return `That thread is in a different conversation from ${label}, so nothing was sent. To reply there, pass the thread's link as the destination too.`;
     case "wrong_workspace":
       return "That Slack link is from another workspace than the one connected. Nothing was sent.";
+    case "invalid_thread":
+      return "The thread must be a link to a Slack message, like https://<workspace>.slack.com/archives/C0123ABCD/p1712345678901234. Nothing was sent.";
+    case "cannot_reply_to_message":
+    case "restricted_action_thread_locked":
+    case "restricted_action_non_threadable_channel":
+      return "Slack doesn't allow replies in that thread.";
+    case "restricted_action_thread_only_channel":
+      return `Only replies in threads can be posted in ${label}.`;
     default:
       return fallback;
   }
@@ -309,6 +342,11 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       const destination = typeof args.destination === "string" ? args.destination.trim() : "";
       if (!destination)
         return clarify("Ask the user which Slack channel or person to send this to.");
+      const threadLink = typeof args.thread === "string" ? args.thread.trim() : "";
+      const thread = threadLink ? parseSlackLink(threadLink) : null;
+      if (threadLink && !thread?.threadTs) {
+        return prepareFailed("invalid_thread", failureMessage("invalid_thread"));
+      }
 
       const access = await auth.getAccessToken(binding);
       if (!access.ok) {
@@ -319,7 +357,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       }
       const { credential } = access;
       const parsed = parseDestination(destination);
-      if (parsed.link && !inWorkspace(parsed.link, credential.teamUrl)) {
+      if ([thread, parsed.link].some((link) => link && !inWorkspace(link, credential.teamUrl))) {
         return prepareFailed("wrong_workspace", failureMessage("wrong_workspace"));
       }
       const cacheKey = `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
@@ -337,15 +375,23 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         id: found.candidate.id,
         label: found.candidate.label,
       };
+      if (thread && !threadFits(target, thread)) {
+        return prepareFailed("thread_mismatch", failureMessage("thread_mismatch", target.label));
+      }
       return {
         status: "ready",
-        payload: { target, text },
+        payload: {
+          target,
+          text,
+          ...(thread ? { thread: { channelId: thread.channelId, ts: thread.threadTs } } : {}),
+        },
         preview: {
           verbKey: "slackPost",
           destinationLabel: target.label,
           accountLabel: credential.userName,
           workspaceLabel: credential.teamName,
           body: text,
+          ...(thread ? { notes: [REPLY_IN_THREAD_NOTE] } : {}),
         },
       };
     },
@@ -354,7 +400,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       if (action !== "send_message") {
         return { state: "failed", errorCode: "unknown_action", message: "Unknown Slack action." };
       }
-      const { target } = payload;
+      const { target, thread } = payload;
       const text = typeof edits.body === "string" ? edits.body : payload.text;
       // Checked before anything reaches Slack, a DM open included.
       const problem = textProblem(text);
@@ -401,10 +447,17 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         }
         channel = channelId;
       }
+      if (thread && channel !== thread.channelId) {
+        return {
+          state: "failed",
+          errorCode: "thread_mismatch",
+          message: failureMessage("thread_mismatch", target.label),
+        };
+      }
 
       const posted = await writeWithRefresh(
         "chat.postMessage",
-        messageParams(channel, text),
+        messageParams(channel, text, thread?.ts),
         binding,
         current
       );
@@ -412,7 +465,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       if (result.ok) {
         return {
           state: "sent",
-          url: messageUrl(posted.access.credential.teamUrl, channel, result.data.ts),
+          url: messageUrl(posted.access.credential.teamUrl, channel, result.data.ts, thread?.ts),
         };
       }
       if (result.outcome === "failed") {

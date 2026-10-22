@@ -23,10 +23,18 @@ function askAboutVanishedChannel(result: ToolResult, destination: string): ToolR
   return result;
 }
 
+// Main posts a send that has a thread only in that thread, so a sent one was
+// a reply there, not a new message in the conversation.
+function withThreadReply(result: ToolResult, thread: string): ToolResult {
+  const data = result.data as { status?: string } | null;
+  if (!thread || data?.status !== "sent") return result;
+  return { ...result, data: { ...data, repliedInThread: true } };
+}
+
 export const slackSendMessageTool: ToolDefinition = {
   name: "slack_send_message",
   description:
-    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, an email address, a Slack id (C…, U… or D…) or a Slack link to the conversation. `text` is the message in Markdown.",
+    "Post a message to Slack as the user. Nothing is sent until the user approves it on a card. `destination` is a #channel the user is in, a person's name, an @handle, an email address, a Slack id (C…, U… or D…) or a Slack link to the conversation. `text` is the message in Markdown. `thread` replies in a thread instead of posting a new message: a Slack link to any message in that thread.",
   parameters: {
     type: "object",
     properties: {
@@ -36,6 +44,11 @@ export const slackSendMessageTool: ToolDefinition = {
           "#channel, a person's name, @handle, email address, Slack id, or a Slack link to the conversation",
       },
       text: { type: "string", description: "The message, in Markdown" },
+      thread: {
+        type: "string",
+        description:
+          "To reply in a thread: a Slack link to a message in it, such as https://<workspace>.slack.com/archives/C…/p…",
+      },
     },
     required: ["destination", "text"],
     additionalProperties: false,
@@ -43,7 +56,7 @@ export const slackSendMessageTool: ToolDefinition = {
   readOnly: false,
   connectorId: "slack",
   promptInstruction:
-    "Use slack_send_message to post to a Slack channel or person as the user; the user approves each message on a card before it is sent. For a person, pass their name, @handle or email address.",
+    'Use slack_send_message to post to a Slack channel or person as the user; the user approves each message on a card before it is sent. For a person, pass their name, @handle or email address. When the user asks to reply in a thread ("in the same thread", "reply to this"), pass a Slack link to a message in that thread as thread (from the selected text, or the link an earlier slack_send_message returned) and the conversation it is in as destination (the same person or channel, or that link). If there is no such link, ask for one instead of posting a new message.',
 
   async execute(
     args: Record<string, unknown>,
@@ -51,14 +64,19 @@ export const slackSendMessageTool: ToolDefinition = {
   ): Promise<ToolResult> {
     const destination = typeof args.destination === "string" ? args.destination.trim() : "";
     const text = typeof args.text === "string" ? args.text : "";
+    const thread = typeof args.thread === "string" ? args.thread.trim() : "";
     if (!destination) {
       return needsClarificationResult(
         "Ask the user which Slack channel or person to send this to."
       );
     }
     if (!text.trim()) return failedResult("no_text", "The message is empty.");
-    const result = await runApprovalAction(context, "slack", "send_message", { destination, text });
-    return askAboutVanishedChannel(result, destination);
+    const result = await runApprovalAction(context, "slack", "send_message", {
+      destination,
+      text,
+      ...(thread ? { thread } : {}),
+    });
+    return withThreadReply(askAboutVanishedChannel(result, destination), thread);
   },
 };
 

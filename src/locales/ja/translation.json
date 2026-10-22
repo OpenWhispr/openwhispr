@@ -4226,7 +4226,11 @@
         "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
         "dm_failed": "{{destination}}とのダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "{{destination}}は読み取り専用か、あなたには制限されています。",
+        "thread_mismatch": "そのスレッドは{{destination}}とは別の会話にあります。何も送信されていません。",
         "wrong_workspace": "そのリンクは別のSlackワークスペースのものです。何も送信されていません。",
+        "invalid_thread": "Slackのメッセージへのリンクではありません。何も送信されていません。",
+        "thread_closed": "Slackではそのスレッドに返信できません。何も送信されていません。",
+        "thread_only": "{{destination}}ではスレッドでの返信のみ投稿できます。何も送信されていません。",
         "generic": "問題が発生しました。何も送信されていません。",
         "github": {
           "reconnect_needed": "設定でGitHubを再接続する必要があります。",
@@ -4349,7 +4353,10 @@
       "slack": {
         "channelLabel": "チャンネル",
         "asLabel": "送信者",
-        "destination": "{{workspace}} · {{destination}}"
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "スレッドに返信"
+        }
       },
       "sentLabel": "送信済み",
       "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
@@ -4579,7 +4586,11 @@
         "credential_save_failed": "このコンピューターにSlackのログイン情報を保存できませんでした。何も送信されていません。",
         "dm_failed": "ダイレクトメッセージを開けませんでした。何も送信されていません。",
         "restricted": "そのチャンネルは読み取り専用か、制限されています。",
+        "thread_mismatch": "そのスレッドは別の会話にあります。何も送信されていません。",
         "wrong_workspace": "そのリンクは別のSlackワークスペースのものです。",
+        "invalid_thread": "Slackのメッセージへのリンクではありません。",
+        "thread_closed": "Slackではそのスレッドに返信できません。",
+        "thread_only": "そのチャンネルではスレッドでの返信のみ投稿できます。",
         "generic": "うまくいきませんでした。",
         "github": {
           "reconnect_needed": "GitHubを再接続する必要があります。",

@@ -714,9 +714,184 @@ test("a list cut off at the page cap still finds an exact @username", async () =
   assert.equal(named.status, "needs_clarification", "a name alone still isn't enough");
 });
 
-// Links to FIXTURES.posted and FIXTURES.postedDm.
+// Links to FIXTURES.posted (where a thread starts), to FIXTURES.postedReply
+// in that thread, and to FIXTURES.postedDm.
 const ENG_MESSAGE = "https://acme-test.slack.com/archives/C0ENG/p1727200000123456";
+const ENG_REPLY =
+  "https://acme-test.slack.com/archives/C0ENG/p1727200009000200?thread_ts=1727200000.123456&cid=C0ENG";
 const GABE_DM_MESSAGE = "https://acme-test.slack.com/archives/D0GABE/p1727200001000100";
+const REPLY_NOTE = { key: "connectors.approval.slack.notes.replyInThread" };
+
+test("a thread link posts the reply in that thread, and the result links the reply in it", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.postedReply)],
+  });
+
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "#eng", text: "On it", thread: ENG_MESSAGE },
+    BOUND
+  );
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.preview.notes, [REPLY_NOTE]);
+  assert.equal(
+    typeof require("../../../src/locales/en/translation.json").connectors.approval.slack.notes
+      ?.replyInThread,
+    "string"
+  );
+  assert.deepEqual(slack.methods(), ["users.conversations"]);
+
+  const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+
+  assert.equal(posts(slack)[0].params.channel, "C0ENG");
+  assert.equal(posts(slack)[0].params.thread_ts, "1727200000.123456");
+  // Slack's own link to a reply, so replying to it again stays in the thread.
+  assert.deepEqual(result, { state: "sent", url: ENG_REPLY });
+});
+
+test("a reply's link replies in its thread, not under the reply", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.postedReply)],
+  });
+
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "#eng", text: "Same thread", thread: ENG_REPLY },
+    BOUND
+  );
+  await connector.commit("send_message", prepared.payload, {}, BOUND);
+
+  assert.equal(posts(slack)[0].params.thread_ts, "1727200000.123456");
+});
+
+test("without a thread nothing changes: no note, no thread_ts", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [ok(FIXTURES.posted)],
+  });
+  for (const thread of [undefined, null, "", "  "]) {
+    const prepared = await connector.prepare(
+      "send_message",
+      { destination: "#eng", text: "Ship it", thread },
+      BOUND
+    );
+    assert.equal(prepared.preview.notes, undefined, String(thread));
+  }
+  const prepared = await prepareEng(connector);
+  await connector.commit("send_message", prepared.payload, {}, BOUND);
+  assert.equal("thread_ts" in posts(slack)[0].params, false);
+});
+
+test("a thread in another conversation than the destination is refused before Slack is written to", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+
+  for (const destination of ["#eng-backend", "Gabe Smith", GABE_DM_MESSAGE]) {
+    const refused = await connector.prepare(
+      "send_message",
+      { destination, text: "hi", thread: ENG_MESSAGE },
+      BOUND
+    );
+    assert.equal(refused.status, "failed", destination);
+    assert.equal(refused.errorCode, "thread_mismatch", destination);
+  }
+  assert.equal(
+    slack
+      .methods()
+      .some((method) => method === "chat.postMessage" || method === "conversations.open"),
+    false
+  );
+});
+
+test("a DM thread for a person is checked against the DM opened at Send", async () => {
+  const other = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "conversations.open": [ok({ ok: true, channel: { id: "D0OTHER" } })],
+  });
+  const prepared = await other.connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith", text: "hi", thread: GABE_DM_MESSAGE },
+    BOUND
+  );
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.preview.notes, [REPLY_NOTE]);
+
+  const refused = await other.connector.commit("send_message", prepared.payload, {}, BOUND);
+
+  assert.equal(refused.state, "failed");
+  assert.equal(refused.errorCode, "thread_mismatch");
+  assert.equal(posts(other.slack).length, 0, "nothing posted after the mismatch");
+
+  const same = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "conversations.open": [ok(FIXTURES.dmOpen)],
+    "chat.postMessage": [ok(FIXTURES.postedDm)],
+  });
+  const ready = await same.connector.prepare(
+    "send_message",
+    { destination: "Gabe Smith", text: "hi", thread: GABE_DM_MESSAGE },
+    BOUND
+  );
+  const sent = await same.connector.commit("send_message", ready.payload, {}, BOUND);
+  assert.equal(sent.state, "sent");
+  assert.deepEqual(posts(same.slack)[0].params, {
+    channel: "D0GABE",
+    markdown_text: "hi",
+    thread_ts: "1727200001.000100",
+  });
+});
+
+test("a link from another workspace, or one that isn't a message link, is refused before calling Slack", async () => {
+  const { connector, slack } = await setupSlack(channelsOnly);
+  for (const [thread, errorCode] of [
+    ["https://other-team.slack.com/archives/C0ENG/p1727200000123456", "wrong_workspace"],
+    ["https://acme-test.slack.com/archives/C0ENG", "invalid_thread"],
+    [
+      "https://acme-test.slack.com/archives/C0ENG/p1727200000123456?thread_ts=soon",
+      "invalid_thread",
+    ],
+    ["https://example.com/eng/1727200000.123456", "invalid_thread"],
+    ["1727200000.123456", "invalid_thread"],
+  ]) {
+    const refused = await connector.prepare(
+      "send_message",
+      { destination: "#eng", text: "hi", thread },
+      BOUND
+    );
+    assert.equal(refused.status, "failed", thread);
+    assert.equal(refused.errorCode, errorCode, thread);
+    assert.equal(typeof refused.message, "string");
+  }
+  assert.deepEqual(slack.calls, []);
+});
+
+test("Slack refusing a reply in that thread is failed, not unknown", async () => {
+  for (const code of [
+    "cannot_reply_to_message",
+    "restricted_action_thread_locked",
+    "restricted_action_non_threadable_channel",
+  ]) {
+    const { connector } = await setupSlack({
+      ...channelsOnly,
+      "chat.postMessage": [slackError(code)],
+    });
+    const prepared = await connector.prepare(
+      "send_message",
+      { destination: "#eng", text: "hi", thread: ENG_MESSAGE },
+      BOUND
+    );
+    const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+    assert.equal(result.state, "failed", code);
+    assert.equal(result.errorCode, code);
+    assert.match(result.message, /thread/, code);
+  }
+});
 
 test("a channel, person or DM named by id, or by a link, resolves exactly", async () => {
   const { connector, slack } = await setupSlack({
