@@ -254,10 +254,11 @@ test("a selection without a reachable dictation agent routes to the panel with t
   });
 
   assert.equal(result, "make this shorter");
-  assert.equal(
-    manager.pendingAssistantConversation.transcript,
-    'make this shorter\n\n"the selected paragraph"'
-  );
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "make this shorter",
+    selectedText: "the selected paragraph",
+    screenContext: null,
+  });
   assert.equal(modelCalls.length, 0);
   assert.ok(!manager.pendingSelectionEdit, "no in-place replacement session may be armed");
 });
@@ -383,7 +384,8 @@ test("a question about a selection goes to the panel instead of replacing it", a
     assert.equal(modelCalls.length, 1, provider);
     assert.ok(!manager.pendingSelectionEdit, `${provider}: no replacement may be armed`);
     assert.deepEqual(manager.pendingAssistantConversation, {
-      transcript: 'explain this\n\n"the selected paragraph"',
+      transcript: "explain this",
+      selectedText: "the selected paragraph",
       screenContext: screenshot,
     });
   }

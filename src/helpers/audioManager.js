@@ -2893,10 +2893,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // and previews stay truthful.
   _bankAssistantDirective(transcript, config, options = {}) {
     if (!this.isProcessing) return;
-    const { selectedContext, deliverySessionId, deliveryAcceptsMarkdown, deliveryAppCategory } =
-      options || {};
+    const {
+      selectedText,
+      selectedContext,
+      deliverySessionId,
+      deliveryAcceptsMarkdown,
+      deliveryAppCategory,
+    } = options || {};
     this.pendingAssistantConversation = {
       transcript,
+      ...(selectedText !== undefined ? { selectedText } : {}),
       // resolveReasoningRoute mirrors an attached screenContext into
       // rawScreenContext (same object), so the raw carry is the single source
       // to read — it also survives when this attach gate dropped the image
@@ -2948,8 +2954,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           config?.wakeWordLanguage ?? resolveWakeWordLanguage(settings),
           config?.snippets ?? settings.snippets
         );
-    const transcript = selectedText === undefined ? command : `${command}\n\n"${selectedText}"`;
-    this._bankAssistantDirective(transcript, config, {
+    this._bankAssistantDirective(command, config, {
+      selectedText,
       selectedContext,
       deliverySessionId,
       deliveryAcceptsMarkdown,
