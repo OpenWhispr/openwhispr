@@ -135,8 +135,8 @@ export async function deliverAssistantResponse(
   if (delivery.mode === "paste") {
     // Both strips also cover the clipboard fallback (the user pastes into the
     // same field by hand); an answer the markdown strip empties is pasted raw.
-    const body = delivery.plainText ? markdownToPlainText(content) || content : content;
-    const text = delivery.appCategory ? withoutEmDashes(body) : body;
+    const toned = delivery.appCategory ? withoutEmDashes(content) : content;
+    const text = delivery.plainText ? markdownToPlainText(toned) || toned : toned;
     try {
       const result = await electronAPI?.pasteAtCapturedTarget?.(delivery.sessionId, text, {
         restoreClipboard: delivery.restoreClipboard,
