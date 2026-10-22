@@ -241,3 +241,35 @@ test("clearing the cached meeting restores another reminded running meeting", (t
   scheduler.onWakeFromSleep();
   assert.equal(prompts, 2, "waking cannot repeat a delivered reminder");
 });
+
+// Calendar.app mirrors Google and Microsoft accounts. The database hides the
+// Apple copy once the REST copy is stored, which can be after the reminder.
+test("a meeting reminded from its Apple copy is not reminded again when the REST copy syncs", () => {
+  const appleCopy = activeEvent("apple", "apple-1");
+  const restCopy = {
+    ...appleCopy,
+    id: "google-1",
+    provider: "google",
+    // Google stores offset-form timestamps; the instants match.
+    start_time: appleCopy.start_time.replace("Z", "+00:00"),
+    end_time: appleCopy.end_time.replace("Z", "+00:00"),
+  };
+  let events = [appleCopy];
+  const databaseManager = {
+    getUpcomingEvents: () => events,
+    getActiveEvents: () => events,
+  };
+  const scheduler = new CalendarReminderScheduler(databaseManager);
+  const reminded = [];
+  scheduler.meetingDetectionEngine = {
+    handleCalendarReminder: (event) => reminded.push(event.id),
+  };
+
+  scheduler.scheduleNextMeeting();
+  // The next Google sync stores the REST copy and refreshes the schedule.
+  events = [restCopy];
+  scheduler.scheduleNextMeeting();
+
+  assert.deepEqual(reminded, ["apple-1"]);
+  scheduler.stop();
+});
