@@ -752,3 +752,22 @@ test("a named turn's late committed is not taken as the stop's ack", async () =>
   assert.equal((await stop.stopped).text, "turn a turn b");
   await streaming.disconnect();
 });
+test("an empty-commit error known only by its code settles stop with no error", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  const errors = [];
+  streaming.onError = (err) => errors.push(err);
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, completed("only turn"));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, {
+    type: "error",
+    error: { code: "input_audio_buffer_commit_empty", message: "Audio buffer is empty" },
+  });
+  await tickImmediate();
+  assert.equal(stop.settled, true, "the empty commit is the stop's answer");
+  assert.equal((await stop.stopped).text, "only turn");
+  assert.deepEqual(errors, []);
+  await streaming.disconnect();
+});

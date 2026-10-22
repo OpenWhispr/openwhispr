@@ -25,6 +25,13 @@ const MODEL_MISSING = "selfHostedRealtimeModelMissing";
 const COMPLETED = "conversation.item.input_audio_transcription.completed";
 const FAILED = "conversation.item.input_audio_transcription.failed";
 
+// Mirrors Tinfoil's check. It reads the raw event because the base class
+// hands onError only the message, which some servers word differently.
+const isEmptyBufferError = (error) =>
+  error?.code === "input_audio_buffer_commit_empty" ||
+  (error?.message || "").includes("buffer too small") ||
+  (error?.message || "").includes("commit_empty");
+
 const createCompatibleRealtimeSocket = ({ url, apiKey }) =>
   new WebSocket(url, apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {});
 
@@ -68,6 +75,14 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     }
     if (!event || typeof event !== "object") return super.handleMessage(data);
     if (this._stop) this._restartStopIdle();
+
+    // An empty commit while stopping is the answer to stop's commit, not an
+    // error to show.
+    if (event.type === "error" && this._stop && isEmptyBufferError(event.error)) {
+      this._stop.acked = true;
+      this._checkStop();
+      return;
+    }
 
     let forwarded = event;
     switch (event.type) {
@@ -172,7 +187,6 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
 
   async _commitAndDrain() {
     this.isDisconnecting = true;
-    const prevOnError = this.onError;
     await new Promise((resolve) => {
       const stop = { acked: false, idleTimer: null };
       const maxTimer = setTimeout(() => stop.finish("max"), STOP_MAX_MS);
@@ -182,7 +196,6 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
         clearTimeout(maxTimer);
         this._stop = null;
         this._onTurnSettled = null;
-        this.onError = prevOnError;
         if (timedOut) {
           debugLogger.debug(
             `${this.providerLabel} stop timeout, using accumulated text`,
@@ -198,14 +211,6 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
       // shortcut; only a closed socket ends this one early.
       this._onTurnSettled = (reason) => {
         if (reason === "closed") stop.finish();
-      };
-      this.onError = (err) => {
-        if (err?.message?.includes("buffer too small") || err?.message?.includes("commit_empty")) {
-          stop.acked = true;
-          this._checkStop();
-        } else {
-          prevOnError?.(err);
-        }
       };
 
       try {
