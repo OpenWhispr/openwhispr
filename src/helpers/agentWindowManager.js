@@ -21,7 +21,7 @@ const sameBounds = (a, b) =>
 /**
  * The assistant's own window (`?agent=true`): a pill, a composer above it, or
  * a modal. It is created hidden once the normal app is up and kept alive while
- * hidden, so a conversation (and a turn waiting on the user) survives a close.
+ * hidden, so it opens at once; a close starts a new chat in it.
  * The renderer owns the layout and asks for bounds and keyboard focus; main
  * owns placement, focus, and the voice state that keeps dictation off the mic.
  */
@@ -111,7 +111,7 @@ class AgentWindowManager {
   }
 
   // The window goes away without the renderer asking (onboarding took the
-  // screen, Alt+F4, Cmd+W): it drops its take and turn, and starts over hidden.
+  // screen, Alt+F4, Cmd+W): it drops its take and turn, starts a new chat, and hides.
   dismiss() {
     if (!this.window) return;
     this._send("agent-window-dismiss");

@@ -15,7 +15,10 @@ const MOCKS = {
     globalThis.__chat = {
       set(next) { state = { ...state, ...next }; listeners.forEach((listener) => listener()); },
       sent: [],
+      // How many new chats had started when each request was sent.
+      sentAfterNewChats: [],
       cancels: 0,
+      newChats: 0,
     };
     export function useAgentChat() {
       const current = useSyncExternalStore(
@@ -28,10 +31,14 @@ const MOCKS = {
         conversationId: 1,
         forkOrigin: current.forkOrigin ?? null,
         agentState: current.busy ? "streaming" : "idle",
-        send: async (text) => { globalThis.__chat.sent.push(text); return true; },
+        send: async (text) => {
+          globalThis.__chat.sent.push(text);
+          globalThis.__chat.sentAfterNewChats.push(globalThis.__chat.newChats);
+          return true;
+        },
         cancel() { globalThis.__chat.cancels += 1; },
         switchChat: async () => true,
-        newChat() {},
+        newChat() { globalThis.__chat.newChats += 1; },
         fork: async () => null,
         regenerate() {},
       };
@@ -1179,4 +1186,57 @@ test("a reply that still claims an action nothing did says it wasn't done", asyn
     view.host.textContent,
     /Not actually done: nothing ran for what this reply says it did\./
   );
+});
+
+const finished = { ...reply([], "Here is the plan."), isStreaming: false };
+
+test("Close starts a new chat, and a command that arrives while the window hides goes to it", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+
+  await React.act(async () => view.button("Close").click());
+  assert.equal(globalThis.__chat.newChats, 1);
+  await React.act(async () => view.main.handlers.command({ text: "What's next?" }));
+  await view.settle();
+  assert.deepEqual(globalThis.__chat.sent, ["What's next?"]);
+  assert.deepEqual(globalThis.__chat.sentAfterNewChats, [1], "sent in the new chat");
+  assert.equal(globalThis.__chat.newChats, 1, "only one new chat");
+});
+
+test("Esc on an idle window starts a new chat; over a running reply it only stops the reply", async (t) => {
+  const view = await mountWindow(t);
+  const escape = () =>
+    React.act(async () =>
+      view.happyWindow.document.dispatchEvent(
+        new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      )
+    );
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([], "Here is")] });
+  await escape();
+  assert.equal(globalThis.__chat.cancels, 1);
+  assert.equal(globalThis.__chat.newChats, 0, "the reply stops, the chat stays");
+
+  await view.chat({ busy: false, messages: [user, finished] });
+  await escape();
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 1);
+});
+
+test("main's dismiss starts a new chat; Minimize keeps it", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ messages: [user, finished] });
+
+  await React.act(async () => view.button("Minimize").click());
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 0);
+
+  await React.act(async () => view.main.handlers.dismiss());
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 1);
 });

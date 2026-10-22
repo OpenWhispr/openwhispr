@@ -407,17 +407,28 @@ export default function AgentWindow() {
     droppedTakeRef.current = takeRef.current;
     cancelTake();
   }, [cancelTake]);
-  const { hide: hideSurface } = surface;
-  const close = useCallback(async () => {
+  // Bumped when the user opens another chat, so the list starts again at the
+  // newest message instead of wherever the previous chat was scrolled.
+  const [openedChat, setOpenedChat] = useState(0);
+
+  const newChat = useCallback(() => {
+    stopReading();
     dropTake();
+    setOpenedChat((count) => count + 1);
+    startNewChat();
+  }, [dropTake, startNewChat, stopReading]);
+
+  const { hide: hideSurface } = surface;
+  // A close starts a new chat, before the hide so that a command arriving
+  // meanwhile goes to it; the old chat stays in the list. Minimize keeps the chat.
+  const close = useCallback(async () => {
+    newChat();
     pressRef.current += 1;
     openedByTakeRef.current = false;
-    cancelTurn();
-    stopReading();
     setRefusal(null);
     await hideSurface();
     dispatch({ type: "hide" });
-  }, [cancelTurn, dispatch, dropTake, hideSurface, stopReading]);
+  }, [dispatch, hideSurface, newChat]);
 
   const handleHotkey = useCallback(
     ({ external }: { external: boolean }) => {
@@ -493,10 +504,8 @@ export default function AgentWindow() {
       });
     },
     dismiss: () => {
-      dropTake();
+      newChat();
       pressRef.current += 1;
-      cancelTurn();
-      stopReading();
       setRefusal(null);
       surface.forgetBounds();
       dispatch({ type: "hide" });
@@ -565,10 +574,6 @@ export default function AgentWindow() {
     });
   }, [conversationId, forkOrigin, dispatch]);
 
-  // Bumped when the user opens another chat, so the list starts again at the
-  // newest message instead of wherever the previous chat was scrolled.
-  const [openedChat, setOpenedChat] = useState(0);
-
   const forkMessage = useCallback(
     async (messageId: string, selectedText?: string) => {
       const message = messagesRef.current.find((m) => m.id === messageId);
@@ -616,13 +621,6 @@ export default function AgentWindow() {
     },
     [conversationId, dropTake, openChat, stopReading]
   );
-
-  const newChat = useCallback(() => {
-    stopReading();
-    dropTake();
-    setOpenedChat((count) => count + 1);
-    startNewChat();
-  }, [dropTake, startNewChat, stopReading]);
 
   const readAloudState = useMemo(
     () => ({
