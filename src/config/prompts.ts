@@ -162,6 +162,10 @@ const GROUNDING_RULE =
 export const CLAIM_CHECK_NOTE =
   "Automatic check, not from the user: your reply says something was done, but no tool result shows it. If the user asked for that action, do it with the tool; if your text is a draft or a quote, keep it; otherwise correct the reply.";
 
+/** Asks for the answer, as the user, once a turn has used every tool step it may. */
+export const STEP_LIMIT_NOTE =
+  "Automatic note, not from the user: you have used every tool call this turn allows. Answer now with what you have, without calling tools, and say plainly what is unfinished.";
+
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";
 const UNNAMED_SIGN_OFF_RULE = `${PLACEHOLDER_RULE} You don't know the user's name, so end an email without a signature line.`;

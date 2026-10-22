@@ -13,7 +13,7 @@ import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../con
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
-import { CLAIM_CHECK_NOTE, wrapCleanupTranscript } from "../config/prompts";
+import { CLAIM_CHECK_NOTE, STEP_LIMIT_NOTE, wrapCleanupTranscript } from "../config/prompts";
 import { stripThinkingTags } from "../helpers/stripThinking.js";
 import {
   getLlmRequestTimeoutSeconds,
@@ -92,7 +92,8 @@ function toByokStreamProvider(provider: string): ByokStreamProvider {
 
 /**
  * A run that ends with finishReason "tool-calls" stopped at the step cap while
- * the model still wanted to call tools. "unbacked_claim" follows a final
+ * the model still wanted to call tools; one more step, with no tools, gave
+ * its answer (STEP_LIMIT_NOTE). "unbacked_claim" follows a final
  * answer that claims an action no tool call in its turn did: with `retry`, its
  * text is withdrawn and the model asked once more (CLAIM_CHECK_NOTE).
  */
@@ -1019,11 +1020,14 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanChat || apiConfig.supportsTemperature;
 
-    const run = (prompt: import("ai").ModelMessage[], maxSteps: number) =>
+    // The step that answers at the cap keeps the tools but may not call them:
+    // providers that check a conversation's tool use need the tools defined.
+    const run = (prompt: import("ai").ModelMessage[], maxSteps: number, answer: boolean) =>
       streamText({
         model: aiModel,
         messages: prompt,
         tools: tools || undefined,
+        ...(answer && tools ? { toolChoice: "none" as const } : {}),
         stopWhen: stepCountIs(maxSteps),
         prepareStep: ({ messages }) => ({
           messages: withStepImages(compactTranscriptHistory(messages), config.stepImages),
@@ -1039,6 +1043,8 @@ class ReasoningService extends BaseReasoningService {
     })) as import("ai").ModelMessage[];
     let stepsLeft = tools ? ReasoningService.MAX_TOOL_STEPS : 1;
     let claimRetried = false;
+    // Once the cap stops a run that still wanted tools, one last step with no tools answers.
+    let answeringAtCap = false;
 
     let canFlushFilteredText = true;
     const finishFilteredText = (): string => {
@@ -1048,12 +1054,14 @@ class ReasoningService extends BaseReasoningService {
 
     try {
       // One run, or two when the final answer of the first claims an action no
-      // tool call did: the second starts from everything the first said.
+      // tool call did, or the first hit the step cap: the second starts from
+      // everything the first said.
       for (;;) {
-        const result = run(prompt, stepsLeft);
+        const result = run(prompt, stepsLeft, answeringAtCap);
         let stepText = "";
         let stepsTaken = 0;
         let retry = false;
+        let capped = false;
         for await (const chunk of result.fullStream) {
           if (chunk.type === "text-delta") {
             const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
@@ -1140,13 +1148,21 @@ class ReasoningService extends BaseReasoningService {
               retry = !claimRetried && stepsTaken < stepsLeft;
               yield { type: "unbacked_claim", retry };
             }
-            if (!retry) yield { type: "done", finishReason: chunk.finishReason };
+            capped = chunk.finishReason === "tool-calls" && !answeringAtCap && Boolean(tools);
+            if (answeringAtCap) yield { type: "done", finishReason: "tool-calls" };
+            else if (!retry && !capped) yield { type: "done", finishReason: chunk.finishReason };
           }
         }
-        if (!retry) break;
+        if (!retry && !capped) break;
+        const { messages: answered } = await result.response;
+        if (capped) {
+          answeringAtCap = true;
+          stepsLeft = 1;
+          prompt = [...prompt, ...answered, { role: "user", content: STEP_LIMIT_NOTE }];
+          continue;
+        }
         claimRetried = true;
         stepsLeft -= stepsTaken;
-        const { messages: answered } = await result.response;
         prompt = [...prompt, ...answered, { role: "user", content: CLAIM_CHECK_NOTE }];
       }
     } catch (error) {
@@ -1484,6 +1500,20 @@ class ReasoningService extends BaseReasoningService {
 
     if (operationWasCancelled()) return;
     // Every step ended in tool calls: the cap stopped a run that wasn't done.
+    // One more step, with no tools, answers with what it has.
+    const answer = this.streamFromIPC(
+      [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
+      { systemPrompt: config.systemPrompt, screenContext: config.screenContext }
+    );
+    let answerText = "";
+    for await (const ev of answer.stream) {
+      if (ev.type !== "content") continue;
+      answerText += ev.text as string;
+      yield { type: "content", text: ev.text as string };
+    }
+    if (answer.wasCancelled() || operationWasCancelled()) return;
+    // Checked like any answer, but not asked again: the turn has no steps left.
+    if (config.isUnbackedClaim?.(answerText)) yield { type: "unbacked_claim", retry: false };
     yield { type: "done", finishReason: "tool-calls" };
   }
 
