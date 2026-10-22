@@ -16,8 +16,7 @@ export interface UploadSegment {
 // mixed-base transcript defeats the export rebase (normalizeSegmentTimestamps
 // keys off min timestamp > 1e9), rendering garbage cue times. The rebase
 // subtracts the minimum on export, so pure-upload output is unchanged.
-// Undefined when there is nothing usable, so plain-text uploads stay exactly
-// as they were.
+// Undefined when there is no usable timing; the caller can keep an untimed segment.
 export function buildUploadTranscript(
   segments?: UploadSegment[] | null,
   anchorMs: number = Date.now()
@@ -74,11 +73,8 @@ interface SaveUploadNoteParams {
   segments?: UploadSegment[] | null;
 }
 
-// The one save path for upload and URL-ingest notes, shared by the single-file
-// flow and the batch queue: the duration goes in the insert (updateNote does
-// not whitelist audio_duration_seconds), and the diarization columns and the
-// timestamped transcript follow through updateNote — the same route the
-// meeting path writes them through.
+// Save transcription with the note itself, so the note-added event and file
+// mirror see it even if the later diarization metadata write fails.
 export async function saveUploadNote({
   title,
   text,
@@ -93,17 +89,32 @@ export async function saveUploadNote({
     durationSeconds,
     segments
   );
+  const timedTranscript = noteUpdates?.transcript as string | undefined;
+  const normalize = (value: string) => value.trim().replace(/\s+/g, " ");
+  const timedText = timedTranscript
+    ? (JSON.parse(timedTranscript) as Array<{ text: string }>).map((seg) => seg.text).join(" ")
+    : "";
+  // Incomplete timing rows must not replace words from the complete result.
+  const transcript =
+    timedTranscript && normalize(timedText) === normalize(text)
+      ? timedTranscript
+      : JSON.stringify([{ text }]);
   const res = await window.electronAPI.saveNote(
     title,
-    text,
+    "",
     "upload",
     sourceName,
     audioDurationSeconds,
-    folderId
+    folderId,
+    null,
+    transcript
   );
   if (res.success && res.note && noteUpdates) {
+    const { transcript: _transcript, ...metadata } = noteUpdates;
     // Best-effort: a failed metadata write must not error a saved note.
-    await window.electronAPI.updateNote(res.note.id, noteUpdates).catch(() => {});
+    if (Object.keys(metadata).length) {
+      await window.electronAPI.updateNote(res.note.id, metadata).catch(() => {});
+    }
   }
   return res;
 }

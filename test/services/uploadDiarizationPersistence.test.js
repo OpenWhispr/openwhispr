@@ -93,7 +93,10 @@ test("a diarized file upload persists the diarization metadata", async (t) => {
 
   assert.equal(calls.saveNote.length, 1);
   const [, content, noteType, sourceFile, audioDuration] = calls.saveNote[0];
-  assert.equal(content, "[Speaker 1] hello [Speaker 2] hi");
+  assert.equal(content, "");
+  assert.deepEqual(JSON.parse(calls.saveNote[0][7]), [
+    { text: "[Speaker 1] hello [Speaker 2] hi" },
+  ]);
   assert.equal(noteType, "upload");
   assert.equal(sourceFile, "board-meeting.m4a");
   assert.equal(audioDuration, 4359.87);
