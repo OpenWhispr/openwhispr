@@ -748,3 +748,23 @@ test("history always starts with the user, however the window or the cap cuts it
   assert.ok(capped.length <= 40, String(capped.length));
   assert.deepEqual(capped, [{ role: "user", content: "Thanks" }]);
 });
+
+test("a look at the screen isn't replayed: later turns don't offer the tool", async () => {
+  const { toHistoryMessages } = await load();
+  for (const toolHistory of ["parts", "text"]) {
+    const history = toHistoryMessages(
+      [
+        user("What's this error?"),
+        assistant("It's a refused connection to port 3000.", [
+          call("look_at_screen", { question: "What does the error say?" }),
+        ]),
+        user("Thanks"),
+      ],
+      { toolHistory }
+    );
+    assert.deepEqual(history[1], {
+      role: "assistant",
+      content: "It's a refused connection to port 3000.",
+    });
+  }
+});

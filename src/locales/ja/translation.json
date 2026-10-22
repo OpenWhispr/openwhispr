@@ -3933,6 +3933,8 @@
       "request_connectionStatus": "接続を依頼しています...",
       "request_accessName": "アクセス",
       "request_accessStatus": "アクセスを依頼しています...",
+      "look_at_screenName": "画面を見る",
+      "look_at_screenStatus": "画面を確認しています...",
       "request_api_keyName": "API キー",
       "request_api_keyStatus": "API キーを依頼しています...",
       "open_settingsName": "設定",

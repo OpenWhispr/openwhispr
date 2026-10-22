@@ -1792,6 +1792,8 @@
       "request_connectionStatus": "جارٍ طلب الربط...",
       "request_accessName": "وصول",
       "request_accessStatus": "جارٍ طلب الوصول...",
+      "look_at_screenName": "النظر إلى الشاشة",
+      "look_at_screenStatus": "جارٍ النظر إلى شاشتك...",
       "request_api_keyName": "مفتاح API",
       "request_api_keyStatus": "جارٍ طلب مفتاح API...",
       "open_settingsName": "الإعدادات",

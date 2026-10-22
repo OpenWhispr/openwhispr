@@ -3933,6 +3933,8 @@
       "request_connectionStatus": "正在請求連結...",
       "request_accessName": "存取",
       "request_accessStatus": "正在請求存取...",
+      "look_at_screenName": "查看螢幕",
+      "look_at_screenStatus": "正在查看你的螢幕...",
       "request_api_keyName": "API 金鑰",
       "request_api_keyStatus": "正在請求 API 金鑰...",
       "open_settingsName": "設定",

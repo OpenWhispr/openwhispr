@@ -1315,6 +1315,21 @@ class ReasoningService extends BaseReasoningService {
     return { stream: generator, wasCancelled: () => cancelled };
   }
 
+  /** One Cloud request about a screenshot, with no tools: the vision chain's answer as text. */
+  async askAboutScreen(
+    question: string,
+    screenContext: { data: string; mediaType: string },
+    systemPrompt: string
+  ): Promise<string> {
+    const { stream } = this.streamFromIPC([{ role: "user", content: question }], {
+      systemPrompt,
+      screenContext,
+    });
+    let answer = "";
+    for await (const ev of stream) if (ev.type === "content") answer += ev.text as string;
+    return answer;
+  }
+
   processTextStreamingCloud(
     messages: Array<{ role: string; content: string | Array<unknown> }>,
     config: {

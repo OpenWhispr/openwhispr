@@ -170,9 +170,13 @@ export function connectsFirst(call: ToolCallInfo): boolean {
 }
 
 // Older versions stored built-in help evidence as a synthetic tool call. It
-// was never a model tool and must not teach future turns to invoke it.
+// was never a model tool and must not teach future turns to invoke it. A look
+// at the screen belongs to the turn its screenshot came with: later turns
+// don't offer the tool, and a provider refuses a call to one it doesn't offer.
+const NOT_REPLAYED = new Set(["grounded_product_help", "look_at_screen"]);
+
 function replayedCalls(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): ToolCallInfo[] {
-  return (toolCalls ?? []).filter((call) => call.name !== "grounded_product_help");
+  return (toolCalls ?? []).filter((call) => !NOT_REPLAYED.has(call.name));
 }
 
 // A tool that asked to connect its service first is recorded by what it then did.

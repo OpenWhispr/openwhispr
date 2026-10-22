@@ -3933,6 +3933,8 @@
       "request_connectionStatus": "正在请求连接...",
       "request_accessName": "访问",
       "request_accessStatus": "正在请求访问...",
+      "look_at_screenName": "查看屏幕",
+      "look_at_screenStatus": "正在查看你的屏幕...",
       "request_api_keyName": "API 密钥",
       "request_api_keyStatus": "正在请求 API 密钥...",
       "open_settingsName": "设置",
