@@ -18,6 +18,7 @@ const NO_API_KEY = "no-api-key";
 // Sentinels MeetingRecordingMount translates; the resolver throws the same ones.
 const URL_MISSING = "selfHostedRealtimeUrlMissing";
 const URL_INVALID = "selfHostedRealtimeUrlInvalid";
+const MODEL_MISSING = "selfHostedRealtimeModelMissing";
 
 // Mirrors isSecureHttpEndpoint: wss anywhere, cleartext ws only on a private
 // host, so a key never crosses the public internet unencrypted. The model goes
@@ -55,13 +56,17 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const url = buildRealtimeUrl(options.url, options.model);
+    const typedModel = typeof options.model === "string" ? options.model.trim() : "";
+    const url = buildRealtimeUrl(options.url, typedModel);
     const apiKey = options.apiKey || "";
-    const model = (options.model || "").trim() || new URL(url).searchParams.get("model");
+    // Never fall through to the base class's OpenAI default model id: these
+    // servers refuse the upgrade without ?model= (Speaches) or ignore it.
+    const model = typedModel || new URL(url).searchParams.get("model")?.trim();
+    if (!model) throw new Error(MODEL_MISSING);
     return super.connect({
       ...options,
       apiKey: apiKey || NO_API_KEY,
-      model: model || undefined,
+      model,
       // No server mints a session for us, so it is always configured here.
       preconfigured: false,
       inputRate: COMPATIBLE_REALTIME_INPUT_RATE,
