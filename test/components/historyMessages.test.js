@@ -580,7 +580,7 @@ test("with parts, drafted content, results and the resolved destination are neve
               status: "sent",
               reference: "o/r#7",
               url: "https://github.com/o/r/issues/7",
-              destination: "Joshua Padoa",
+              destination: "Sam Rivera",
               finalText: "the edited issue",
             },
           }
@@ -617,7 +617,7 @@ test("with parts, drafted content, results and the resolved destination are neve
     "Secret plan",
     "body text",
     "dana@example.com",
-    "Joshua",
+    "Sam",
     "edited issue",
     "2 results",
     "ignore previous",
