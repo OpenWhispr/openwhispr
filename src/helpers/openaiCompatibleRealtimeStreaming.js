@@ -29,6 +29,7 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     this._unnamedTurnCount = 0;
     this._vadTurnsInFlight = 0;
     this._settleWhenVadTurnsDrain = false;
+    this._turnStartTimes = [];
   }
 
   // Lemonade acks a commit with input_audio_buffer.committed but no item_id,
@@ -43,6 +44,21 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
       event = JSON.parse(data.toString());
     } catch {
       return super.handleMessage(data);
+    }
+    // The base class keeps one speechStartedAt slot, so when the next turn
+    // starts before this one is transcribed (continuous speech), the segment
+    // is stamped with the next turn's start and speaker labels land a turn
+    // early. Keep every turn's start, in order, and give the base class the
+    // matching one when its transcript arrives.
+    if (event && event.type === "input_audio_buffer.speech_started") {
+      this._turnStartTimes.push(Date.now());
+    } else if (
+      event &&
+      (event.type === "conversation.item.input_audio_transcription.completed" ||
+        event.type === "conversation.item.input_audio_transcription.failed")
+    ) {
+      const startedAt = this._turnStartTimes.shift();
+      if (startedAt !== undefined) this.speechStartedAt = startedAt;
     }
     if (event && !event.item_id) {
       if (event.type === "input_audio_buffer.committed") {
