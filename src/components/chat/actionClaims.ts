@@ -91,9 +91,9 @@ export type ActionClaim = "new" | "recalled";
 
 /**
  * What the reply claims was done, if anything. A verb the user's own text
- * already has (`source`: their selected text and quotes) is theirs, as in a
- * rewrite of "I have emailed the client"; a sentence that introduces a draft
- * ("I've created a summary:") claims only a delivery.
+ * already has (`source`) is theirs, as in a rewrite of "I have emailed the
+ * client"; a sentence that introduces a draft ("I've created a summary:")
+ * claims only a delivery.
  */
 export function claimedAction(text: string, source = ""): ActionClaim | null {
   if (text.includes(TRACE_OPENING)) return "new";
@@ -121,8 +121,17 @@ export interface ClaimContext {
   /** Calls recorded for earlier turns, and those a regenerate carried over. */
   earlierCalls: ReadonlyArray<ToolCallInfo>;
   isReadOnly: (toolName: string) => boolean;
-  /** The user's request and the text they selected, which a reply may repeat. */
+  /** The user's request and the text they selected, whose words a reply may write for them. */
   request: { text: string; selectedText?: string };
+}
+
+// The user's own words a reply may repeat: what they selected, what they
+// quoted, and what their request asks to be said ("say I've posted it").
+function userText({ text, selectedText = "" }: ClaimContext["request"]): string {
+  const asked = CLAIMS.flatMap(({ pattern }) =>
+    [...text.matchAll(pattern)].map(([, verb]) => verb)
+  );
+  return [selectedText, ...(text.match(QUOTED) ?? []), ...asked].join("\n");
 }
 
 /**
@@ -133,8 +142,7 @@ export function isUnbackedClaim(
   text: string,
   { turnCalls, earlierCalls, isReadOnly, request }: ClaimContext
 ): boolean {
-  const source = [request.selectedText ?? "", ...(request.text.match(QUOTED) ?? [])].join("\n");
-  const claim = claimedAction(text, source);
+  const claim = claimedAction(text, userText(request));
   if (!claim) return false;
   const backed = (calls: ReadonlyArray<ToolCallInfo>) =>
     calls.some((call) => backsActionClaim(call, isReadOnly(call.name)));

@@ -294,3 +294,18 @@ test("a rewrite of the user's selected or quoted text is never flagged", async (
   );
   assert.equal(isUnbackedClaim(reply, context({ request: { text: "Did you email them?" } })), true);
 });
+
+test("a message the user asked to have written in their voice is never flagged", async () => {
+  const { isUnbackedClaim } = await load();
+  const request = {
+    text: "Write a Slack message I can paste, saying I've posted the release notes and sent the invite.",
+  };
+  const reply =
+    "Hey team, I've posted the release notes and sent out the invite for Friday's retro.";
+  assert.equal(isUnbackedClaim(reply, context({ request })), false);
+  // A question about a send isn't one.
+  assert.equal(
+    isUnbackedClaim("Yes, it was sent.", context({ request: { text: "Is it sent?" } })),
+    true
+  );
+});
