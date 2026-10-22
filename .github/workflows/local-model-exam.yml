@@ -1,0 +1,79 @@
+# Weekly re-run of a small slice of the local model exam on GitHub's runners.
+# Every speech and text model in the slice is downloaded with the app's own
+# download code and run by the app's own engines on the processor: silence and
+# pauses through the app's speech gate, a few public FLEURS clips, and a few
+# dictations through cleanup (scripts/local-model-exam/canary.mjs; pass marks
+# in scripts/local-model-exam/lib/canary.mjs). No keys and no cloud calls. A
+# failed check, crash, skip or timeout fails the job and files or updates an
+# issue per runner OS. Pull requests that change the exam run it too, without
+# filing an issue. Same pattern as llm-canary.yml and stt-canary.yml.
+name: local-model-exam
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/local-model-exam/**"
+      - ".github/workflows/local-model-exam.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Download the app's engines
+        run: npm run download:whisper-cpp && npm run download:sherpa-onnx && npm run download:llama-server
+      # Models download fresh every run, which also checks the registry's URLs.
+      # A fresh runner has no app cache, so the app has nothing to move here.
+      - name: Point the model cache at the runner's temp folder
+        run: echo "OPENWHISPR_CACHE_ROOT=$RUNNER_TEMP/ow-cache" >> "$GITHUB_ENV"
+      - name: Run canary
+        id: canary
+        run: |
+          set -o pipefail
+          node --import tsx scripts/local-model-exam/canary.mjs --out canary-out | tee canary-report.md
+      - name: Upload records
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: local-model-exam-${{ runner.os }}
+          path: canary-out
+          if-no-files-found: ignore
+      # Also when setup failed or the job ran out of time: nothing was checked.
+      - name: File or update failure issue
+        if: (failure() || cancelled()) && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Local model exam canary failing on ${{ runner.os }}"
+          body="$(cat canary-report.md 2>/dev/null || echo 'The canary did not finish.')
+
+          _Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}_"
+          gh label create local-model-exam --color D93F0B \
+            --description "Filed by the weekly local model exam canary" 2>/dev/null || true
+          existing=$(gh issue list --label local-model-exam --state open --search "in:title $title" \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label local-model-exam
+          fi
