@@ -23,8 +23,9 @@ const SLACK_ESCAPE_SPECIALS = true;
 const TOO_LARGE_FOR_NAMES =
   "This Slack workspace is too large to look people up by name. Ask the user for the person's email address, or the exact #channel name.";
 // A channel (C…, or G… for an older private one), a DM (D…) or a person (U…,
-// or W… on Enterprise Grid). Slack's ids are nine or more characters with a
-// digit, so a name typed in capitals ("GABE", "D2C") is still a name.
+// or W… on Enterprise Grid): nine or more characters with a digit. Shorter
+// names typed in capitals ("GABE", "D2C") never match; a longer one such as
+// "DESIGN2025" can, so findTarget tries a bare one as a name as well.
 const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
 // A message in a link: p, then its ts without the dot.
 const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
@@ -77,7 +78,7 @@ function parseSlackLink(value) {
   if (url.protocol !== "https:" || !url.hostname.endsWith(".slack.com")) return null;
   const [archives, channelId, message, ...rest] = url.pathname.split("/").filter(Boolean);
   if (archives !== "archives" || rest.length > 0) return null;
-  if (!/^[CDG][A-Z0-9]+$/.test(channelId ?? "")) return null;
+  if (!/^[CDG]/.test(channelId ?? "") || !SLACK_ID.test(channelId)) return null;
   const cid = url.searchParams.get("cid");
   if (cid !== null && cid !== channelId) return null;
   const ts = message === undefined ? null : LINK_MESSAGE.exec(message);
@@ -154,7 +155,7 @@ function parseDestination(raw) {
   if (isValidEmailAddress(value)) return { kind: "email", query: value };
   if (value.startsWith("@")) return { kind: "person", query: value.slice(1) };
   const link = parseSlackLink(value);
-  if (link) return { kind: "id", query: link.channelId };
+  if (link) return { kind: "link", query: link.channelId };
   if (SLACK_ID.test(value)) return { kind: "id", query: value };
   return { kind: "any", query: value };
 }
@@ -215,8 +216,8 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     };
   }
 
-  async function findTarget(parsed, token, cacheKey) {
-    if (parsed.kind === "id") return findById(parsed.query, token, cacheKey);
+  // unmatched: no name was found, or could be in a list cut off at the page cap.
+  async function findByName(parsed, token, cacheKey) {
     if (parsed.kind === "email") {
       const found = await directory.personByEmail(token, parsed.query);
       if (!found.ok) return { error: found.errorCode };
@@ -251,7 +252,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     // something: an exact @username (above), an exact channel name, or an
     // email address.
     if (lists.some((list) => list.truncated)) {
-      if (parsed.kind !== "channel") return { clarify: clarify(TOO_LARGE_FOR_NAMES) };
+      if (parsed.kind !== "channel") {
+        return { clarify: clarify(TOO_LARGE_FOR_NAMES), unmatched: true };
+      }
       const exact = resolveTarget(parsed.query, candidates, { exactOnly: true });
       if (exact.status === "match") return { candidate: exact.candidate };
       return {
@@ -275,7 +278,26 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       parsed.kind === "channel"
         ? `a channel called #${parsed.query} that the user is in`
         : `"${parsed.query}"`;
-    return { clarify: clarify(`Couldn't find ${where} in Slack. Ask the user where to send it.`) };
+    return {
+      clarify: clarify(`Couldn't find ${where} in Slack. Ask the user where to send it.`),
+      unmatched: true,
+    };
+  }
+
+  // A link names its conversation by id. A bare id-shaped value can also be a
+  // name ("DESIGN2025" is a channel): a DM id has no lookup of its own, so it
+  // is a DM only when no name matches; any other is looked up as an id first,
+  // and tried as a name when nothing has that id.
+  async function findTarget(parsed, token, cacheKey) {
+    if (parsed.kind === "link") return findById(parsed.query, token, cacheKey);
+    if (parsed.kind !== "id") return findByName(parsed, token, cacheKey);
+    const asName = { kind: "any", query: parsed.query };
+    if (parsed.query.startsWith("D")) {
+      const named = await findByName(asName, token, cacheKey);
+      return named.unmatched ? findById(parsed.query, token, cacheKey) : named;
+    }
+    const byId = await findById(parsed.query, token, cacheKey);
+    return byId.clarify ? findByName(asName, token, cacheKey) : byId;
   }
 
   // Slack refusing a token it just issued means the login itself is gone.
