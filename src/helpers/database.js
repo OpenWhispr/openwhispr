@@ -5685,7 +5685,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+          "UPDATE agent_conversations SET title = ?, updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
         )
         .run(title, id);
       return { success: result.changes > 0 };
@@ -5766,7 +5766,7 @@ class DatabaseManager {
           .run(conversationId, role, content, metadataStr);
         this.db
           .prepare(
-            "UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+            "UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
           )
           .run(conversationId);
         return this.db
@@ -7008,7 +7008,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const result = this.db
         .prepare(
-          "UPDATE agent_conversations SET archived_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL"
+          "UPDATE agent_conversations SET archived_at = CURRENT_TIMESTAMP, sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
         )
         .run(id);
       return { success: result.changes > 0 };
