@@ -59,19 +59,39 @@ async function mountScroller(t) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-stick-to-bottom-test-" });
   const { useStickToBottom } = await vite.ssrLoadModule("/hooks/useStickToBottom.ts");
   function Scroller() {
-    const { scrollRef, handleScroll } = useStickToBottom("messages");
+    const { scrollRef, handleScroll, handleWheel } = useStickToBottom("messages");
     return React.createElement(
       "div",
-      { ref: scrollRef, onScroll: handleScroll },
-      React.createElement("div", null, "conversation")
+      { ref: scrollRef, onScroll: handleScroll, onWheel: handleWheel },
+      React.createElement(
+        "div",
+        null,
+        "conversation",
+        // A card in the conversation whose long body scrolls on its own.
+        React.createElement("div", null, React.createElement("p", null, "card body"))
+      )
     );
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Scroller)));
   const scroller = container.childNodes[0];
   Object.assign(scroller, { scrollHeight: 1000, clientHeight: 400, scrollTop: 600 });
-  return { scroller, content: scroller.childNodes[0], resizeObservers };
+  const content = scroller.childNodes[0];
+  const cardBody = content.childNodes.find((node) => node.nodeType === 1);
+  Object.assign(cardBody, { scrollHeight: 300, clientHeight: 176, scrollTop: 0 });
+  return { scroller, content, cardBody, resizeObservers };
 }
+
+const wheelUp = (target) =>
+  React.act(async () =>
+    target.dispatchEvent({
+      type: "wheel",
+      bubbles: true,
+      deltaY: -40,
+      preventDefault() {},
+      stopPropagation() {},
+    })
+  );
 
 test("added bottom padding keeps a pinned conversation at its end", async (t) => {
   const { scroller, content, resizeObservers } = await mountScroller(t);
@@ -104,4 +124,26 @@ test("added bottom padding never pulls a reader back down", async (t) => {
   resizeObservers.resizePadding(content);
 
   assert.equal(scroller.scrollTop, 100);
+});
+
+test("a wheel up inside a card body that can still scroll up keeps the conversation following", async (t) => {
+  const { scroller, content, cardBody, resizeObservers } = await mountScroller(t);
+  cardBody.scrollTop = 80;
+
+  // The body takes the wheel; the reply that follows still streams into view.
+  await wheelUp(cardBody.childNodes[0]);
+  scroller.scrollHeight = 1120;
+  resizeObservers.resizePadding(content);
+
+  assert.equal(scroller.scrollTop, 720);
+});
+
+test("a wheel up over a card body already at its top leaves the bottom", async (t) => {
+  const { scroller, content, cardBody, resizeObservers } = await mountScroller(t);
+
+  await wheelUp(cardBody.childNodes[0]);
+  scroller.scrollHeight = 1120;
+  resizeObservers.resizePadding(content);
+
+  assert.equal(scroller.scrollTop, 600, "the reader went up the conversation");
 });

@@ -36,11 +36,16 @@ function pinToBottom(node: HTMLElement): void {
 
 // Portaled descendants (e.g. a popover opened from a row) bubble synthetic
 // events through the React tree while their DOM target lives outside the
-// scroller; wheeling there scrolls another surface, not the stream.
+// scroller; wheeling there scrolls another surface, not the stream. So does
+// an upward gesture over a scroller inside the stream that can still scroll
+// up (a card's long body): that scroller takes it.
 function isReaderGesture(node: HTMLElement, target: EventTarget | null): boolean {
-  return (
-    node.scrollHeight - node.clientHeight > 1 && target instanceof Node && node.contains(target)
-  );
+  if (node.scrollHeight - node.clientHeight <= 1) return false;
+  if (!(target instanceof Node && node.contains(target))) return false;
+  for (let inner: Node | null = target; inner && inner !== node; inner = inner.parentNode) {
+    if (inner instanceof Element && inner.scrollTop > 0) return false;
+  }
+  return true;
 }
 
 /**
