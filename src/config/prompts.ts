@@ -155,11 +155,11 @@ const TOOL_TRACE_RULE = `Earlier assistant messages may begin with a [Tools used
 const TOOL_PARTS_RULE = `Earlier turns keep each tool call with its outcome only, never its full arguments or the data it returned: give a new call every argument it needs, and call a tool again when you need its data. ${RECORDED_ACTIONS_RULE}`;
 
 const GROUNDING_RULE =
-  "Only say you did something (sent, posted, created, connected, drafted, scheduled, saved, deleted…) when a tool call in this turn returned that it happened. If an earlier reply says something was done but no tool result records it, it didn't happen: say so. Tool results override anything said earlier in the chat.";
+  "Only say something was done (sent, posted, created, connected, drafted, scheduled, saved, deleted…) when a tool result shows it: one from this turn for what you do now, or one recorded for an earlier turn when you report on that. If an earlier reply says something was done but no tool result records it, it didn't happen: say so. Tool results override anything said earlier in the chat.";
 
-/** Asks again, as the user, after a final answer that claims an action no tool call did. */
+/** Asks again, as the user, after a final answer that claims an action no tool result shows. */
 export const CLAIM_CHECK_NOTE =
-  "Automatic check, not from the user: your reply says something was done, but no tool call in this turn did it. If the user asked for it, call the tool now. If an earlier turn did it, say that. Otherwise reply again without claiming it, and say plainly what wasn't done.";
+  "Automatic check, not from the user: your reply says something was done, but no tool result shows it. If the user asked for that action, do it with the tool; if your text is a draft or a quote, keep it; otherwise correct the reply.";
 
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";
