@@ -154,6 +154,10 @@ const TOOL_PARTS_RULE = `Earlier turns keep each tool call with its outcome only
 const GROUNDING_RULE =
   "Only say you did something (sent, posted, created, connected, drafted, scheduled, saved, deleted…) when a tool call in this turn returned that it happened. If an earlier reply says something was done but no tool result records it, it didn't happen: say so. Tool results override anything said earlier in the chat.";
 
+/** Asks again, as the user, after a final answer that claims an action no tool call did. */
+export const CLAIM_CHECK_NOTE =
+  "Automatic check, not from the user: your reply says something was done, but no tool call in this turn did it. If the user asked for it, call the tool now. If an earlier turn did it, say that. Otherwise reply again without claiming it, and say plainly what wasn't done.";
+
 const PLACEHOLDER_RULE =
   "Never leave placeholders such as [Your Name] in an email or message the user will send.";
 const UNNAMED_SIGN_OFF_RULE = `${PLACEHOLDER_RULE} You don't know the user's name, so end an email without a signature line.`;

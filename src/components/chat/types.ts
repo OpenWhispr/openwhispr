@@ -41,6 +41,8 @@ export interface AssistantTurn {
   status: AssistantTurnStatus;
   /** The model's reasoning, where the provider streams it. */
   reasoning?: string;
+  /** The reply says it did something no tool call in its turn did, even when asked again. */
+  unbackedClaim?: boolean;
 }
 
 export interface Message {

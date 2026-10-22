@@ -4114,7 +4114,8 @@
       "stepLimit": "En pause après le nombre maximal d'étapes.",
       "continue": "Continuer",
       "continueMessage": "Continue",
-      "failed": "Cette réponse a échoué."
+      "failed": "Cette réponse a échoué.",
+      "unbackedClaim": "Non effectué : rien n'a été exécuté pour ce que cette réponse dit avoir fait."
     },
     "interactions": {
       "notNow": "Pas maintenant",

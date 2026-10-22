@@ -191,6 +191,58 @@ test("a run stopped by the step cap is marked so the user can continue it", asyn
   assert.equal(harness.completed[0][3].turn.status, "step_limit");
 });
 
+// The service asks the hook whether a final answer's claim is backed, as
+// ReasoningService does, and streams what follows from the answer.
+test("an answer asked again replaces the claim it made, and one still claiming is flagged", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const verdicts = [];
+  harness.setStream((_tools, config) =>
+    (async function* () {
+      yield { type: "content", text: "Let me look." };
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
+      yield { type: "tool_result", callId: "c1", toolName: "search_notes", displayText: "Done" };
+      yield { type: "content", text: "Done! I've sent it to Gabe." };
+      verdicts.push(config.isUnbackedClaim("Done! I've sent it to Gabe."));
+      yield { type: "unbacked_claim", retry: true };
+      yield { type: "content", text: "I've sent it, honestly." };
+      yield { type: "unbacked_claim", retry: false };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Email Gabe", []);
+
+  assert.deepEqual(verdicts, [true], "a lookup backs no claim");
+  const [[, content, , details]] = harness.completed;
+  assert.equal(content, "Let me look.\n\nI've sent it, honestly.");
+  assert.equal(details.turn.status, "complete");
+  assert.equal(details.turn.unbackedClaim, true);
+});
+
+test("an answer that claims what its turn's tools did is left alone", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const verdicts = [];
+  harness.setStream((_tools, config) =>
+    (async function* () {
+      verdicts.push(config.isUnbackedClaim("I've created the note."));
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "create_note", arguments: "{}" }] };
+      yield {
+        type: "tool_result",
+        callId: "c1",
+        toolName: "create_note",
+        displayText: "Created",
+        metadata: { id: 4, title: "Plan" },
+      };
+      verdicts.push(config.isUnbackedClaim("I've created the note."));
+      yield { type: "content", text: "I've created the note." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await harness.captured.sendToAI("Make a note", []);
+
+  assert.deepEqual(verdicts, [true, false]);
+  assert.equal(harness.completed[0][3].turn.unbackedClaim, undefined);
+});
+
 test("a turn waiting on a question is saved as waiting, as answered, then completed in place", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
   const store = await harness.vite.ssrLoadModule("/stores/agentInteractionStore.ts");

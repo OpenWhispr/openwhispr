@@ -208,6 +208,11 @@ export function TurnNotes({
       {turn.status === "error" && !failedHere && (
         <p className="mt-1.5 text-[11px] text-destructive/80">{t("agentMode.turn.failed")}</p>
       )}
+      {turn.unbackedClaim && (
+        <p className="mt-1.5 text-[11px] text-destructive/80">
+          {t("agentMode.turn.unbackedClaim")}
+        </p>
+      )}
       {turn.status === "step_limit" && (
         <p className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground/80">
           {t("agentMode.turn.stepLimit")}

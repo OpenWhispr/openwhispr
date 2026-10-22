@@ -1158,3 +1158,25 @@ test("a spoken command after a timed open made while away asks for the keyboard 
   await view.settle();
   assert.equal(view.main.layouts.at(-1).focus, true, "the question can be typed into");
 });
+
+test("a reply that still claims an action nothing did says it wasn't done", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.chat({
+    messages: [
+      { id: "u1", role: "user", content: "Email Gabe", isStreaming: false },
+      {
+        id: "a1",
+        role: "assistant",
+        content: "I've sent it.",
+        isStreaming: false,
+        turn: { startedAt: 1, finishedAt: 2, status: "complete", unbackedClaim: true },
+      },
+    ],
+  });
+  await view.settle();
+  assert.match(
+    view.host.textContent,
+    /Not actually done: nothing ran for what this reply says it did\./
+  );
+});

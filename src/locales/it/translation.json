@@ -3944,7 +3944,8 @@
       "stepLimit": "In pausa dopo il numero massimo di passaggi.",
       "continue": "Continua",
       "continueMessage": "Continua",
-      "failed": "Questa risposta non è riuscita."
+      "failed": "Questa risposta non è riuscita.",
+      "unbackedClaim": "Non fatto: non è stato eseguito nulla di ciò che questa risposta dice di aver fatto."
     },
     "interactions": {
       "notNow": "Non ora",

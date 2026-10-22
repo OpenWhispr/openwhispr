@@ -3944,7 +3944,8 @@
       "stepLimit": "ステップ数の上限に達したため一時停止しました。",
       "continue": "続ける",
       "continueMessage": "続けて",
-      "failed": "この返信は失敗しました。"
+      "failed": "この返信は失敗しました。",
+      "unbackedClaim": "実行されていません：この返信が行ったと言っている操作は、実際には行われていません。"
     },
     "interactions": {
       "notNow": "今はしない",

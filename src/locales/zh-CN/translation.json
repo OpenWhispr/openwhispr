@@ -3944,7 +3944,8 @@
       "stepLimit": "已达到最大步骤数，已暂停。",
       "continue": "继续",
       "continueMessage": "继续",
-      "failed": "此回复失败。"
+      "failed": "此回复失败。",
+      "unbackedClaim": "实际未完成：这条回复所说的操作并没有执行。"
     },
     "interactions": {
       "notNow": "暂不",

@@ -281,3 +281,117 @@ test("a provider failure streamed as a plain object keeps its message", async (t
     }
   );
 });
+
+// A final answer that claims an action no tool call in its turn did is asked
+// again once, with a note from the user's side; the caller decides what a claim is.
+const claimsSent = (text) => /I've sent/.test(text);
+
+test("a cloud answer that claims an unbacked action is asked once more", async (t) => {
+  const { CLAIM_CHECK_NOTE } = await import("../../src/config/prompts.ts");
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Email Gabe" }], {
+      systemPrompt: "Answer.",
+      tools: [{ name: "lookup", description: "Look up", parameters: {} }],
+      executeToolCall: async () => ({ data: "ok", displayText: "ok" }),
+      isUnbackedClaim: claimsSent,
+    })
+  );
+  await settle();
+  bridge.step([{ type: "content", text: "Done! I've sent it." }]);
+  await settle();
+  bridge.step([{ type: "content", text: "I haven't sent it yet. Want me to?" }]);
+  const chunks = await output;
+
+  assert.equal(bridge.startCalls.length, 2);
+  assert.deepEqual(bridge.startCalls[1][1], [
+    { role: "user", content: "Email Gabe" },
+    { role: "assistant", content: "Done! I've sent it." },
+    { role: "user", content: CLAIM_CHECK_NOTE },
+  ]);
+  assert.deepEqual(
+    chunks.filter((chunk) => chunk.type !== "content"),
+    [
+      { type: "unbacked_claim", retry: true },
+      { type: "done", finishReason: "stop" },
+    ]
+  );
+});
+
+test("a cloud answer still claiming it after the second ask is kept and flagged", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Email Gabe" }], {
+      systemPrompt: "Answer.",
+      tools: [{ name: "lookup", description: "Look up", parameters: {} }],
+      executeToolCall: async () => ({ data: "ok", displayText: "ok" }),
+      isUnbackedClaim: claimsSent,
+    })
+  );
+  await settle();
+  bridge.step([{ type: "content", text: "Done! I've sent it." }]);
+  await settle();
+  bridge.step([{ type: "content", text: "I've sent it, really." }]);
+  const chunks = await output;
+
+  assert.equal(bridge.startCalls.length, 2);
+  assert.deepEqual(
+    chunks.filter((chunk) => chunk.type !== "content"),
+    [
+      { type: "unbacked_claim", retry: true },
+      { type: "unbacked_claim", retry: false },
+      { type: "done", finishReason: "stop" },
+    ]
+  );
+});
+
+test("a BYOK answer that claims an unbacked action is asked once more after everything it said", async (t) => {
+  const { CLAIM_CHECK_NOTE } = await import("../../src/config/prompts.ts");
+  const { reasoningService, vite } = await loadReasoningService(t, {
+    electronAPI: { getGroqKey: async () => "gsk_test" },
+  });
+  const bodies = stubFetch(t, [
+    () =>
+      sse(
+        groqChunk({
+          tool_calls: [
+            { index: 0, id: "c1", type: "function", function: { name: "lookup", arguments: "{}" } },
+          ],
+        }),
+        groqChunk({}, "tool_calls")
+      ),
+    () => sse(groqChunk({ content: "Done! I've sent it." }), groqChunk({}, "stop")),
+    () => sse(groqChunk({ content: "Not sent yet: want me to?" }), groqChunk({}, "stop")),
+  ]);
+  const tools = await groqTools(vite, async () => ({ success: true, data: "ok", displayText: "" }));
+  const chunks = await collect(
+    reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "Email Gabe" }],
+      "openai/gpt-oss-120b",
+      "groq",
+      { ...GROQ_CONFIG, isUnbackedClaim: claimsSent },
+      tools
+    )
+  );
+
+  assert.equal(bodies.length, 3);
+  assert.deepEqual(
+    bodies[2].messages.map((message) => [message.role, message.content]),
+    [
+      ["user", "Email Gabe"],
+      ["assistant", ""],
+      ["tool", "ok"],
+      ["assistant", "Done! I've sent it."],
+      ["user", CLAIM_CHECK_NOTE],
+    ]
+  );
+  assert.deepEqual(
+    chunks.filter((chunk) => chunk.type === "unbacked_claim" || chunk.type === "done"),
+    [
+      { type: "unbacked_claim", retry: true },
+      { type: "done", finishReason: "stop" },
+    ]
+  );
+});

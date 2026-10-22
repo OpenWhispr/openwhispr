@@ -4114,7 +4114,8 @@
       "stepLimit": "Nach der maximalen Anzahl von Schritten pausiert.",
       "continue": "Fortfahren",
       "continueMessage": "Mach weiter",
-      "failed": "Diese Antwort ist fehlgeschlagen."
+      "failed": "Diese Antwort ist fehlgeschlagen.",
+      "unbackedClaim": "Nicht erledigt: Für das, was diese Antwort als erledigt angibt, wurde nichts ausgeführt."
     },
     "interactions": {
       "notNow": "Nicht jetzt",
