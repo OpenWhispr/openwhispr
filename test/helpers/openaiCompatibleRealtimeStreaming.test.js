@@ -713,3 +713,42 @@ test("a self-hosted session sets no proactive 55-minute reconnect", async () => 
   assert.equal(streaming._sessionTimer, null);
   await streaming.disconnect();
 });
+
+// A server that names its speech events: a turn silence closed before stop is
+// still owed a transcript, and its own committed is never the stop's ack.
+test("a cleared stop waits for a named silence-closed turn in flight", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started", item_id: "a" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped", item_id: "a" });
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.cleared" });
+  await tickImmediate();
+  assert.equal(stop.settled, false, "turn a has not been transcribed yet");
+
+  emit(socket, completed("turn a", { item_id: "a" }));
+  assert.equal((await stop.stopped).text, "turn a");
+  await streaming.disconnect();
+});
+
+test("a named turn's late committed is not taken as the stop's ack", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started", item_id: "a" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped", item_id: "a" });
+  emit(socket, { type: "input_audio_buffer.speech_started", item_id: "b" });
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed", item_id: "a" });
+  emit(socket, completed("turn a", { item_id: "a" }));
+  await tickImmediate();
+  assert.equal(stop.settled, false, "the stop's own commit has not been answered");
+
+  emit(socket, { type: "input_audio_buffer.committed", item_id: "b" });
+  emit(socket, completed("turn b", { item_id: "b" }));
+  assert.equal((await stop.stopped).text, "turn a turn b");
+  await streaming.disconnect();
+});
