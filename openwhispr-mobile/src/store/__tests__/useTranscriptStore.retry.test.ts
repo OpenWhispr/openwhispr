@@ -522,6 +522,22 @@ it('retries an upload in Local Mode on the route chosen for uploads', async () =
   );
 });
 
+// Cloud Mode can keep uploads On-Device; a retry must not send that audio to Cloud.
+it('retries an upload in Cloud Mode on the route chosen for uploads', async () => {
+  mockSnapshotTranscriptionJob.mockReturnValueOnce({
+    provider: 'local',
+    cleanupRoute: { mode: 'local', scope: 'cleanup' },
+  });
+  useTranscriptStore.setState({
+    transcripts: [failedTranscript({ provider: 'local', requestContext: 'file' })],
+  });
+  await useTranscriptStore.getState().retryTranscript('t1');
+  expect(mockSnapshotTranscriptionJob).toHaveBeenCalledWith('upload');
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ provider: 'local' }),
+  );
+});
+
 it('retries an On-Device recording on Cloud after switching to Cloud', async () => {
   useTranscriptStore.setState({
     transcripts: [
