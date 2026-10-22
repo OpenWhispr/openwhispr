@@ -58,6 +58,7 @@ import {
   toHistoryMessages,
   withoutEchoedToolTrace,
   type HistoryMessage,
+  type ToolHistory,
 } from "./historyMessages";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
@@ -619,12 +620,20 @@ export function useChatStreaming({
         ]
           .filter(Boolean)
           .join("\n\n");
+        // Earlier tool use replays as tool messages, except to self-hosted
+        // servers, whose chat templates may not take them: they get a note.
+        const toolHistory: ToolHistory =
+          registry === null
+            ? "none"
+            : !isCloudAgent && (isLocalProvider || isLanAgent || isCustomAgent)
+              ? "text"
+              : "parts";
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
           getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
             unavailable: nameUnavailableCapabilities ? unavailable : [],
-            toolTrace: registry !== null,
+            ...(toolHistory !== "none" ? { toolHistory } : {}),
             openNote: openNoteContext || undefined,
             openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
@@ -634,9 +643,7 @@ export function useChatStreaming({
           settings.uiLanguage
         );
 
-        const history: HistoryMessage[] = toHistoryMessages(allMessages, {
-          includeToolTrace: registry !== null,
-        });
+        const history: HistoryMessage[] = toHistoryMessages(allMessages, { toolHistory });
 
         const requestText = options?.requestText;
         if (requestText) {

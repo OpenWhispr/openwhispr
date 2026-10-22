@@ -81,18 +81,23 @@ test("connector tools group under the same names the unavailable list uses", asy
   }
 });
 
-test("the tool-trace rule rides only with traced history", async () => {
+test("earlier tool use gets the rule for the form history carries it in", async () => {
   const { getAgentSystemPrompt } = await load();
-  assert.match(
-    getAgentSystemPrompt(["web_search"], undefined, { toolTrace: true }),
-    /\[Tools used: …\] note .* Never write such a note yourself/
-  );
+  const text = getAgentSystemPrompt(["web_search"], undefined, { toolHistory: "text" });
+  assert.match(text, /\[Tools used: …\] note .* Never write such a note yourself/);
+  const parts = getAgentSystemPrompt(["web_search"], undefined, { toolHistory: "parts" });
+  assert.match(parts, /Earlier turns keep each tool call with its outcome only/);
+  // A replayed call shows only some arguments; copying it would leave out required ones.
+  assert.match(parts, /give a new call every argument it needs/);
+  assert.doesNotMatch(parts, /Tools used/);
   // A follow-up ("it's #engineering", "retry") must not redo what already went out.
-  assert.match(
-    getAgentSystemPrompt(["web_search"], undefined, { toolTrace: true }),
-    /marked sent or draft opened already happened.*never do it again unless the user asks/
-  );
-  assert.doesNotMatch(getAgentSystemPrompt(["web_search"]), /Tools used/);
+  for (const prompt of [text, parts]) {
+    assert.match(
+      prompt,
+      /marked sent or draft opened already happened.*never do it again unless the user asks/
+    );
+  }
+  assert.doesNotMatch(getAgentSystemPrompt(["web_search"]), /Tools used|Earlier turns keep/);
 });
 
 test("without tools there is no capability block, but unavailable capabilities are still named", async () => {

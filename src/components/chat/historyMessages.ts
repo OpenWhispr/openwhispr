@@ -8,8 +8,18 @@ export interface HistoryMessage {
   content: string | Array<Record<string, unknown>>;
 }
 
+/**
+ * How earlier turns' tool use reaches the model: as tool-call and tool-result
+ * parts, as a [Tools used: …] note on the reply (self-hosted servers, whose
+ * chat templates may not take tool messages), or not at all (no tools).
+ */
+export type ToolHistory = "parts" | "text" | "none";
+
 const HISTORY_LIMIT = 20;
 const TRACE_ARG_MAX_CHARS = 80;
+// Providers differ on call ids, and one may replay to another: Anthropic takes
+// letters, digits, _ and -, OpenAI Chat Completions at most 40 characters.
+const CALL_ID_MAX_CHARS = 36;
 const TRACE_OPENING = "[Tools used:";
 const ECHOED_TRACE = /^\s*\[Tools used:[^\]\n]*\]\s*/;
 
@@ -61,19 +71,32 @@ function outcomeUrl(value: unknown): string | null {
   return value;
 }
 
+interface CallOutcome {
+  outcome: string;
+  /** What a sent action created. */
+  reference?: string;
+  link?: string;
+}
+
 /**
  * What a connector action did, plus what a sent one created (its reference and
- * link). Never the destination, the user's edits on the card, or error text:
- * a display name or an error body is other people's text.
+ * link). Never the resolved destination, the user's edits on the card, or
+ * error text: a display name or an error body is other people's text. A call
+ * cut off before its result arrived may still have had its side effect (a
+ * send commits in main after Esc), unless the stop recorded that it never ran.
  */
-function traceOutcome(call: ToolCallInfo): string | null {
-  const data = call.metadata;
-  if (!data || Array.isArray(data) || typeof data.status !== "string") return null;
-  if (!Object.hasOwn(ACTION_OUTCOME, data.status)) return null;
-  const outcome = ACTION_OUTCOME[data.status];
-  if (data.status !== "sent") return outcome;
-  const created = [traceText(data.reference), outcomeUrl(data.url)].filter(Boolean);
-  return created.length ? `${outcome}: ${created.join(" ")}` : outcome;
+function callOutcome(call: ToolCallInfo): CallOutcome | null {
+  const data = call.metadata && !Array.isArray(call.metadata) ? call.metadata : null;
+  const status = typeof data?.status === "string" ? data.status : "";
+  if (!data || !Object.hasOwn(ACTION_OUTCOME, status)) {
+    const cutOff = call.status === "executing" || call.status === "stopped";
+    return cutOff ? { outcome: "outcome not recorded" } : null;
+  }
+  const outcome = ACTION_OUTCOME[status];
+  if (status !== "sent") return { outcome };
+  const reference = traceText(data.reference);
+  const link = outcomeUrl(data.url);
+  return { outcome, ...(reference ? { reference } : {}), ...(link ? { link } : {}) };
 }
 
 function traceText(value: unknown): string | null {
@@ -90,23 +113,26 @@ function traceText(value: unknown): string | null {
     : clean;
 }
 
-// What the user was asked and how they answered. A saved key is only ever
-// "saved": its value never reaches the conversation.
+// What the user was asked and how they answered, with the name the answer
+// goes by in a tool result. A saved key is only ever "saved": its value never
+// reaches the conversation.
 function interactionTrace({ payload, state, result }: InteractionRecord): {
+  field: string;
   arg: string;
   outcome: string;
 } {
   if (payload.kind !== "questions") {
-    const arg =
+    const [field, arg] =
       payload.kind === "access"
-        ? payload.resource
+        ? ["resource", payload.resource]
         : payload.kind === "apiKey"
-          ? payload.provider
-          : payload.target;
-    return { arg, outcome: interactionOutcome(state, result) };
+          ? ["provider", payload.provider]
+          : ["target", payload.target];
+    return { field, arg, outcome: interactionOutcome(state, result) };
   }
   if (result?.status !== "answered") {
     return {
+      field: "questions",
       arg: payload.questions.map((question) => traceText(question.prompt)).join("; "),
       outcome: interactionOutcome(state, result),
     };
@@ -115,7 +141,7 @@ function interactionTrace({ payload, state, result }: InteractionRecord): {
     const text = answerText(question, result.answers[question.id]);
     return `${traceText(question.prompt)} → ${traceText(text) ?? "nothing chosen"}`;
   });
-  return { arg: answered.join("; "), outcome: "answered" };
+  return { field: "answers", arg: answered.join("; "), outcome: "answered" };
 }
 
 function interactionOutcome(
@@ -140,32 +166,86 @@ export function connectsFirst(call: ToolCallInfo): boolean {
   return call.interaction?.payload.kind === "connection" && call.name !== "request_connection";
 }
 
+// Older versions stored built-in help evidence as a synthetic tool call. It
+// was never a model tool and must not teach future turns to invoke it.
+function replayedCalls(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): ToolCallInfo[] {
+  return (toolCalls ?? []).filter((call) => call.name !== "grounded_product_help");
+}
+
+// A tool that asked to connect its service first is recorded by what it then did.
+function askedUser(call: ToolCallInfo): InteractionRecord | null {
+  return call.interaction && !connectsFirst(call) ? call.interaction : null;
+}
+
 /**
  * A short record of the tools a turn called, so the model sees its own
  * precedent. Never results: query items and web results are other people's
  * text. A connector action's outcome is noted, so it isn't done twice.
  */
 export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): string {
-  if (!toolCalls?.length) return "";
-  // Older versions stored built-in help evidence as a synthetic tool call. It
-  // was never a model tool and must not teach future turns to invoke it.
-  const entries = toolCalls
-    .filter((call) => call.name !== "grounded_product_help")
-    .map((call) => {
-      // A tool that asked to connect its service first is traced by what it then did.
-      if (call.interaction && !connectsFirst(call)) {
-        const { arg, outcome } = interactionTrace(call.interaction);
-        return `${call.name} ("${arg}") (${outcome})`;
-      }
-      const arg = traceArgument(call);
-      // A call cut off before its result arrived may still have had its side
-      // effect (a send commits in main after Esc), unless the stop recorded
-      // that it never ran.
-      const cutOff = call.status === "executing" || call.status === "stopped";
-      const outcome = traceOutcome(call) ?? (cutOff ? "outcome not recorded" : null);
-      return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
-    });
+  const entries = replayedCalls(toolCalls).map((call) => {
+    const asked = askedUser(call);
+    if (asked) {
+      const { arg, outcome } = interactionTrace(asked);
+      return `${call.name} ("${arg}") (${outcome})`;
+    }
+    const arg = traceArgument(call);
+    const result = callOutcome(call);
+    const created = [result?.reference, result?.link].filter(Boolean).join(" ");
+    const outcome = result && (created ? `${result.outcome}: ${created}` : result.outcome);
+    return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
+  });
   return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";
+}
+
+function replayCallId(id: string, used: Set<string>): string {
+  const base = id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, CALL_ID_MAX_CHARS) || "call";
+  let replayed = base;
+  for (let n = 2; used.has(replayed); n++) replayed = `${base}_${n}`;
+  used.add(replayed);
+  return replayed;
+}
+
+/**
+ * One earlier call as the provider's own tool-call and tool-result messages,
+ * carrying what the text trace does: the argument it may show, and its
+ * outcome (an answer, or what an action did and created). A call with no
+ * recorded outcome is "done" or "failed", never its result.
+ */
+function toolCallParts(call: ToolCallInfo, toolCallId: string): HistoryMessage[] {
+  const asked = askedUser(call);
+  const field = TRACE_ARGUMENT[call.name];
+  const arg = asked ? null : traceArgument(call);
+  let result: Record<string, string>;
+  if (asked) {
+    const { field: answerField, arg: answer, outcome } = interactionTrace(asked);
+    result = { status: outcome, ...(answer ? { [answerField]: answer } : {}) };
+  } else {
+    const { outcome, ...created } = callOutcome(call) ?? {
+      outcome: call.status === "error" ? "failed" : "done",
+    };
+    result = { status: outcome, ...created };
+  }
+  const { name: toolName } = call;
+  return [
+    {
+      role: "assistant",
+      content: [
+        { type: "tool-call", toolCallId, toolName, input: field && arg ? { [field]: arg } : {} },
+      ],
+    },
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId,
+          toolName,
+          output: { type: "text", value: JSON.stringify(result) },
+        },
+      ],
+    },
+  ];
 }
 
 /**
@@ -182,16 +262,17 @@ export function withoutEchoedToolTrace(content: string): string {
 }
 
 /**
- * The last messages as the model sees them, with earlier tool use noted on
- * assistant turns and the selected text a request was about kept with it. A
- * failed reply with nothing in it is left out: some providers reject an empty
- * assistant message.
+ * The last messages as the model sees them, with earlier tool use on assistant
+ * turns (see ToolHistory) and the selected text a request was about kept with
+ * it. A failed reply with nothing in it is left out, and so is a reply's empty
+ * text after its tool calls: some providers reject an empty assistant message.
  */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
-  { includeToolTrace }: { includeToolTrace: boolean }
+  { toolHistory }: { toolHistory: ToolHistory }
 ): HistoryMessage[] {
-  return messages.slice(-HISTORY_LIMIT).flatMap((m) => {
+  const callIds = new Set<string>();
+  return messages.slice(-HISTORY_LIMIT).flatMap((m): HistoryMessage | HistoryMessage[] => {
     if (m.role === "user" && m.selectedContext) {
       return {
         role: m.role,
@@ -202,7 +283,14 @@ export function toHistoryMessages(
         }),
       };
     }
-    const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
+    const calls = m.role === "assistant" ? replayedCalls(m.toolCalls) : [];
+    if (toolHistory === "parts" && calls.length > 0) {
+      return [
+        ...calls.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+        ...(m.content.trim() ? [{ role: m.role, content: m.content }] : []),
+      ];
+    }
+    const trace = toolHistory === "text" ? toolTrace(calls) : "";
     const content = trace ? `${trace}\n\n${m.content}` : m.content;
     return m.turn?.status === "error" && !content.trim() ? [] : { role: m.role, content };
   });
