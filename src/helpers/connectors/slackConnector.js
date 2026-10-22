@@ -463,9 +463,17 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       );
       const { result } = posted;
       if (result.ok) {
+        // The thread Slack says the message went into, if any: one it didn't
+        // thread is linked as the new message it is.
+        const threadTs = thread ? result.data.message?.thread_ts : undefined;
         return {
           state: "sent",
-          url: messageUrl(posted.access.credential.teamUrl, channel, result.data.ts, thread?.ts),
+          url: messageUrl(
+            posted.access.credential.teamUrl,
+            channel,
+            result.data.ts,
+            MESSAGE_TS.test(threadTs ?? "") ? threadTs : undefined
+          ),
         };
       }
       if (result.outcome === "failed") {

@@ -781,6 +781,28 @@ test("the Reply in thread note shows when the thread started, in every language"
   );
 });
 
+test("a reply Slack didn't thread is linked as the message it is", async () => {
+  const { message } = FIXTURES.postedReply;
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "chat.postMessage": [
+      ok({ ...FIXTURES.postedReply, message: { ...message, thread_ts: undefined } }),
+    ],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "#eng", text: "On it", thread: ENG_MESSAGE },
+    BOUND
+  );
+
+  const result = await connector.commit("send_message", prepared.payload, {}, BOUND);
+
+  assert.deepEqual(result, {
+    state: "sent",
+    url: "https://acme-test.slack.com/archives/C0ENG0001/p1727200009000200",
+  });
+});
+
 test("a reply's link replies in its thread, not under the reply", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,

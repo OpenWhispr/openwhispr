@@ -23,12 +23,14 @@ function askAboutVanishedChannel(result: ToolResult, destination: string): ToolR
   return result;
 }
 
-// Main posts a send that has a thread only in that thread, so a sent one was
-// a reply there, not a new message in the conversation.
+// Main links a reply in the thread Slack put it in (?thread_ts=), as Slack's
+// own links do, and a message Slack didn't thread as a new one, so the link
+// says which it was.
 function withThreadReply(result: ToolResult, thread: string): ToolResult {
-  const data = result.data as { status?: string } | null;
+  const data = result.data as { status?: string; url?: unknown } | null;
   if (!thread || data?.status !== "sent") return result;
-  return { ...result, data: { ...data, repliedInThread: true } };
+  const repliedInThread = typeof data.url === "string" && /[?&]thread_ts=/.test(data.url);
+  return { ...result, data: { ...data, repliedInThread } };
 }
 
 export const slackSendMessageTool: ToolDefinition = {
