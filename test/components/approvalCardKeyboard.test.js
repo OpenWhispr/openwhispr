@@ -139,9 +139,11 @@ async function mountPendingCard(t, options = {}) {
         messageId: "m1",
         toolCallId: "call-1",
         signal: new AbortController().signal,
-        onApprovalRequested() {},
-        onHoldDelivery() {},
         claimTurnSlot: () => true,
+        claimAction: () => true,
+        releaseAction() {},
+        sentEarlier: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       connectorId,
@@ -153,9 +155,8 @@ async function mountPendingCard(t, options = {}) {
   return { container, store, key, calls, toolResult: () => toolResult };
 }
 
-test("Esc in the text field ends editing, keeps the draft, and never reaches the panel", async (t) => {
+test("Esc in the text field keeps the draft and never reaches the panel", async (t) => {
   const { container, store, key, calls } = await mountPendingCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => store.updateApprovalDraft(key, { body: "Edited text" }));
 
   let event;
@@ -165,13 +166,13 @@ test("Esc in the text field ends editing, keeps the draft, and never reaches the
 
   // The panel listens on document, above React's root: a stopped event never gets there.
   assert.equal(event.cancelBubble, true);
-  assert.ok(!textarea(container), "edit mode ended");
-  assert.match(container.textContent, /Edited text/);
+  assert.ok(textarea(container), "the field stays");
+  assert.equal(store.useConnectorApprovalStore.getState().entries[key].draft.body, "Edited text");
   assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
   assert.deepEqual(calls.cancel, []);
 });
 
-test("Esc in an issue title field ends editing and never reaches the panel", async (t) => {
+test("Esc in an issue title field never reaches the panel", async (t) => {
   const { container, store, key, calls } = await mountPendingCard(t, {
     connectorId: "linear",
     action: "create_issue",
@@ -185,7 +186,6 @@ test("Esc in an issue title field ends editing and never reaches the panel", asy
       fields: { title: "Fix login", body: "Safari users can't sign in." },
     },
   });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   let event;
   await React.act(async () => {
@@ -193,13 +193,12 @@ test("Esc in an issue title field ends editing and never reaches the panel", asy
   });
 
   assert.equal(event.cancelBubble, true);
-  assert.ok(!field(container, "issue.titleLabel"), "edit mode ended");
-  assert.match(container.textContent, /Fix login/);
+  assert.equal(field(container, "issue.titleLabel").value, "Fix login");
   assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
   assert.deepEqual(calls.cancel, []);
 });
 
-test("Esc in a comment body field ends editing and never reaches the panel", async (t) => {
+test("Esc in a comment body field never reaches the panel", async (t) => {
   const { container, store, key, calls } = await mountPendingCard(t, {
     connectorId: "github",
     action: "comment",
@@ -212,7 +211,6 @@ test("Esc in a comment body field ends editing and never reaches the panel", asy
       fields: { body: "Fixed in 1.9." },
     },
   });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   let event;
   await React.act(async () => {
@@ -220,15 +218,17 @@ test("Esc in a comment body field ends editing and never reaches the panel", asy
   });
 
   assert.equal(event.cancelBubble, true);
-  assert.ok(!field(container, "comment.bodyLabel"), "edit mode ended");
-  assert.match(container.textContent, /Fixed in 1\.9\./);
+  assert.ok(field(container, "comment.bodyLabel"), "the field stays");
+  assert.equal(
+    store.useConnectorApprovalStore.getState().entries[key].draft.fields.body,
+    "Fixed in 1.9."
+  );
   assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
   assert.deepEqual(calls.cancel, []);
 });
 
-test("Send while editing sends the edit, leaves edit mode and keeps focus on the card", async (t) => {
+test("Send sends the edit, freezes the fields and keeps focus on the card", async (t) => {
   const { container, store, key, calls, toolResult } = await mountPendingCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => store.updateApprovalDraft(key, { body: "Edited text" }));
 
   await React.act(async () => click(button(container, "connectors.approval.send")));
@@ -237,4 +237,17 @@ test("Send while editing sends the edit, leaves edit mode and keeps focus on the
   assert.deepEqual(calls.commit, [{ actionId: "a1", edits: { body: "Edited text" } }]);
   assert.ok(!textarea(container), "no editable field after Send");
   assert.equal(globalThis.document.activeElement?.getAttribute("data-approval-card"), key);
+});
+
+test("Esc on a card's button stays in the card too", async (t) => {
+  const { container, store, key, calls } = await mountPendingCard(t);
+
+  let event;
+  await React.act(async () => {
+    event = keyDown(button(container, "connectors.approval.send"), "Escape");
+  });
+
+  assert.equal(event.cancelBubble, true);
+  assert.equal(store.useConnectorApprovalStore.getState().entries[key].state, "pending");
+  assert.deepEqual(calls.cancel, []);
 });

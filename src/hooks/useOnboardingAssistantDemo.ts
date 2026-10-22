@@ -23,7 +23,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
   const [messages, setMessages] = useState<Message[]>([]);
   const repliedRef = useRef(false);
   const { agentState, activeToolName, sendToAI } = useChatStreaming({
-    messages,
     setMessages,
     inferenceScope: "dictationAgent",
     nameUnavailableCapabilities: false,
@@ -59,7 +58,6 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
       setMessages([userMessage]);
       void sendToAI(request, [userMessage], {
         attachment: command.attachment ?? undefined,
-        suppressResponseContent: true,
         onComplete: ({ content }) => {
           repliedRef.current = true;
           publish({ status: "success", text: content });

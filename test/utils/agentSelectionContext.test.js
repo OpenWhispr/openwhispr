@@ -34,3 +34,15 @@ test("selected context is normalized and bounded", () => {
   assert.equal(context.sourceMessageId, "assistant-2");
   assert.equal(contextModule.normalizeAgentSelectionContext({ text: "   " }), null);
 });
+
+test("text selected in another app is quoted as such, and keeps its source when normalized", () => {
+  const context = contextModule.normalizeAgentSelectionContext({
+    text: "Q4 revenue table",
+    source: "external",
+  });
+  assert.deepEqual(context, { text: "Q4 revenue table", sourceMessageId: "", source: "external" });
+
+  const request = contextModule.buildAgentRequestText("summarize this", context);
+  assert.match(request, /"source":"selected_in_another_app"/);
+  assert.doesNotMatch(request, /previous_assistant_response/);
+});

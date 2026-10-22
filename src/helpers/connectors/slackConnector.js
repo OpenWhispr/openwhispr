@@ -90,10 +90,21 @@ function parseDestination(raw) {
 }
 
 function clarify(message, candidates = []) {
+  const labels = candidates.map((candidate) => candidate.hint ?? candidate.label);
   return {
     status: "needs_clarification",
     message,
-    candidates: candidates.map((candidate) => candidate.hint ?? candidate.label),
+    candidates: labels,
+    // What the user can pick from: each destination finds exactly that
+    // channel (#name) or person (@username) when prepared again.
+    ...(candidates.length > 0
+      ? {
+          choices: candidates.map((candidate, index) => ({
+            label: labels[index],
+            destination: candidate.kind === "channel" ? candidate.label : `@${candidate.handle}`,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -123,9 +134,19 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     if (failure) return { error: failure.errorCode };
     const candidates = lists.flatMap((list) => list.items);
 
+    // A username is unique in a workspace, so "@handle" (what the picker
+    // sends) finds exactly that person, even when it is also someone else's
+    // display name.
+    if (parsed.kind === "person") {
+      const handle = parsed.query.toLowerCase();
+      const exact = candidates.find((candidate) => candidate.handle?.toLowerCase() === handle);
+      if (exact) return { candidate: exact };
+    }
+
     // A name is only unique if every candidate was seen. When a list stopped
-    // at the page cap, only an exact channel name (unique in a workspace)
-    // still identifies something; a person needs an email address.
+    // at the page cap, only what is unique in a workspace still identifies
+    // something: an exact @username (above), an exact channel name, or an
+    // email address.
     if (lists.some((list) => list.truncated)) {
       if (parsed.kind !== "channel") return { clarify: clarify(TOO_LARGE_FOR_NAMES) };
       const exact = resolveTarget(parsed.query, candidates, { exactOnly: true });

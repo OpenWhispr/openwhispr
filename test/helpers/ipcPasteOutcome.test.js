@@ -142,8 +142,8 @@ test("paste-text on Linux hands back the keyboard the assistant panel took befor
           isFocused: () => true,
           blur: () => order.push("blur"),
         },
-        // blur() leaves X focus on the Linux pill, so the paste would land in
-        // the panel instead of the user's app.
+        // blur() leaves X focus on the Linux pill, so the paste would land
+        // there instead of the user's app.
         returnLinuxKeyboardFocus: () => order.push("return"),
       };
       target.clipboardManager = {

@@ -1,9 +1,9 @@
 import { useId, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { liveCardNotesFor } from "./liveCardNotes";
+import { INLINE_TEXT_FIELD, INLINE_TITLE_FIELD } from "./interactions/cardStyles";
 import type { IssueFieldProblem, IssueFields, IssueVerb } from "../../utils/issueApprovalFields";
 
-const FIELD_CLASS = "w-full rounded-md border border-border/70 bg-background px-2 py-1";
 const TITLE_PROBLEMS: ReadonlySet<IssueFieldProblem> = new Set(["missingTitle", "titleTooLong"]);
 
 // A title is one line in every tracker. A pasted line break becomes a space
@@ -76,7 +76,7 @@ function IssueFieldsLayout({
           aria-label={t("connectors.approval.issue.titleLabel")}
           {...description(titleInvalid)}
           type="text"
-          className={FIELD_CLASS}
+          className={INLINE_TITLE_FIELD}
           dir="auto"
           value={fields.title}
           onChange={(event) => onChange({ title: singleLine(event.target.value) })}
@@ -87,7 +87,7 @@ function IssueFieldsLayout({
           hasTitle ? "connectors.approval.issue.bodyLabel" : "connectors.approval.comment.bodyLabel"
         )}
         {...description(bodyInvalid)}
-        className={`min-h-24 ${FIELD_CLASS}`}
+        className={INLINE_TEXT_FIELD}
         dir="auto"
         value={fields.body}
         onChange={(event) => onChange({ body: event.target.value })}
@@ -117,7 +117,11 @@ export function IssueApprovalFields({
       {hasNotes && (
         <div id={notesId}>
           {liveNotes.map((note) => (
-            <p key={note.key} className="mt-1 text-xs text-muted-foreground" dir="auto">
+            <p
+              key={note.key}
+              className="mt-1 text-xs text-muted-foreground agent:text-[13px]"
+              dir="auto"
+            >
               {t(note.key, note.values)}
             </p>
           ))}
