@@ -62,6 +62,8 @@ async function groqTools(vite, tool) {
 }
 
 const GROQ_CONFIG = { systemPrompt: "Answer the user." };
+// Tool steps a turn may take before it has to answer.
+const STEP_CAP = 20;
 
 test("Groq reasoning streams as reasoning, apart from the answer", async (t) => {
   const { reasoningService } = await loadReasoningService(t, {
@@ -100,7 +102,8 @@ test("Groq reasoning streams as reasoning, apart from the answer", async (t) => 
   );
 });
 
-test("a failed tool step is flagged as an error, and a cut-short run ends in tool-calls", async (t) => {
+test("a failed tool step is flagged as an error, and a cut-short run answers without tools", async (t) => {
+  const { STEP_LIMIT_NOTE } = await import("../../src/config/prompts.ts");
   const { reasoningService, vite } = await loadReasoningService(t, {
     electronAPI: { getGroqKey: async () => "gsk_test" },
   });
@@ -110,11 +113,15 @@ test("a failed tool step is flagged as an error, and a cut-short run ends in too
         { index: 0, id, type: "function", function: { name: "lookup", arguments: "{}" } },
       ],
     });
-  // Twenty steps that all end in a tool call: the cap stops the run.
-  stubFetch(
-    t,
-    Array.from({ length: 20 }, (_, i) => () => sse(toolCall(`c${i}`), groqChunk({}, "tool_calls")))
-  );
+  // Every step ends in a tool call until the cap stops the run; one more
+  // request, with no tools, gives the answer.
+  const bodies = stubFetch(t, [
+    ...Array.from(
+      { length: STEP_CAP },
+      (_, i) => () => sse(toolCall(`c${i}`), groqChunk({}, "tool_calls"))
+    ),
+    () => sse(groqChunk({ content: "The lookups failed." }), groqChunk({}, "stop")),
+  ]);
   const tools = await groqTools(vite, async () => ({
     success: false,
     data: null,
@@ -130,9 +137,15 @@ test("a failed tool step is flagged as an error, and a cut-short run ends in too
     )
   );
   const results = chunks.filter((c) => c.type === "tool_result");
-  assert.equal(results.length, 20);
+  assert.equal(results.length, STEP_CAP);
   assert.ok(results.every((result) => result.isError === true));
-  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
+  assert.equal(bodies.length, STEP_CAP + 1);
+  assert.equal(bodies.at(-1).tool_choice, "none");
+  assert.deepEqual(bodies.at(-1).messages.at(-1), { role: "user", content: STEP_LIMIT_NOTE });
+  assert.deepEqual(chunks.slice(-2), [
+    { type: "content", text: "The lookups failed." },
+    { type: "done", finishReason: "tool-calls" },
+  ]);
 });
 
 test("a screenshot attached mid-turn reaches every later step as an image", async (t) => {
@@ -253,7 +266,8 @@ test("a question about the screen is one Cloud request with the screenshot and n
   });
 });
 
-test("a cloud run whose every step calls a tool ends in tool-calls", async (t) => {
+test("a cloud run whose every step calls a tool answers once more, without tools", async (t) => {
+  const { STEP_LIMIT_NOTE } = await import("../../src/config/prompts.ts");
   const bridge = cloudBridge();
   const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
   const output = collect(
@@ -263,12 +277,51 @@ test("a cloud run whose every step calls a tool ends in tool-calls", async (t) =
       executeToolCall: async () => ({ data: "ok", displayText: "ok" }),
     })
   );
-  for (let step = 0; step < 20; step++) {
+  for (let step = 0; step < STEP_CAP; step++) {
     await settle();
     bridge.step([{ type: "tool_call", id: `c${step}`, name: "lookup", arguments: "{}" }]);
   }
+  await settle();
+  bridge.step([{ type: "content", text: "Here is what I found so far." }]);
   const chunks = await output;
-  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
+
+  assert.equal(bridge.startCalls.length, STEP_CAP + 1);
+  const [, messages, options] = bridge.startCalls.at(-1);
+  assert.deepEqual(messages.at(-1), { role: "user", content: STEP_LIMIT_NOTE });
+  assert.equal(options.tools, undefined);
+  assert.deepEqual(chunks.slice(-2), [
+    { type: "content", text: "Here is what I found so far." },
+    { type: "done", finishReason: "tool-calls" },
+  ]);
+});
+
+test("a cloud answer at the step cap that claims an unbacked action is flagged, not asked again", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Email Gabe" }], {
+      systemPrompt: "Answer.",
+      tools: [{ name: "lookup", description: "Look up", parameters: {} }],
+      executeToolCall: async () => ({ data: "ok", displayText: "ok" }),
+      isUnbackedClaim: (text) => /I've sent/.test(text),
+    })
+  );
+  for (let step = 0; step < STEP_CAP; step++) {
+    await settle();
+    bridge.step([{ type: "tool_call", id: `c${step}`, name: "lookup", arguments: "{}" }]);
+  }
+  await settle();
+  bridge.step([{ type: "content", text: "Done! I've sent it." }]);
+  const chunks = await output;
+
+  assert.equal(bridge.startCalls.length, STEP_CAP + 1);
+  assert.deepEqual(
+    chunks.filter((chunk) => chunk.type === "unbacked_claim" || chunk.type === "done"),
+    [
+      { type: "unbacked_claim", retry: false },
+      { type: "done", finishReason: "tool-calls" },
+    ]
+  );
 });
 
 test("a provider failure streamed as a plain object keeps its message", async (t) => {
