@@ -84,9 +84,11 @@ const SENT_TO = /^\W*(?:(?:email|message|reply|comment)\s+)?(sent|posted)\s+to\b
 // sent", "According to your notes, …", "saved automatically") claims nothing,
 // nor does the rest of its sentence.
 const NOT_A_CLAIM = /^\W*(?:if|once|when|after|until|unless|according to)\b|\bautomatically\b/i;
-// A first-person claim about before ("I sent it earlier") reports on an
-// earlier turn, which that turn's recorded result can back.
+// A first-person claim in the simple past or about before ("I sent Gabe the
+// roadmap", "I've sent it earlier") reports on what was done, which an
+// earlier turn's recorded result can back; "I've sent it" says this turn did.
 const EARLIER = /\b(?:earlier|already|previously|before|yesterday|ago)\b/i;
+const PERFECT = /['’]ve\b|\bhave\b/i;
 
 // What the reply writes for the user isn't its own voice: fenced code,
 // blockquotes, quoted spans, and what follows a colon whose lead-in introduces
@@ -157,7 +159,9 @@ function claimsIn(text: string): Claim[] {
         const destination = DESTINATION.exec(sentence);
         claims.push({
           kind,
-          report: form === "report" || (form === "first" && EARLIER.test(sentence)),
+          report:
+            form === "report" ||
+            (form === "first" && (EARLIER.test(sentence) || !PERFECT.test(match[0]))),
           destination: destination ? (destination[1] ?? destination[2]) : null,
           phrase: normalize([match[0], ...after.slice(0, 3)].join(" ")),
         });
