@@ -295,6 +295,69 @@ test("slack_send_message lets the user pick a person a name matched, then sends 
   assert.equal((await pending).data.status, "sent");
 });
 
+test("slack_send_message keeps the thread when the user picks who a name meant", async (t) => {
+  const prepared = [];
+  const thread = "https://acme.slack.com/archives/D0GABE001/p1727200001000100";
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_id, _action, args) => {
+          prepared.push(args);
+          return prepared.length === 1
+            ? {
+                status: "needs_clarification",
+                message: 'More than one match for "gab".',
+                candidates: ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"],
+                choices: [
+                  { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+                  { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+                ],
+              }
+            : {
+                status: "ready",
+                actionId: "a-thread-picked",
+                preview: {
+                  verbKey: "slackPost",
+                  destinationLabel: "Gabe Smith",
+                  accountLabel: "chad",
+                  body: "hi",
+                },
+              };
+        },
+        connectorCommit: async () => ({
+          state: "sent",
+          url: "https://acme.slack.com/archives/D0GABE001/p1727200009000200?thread_ts=1727200001.000100&cid=D0GABE001",
+        }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const [slackSendMessageTool, approvals, interactions] = await Promise.all([
+    askingSlackTool(),
+    loadApprovals(),
+    import("../../src/stores/agentInteractionStore.ts"),
+  ]);
+  approvals.useConnectorApprovalStore.setState({ entries: {} });
+  interactions.useAgentInteractionStore.setState({ entries: {} });
+  const key = approvals.approvalKey("m34", "call-34");
+  const pending = slackSendMessageTool.execute(
+    { destination: "gab", text: "hi", thread },
+    { ...toolContext("m34", "call-34"), onInteraction() {} }
+  );
+  await until(() => interactions.useAgentInteractionStore.getState().entries[key]);
+  interactions.updateInteractionDraft(key, { destination: "@gabe" });
+  interactions.answerQuestions(key);
+  await until(() => approvals.useConnectorApprovalStore.getState().entries[key]);
+  await approvals.approveAction(key);
+  const result = await pending;
+
+  assert.deepEqual(prepared, [
+    { destination: "gab", text: "hi", thread },
+    { destination: "@gabe", text: "hi", thread },
+  ]);
+  assert.equal(result.data.repliedInThread, true);
+});
+
 test("slack_send_message asks which one only once", async (t) => {
   const prepared = slackPicker(t, {
     secondReply: {
