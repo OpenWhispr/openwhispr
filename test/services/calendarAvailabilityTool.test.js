@@ -482,9 +482,21 @@ test("availability prompt context refreshes local time without rebuilding the re
   assert.match(first, /broad multi-day request without daily-hour bounds/);
   assert.match(
     first,
-    /Current local date and time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\./
+    /Current local date and time: [A-Z][a-z]+day, \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\./
   );
   assert.ok(first.includes(`IANA time zone: ${timeZone}.`));
   assert.notEqual(first, second);
-  assert.doesNotMatch(getAgentSystemPrompt(["get_calendar_events"]), /Current local date and time/);
+});
+
+test("every request carries today's weekday, with or without calendar tools", async (t) => {
+  const { getAgentSystemPrompt } = await import("../../src/config/prompts.ts");
+  // Noon UTC is the same Tuesday in every time zone from UTC−11 to UTC+11.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-08-25T12:00:00Z") });
+  for (const tools of [["get_calendar_events"], ["web_search"], []]) {
+    assert.match(
+      getAgentSystemPrompt(tools),
+      /Current local date and time: Tuesday, 2026-08-25T/,
+      tools.join(",")
+    );
+  }
 });
