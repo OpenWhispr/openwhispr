@@ -204,7 +204,7 @@ test("self-hosted mode fails closed on a missing or unsafe WebSocket URL", async
     "ws://localhost:9000/v1/realtime",
     "ws://10.0.0.5/realtime",
     "ws://box.local:9000/api/v1/realtime",
-    "ws://ai2.tailnet.ts.net:9000/v1/realtime",
+    "ws://box.tailnet.ts.net:9000/v1/realtime",
   ]) {
     assert.equal(
       resolveMeetingTranscriptionOptions({
