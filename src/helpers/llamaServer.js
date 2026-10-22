@@ -88,6 +88,9 @@ class LlamaServerManager {
     // one just paid to open. See #2142.
     this.contextSize = null;
     this.startupPromise = null;
+    // What the start in flight was asked to load, so a concurrent start for
+    // anything else waits for it instead of joining it.
+    this.startingRequest = null;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -174,39 +177,49 @@ class LlamaServerManager {
   }
 
   async start(modelPath, options = {}) {
-    if (this.startupPromise) return this.startupPromise;
-
     // A change in drafter presence for the same model must still restart the
     // server so the new speculative-decoding flags take effect.
-    const requestedDraftPath = options.draftModelPath || null;
-    const requestedContextSize = options.contextSize || DEFAULT_CONTEXT_SIZE;
-    if (
-      this.ready &&
-      this.modelPath === modelPath &&
-      this.draftModelPath === requestedDraftPath &&
-      requestedContextSize <= (this.contextSize || 0)
-    ) {
+    const request = {
+      modelPath,
+      draftModelPath: options.draftModelPath || null,
+      contextSize: options.contextSize || DEFAULT_CONTEXT_SIZE,
+    };
+    const serves = (server) =>
+      server.modelPath === request.modelPath &&
+      server.draftModelPath === request.draftModelPath &&
+      request.contextSize <= (server.contextSize || 0);
+
+    // Join a start in flight only when it loads what this request needs;
+    // otherwise let it finish and restart over it.
+    while (this.startupPromise) {
+      if (serves(this.startingRequest)) return this.startupPromise;
+      await this.startupPromise.catch(() => {});
+    }
+
+    if (this.ready && serves(this)) {
       // Streaming chat reaches the port directly and never goes through
       // inference(), so asking for the running server is its only activity.
       this.resetIdleTimer();
       return;
     }
 
-    if (this.process) {
-      await this.stop();
-    }
-
-    // Residency may have been turned off while the old server stopped.
-    this.clearIdleTimer();
-    this.startupPromise = this._doStart(modelPath, options);
-    try {
-      await this.startupPromise;
-      // The ladder may have stepped the context down to get a GPU rung to
-      // start; record what loaded, not what was asked for.
-      this.contextSize = this.activeContextSize ?? requestedContextSize;
-    } finally {
-      this.startupPromise = null;
-    }
+    this.startingRequest = request;
+    // Assigned before any await so concurrent callers can never double-spawn.
+    this.startupPromise = (async () => {
+      try {
+        if (this.process) await this.stop();
+        // Residency may have been turned off while the old server stopped.
+        this.clearIdleTimer();
+        await this._doStart(modelPath, options);
+        // The ladder may have stepped the context down to get a GPU rung to
+        // start; record what loaded, not what was asked for.
+        this.contextSize = this.activeContextSize ?? request.contextSize;
+      } finally {
+        this.startupPromise = null;
+        this.startingRequest = null;
+      }
+    })();
+    return this.startupPromise;
   }
 
   _buildBaseArgs(modelPath, port, options = {}) {
