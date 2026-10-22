@@ -65,11 +65,20 @@ export const buildApiUrl = (base: string, path: string): string => {
   return joinUrlDecorators(`${originAndPath}${normalizedPath}`, query, hash);
 };
 
+// A path that already ends in a version segment — /v1, /v2, /v4, /api/v0,
+// /v1beta — is a complete API mount: appending /v1 to another version (the
+// Z.ai coding base https://api.z.ai/api/coding/paas/v4) produces a doubled
+// path the provider 404s on (#2381). Unversioned mounts such as /stable are
+// deliberately left alone — there is no signal they are complete, so they keep
+// the /v1 sibling fallback in getModelListBaseCandidates below.
+const versionedPathSuffix = /\/(v\d+([a-z].*)?|api\/v\d+)$/i;
+
 export const ensureV1Suffix = (base: string): string => {
   if (!base) return base;
   const normalized = normalizeBaseUrl(base) || base;
   const { path, query, hash } = splitUrlDecorators(normalized);
-  return joinUrlDecorators(path.endsWith("/v1") ? path : `${path}/v1`, query, hash);
+  const complete = path.endsWith("/v1") || versionedPathSuffix.test(path);
+  return joinUrlDecorators(complete ? path : `${path}/v1`, query, hash);
 };
 
 // Ordered bases to try when listing models from an OpenAI-compatible server.
@@ -84,6 +93,9 @@ export const getModelListBaseCandidates = (base: string): string[] => {
   if (nativeApiMatch) {
     return [normalized, joinUrlDecorators(`${nativeApiMatch[1]}/v1`, query, hash)];
   }
+  // A versioned mount other than /v1 (e.g. Z.ai's /api/coding/paas/v4) is a
+  // complete base: probing a /v1 sibling next to it only wastes a request on
+  // a path the provider does not serve (#2381).
   const withV1 = ensureV1Suffix(normalized);
   return withV1 === normalized ? [normalized] : [normalized, withV1];
 };

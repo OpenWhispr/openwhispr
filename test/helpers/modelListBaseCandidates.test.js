@@ -82,3 +82,22 @@ test("preserves query strings while deriving /v1 candidates", async () => {
     ["https://api.example.com/v1?api-version=2024-02-01"]
   );
 });
+
+// Regression for #2381: a base ending in a version segment other than /v1 is
+// already a complete mount — deriving a /v1 sibling probed a path the provider
+// does not serve and misreported working endpoints as unreachable.
+test("versioned bases other than /v1 get no /v1 sibling candidate", async () => {
+  const { getModelListBaseCandidates } = await load();
+
+  assert.deepEqual(getModelListBaseCandidates("https://api.z.ai/api/coding/paas/v4"), [
+    "https://api.z.ai/api/coding/paas/v4",
+  ]);
+  assert.deepEqual(getModelListBaseCandidates("https://api.example.com/v2"), [
+    "https://api.example.com/v2",
+  ]);
+  // Pasting the full endpoint URL normalizes to the same versioned base.
+  assert.deepEqual(
+    getModelListBaseCandidates("https://api.z.ai/api/coding/paas/v4/chat/completions"),
+    ["https://api.z.ai/api/coding/paas/v4"]
+  );
+});
