@@ -7747,6 +7747,7 @@ class IPCHandlers {
           const tokenEvent = { sender: win.webContents };
           const connectOpts = {
             model: options.model,
+            url: options.url,
             language: options.language,
             mode: options.mode,
             preconfigured: options.mode !== "byok",
@@ -7936,6 +7937,8 @@ class IPCHandlers {
 
       const connectOpts = {
         model: options.model,
+        // Only the self-hosted client reads it; the others dial a fixed host.
+        url: options.url,
         language: options.language,
         mode: options.mode,
         preconfigured: options.mode !== "byok",
