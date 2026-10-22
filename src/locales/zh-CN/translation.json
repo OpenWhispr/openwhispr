@@ -4354,7 +4354,7 @@
         "asLabel": "身份",
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
-          "replyInThread": "在话题中回复"
+          "replyInThread": "在 {{started, datetime(dateStyle: medium; timeStyle: short)}} 开始的话题中回复"
         }
       },
       "sentLabel": "已发送",

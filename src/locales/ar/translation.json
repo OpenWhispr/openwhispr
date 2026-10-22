@@ -928,7 +928,7 @@
         "asLabel": "بصفتك",
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
-          "replyInThread": "رد في سلسلة الرسائل"
+          "replyInThread": "رد في سلسلة الرسائل التي بدأت في {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         }
       },
       "sentLabel": "تم الإرسال",

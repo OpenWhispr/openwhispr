@@ -4524,7 +4524,7 @@
         "asLabel": "As",
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
-          "replyInThread": "Reply in thread"
+          "replyInThread": "Reply in thread started {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         }
       },
       "sentLabel": "Sent",
