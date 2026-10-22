@@ -1386,6 +1386,7 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
     assert.equal(survivor.folder_id, null);
     assert.equal(survivor.cloud_id, null);
     assert.equal(survivor.sync_status, "pending");
+    assert.equal(survivor.account_id, "test-account", "the fork is the active account's");
   }
   assert.notEqual(db.getNote(dirty.id).client_note_id, dirty.client_note_id, "identity forked");
   assert.equal(db.getNote(dirty.id).cloud_updated_at, null, "fork clears the old cloud base");
@@ -1426,10 +1427,37 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
   assert.equal(preserved.folder.cloud_id, null);
   assert.equal(preserved.folder.sync_status, "pending");
   assert.notEqual(preserved.folder.client_folder_id, dirtyFolder.client_folder_id);
+  assert.equal(preserved.folder.account_id, "test-account");
   const movedChild = db.getNote(child.id);
   assert.equal(movedChild.space_id, privateId);
   assert.equal(movedChild.folder_id, dirtyFolder.id, "children keep the preserved folder link");
   assert.equal(movedChild.cloud_id, null);
+  assert.equal(movedChild.account_id, "test-account");
+
+  // Relocated Personal content stays out of another local account's scope.
+  db.setActiveAccountId("other");
+  for (const id of [dirty.id, draft.id, child.id]) assert.equal(db.getNote(id), null);
+  assert.equal(
+    db.getFolders().some((f) => f.id === dirtyFolder.id),
+    false
+  );
+});
+
+test("relocateRevokedFolder keeps another account's draft in a legacy folder with that account", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  db.setActiveAccountId(null);
+  const legacy = db.createFolder("Shared").folder;
+  db.markFolderSynced(legacy.id, "cloud-legacy-folder");
+  db.setActiveAccountId("other");
+  const theirs = db.saveNote("Theirs", "unpushed", "personal", null, null, legacy.id).note;
+  db.setActiveAccountId("test-account");
+
+  assert.ok(db.relocateRevokedFolder(legacy.id, privateId, false).success);
+  assert.equal(db.getNote(theirs.id), null, "relocation never hands the draft to this account");
+  db.setActiveAccountId("other");
+  assert.equal(db.getNote(theirs.id).account_id, "other");
 });
 
 test("getFolderNoteCounts attributes space-root notes per space", (t) => {
@@ -1595,9 +1623,15 @@ test("purgeSpace preserves dirty cloud-backed notes with forked identities", (t)
     assert.notEqual(relocated.client_note_id, prior.client_note_id);
     assert.equal(relocated.is_shared, 0);
     assert.equal(relocated.share_token, null);
+    assert.equal(relocated.account_id, "test-account", "the fork is the active account's");
   }
   const count = (sql, ...args) => db.db.prepare(sql).get(...args).count;
   assert.equal(count("SELECT COUNT(*) as count FROM notes WHERE id = ?", clean.id), 0);
+
+  // Relocated Personal content stays out of another local account's scope.
+  db.setActiveAccountId("other");
+  assert.equal(db.getNote(dirty.id), null);
+  assert.equal(db.getNote(errored.id), null);
 });
 
 test("purgeSpace survives tombstones in other spaces referencing its folders", (t) => {
