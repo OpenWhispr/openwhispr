@@ -4348,13 +4348,14 @@ class DatabaseManager {
             .map((row) => row.id);
           if (preservedIds.length > 0) {
             const relocateNote = this.db.prepare(
-              "UPDATE notes SET space_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE notes SET space_id = ?, account_id = ?, folder_id = NULL, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
             );
             const detachNoteConversation = this.db.prepare(
               "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
             );
+            const accountId = this._accountIdForSpace(privateSpaceId);
             for (const noteId of preservedIds) {
-              relocateNote.run(privateSpaceId, randomUUID(), noteId);
+              relocateNote.run(privateSpaceId, accountId, randomUUID(), noteId);
               // A note chat follows the dirty note fork into Personal. Clear
               // any redundant team-container scope so the container cleanup
               // below cannot retire a conversation whose note survived.
@@ -7535,6 +7536,9 @@ class DatabaseManager {
       const serverOwnedChildren =
         "SELECT id FROM notes WHERE folder_id = ? AND (deleted_at IS NOT NULL OR (sync_status = 'synced' AND cloud_id IS NOT NULL))";
       const result = this.db.transaction(() => {
+        // A legacy folder can hold another local account's notes; they stay
+        // that account's at the space root instead of following this folder.
+        const releasedNotes = this._releaseOutOfScopeChildNotes(id);
         const preservedIds = this.db
           .prepare(
             "SELECT id FROM notes WHERE folder_id = ? AND deleted_at IS NULL AND (sync_status != 'synced' OR cloud_id IS NULL)"
@@ -7553,13 +7557,20 @@ class DatabaseManager {
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, account_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
         );
+        const accountId = this._accountIdForSpace(privateSpaceId);
         for (const noteId of preservedIds) {
-          relocateNote.run(privateSpaceId, preserveFolder ? id : null, randomUUID(), noteId);
+          relocateNote.run(
+            privateSpaceId,
+            accountId,
+            preserveFolder ? id : null,
+            randomUUID(),
+            noteId
+          );
           // Note-scoped chats follow a preserved dirty note, not the revoked
           // team container. Folder-only chats are handled separately below.
           detachNoteConversation.run(noteId);
@@ -7575,9 +7586,9 @@ class DatabaseManager {
           }
           this.db
             .prepare(
-              "UPDATE folders SET space_id = ?, name = ?, client_folder_id = ?, cloud_id = NULL, sync_status = 'pending', left_team = 0, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE folders SET space_id = ?, account_id = ?, name = ?, client_folder_id = ?, cloud_id = NULL, sync_status = 'pending', left_team = 0, updated_at = datetime('now') WHERE id = ?"
             )
-            .run(privateSpaceId, name, randomUUID(), id);
+            .run(privateSpaceId, accountId, name, randomUUID(), id);
           preservedFolder = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
           // Folder-scoped chats follow the preserved folder into the private
           // space so their space ref doesn't dangle on the revoked space.
@@ -7594,6 +7605,7 @@ class DatabaseManager {
         return {
           folder: preservedFolder,
           relocatedNotes: preservedIds.map((noteId) => getNote.get(noteId)),
+          releasedNotes,
           deletedNoteIds,
         };
       })();

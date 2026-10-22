@@ -1460,6 +1460,29 @@ test("relocateRevokedFolder keeps another account's draft in a legacy folder wit
   assert.equal(db.getNote(theirs.id).account_id, "other");
 });
 
+test("relocateRevokedFolder releases another account's draft from a preserved legacy folder", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  db.setActiveAccountId(null);
+  const legacy = db.createFolder("Shared").folder;
+  db.markFolderSynced(legacy.id, "cloud-legacy-folder");
+  db.renameFolder(legacy.id, "Shared edited");
+  db.setActiveAccountId("other");
+  const theirs = db.saveNote("Theirs", "unpushed", "personal", null, null, legacy.id).note;
+  db.setActiveAccountId("test-account");
+
+  const result = db.relocateRevokedFolder(legacy.id, privateId, true);
+  assert.ok(result.success);
+  assert.equal(result.folder.account_id, "test-account");
+  assert.equal(db.getNote(theirs.id), null);
+  db.setActiveAccountId("other");
+  const released = db.getNote(theirs.id);
+  assert.equal(released.account_id, "other");
+  assert.equal(released.folder_id, null, "the draft leaves a folder its account can't see");
+  assert.ok(db.getNotes(null, 100, null, privateId).some((n) => n.id === theirs.id));
+});
+
 test("getFolderNoteCounts attributes space-root notes per space", (t) => {
   const db = createDb(t);
   if (!db) return;

@@ -2894,6 +2894,11 @@ class IPCHandlers {
         for (const note of result.relocatedNotes ?? []) {
           this._asyncMirrorWrite(note);
         }
+        // Other accounts' notes were released to the space root; their mirror
+        // files leave with the folder directory, so rewrite the live ones.
+        for (const note of result.releasedNotes ?? []) {
+          if (!note.deleted_at) this._asyncMirrorWrite(note);
+        }
         for (const noteId of result.deletedNoteIds ?? []) {
           this._asyncMirrorDelete(noteId);
         }
