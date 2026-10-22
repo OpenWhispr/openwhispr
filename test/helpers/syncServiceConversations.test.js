@@ -246,3 +246,36 @@ test("a cloud conversation tombstone hard-deletes the local row and its messages
   );
   assert.equal(messageCount(db), 0, "the messages go with the conversation");
 });
+
+test("a conversation isn't pushed while a reply waits on the user, only once its turn ends", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("Waiting on a question");
+  db.addAgentMessage(conversation.id, "user", "Post the update");
+  const reply = db.addAgentMessage(conversation.id, "assistant", "", {
+    turn: { startedAt: Date.now(), status: "waiting" },
+  });
+  // A turn that old was cut off (the app quit); it goes as it is.
+  const cutOff = db.createAgentConversation("Cut off");
+  db.addAgentMessage(cutOff.id, "assistant", "", {
+    turn: { startedAt: Date.now() - 2 * 60 * 60 * 1000, status: "running" },
+  });
+
+  await service.syncAll(true);
+  assert.deepEqual(
+    cloud.logFor("/api/conversations/create").map((entry) => entry.body.title),
+    ["Cut off"]
+  );
+
+  db.updateAgentMessage(reply.id, "Posted.", {
+    turn: { startedAt: Date.now(), finishedAt: Date.now(), status: "complete" },
+  });
+  await service.syncAll(true);
+  const pushed = cloud.logFor("/api/conversations/create").at(-1).body;
+  assert.equal(pushed.title, "Waiting on a question");
+  assert.deepEqual(
+    pushed.messages.map((message) => message.content),
+    ["Post the update", "Posted."]
+  );
+});

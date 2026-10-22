@@ -13,6 +13,11 @@ import {
   Users,
   MessageSquare,
   CheckCircle,
+  HelpCircle,
+  KeyRound,
+  Link2,
+  Monitor,
+  Settings,
 } from "../icons";
 
 export const toolIcons: Record<string, typeof Search> = {
@@ -36,4 +41,9 @@ export const toolIcons: Record<string, typeof Search> = {
   linear_search_issues: Search,
   linear_create_issue: CheckCircle,
   linear_comment: MessageSquare,
+  ask_user: HelpCircle,
+  request_connection: Link2,
+  request_access: Monitor,
+  request_api_key: KeyRound,
+  open_settings: Settings,
 };

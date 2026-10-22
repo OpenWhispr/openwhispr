@@ -217,7 +217,7 @@ export function buildStreamingSessionOptions({
     tenant: settings.cortiTenant,
   };
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
-  // assistant voice skips it because the Assistant panel owns that surface.
+  // assistant voice skips it because the agent window owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
     options.preview = true;
   }

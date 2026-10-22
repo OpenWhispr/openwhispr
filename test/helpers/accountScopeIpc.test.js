@@ -9,7 +9,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js) with the bearer state under test control
+// from windowIpcSenders.test.js) with the bearer state under test control
 // and the binding file in a temporary userData directory, so the scope
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();

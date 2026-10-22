@@ -143,9 +143,11 @@ async function mountEmailCard(
         messageId: "m1",
         toolCallId: "call-1",
         signal: new AbortController().signal,
-        onApprovalRequested() {},
-        onHoldDelivery() {},
         claimTurnSlot: () => true,
+        claimAction: () => true,
+        releaseAction() {},
+        sentEarlier: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "gmail",
@@ -163,7 +165,6 @@ const FIFTY_ONE = Array.from({ length: 51 }, (_, index) => `p${index}@acme.test`
 
 test("a bad address, an empty To or Gmail's limits block Send with the reason on the card", async (t) => {
   const { container, calls } = await mountEmailCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   for (const [labelKey, value, reason] of [
     ["toLabel", "josh@acme.test, dana", "invalidAddress"],
@@ -209,7 +210,6 @@ test("a bad address, an empty To or Gmail's limits block Send with the reason on
 
 test("Send commits exactly the edited fields the card shows, and reports them to the model", async (t) => {
   const { container, calls, draftFields, toolResult } = await mountEmailCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => type(field(container, "toLabel"), "josh@acme.test, dana@acme.test"));
   await React.act(async () => type(field(container, "ccLabel"), ""));
   await React.act(async () =>
@@ -232,7 +232,7 @@ test("Send commits exactly the edited fields the card shows, and reports them to
   assert.equal(result.data.status, "sent");
   assert.deepEqual(result.data.final, edited);
   assert.equal("finalText" in result.data, false);
-  // Out of edit mode, the card still shows what was sent.
+  // Once sent, the card still shows what was sent.
   assert.match(container.textContent, /josh@acme\.test, dana@acme\.test/);
   assert.match(container.textContent, /Q3 numbers Bcc: evil@attacker\.test/);
 });
@@ -245,7 +245,6 @@ test("after a recipient edit, the model and the card name who it actually went t
       destinationLabel: "dana@acme.test +1",
     },
   });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => type(field(container, "toLabel"), "dana@acme.test"));
 
   await React.act(async () => click(button(container, "connectors.approval.send")));
@@ -261,9 +260,8 @@ test("a send whose result names no recipients keeps the prepared label", async (
   assert.equal((await toolResult()).data.destination, "josh@acme.test");
 });
 
-test("Esc in an email field ends editing and keeps the edit", async (t) => {
+test("Esc in an email field stays in the card and keeps the edit", async (t) => {
   const { container, draftFields } = await mountEmailCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => type(field(container, "subjectLabel"), "Q3 (final)"));
 
   const event = { cancelBubble: false };
@@ -278,20 +276,18 @@ test("Esc in an email field ends editing and keeps the edit", async (t) => {
   );
 
   assert.equal(event.cancelBubble, true, "the panel never sees the Esc");
-  assert.equal(field(container, "subjectLabel"), null, "edit mode ended");
+  assert.ok(field(container, "subjectLabel"), "the field stays");
   assert.equal(draftFields().subject, "Q3 (final)");
 });
 
-test("Esc on the Edit button, outside the fields, ends editing instead of cancelling the card", async (t) => {
+test("Esc on Copy, outside the fields, never cancels the card", async (t) => {
   const { container, draftFields, calls } = await mountEmailCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => type(field(container, "toLabel"), "dana@acme.test"));
 
-  // Focus stays on the button after clicking Edit; the panel's Esc would
-  // cancel the turn and withdraw the card with the edit.
+  // The panel's Esc would cancel the turn and withdraw the card with the edit.
   const event = { cancelBubble: false };
   await React.act(async () =>
-    dispatch(button(container, "connectors.approval.doneEditing"), "keydown", {
+    dispatch(button(container, "common.copy"), "keydown", {
       key: "Escape",
       stopPropagation() {
         event.cancelBubble = true;
@@ -301,14 +297,12 @@ test("Esc on the Edit button, outside the fields, ends editing instead of cancel
   );
 
   assert.equal(event.cancelBubble, true, "the panel never sees the Esc");
-  assert.equal(field(container, "toLabel"), null, "edit mode ended");
   assert.deepEqual(draftFields().to, ["dana@acme.test"]);
   assert.deepEqual(calls.cancel, []);
 });
 
 test("a stripped display name shows the addresses the email will go to", async (t) => {
   const { container, draftFields } = await mountEmailCard(t);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   const sendsTo = () =>
     findElement(
       container,

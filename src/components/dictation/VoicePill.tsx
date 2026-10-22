@@ -107,9 +107,9 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
         className
       )}
       style={{
-        // Listening uses the same compact pill as the assistant panel. The
-        // previous wide recording bar made the control feel like a different
-        // surface and forced an unnecessary large window resize.
+        // Listening uses the same compact pill as the idle state. The previous
+        // wide recording bar made the control feel like a different surface
+        // and forced an unnecessary large window resize.
         width: footprint.width,
         height: footprint.height,
         cursor: isProcessing || isThinking ? "not-allowed" : isDragging ? "grabbing" : "pointer",

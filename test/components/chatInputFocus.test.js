@@ -29,7 +29,10 @@ async function mountChatInput(t, installDom = installHostDom) {
     cachePrefix: "openwhispr-note-chat-focus-test-",
     mockModules: {
       "/ui/useToast": `export const useToast = () => ({ toast: () => {} });`,
-      "/useVoiceDraft": `export const useVoiceDraft = () => ({ status: "idle", streamingOnlyProvider: false });`,
+      "/useVoiceDraft": `
+        const cancel = () => (globalThis.__voiceCancels = (globalThis.__voiceCancels ?? 0) + 1);
+        export const useVoiceDraft = () => ({ status: "idle", streamingOnlyProvider: false, cancel });
+      `,
       "/stores/meetingRecordingStore": `
         export const getMicAnalyser = () => null;
         export const useMeetingRecordingStore = { getState: () => ({ currentMicLevel: 0 }) };
@@ -206,4 +209,22 @@ test("cancelling a reply hands focus back to the composer", async (t) => {
     true,
     "focus would otherwise fall to the page when the Cancel button unmounts"
   );
+});
+
+test("a composer hidden behind another view discards its voice draft, as an unmount would", async (t) => {
+  const { root, ChatInput } = await mountChatInput(t);
+  t.after(() => delete globalThis.__voiceCancels);
+  const props = {
+    variant: "assistant",
+    agentState: "idle",
+    partialTranscript: "",
+    voiceDraft: true,
+  };
+
+  await React.act(async () => root.render(React.createElement(ChatInput, props)));
+  assert.equal(globalThis.__voiceCancels, undefined, "a visible composer keeps recording");
+  await React.act(async () =>
+    root.render(React.createElement(ChatInput, { ...props, active: false }))
+  );
+  assert.equal(globalThis.__voiceCancels, 1);
 });

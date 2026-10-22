@@ -24,7 +24,7 @@ interface ChatInputProps {
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
-  /** Overrides the default wrapper padding (compact hosts like the assistant panel). */
+  /** Overrides the default wrapper padding (compact hosts). */
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;
@@ -42,6 +42,8 @@ interface ChatInputProps {
   slashCommands?: SlashCommand[];
   /** The menu fills the host above the composer, so the host hides what it would cover. */
   onSlashMenuOpenChange?: (open: boolean) => void;
+  /** False while the host is hidden but kept mounted: a voice draft is discarded, as on unmount. */
+  active?: boolean;
 }
 
 function RecordingIndicator() {
@@ -92,6 +94,7 @@ export function ChatInput({
   expandOnFocusSize = "standard",
   slashCommands,
   onSlashMenuOpenChange,
+  active = true,
 }: ChatInputProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -121,6 +124,10 @@ export function ChatInput({
       });
     },
   });
+  const cancelVoice = voice.cancel;
+  useEffect(() => {
+    if (!active) cancelVoice();
+  }, [active, cancelVoice]);
   const isVoiceRecording = voice.status === "recording";
   const isVoiceTranscribing = voice.status === "transcribing";
   const isCompactNote = variant === "note" && !outlined;

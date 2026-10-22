@@ -153,9 +153,6 @@ export const githubSearchIssuesTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // Results are other people's text; an answer shaped by them stays in the
-    // panel rather than being pasted into the user's document.
-    context?.onHoldDelivery();
     const query = text(args, "query").trim();
     if (!query) return needsClarificationResult("Ask the user what to search GitHub for.");
     if (characterCount(query) > MAX_ISSUE_QUERY_LENGTH) {
@@ -216,9 +213,6 @@ export const githubCreateIssueTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // Every outcome keeps the turn off the caret: a card, a question back and
-    // a receipt all belong in the panel, never in the user's document.
-    context?.onHoldDelivery();
     // A title is one line on GitHub; main collapses line breaks the same way.
     const title = text(args, "title")
       .replace(/\s*[\r\n]+\s*/g, " ")
@@ -283,7 +277,6 @@ export const githubCommentTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    context?.onHoldDelivery();
     const target = text(args, "target").trim();
     const body = text(args, "body");
     if (!isGithubTarget(target)) {

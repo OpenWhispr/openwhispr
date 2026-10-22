@@ -91,12 +91,18 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
+  // An answer card's title and message: prose in any script.
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
-  // To, Cc, Subject, Body: people's names and prose in any script.
-  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
+  // To, Cc, Subject: people's names and prose in any script.
+  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto"],
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
+  // An API key, always LTR; a typed answer in any script.
+  "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
+  "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],
   "src/components/notes/AddNotesToFolderDialog.tsx": ["auto"],
   "src/components/notes/MeetingTranscriptChat.tsx": ["ltr", "auto"],

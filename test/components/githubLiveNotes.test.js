@@ -97,9 +97,11 @@ async function mountCard(t, { connectorId, preview, language = "en" }) {
       messageId: "m1",
       toolCallId: "call-1",
       signal: new AbortController().signal,
-      onApprovalRequested() {},
-      onHoldDelivery() {},
       claimTurnSlot: () => true,
+      claimAction: () => true,
+      releaseAction() {},
+      sentEarlier: () => false,
+      recordCompletedAction() {},
       releaseTurnSlot() {},
     },
     { actionId: "a1", connectorId, preview }
@@ -122,7 +124,6 @@ test("a GitHub issue card says who its mentions will notify", async (t) => {
 
 test("the note follows the user's edits: added, changed and gone", async (t) => {
   const container = await mountCard(t, { connectorId: "github", preview: ISSUE });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   const body = () => field(container, "connectors.approval.issue.bodyLabel");
 
   await React.act(async () => type(body(), "Ask @bob instead. Also @Bob and @carol."));
@@ -159,7 +160,6 @@ test("a language tag Intl can't read falls back to a comma list", async (t) => {
 
 test("the fields being edited are described by the note, and only while there is one", async (t) => {
   const container = await mountCard(t, { connectorId: "github", preview: ISSUE });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   const title = () => field(container, "connectors.approval.issue.titleLabel");
   const body = () => field(container, "connectors.approval.issue.bodyLabel");
 
