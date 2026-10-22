@@ -7,6 +7,14 @@ function notificationKey(event) {
   return `${event.provider || "google"}:${event.id}`;
 }
 
+// Calendar.app mirrors Google and Microsoft accounts, and the database hides
+// an Apple copy only once its REST copy is stored (dedupedEventsQuery). Pair
+// the copies the same way, by time slot and title, so a copy stored after the
+// other one's reminder is not reminded again.
+function mirrorSlotKey(event) {
+  return `${Date.parse(event.start_time)}|${Date.parse(event.end_time)}|${event.summary || ""}`;
+}
+
 // A solo event with no invitees and no meeting link is a time block (focus
 // time, a personal reminder), not a meeting — every provider syncs those.
 function isReminderEligible(event) {
@@ -23,6 +31,26 @@ class CalendarReminderScheduler {
     this.meetingEndTimer = null;
     this.activeMeeting = null;
     this.notifiedMeetings = new Set();
+    // Mirror slot -> notification keys reminded in that slot.
+    this.notifiedSlots = new Map();
+  }
+
+  _wasNotified(event) {
+    if (this.notifiedMeetings.has(notificationKey(event))) return true;
+    const isApple = event.provider === "apple";
+    for (const key of this.notifiedSlots.get(mirrorSlotKey(event)) ?? []) {
+      // REST rows never mirror each other, so only an Apple/REST pair matches.
+      if (key.startsWith("apple:") !== isApple) return true;
+    }
+    return false;
+  }
+
+  _markNotified(event) {
+    const key = notificationKey(event);
+    this.notifiedMeetings.add(key);
+    const slot = mirrorSlotKey(event);
+    if (!this.notifiedSlots.has(slot)) this.notifiedSlots.set(slot, new Set());
+    this.notifiedSlots.get(slot).add(key);
   }
 
   scheduleNextMeeting() {
@@ -34,7 +62,7 @@ class CalendarReminderScheduler {
       // during the meeting) is active again, without a second reminder.
       const delivered = this.databaseManager
         .getUpcomingEvents(1)
-        .find((event) => this.notifiedMeetings.has(notificationKey(event)));
+        .find((event) => this._wasNotified(event));
       if (delivered) {
         this.activeMeeting = delivered;
         this._scheduleMeetingEnd(delivered);
@@ -47,9 +75,7 @@ class CalendarReminderScheduler {
     }
 
     const upcoming = this.databaseManager.getUpcomingEvents(1440);
-    const next = upcoming.find(
-      (event) => isReminderEligible(event) && !this.notifiedMeetings.has(notificationKey(event))
-    );
+    const next = upcoming.find((event) => isReminderEligible(event) && !this._wasNotified(event));
     if (!next) return;
 
     const delay = new Date(next.start_time).getTime() - MEETING_REMINDER_LEAD_MS - Date.now();
@@ -82,7 +108,7 @@ class CalendarReminderScheduler {
     }
 
     this.activeMeeting = event;
-    this.notifiedMeetings.add(notificationKey(event));
+    this._markNotified(event);
 
     debugLogger.info("Calendar meeting reminder due", { summary: event.summary }, "calendar");
     this.meetingDetectionEngine?.handleCalendarReminder(event);
@@ -173,6 +199,7 @@ class CalendarReminderScheduler {
     if (!provider) {
       this.stop();
       this.notifiedMeetings.clear();
+      this.notifiedSlots.clear();
       return;
     }
 
@@ -189,6 +216,10 @@ class CalendarReminderScheduler {
     const prefix = `${provider}:`;
     for (const key of this.notifiedMeetings) {
       if (key.startsWith(prefix)) this.notifiedMeetings.delete(key);
+    }
+    for (const [slot, keys] of this.notifiedSlots) {
+      for (const key of keys) if (key.startsWith(prefix)) keys.delete(key);
+      if (keys.size === 0) this.notifiedSlots.delete(slot);
     }
 
     this.scheduleNextMeeting();
