@@ -210,25 +210,7 @@ test("a press before the renderer is ready reaches it once it is", () => {
   assert.deepEqual(win.sent, []);
 
   manager.markReady(fromAgent(win));
-  assert.deepEqual(win.sent, [
-    { channel: "agent-window-hotkey", payload: { external: true, opened: true } },
-  ]);
-});
-
-test("only the press that opens the window may capture the screen; another app's still counts as external", async () => {
-  const { manager, win } = await openedManager();
-  const press = () => {
-    manager.handleHotkey();
-    return win.sent.at(-1).payload;
-  };
-  // Shown but another app has the keyboard: its selection is wanted, a new
-  // screenshot is not (the window now covers part of the screen).
-  win.focused = false;
-  assert.deepEqual(press(), { external: true, opened: false });
-  win.focused = true;
-  assert.deepEqual(press(), { external: false, opened: false });
-  win.hide();
-  assert.deepEqual(press(), { external: true, opened: true });
+  assert.deepEqual(win.sent, [{ channel: "agent-window-hotkey", payload: { external: true } }]);
 });
 
 test("layouts keep the bottom-center anchor and only a layout change sets bounds", async () => {
@@ -587,7 +569,7 @@ test("a reloaded renderer starts hidden and without a take, like a new one", asy
   manager.markReady(fromAgent(win));
   assert.deepEqual(win.sent.at(-1), {
     channel: "agent-window-hotkey",
-    payload: { external: true, opened: true },
+    payload: { external: true },
   });
 });
 

@@ -114,8 +114,6 @@ async function mountWindow(t) {
   });
   const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
   const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   approvalStore = approvals.useConnectorApprovalStore;
   const { default: AgentWindow } = await vite.ssrLoadModule("/components/agent/AgentWindow.tsx");
   const { SettingsProvider } = await vite.ssrLoadModule("/hooks/useSettings.ts");
@@ -179,8 +177,6 @@ async function mountWindow(t) {
     main,
     interactions,
     approvals,
-    useSettingsStore,
-    usePolicyStore,
     settle,
     chat,
     button,
@@ -1163,36 +1159,9 @@ test("a spoken command after a timed open made while away asks for the keyboard 
   assert.equal(view.main.layouts.at(-1).focus, true, "the question can be typed into");
 });
 
-test("only the press that opens the window captures the screen; a later one reads just the selection", async (t) => {
-  const view = await mountWindow(t);
-  const captures = [];
-  Object.assign(view.happyWindow.electronAPI, {
-    captureSelectedText: async () => {
-      captures.push("selection");
-      return null;
-    },
-    captureScreenContext: async () => {
-      captures.push("screen");
-      return null;
-    },
-  });
-  view.usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
-  view.useSettingsStore.setState({ voiceAgentScreenContext: true });
-
-  await React.act(async () => view.main.handlers.hotkey({ external: true, opened: true }));
-  await view.settle();
-  assert.deepEqual(captures, ["selection", "screen"]);
-
-  // Shown, but pressed from another app: the window covers the screen now.
-  captures.length = 0;
-  await React.act(async () => view.main.handlers.hotkey({ external: true, opened: false }));
-  await view.settle();
-  assert.deepEqual(captures, ["selection"]);
-});
-
 test("a reply that still claims an action nothing did says it wasn't done", async (t) => {
   const view = await mountWindow(t);
-  await React.act(async () => view.main.handlers.hotkey({ external: false, opened: true }));
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
   await view.chat({
     messages: [
       { id: "u1", role: "user", content: "Email Gabe", isStreaming: false },
