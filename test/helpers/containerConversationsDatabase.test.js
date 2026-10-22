@@ -268,6 +268,45 @@ test("getNotesForSpace includes foldered notes, unlike the root-only getNotes", 
   assert.deepEqual(new Set(all.map((n) => n.id)), new Set([rootNote.id, keptNote.id]));
 });
 
+test("note lists order cloud ISO and local SQLite timestamps by time", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const folder = db.createFolder("Docs", privateId).folder;
+
+  // Pulled notes keep the cloud's ISO updated_at; local edits store SQLite's
+  // "YYYY-MM-DD HH:MM:SS". On the same UTC day 'T' sorts above ' ' as text.
+  const pulled = db.upsertNoteFromCloud(
+    {
+      id: "cloud-pulled",
+      client_note_id: "client-pulled",
+      title: "Pulled earlier",
+      content: "",
+      created_at: "2026-10-22T03:40:00.000Z",
+      updated_at: "2026-10-22T03:43:07.531Z",
+    },
+    folder.id,
+    privateId
+  );
+  const local = db.saveNote("Edited here", "", "personal", null, null, folder.id, privateId).note;
+  db.updateNote(local.id, { content: "edited" });
+  db.db.prepare("UPDATE notes SET updated_at = '2026-10-22 03:44:07' WHERE id = ?").run(local.id);
+
+  assert.deepEqual(
+    db.getNotes(null, 50, folder.id, privateId).map((n) => n.id),
+    [local.id, pulled.id]
+  );
+  assert.deepEqual(
+    db.getNotes(null, 1, folder.id, privateId).map((n) => n.id),
+    [local.id],
+    "LIMIT must keep the most recently edited note"
+  );
+  assert.deepEqual(
+    db.getNotesForSpace(privateId).map((n) => n.id),
+    [local.id, pulled.id]
+  );
+});
+
 test("getNoteIdsInFolder excludes deleted notes", (t) => {
   const db = createDb(t);
   if (!db) return;
