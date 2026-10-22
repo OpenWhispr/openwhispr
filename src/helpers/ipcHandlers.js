@@ -2154,13 +2154,14 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-mark-dictionary-synced",
-      async (_event, id, cloudId, serverUpdatedAt, expectedWord, expectedSource) => {
+      async (_event, id, cloudId, serverUpdatedAt, expectedWord, expectedSource, serverSource) => {
         return this.databaseManager.markDictionaryEntrySynced(
           id,
           cloudId,
           serverUpdatedAt,
           expectedWord,
-          expectedSource
+          expectedSource,
+          serverSource
         );
       }
     );

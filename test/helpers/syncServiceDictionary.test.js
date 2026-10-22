@@ -62,8 +62,8 @@ function setup(t, source = "manual") {
   return { db, api, cloud, local, service };
 }
 
-function editInServerSecond(db, word = "ALPHA") {
-  db.applyDictionaryChanges({ add: [word] });
+function editInServerSecond(db, word = "ALPHA", source = "manual") {
+  db.applyDictionaryChanges({ add: [word] }, source);
   // Pin SQLite's second precision below the fractional server echo without
   // depending on wall-clock timing or waiting for a second boundary.
   db.db.prepare("UPDATE custom_dictionary SET updated_at = ?").run(LOCAL_SECOND);
@@ -85,6 +85,49 @@ test("an unchanged dictionary create acknowledges the server revision and preser
   await service.pullDictionary();
   assert.deepEqual(db.getDictionaryEntryByClientId(local.client_dict_id), row);
 });
+
+for (const kind of ["create ACK", "in-flight create edit", "cloud merge"]) {
+  test(`manual dictionary provenance survives ${kind} and a subsequent learned casing edit`, async (t) => {
+    const ctx = setup(t, "learned");
+    if (!ctx) return;
+    const { db, api, cloud, local, service } = ctx;
+    if (kind === "cloud merge") {
+      await service.syncDictionary();
+      cloud.entry.source = "manual";
+      cloud.entry.updated_at = NEXT_SERVER_AT;
+      api.upsertDictionaryFromCloud = async (entry) => {
+        editInServerSecond(db, "ALPHA", "learned");
+        return db.upsertDictionaryFromCloud(entry);
+      };
+      await service.pullDictionary();
+    } else {
+      cloud.afterWrite = () => {
+        // A batch-create deduplicated against a manual word keeps its source.
+        cloud.entry.source = "manual";
+        if (kind === "in-flight create edit") editInServerSecond(db, "ALPHA", "learned");
+        cloud.afterWrite = () => {};
+      };
+      await service.syncDictionary();
+    }
+
+    const row = db.getDictionaryEntryByClientId(local.client_dict_id);
+    assert.equal(row.source, "manual");
+    assert.equal(row.word, kind === "create ACK" ? "alpha" : "ALPHA");
+    assert.equal(row.created_at, CREATED_AT);
+    assert.equal(row.updated_at, kind === "create ACK" ? SERVER_AT : LOCAL_SECOND);
+    assert.equal(row.sync_status, kind === "create ACK" ? "synced" : "pending");
+    assert.equal(row.cloud_id, cloud.entry.id);
+
+    if (kind === "create ACK") editInServerSecond(db, "ALPHA", "learned");
+    await service.syncDictionary();
+    assert.equal(cloud.entry.word, "ALPHA");
+    assert.equal(cloud.entry.source, "manual");
+    assert.equal(db.getDictionaryEntryByClientId(local.client_dict_id).sync_status, "synced");
+    assert.equal(DictionaryService.delete.mock.callCount(), 0);
+    assert.equal(DictionaryService.batchCreate.mock.callCount(), 1);
+    assert.equal(DictionaryService.update.mock.callCount(), 1);
+  });
+}
 
 test("a same-second casing edit after create ACK survives the echo and reaches the next PATCH", async (t) => {
   const ctx = setup(t);

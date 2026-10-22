@@ -3737,7 +3737,8 @@ declare global {
         cloudId: string,
         serverUpdatedAt?: string,
         expectedWord?: string,
-        expectedSource?: DictionaryEntryItem["source"]
+        expectedSource?: DictionaryEntryItem["source"],
+        serverSource?: DictionaryEntryItem["source"]
       ) => Promise<{ success: boolean; changes: number }>;
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;

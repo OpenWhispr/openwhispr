@@ -2786,17 +2786,19 @@ class DatabaseManager {
           .get(word);
 
       if (existing) {
+        // Manual is sticky — a pull never demotes a local manual row to learned.
+        const mergedSource =
+          existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
         // A local edit can follow the push ACK within the same SQLite second.
         // Its timestamp cannot safely order it against the server's echo.
         if (existing.sync_status === "pending") {
           this.db
-            .prepare("UPDATE custom_dictionary SET cloud_id = COALESCE(cloud_id, ?) WHERE id = ?")
-            .run(cloudEntry.id, existing.id);
+            .prepare(
+              "UPDATE custom_dictionary SET cloud_id = COALESCE(cloud_id, ?), source = ? WHERE id = ?"
+            )
+            .run(cloudEntry.id, mergedSource, existing.id);
           return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
         }
-        // Manual is sticky — a pull never demotes a local manual row to learned.
-        const mergedSource =
-          existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
         this.db
           .prepare(
             `UPDATE custom_dictionary
@@ -2833,7 +2835,8 @@ class DatabaseManager {
     cloudId,
     serverUpdatedAt = null,
     expectedWord = null,
-    expectedSource = null
+    expectedSource = null,
+    serverSource = null
   ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -2849,10 +2852,17 @@ class DatabaseManager {
         const result = this.db
           .prepare(
             `UPDATE custom_dictionary
-             SET cloud_id = ?, sync_status = ?, updated_at = COALESCE(?, updated_at)
+             SET cloud_id = ?, sync_status = ?, updated_at = COALESCE(?, updated_at),
+                 source = CASE WHEN ? = 'manual' THEN 'manual' ELSE source END
              WHERE id = ?`
           )
-          .run(cloudId, unchanged ? "synced" : "pending", unchanged ? serverUpdatedAt : null, id);
+          .run(
+            cloudId,
+            unchanged ? "synced" : "pending",
+            unchanged ? serverUpdatedAt : null,
+            serverSource,
+            id
+          );
         return { success: result.changes > 0, changes: result.changes };
       })();
     } catch (error) {

@@ -2576,7 +2576,8 @@ export class SyncService {
           server.id,
           server.updated_at,
           entry.word,
-          entry.source
+          entry.source,
+          server.source
         );
       } catch (err) {
         // 404: another device purged the cloud row. Clear the stale cloud_id so
@@ -2616,7 +2617,8 @@ export class SyncService {
             server.id,
             server.updated_at,
             local.word,
-            local.source
+            local.source,
+            server.source
           );
           if (result && result.changes === 0) {
             try {

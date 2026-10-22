@@ -1280,14 +1280,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
   upsertDictionaryFromCloud: (cloudEntry) =>
     ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
-  markDictionarySynced: (id, cloudId, serverUpdatedAt, expectedWord, expectedSource) =>
+  markDictionarySynced: (
+    id,
+    cloudId,
+    serverUpdatedAt,
+    expectedWord,
+    expectedSource,
+    serverSource
+  ) =>
     ipcRenderer.invoke(
       "db-mark-dictionary-synced",
       id,
       cloudId,
       serverUpdatedAt,
       expectedWord,
-      expectedSource
+      expectedSource,
+      serverSource
     ),
   hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
   clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
