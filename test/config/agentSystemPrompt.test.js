@@ -227,3 +227,12 @@ test("without Tone & Style the prompt has no writing style", async () => {
   const { getAgentSystemPrompt } = await load();
   assert.doesNotMatch(getAgentSystemPrompt([], undefined, {}), /WRITING STYLE/);
 });
+
+test("calendar events are told in their local fields; start and end are for other tools", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt(["get_calendar_events"]);
+  assert.match(
+    prompt,
+    /Tell the user each event's date, weekday, startTime, endTime and timeZoneName exactly as returned; start and end are only for passing to other tools/
+  );
+});
