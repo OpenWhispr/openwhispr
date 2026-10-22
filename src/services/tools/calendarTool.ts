@@ -5,21 +5,14 @@ import { localDateFormatter, localizeInstant } from "./calendarAvailabilityTool"
 
 type TimeRange = "today" | "tomorrow" | "week";
 
+// Through the end of the range's last local day ("week": today and the six
+// days after it), so all-day and timed events cover the same days.
 function getWindowMinutes(timeRange: TimeRange): number {
-  if (timeRange === "week") return 10080;
-
   const now = new Date();
-  if (timeRange === "tomorrow") {
-    const endOfTomorrow = new Date(now);
-    endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
-    endOfTomorrow.setHours(23, 59, 59, 999);
-    return Math.ceil((endOfTomorrow.getTime() - now.getTime()) / 60000);
-  }
-
-  // "today": remaining minutes until midnight
-  const midnight = new Date(now);
-  midnight.setHours(23, 59, 59, 999);
-  return Math.max(1, Math.ceil((midnight.getTime() - now.getTime()) / 60000));
+  const end = new Date(now);
+  end.setDate(end.getDate() + (timeRange === "week" ? 6 : timeRange === "tomorrow" ? 1 : 0));
+  end.setHours(23, 59, 59, 999);
+  return Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 60000));
 }
 
 // Rows come straight from the calendar_events table (start_time/end_time

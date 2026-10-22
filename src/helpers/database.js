@@ -5284,9 +5284,9 @@ class DatabaseManager {
   }
 
   // includeAllDay adds all-day events from today up to the day the window
-  // ends in, not that day itself: the assistant's calendar tool rounds its
-  // windows up to just past a midnight (reminders and the meeting list skip
-  // all-day events).
+  // ends in, not that day itself: the assistant's calendar tool ends each
+  // window at the end of a local day, rounded up to just past midnight
+  // (reminders and the meeting list skip all-day events).
   getUpcomingEvents(windowMinutes = 1440, { includeAllDay = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
