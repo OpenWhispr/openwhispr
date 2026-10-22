@@ -165,12 +165,30 @@ function getDBus() {
   }
 }
 
+// A non-production channel (npm run dev) gets its own bus name and gsettings
+// paths, so it never takes over the shortcuts of an installed build running
+// beside it. Read lazily: main sets OPENWHISPR_CHANNEL after some requires.
+function getChannelSuffix() {
+  const channel = process.env.OPENWHISPR_CHANNEL;
+  return channel && channel !== "production" ? channel : "";
+}
+
+function getDBusServiceName() {
+  const channel = getChannelSuffix();
+  return channel ? `${DBUS_SERVICE_NAME}.${channel}` : DBUS_SERVICE_NAME;
+}
+
 function getSlotConfig(slotName) {
   const config = SLOT_CONFIG[slotName];
   if (!config) {
     throw new Error(`[GnomeShortcut] Unknown slot: "${slotName}"`);
   }
-  return config;
+  const channel = getChannelSuffix();
+  if (!channel) return config;
+  return {
+    path: config.path.replace(/\/openwhispr(?=[-/])/, `/openwhispr-${channel}`),
+    name: config.name.replace(/^OpenWhispr/, `OpenWhispr (${channel})`),
+  };
 }
 
 class GnomeShortcutManager {
@@ -257,7 +275,7 @@ class GnomeShortcutManager {
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
       });
-      this.bus.requestName(DBUS_SERVICE_NAME, 0);
+      this.bus.requestName(getDBusServiceName(), 0);
       this.bus.exportInterface(
         {
           Toggle: () => {
@@ -381,7 +399,7 @@ class GnomeShortcutManager {
       translation: "ToggleTranslation",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
-    const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
+    const command = `dbus-send --session --type=method_call --dest=${getDBusServiceName()} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
 
     try {
       const existing = this.getExistingKeybindings();

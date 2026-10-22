@@ -627,6 +627,7 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 - D-Bus service: `com.openwhispr.App`
 - D-Bus path: `/com/openwhispr/App`
 - gsettings path: `/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/`
+- A non-production channel (`npm run dev`, `OPENWHISPR_CHANNEL`) registers under `com.openwhispr.App.<channel>` and `openwhispr-<channel>*` gsettings paths (`getDBusServiceName`, `getSlotConfig`), so a development build never takes over the shortcuts or bus name of an installed build running beside it
 
 **IPC Integration**:
 
