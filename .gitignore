@@ -322,3 +322,8 @@ src/assets/fonts/yowza/*.otf
 
 # Local scratch output from the Superpowers Claude Code plugin (SDD fix reports etc.).
 .superpowers/
+
+# Local model exam working files
+scripts/local-model-exam/.cache/
+scripts/local-model-exam/results/
+scripts/local-model-exam/results-*.log

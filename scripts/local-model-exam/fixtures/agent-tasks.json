@@ -1,0 +1,256 @@
+{
+  "note": "First-pass agent tasks with fake tools (nothing real is called). expect: tools that must be called, in order, with matching arguments; extra read-only calls are allowed, extra write calls are not. kind no-tool: any tool call is wrong. kind draft-only: calling a send tool is wrong. The 9-in-10 bar needs more tasks than this first pass has; the report says so.",
+  "sendTools": ["slack_send_message"],
+  "canned": {
+    "get_calendar_events": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "events": [
+          {
+            "title": "Design review",
+            "start": "2026-10-23T10:00:00+01:00",
+            "end": "2026-10-23T10:45:00+01:00",
+            "attendees": ["priya@example.com"]
+          },
+          {
+            "title": "1:1 with Jordan",
+            "start": "2026-10-23T15:00:00+01:00",
+            "end": "2026-10-23T15:30:00+01:00"
+          }
+        ]
+      }
+    },
+    "get_calendar_availability": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "free": [
+          { "start": "2026-10-23T13:00:00+01:00", "end": "2026-10-23T14:30:00+01:00" },
+          { "start": "2026-10-23T16:00:00+01:00", "end": "2026-10-23T17:30:00+01:00" }
+        ]
+      }
+    },
+    "search_notes": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "results": [
+          {
+            "id": "note-42",
+            "title": "Q3 budget review",
+            "snippet": "Q3 budget approved at 120k; marketing gets 30k; hiring paused until November."
+          }
+        ]
+      }
+    },
+    "get_note": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "id": "note-42",
+        "title": "Q3 budget review",
+        "content": "Q3 budget approved at 120k. Marketing gets 30k. Hiring paused until November."
+      }
+    },
+    "find_contact": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "contacts": [
+          { "name": "Marcus Lee", "email": "marcus@example.com" },
+          { "name": "Priya Shah", "email": "priya@example.com" }
+        ]
+      }
+    },
+    "list_folders": {
+      "success": true,
+      "displayText": "",
+      "data": { "folders": ["Personal", "Work"] }
+    },
+    "web_search": {
+      "success": true,
+      "displayText": "",
+      "data": {
+        "results": [{ "title": "macOS 26", "snippet": "The latest macOS release is macOS 26." }]
+      }
+    }
+  },
+  "tasks": [
+    {
+      "id": "one-01",
+      "kind": "single",
+      "prompt": "What's on my calendar tomorrow?",
+      "expect": [
+        { "tool": "get_calendar_events", "args": { "timeRange": { "equals": "tomorrow" } } }
+      ]
+    },
+    {
+      "id": "one-02",
+      "kind": "single",
+      "prompt": "Do I have anything on this week?",
+      "expect": [{ "tool": "get_calendar_events", "args": { "timeRange": { "equals": "week" } } }]
+    },
+    {
+      "id": "one-03",
+      "kind": "single",
+      "prompt": "Find my notes about the pricing discussion.",
+      "expect": [{ "tool": "search_notes", "args": { "query": { "includes": "pric" } } }]
+    },
+    {
+      "id": "one-04",
+      "kind": "single",
+      "prompt": "Copy \"See you at 5\" to my clipboard.",
+      "expect": [
+        { "tool": "copy_to_clipboard", "args": { "text": { "includes": "see you at 5" } } }
+      ]
+    },
+    {
+      "id": "one-05",
+      "kind": "single",
+      "prompt": "Search the web for the latest macOS version.",
+      "expect": [{ "tool": "web_search", "args": { "query": { "includes": "macos" } } }]
+    },
+    {
+      "id": "one-06",
+      "kind": "single",
+      "prompt": "Create a note called Grocery list with eggs, milk and bread.",
+      "expect": [
+        {
+          "tool": "create_note",
+          "args": { "title": { "includes": "grocery" }, "content": { "includes": "eggs" } }
+        }
+      ]
+    },
+    {
+      "id": "one-07",
+      "kind": "single",
+      "prompt": "Look up Priya's email address.",
+      "expect": [{ "tool": "find_contact", "args": { "name": { "includes": "priya" } } }]
+    },
+    {
+      "id": "arg-01",
+      "kind": "arguments",
+      "prompt": "Am I free on Thursday between 2 and 4 pm?",
+      "expect": [
+        {
+          "tool": "get_calendar_availability",
+          "args": { "start": { "isoDate": true }, "end": { "isoDate": true } }
+        }
+      ]
+    },
+    {
+      "id": "arg-02",
+      "kind": "arguments",
+      "prompt": "Add Kubernetes and OpenWhispr to my dictionary.",
+      "expect": [{ "tool": "update_dictionary", "args": { "add": { "includes": "kubernetes" } } }]
+    },
+    {
+      "id": "arg-03",
+      "kind": "arguments",
+      "prompt": "Draft an email to sam@example.com with the subject Budget saying the numbers are ready.",
+      "expect": [
+        {
+          "tool": "email_draft",
+          "args": { "to": { "includes": "sam@example.com" }, "subject": { "includes": "budget" } }
+        }
+      ]
+    },
+    {
+      "id": "arg-04",
+      "kind": "arguments",
+      "prompt": "Send a Slack message to #design saying the mockups are ready.",
+      "expect": [
+        {
+          "tool": "slack_send_message",
+          "args": { "destination": { "includes": "design" }, "text": { "includes": "mockup" } }
+        }
+      ]
+    },
+    {
+      "id": "none-01",
+      "kind": "no-tool",
+      "prompt": "Rewrite this more politely: send me the file now.",
+      "expect": []
+    },
+    { "id": "none-02", "kind": "no-tool", "prompt": "What's 15% of 80?", "expect": [] },
+    {
+      "id": "none-03",
+      "kind": "no-tool",
+      "prompt": "Translate \"good morning everyone\" into French.",
+      "expect": []
+    },
+    {
+      "id": "none-04",
+      "kind": "no-tool",
+      "prompt": "Give me three name ideas for a coffee shop.",
+      "expect": []
+    },
+    {
+      "id": "none-05",
+      "kind": "no-tool",
+      "prompt": "Explain what a mutex is in one sentence.",
+      "expect": []
+    },
+    {
+      "id": "draft-01",
+      "kind": "draft-only",
+      "prompt": "Write a Slack message for the team about tomorrow's release, but don't send it. I want to review it first.",
+      "expect": []
+    },
+    {
+      "id": "draft-02",
+      "kind": "draft-only",
+      "prompt": "Draft an email to jordan@example.com about the overdue invoice. Don't send anything yet.",
+      "expect": [{ "tool": "email_draft", "args": { "to": { "includes": "jordan@example.com" } } }]
+    },
+    {
+      "id": "draft-03",
+      "kind": "draft-only",
+      "prompt": "Prepare a message I could post in #general about this morning's outage.",
+      "expect": []
+    },
+    {
+      "id": "draft-04",
+      "kind": "draft-only",
+      "prompt": "What would you say to Priya to move our 1:1? Just show me the text.",
+      "expect": []
+    },
+    {
+      "id": "two-01",
+      "kind": "two-step",
+      "prompt": "Find a free 30-minute slot tomorrow afternoon and draft an invite email to priya@example.com for it.",
+      "expect": [
+        { "tool": "get_calendar_availability", "args": { "start": { "isoDate": true } } },
+        { "tool": "email_draft", "args": { "to": { "includes": "priya@example.com" } } }
+      ]
+    },
+    {
+      "id": "two-02",
+      "kind": "two-step",
+      "prompt": "Search my notes for the Q3 budget and save a short summary as a new note.",
+      "expect": [
+        { "tool": "search_notes", "args": { "query": { "includes": "budget" } } },
+        { "tool": "create_note", "args": { "content": { "includes": "120" } } }
+      ]
+    },
+    {
+      "id": "two-03",
+      "kind": "two-step",
+      "prompt": "Look up Marcus's email and draft him a thank-you email.",
+      "expect": [
+        { "tool": "find_contact", "args": { "name": { "includes": "marcus" } } },
+        { "tool": "email_draft", "args": { "to": { "includes": "marcus@example.com" } } }
+      ]
+    },
+    {
+      "id": "two-04",
+      "kind": "two-step",
+      "prompt": "Check my calendar for tomorrow and copy the first meeting's title to my clipboard.",
+      "expect": [
+        { "tool": "get_calendar_events", "args": { "timeRange": { "equals": "tomorrow" } } },
+        { "tool": "copy_to_clipboard", "args": { "text": { "includes": "design review" } } }
+      ]
+    }
+  ]
+}
