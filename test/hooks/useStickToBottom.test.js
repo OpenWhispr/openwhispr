@@ -59,10 +59,17 @@ async function mountScroller(t) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-stick-to-bottom-test-" });
   const { useStickToBottom } = await vite.ssrLoadModule("/hooks/useStickToBottom.ts");
   function Scroller() {
-    const { scrollRef, handleScroll, handleWheel } = useStickToBottom("messages");
+    const { scrollRef, handleScroll, handleWheel, handleTouchStart, handleTouchMove } =
+      useStickToBottom("messages");
     return React.createElement(
       "div",
-      { ref: scrollRef, onScroll: handleScroll, onWheel: handleWheel },
+      {
+        ref: scrollRef,
+        onScroll: handleScroll,
+        onWheel: handleWheel,
+        onTouchStart: handleTouchStart,
+        onTouchMove: handleTouchMove,
+      },
       React.createElement(
         "div",
         null,
@@ -82,16 +89,14 @@ async function mountScroller(t) {
   return { scroller, content, cardBody, resizeObservers };
 }
 
-const wheelUp = (target) =>
+const dispatch = (target, event) =>
   React.act(async () =>
-    target.dispatchEvent({
-      type: "wheel",
-      bubbles: true,
-      deltaY: -40,
-      preventDefault() {},
-      stopPropagation() {},
-    })
+    target.dispatchEvent({ bubbles: true, preventDefault() {}, stopPropagation() {}, ...event })
   );
+const wheelUp = (target, timeStamp) => dispatch(target, { type: "wheel", deltaY: -40, timeStamp });
+// A finger moving down the screen scrolls up.
+const touchDown = (target, clientY, timeStamp) =>
+  dispatch(target, { type: "touchmove", touches: [{ clientY }], timeStamp });
 
 test("added bottom padding keeps a pinned conversation at its end", async (t) => {
   const { scroller, content, resizeObservers } = await mountScroller(t);
@@ -146,4 +151,38 @@ test("a wheel up over a card body already at its top leaves the bottom", async (
   resizeObservers.resizePadding(content);
 
   assert.equal(scroller.scrollTop, 600, "the reader went up the conversation");
+});
+
+test("a wheel gesture that goes on after a card body reaches its top stays the body's", async (t) => {
+  const { scroller, content, cardBody, resizeObservers } = await mountScroller(t);
+  const inBody = cardBody.childNodes[0];
+  cardBody.scrollTop = 40;
+  await wheelUp(inBody, 1000);
+  // The body reached its top; the rest of the gesture (momentum too) stays with it.
+  cardBody.scrollTop = 0;
+  await wheelUp(inBody, 1016);
+  await wheelUp(inBody, 1180);
+  scroller.scrollHeight = 1120;
+  resizeObservers.resizePadding(content);
+  assert.equal(scroller.scrollTop, 720, "still following");
+
+  // A new gesture after a pause moves the conversation itself.
+  await wheelUp(inBody, 1500);
+  scroller.scrollHeight = 1240;
+  resizeObservers.resizePadding(content);
+  assert.equal(scroller.scrollTop, 720, "the reader went up the conversation");
+});
+
+test("a touch drag that goes on after a card body reaches its top stays the body's", async (t) => {
+  const { scroller, content, cardBody, resizeObservers } = await mountScroller(t);
+  const inBody = cardBody.childNodes[0];
+  cardBody.scrollTop = 40;
+  await dispatch(inBody, { type: "touchstart", touches: [{ clientY: 100 }] });
+  await touchDown(inBody, 120, 1000);
+  cardBody.scrollTop = 0;
+  await touchDown(inBody, 140, 1016);
+  scroller.scrollHeight = 1120;
+  resizeObservers.resizePadding(content);
+
+  assert.equal(scroller.scrollTop, 720);
 });
