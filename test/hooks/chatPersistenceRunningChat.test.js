@@ -13,7 +13,7 @@ function fakeDb() {
   let nextId = 1;
   const rows = [];
   const conversations = new Map();
-  const calls = { add: [], update: [], fork: [] };
+  const calls = { add: [], update: [], fork: [], title: [] };
   const get = (id) => {
     const conversation = conversations.get(id);
     if (!conversation) return null;
@@ -54,6 +54,11 @@ function fakeDb() {
       if (!row) return null;
       Object.assign(row, { content, metadata: metadata ? JSON.stringify(metadata) : null });
       return row;
+    },
+    updateAgentConversationTitle: async (id, title) => {
+      calls.title.push({ id, title });
+      conversations.get(id).title = title;
+      return { success: true };
     },
     forkAgentConversation: async (conversationId, throughId, context) => {
       calls.fork.push({ conversationId, throughId, context });
@@ -264,4 +269,52 @@ test("a fork the user left before it finished reports that, not a failure", asyn
   });
   assert.equal(result, false);
   assert.equal(current().conversationId, null, "the new chat stays open");
+});
+
+// The agent window's chat, with the reply itself stood in for.
+async function mountAgentChat(t) {
+  const db = fakeDb();
+  let root;
+  t.after(() => root && React.act(async () => root.unmount()));
+  installBrowserGlobals(t, { window: { electronAPI: db.api } });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-persistence-test-",
+    mockModules: {
+      "/useChatStreaming": `
+        export function useChatStreaming() {
+          return { agentState: "idle", cancelStream() {}, sendToAI: async () => {} };
+        }
+      `,
+      "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
+    },
+  });
+  const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+  const { createRoot } = require("react-dom/client");
+  let chat;
+  function Harness() {
+    chat = useAgentChat({ onRegenerateFailed() {} });
+    return null;
+  }
+  root = createRoot(container);
+  await React.act(async () => root.render(React.createElement(Harness)));
+  const act = (fn) => React.act(async () => fn());
+  return { db, act, current: () => chat };
+}
+
+test("a fork takes its title from its own first message, as a new chat does", async (t) => {
+  const { db, act, current } = await mountAgentChat(t);
+  await act(() => current().send("Draft the launch plan"));
+  const parentId = current().conversationId;
+  await db.api.addAgentMessage(parentId, "assistant", "Draft one.");
+  await act(() => current().switchChat(parentId));
+  await act(() => current().fork(current().messages[1]));
+  const forkId = current().conversationId;
+  assert.notEqual(forkId, parentId);
+
+  await act(() => current().send("Make it shorter"));
+  await act(() => current().send("And friendlier"));
+
+  assert.deepEqual(db.calls.title, [{ id: forkId, title: "Make it shorter" }]);
+  assert.equal(db.conversations.get(parentId).title, "Draft the launch plan");
 });

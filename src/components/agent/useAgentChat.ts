@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
-import { useChatMessageSender } from "../chat/useChatMessageSender";
+import { useChatMessageSender, type PersistedMessageContext } from "../chat/useChatMessageSender";
 import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
 import type { Message } from "../chat/types";
 
@@ -30,16 +30,28 @@ export function useAgentChat({
   });
   const { cancelStream, sendToAI } = streaming;
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
-  const { createConversation: createPersisted } = persistence;
+  const { createConversation: createPersisted, forkOrigin } = persistence;
   const createConversation = useCallback(
     (text: string) => createPersisted(conversationTitle(text)),
     [createPersisted]
+  );
+  // A fork starts with its parent's title; its own first message names it, as a new chat's does.
+  const retitleFork = useCallback(
+    ({ conversationId, text, isFirstMessage }: PersistedMessageContext) => {
+      if (!isFirstMessage || !forkOrigin) return;
+      void window.electronAPI?.updateAgentConversationTitle?.(
+        conversationId,
+        conversationTitle(text)
+      );
+    },
+    [forkOrigin]
   );
   const send = useChatMessageSender({
     conversationId: persistence.conversationId,
     persistence,
     streaming,
     createConversation,
+    onMessagePersisted: retitleFork,
     onSendingChange: setSubmissionInFlight,
   });
   useInterruptedInteractions(persistence, send);
@@ -102,7 +114,7 @@ export function useAgentChat({
   return {
     messages: persistence.messages,
     conversationId,
-    forkOrigin: persistence.forkOrigin,
+    forkOrigin,
     agentState: streaming.agentState,
     busy,
     send,
