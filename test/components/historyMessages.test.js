@@ -274,12 +274,24 @@ test("user messages and turns without tools are untouched, and the trace can be 
   );
 });
 
-test("history keeps the last 20 messages", async () => {
+test("history keeps the newest messages within 40 entries and 16,000 tokens", async () => {
   const { toHistoryMessages } = await load();
-  const messages = Array.from({ length: 25 }, (_, i) => user(`m${i}`));
-  const history = toHistoryMessages(messages, { toolHistory: "text" });
-  assert.equal(history.length, 20);
+  const short = Array.from({ length: 45 }, (_, i) => user(`m${i}`));
+  const history = toHistoryMessages(short, { toolHistory: "text" });
+  assert.equal(history.length, 40);
   assert.equal(history[0].content, "m5");
+
+  // About 6,700 tokens each: two fit, three don't.
+  const long = Array.from({ length: 5 }, (_, i) => user(`${i}`.repeat(20_000)));
+  assert.equal(toHistoryMessages(long, { toolHistory: "text" }).length, 2);
+
+  // The request itself always goes, however long.
+  const huge = [user("Earlier"), assistant("Sure."), user("x".repeat(60_000))];
+  assert.deepEqual(
+    toHistoryMessages(huge, { toolHistory: "text" }).map((m) => m.content.length),
+    [60_000]
+  );
+  assert.deepEqual(toHistoryMessages([assistant("Hello")], { toolHistory: "text" }), []);
 });
 
 test("historical built-in help remains readable without inventing a model tool", async () => {
@@ -717,21 +729,25 @@ test("with parts, a reply with no text adds no empty message, and help evidence 
   );
 });
 
-test("history always starts with the user, however the window or the cap cuts it", async () => {
+test("history always starts with the user, however the cap cuts it", async () => {
   const { toHistoryMessages } = await load();
-  // 21 messages: the 20-message window starts on a reply that used a tool,
-  // which Gemini would get as a conversation opening with a function call.
+  // The cap can land on a reply that used a tool, which Gemini would get as a
+  // conversation opening with a function call.
   const messages = [
     user("u0"),
-    ...Array.from({ length: 10 }, (_, i) => [
+    ...Array.from({ length: 25 }, (_, i) => [
       assistant(`a${i}`, [call("web_search", { query: `q${i}` }, { id: `c${i}` })]),
       user(`u${i + 1}`),
     ]).flat(),
   ];
-  for (const toolHistory of ["parts", "text", "none"]) {
+  for (const [toolHistory, first] of [
+    ["parts", "u16"],
+    ["text", "u6"],
+    ["none", "u6"],
+  ]) {
     const history = toHistoryMessages(messages, { toolHistory });
     assert.equal(history[0].role, "user", toolHistory);
-    assert.equal(history[0].content, "u1", toolHistory);
+    assert.equal(history[0].content, first, toolHistory);
   }
 
   // A long tool turn is kept within 40 entries, still starting with the user

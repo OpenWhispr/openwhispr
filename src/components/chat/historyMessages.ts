@@ -2,6 +2,7 @@ import type { Message, ToolCallInfo } from "./types";
 import type { InteractionRecord } from "../../types/agentInteractions";
 import { buildAgentRequestText } from "../../utils/agentSelectionContext";
 import { answerText } from "../../utils/interactionAnswers";
+import { estimateNoteTokens } from "../../helpers/noteChunking";
 
 export interface HistoryMessage {
   role: string;
@@ -15,10 +16,11 @@ export interface HistoryMessage {
  */
 export type ToolHistory = "parts" | "text" | "none";
 
-const HISTORY_LIMIT = 20;
-// Tool messages count too: the cloud's Gemma provider takes at most 64
-// messages a request, the turn's own tool steps included.
+// History is the newest whole messages within both limits. Tool messages
+// count too: the cloud's Gemma provider takes at most 64 messages a request,
+// the turn's own tool steps included.
 const HISTORY_MAX_ENTRIES = 40;
+const HISTORY_MAX_TOKENS = 16_000;
 const TRACE_ARG_MAX_CHARS = 80;
 // Providers differ on call ids, and one may replay to another: Anthropic takes
 // letters, digits, _ and -, OpenAI Chat Completions at most 40 characters.
@@ -280,30 +282,45 @@ export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
   { toolHistory }: { toolHistory: ToolHistory }
 ): HistoryMessage[] {
+  // The request, the newest user message, always stays, however long it is.
+  let request = messages.length - 1;
+  while (request >= 0 && messages[request].role !== "user") request--;
+  if (request < 0) return [];
+  let first = messages.length;
+  for (let entries = 0, tokens = 0; first > 0; first--) {
+    const replay = replayed(messages[first - 1], toolHistory, new Set());
+    entries += replay.length;
+    tokens += estimateNoteTokens(JSON.stringify(replay));
+    const full = entries > HISTORY_MAX_ENTRIES || tokens > HISTORY_MAX_TOKENS;
+    if (full && first - 1 < request) break;
+  }
+  while (messages[first].role !== "user") first++;
   const callIds = new Set<string>();
-  const history = messages.slice(-HISTORY_LIMIT).flatMap((m): HistoryMessage | HistoryMessage[] => {
-    if (m.role === "user" && m.selectedContext) {
-      return {
+  return messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds));
+}
+
+/** One message as the model sees it (see toHistoryMessages). */
+function replayed(m: Message, toolHistory: ToolHistory, callIds: Set<string>): HistoryMessage[] {
+  if (m.role === "user" && m.selectedContext) {
+    return [
+      {
         role: m.role,
         content: buildAgentRequestText(m.content, {
           text: m.selectedContext,
           sourceMessageId: "",
           source: m.selectedContextSource,
         }),
-      };
-    }
-    const calls = m.role === "assistant" ? replayedCalls(m.toolCalls) : [];
-    if (toolHistory === "parts" && calls.length > 0) {
-      return [
-        ...calls.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
-        ...(m.content.trim() ? [{ role: m.role, content: m.content }] : []),
-      ];
-    }
-    const trace = toolHistory === "text" ? toolTrace(calls) : "";
-    const content = trace ? `${trace}\n\n${m.content}` : m.content;
-    return m.turn?.status === "error" && !content.trim() ? [] : { role: m.role, content };
-  });
-  const kept = history.slice(-HISTORY_MAX_ENTRIES);
-  const start = kept.findIndex((m) => m.role === "user");
-  return start === -1 ? [] : kept.slice(start);
+      },
+    ];
+  }
+  const calls = m.role === "assistant" ? replayedCalls(m.toolCalls) : [];
+  if (toolHistory === "parts" && calls.length > 0) {
+    return [
+      ...calls.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+      ...(m.content.trim() ? [{ role: m.role, content: m.content }] : []),
+    ];
+  }
+  const trace = toolHistory === "text" ? toolTrace(calls) : "";
+  const content = trace ? `${trace}\n\n${m.content}` : m.content;
+  return m.turn?.status === "error" && !content.trim() ? [] : [{ role: m.role, content }];
 }
