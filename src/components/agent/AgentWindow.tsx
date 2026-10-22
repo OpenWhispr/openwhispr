@@ -354,41 +354,36 @@ export default function AgentWindow() {
       (state.notice !== null || (pendingCard !== null && !listening && !transcribing)),
   });
 
-  // Another app's selection and, on the press that opened the window, a
-  // screenshot ride with the request the press starts.
-  const capturePressContext = useCallback(
-    (withScreen: boolean) => {
-      const press = ++pressRef.current;
-      const isCurrent = () => press === pressRef.current;
-      const selection = Promise.resolve(window.electronAPI?.captureSelectedText?.())
-        .then((capture) => {
-          if (isCurrent() && capture?.status === "selected") {
-            dispatch({
-              type: "setContext",
-              context: { text: capture.text, sourceMessageId: "", source: "external" },
-            });
-          }
-        })
-        .catch(() => {});
-      const screenshot =
-        withScreen &&
-        getSettings().voiceAgentScreenContext &&
-        isScreenContextAllowed(usePolicyStore.getState())
-          ? Promise.resolve(window.electronAPI?.captureScreenContext?.())
-              .then((image) => {
-                if (isCurrent() && image) {
-                  dispatch({
-                    type: "setAttachment",
-                    attachment: { image: image.data, mediaType: image.mediaType },
-                  });
-                }
-              })
-              .catch(() => {})
-          : null;
-      pressCaptureRef.current = Promise.all([selection, screenshot]);
-    },
-    [dispatch]
-  );
+  // Another app's selection and a screenshot, read at the press, ride with
+  // the request it starts.
+  const capturePressContext = useCallback(() => {
+    const press = ++pressRef.current;
+    const isCurrent = () => press === pressRef.current;
+    const selection = Promise.resolve(window.electronAPI?.captureSelectedText?.())
+      .then((capture) => {
+        if (isCurrent() && capture?.status === "selected") {
+          dispatch({
+            type: "setContext",
+            context: { text: capture.text, sourceMessageId: "", source: "external" },
+          });
+        }
+      })
+      .catch(() => {});
+    const screenshot =
+      getSettings().voiceAgentScreenContext && isScreenContextAllowed(usePolicyStore.getState())
+        ? Promise.resolve(window.electronAPI?.captureScreenContext?.())
+            .then((image) => {
+              if (isCurrent() && image) {
+                dispatch({
+                  type: "setAttachment",
+                  attachment: { image: image.data, mediaType: image.mediaType },
+                });
+              }
+            })
+            .catch(() => {})
+        : null;
+    pressCaptureRef.current = Promise.all([selection, screenshot]);
+  }, [dispatch]);
 
   const startListening = useCallback(async () => {
     if (refuseIfRestricted()) return;
@@ -425,7 +420,7 @@ export default function AgentWindow() {
   }, [cancelTurn, dispatch, dropTake, hideSurface, stopReading]);
 
   const handleHotkey = useCallback(
-    ({ external, opened }: { external: boolean; opened: boolean }) => {
+    ({ external }: { external: boolean }) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
       // The second press sends what was said.
@@ -448,7 +443,7 @@ export default function AgentWindow() {
         openedByTakeRef.current = true;
         dispatch({ type: "show", layout: "pill", input: "voice" });
       }
-      if (external) capturePressContext(opened);
+      if (external) capturePressContext();
       void startListening();
     },
     [busy, capturePressContext, dispatch, listening, refuseIfRestricted, startListening, voice]
