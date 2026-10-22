@@ -1,6 +1,7 @@
 const WebSocket = require("ws");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { buildRealtimeUrl } = require("./selfHostedRealtimeUrl");
+const debugLogger = require("./debugLogger");
 
 // Servers that speak the OpenAI Realtime transcription protocol on the user's
 // own network (Lemonade, Speaches). Scoped to that protocol, not to "any URL":
@@ -14,8 +15,15 @@ const DEFAULT_CAPTURE_RATE = 24000;
 // The base class refuses to connect without a key; a keyless local server is
 // sent no Authorization header at all, so this value never leaves the process.
 const NO_API_KEY = "no-api-key";
+// A local server can take seconds for the last turn, so stop waits while the
+// server is still sending something for it, not a fixed 3 s.
+const STOP_IDLE_MS = 5000;
+const STOP_MAX_MS = 30000;
 
 const MODEL_MISSING = "selfHostedRealtimeModelMissing";
+
+const COMPLETED = "conversation.item.input_audio_transcription.completed";
+const FAILED = "conversation.item.input_audio_transcription.failed";
 
 const createCompatibleRealtimeSocket = ({ url, apiKey }) =>
   new WebSocket(url, apiKey ? { headers: { Authorization: `Bearer ${apiKey}` } } : {});
@@ -25,19 +33,32 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     super();
     this.providerLabel = "OpenAI-compatible Realtime";
     this._createSocketImpl = createSocketImpl;
-    this._unnamedTurns = [];
-    this._unnamedTurnCount = 0;
-    this._vadTurnsInFlight = 0;
-    this._settleWhenVadTurnsDrain = false;
-    this._turnStartTimes = [];
+    this._stop = null;
+    this._stopping = null;
+    this._resetTurns();
   }
 
-  // Lemonade acks a commit with input_audio_buffer.committed but no item_id,
-  // then sends that turn's completed event, also without one, about half a
-  // second later. The base class tracks pending turns by item_id, so it read
-  // the ack as "nothing left to transcribe" and closed the socket on stop
-  // before the last turn arrived, losing it. Turns are named here, in order,
-  // so the base class waits for them like any other.
+  // Lemonade sends no item_id on committed or completed, and closes a turn on
+  // silence with speech_stopped and no committed at all. The base class tracks
+  // turns by item_id and keeps one speechStartedAt slot, so it could close on
+  // stop before the last turn arrived and stamp a segment with the next turn's
+  // start. Every turn is queued here in order, with its own start time, and
+  // stop waits until the queue drains.
+  _resetTurns() {
+    this._unnamedTurnCount = 0;
+    this._openTurn = null;
+    this._turns = [];
+    this._startsById = new Map();
+    // Set once the server sends committed for a turn it closed on silence.
+    this._vadCommitShape = false;
+  }
+
+  _nameTurn(itemId) {
+    if (itemId) return itemId;
+    this._unnamedTurnCount += 1;
+    return `unnamed-turn-${this._unnamedTurnCount}`;
+  }
+
   handleMessage(data) {
     let event;
     try {
@@ -45,65 +66,145 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     } catch {
       return super.handleMessage(data);
     }
-    // The base class keeps one speechStartedAt slot, so when the next turn
-    // starts before this one is transcribed (continuous speech), the segment
-    // is stamped with the next turn's start and speaker labels land a turn
-    // early. Keep every turn's start, in order, and give the base class the
-    // matching one when its transcript arrives.
-    if (event && event.type === "input_audio_buffer.speech_started") {
-      this._turnStartTimes.push(Date.now());
-    } else if (
-      event &&
-      (event.type === "conversation.item.input_audio_transcription.completed" ||
-        event.type === "conversation.item.input_audio_transcription.failed")
-    ) {
-      const startedAt = this._turnStartTimes.shift();
-      if (startedAt !== undefined) this.speechStartedAt = startedAt;
-    }
-    if (event && !event.item_id) {
-      if (event.type === "input_audio_buffer.committed") {
-        this._unnamedTurnCount += 1;
-        const itemId = `unnamed-turn-${this._unnamedTurnCount}`;
-        this._unnamedTurns.push(itemId);
-        return super.handleMessage(JSON.stringify({ ...event, item_id: itemId }));
-      }
-      if (
-        (event.type === "conversation.item.input_audio_transcription.completed" ||
-          event.type === "conversation.item.input_audio_transcription.failed") &&
-        this._unnamedTurns.length
-      ) {
-        return super.handleMessage(
-          JSON.stringify({ ...event, item_id: this._unnamedTurns.shift() })
-        );
-      }
-      // A turn the server closed on silence has speech_stopped but no committed.
-      // Count it until its transcript arrives, so a stop does not close early.
-      if (event.type === "input_audio_buffer.speech_stopped") {
-        this._vadTurnsInFlight += 1;
-      } else if (
-        event.type === "conversation.item.input_audio_transcription.completed" ||
-        event.type === "conversation.item.input_audio_transcription.failed"
-      ) {
-        this._vadTurnsInFlight = Math.max(0, this._vadTurnsInFlight - 1);
-        const result = super.handleMessage(data);
-        if (this._settleWhenVadTurnsDrain && this._vadTurnsInFlight === 0) {
-          this._settleWhenVadTurnsDrain = false;
-          this._onTurnSettled?.("committed");
+    if (!event || typeof event !== "object") return super.handleMessage(data);
+    if (this._stop) this._restartStopIdle();
+
+    let forwarded = event;
+    switch (event.type) {
+      case "input_audio_buffer.speech_started":
+        if (event.item_id) this._startsById.set(event.item_id, Date.now());
+        else this._openTurn = { startedAt: Date.now() };
+        break;
+      // After stop's commit is answered, speech_stopped only closes the turn
+      // that commit already took.
+      case "input_audio_buffer.speech_stopped":
+        if (!event.item_id && !this._stop?.acked) {
+          this._turns.push({ kind: "vad", id: null, startedAt: this._openTurn?.startedAt ?? null });
         }
-        return result;
+        this._openTurn = null;
+        break;
+      case "input_audio_buffer.committed": {
+        const id = this._nameTurn(event.item_id);
+        const unbound = this._turns.find((turn) => turn.kind === "vad" && !turn.id);
+        if (!this._stop || (this._vadCommitShape && unbound)) {
+          if (!this._stop) this._vadCommitShape = true;
+          if (unbound) unbound.id = id;
+          else {
+            this._turns.push({ kind: "vad", id, startedAt: this._openTurn?.startedAt ?? null });
+            this._openTurn = null;
+          }
+        } else {
+          // The answer to stop's commit, which may arrive before an earlier
+          // silence-closed turn is transcribed.
+          this._stop.acked = true;
+          this._turns.push({ kind: "commit", id, startedAt: this._openTurn?.startedAt ?? null });
+          this._openTurn = null;
+        }
+        forwarded = { ...event, item_id: id };
+        break;
       }
+      // Lemonade answers a commit with cleared, and no committed, when silence
+      // already closed the last turn: nothing new is coming for the commit.
+      case "input_audio_buffer.cleared":
+        if (this._stop) {
+          this._stop.acked = true;
+          this._openTurn = null;
+        }
+        break;
+      case COMPLETED:
+      case FAILED: {
+        let index = event.item_id ? this._turns.findIndex((turn) => turn.id === event.item_id) : -1;
+        if (index === -1) index = this._turns.findIndex((turn) => !event.item_id || !turn.id);
+        const [turn] = index === -1 ? [] : this._turns.splice(index, 1);
+        // A transcript that matches no known turn while stopping is the
+        // commit's own, from a server that never acks commits.
+        if (!turn && this._stop) this._stop.acked = true;
+        this.speechStartedAt = this._startsById.get(event.item_id) ?? turn?.startedAt ?? null;
+        this._startsById.delete(event.item_id);
+        if (!event.item_id && turn?.id) forwarded = { ...event, item_id: turn.id };
+        break;
+      }
+      default:
+        break;
     }
-    // Lemonade answers a commit with input_audio_buffer.cleared, and no
-    // committed, when silence already closed the last turn. Nothing new is
-    // coming for the commit, so settle once any silence-closed turn has its
-    // transcript instead of waiting out the disconnect timeout.
-    if (event && event.type === "input_audio_buffer.cleared") {
-      const result = super.handleMessage(data);
-      if (this._vadTurnsInFlight === 0) this._onTurnSettled?.("committed");
-      else this._settleWhenVadTurnsDrain = true;
-      return result;
+
+    const result = super.handleMessage(forwarded === event ? data : JSON.stringify(forwarded));
+    this._checkStop();
+    return result;
+  }
+
+  _checkStop() {
+    if (this._stop?.acked && !this._turns.length && !this.pendingTranscriptions.size) {
+      this._stop.finish();
     }
-    return super.handleMessage(data);
+  }
+
+  _restartStopIdle() {
+    clearTimeout(this._stop.idleTimer);
+    this._stop.idleTimer = setTimeout(() => this._stop?.finish("idle"), STOP_IDLE_MS);
+  }
+
+  async disconnect({ commit = true } = {}) {
+    // A second call while stop is waiting shares that wait.
+    if (this._stopping) return this._stopping;
+    if (!commit || this.ws?.readyState !== WebSocket.OPEN || !this.audioBytesSent) {
+      return super.disconnect({ commit });
+    }
+    this._stopping = this._commitAndDrain().finally(() => {
+      this._stopping = null;
+    });
+    return this._stopping;
+  }
+
+  async _commitAndDrain() {
+    this.isDisconnecting = true;
+    const prevOnError = this.onError;
+    await new Promise((resolve) => {
+      const stop = { acked: false, idleTimer: null };
+      const maxTimer = setTimeout(() => stop.finish("max"), STOP_MAX_MS);
+      stop.finish = (timedOut) => {
+        if (this._stop !== stop) return;
+        clearTimeout(stop.idleTimer);
+        clearTimeout(maxTimer);
+        this._stop = null;
+        this._onTurnSettled = null;
+        this.onError = prevOnError;
+        if (timedOut) {
+          debugLogger.debug(
+            `${this.providerLabel} stop timeout, using accumulated text`,
+            this._logContext({ timeout: timedOut, turnsPending: this._turns.length })
+          );
+        }
+        resolve();
+      };
+      this._stop = stop;
+      this._restartStopIdle();
+
+      // The base class's own wait would settle on its serverAcksCommits
+      // shortcut; only a closed socket ends this one early.
+      this._onTurnSettled = (reason) => {
+        if (reason === "closed") stop.finish();
+      };
+      this.onError = (err) => {
+        if (err?.message?.includes("buffer too small") || err?.message?.includes("commit_empty")) {
+          stop.acked = true;
+          this._checkStop();
+        } else {
+          prevOnError?.(err);
+        }
+      };
+
+      try {
+        this.ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      } catch {
+        stop.finish();
+      }
+    });
+
+    // The base class closes the socket, cleans up and returns the transcript.
+    const result = await super.disconnect({ commit: false });
+    this.isDisconnecting = false;
+    return result;
   }
 
   async connect(options = {}) {
@@ -114,7 +215,7 @@ class OpenAICompatibleRealtimeStreaming extends OpenAIRealtimeStreaming {
     // servers refuse the upgrade without ?model= (Speaches) or ignore it.
     const model = typedModel || new URL(url).searchParams.get("model")?.trim();
     if (!model) throw new Error(MODEL_MISSING);
-    this._unnamedTurns = [];
+    if (!this.isConnected && !this.isConnecting) this._resetTurns();
     return super.connect({
       ...options,
       apiKey: apiKey || NO_API_KEY,

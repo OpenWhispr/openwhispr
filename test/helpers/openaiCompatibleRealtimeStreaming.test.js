@@ -458,3 +458,252 @@ test("each transcript keeps its own turn's start time when turns overlap", async
   assert.deepEqual(stamps, [1000, 4000]);
   await streaming.disconnect();
 });
+
+const emit = (socket, event) => socket.emit("message", JSON.stringify(event));
+const completed = (transcript, extra = {}) => ({
+  type: "conversation.item.input_audio_transcription.completed",
+  transcript,
+  ...extra,
+});
+const tickImmediate = () => new Promise((resolve) => setImmediate(resolve));
+
+function trackStop(streaming) {
+  const state = { settled: false };
+  state.stopped = streaming.disconnect().then((result) => {
+    state.settled = true;
+    return result;
+  });
+  return state;
+}
+
+// A turn the server closed on silence is still being transcribed when stop
+// commits, and the commit's ack (or the earlier turn's transcript) arrives
+// first: neither may end the wait before the commit's own transcript.
+for (const order of ["ack first", "earlier transcript first"]) {
+  test(`stop keeps the last turn when a silence-closed turn is in flight (${order})`, async () => {
+    const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+    streaming.sendAudio(Buffer.alloc(4800));
+    emit(socket, { type: "input_audio_buffer.speech_started" });
+    emit(socket, { type: "input_audio_buffer.speech_stopped" });
+    emit(socket, { type: "input_audio_buffer.speech_started" });
+
+    const stop = trackStop(streaming);
+    await tickImmediate();
+    const events =
+      order === "ack first"
+        ? [{ type: "input_audio_buffer.committed" }, completed("turn a")]
+        : [completed("turn a"), { type: "input_audio_buffer.committed" }];
+    for (const event of events) emit(socket, event);
+    await tickImmediate();
+    assert.equal(stop.settled, false, "the commit's own transcript has not arrived");
+
+    emit(socket, completed("turn b"));
+    assert.equal((await stop.stopped).text, "turn a turn b");
+  });
+
+  test(`a cleared stop waits for every silence-closed turn in flight (${order})`, async () => {
+    const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+    streaming.sendAudio(Buffer.alloc(4800));
+    for (let turn = 0; turn < 2; turn += 1) {
+      emit(socket, { type: "input_audio_buffer.speech_started" });
+      emit(socket, { type: "input_audio_buffer.speech_stopped" });
+    }
+
+    const stop = trackStop(streaming);
+    await tickImmediate();
+    const events =
+      order === "ack first"
+        ? [{ type: "input_audio_buffer.cleared" }, completed("turn a")]
+        : [completed("turn a"), { type: "input_audio_buffer.cleared" }];
+    for (const event of events) emit(socket, event);
+    await tickImmediate();
+    assert.equal(stop.settled, false, "the second turn has not been transcribed yet");
+
+    emit(socket, completed("turn b"));
+    assert.equal((await stop.stopped).text, "turn a turn b");
+  });
+}
+
+test("a server that commits its silence-closed turns settles a cleared stop at once", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("only turn"));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.cleared" });
+  await tickImmediate();
+  assert.equal(stop.settled, true);
+  assert.equal((await stop.stopped).text, "only turn");
+});
+
+test("a server that names only the transcript settles a cleared stop at once", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, completed("only turn", { item_id: "item-1" }));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.cleared" });
+  await tickImmediate();
+  assert.equal(stop.settled, true);
+  assert.equal((await stop.stopped).text, "only turn");
+});
+
+test("a silence-closed turn that never gets a transcript holds stop only until idle", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.cleared" });
+  t.mock.timers.tick(4999);
+  await tickImmediate();
+  assert.equal(stop.settled, false);
+  t.mock.timers.tick(1);
+  assert.equal((await stop.stopped).text, "");
+});
+
+test("a speech_stopped after the stop's ack does not hold stop for another turn", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, completed("last turn"));
+  await tickImmediate();
+  assert.equal(stop.settled, true);
+  assert.equal((await stop.stopped).text, "last turn");
+});
+
+test("a slow server's last turn is kept past the base 3 s stop timeout", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  streaming.sendAudio(Buffer.alloc(4800));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  t.mock.timers.tick(4000);
+  emit(socket, {
+    type: "conversation.item.input_audio_transcription.delta",
+    delta: "slow",
+  });
+  t.mock.timers.tick(4000);
+  await tickImmediate();
+  assert.equal(stop.settled, false, "a delta restarts the idle wait");
+  emit(socket, completed("slow turn"));
+  assert.equal((await stop.stopped).text, "slow turn");
+});
+
+test("a server that keeps streaming is cut off at the stop cap", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, completed("kept turn"));
+
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  for (let elapsed = 0; elapsed < 28000; elapsed += 4000) {
+    t.mock.timers.tick(4000);
+    emit(socket, { type: "conversation.item.input_audio_transcription.delta", delta: "x" });
+  }
+  await tickImmediate();
+  assert.equal(stop.settled, false);
+  t.mock.timers.tick(2000);
+  assert.equal((await stop.stopped).text, "kept turn");
+});
+
+test("a second stop shares the first one's wait and sends one commit", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  const first = streaming.disconnect();
+  const second = streaming.disconnect();
+  await tickImmediate();
+  emit(socket, { type: "input_audio_buffer.committed" });
+  emit(socket, completed("last turn"));
+  assert.equal((await first).text, "last turn");
+  assert.equal((await second).text, "last turn");
+  assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, 1);
+});
+
+test("a socket that closes during stop ends the wait with what arrived", async () => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(socket, completed("kept turn"));
+  let lost = false;
+  streaming.onConnectionLost = () => {
+    lost = true;
+  };
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  socket.terminate();
+  assert.equal((await stop.stopped).text, "kept turn");
+  assert.equal(lost, false, "a stop is not a lost connection");
+  assert.equal(streaming.isDisconnecting, false);
+});
+
+test("a blip that never ends does not shift later turns' start times", async (t) => {
+  const { streaming, socket } = await connectWith({ model: "whisper", apiKey: "" });
+  const stamps = [];
+  streaming.onFinalTranscript = (_text, timestamp) => stamps.push(timestamp);
+  let now = 1000;
+  t.mock.method(Date, "now", () => now);
+
+  // A blip with no speech_stopped, then one with an empty transcript.
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  now = 2000;
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, completed(""));
+  now = 5000;
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  now = 6000;
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, completed("real turn"));
+  now = 9000;
+  emit(socket, { type: "input_audio_buffer.speech_started" });
+  emit(socket, { type: "input_audio_buffer.speech_stopped" });
+  emit(socket, completed("next turn"));
+
+  assert.deepEqual(stamps, [5000, 9000]);
+  await streaming.disconnect();
+});
+
+test("connect starts a new session with no turns left from the last one", async () => {
+  const { OpenAICompatibleRealtimeStreaming } = await load();
+  const sockets = [makeFakeSocket(WS.CONNECTING), makeFakeSocket(WS.CONNECTING)];
+  let dialed = 0;
+  const streaming = new OpenAICompatibleRealtimeStreaming(async () => sockets[dialed++]);
+
+  let connected = streaming.connect({ url: LAN_URL, model: "whisper" });
+  await finishConnect(sockets[0]);
+  await connected;
+  streaming.sendAudio(Buffer.alloc(4800));
+  emit(sockets[0], { type: "input_audio_buffer.speech_started" });
+  emit(sockets[0], { type: "input_audio_buffer.speech_stopped" });
+  await streaming.disconnect({ commit: false });
+
+  connected = streaming.connect({ url: LAN_URL, model: "whisper" });
+  await finishConnect(sockets[1]);
+  await connected;
+  streaming.sendAudio(Buffer.alloc(4800));
+  const stop = trackStop(streaming);
+  await tickImmediate();
+  emit(sockets[1], { type: "input_audio_buffer.cleared" });
+  await tickImmediate();
+  assert.equal(stop.settled, true, "the old session's open turn must not hold this stop");
+  await stop.stopped;
+});
