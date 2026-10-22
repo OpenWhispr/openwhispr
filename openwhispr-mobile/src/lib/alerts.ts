@@ -11,18 +11,24 @@ export function confirmDestructive(
   title: string,
   message: string,
   onConfirm: ConfirmCallback,
-  options?: { destructiveLabel?: string },
+  options?: { destructiveLabel?: string; onCancel?: () => void },
 ): void {
-  Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
-    {
-      text: options?.destructiveLabel ?? 'Delete',
-      style: 'destructive',
-      onPress: () => {
-        runConfirm(onConfirm);
+  Alert.alert(
+    title,
+    message,
+    [
+      { text: 'Cancel', style: 'cancel', onPress: options?.onCancel },
+      {
+        text: options?.destructiveLabel ?? 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          runConfirm(onConfirm);
+        },
       },
-    },
-  ]);
+    ],
+    // Android reports a tap outside the dialog or Back through onDismiss, not the Cancel button.
+    options?.onCancel ? { cancelable: true, onDismiss: options.onCancel } : undefined,
+  );
 }
 
 // Shared by the Account and Profile screens so both Delete Account entry
