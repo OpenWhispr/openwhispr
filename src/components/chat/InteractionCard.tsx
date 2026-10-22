@@ -165,7 +165,9 @@ export function InteractionOutcomeRow({
   const { payload, result } = entry;
   const answers =
     result?.status === "answered" && payload.kind === "questions"
-      ? payload.questions.map((question) => answerText(question, result.answers[question.id]))
+      ? payload.questions
+          .map((question) => answerText(question, result.answers[question.id]))
+          .filter(Boolean)
       : [];
   return (
     <p
