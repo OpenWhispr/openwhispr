@@ -1233,7 +1233,16 @@ class WindowManager {
     const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
     void this.selectionManager?.captureTarget?.({ force: true });
     this.showDictationPanel({ reposition: true, targetPidPromise });
-    this.mainWindow.webContents.send("run-transform", { kind });
+    // macOS reads the selection (and the app's tone) from the captured PID,
+    // which resolves a moment after the press. A dictation reads it seconds
+    // later; a transform reads it at once, so it starts only once it's known.
+    // Windows and Linux wait for their own probe inside the selection read.
+    Promise.resolve(targetPidPromise)
+      .catch(() => null)
+      .then(() => {
+        if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+        this.mainWindow.webContents.send("run-transform", { kind });
+      });
   }
 
   // The tray's Ask assistant. Only the renderer can open the panel, and only it
