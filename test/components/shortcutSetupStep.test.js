@@ -122,8 +122,8 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 const button = (tree, label) =>
   findElement(tree, (node) => node.type === "button" && textContent(node) === label);
 
-test("the step opens empty and listening, with the recommendations as one-click picks", async (t) => {
-  const { harness, render, chord } = await createShortcutHarness(t);
+test("the step opens empty and listening, with the recommendations as hints only", async (t) => {
+  const { harness, render, input, chord } = await createShortcutHarness(t);
 
   const initialTree = render();
   assert.equal(chord(initialTree), null, "nothing is pre-filled");
@@ -132,8 +132,13 @@ test("the step opens empty and listening, with the recommendations as one-click 
   assert.doesNotMatch(textContent(initialTree), /confirmAgain/);
   assert.equal(button(initialTree, "Choose another shortcut"), null);
 
-  // A recommendation is registered on the click; no second press needed.
-  button(initialTree, "Right Option").props.onClick();
+  // Recommendations are labels, not buttons: the user has to press the key.
+  for (const label of ["Right Option", "Globe/Fn", "Ctrl + R"]) {
+    assert.equal(button(initialTree, label), null, `${label} is not clickable`);
+  }
+  assert.deepEqual(harness.confirmed, []);
+
+  input(initialTree).props.onChange("RightOption");
   await settle();
   assert.deepEqual(harness.confirmed, ["RightOption"]);
   assert.deepEqual(harness.changed, ["RightOption"]);
@@ -194,11 +199,11 @@ test("a shortcut confirmed in an earlier session reopens confirmed", async (t) =
 });
 
 test("a shortcut that fails to register empties the box and explains why", async (t) => {
-  const { harness, render, chord } = await createShortcutHarness(t, {
+  const { harness, render, input, chord } = await createShortcutHarness(t, {
     onConfirm: async () => "taken",
   });
 
-  button(render(), "Ctrl + R").props.onClick();
+  input(render()).props.onChange("Control+R");
   await settle();
   assert.deepEqual(harness.changed, []);
   assert.equal(harness.cleared, 1);
