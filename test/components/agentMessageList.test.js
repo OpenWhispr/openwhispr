@@ -124,3 +124,15 @@ test("the selection toolbar is placed again when Fork from here appears", async 
   assert.ok(forkButton());
   assert.ok(globalThis.__placements > placed, "placed again for its new width");
 });
+
+test("a streaming reply lays out its actions out of sight, so they don't push it up as it ends", async (t) => {
+  // The Copy button's row: hidden while the reply streams, shown once it ends.
+  const actionRow = (markup) =>
+    markup.match(/<div class="([^"]*)">(?:(?!<div).)*?aria-label="common.copy"/)?.[1];
+  const streaming = { ...message("m2", "assistant", "Here is the"), isStreaming: true };
+  const running = await renderList(t, { messages: [MESSAGES[0], streaming], forkOrigin: null });
+  assert.match(actionRow(running) ?? "", /\binvisible\b/);
+
+  const done = await renderList(t, { messages: MESSAGES.slice(0, 2), forkOrigin: null });
+  assert.ok(actionRow(done) !== undefined && !/\binvisible\b/.test(actionRow(done)));
+});
