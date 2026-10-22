@@ -1414,8 +1414,13 @@ declare global {
       agentWindowSetVoiceState?: (state: AgentVoiceState) => Promise<boolean>;
       openAgentWindow?: () => Promise<boolean>;
       submitAgentCommand?: (command: AgentWindowCommand) => Promise<boolean>;
-      /** `external`: the press came from another app, whose selection may be captured. */
-      onAgentWindowHotkey?: (callback: (payload: { external: boolean }) => void) => () => void;
+      /**
+       * `external`: the press came from another app, whose selection may be
+       * captured. `opened`: it showed the window, so the screen may be too.
+       */
+      onAgentWindowHotkey?: (
+        callback: (payload: { external: boolean; opened: boolean }) => void
+      ) => () => void;
       onAgentWindowOpen?: (
         callback: (payload: { layout: AgentWindowLayout }) => void
       ) => () => void;
