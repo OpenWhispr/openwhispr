@@ -906,6 +906,9 @@ test("a link that isn't to a Slack message, or whose cid disagrees with it, is r
     "https://acme-test.slack.com/archives/C0ENG0001",
     "https://acme-test.slack.com/archives/C0ENG0001/p1727200000123456?thread_ts=soon",
     `${ENG_MESSAGE}?cid=C0OTHER01`,
+    // Not shaped like a Slack id.
+    "https://acme-test.slack.com/archives/D1/p1727200000123456",
+    "https://acme-test.slack.com/archives/DESIGN/p1727200000123456",
     `${ENG_REPLY.replace("cid=C0ENG0001", "cid=C0OTHER01")}`,
     "https://example.com/archives/C0ENG0001/p1727200000123456",
     "https://slack.com.example.net/archives/C0ENG0001/p1727200000123456",
@@ -973,6 +976,7 @@ test("Slack refusing a reply in that thread is failed, not unknown", async () =>
 test("a channel, person or DM named by id, or by a link, resolves exactly", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
     "users.info": [ok(FIXTURES.lookupGabe)],
     "chat.postMessage": [ok(FIXTURES.postedDm)],
   });
@@ -1025,6 +1029,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
 test("an id or link that finds nothing asks", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
     "users.info": [slackError("user_not_found")],
   });
   for (const destination of [
@@ -1040,7 +1045,7 @@ test("an id or link that finds nothing asks", async () => {
   assert.equal(posts(slack).length, 0);
 });
 
-test("a channel id missing from a cut-off list is said to be possibly cut off", async () => {
+test("a channel link missing from a cut-off list is said to be possibly cut off", async () => {
   const { connector } = await setupSlack({
     "users.conversations": [
       ok({
@@ -1058,11 +1063,26 @@ test("a channel id missing from a cut-off list is said to be possibly cut off", 
   assert.equal(found.status, "ready");
   const missed = await connector.prepare(
     "send_message",
-    { destination: "C0NOPE001", text: "hi" },
+    { destination: "https://acme-test.slack.com/archives/C0NOPE001", text: "hi" },
     BOUND
   );
   assert.equal(missed.status, "needs_clarification");
   assert.match(missed.message, /more Slack channels than can be listed/);
+});
+
+test("a link to a conversation not shaped like a Slack id is no link", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+  });
+  for (const destination of [
+    "https://acme-test.slack.com/archives/D1/p1727200000123456",
+    "https://acme-test.slack.com/archives/DESIGN",
+  ]) {
+    const prepared = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(prepared.status, "needs_clarification", destination);
+  }
+  assert.equal(posts(slack).length, 0);
 });
 
 test("a name that only looks like an id is still a name", async () => {
@@ -1076,19 +1096,26 @@ test("a name that only looks like an id is still a name", async () => {
           channel("C0DEVTWO1", "dev2"),
           channel("C0W3CSPEC", "w3c"),
           channel("C0DROIDS1", "c3po"),
+          channel("C0DESIGN1", "design2025"),
+          channel("C0CUSTOM1", "customers1"),
+          channel("C0STOCKS1", "warehouse1"),
         ],
         response_metadata: { next_cursor: "" },
       }),
     ],
     "users.list": [ok(FIXTURES.people)],
+    "users.info": [slackError("user_not_found")],
   });
-  // Slack's ids are nine or more characters with a digit; these are names.
+  // Too short to be ids, or shaped like one but nobody's id: names either way.
   for (const [destination, label] of [
     ["GABE", "Gabe Smith"],
     ["D2C", "#d2c"],
     ["DEV2", "#dev2"],
     ["W3C", "#w3c"],
     ["C3PO", "#c3po"],
+    ["DESIGN2025", "#design2025"],
+    ["CUSTOMERS1", "#customers1"],
+    ["WAREHOUSE1", "#warehouse1"],
   ]) {
     const prepared = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
     assert.equal(prepared.status, "ready", destination);
