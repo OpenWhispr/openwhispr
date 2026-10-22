@@ -795,3 +795,32 @@ test("today's window, rounded up past midnight as the calendar tool does, keeps 
   ]);
   db.db.close();
 });
+
+test("the week's window, to the end of the sixth day after today, covers that day's all-day events and no later", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  db.upsertCalendarEvents(
+    [6, 7].map((offset) =>
+      restEvent("google", "google-calendar", `day-${offset}`, {
+        start_time: localDate(day(offset)),
+        end_time: localDate(day(offset + 1)),
+        is_all_day: true,
+      })
+    )
+  );
+  // calendarTool's "week": the minutes to the end of the sixth day after today.
+  const end = day(6);
+  end.setHours(23, 59, 59, 999);
+  const week = Math.ceil((end.getTime() - now.getTime()) / 60000);
+
+  assert.deepEqual(
+    db.getUpcomingEvents(week, { includeAllDay: true }).map((event) => event.id),
+    ["day-6"]
+  );
+  db.db.close();
+});

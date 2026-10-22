@@ -142,7 +142,7 @@ test("all-day events are asked for and come back as their days", async (t) => {
 
   const { data } = await calendarTool.execute({ timeRange: "week" });
 
-  assert.deepEqual(calls, [[10080, { includeAllDay: true }]]);
+  assert.deepEqual(calls[0][1], { includeAllDay: true });
   assert.deepEqual(JSON.parse(JSON.stringify(data)), [
     {
       summary: "Out of office",
@@ -200,12 +200,19 @@ test("an unsuccessful IPC response fails the tool call", async () => {
   assert.equal(result.displayText, "Failed to fetch calendar events");
 });
 
-test("the week range forwards a 7-day window", async () => {
+test("the week range runs to the end of the sixth day after today, like today and tomorrow to midnight", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 9, 22, 3, 17).getTime() });
   const { calendarTool } = await load();
   const calls = [];
   stubEvents([], calls);
 
-  await calendarTool.execute({ timeRange: "week" });
+  for (const timeRange of ["today", "tomorrow", "week"]) await calendarTool.execute({ timeRange });
 
-  assert.deepEqual(calls, [[10080, { includeAllDay: true }]]);
+  const minutesTo = (day) =>
+    Math.ceil((new Date(2026, 9, day, 23, 59, 59, 999) - new Date(2026, 9, 22, 3, 17)) / 60000);
+  assert.deepEqual(
+    calls.map(([minutes]) => minutes),
+    [minutesTo(22), minutesTo(23), minutesTo(28)]
+  );
+  assert.deepEqual(calls[2][1], { includeAllDay: true });
 });
