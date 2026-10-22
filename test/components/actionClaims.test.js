@@ -3,90 +3,17 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/components/chat/actionClaims.ts");
 
-test("a reply that says this turn did something is a new claim", async () => {
-  const { claimedAction } = await load();
-  for (const text of [
-    "Done! I've sent a follow-up email to Gabe saying he can ignore the last one.",
-    "I've prompted you to connect your calendar.",
-    "I’ve gone ahead and posted it in #general.",
-    "I have scheduled the meeting for 3 PM tomorrow.",
-    "I've created the issue for the login bug.",
-    "I've added the standup to your calendar.",
-    "I've saved it to your notes.",
-    "✅ Email sent!",
-    "Sure.\nMessage posted to #eng.",
-    "[Tools used: email_draft (sent)]\n\nDone, it's on its way.",
-    // A delivery before a colon is still one.
-    "I've sent Gabe the following:\n\nHi Gabe, ignore the last email.",
-  ]) {
-    assert.equal(claimedAction(text), "new", text);
-  }
-});
-
-test("a reply that reports something was done is a recalled claim", async () => {
-  const { claimedAction } = await load();
-  for (const text of [
-    "Yes, it was sent.",
-    "It's been sent!",
-    "I've already sent it to Gabe.",
-    "I sent the message to Chad.",
-    "Your email has been sent to Josh.",
-    "Gmail has been connected.",
-    "Your key is saved.",
-    "Yes — I sent it earlier in this chat: https://mail.google.com/mail/u/0/#sent",
-    "I posted it in #eng yesterday.",
-  ]) {
-    assert.equal(claimedAction(text), "recalled", text);
-  }
-});
-
-test("plans, offers, questions, negations and states are not claims", async () => {
-  const { claimedAction } = await load();
-  for (const text of [
-    "I can send it once you confirm.",
-    "Gmail is connected.",
-    "Your standup is scheduled for 5:45 PM.",
-    "The invite was sent by Sarah on Monday.",
-    "I'll send it now.",
-    "I haven't sent anything yet.",
-    "I have not sent it, and I didn't post anything either.",
-    "Should I send it to Josh?",
-    "Have I sent it? No, the card was cancelled.",
-    "I've rewritten it to be shorter.",
-    "I searched your notes and found three meetings with Dana.",
-    "Once you approve the card, it will be sent.",
-    "The draft is ready for you to review and send.",
-    "Your calendar is not connected yet, so I can't check it.",
-    "",
-  ]) {
-    assert.equal(claimedAction(text), null, text);
-  }
-});
-
-test("text the reply drafts or quotes for the user is not its own claim", async () => {
-  const { claimedAction } = await load();
-  for (const text of [
-    "Here's a reply: Hi Sarah, I've sent the invite for Thursday.",
-    "Sure! Here's a friendlier version:\n\nHi Sarah, I've sent the invite for Thursday.",
-    "I've drafted an email to Sarah below:\n\nHi Sarah,\n\nI've sent the invite.",
-    "I've created a summary of the meeting:\n- Dana has sent the budget.",
-    "I've updated the wording below so it sounds friendlier:",
-    "**Draft:**\nI have emailed the client and they agreed.",
-    "Reply:\nThanks! I've posted it in #eng.",
-    'She wrote "I\'ve sent the invite" an hour ago.',
-    "> I've sent the invite.\n\nWant me to reply to this?",
-    "```\nI've sent the invite.\n```",
-  ]) {
-    assert.equal(claimedAction(text), null, text);
-  }
-});
-
-test("a claim the user's own text already makes is theirs, as in a rewrite", async () => {
-  const { claimedAction } = await load();
-  const rewrite = "I have emailed the client, and they agreed to Friday.";
-  assert.equal(claimedAction(rewrite, "i have emailed the client. they said friday works"), null);
-  assert.equal(claimedAction(rewrite), "new");
-});
+const OFFERED = new Set([
+  "email_draft",
+  "slack_send_message",
+  "create_note",
+  "linear_create_issue",
+  "github_comment",
+  "request_connection",
+  "request_api_key",
+  "update_dictionary",
+  "search_notes",
+]);
 
 const call = (name, extra = {}) => ({
   id: `call-${name}`,
@@ -95,217 +22,230 @@ const call = (name, extra = {}) => ({
   status: "completed",
   ...extra,
 });
+const sent = (name = "email_draft", extra = {}) =>
+  call(name, { metadata: { status: "sent", ...extra } });
 
-test("a claim is backed by an action that happened, or may have", async () => {
-  const { backsActionClaim } = await load();
-  const action = (status) => call("email_draft", { metadata: { status } });
-  for (const status of ["sent", "draft_opened", "unknown", "already_sent"]) {
-    assert.equal(backsActionClaim(action(status), false), true, status);
+const context = (overrides = {}) => ({
+  turnCalls: [],
+  earlierCalls: [],
+  isOffered: (name) => OFFERED.has(name),
+  request: { text: "Can you help?" },
+  ...overrides,
+});
+
+async function unbacked(text, overrides) {
+  const { isUnbackedClaim } = await load();
+  return isUnbackedClaim(text, context(overrides));
+}
+
+test("the adversarial cases come out as a precise safety net should", async () => {
+  const dictionaryEdit = call("update_dictionary", { metadata: { added: ["Gabe"] } });
+  const cases = [
+    ["According to your notes, the invoice was sent Monday", {}, false],
+    ["According to your notes, the email was sent Monday", {}, false],
+    ["Once it's sent, you'll see it in Sent", {}, false],
+    ["Notes are saved automatically", {}, false],
+    ["Translation:\n\nHi team, I have sent the email.", {}, false],
+    [
+      "Here it is, as I wrote it: Hi Gabe, I've sent the invoice for October.",
+      {
+        turnCalls: [
+          call("email_draft", {
+            arguments: JSON.stringify({
+              to: ["gabe@acme.test"],
+              body: "Hi Gabe, I've sent the invoice for October.",
+            }),
+            metadata: { status: "draft_opened" },
+          }),
+        ],
+      },
+      false,
+    ],
+    ["Message posted to #eng", {}, true],
+    ["Sent to Gabe!", {}, true],
+    ["Your email to Gabe has been sent.", { turnCalls: [dictionaryEdit] }, true],
+    ["I've sent it to Gabe!", { request: { text: "Let me know once it's sent" } }, true],
+    ["The issue has been created.", {}, true],
+    ["Here's what I did: I've sent the email to Gabe.", {}, true],
+    [
+      "Yes, it was sent.",
+      { earlierCalls: [sent("email_draft", { destination: "gabe@acme.test" })] },
+      false,
+    ],
+  ];
+  for (const [text, overrides, expected] of cases) {
+    assert.equal(await unbacked(text, overrides), expected, text);
   }
-  for (const status of [
-    "failed",
-    "not_sent",
-    "cancelled_by_user",
-    "needs_clarification",
-    "unavailable",
+});
+
+test("the three forms in the reply's own voice are claims", async () => {
+  for (const text of [
+    "I've sent the follow-up to Gabe.",
+    "I have just posted it in #eng.",
+    "I sent the message to Chad.",
+    "I emailed Dana the slides.",
+    "It's been sent!",
+    "That was posted to #eng.",
+    "Your message has been sent to the team.",
+    "The email is now sent.",
+    "The draft has been drafted and is in Gmail.",
+    "Sent to #eng.",
+    "✅ Email sent to Josh.",
+    "I've connected Gmail for you.",
+    "I've saved your OpenAI key.",
+    "I've created the note.",
+    "I've filed the bug in Linear.",
   ]) {
-    assert.equal(backsActionClaim(action(status), false), false, status);
+    assert.equal(await unbacked(text), true, text);
   }
-  // A call that failed or never finished backs nothing.
-  assert.equal(backsActionClaim(call("create_note", { status: "error" }), false), false);
-  assert.equal(backsActionClaim(call("create_note", { status: "stopped" }), false), false);
+});
+
+test("plans, questions, negations, states and descriptions are not claims", async () => {
+  for (const text of [
+    "I can send it once you confirm.",
+    "I'll send it now.",
+    "I haven't sent anything yet.",
+    "I have not sent it.",
+    "Should I send it to Josh?",
+    "Gmail is connected.",
+    "Your standup is scheduled for 5:45 PM.",
+    "I've created a summary of the meeting:\n- Dana sent the budget.",
+    "I've drafted an email to Sarah below:\n\nHi Sarah, I've sent the invite.",
+    "I've saved it to your notes.",
+    "Done ✅",
+    "If it was sent, Gabe has it by now.",
+    "",
+  ]) {
+    assert.equal(await unbacked(text), false, text);
+  }
+});
+
+test("text the reply writes for the user is not its own voice", async () => {
+  for (const text of [
+    "Here's a reply: Hi Sarah, I've sent the invite for Thursday.",
+    "Sure! Here's a friendlier version:\n\nHi Sarah, I've sent the invite.",
+    "**Draft:**\nI have emailed the client and they agreed.",
+    "Reply:\nThanks! I've posted it in #eng.",
+    'She wrote "I\'ve sent the invite" an hour ago.',
+    "> I've sent the invite.\n\nWant me to reply to this?",
+    "```\nI've sent the invite.\n```",
+  ]) {
+    assert.equal(await unbacked(text), false, text);
+  }
+  // "All done:" and "Here's what I did:" introduce no draft.
+  assert.equal(await unbacked("All done: I've sent the email to Gabe."), true);
+});
+
+test("only a claim's own words in the user's text exempt it, never a stray verb", async () => {
+  const selectedText = "Thanks, see you Friday.\n\nSent from my iPhone";
+  assert.equal(
+    await unbacked("I've sent it to Gabe.", { request: { text: "Reply to this", selectedText } }),
+    true
+  );
+  const rewrite = "I have emailed the client, and they agreed to Friday.";
+  assert.equal(
+    await unbacked(rewrite, {
+      request: {
+        text: "Make this more professional",
+        selectedText: "hey so i have emailed the client and they r ok with friday",
+      },
+    }),
+    false
+  );
+  assert.equal(
+    await unbacked("Hey team, I've posted the release notes and sent out the invite.", {
+      request: { text: "Write a Slack message saying I've posted the release notes" },
+    }),
+    false
+  );
+});
+
+test("no tool of the claim's kind, no check", async () => {
+  const offered = (names) => ({ isOffered: (name) => names.includes(name) });
+  assert.equal(await unbacked("I've sent it to Gabe.", offered(["create_note"])), false);
+  assert.equal(await unbacked("I've connected Gmail.", offered(["email_draft"])), false);
+  assert.equal(await unbacked("I've sent it to Gabe.", offered(["slack_send_message"])), true);
+});
+
+test("a claim is backed only by a result of its kind this turn", async () => {
+  const claim = "I've sent it to Gabe.";
+  for (const status of ["sent", "unknown", "already_sent"]) {
+    assert.equal(await unbacked(claim, { turnCalls: [sent("email_draft", { status })] }), false);
+  }
+  for (const status of ["failed", "not_sent", "cancelled_by_user", "draft_opened"]) {
+    assert.equal(
+      await unbacked(claim, { turnCalls: [sent("email_draft", { status })] }),
+      true,
+      status
+    );
+  }
+  assert.equal(await unbacked(claim, { turnCalls: [call("create_note")] }), true);
+  assert.equal(
+    await unbacked("Your email has been drafted.", {
+      turnCalls: [sent("email_draft", { status: "draft_opened" })],
+    }),
+    false
+  );
+  assert.equal(
+    await unbacked("I've created the note.", { turnCalls: [call("create_note")] }),
+    false
+  );
+  assert.equal(
+    await unbacked("The issue has been created.", {
+      turnCalls: [sent("linear_create_issue", { reference: "ENG-12" })],
+    }),
+    false
+  );
 });
 
 // Interaction tools also save their result as metadata, as the chat does.
 const asked = (name, payload, result, metadata) =>
-  call(name, {
-    metadata,
-    interaction: { payload, state: "settled", ...(result ? { result } : {}) },
-  });
+  call(name, { metadata, interaction: { payload, state: "settled", result } });
 
-test("a finished connection or saved key backs a claim; a dismissed card doesn't", async () => {
-  const { backsActionClaim } = await load();
-  const connection = { kind: "connection", target: "gmail" };
-  assert.equal(
-    backsActionClaim(
-      asked(
-        "request_connection",
-        connection,
-        { status: "connected", target: "gmail" },
-        { status: "connected", target: "gmail", guidance: "Gmail is connected now." }
-      ),
-      true
-    ),
-    true
+test("a real connect or saved key backs saying so; a dismissed card doesn't", async () => {
+  const connected = asked(
+    "request_connection",
+    { kind: "connection", target: "gmail" },
+    { status: "connected", target: "gmail" },
+    { status: "connected", target: "gmail", guidance: "Gmail is connected now." }
   );
-  assert.equal(
-    backsActionClaim(
-      asked(
-        "request_api_key",
-        { kind: "apiKey", provider: "openai" },
-        { status: "saved" },
-        { status: "saved", provider: "openai", guidance: "Say only that it is saved." }
-      ),
-      true
-    ),
-    true
-  );
-  const settings = { kind: "settings", target: "llms" };
-  assert.equal(
-    backsActionClaim(
-      asked("open_settings", settings, { status: "done" }, { status: "done" }),
-      true
-    ),
-    true
-  );
-  assert.equal(
-    backsActionClaim(
-      asked(
-        "open_settings",
-        settings,
-        { status: "done", ready: false },
-        { status: "done", ready: false }
-      ),
-      true
-    ),
-    false
-  );
-  assert.equal(
-    backsActionClaim(
-      asked(
-        "request_connection",
-        connection,
-        { status: "cancelled" },
-        { status: "cancelled_by_user" }
-      ),
-      true
-    ),
-    false
-  );
-  assert.equal(
-    backsActionClaim(
-      asked(
-        "ask_user",
-        { kind: "questions", questions: [] },
-        { status: "answered", answers: {} },
-        {
-          status: "answered",
-          answers: {},
-        }
-      ),
-      true
-    ),
-    false
-  );
-  // A send that connected first is judged by the send.
-  const connectedThenFailed = call("slack_send_message", {
-    metadata: { status: "failed" },
-    interaction: {
-      payload: { kind: "connection", target: "slack" },
-      state: "settled",
-      result: { status: "connected", target: "slack" },
-    },
-  });
-  assert.equal(backsActionClaim(connectedThenFailed, false), false);
-  assert.equal(
-    backsActionClaim({ ...connectedThenFailed, metadata: { status: "sent" } }, false),
-    true
-  );
-});
-
-test("a tool that changes something backs a claim; a lookup doesn't", async () => {
-  const { backsActionClaim } = await load();
-  assert.equal(backsActionClaim(call("update_note", { metadata: { id: 3 } }), false), true);
-  assert.equal(backsActionClaim(call("search_notes", { metadata: [{ id: 3 }] }), true), false);
-  assert.equal(backsActionClaim(call("get_calendar_events"), true), false);
-});
-
-const sent = (name = "email_draft") => call(name, { metadata: { status: "sent" } });
-const context = (overrides = {}) => ({
-  turnCalls: [],
-  earlierCalls: [],
-  isReadOnly: (name) => ["search_notes", "get_calendar_events"].includes(name),
-  request: { text: "Is it sent?" },
-  ...overrides,
-});
-
-test("a new claim needs this turn's result; an earlier recorded one doesn't back it", async () => {
-  const { isUnbackedClaim } = await load();
-  const claim = "Done! I've sent a follow-up email to Gabe.";
-  assert.equal(isUnbackedClaim(claim, context()), true);
-  assert.equal(isUnbackedClaim(claim, context({ earlierCalls: [sent()] })), true);
-  assert.equal(isUnbackedClaim(claim, context({ turnCalls: [sent()] })), false);
-  // A lookup this turn backs nothing.
-  assert.equal(isUnbackedClaim(claim, context({ turnCalls: [call("search_notes")] })), true);
-});
-
-test("confirming what an earlier turn recorded is backed; a claim nothing recorded isn't", async () => {
-  const { isUnbackedClaim } = await load();
-  for (const text of ["Yes, it was sent.", "It's been sent!", "I've already sent it to Gabe."]) {
-    assert.equal(isUnbackedClaim(text, context()), true, text);
-    assert.equal(isUnbackedClaim(text, context({ earlierCalls: [sent()] })), false, text);
-    assert.equal(isUnbackedClaim(text, context({ turnCalls: [sent()] })), false, text);
-  }
-});
-
-test("a saved key or a real connect backs saying so", async () => {
-  const { isUnbackedClaim } = await load();
   const savedKey = asked(
     "request_api_key",
     { kind: "apiKey", provider: "openai" },
     { status: "saved" },
     { status: "saved", provider: "openai", guidance: "Say only that it is saved." }
   );
-  const isReadOnly = () => true;
-  assert.equal(
-    isUnbackedClaim("Your key is saved.", context({ isReadOnly, turnCalls: [savedKey] })),
-    false
-  );
-  const connected = asked(
+  const dismissed = asked(
     "request_connection",
     { kind: "connection", target: "gmail" },
-    { status: "connected", target: "gmail" },
-    { status: "connected", target: "gmail" }
+    { status: "cancelled" },
+    { status: "cancelled_by_user" }
   );
-  assert.equal(
-    isUnbackedClaim("Gmail has been connected.", context({ isReadOnly, turnCalls: [connected] })),
-    false
-  );
+  assert.equal(await unbacked("I've connected Gmail.", { turnCalls: [connected] }), false);
+  assert.equal(await unbacked("I've saved your OpenAI key.", { turnCalls: [savedKey] }), false);
+  assert.equal(await unbacked("I've connected Gmail.", { turnCalls: [dismissed] }), true);
+  assert.equal(await unbacked("I've saved your OpenAI key.", { turnCalls: [connected] }), true);
 });
 
-test("a rewrite of the user's selected or quoted text is never flagged", async () => {
-  const { isUnbackedClaim } = await load();
-  const reply = "I have emailed the client, and they agreed to Friday.";
+test("an earlier turn backs only a report of the same kind, to whoever it names", async () => {
+  const toGabe = sent("email_draft", { destination: "gabe@acme.test" });
+  // A new claim always needs this turn.
   assert.equal(
-    isUnbackedClaim(
-      reply,
-      context({
-        request: { text: "Make this clearer", selectedText: "emailed client, they ok with fri" },
-      })
-    ),
-    false
-  );
-  assert.equal(
-    isUnbackedClaim(
-      reply,
-      context({ request: { text: 'Make this clearer: "I emailed the client, they ok fri"' } })
-    ),
-    false
-  );
-  assert.equal(isUnbackedClaim(reply, context({ request: { text: "Did you email them?" } })), true);
-});
-
-test("a message the user asked to have written in their voice is never flagged", async () => {
-  const { isUnbackedClaim } = await load();
-  const request = {
-    text: "Write a Slack message I can paste, saying I've posted the release notes and sent the invite.",
-  };
-  const reply =
-    "Hey team, I've posted the release notes and sent out the invite for Friday's retro.";
-  assert.equal(isUnbackedClaim(reply, context({ request })), false);
-  // A question about a send isn't one.
-  assert.equal(
-    isUnbackedClaim("Yes, it was sent.", context({ request: { text: "Is it sent?" } })),
+    await unbacked("Done! I've sent the follow-up to Gabe.", { earlierCalls: [toGabe] }),
     true
   );
+  assert.equal(await unbacked("Yes, it was sent.", { earlierCalls: [toGabe] }), false);
+  assert.equal(
+    await unbacked("Yes, your email to Gabe was sent.", { earlierCalls: [toGabe] }),
+    false
+  );
+  assert.equal(
+    await unbacked("Yes, your email to Dana was sent.", { earlierCalls: [toGabe] }),
+    true
+  );
+  // A first-person claim about before reports on that earlier turn.
+  assert.equal(await unbacked("I sent it to Gabe earlier.", { earlierCalls: [toGabe] }), false);
+  // Another kind never backs it.
+  assert.equal(await unbacked("Yes, it was sent.", { earlierCalls: [call("create_note")] }), true);
+  assert.equal(await unbacked("Yes, it was sent.", {}), true);
 });

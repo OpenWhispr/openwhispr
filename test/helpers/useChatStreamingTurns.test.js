@@ -201,19 +201,19 @@ test("an answer asked again replaces the claim it made, and one still claiming i
       yield { type: "content", text: "Let me look." };
       yield { type: "tool_calls", calls: [{ id: "c1", name: "search_notes", arguments: "{}" }] };
       yield { type: "tool_result", callId: "c1", toolName: "search_notes", displayText: "Done" };
-      yield { type: "content", text: "Done! I've sent it to Gabe." };
-      verdicts.push(config.isUnbackedClaim("Done! I've sent it to Gabe."));
+      yield { type: "content", text: "Done! I've created the note for you." };
+      verdicts.push(config.isUnbackedClaim("Done! I've created the note for you."));
       yield { type: "unbacked_claim", retry: true };
-      yield { type: "content", text: "I've sent it, honestly." };
+      yield { type: "content", text: "I've created the note, honestly." };
       yield { type: "unbacked_claim", retry: false };
       yield { type: "done", finishReason: "stop" };
     })()
   );
-  await harness.captured.sendToAI("Email Gabe", []);
+  await harness.captured.sendToAI("Make a note of it", []);
 
   assert.deepEqual(verdicts, [true], "a lookup backs no claim");
   const [[, content, , details]] = harness.completed;
-  assert.equal(content, "Let me look.\n\nI've sent it, honestly.");
+  assert.equal(content, "Let me look.\n\nI've created the note, honestly.");
   assert.equal(details.turn.status, "complete");
   assert.equal(details.turn.unbackedClaim, true);
 });
@@ -243,42 +243,44 @@ test("an answer that claims what its turn's tools did is left alone", async (t) 
   assert.equal(harness.completed[0][3].turn.unbackedClaim, undefined);
 });
 
-test("a report on an earlier recorded send, or a rewrite of the selection, is not an unbacked claim", async (t) => {
+test("a report on an earlier recorded result, the user's own words and a kind with no tool are not flagged", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
   const verdicts = [];
   harness.setStream((_tools, config) =>
     (async function* () {
-      verdicts.push(config.isUnbackedClaim("Yes, it was sent."));
-      verdicts.push(config.isUnbackedClaim("I have emailed the client and they agreed."));
-      yield { type: "content", text: "Yes, it was sent." };
+      verdicts.push(config.isUnbackedClaim("Yes, the note was created."));
+      verdicts.push(config.isUnbackedClaim("I have created the note for Dana."));
+      // No send tool here: nothing to check.
+      verdicts.push(config.isUnbackedClaim("I've sent it to Gabe."));
+      yield { type: "content", text: "Yes, the note was created." };
       yield { type: "done", finishReason: "stop" };
     })()
   );
   const earlier = [
-    { id: "u0", role: "user", content: "Email Gabe the update", isStreaming: false },
+    { id: "u0", role: "user", content: "Make a note for Dana", isStreaming: false },
     {
       id: "a0",
       role: "assistant",
-      content: "Sent.",
+      content: "Done.",
       isStreaming: false,
       toolCalls: [
         {
           id: "c0",
-          name: "email_draft",
+          name: "create_note",
           arguments: "{}",
           status: "completed",
-          metadata: { status: "sent" },
+          metadata: { id: 3, title: "Dana" },
         },
       ],
     },
-    { id: "u1", role: "user", content: "Is it sent?", isStreaming: false },
+    { id: "u1", role: "user", content: "Did that work?", isStreaming: false },
   ];
-  await harness.captured.sendToAI("Is it sent?", earlier, {
-    selectedContext: { text: "emailed the client, they agreed", sourceMessageId: "" },
+  await harness.captured.sendToAI("Did that work?", earlier, {
+    selectedContext: { text: "I have created the note for Dana yesterday", sourceMessageId: "" },
   });
-  await harness.captured.sendToAI("Is it sent?", earlier.slice(2));
+  await harness.captured.sendToAI("Did that work?", earlier.slice(2));
 
-  assert.deepEqual(verdicts, [false, false, true, true]);
+  assert.deepEqual(verdicts, [false, false, false, true, true, false]);
 });
 
 test("a turn waiting on a question is saved as waiting, as answered, then completed in place", async (t) => {

@@ -1,118 +1,193 @@
 import type { ToolCallInfo } from "./types";
-import { TRACE_OPENING, connectsFirst } from "./historyMessages";
 
-// What a final answer says was done, in English only: a reply in another
-// language never matches, so it is shown as written, never asked again or
-// flagged. A plan, an offer, a question or a negation ("I can send it", "I
-// haven't sent it") is never a claim, and neither is text the reply drafts or
-// quotes for the user (ownWords).
-const DONE =
-  "sent|emailed|messaged|texted|posted|replied|forwarded|filed|commented|scheduled|booked|connected|prompted";
-// These also describe text written in the reply itself ("I've updated the
-// wording"), so they count only with something a tool changes close after.
-const CHANGED = "created|drafted|saved|updated|edited|added|removed|deleted|moved|renamed";
-const CHANGED_TARGETS =
-  "notes?|dictionary|snippets?|calendar|events?|meetings?|invites?|invitations?|issues?|tickets?|reminders?|tasks?|folders?|contacts?|emails?|drafts?";
-// Passives that report a delivery or a save ("it was sent", "it's been
-// posted"), not one done by someone else ("sent by Sarah"). "Connected" only
-// in the perfect: "Gmail is connected" describes a state.
-const PASSIVE_DONE = "sent|emailed|posted|forwarded|filed|delivered|saved|deleted";
-const ADVERBS = String.raw`(?:(?:just|now|also|already|successfully|(?:gone|went) ahead and)\s+)*`;
-const CHANGED_OBJECT = String.raw`(?:\s+\S+){0,5}?\s+(?:${CHANGED_TARGETS})\b`;
-const NOT_BY = String.raw`(?![^.!?\n]*\bby\b)`;
+// A narrow safety net for a final answer that says something was done when no
+// tool did it. It errs towards silence: a "not done" note on a truthful reply
+// is worse than a missed claim. English only: a reply in another language
+// never matches, so it is shown as written, never asked again or flagged.
 
-// `recalled`: it reports what was done ("I sent it", "it was sent") rather
-// than saying this turn did it ("I've sent it", "Email sent!"). `changed`:
-// one of the CHANGED verbs.
-const CLAIMS: ReadonlyArray<{ pattern: RegExp; recalled?: true; changed?: true }> = [
-  { pattern: new RegExp(String.raw`\bI(?:'ve|’ve| have)\s+${ADVERBS}(${DONE})\b`, "gi") },
-  {
-    pattern: new RegExp(
-      String.raw`\bI(?:'ve|’ve| have)\s+${ADVERBS}(${CHANGED})${CHANGED_OBJECT}`,
-      "gi"
-    ),
-    changed: true,
-  },
-  {
-    pattern:
-      /^\W*(?:email|message|reply|comment|issue|note|invite|draft)\s+(sent|posted|created|filed|saved|scheduled)\b/gi,
-  },
-  { pattern: new RegExp(String.raw`\bI\s+${ADVERBS}(${DONE})\b`, "gi"), recalled: true },
-  {
-    pattern: new RegExp(String.raw`\bI\s+${ADVERBS}(${CHANGED})${CHANGED_OBJECT}`, "gi"),
-    recalled: true,
-    changed: true,
-  },
-  {
-    pattern: new RegExp(
-      String.raw`(?:\b(?:was|were|(?:has|have)\s+been)|\b(?:it|that|this|everything)['’]s\s+been)\s+${ADVERBS}(${PASSIVE_DONE}|connected)\b${NOT_BY}`,
-      "gi"
-    ),
-    recalled: true,
-  },
-  {
-    pattern: new RegExp(
-      String.raw`(?:\b(?:is|are)|\b(?:it|that|this|everything)['’]s)\s+${ADVERBS}(${PASSIVE_DONE})\b${NOT_BY}`,
-      "gi"
-    ),
-    recalled: true,
-  },
-];
-// A claim about before ("I sent it earlier", "I've already sent it") reports
-// on what was done, which an earlier turn's recorded result can back.
-const EARLIER =
-  /\b(?:earlier|previously|before|already|yesterday|ago|last (?:time|turn|message|reply))\b/i;
+type ClaimKind = "send" | "draft" | "create" | "connect" | "save";
 
-// What the reply writes or quotes for the user (a draft, a rewrite, a quote)
-// isn't the reply speaking for itself: fenced code, blockquotes, quoted
-// spans, everything from a lead-in ("Here's a reply:", "Draft:") on, and
-// what follows a line ending in a colon ("I've drafted it below:").
+const WENT_OUT = new Set(["sent", "unknown", "already_sent"]);
+
+function resultStatus(call: ToolCallInfo): string | undefined {
+  const data = call.metadata;
+  return data && !Array.isArray(data) && typeof data.status === "string" ? data.status : undefined;
+}
+
+// A connector action that went out, or may have: never flagged as not done.
+const wentOut = (call: ToolCallInfo) => WENT_OUT.has(resultStatus(call) ?? "");
+const answered = (call: ToolCallInfo, status: string) =>
+  call.interaction?.result?.status === status;
+
+// Each kind of claim: its past-tense verbs, the tools that can do it (no tool
+// offered, no check), and whether a call of one did.
+const KINDS: Record<
+  ClaimKind,
+  { verbs: string; tools: string[]; did: (call: ToolCallInfo) => boolean }
+> = {
+  send: {
+    verbs: "sent|emailed|messaged|posted",
+    tools: ["email_draft", "slack_send_message", "linear_comment", "github_comment"],
+    did: wentOut,
+  },
+  draft: {
+    verbs: "drafted",
+    tools: ["email_draft"],
+    did: (call) => wentOut(call) || resultStatus(call) === "draft_opened",
+  },
+  create: {
+    verbs: "created|filed|commented",
+    tools: [
+      "create_note",
+      "linear_create_issue",
+      "github_create_issue",
+      "linear_comment",
+      "github_comment",
+    ],
+    did: (call) => (call.name === "create_note" ? call.status === "completed" : wentOut(call)),
+  },
+  connect: {
+    verbs: "connected",
+    tools: ["request_connection"],
+    did: (call) => answered(call, "connected"),
+  },
+  save: { verbs: "saved", tools: ["request_api_key"], did: (call) => answered(call, "saved") },
+};
+const KIND_OF_VERB = new Map(
+  (Object.keys(KINDS) as ClaimKind[]).flatMap((kind) =>
+    KINDS[kind].verbs.split("|").map((verb) => [verb, kind] as const)
+  )
+);
+// "Created" counts only with what a tool creates, and "saved" only for a key:
+// "I've created a summary" or "notes are saved" describe no tool's action.
+const CREATED_OBJECT = /\b(?:notes?|issues?|tickets?|comments?)\b/i;
+const SAVED_OBJECT = /\bkeys?\b/i;
+
+const ALL_VERBS = [...KIND_OF_VERB.keys()];
+const ADVERBS = String.raw`(?:(?:just|already|now|also|successfully)\s+)*`;
+// (a) "I've sent", "I have just posted", "I sent". "Drafted" only in a report:
+// "I've drafted it below" describes the reply's own text.
+const FIRST_PERSON = new RegExp(
+  String.raw`\bI(?:['’]ve|\s+have)?\s+${ADVERBS}(${ALL_VERBS.filter((verb) => verb !== "drafted").join("|")})\b`,
+  "gi"
+);
+// (b) A result report: "it was sent", "your email to Gabe has been sent",
+// "the issue is now created", "it's been posted".
+const REPORT = new RegExp(
+  String.raw`\b(?:it|that|your\s+[\w-]+|the\s+(?:email|message|draft|issue|comment|note))(?:\s+to\s+(?:the\s+)?\S+)?(?:\s+(?:was|has\s+been|is\s+now)|['’]s\s+been)\s+${ADVERBS}(${ALL_VERBS.join("|")})\b`,
+  "gi"
+);
+// (c) "Sent to Gabe!", "Message posted to #eng".
+const SENT_TO = /^\W*(?:(?:email|message|reply|comment)\s+)?(sent|posted)\s+to\b/gi;
+
+// A clause that is a condition, a plan or someone else's account ("Once it's
+// sent", "According to your notes, …", "saved automatically") claims nothing,
+// nor does the rest of its sentence.
+const NOT_A_CLAIM = /^\W*(?:if|once|when|after|until|unless|according to)\b|\bautomatically\b/i;
+// A first-person claim about before ("I sent it earlier") reports on an
+// earlier turn, which that turn's recorded result can back.
+const EARLIER = /\b(?:earlier|already|previously|before|yesterday|ago)\b/i;
+
+// What the reply writes for the user isn't its own voice: fenced code,
+// blockquotes, quoted spans, and what follows a colon whose lead-in introduces
+// a draft ("Here's a reply:", "Translation:"). "Here's what I did:" doesn't.
 const FENCED = /```[\s\S]*?(?:```|$)/g;
 const BLOCKQUOTE = /^[ \t]*>.*$/gm;
 const QUOTED = /"[^"\n]*"|“[^”\n]*”|«[^»\n]*»|„[^“”\n]*[“”]/g;
-const LEAD_IN =
-  /\bhere(?:'s|’s| is| are)\b[^:\n]*:|^[ \t]*[*_]*(?:suggested |rewritten |revised )?(?:draft|reply|rewrite|version|response)[*_]*[ \t]*:/im;
-const ENDS_IN_COLON = /:[*_]*[ \t]*$/m;
+const DRAFT_LEAD_IN =
+  /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|below)\b/i;
 
 function ownWords(text: string): string {
   const plain = text.replace(FENCED, "\n").replace(BLOCKQUOTE, "").replace(QUOTED, '""');
-  const leadIn = LEAD_IN.exec(plain);
-  const colon = ENDS_IN_COLON.exec(plain);
-  if (colon && (!leadIn || colon.index < leadIn.index)) return plain.slice(0, colon.index + 1);
-  return leadIn ? plain.slice(0, leadIn.index) : plain;
+  for (const colon of plain.matchAll(/:[*_]*(?=\s|$)/g)) {
+    const leadIn =
+      plain
+        .slice(0, colon.index)
+        .split(/[.!?\n]/)
+        .at(-1) ?? "";
+    if (DRAFT_LEAD_IN.test(leadIn)) return plain.slice(0, colon.index + colon[0].length);
+  }
+  return plain;
 }
 
-/**
- * "new": the reply says this turn did it, so only this turn's tool results
- * can back it. "recalled": it reports what was done, which an earlier turn's
- * recorded result can back too.
- */
-export type ActionClaim = "new" | "recalled";
+// Lowercase words only, so a claim is found in the user's or a tool's text
+// whatever the punctuation or contraction.
+const normalize = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/'ve\b/g, " have")
+    .replace(/[^\w\s#@'-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-/**
- * What the reply claims was done, if anything. A verb the user's own text
- * already has (`source`) is theirs, as in a rewrite of "I have emailed the
- * client"; a sentence that introduces a draft ("I've created a summary:")
- * claims only a delivery.
- */
-export function claimedAction(text: string, source = ""): ActionClaim | null {
-  if (text.includes(TRACE_OPENING)) return "new";
-  let claim: ActionClaim | null = null;
+interface Claim {
+  kind: ClaimKind;
+  /** A report on what was done, which an earlier turn's result can back. */
+  report: boolean;
+  /** The person or channel it names ("to Gabe", "in #eng"), if any. */
+  destination: string | null;
+  /** The claim with the words after it, to find it in the user's or a tool's text. */
+  phrase: string;
+}
+
+const DESTINATION = /\bto\s+(#[\w-]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|[A-Z][\w'’-]*)|\bin\s+(#[\w-]+)/;
+
+const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
+  [FIRST_PERSON, "first"],
+  [REPORT, "report"],
+  [SENT_TO, "sentTo"],
+];
+
+function claimsIn(text: string): Claim[] {
+  const claims: Claim[] = [];
   for (const sentence of ownWords(text).split(/(?<=[.!?])\s+|\n+/)) {
-    const trimmed = sentence.trim();
-    if (trimmed.endsWith("?")) continue;
-    const introducesDraft = /:[*_]*$/.test(trimmed);
-    const earlier = EARLIER.test(sentence);
-    for (const { pattern, recalled, changed } of CLAIMS) {
-      if (changed && introducesDraft) continue;
-      for (const [, verb] of sentence.matchAll(pattern)) {
-        if (new RegExp(String.raw`\b${verb}\b`, "i").test(source)) continue;
-        if (!recalled && !earlier) return "new";
-        claim = "recalled";
+    if (sentence.trim().endsWith("?")) continue;
+    for (const [pattern, form] of FORMS) {
+      for (const match of sentence.matchAll(pattern)) {
+        const verb = match[1].toLowerCase();
+        const kind = KIND_OF_VERB.get(verb);
+        const end = match.index + match[0].length;
+        const clauseEnd = sentence.slice(end).search(/[,;]/);
+        const upToClause = sentence.slice(0, clauseEnd === -1 ? undefined : end + clauseEnd);
+        if (!kind || upToClause.split(/[,;]/).some((clause) => NOT_A_CLAIM.test(clause))) continue;
+        if (verb === "created" && !CREATED_OBJECT.test(sentence)) continue;
+        if (kind === "save" && !SAVED_OBJECT.test(sentence)) continue;
+        const after = sentence.slice(end).trim().split(/\s+/);
+        const destination = DESTINATION.exec(sentence);
+        claims.push({
+          kind,
+          report: form === "report" || (form === "first" && EARLIER.test(sentence)),
+          destination: destination ? (destination[1] ?? destination[2]) : null,
+          phrase: normalize([match[0], ...after.slice(0, 3)].join(" ")),
+        });
       }
     }
   }
-  return claim;
+  return claims;
+}
+
+function stringsIn(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringsIn);
+  if (value && typeof value === "object") return Object.values(value).flatMap(stringsIn);
+  return [];
+}
+
+function argumentText(call: ToolCallInfo): string[] {
+  try {
+    return stringsIn(JSON.parse(call.arguments));
+  } catch {
+    return [];
+  }
+}
+
+// An earlier result backs a report that names someone only if it went there.
+function wentTo(call: ToolCallInfo, destination: string | null): boolean {
+  const label = call.metadata && !Array.isArray(call.metadata) ? call.metadata.destination : null;
+  if (!destination || typeof label !== "string") return true;
+  const [named, sent] = [destination.toLowerCase(), label.toLowerCase()];
+  return sent.includes(named) || named.includes(sent);
 }
 
 export interface ClaimContext {
@@ -120,58 +195,30 @@ export interface ClaimContext {
   turnCalls: ReadonlyArray<ToolCallInfo>;
   /** Calls recorded for earlier turns, and those a regenerate carried over. */
   earlierCalls: ReadonlyArray<ToolCallInfo>;
-  isReadOnly: (toolName: string) => boolean;
-  /** The user's request and the text they selected, whose words a reply may write for them. */
+  /** Whether this conversation offers the tool. */
+  isOffered: (toolName: string) => boolean;
+  /** The user's request and the text they selected. */
   request: { text: string; selectedText?: string };
 }
 
-// The user's own words a reply may repeat: what they selected, what they
-// quoted, and what their request asks to be said ("say I've posted it").
-function userText({ text, selectedText = "" }: ClaimContext["request"]): string {
-  const asked = CLAIMS.flatMap(({ pattern }) =>
-    [...text.matchAll(pattern)].map(([, verb]) => verb)
-  );
-  return [selectedText, ...(text.match(QUOTED) ?? []), ...asked].join("\n");
-}
-
 /**
- * The final answer claims an action no tool result backs: a new claim needs
- * one from this turn, a recalled one any recorded one.
+ * The final answer claims, in its own voice, an action of a kind a tool here
+ * can do, and no result backs it. Any claim is backed by a call of its kind in
+ * this turn; a report ("it was sent") also by one recorded for an earlier
+ * turn, which went to whoever it names. A claim whose words are the user's
+ * (their request or selection) or a tool call's payload is no claim.
  */
 export function isUnbackedClaim(
   text: string,
-  { turnCalls, earlierCalls, isReadOnly, request }: ClaimContext
+  { turnCalls, earlierCalls, isOffered, request }: ClaimContext
 ): boolean {
-  const claim = claimedAction(text, userText(request));
-  if (!claim) return false;
-  const backed = (calls: ReadonlyArray<ToolCallInfo>) =>
-    calls.some((call) => backsActionClaim(call, isReadOnly(call.name)));
-  return !backed(turnCalls) && (claim === "new" || !backed(earlierCalls));
-}
-
-// A connector action that happened, or may have.
-const ACTION_DONE = new Set(["sent", "draft_opened", "unknown", "already_sent"]);
-// What the user did on a card: connected a service, saved a key, granted access.
-const INTERACTION_DONE = new Set(["connected", "saved", "granted"]);
-
-/**
- * A call that did something a claim can describe: a connector
- * action that went out (or may have), a finished connection or saved key, or
- * a tool that changes something (a note, the dictionary, the clipboard).
- * Lookups back no claim.
- */
-export function backsActionClaim(call: ToolCallInfo, readOnly: boolean): boolean {
-  if (call.status !== "completed") return false;
-  // An interaction's result also sits in its metadata ("connected", "saved"),
-  // so the card's answer is read first; a send that connected first is judged by the send.
-  if (call.interaction && !connectsFirst(call)) {
-    const result = call.interaction.result;
-    return (
-      !!result &&
-      (INTERACTION_DONE.has(result.status) || (result.status === "done" && result.ready !== false))
-    );
-  }
-  const status = call.metadata && !Array.isArray(call.metadata) ? call.metadata.status : undefined;
-  if (typeof status === "string") return ACTION_DONE.has(status);
-  return !readOnly;
+  const theirWords = normalize(
+    [request.text, request.selectedText ?? "", ...turnCalls.flatMap(argumentText)].join("\n")
+  );
+  return claimsIn(text).some(({ kind, report, destination, phrase }) => {
+    const { tools, did } = KINDS[kind];
+    if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
+    if (turnCalls.some(did)) return false;
+    return !report || !earlierCalls.some((call) => did(call) && wentTo(call, destination));
+  });
 }
