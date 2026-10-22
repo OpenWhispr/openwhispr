@@ -397,6 +397,12 @@ const SIGNED_OUT_AUTH_MOCK = {
   "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
 };
 
+// The chat adds the app's context (the time, matching library notes) to the
+// end of the user's message; this is what the user wrote.
+function userTextOf(content) {
+  return content.split("\n\nContext from the app for this message")[0];
+}
+
 module.exports = {
   SIGNED_OUT_AUTH_MOCK,
   addTeardown,
@@ -406,4 +412,5 @@ module.exports = {
   installHookDom,
   installHostDom,
   installMicCaptureGlobals,
+  userTextOf,
 };

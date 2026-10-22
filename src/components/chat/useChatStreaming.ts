@@ -31,6 +31,7 @@ import {
 import {
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  buildMessageContext,
   getAgentSystemPrompt,
 } from "../../config/prompts";
 import { calendarProviders, resolveUnavailableCapabilities } from "../../config/agentCapabilities";
@@ -652,7 +653,7 @@ export function useChatStreaming({
         // The user's dictionary rides on every conversation so replies use their
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
-          getAgentSystemPrompt(offeredTools, libraryContext || undefined, {
+          getAgentSystemPrompt(offeredTools, {
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             ...(toolHistory !== "none" ? { toolHistory } : {}),
             openNote: openNoteContext || undefined,
@@ -681,6 +682,17 @@ export function useChatStreaming({
               : null
           );
         }
+
+        // The time and the matching notes change with every message, so they
+        // ride on it: the system prompt, tools and earlier turns stay cacheable.
+        transformLastUserMessage(history, (message) =>
+          typeof message.content === "string"
+            ? {
+                ...message,
+                content: `${message.content}\n\n${buildMessageContext(libraryContext || undefined)}`,
+              }
+            : message
+        );
 
         // A screenshot the resolver kept rides with the command it came with:
         // BYOK models get it as an image part, the cloud agent (outside the
