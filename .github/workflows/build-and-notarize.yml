@@ -82,7 +82,7 @@ jobs:
         run: npm install @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
 
       - name: Cache native binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: resources/bin
           key: linux-x64-bin-${{ hashFiles('scripts/download-*.js') }}
@@ -116,7 +116,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Cache Electron
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/electron
           key: linux-electron-${{ hashFiles('package-lock.json') }}
@@ -184,7 +184,7 @@ jobs:
         run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
 
       - name: Cache native binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: resources/bin
           # Native helper sources are in the key so source changes cannot
@@ -236,7 +236,7 @@ jobs:
           cl /O2 /nologo resources\windows-mic-listener.c /Fe:resources\bin\windows-mic-listener.exe ole32.lib oleaut32.lib
 
       - name: Cache Electron
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/AppData/Local/electron/Cache
           key: windows-electron-${{ hashFiles('package-lock.json') }}
@@ -305,7 +305,7 @@ jobs:
           npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
 
       - name: Cache native binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: resources/bin
           key: macos-${{ matrix.arch }}-bin-${{ hashFiles('scripts/download-*.js', 'scripts/build-globe-listener.js', 'resources/macos-globe-listener.swift', 'scripts/build-macos-fast-paste.js', 'resources/macos-fast-paste.swift', 'scripts/build-media-remote.js', 'resources/macos-media-remote.swift', 'scripts/build-macos-audio-tap.js', 'resources/macos-audio-tap.swift') }}
@@ -354,7 +354,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Cache Electron
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/electron
           key: macos-${{ matrix.arch }}-electron-${{ hashFiles('package-lock.json') }}
