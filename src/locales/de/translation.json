@@ -2684,6 +2684,8 @@
         "urlLabel": "Realtime-WebSocket-URL",
         "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Verwende wss:// oder ws:// für einen Server in deinem lokalen Netzwerk.",
+        "modelPlaceholder": "Whisper-Large-v3-Turbo",
+        "modelRequired": "Erforderlich: das Modell, das dein Server laden soll, z. B. Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "API-Schlüssel (optional)",
         "help": "Dein Server muss das OpenAI-Realtime-Transkriptionsprotokoll über WebSocket sprechen. Es gibt keinen HTTP-Fallback."
       }
@@ -3569,6 +3571,7 @@
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
       "selfHostedRealtimeUrlMissing": "Der selbst gehostete Modus der Notizaufnahme benötigt eine Realtime-WebSocket-URL. Öffne die Einstellungen und gib die URL deines Servers ein oder wähle einen anderen Modus.",
       "selfHostedRealtimeUrlInvalid": "Die selbst gehostete URL der Notizaufnahme muss mit wss:// beginnen oder mit ws:// für einen Server in deinem lokalen Netzwerk. Öffne die Einstellungen und korrigiere die URL.",
+      "selfHostedRealtimeModelMissing": "Der selbst gehostete Modus der Notizaufnahme benötigt einen Modellnamen. Öffne die Einstellungen und gib das Modell ein, das dein Server verwenden soll.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",

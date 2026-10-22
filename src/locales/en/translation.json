@@ -2684,6 +2684,8 @@
         "urlLabel": "Realtime WebSocket URL",
         "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Use wss://, or ws:// for a server on your local network.",
+        "modelPlaceholder": "Whisper-Large-v3-Turbo",
+        "modelRequired": "Required: the model your server should load, such as Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "API key (optional)",
         "help": "Your server must speak the OpenAI Realtime transcription protocol over WebSocket. There is no HTTP fallback."
       }
@@ -3569,6 +3571,7 @@
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
       "selfHostedRealtimeUrlMissing": "Note Recording's Self-Hosted mode needs a realtime WebSocket URL. Open Settings and enter your server's URL, or choose another mode.",
       "selfHostedRealtimeUrlInvalid": "Note Recording's self-hosted URL must start with wss://, or ws:// for a server on your local network. Open Settings and correct the URL.",
+      "selfHostedRealtimeModelMissing": "Note Recording's Self-Hosted mode needs a model name. Open Settings and enter the model your server should use.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "signInRequired": "Note Recording requires you to be signed in. Please sign in.",

@@ -52,6 +52,14 @@ function MeetingEchoCancellationRow() {
 
 const noop = () => {};
 
+const urlHasModel = (url: string) => {
+  try {
+    return Boolean(new URL(url).searchParams.get("model")?.trim());
+  } catch {
+    return false;
+  }
+};
+
 // Self-Hosted for Note Recording is a server that speaks the OpenAI Realtime
 // transcription protocol over WebSocket. There is no HTTP fallback, so the URL
 // is a WebSocket URL of its own, not the dictation self-hosted endpoint.
@@ -65,6 +73,8 @@ function MeetingSelfHostedRealtimePanel() {
   const setApiKey = useSettingsStore((s) => s.setOpenaiCompatibleRealtimeApiKey);
   const trimmedUrl = meetingRealtimeUrl.trim();
   const urlInvalid = trimmedUrl !== "" && !isSecureWebSocketEndpoint(trimmedUrl);
+  // Same rule as the resolver: a model in the URL's query counts.
+  const modelMissing = meetingRealtimeModel.trim() === "" && !urlHasModel(trimmedUrl);
 
   return (
     <div className="border border-border rounded-lg p-3 space-y-2.5">
@@ -102,9 +112,16 @@ function MeetingSelfHostedRealtimePanel() {
           className="h-8"
           value={meetingRealtimeModel}
           onChange={(e) => setMeetingRealtimeModel(e.target.value)}
+          placeholder={t("settingsPage.transcription.selfHostedRealtime.modelPlaceholder")}
+          aria-required
           autoComplete="off"
           spellCheck={false}
         />
+        {modelMissing && (
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.transcription.selfHostedRealtime.modelRequired")}
+          </p>
+        )}
       </div>
       <ApiKeyInput
         apiKey={apiKey}

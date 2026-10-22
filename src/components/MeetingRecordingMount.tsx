@@ -23,6 +23,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
   selfHostedRealtimeUrlMissing: "notes.meeting.selfHostedRealtimeUrlMissing",
   selfHostedRealtimeUrlInvalid: "notes.meeting.selfHostedRealtimeUrlInvalid",
+  selfHostedRealtimeModelMissing: "notes.meeting.selfHostedRealtimeModelMissing",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
   signInRequired: "notes.meeting.signInRequired",

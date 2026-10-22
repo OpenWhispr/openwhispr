@@ -2390,6 +2390,8 @@
         "urlLabel": "即時 WebSocket URL",
         "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "請使用 wss://，區域網路內的伺服器可使用 ws://。",
+        "modelPlaceholder": "Whisper-Large-v3-Turbo",
+        "modelRequired": "必填：伺服器應載入的模型，例如 Whisper-Large-v3-Turbo。",
         "apiKeyLabel": "API Key（選填）",
         "help": "你的伺服器必須透過 WebSocket 支援 OpenAI Realtime 轉寫協定。不提供 HTTP 備援。"
       }
@@ -3218,6 +3220,7 @@
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
       "selfHostedRealtimeUrlMissing": "筆記錄音的自架模式需要即時 WebSocket URL。請開啟設定並輸入伺服器的 URL，或選擇其他模式。",
       "selfHostedRealtimeUrlInvalid": "筆記錄音的自架 URL 必須以 wss:// 開頭，區域網路內的伺服器可使用 ws://。請開啟設定並更正 URL。",
+      "selfHostedRealtimeModelMissing": "筆記錄音的自架模式需要模型名稱。請開啟設定並輸入伺服器應使用的模型。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "signInRequired": "筆記錄音需要登入，請先登入。",

@@ -83,10 +83,17 @@ export function resolveMeetingTranscriptionOptions({
     const url = typeof realtimeUrl === "string" ? realtimeUrl.trim() : "";
     if (!url) throw new Error("selfHostedRealtimeUrlMissing");
     if (!isSecureWebSocketEndpoint(url)) throw new Error("selfHostedRealtimeUrlInvalid");
+    // A blank model would fall through to the OpenAI default model id, which a
+    // self-hosted server either refuses (Speaches needs ?model=) or ignores. A
+    // model already in the URL's query counts.
+    const model = typeof realtimeModel === "string" ? realtimeModel.trim() : "";
+    if (!model && !new URL(url).searchParams.get("model")?.trim()) {
+      throw new Error("selfHostedRealtimeModelMissing");
+    }
     return {
       provider: "openai-compatible-realtime",
       url,
-      model: typeof realtimeModel === "string" ? realtimeModel.trim() : "",
+      model,
       mode: "self-hosted",
       language,
     };

@@ -275,3 +275,41 @@ test("a server that never confirms the session times out with no fallback", asyn
   assert.equal(calls.length, 1);
   assert.equal(streaming.isConnected, false);
 });
+
+test("a blank model is refused before dialing, never sent as the OpenAI default", async () => {
+  const { OpenAICompatibleRealtimeStreaming } = await load();
+  let calls = 0;
+  const streaming = new OpenAICompatibleRealtimeStreaming(async () => {
+    calls += 1;
+    return makeFakeSocket(WS.OPEN);
+  });
+
+  // A non-string from a bad renderer is a sentinel too, not a TypeError.
+  for (const model of [undefined, null, "", "   ", 42, {}]) {
+    await assert.rejects(
+      streaming.connect({ url: LAN_URL, model }),
+      { message: "selfHostedRealtimeModelMissing" },
+      JSON.stringify(model)
+    );
+  }
+  await assert.rejects(streaming.connect({ url: `${LAN_URL}?model=%20%20` }), {
+    message: "selfHostedRealtimeModelMissing",
+  });
+  assert.equal(calls, 0);
+});
+
+test("a model given only in the URL query is the one the session declares", async () => {
+  const { OpenAICompatibleRealtimeStreaming } = await load();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const { factory, calls } = makeRecordingFactory(socket);
+  const streaming = new OpenAICompatibleRealtimeStreaming(factory);
+  const connected = streaming.connect({ url: `${LAN_URL}?model=Whisper-Large-v3-Turbo` });
+  await finishConnect(socket);
+  await connected;
+
+  assert.equal(new URL(calls[0].url).searchParams.get("model"), "Whisper-Large-v3-Turbo");
+  const [update] = sentEvents(socket, "session.update");
+  assert.equal(update.session.audio.input.transcription.model, "Whisper-Large-v3-Turbo");
+  assert.doesNotMatch(JSON.stringify(socket.sent), /gpt-4o/);
+  streaming.cleanup();
+});

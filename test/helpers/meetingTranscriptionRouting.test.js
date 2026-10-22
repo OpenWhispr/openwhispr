@@ -12,6 +12,7 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 const SENTINEL_KEYS = {
   selfHostedRealtimeUrlMissing: "selfHostedRealtimeUrlMissing",
   selfHostedRealtimeUrlInvalid: "selfHostedRealtimeUrlInvalid",
+  selfHostedRealtimeModelMissing: "selfHostedRealtimeModelMissing",
   unsupportedProvider: "unsupportedProvider",
   noProviderSelected: "noProviderSelected",
 };
@@ -106,14 +107,49 @@ test("self-hosted mode never follows a stale Tinfoil provider", async () => {
     { message: "selfHostedRealtimeUrlMissing" }
   );
 
-  // With one, the self-hosted server is used and the Tinfoil model is not carried over.
-  const resolved = resolveMeetingTranscriptionOptions({
-    ...baseOptions,
-    transcriptionMode: "self-hosted",
-    realtimeUrl: "ws://192.168.1.20:9000/v1/realtime",
+  // With one but no model of its own, the Tinfoil model is not carried over.
+  assert.throws(
+    () =>
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "self-hosted",
+        realtimeUrl: "ws://192.168.1.20:9000/v1/realtime",
+      }),
+    { message: "selfHostedRealtimeModelMissing" }
+  );
+});
+
+test("self-hosted mode requires a model, from the field or the URL query", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+  const selfHosted = { ...baseOptions, transcriptionMode: "self-hosted" };
+  const url = "ws://192.168.1.20:9000/v1/realtime";
+
+  // A blank model must never reach the client, which would otherwise send the
+  // OpenAI default model id to the user's server.
+  for (const realtimeModel of [undefined, null, "", "   ", 42]) {
+    assert.throws(
+      () => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: url, realtimeModel }),
+      { message: "selfHostedRealtimeModelMissing" },
+      JSON.stringify(realtimeModel)
+    );
+  }
+  assert.throws(
+    () => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: `${url}?model=%20` }),
+    { message: "selfHostedRealtimeModelMissing" }
+  );
+
+  const fromQuery = resolveMeetingTranscriptionOptions({
+    ...selfHosted,
+    realtimeUrl: `${url}?model=whisper`,
   });
-  assert.equal(resolved.provider, "openai-compatible-realtime");
-  assert.equal(resolved.model, "");
+  assert.equal(fromQuery.provider, "openai-compatible-realtime");
+  assert.equal(fromQuery.model, "");
+  assert.equal(new URL(fromQuery.url).searchParams.get("model"), "whisper");
+
+  // The URL is checked first, so a bad URL is reported even with no model.
+  assert.throws(() => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: "" }), {
+    message: "selfHostedRealtimeUrlMissing",
+  });
 });
 
 test("self-hosted mode routes to the OpenAI-compatible realtime client", async () => {
@@ -175,6 +211,7 @@ test("self-hosted mode fails closed on a missing or unsafe WebSocket URL", async
         ...baseOptions,
         transcriptionMode: "self-hosted",
         realtimeUrl,
+        realtimeModel: "whisper",
       }).url,
       realtimeUrl
     );

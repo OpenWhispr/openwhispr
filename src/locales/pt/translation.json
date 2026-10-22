@@ -2369,6 +2369,8 @@
         "urlLabel": "URL de WebSocket em tempo real",
         "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
         "urlInvalid": "Use wss://, ou ws:// para um servidor na sua rede local.",
+        "modelPlaceholder": "Whisper-Large-v3-Turbo",
+        "modelRequired": "Obrigatório: o modelo que o seu servidor deve carregar, por exemplo Whisper-Large-v3-Turbo.",
         "apiKeyLabel": "Chave API (opcional)",
         "help": "Seu servidor precisa falar o protocolo de transcrição OpenAI Realtime via WebSocket. Não há alternativa por HTTP."
       }
@@ -3218,6 +3220,7 @@
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
       "selfHostedRealtimeUrlMissing": "O modo auto-hospedado da gravação de notas precisa de uma URL de WebSocket em tempo real. Abra as Configurações e informe a URL do seu servidor, ou escolha outro modo.",
       "selfHostedRealtimeUrlInvalid": "A URL auto-hospedada da gravação de notas deve começar com wss://, ou ws:// para um servidor na sua rede local. Abra as Configurações e corrija a URL.",
+      "selfHostedRealtimeModelMissing": "O modo auto-hospedado da gravação de notas precisa do nome de um modelo. Abra as Configurações e informe o modelo que o seu servidor deve usar.",
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "signInRequired": "A gravação de notas exige que você entre na sua conta. Entre para continuar.",
