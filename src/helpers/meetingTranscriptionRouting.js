@@ -1,3 +1,5 @@
+import { isSecureWebSocketEndpoint } from "../utils/urlUtils";
+
 // Note recording only offers providers the main process will actually run:
 // meeting prepare/start check ALLOWED_MEETING_PROVIDERS (derived from the
 // streaming client table in meetingStreamingProviders.js) and reject anything
@@ -41,6 +43,8 @@ export function resolveMeetingTranscriptionOptions({
   cortiEnvironment,
   cortiTenant,
   keyterms,
+  realtimeUrl,
+  realtimeModel,
 }) {
   if (transcriptionMode === "local") {
     return {
@@ -66,12 +70,26 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
-  // These two are reachable from a settings copy the user never made by hand —
-  // the 1.6.10 follow-flag migration carried a dictation choice Note Recording
-  // cannot serve — so they are sentinels that MeetingRecordingMount translates,
-  // not English sentences. Anything after the colon is an argument.
+  // Errors from here on are sentinels that MeetingRecordingMount translates, not
+  // English sentences; anything after the colon is an argument. Several are
+  // reachable from a settings copy the user never made by hand — the 1.6.10
+  // follow-flag migration carried dictation choices into Note Recording.
+  //
+  // Self-hosted means a server speaking the OpenAI Realtime protocol at a
+  // WebSocket URL the user typed for Note Recording. It never inherits the
+  // dictation HTTP endpoint or a cloud provider selection, and there is no
+  // HTTP fallback: a missing or unsafe URL fails here.
   if (transcriptionMode === "self-hosted") {
-    throw new Error("unsupportedSelfHosted");
+    const url = typeof realtimeUrl === "string" ? realtimeUrl.trim() : "";
+    if (!url) throw new Error("selfHostedRealtimeUrlMissing");
+    if (!isSecureWebSocketEndpoint(url)) throw new Error("selfHostedRealtimeUrlInvalid");
+    return {
+      provider: "openai-compatible-realtime",
+      url,
+      model: typeof realtimeModel === "string" ? realtimeModel.trim() : "",
+      mode: "self-hosted",
+      language,
+    };
   }
 
   if (transcriptionMode !== "providers") {

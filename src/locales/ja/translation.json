@@ -2385,7 +2385,14 @@
         }
       },
       "meetingEnterpriseOnly": "組織はエンタープライズクラウドの文字起こしのみを許可しており、会議の録音にはまだ対応していません。",
-      "meetingCloudSignedOut": "サインアウト中は OpenWhispr Cloud でノート録音を開始できません。上で別のエンジンを選択してください。"
+      "meetingCloudSignedOut": "サインアウト中は OpenWhispr Cloud でノート録音を開始できません。上で別のエンジンを選択してください。",
+      "selfHostedRealtime": {
+        "urlLabel": "リアルタイム WebSocket URL",
+        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
+        "urlInvalid": "wss:// を使用するか、ローカルネットワーク上のサーバーには ws:// を使用してください。",
+        "apiKeyLabel": "API キー（任意）",
+        "help": "サーバーは WebSocket 経由で OpenAI Realtime 文字起こしプロトコルに対応している必要があります。HTTP へのフォールバックはありません。"
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3285,7 +3292,8 @@
       "description": "文字起こしと構造化されたサマリー",
       "back": "戻る",
       "restrictedByOrg": "会議の文字起こしは組織によって制限されています。",
-      "unsupportedSelfHosted": "ノート録音はまだセルフホストのエンドポイントを利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
+      "selfHostedRealtimeUrlMissing": "ノート録音のセルフホストモードにはリアルタイム WebSocket URL が必要です。設定を開いてサーバーの URL を入力するか、別のモードを選択してください。",
+      "selfHostedRealtimeUrlInvalid": "ノート録音のセルフホスト URL は wss:// で始まるか、ローカルネットワーク上のサーバーの場合は ws:// で始まる必要があります。設定を開いて URL を修正してください。",
       "unsupportedProvider": "ノート録音ではライブ文字起こしに {{provider}} を利用できません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "noProviderSelected": "ノート録音のプロバイダーが選択されていません。設定を開き、ローカルまたはストリーミング対応プロバイダーを選択してください。",
       "signInRequired": "ノート録音にはサインインが必要です。サインインしてください。",

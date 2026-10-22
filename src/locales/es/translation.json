@@ -2437,7 +2437,14 @@
         }
       },
       "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones.",
-      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba."
+      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba.",
+      "selfHostedRealtime": {
+        "urlLabel": "URL de WebSocket en tiempo real",
+        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
+        "urlInvalid": "Usa wss://, o ws:// para un servidor en tu red local.",
+        "apiKeyLabel": "Clave API (opcional)",
+        "help": "Tu servidor debe hablar el protocolo de transcripción OpenAI Realtime por WebSocket. No hay alternativa por HTTP."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3261,7 +3268,8 @@
       "description": "Transcripciones y resúmenes estructurados",
       "back": "Atrás",
       "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización.",
-      "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "selfHostedRealtimeUrlMissing": "El modo autoalojado de la grabación de notas necesita una URL de WebSocket en tiempo real. Abre Ajustes e introduce la URL de tu servidor, o elige otro modo.",
+      "selfHostedRealtimeUrlInvalid": "La URL autoalojada de la grabación de notas debe empezar por wss://, o ws:// para un servidor en tu red local. Abre Ajustes y corrige la URL.",
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
       "signInRequired": "La grabación de notas requiere iniciar sesión. Por favor, inicia sesión.",

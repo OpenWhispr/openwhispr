@@ -2385,7 +2385,14 @@
         }
       },
       "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。",
-      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。"
+      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。",
+      "selfHostedRealtime": {
+        "urlLabel": "即時 WebSocket URL",
+        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
+        "urlInvalid": "請使用 wss://，區域網路內的伺服器可使用 ws://。",
+        "apiKeyLabel": "API Key（選填）",
+        "help": "你的伺服器必須透過 WebSocket 支援 OpenAI Realtime 轉寫協定。不提供 HTTP 備援。"
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3209,7 +3216,8 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
+      "selfHostedRealtimeUrlMissing": "筆記錄音的自架模式需要即時 WebSocket URL。請開啟設定並輸入伺服器的 URL，或選擇其他模式。",
+      "selfHostedRealtimeUrlInvalid": "筆記錄音的自架 URL 必須以 wss:// 開頭，區域網路內的伺服器可使用 ws://。請開啟設定並更正 URL。",
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "signInRequired": "筆記錄音需要登入，請先登入。",

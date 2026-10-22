@@ -6,12 +6,15 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isModeAllowedByPolicy } from "../../stores/policyRules";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import ApiKeyInput from "../ui/ApiKeyInput";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import type { InferenceMode } from "../../types/electron";
 import { getMeetingStreamingTranscriptionProviders } from "../../models/ModelRegistry";
+import { isSecureWebSocketEndpoint } from "../../utils/urlUtils";
 
 const MEETING_BYOK_PROVIDER_IDS = getMeetingStreamingTranscriptionProviders().map(
   (provider) => provider.id
@@ -48,6 +51,72 @@ function MeetingEchoCancellationRow() {
 }
 
 const noop = () => {};
+
+// Self-Hosted for Note Recording is a server that speaks the OpenAI Realtime
+// transcription protocol over WebSocket. There is no HTTP fallback, so the URL
+// is a WebSocket URL of its own, not the dictation self-hosted endpoint.
+function MeetingSelfHostedRealtimePanel() {
+  const { t } = useTranslation();
+  const meetingRealtimeUrl = useSettingsStore((s) => s.meetingRealtimeUrl);
+  const setMeetingRealtimeUrl = useSettingsStore((s) => s.setMeetingRealtimeUrl);
+  const meetingRealtimeModel = useSettingsStore((s) => s.meetingRealtimeModel);
+  const setMeetingRealtimeModel = useSettingsStore((s) => s.setMeetingRealtimeModel);
+  const apiKey = useSettingsStore((s) => s.openaiCompatibleRealtimeApiKey);
+  const setApiKey = useSettingsStore((s) => s.setOpenaiCompatibleRealtimeApiKey);
+  const trimmedUrl = meetingRealtimeUrl.trim();
+  const urlInvalid = trimmedUrl !== "" && !isSecureWebSocketEndpoint(trimmedUrl);
+
+  return (
+    <div className="border border-border rounded-lg p-3 space-y-2.5">
+      <div className="space-y-1.5">
+        <label htmlFor="meeting-realtime-url" className="block text-xs font-medium text-foreground">
+          {t("settingsPage.transcription.selfHostedRealtime.urlLabel")}
+        </label>
+        <Input
+          id="meeting-realtime-url"
+          dir="ltr"
+          className="h-8"
+          value={meetingRealtimeUrl}
+          onChange={(e) => setMeetingRealtimeUrl(e.target.value)}
+          placeholder={t("settingsPage.transcription.selfHostedRealtime.urlPlaceholder")}
+          aria-invalid={urlInvalid || undefined}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {urlInvalid && (
+          <p className="text-xs text-destructive">
+            {t("settingsPage.transcription.selfHostedRealtime.urlInvalid")}
+          </p>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <label
+          htmlFor="meeting-realtime-model"
+          className="block text-xs font-medium text-foreground"
+        >
+          {t("common.model")}
+        </label>
+        <Input
+          id="meeting-realtime-model"
+          dir="ltr"
+          className="h-8"
+          value={meetingRealtimeModel}
+          onChange={(e) => setMeetingRealtimeModel(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+      <ApiKeyInput
+        apiKey={apiKey}
+        setApiKey={setApiKey}
+        label={t("settingsPage.transcription.selfHostedRealtime.apiKeyLabel")}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t("settingsPage.transcription.selfHostedRealtime.help")}
+      </p>
+    </div>
+  );
+}
 
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
@@ -105,8 +174,6 @@ export function MeetingTranscriptionPanel() {
         label: t("settingsPage.transcription.modes.selfHosted"),
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
-        disabled: true,
-        badge: t("common.comingSoon"),
       },
     ],
     "transcription",
@@ -115,7 +182,6 @@ export function MeetingTranscriptionPanel() {
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
-    if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
       requestSignIn();
       return;
@@ -202,6 +268,7 @@ export function MeetingTranscriptionPanel() {
       )}
       {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {effectiveTranscriptionMode === "self-hosted" && <MeetingSelfHostedRealtimePanel />}
       <MeetingSpeakerDetectionRow />
       <MeetingEchoCancellationRow />
     </div>

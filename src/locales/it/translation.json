@@ -2385,7 +2385,14 @@
         }
       },
       "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni.",
-      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con OpenWhispr Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra."
+      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con OpenWhispr Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra.",
+      "selfHostedRealtime": {
+        "urlLabel": "URL WebSocket in tempo reale",
+        "urlPlaceholder": "ws://192.168.1.20:9000/v1/realtime",
+        "urlInvalid": "Usa wss://, oppure ws:// per un server sulla tua rete locale.",
+        "apiKeyLabel": "Chiave API (facoltativa)",
+        "help": "Il tuo server deve supportare il protocollo di trascrizione OpenAI Realtime via WebSocket. Non c'è alcun fallback HTTP."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3209,7 +3216,8 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
+      "selfHostedRealtimeUrlMissing": "La modalità self-hosted della registrazione delle note richiede un URL WebSocket in tempo reale. Apri le Impostazioni e inserisci l'URL del tuo server, oppure scegli un'altra modalità.",
+      "selfHostedRealtimeUrlInvalid": "L'URL self-hosted della registrazione delle note deve iniziare con wss://, oppure ws:// per un server sulla tua rete locale. Apri le Impostazioni e correggi l'URL.",
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "signInRequired": "La registrazione delle note richiede l'accesso. Accedi, per favore.",
