@@ -177,7 +177,11 @@ test("Continue moves on from checkboxes, and ↑ on the last question submits on
       answers: { goal: "balanced", include: ["research"], deadline: "Friday" },
     },
   ]);
-  assert.equal(card.host.textContent, "", "an answered card gives way to its step");
+  assert.equal(
+    card.host.textContent,
+    "Answered · Balanced · Research · Friday",
+    "an answered card leaves what was answered"
+  );
 });
 
 test("Esc in a question card dismisses it, and never reaches the window", async (t) => {
