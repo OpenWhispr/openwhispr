@@ -80,6 +80,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
+  // The self-hosted realtime WebSocket URL and model id are technical values.
+  "src/components/settings/MeetingSettings.tsx": ["ltr", "ltr"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   // Teamspace search: names in any script.
   "src/components/settings/TeamSpacesPanel.tsx": ["auto"],

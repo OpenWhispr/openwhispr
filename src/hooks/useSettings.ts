@@ -106,6 +106,7 @@ export interface ApiKeySettings {
   deepgramApiKey: string;
   assemblyaiApiKey: string;
   elevenlabsApiKey: string;
+  openaiCompatibleRealtimeApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
