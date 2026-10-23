@@ -26,6 +26,14 @@ test("punctuation accelerators map to Qt key codes", () => {
   assert.equal(KDEShortcutManager.convertToQtKeyCode("Control+Plus"), QT_CONTROL | QT_KEY_PLUS);
 });
 
+// Electron's "Enter" is the main Return key (Qt::Key_Return); Qt::Key_Enter is
+// the keypad Enter, which a Return press never matches.
+test("Enter maps to Qt's Return key", () => {
+  const QT_KEY_RETURN = 0x01000004;
+  assert.equal(KDEShortcutManager.convertToQtKeyCode("Enter"), QT_KEY_RETURN);
+  assert.equal(KDEShortcutManager.convertToQtKeyCode("Control+Enter"), QT_CONTROL | QT_KEY_RETURN);
+});
+
 test("unknown keys still return null", () => {
   assert.equal(KDEShortcutManager.convertToQtKeyCode("Control+Unknown"), null);
 });
