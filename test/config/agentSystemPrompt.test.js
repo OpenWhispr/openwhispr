@@ -183,6 +183,15 @@ test("the name joins the prompt as one plain line", async () => {
   assert.match(long, /The user's name is A{100}\./);
 });
 
+test("a base prompt takes the Chat prompt's place, ahead of the tool rules", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const chat = getAgentSystemPrompt(["search_notes"]);
+  const based = getAgentSystemPrompt(["search_notes"], undefined, { basePrompt: "BASE_SENTINEL" });
+  assert.match(chat, /^You are a helpful voice assistant/);
+  assert.match(based, /^BASE_SENTINEL\n\nYou can use these tools/);
+  assert.equal(based.slice("BASE_SENTINEL".length), chat.slice(chat.indexOf("\n\nYou can use")));
+});
+
 const TONES = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
 
 test("Tone & Style lists the user's style for each kind of writing, after the sign-off rule", async () => {
