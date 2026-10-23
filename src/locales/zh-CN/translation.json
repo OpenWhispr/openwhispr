@@ -5076,5 +5076,29 @@
     "permissionDenied": "已拒绝",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企业音频设置",
+      "description": "在此设备配置凭据并测试组织的音频连接。",
+      "provider": "音频提供商",
+      "gateway": "音频网关",
+      "provisioned": "凭据已配置",
+      "credentialMissing": "需要凭据",
+      "proxyCredentialFormat": "代理凭据请输入包含 username 和 password 的 JSON；音频凭据请输入 API 密钥。",
+      "probeConsent": "我允许发送简短的音频测试请求，这可能产生提供商费用。",
+      "testBatch": "测试文件转写",
+      "testRealtime": "测试会议连接",
+      "testPassed": "连接测试通过，已向管理员报告。",
+      "testFailed": "连接测试失败：{{code}}",
+      "setupFailed": "设置失败。请检查登录状态、工作区权限和网络设置。",
+      "saved": "凭据已保存在此设备。",
+      "operationUnavailable": "组织尚未配置此音频操作。",
+      "certificateUnavailable": "组织的证书包不可用。",
+      "partialUpload": "{{count}} 个音频片段失败，转写不完整。",
+      "importBootstrap": "导入组织配置",
+      "importedBootstrap": "已导入配置凭据。",
+      "bootstrapNotFound": "未找到配置文件。"
+    }
   }
 }

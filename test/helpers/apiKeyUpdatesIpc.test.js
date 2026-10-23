@@ -128,9 +128,10 @@ const electron = {
   },
   net: {
     // BYOK mints present the saved key; managed ones present the account session.
-    fetch: async (_url, init) => ({
+    fetch: async (url, init) => ({
       ok: true,
       json: async () => {
+        if (url.endsWith("/api/workspaces")) return { data: [] };
         const token = await fetchToken(init.headers.Authorization);
         return { token, clientSecret: token, clientSecrets: [token, token] };
       },
@@ -169,6 +170,15 @@ Module._load = function (request, parent, isMain) {
         getState: () => ({ token: "account", generation: authGeneration }),
         subscribe: () => () => {},
       };
+    if (request === "./accountScopeBinding")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        read: () => null,
+        resolveActiveAccountScope: ({ generation }) => ({
+          accountId: "personal-account",
+          authGeneration: generation,
+        }),
+      };
   }
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -201,6 +211,9 @@ const target = {
   _dictationIdleTimer: null,
   _meetingMicStreaming: null,
   _meetingSystemStreaming: null,
+  _enterpriseAudioBinding: null,
+  _enterpriseAudioScope: null,
+  _enterpriseAudioScopeRevision: 0,
   // A system audio tap on every platform, so each meeting opens two streams.
   audioTapManager: { isSupported: () => true, start: async () => {}, stop: async () => {} },
   _mintStoredCortiToken: async () => ({

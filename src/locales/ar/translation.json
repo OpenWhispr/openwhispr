@@ -5198,5 +5198,29 @@
     "permissionDenied": "مرفوض",
     "permissionRestricted": "مقيّد",
     "permissionNotDetermined": "لم يُطلب"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "إعداد صوت المؤسسة",
+      "description": "اضبط بيانات الاعتماد على هذا الجهاز واختبر اتصال الصوت الخاص بمؤسستك.",
+      "provider": "مزود الصوت",
+      "gateway": "بوابة الصوت",
+      "provisioned": "تم إعداد بيانات الاعتماد",
+      "credentialMissing": "بيانات الاعتماد مطلوبة",
+      "proxyCredentialFormat": "للوكيل، أدخل JSON يحتوي على username وpassword. للصوت، أدخل مفتاح API.",
+      "probeConsent": "أسمح باختبارات صوتية قصيرة قد تترتب عليها رسوم لدى المزود.",
+      "testBatch": "اختبار نسخ ملف صوتي",
+      "testRealtime": "اختبار اتصال الاجتماع",
+      "testPassed": "نجح اختبار الاتصال وأُبلغ المسؤول بالنتيجة.",
+      "testFailed": "فشل اختبار الاتصال: {{code}}",
+      "setupFailed": "فشل الإعداد. تحقق من تسجيل الدخول والصلاحيات والشبكة.",
+      "saved": "حُفظت بيانات الاعتماد على هذا الجهاز.",
+      "operationUnavailable": "لم تضبط مؤسستك هذه العملية الصوتية.",
+      "certificateUnavailable": "حزمة شهادات المؤسسة غير متاحة.",
+      "partialUpload": "فشلت {{count}} مقاطع صوتية؛ النسخ غير مكتمل.",
+      "importBootstrap": "استيراد إعداد المؤسسة",
+      "importedBootstrap": "تم استيراد بيانات الاعتماد.",
+      "bootstrapNotFound": "لم يُعثر على ملف الإعداد."
+    }
   }
 }

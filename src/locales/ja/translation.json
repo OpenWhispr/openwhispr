@@ -5076,5 +5076,29 @@
     "permissionDenied": "拒否",
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業向け音声の設定",
+      "description": "この端末に認証情報を設定し、組織の音声接続をテストします。",
+      "provider": "音声プロバイダー",
+      "gateway": "音声ゲートウェイ",
+      "provisioned": "認証情報を設定済み",
+      "credentialMissing": "認証情報が必要です",
+      "proxyCredentialFormat": "プロキシには username と password を含む JSON、音声には API キーを入力してください。",
+      "probeConsent": "プロバイダーの料金が発生する可能性がある短い音声テストを許可します。",
+      "testBatch": "ファイル文字起こしをテスト",
+      "testRealtime": "会議の接続をテスト",
+      "testPassed": "接続テストに成功し、管理者に報告しました。",
+      "testFailed": "接続テストに失敗しました: {{code}}",
+      "setupFailed": "設定に失敗しました。サインイン、アクセス権、ネットワークを確認してください。",
+      "saved": "認証情報をこの端末に保存しました。",
+      "operationUnavailable": "組織がこの音声処理を設定していません。",
+      "certificateUnavailable": "組織の証明書バンドルを利用できません。",
+      "partialUpload": "音声の {{count}} 区間で失敗しました。文字起こしは不完全です。",
+      "importBootstrap": "組織の設定をインポート",
+      "importedBootstrap": "設定の認証情報をインポートしました。",
+      "bootstrapNotFound": "設定ファイルが見つかりません。"
+    }
   }
 }

@@ -758,6 +758,24 @@ function initializeDeferredManagers() {
   meetingDetectionEngine.start();
 }
 
+let pendingEnterpriseAudioTest = null;
+ipcMain.handle("get-pending-enterprise-audio-test", (_event, consume = false) => {
+  const pending = pendingEnterpriseAudioTest;
+  if (consume) pendingEnterpriseAudioTest = null;
+  return pending;
+});
+function handleEnterpriseAudioLink(url) {
+  const request = require("./src/helpers/enterpriseAudioDeepLink").parseEnterpriseAudioDeepLink(
+    url,
+    OAUTH_PROTOCOL
+  );
+  if (!request) return false;
+  pendingEnterpriseAudioTest = request;
+  void windowManager?.showControlPanel();
+  windowManager?.controlPanelWindow?.webContents.send("enterprise-audio-test-requested");
+  return true;
+}
+
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
@@ -766,6 +784,8 @@ app.on("open-url", (event, url) => {
     handleUpgradeDeepLink();
     return;
   }
+
+  if (handleEnterpriseAudioLink(url)) return;
 
   if (isNoteDeepLink(url)) {
     void handleNoteDeepLink(url);
@@ -1244,7 +1264,9 @@ async function startApp() {
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+    // The renderer consumes the saved setup request after settings mount.
+  } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
     if (initialProtocolUrl && process.platform !== "darwin") {
@@ -1985,6 +2007,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isNoteDeepLink(url)) {

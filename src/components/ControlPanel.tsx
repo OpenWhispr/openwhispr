@@ -205,6 +205,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setShowSettings(true);
   }, []);
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
+  useEffect(() => {
+    const open = () => openTranscriptionSettings();
+    const unsubscribe = window.electronAPI?.onEnterpriseAudioTestRequested?.(open);
+    void window.electronAPI?.getPendingEnterpriseAudioTest?.().then((pending) => {
+      if (pending) open();
+    });
+    return unsubscribe;
+  }, [openTranscriptionSettings]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();

@@ -122,6 +122,7 @@ function createEnterpriseIdentityManager({
   getApiUrl,
   getAppVersion,
   proxyFetch,
+  enterpriseFetch,
   tokenStore,
   logger,
   broadcast,
@@ -225,7 +226,7 @@ function createEnterpriseIdentityManager({
   // The deadline covers the body as well as the headers: a server that sends
   // headers and then stalls would otherwise hang the shared config and
   // credential requests that every later caller joins.
-  async function fetchWithTimeout(url, init, read) {
+  async function fetchWithTimeout(url, init, read, network, certificateBundles) {
     const controller = new AbortController();
     const aborted = new Promise((_, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), {
@@ -235,7 +236,15 @@ function createEnterpriseIdentityManager({
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       return await Promise.race([
-        proxyFetch(url, { ...init, signal: controller.signal }).then(read),
+        (network && enterpriseFetch
+          ? enterpriseFetch(
+              url,
+              { ...init, signal: controller.signal },
+              network,
+              certificateBundles
+            )
+          : proxyFetch(url, { ...init, signal: controller.signal })
+        ).then(read),
         aborted,
       ]);
     } finally {
@@ -466,7 +475,15 @@ function createEnterpriseIdentityManager({
 
   function managedProviderFunctions(identity, resolution) {
     const record = resolution.record;
-    const key = credentialKey(identity, resolution.generation, record.provider, record.version);
+    const tokenScope =
+      resolution.operation === "realtime"
+        ? (record.config.realtime?.tokenScope ??
+          (record.config.realtime?.protocol === "openai-transcription-ga"
+            ? "https://ai.azure.com/.default"
+            : AZURE_SCOPE))
+        : AZURE_SCOPE;
+    const key = `${credentialKey(identity, resolution.generation, record.provider, record.version)}\n${tokenScope}`;
+    if (record.provider === "openai-compatible") return {};
     if (record.provider === "bedrock") {
       return {
         credentialProvider: () =>
@@ -513,7 +530,7 @@ function createEnterpriseIdentityManager({
           const body = new URLSearchParams({
             client_id: record.config.clientId,
             grant_type: "client_credentials",
-            scope: AZURE_SCOPE,
+            scope: tokenScope,
             client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
             client_assertion: assertion,
           });
@@ -535,7 +552,9 @@ function createEnterpriseIdentityManager({
                 });
               }
               return response.json();
-            }
+            },
+            record.config.network,
+            resolution.certificateBundles
           );
           assertIdentityCurrent(identity);
           if (typeof token?.access_token !== "string" || !Number.isFinite(token?.expires_in)) {
@@ -557,7 +576,8 @@ function createEnterpriseIdentityManager({
     const resolution = resolveManagedEnterpriseScope(
       config,
       request.inferenceScope,
-      request.setupMode
+      request.setupMode,
+      request.operation
     );
     if (resolution.kind === "error") {
       throw Object.assign(new Error(resolution.message), { code: resolution.code });
@@ -567,14 +587,19 @@ function createEnterpriseIdentityManager({
       managed: true,
       identity,
       provider: resolution.provider,
+      mode: resolution.mode,
+      allowManualSetup: resolution.allowManualSetup,
       model: resolution.model,
       config: resolution.record.config,
+      certificateBundles: config.certificateBundles,
       version: resolution.record.version,
       generation: config.generation,
       ...managedProviderFunctions(identity, {
         ...resolution,
         generation: config.generation,
         inferenceScope: request.inferenceScope,
+        operation: request.operation,
+        certificateBundles: config.certificateBundles,
       }),
     };
   }

@@ -5076,5 +5076,29 @@
     "permissionDenied": "Negada",
     "permissionRestricted": "Restrita",
     "permissionNotDetermined": "Não solicitada"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Configuração de áudio empresarial",
+      "description": "Configure as credenciais neste dispositivo e teste a ligação de áudio da organização.",
+      "provider": "Fornecedor de áudio",
+      "gateway": "Gateway de áudio",
+      "provisioned": "Credencial configurada",
+      "credentialMissing": "Credencial necessária",
+      "proxyCredentialFormat": "Para um proxy, introduza JSON com username e password. Para áudio, introduza a chave API.",
+      "probeConsent": "Autorizo testes curtos de áudio que podem gerar custos do fornecedor.",
+      "testBatch": "Testar transcrição de ficheiro",
+      "testRealtime": "Testar ligação de reunião",
+      "testPassed": "Teste concluído e comunicado ao administrador.",
+      "testFailed": "Falha no teste de ligação: {{code}}",
+      "setupFailed": "Falha na configuração. Verifique a sessão, as permissões e a rede.",
+      "saved": "Credencial guardada neste dispositivo.",
+      "operationUnavailable": "A organização não configurou esta operação de áudio.",
+      "certificateUnavailable": "O conjunto de certificados da organização está indisponível.",
+      "partialUpload": "Falharam {{count}} segmentos de áudio; a transcrição está incompleta.",
+      "importBootstrap": "Importar configuração da organização",
+      "importedBootstrap": "Credenciais de configuração importadas.",
+      "bootstrapNotFound": "Ficheiro de configuração não encontrado."
+    }
   }
 }

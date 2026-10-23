@@ -1,3 +1,4 @@
+import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
@@ -597,12 +598,12 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
+    setEnterpriseTranscriptionSetupMode(mode === "enterprise" ? "managed" : "manual");
     if (mode === effectiveTranscriptionMode) return;
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
     updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
     setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
 
     const toastKey = {
       openwhispr: "switchedCloud",
@@ -748,6 +749,7 @@ function TranscriptionSection({
     <div className="space-y-4">
       {errorCard}
       {managedCard}
+      <EnterpriseAudioSettings />
       {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (

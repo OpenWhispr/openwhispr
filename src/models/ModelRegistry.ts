@@ -249,7 +249,8 @@ export function isEnterpriseProvider(value: unknown): value is EnterpriseProvide
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
 }
 
-export function enterpriseProviderName(provider: EnterpriseProvider): string {
+export function enterpriseProviderName(provider: EnterpriseProvider | "openai-compatible"): string {
+  if (provider === "openai-compatible") return "OpenAI-compatible";
   return modelRegistry.getEnterpriseProviders().find((p) => p.id === provider)?.name ?? provider;
 }
 

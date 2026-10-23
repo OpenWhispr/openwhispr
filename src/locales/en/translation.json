@@ -5076,5 +5076,29 @@
     "permissionDenied": "Denied",
     "permissionRestricted": "Restricted",
     "permissionNotDetermined": "Not requested"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Enterprise audio setup",
+      "description": "Provision credentials on this device and test your organization’s audio connection.",
+      "provider": "Audio provider",
+      "gateway": "Audio gateway",
+      "provisioned": "Credential provisioned",
+      "credentialMissing": "Credential required",
+      "proxyCredentialFormat": "For a proxy slot, enter JSON with username and password. For an audio slot, enter the API key.",
+      "probeConsent": "I allow short audio test requests, which may incur provider charges.",
+      "testBatch": "Test file transcription",
+      "testRealtime": "Test live meeting connection",
+      "testPassed": "Connection test passed and reported to your administrator.",
+      "testFailed": "Connection test failed: {{code}}",
+      "setupFailed": "Setup failed. Check your sign-in, workspace access and network settings.",
+      "saved": "Credential saved on this device.",
+      "operationUnavailable": "Your organization has not configured this audio operation.",
+      "certificateUnavailable": "The organization’s certificate bundle is unavailable.",
+      "partialUpload": "{{count}} audio chunks failed; this transcript is incomplete.",
+      "importBootstrap": "Import organization bootstrap",
+      "importedBootstrap": "Bootstrap credentials imported.",
+      "bootstrapNotFound": "No bootstrap file was found."
+    }
   }
 }

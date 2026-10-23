@@ -1,3 +1,4 @@
+import type { InferenceScope } from "../config/inferenceScopes";
 import { create } from "zustand";
 import {
   clearManagedEnterpriseIdentity,
@@ -277,7 +278,8 @@ function resolveScope(
   config: ManagedEnterpriseConfig | null,
   requestedScope: ManagedEnterpriseScope,
   setupMode: EnterpriseSetupMode,
-  scopeHold: false | "unavailable" | "loading"
+  scopeHold: false | "unavailable" | "loading",
+  operation: "batch" | "realtime" = "batch"
 ): ManagedEnterpriseScopeResolution {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
   if (!config && scopeHold) {
@@ -299,7 +301,8 @@ function resolveScope(
   const resolution = resolveManagedEnterpriseScope(
     config,
     scope,
-    setupMode
+    setupMode,
+    operation
   ) as ManagedEnterpriseScopeResolution;
   if (
     resolution.kind === "managed" &&
@@ -362,23 +365,55 @@ function scopeFailsClosed(
   return false;
 }
 
+type TextScopeResolution =
+  | Exclude<ManagedEnterpriseScopeResolution, { kind: "managed" }>
+  | (Extract<ManagedEnterpriseScopeResolution, { kind: "managed" }> & {
+      provider: "bedrock" | "azure";
+    });
+
 /** Imperative reads (services, stores). Components should use useManagedScopeResolution. */
 export function getManagedScopeResolution(
-  scope: ManagedEnterpriseScope,
+  scope: InferenceScope,
   setupMode: EnterpriseSetupMode
+): TextScopeResolution;
+export function getManagedScopeResolution(
+  scope: ManagedEnterpriseScope,
+  setupMode: EnterpriseSetupMode,
+  operation?: "batch" | "realtime"
+): ManagedEnterpriseScopeResolution;
+export function getManagedScopeResolution(
+  scope: ManagedEnterpriseScope,
+  setupMode: EnterpriseSetupMode,
+  operation: "batch" | "realtime" = "batch"
 ): ManagedEnterpriseScopeResolution {
   const state = useEnterpriseIdentityStore.getState();
-  return resolveScope(state.config, scope, setupMode, scopeFailsClosed(state, scope, setupMode));
+  return resolveScope(
+    state.config,
+    scope,
+    setupMode,
+    scopeFailsClosed(state, scope, setupMode),
+    operation
+  );
 }
 
 /** Subscribes to the managed config so the UI re-renders when an administrator changes it. */
 export function useManagedScopeResolution(
-  scope: ManagedEnterpriseScope,
+  scope: InferenceScope,
   setupMode: EnterpriseSetupMode
+): TextScopeResolution;
+export function useManagedScopeResolution(
+  scope: ManagedEnterpriseScope,
+  setupMode: EnterpriseSetupMode,
+  operation?: "batch" | "realtime"
+): ManagedEnterpriseScopeResolution;
+export function useManagedScopeResolution(
+  scope: ManagedEnterpriseScope,
+  setupMode: EnterpriseSetupMode,
+  operation: "batch" | "realtime" = "batch"
 ): ManagedEnterpriseScopeResolution {
   const config = useEnterpriseIdentityStore((state) => state.config);
   const scopeHold = useEnterpriseIdentityStore((state) =>
     scopeFailsClosed(state, scope, setupMode)
   );
-  return resolveScope(config, scope, setupMode, scopeHold);
+  return resolveScope(config, scope, setupMode, scopeHold, operation);
 }

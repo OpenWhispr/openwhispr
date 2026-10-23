@@ -5076,5 +5076,29 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業音訊設定",
+      "description": "在此裝置設定憑證並測試組織的音訊連線。",
+      "provider": "音訊供應商",
+      "gateway": "音訊閘道",
+      "provisioned": "憑證已設定",
+      "credentialMissing": "需要憑證",
+      "proxyCredentialFormat": "代理伺服器請輸入包含 username 和 password 的 JSON；音訊請輸入 API 金鑰。",
+      "probeConsent": "我允許傳送簡短的音訊測試要求，這可能產生供應商費用。",
+      "testBatch": "測試檔案轉錄",
+      "testRealtime": "測試會議連線",
+      "testPassed": "連線測試通過，已向管理員回報。",
+      "testFailed": "連線測試失敗：{{code}}",
+      "setupFailed": "設定失敗。請檢查登入狀態、工作區權限與網路設定。",
+      "saved": "憑證已儲存在此裝置。",
+      "operationUnavailable": "組織尚未設定此音訊操作。",
+      "certificateUnavailable": "組織的憑證組合無法使用。",
+      "partialUpload": "{{count}} 個音訊片段失敗，轉錄不完整。",
+      "importBootstrap": "匯入組織設定",
+      "importedBootstrap": "已匯入設定憑證。",
+      "bootstrapNotFound": "找不到設定檔。"
+    }
   }
 }

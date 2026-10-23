@@ -5076,5 +5076,29 @@
     "permissionDenied": "Verweigert",
     "permissionRestricted": "Eingeschränkt",
     "permissionNotDetermined": "Nicht angefragt"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Enterprise-Audio einrichten",
+      "description": "Zugangsdaten auf diesem Gerät einrichten und die Audioverbindung der Organisation testen.",
+      "provider": "Audioanbieter",
+      "gateway": "Audio-Gateway",
+      "provisioned": "Zugangsdaten eingerichtet",
+      "credentialMissing": "Zugangsdaten erforderlich",
+      "proxyCredentialFormat": "Für einen Proxy JSON mit username und password eingeben. Für Audio den API-Schlüssel eingeben.",
+      "probeConsent": "Ich erlaube kurze Audiotests, die Anbieterkosten verursachen können.",
+      "testBatch": "Dateitranskription testen",
+      "testRealtime": "Besprechungsverbindung testen",
+      "testPassed": "Verbindungstest bestanden und an die Administration gemeldet.",
+      "testFailed": "Verbindungstest fehlgeschlagen: {{code}}",
+      "setupFailed": "Einrichtung fehlgeschlagen. Anmeldung, Zugriffsrechte und Netzwerk prüfen.",
+      "saved": "Zugangsdaten auf diesem Gerät gespeichert.",
+      "operationUnavailable": "Die Organisation hat diesen Audiovorgang nicht eingerichtet.",
+      "certificateUnavailable": "Das Zertifikatspaket der Organisation ist nicht verfügbar.",
+      "partialUpload": "{{count}} Audioabschnitte fehlgeschlagen; das Transkript ist unvollständig.",
+      "importBootstrap": "Organisationskonfiguration importieren",
+      "importedBootstrap": "Zugangsdaten aus der Konfiguration importiert.",
+      "bootstrapNotFound": "Keine Konfigurationsdatei gefunden."
+    }
   }
 }

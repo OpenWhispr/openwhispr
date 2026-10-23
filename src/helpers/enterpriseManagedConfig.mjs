@@ -9,7 +9,7 @@ const ENTERPRISE_INFERENCE_SCOPES = [
 /** The managed speech-to-text scope; resolved from the Azure `transcription` config section. */
 const ENTERPRISE_TRANSCRIPTION_SCOPE = "transcription";
 
-const ENTERPRISE_PROVIDERS = ["bedrock", "azure"];
+const ENTERPRISE_PROVIDERS = ["bedrock", "azure", "openai-compatible"];
 const PROVIDER_MODES = ["disabled", "managed_default", "managed_required"];
 const AWS_ROLE_ARN = /^arn:(aws|aws-us-gov):iam::\d{12}:role\/[A-Za-z0-9+=,.@_/-]{1,512}$/;
 const AWS_REGION = /^[a-z]{2}(?:-gov)?-[a-z]+-\d$/;
@@ -102,6 +102,14 @@ function isValidProviderConfig(record) {
   if (!Number.isSafeInteger(record.version) || record.version < 1) return false;
   const config = record.config;
   if (!config || typeof config !== "object") return false;
+  if (config.network !== undefined && !isValidAudioNetwork(config.network)) return false;
+  if (record.provider === "openai-compatible") {
+    return (
+      Boolean(config.batch || config.realtime) &&
+      (!config.batch || isValidAudioOperation(config.batch, "https:", true)) &&
+      (!config.realtime || isValidAudioOperation(config.realtime, "wss:", true))
+    );
+  }
 
   if (record.provider === "bedrock") {
     const partition = typeof config.roleArn === "string" ? config.roleArn.split(":")[1] : null;
@@ -118,7 +126,10 @@ function isValidProviderConfig(record) {
   // must be present and every present section must be complete.
   const hasLlmSection =
     config.allowedDeployments !== undefined || config.scopeDefaults !== undefined;
-  if (!hasLlmSection && config.transcription === undefined) return false;
+  if (!hasLlmSection && config.transcription === undefined && config.realtime === undefined)
+    return false;
+  if (config.realtime !== undefined && !isValidAudioOperation(config.realtime, "wss:", false))
+    return false;
   if (hasLlmSection && !isValidLlmSection(config.allowedDeployments, config.scopeDefaults)) {
     return false;
   }
@@ -170,21 +181,45 @@ function resolutionError(code, message) {
   return { kind: "error", code, message };
 }
 
-function managedModelFor(record, scope) {
+function managedModelFor(record, scope, operation = "batch") {
   if (scope === ENTERPRISE_TRANSCRIPTION_SCOPE) {
+    if (operation === "realtime") return record.config.realtime?.defaultDeployment;
+    if (record.provider === "openai-compatible") return record.config.batch?.defaultDeployment;
     return record.config.transcription?.defaultDeployment;
   }
   return record.config.scopeDefaults?.[scope];
 }
 
-function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
+function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto", operation = "batch") {
   if (!ENTERPRISE_INFERENCE_SCOPES.includes(scope) && scope !== ENTERPRISE_TRANSCRIPTION_SCOPE) {
     return resolutionError("MANAGED_SCOPE_INVALID", "The requested inference scope is invalid.");
   }
   if (!envelope?.providers?.length) return { kind: "manual" };
 
+  if (scope === ENTERPRISE_TRANSCRIPTION_SCOPE && !["batch", "realtime"].includes(operation))
+    return resolutionError("MANAGED_SCOPE_INVALID", "Unsupported audio operation.");
+  const audioOwners =
+    scope === ENTERPRISE_TRANSCRIPTION_SCOPE
+      ? envelope.providers.filter(
+          (record) =>
+            record.mode !== "disabled" &&
+            (record.config.transcription || record.config.batch || record.config.realtime)
+        )
+      : [];
+  if (
+    audioOwners.some(
+      (record) =>
+        (record.mode === "managed_required" || !record.allowManualSetup) &&
+        !managedModelFor(record, scope, operation)
+    )
+  )
+    return resolutionError(
+      "MANAGED_OPERATION_UNAVAILABLE",
+      "Your organization has not configured this enterprise audio operation."
+    );
   const configured = envelope.providers.filter(
-    (record) => record.mode !== "disabled" && isNonEmptyString(managedModelFor(record, scope))
+    (record) =>
+      record.mode !== "disabled" && isNonEmptyString(managedModelFor(record, scope, operation))
   );
   if (!configured.length) return { kind: "manual" };
 
@@ -204,7 +239,7 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
   return {
     kind: "managed",
     provider: record.provider,
-    model: managedModelFor(record, scope),
+    model: managedModelFor(record, scope, operation),
     mode: record.mode,
     allowManualSetup: record.allowManualSetup,
     record,
@@ -223,12 +258,94 @@ function managedScopesForConfig(config) {
     if (record.mode === "disabled") continue;
     const isEnforced = record.mode === "managed_required" || !record.allowManualSetup;
     for (const scope of [...ENTERPRISE_INFERENCE_SCOPES, ENTERPRISE_TRANSCRIPTION_SCOPE]) {
-      if (!isNonEmptyString(managedModelFor(record, scope))) continue;
+      if (
+        !isNonEmptyString(managedModelFor(record, scope)) &&
+        !(scope === ENTERPRISE_TRANSCRIPTION_SCOPE && record.config.realtime?.defaultDeployment)
+      )
+        continue;
       if (!managed.includes(scope)) managed.push(scope);
       if (isEnforced && !enforced.includes(scope)) enforced.push(scope);
     }
   }
   return { managed, enforced };
+}
+
+function isValidAudioNetwork(network) {
+  if (!network || typeof network !== "object") return false;
+  for (const [key, min, max] of [
+    ["connectTimeoutMs", 1000, 120000],
+    ["httpTimeoutMs", 1000, 600000],
+    ["idleTimeoutMs", 10000, 600000],
+    ["sessionMaxMs", 60000, 3600000],
+  ]) {
+    if (
+      network[key] !== undefined &&
+      (!Number.isInteger(network[key]) || network[key] < min || network[key] > max)
+    )
+      return false;
+  }
+  if (network.caBundleId && !UUID.test(network.caBundleId)) return false;
+  const proxy = network.proxy;
+  if (!proxy) return true;
+  if (
+    !["system", "fixed", "direct"].includes(proxy.mode) ||
+    (proxy.mandatory && proxy.mode === "direct")
+  )
+    return false;
+  if (proxy.mode === "fixed") {
+    try {
+      const url = new URL(proxy.url);
+      if (
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        url.pathname !== "/"
+      )
+        return false;
+    } catch {
+      return false;
+    }
+  }
+  return (
+    !proxy.bypass ||
+    (Array.isArray(proxy.bypass) &&
+      proxy.bypass.length <= 100 &&
+      proxy.bypass.every(isNonEmptyString))
+  );
+}
+
+function isValidAudioOperation(operation, scheme, gateway) {
+  if (!isValidTranscriptionSection(operation)) return false;
+  if (
+    scheme === "wss:" &&
+    (!operation ||
+      !["openai-transcription-preview", "openai-transcription-ga"].includes(operation.protocol) ||
+      operation.sampleRate !== 24000)
+  )
+    return false;
+  if (!gateway)
+    return operation.apiVersion === "v1" || AZURE_LEGACY_API_VERSION.test(operation.apiVersion);
+  try {
+    const url = new URL(operation.endpoint);
+    if (
+      url.protocol !== scheme ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      [...url.searchParams.keys()].some((key) =>
+        /^(api[-_]?key|token|access_token|authorization|secret)$/i.test(key)
+      )
+    )
+      return false;
+  } catch {
+    return false;
+  }
+  return (
+    ["bearer", "api-key"].includes(operation.authentication?.type) &&
+    /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(operation.authentication?.credentialSlot)
+  );
 }
 
 export {

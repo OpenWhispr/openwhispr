@@ -23,6 +23,46 @@ const managedPolicy = {
   minAppVersion: null,
 };
 
+test("enterprise-only transcription policy resolves meeting mode and provider before capture", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _providerSettingsMigrated: "1",
+      uploadTranscriptionMigrated: "true",
+      meetingFollowsTranscription: "false",
+      meetingTranscriptionMode: "openwhispr",
+      meetingCloudTranscriptionProvider: "openai",
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-enterprise-meeting-policy-",
+  });
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { getSettings, useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { isTranscriptionContextAllowed } = await vite.ssrLoadModule("/stores/policyRules.ts");
+  for (const provider of ["azure", "openai-compatible"]) {
+    usePolicyStore.setState({
+      status: "managed",
+      managed: true,
+      appVersion: "1.12.0",
+      policy: {
+        ...managedPolicy,
+        transcription: {
+          allowedModes: ["enterprise"],
+          allowedByokProviders: [],
+          allowedEnterpriseProviders: [provider],
+        },
+      },
+    });
+    assert.equal(getSettings().meetingTranscriptionMode, "enterprise");
+    assert.equal(getSettings().meetingCloudTranscriptionProvider, provider);
+    assert.equal(
+      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting"),
+      true
+    );
+    assert.equal(useSettingsStore.getState().meetingTranscriptionMode, "openwhispr");
+  }
+});
+
 test("runtime settings use managed fallbacks without overwriting raw preferences", async (t) => {
   const browser = installBrowserGlobals(t, {
     initialStorage: {

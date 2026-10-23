@@ -55,6 +55,7 @@ export const useBatchQueueStore = create<BatchQueueStoreState>()(() => ({
 // immediately.
 let runId = 0;
 let activeUploadRequestId: string | null = null;
+let activeUploadProgressCleanup: (() => void) | undefined;
 
 function updateQueue(updater: (prev: QueueItem[]) => QueueItem[]) {
   useBatchQueueStore.setState((s) => ({ queue: updater(s.queue) }));
@@ -95,6 +96,8 @@ export function removeQueueItem(id: string) {
 
 export function cancelBatch() {
   runId++;
+  activeUploadProgressCleanup?.();
+  activeUploadProgressCleanup = undefined;
   if (activeUploadRequestId) {
     window.electronAPI.cancelUploadTranscription?.(activeUploadRequestId);
     activeUploadRequestId = null;
@@ -112,6 +115,8 @@ export function cancelBatch() {
 
 export function clearBatchQueue() {
   runId++;
+  activeUploadProgressCleanup?.();
+  activeUploadProgressCleanup = undefined;
   useBatchQueueStore.setState({ queue: [], isProcessing: false });
 }
 
@@ -203,6 +208,16 @@ export function processBatchQueue(
 
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
+      let cleanupTranscriptionProgress: (() => void) | undefined;
+      if (isManagedTranscriptionActive()) {
+        cleanupTranscriptionProgress = window.electronAPI.onUploadTranscriptionProgress?.(
+          ({ chunksCompleted, chunksTotal }) => {
+            if (chunksTotal > 0)
+              updateItem(item.id, { progress: (chunksCompleted / chunksTotal) * 90 });
+          }
+        );
+        activeUploadProgressCleanup = cleanupTranscriptionProgress;
+      }
       const transcriptionResult = await transcribeFileWithSpeakers(
         filePath,
         transcription,
@@ -210,6 +225,9 @@ export function processBatchQueue(
         durationSeconds,
         { requestId, timestamps: true }
       ).finally(() => {
+        cleanupTranscriptionProgress?.();
+        if (activeUploadProgressCleanup === cleanupTranscriptionProgress)
+          activeUploadProgressCleanup = undefined;
         if (activeUploadRequestId === requestId) activeUploadRequestId = null;
       });
 

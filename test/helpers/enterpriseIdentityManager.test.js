@@ -106,6 +106,8 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
   const runtime = await manager.resolveProvider(request());
   assert.equal(runtime.managed, true);
   assert.equal(runtime.provider, "azure");
+  assert.equal(runtime.mode, "managed_default");
+  assert.equal(runtime.allowManualSetup, true);
   assert.equal(runtime.model, "deployment-a");
   assert.equal(await runtime.tokenProvider(), "azure-bearer-token");
   assert.equal(await runtime.tokenProvider(), "azure-bearer-token");

@@ -1,3 +1,4 @@
+import { EnterpriseAudioSettings } from "./EnterpriseAudioSettings";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, ShieldCheck } from "../icons";
@@ -14,6 +15,8 @@ import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
+import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import { enterpriseProviderName } from "../../models/ModelRegistry";
 
 export function UploadTranscriptionPanel() {
   const { t } = useTranslation();
@@ -40,11 +43,16 @@ export function UploadTranscriptionPanel() {
     setUploadCloudTranscriptionBaseUrl,
     setUploadCloudTranscriptionMode,
     setEnterpriseTranscriptionSetupMode,
+    enterpriseTranscriptionSetupMode,
     uploadRemoteTranscriptionUrl,
     setUploadRemoteTranscriptionUrl,
     uploadRemoteTranscriptionModel,
     setUploadRemoteTranscriptionModel,
   } = useSettingsStore();
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedActive = managed.kind === "managed";
+  const managedRequired =
+    managedActive && (managed.mode === "managed_required" || !managed.allowManualSetup);
   const {
     modes: transcriptionModes,
     effectiveMode: effectiveTranscriptionMode,
@@ -77,7 +85,7 @@ export function UploadTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
-      ...(isEnterpriseTranscriptionOfferable(policySnapshot)
+      ...(managedActive || isEnterpriseTranscriptionOfferable(policySnapshot)
         ? [
             {
               id: "enterprise" as const,
@@ -101,11 +109,11 @@ export function UploadTranscriptionPanel() {
       requestSignIn();
       return;
     }
+    setEnterpriseTranscriptionSetupMode(mode === "enterprise" ? "managed" : "manual");
     if (mode === effectiveTranscriptionMode) return;
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");
     setUploadCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
   };
 
   const handleLocalTranscriptionModelSelect = useCallback(
@@ -155,15 +163,40 @@ export function UploadTranscriptionPanel() {
 
   return (
     <div className="space-y-3">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={effectiveTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
+      <EnterpriseAudioSettings />
+      {managedActive && (
+        <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+          <p className="text-sm font-medium">
+            {t("settingsPage.aiModels.managedEnterprise.title")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {enterpriseProviderName(managed.provider)} · {managed.model}
+          </p>
+        </div>
+      )}
+      {managed.kind === "error" ? (
+        <p role="alert" className="text-sm text-destructive">
+          {managed.messageKey ? t(managed.messageKey) : managed.message}
+        </p>
+      ) : (
+        <InferenceModeSelector
+          modes={
+            managedRequired
+              ? transcriptionModes.filter((mode) => mode.id === "enterprise")
+              : transcriptionModes
+          }
+          activeMode={managedActive ? "enterprise" : effectiveTranscriptionMode}
+          onSelect={handleTranscriptionModeSelect}
+        />
+      )}
 
-      {effectiveTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {effectiveTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {effectiveTranscriptionMode === "self-hosted" && (
+      {managed.kind === "manual" &&
+        effectiveTranscriptionMode === "providers" &&
+        renderTranscriptionPicker("cloud")}
+      {managed.kind === "manual" &&
+        effectiveTranscriptionMode === "local" &&
+        renderTranscriptionPicker("local")}
+      {managed.kind === "manual" && effectiveTranscriptionMode === "self-hosted" && (
         <SelfHostedPanel
           service="transcription"
           url={uploadRemoteTranscriptionUrl}

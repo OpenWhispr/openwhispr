@@ -726,6 +726,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
   managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
+  getPendingEnterpriseAudioTest: (consume = false) =>
+    ipcRenderer.invoke("get-pending-enterprise-audio-test", consume),
+  onEnterpriseAudioTestRequested: registerListener(
+    "enterprise-audio-test-requested",
+    (callback) => () => callback()
+  ),
+  enterpriseAudioImportBootstrap: (data) =>
+    ipcRenderer.invoke("enterprise-audio-import-bootstrap", data),
+  enterpriseAudioStatus: (data) => ipcRenderer.invoke("enterprise-audio-status", data),
+  enterpriseAudioSaveCredential: (data) =>
+    ipcRenderer.invoke("enterprise-audio-save-credential", data),
+  enterpriseAudioTest: (data) => ipcRenderer.invoke("enterprise-audio-test", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
