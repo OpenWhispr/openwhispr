@@ -250,7 +250,77 @@ test("a missing parent preflight preserves the current session, messages and own
   assert.equal((await h.db.api.claimAgentConversation(id, "peer")).owned, false);
 });
 
-for (const leave of ["new chat", "account"]) {
+for (const phase of ["preflight", "release", "claim"]) {
+  for (const firstFinished of ["earlier", "later"]) {
+    test(`the last selected chat wins with ${phase} pending and ${firstFinished} finishing first`, async (t) => {
+      const h = await mountPersistence(t);
+      const original = await h.db.api.createAgentConversation("Original");
+      const earlier = await h.db.api.createAgentConversation("Earlier selection");
+      const later = await h.db.api.createAgentConversation("Later selection");
+      for (const conversation of [original, earlier, later]) {
+        await h.db.api.addAgentMessage(conversation.id, "user", conversation.title);
+      }
+      await h.act(() => h.current().loadConversation(original.id));
+      if (phase === "release") await h.act(() => h.current().claimConversation(original.id));
+
+      const get = h.db.api.getAgentConversation;
+      const claim = h.db.api.claimAgentConversation;
+      const release = h.db.api.releaseAgentConversation;
+      const finish = new Map();
+      h.db.api.getAgentConversation = (id) =>
+        id === later.id || (phase === "preflight" && id === earlier.id)
+          ? new Promise((resolve) => finish.set(id, () => resolve(get(id))))
+          : get(id);
+      if (phase === "release") {
+        h.db.api.releaseAgentConversation = (id, owner) =>
+          id === original.id
+            ? new Promise((resolve) => finish.set(earlier.id, () => resolve(release(id, owner))))
+            : release(id, owner);
+      } else if (phase === "claim") {
+        h.db.api.claimAgentConversation = (id, owner) =>
+          id === earlier.id
+            ? new Promise((resolve) => finish.set(id, () => resolve(claim(id, owner))))
+            : claim(id, owner);
+      }
+      const stopped = [];
+      let first, second;
+      await h.act(() => {
+        first = h.current().loadConversation(earlier.id, () => stopped.push(earlier.id));
+      });
+      await h.act(() => {
+        second = h.current().loadConversation(later.id, () => stopped.push(later.id));
+      });
+      assert.ok(finish.has(earlier.id), "the earlier switch reached the held operation");
+      assert.ok(finish.has(later.id), "the later selection is waiting on its preflight");
+
+      const order = firstFinished === "earlier" ? [earlier.id, later.id] : [later.id, earlier.id];
+      await h.act(() => finish.get(order[0])());
+      if (firstFinished === "earlier") {
+        assert.equal(h.current().conversationId, original.id, "a stale selection never opens");
+      }
+      await h.act(() => finish.get(order[1])());
+      let results;
+      await h.act(async () => {
+        results = await Promise.all([first, second]);
+      });
+      assert.deepEqual(results, [false, true]);
+      assert.equal(h.current().conversationId, later.id);
+      assert.deepEqual(
+        h.current().messages.map((message) => message.content),
+        [later.title]
+      );
+      if (phase === "preflight") assert.deepEqual(stopped, [later.id]);
+      if (phase === "claim") {
+        assert.equal((await claim(earlier.id, "peer")).owned, true, "the stale claim was released");
+      }
+      await h.act(() => h.current().saveUserMessage("Follow up"));
+      assert.equal(h.db.calls.add.at(-1).conversation_id, later.id);
+      assert.equal(h.db.rows.filter((row) => row.conversation_id === earlier.id).length, 1);
+    });
+  }
+}
+
+for (const leave of ["new chat", "account", "unmount"]) {
   test(`a parent preflight that resolves after ${leave} cannot stop or replace it`, async (t) => {
     const h = await mountPersistence(t);
     let finish;
@@ -265,11 +335,13 @@ for (const leave of ["new chat", "account"]) {
         stopped = true;
       });
     });
-    await h.act(() => {
-      if (leave === "account") h.db.emitScope({ accountId: "account-b", authGeneration: 2 });
-      else h.current().handleNewChat();
-      h.current().setMessages([message("new", "user", "Replacement")]);
-    });
+    if (leave === "unmount") await h.unmount();
+    else
+      await h.act(() => {
+        if (leave === "account") h.db.emitScope({ accountId: "account-b", authGeneration: 2 });
+        else h.current().handleNewChat();
+        h.current().setMessages([message("new", "user", "Replacement")]);
+      });
     let result;
     await h.act(async () => {
       finish({ id: 9, title: "Old parent", messages: [] });
@@ -277,8 +349,10 @@ for (const leave of ["new chat", "account"]) {
     });
     assert.equal(result, false);
     assert.equal(stopped, false);
-    assert.equal(h.current().conversationId, null);
-    assert.equal(h.current().messages[0].content, "Replacement");
+    if (leave !== "unmount") {
+      assert.equal(h.current().conversationId, null);
+      assert.equal(h.current().messages[0].content, "Replacement");
+    }
   });
 }
 

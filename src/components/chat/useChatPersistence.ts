@@ -87,6 +87,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   // completed in place rather than added twice.
   const savedRowsRef = useRef(new Map<string, Promise<number | null>>());
   const sessionVersionRef = useRef(0);
+  const loadVersionRef = useRef(0);
   const accountVersionRef = useRef(0);
   const ownerIdRef = useRef(crypto.randomUUID());
   const ownedConversationRef = useRef<number | null>(null);
@@ -199,10 +200,12 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const loadConversation = useCallback(
     async (id: number, beforeOpen?: () => void) => {
+      const loadVersion = ++loadVersionRef.current;
       if (beforeOpen) {
         const version = sessionVersionRef.current;
         const target = await window.electronAPI?.getAgentConversation?.(id);
-        if (version !== sessionVersionRef.current) return false;
+        if (version !== sessionVersionRef.current || loadVersion !== loadVersionRef.current)
+          return false;
         if (!target) return null;
         beforeOpen();
       }
@@ -210,7 +213,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       if (ownedConversationRef.current != null)
         await releaseConversation(ownedConversationRef.current);
       await releasingRef.current;
-      if (version !== sessionVersionRef.current) return false;
+      if (version !== sessionVersionRef.current || loadVersion !== loadVersionRef.current)
+        return false;
       const ownerId = crypto.randomUUID();
       ownerIdRef.current = ownerId;
       blockedConversationRef.current = null;
@@ -219,13 +223,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         ? claim.conversation
         : await window.electronAPI?.getAgentConversation?.(id);
       if (claim?.owned) {
-        if (version !== sessionVersionRef.current) {
+        if (version !== sessionVersionRef.current || loadVersion !== loadVersionRef.current) {
           void window.electronAPI?.releaseAgentConversation?.(id, ownerId);
           return false;
         }
         ownedConversationRef.current = id;
       }
-      if (version !== sessionVersionRef.current) return false;
+      if (version !== sessionVersionRef.current || loadVersion !== loadVersionRef.current)
+        return false;
       if (!conv) {
         // The conversation was deleted elsewhere (e.g. ControlPanel history).
         // Clear the id, or every subsequent save silently no-ops against the

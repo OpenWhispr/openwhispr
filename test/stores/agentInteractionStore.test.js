@@ -74,12 +74,14 @@ const QUESTIONS = {
 test("dismissing a calendar card cancels its actual request and fences late settings writes", async () => {
   for (const provider of ["google", "microsoft", "apple"]) {
     let finish, requestId;
+    const started = Promise.withResolvers();
     const cancelled = [],
       wrongCancels = [];
     const connect = (id) => {
       requestId = id;
       return new Promise((resolve) => {
         finish = resolve;
+        started.resolve();
       });
     };
     const store = await loadStore({
@@ -104,7 +106,7 @@ test("dismissing a calendar card cancels its actual request and fences late sett
     });
     const key = `m1::calendar-${provider}`;
     const connecting = store.connectInteraction(key, provider);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await started.promise;
     store.cancelInteraction(key);
     finish({ success: true, email: "late@calendar.test" });
     await connecting;
