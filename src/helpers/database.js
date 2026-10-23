@@ -1498,7 +1498,8 @@ class DatabaseManager {
       }
 
       // Rebuild folders to drop the table-level UNIQUE(name); per-space name
-      // uniqueness is enforced by idx_folders_space_name below.
+      // uniqueness is enforced by idx_folders_space_legacy_name and
+      // idx_folders_space_account_name below.
       // better-sqlite3 enables foreign_keys by default, so DROP TABLE folders
       // would fail while notes.folder_id rows reference it; the pragma is a
       // no-op inside a transaction, so toggle it around the rebuild.
@@ -1542,10 +1543,6 @@ class DatabaseManager {
           if (foreignKeysWereOn) this.db.pragma("foreign_keys = ON");
         }
       }
-      this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_name ON folders(space_id, name) WHERE deleted_at IS NULL"
-      );
-
       const privateSpace = this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get();
       this.db
         .prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL")
@@ -1576,6 +1573,9 @@ class DatabaseManager {
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_account_id ON notes(account_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_account_id ON folders(account_id)");
+      // Builds before per-account folders kept names unique per space alone,
+      // which fails once two accounts' default folders share a space; never
+      // re-create it, or launch fails on such a database.
       this.db.exec("DROP INDEX IF EXISTS idx_folders_space_name");
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_legacy_name ON folders(space_id, name) WHERE deleted_at IS NULL AND account_id IS NULL"
@@ -7687,10 +7687,11 @@ class DatabaseManager {
           updatedAt
         );
       } catch (err) {
-        // A live same-named folder already exists in this space (partial unique
-        // index idx_folders_space_name is a different conflict target than the
-        // client_folder_id upsert). Converge on the existing folder by adopting
-        // the cloud row's identity instead of wedging the pull.
+        // A live same-named folder of the same owner already exists in this
+        // space (the partial unique name indexes are a different conflict
+        // target than the client_folder_id upsert). Converge on the existing
+        // folder by adopting the cloud row's identity instead of wedging the
+        // pull.
         // Match the error code, not the message text (which SQLite could
         // reformat); the column check keeps client_folder_id collisions on
         // the rethrow path.
