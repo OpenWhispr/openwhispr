@@ -15,6 +15,7 @@ import type {
 import type { CalendarAccount, MicrosoftCalendarAccount } from "../types/calendar";
 import { normalizeEmailDraftTarget, type EmailDraftTargetSetting } from "../utils/emailDraftTarget";
 import { normalizeToneStyles, type ToneStyles } from "../config/toneStyle";
+import { normalizePolishStrength, normalizeTransformAutoApply } from "../helpers/transforms";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
 import {
@@ -895,6 +896,12 @@ function migrateRetiredCloudModels() {
 
 migrateRetiredCloudModels();
 
+/** The transform auto-apply runs on each dictation, or "off". */
+export type TransformAutoApplySetting = "off" | "polish" | "promptEngineer";
+
+/** Light corrects without rewriting; Strong rewrites like an editor. */
+export type PolishStrengthSetting = "light" | "strong";
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -1219,6 +1226,14 @@ export interface SettingsState
   setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
   setTranslationKey: (key: string) => Promise<HotkeyRegistrationResult>;
+  polishKey: string;
+  setPolishKey: (key: string) => Promise<HotkeyRegistrationResult>;
+  promptEngineerKey: string;
+  setPromptEngineerKey: (key: string) => Promise<HotkeyRegistrationResult>;
+  transformAutoApply: TransformAutoApplySetting;
+  setTransformAutoApply: (value: TransformAutoApplySetting) => void;
+  polishStrength: PolishStrengthSetting;
+  setPolishStrength: (value: PolishStrengthSetting) => void;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -1340,7 +1355,7 @@ function createNumberSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "voiceAgentKey" | "translationKey",
+  key: "voiceAgentKey" | "translationKey" | "polishKey" | "promptEngineerKey",
   label: string,
   getRegisterFn: () => ((hotkey: string) => Promise<HotkeyRegistrationResult>) | undefined,
   fallbackSave?: (hotkey: string) => void
@@ -1625,6 +1640,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   translationKey: readString("translationKey", ""),
+  polishKey: readString("polishKey", ""),
+  promptEngineerKey: readString("promptEngineerKey", ""),
+  transformAutoApply: normalizeTransformAutoApply(
+    readString("transformAutoApply", "off")
+  ) as TransformAutoApplySetting,
+  polishStrength: normalizePolishStrength(
+    readString("polishStrength", "light")
+  ) as PolishStrengthSetting,
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   spokenLanguages: readStringArray("spokenLanguages", []),
@@ -2363,6 +2386,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "translation hotkey",
     () => window.electronAPI?.updateTranslationHotkey
   ),
+  setPolishKey: createRegisteredHotkeySetter(
+    "polishKey",
+    "polish hotkey",
+    () => window.electronAPI?.updatePolishHotkey
+  ),
+  setPromptEngineerKey: createRegisteredHotkeySetter(
+    "promptEngineerKey",
+    "prompt engineer hotkey",
+    () => window.electronAPI?.updatePromptEngineerHotkey
+  ),
+  setTransformAutoApply: createStringSetter("transformAutoApply"),
+  setPolishStrength: createStringSetter("polishStrength"),
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
     if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
@@ -3587,6 +3622,25 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // Sync the Polish and Prompt Engineer hotkeys from main process
+    for (const [key, getKey] of [
+      ["polishKey", window.electronAPI.getPolishKey],
+      ["promptEngineerKey", window.electronAPI.getPromptEngineerKey],
+    ] as const) {
+      try {
+        const envKey = await getKey?.();
+        if (envKey && envKey !== state[key]) {
+          createStringSetter(key)(envKey);
+        }
+      } catch (err) {
+        logger.warn(
+          `Failed to sync ${key} on startup`,
+          { error: (err as Error).message },
+          "settings"
+        );
+      }
+    }
+
     try {
       let envMode = await window.electronAPI.getActivationMode?.();
       if (envMode && envMode !== state.activationMode) {
@@ -3836,6 +3890,10 @@ export async function initializeSettings(): Promise<void> {
       value = normalizeEmailDraftTarget(newValue);
     } else if (key === "toneStyles") {
       value = normalizeToneStyles(newValue);
+    } else if (key === "transformAutoApply") {
+      value = normalizeTransformAutoApply(newValue);
+    } else if (key === "polishStrength") {
+      value = normalizePolishStrength(newValue);
     } else {
       value = newValue;
     }

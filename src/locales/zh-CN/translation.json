@@ -2186,6 +2186,14 @@
       "translationHotkey": {
         "title": "翻译快捷键",
         "description": "用任何语言听写——粘贴的文本会自动翻译"
+      },
+      "polishHotkey": {
+        "title": "润色快捷键",
+        "description": "在任意应用中选中文本后按此快捷键，即可原地改写：修正语法、去掉口头禅、表达更清楚，并采用语气与风格中设置的语气。使用你的听写清理模型。"
+      },
+      "promptEngineerHotkey": {
+        "title": "提示词工程师快捷键",
+        "description": "在任意应用中选中文本后按此快捷键，即可将其原地改写为给 AI 助手的详细提示词。使用你的听写清理模型。"
       }
     },
     "permissions": {
@@ -2627,6 +2635,30 @@
       "upgradeCta": "立即升级",
       "upgradedTitle": "已升级到 Enterprise",
       "upgradedDescription": "{{workspace}} 现已升级到 Enterprise。"
+    },
+    "transforms": {
+      "title": "润色与提示词工程师",
+      "description": "使用上方的听写清理模型改写文本，即使关闭了文本清理也可以。选中文本后按「设置 → 快捷键」中设置的快捷键，或在每次听写后自动运行其中一项。",
+      "autoApply": {
+        "label": "每次听写后应用",
+        "description": "在粘贴前改写每次听写的内容。助手命令和翻译保持不变。",
+        "options": {
+          "off": "关闭",
+          "polish": "润色",
+          "promptEngineer": "提示词工程师"
+        }
+      },
+      "polishStrength": {
+        "label": "润色强度",
+        "options": {
+          "light": "轻度",
+          "strong": "强力"
+        },
+        "descriptions": {
+          "light": "修正语法、口头禅和标点，保持你的句子不变。适合小型本地模型。",
+          "strong": "像编辑一样改写：先说重点、删去冗词并整理成列表。最适合大型或云端模型。"
+        }
+      }
     }
   },
   "models": {
@@ -5080,5 +5112,28 @@
     "permissionDenied": "已拒绝",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
+  },
+  "transforms": {
+    "names": {
+      "polish": "润色",
+      "promptEngineer": "提示词工程师"
+    },
+    "errors": {
+      "title": "{{name}}未能运行",
+      "notAppliedTitle": "{{name}}未应用",
+      "onClipboard": "结果已复制到剪贴板。",
+      "noModel": "请先在「设置 → 语言模型」中设置听写清理模型。",
+      "nothingSelected": "请先选中一些文本，然后再按快捷键。",
+      "tooLarge": "选中的内容过长。请选择不超过 6,000 个字符。",
+      "changed": "在 OpenWhispr 读取之前，选中的文本或应用已发生变化。未做任何更改。",
+      "unavailable": "OpenWhispr 无法读取选中的文本。请检查辅助功能或输入自动化权限后重试。",
+      "failed": "AI 未能完成。你的文本未被更改。",
+      "invalidResponse": "AI 返回了无效的结果。你的文本未被更改。",
+      "emptyResponse": "AI 返回了空结果。你的文本未被更改。",
+      "truncatedResponse": "AI 在完成前停止了。你的文本未被更改。请尝试减少文本。"
+    },
+    "autoApply": {
+      "failedTitle": "{{name}}未能在本次听写中运行"
+    }
   }
 }

@@ -2480,6 +2480,14 @@
       "translationHotkey": {
         "title": "Raccourci de Traduction",
         "description": "Dictez dans n'importe quelle langue : le texte collé ressort traduit"
+      },
+      "polishHotkey": {
+        "title": "Raccourci Peaufiner",
+        "description": "Sélectionnez du texte dans n'importe quelle app et appuyez sur ce raccourci pour le réécrire sur place : grammaire corrigée, hésitations supprimées, plus clair et dans votre ton de Ton et style. Utilise votre modèle de Nettoyage de la dictée."
+      },
+      "promptEngineerHotkey": {
+        "title": "Raccourci Ingénieur de prompts",
+        "description": "Sélectionnez du texte dans n'importe quelle app et appuyez sur ce raccourci pour le réécrire sur place en prompt détaillé pour un assistant IA. Utilise votre modèle de Nettoyage de la dictée."
       }
     },
     "permissions": {
@@ -2721,6 +2729,30 @@
       "upgradeCta": "Mettre à niveau",
       "upgradedTitle": "Mise à niveau effectuée",
       "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
+    },
+    "transforms": {
+      "title": "Peaufiner et Ingénieur de prompts",
+      "description": "Réécrivez du texte avec le modèle de Nettoyage de la dictée ci-dessus, même quand le nettoyage du texte est désactivé. Sélectionnez du texte et appuyez sur les raccourcis définis dans Paramètres → Raccourcis, ou appliquez-en un à chaque dictée.",
+      "autoApply": {
+        "label": "Appliquer après chaque dictée",
+        "description": "Réécrit chaque dictée avant de la coller. Les commandes de l'assistant et les traductions restent inchangées.",
+        "options": {
+          "off": "Désactivé",
+          "polish": "Peaufiner",
+          "promptEngineer": "Ingénieur de prompts"
+        }
+      },
+      "polishStrength": {
+        "label": "Intensité de Peaufiner",
+        "options": {
+          "light": "Légère",
+          "strong": "Forte"
+        },
+        "descriptions": {
+          "light": "Corrige la grammaire, les hésitations et la ponctuation, et garde vos phrases telles quelles. Sûre avec les petits modèles locaux.",
+          "strong": "Réécrit comme un éditeur : commence par l'essentiel, supprime les longueurs et crée des listes. Idéale avec un grand modèle ou un modèle hébergé."
+        }
+      }
     }
   },
   "models": {
@@ -5080,5 +5112,28 @@
     "permissionDenied": "Refusé",
     "permissionRestricted": "Restreint",
     "permissionNotDetermined": "Non demandé"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Peaufiner",
+      "promptEngineer": "Ingénieur de prompts"
+    },
+    "errors": {
+      "title": "{{name}} n'a pas pu s'exécuter",
+      "notAppliedTitle": "{{name}} non appliqué",
+      "onClipboard": "Le résultat est dans votre presse-papiers.",
+      "noModel": "Configurez d'abord un modèle de Nettoyage de la dictée dans Paramètres → Modèles de langage.",
+      "nothingSelected": "Sélectionnez d'abord du texte, puis appuyez sur le raccourci.",
+      "tooLarge": "La sélection est trop longue. Sélectionnez 6 000 caractères ou moins.",
+      "changed": "Le texte sélectionné ou l'app a changé avant qu'OpenWhispr puisse le lire. Rien n'a été modifié.",
+      "unavailable": "OpenWhispr n'a pas pu lire le texte sélectionné. Vérifiez les autorisations d'accessibilité ou d'automatisation de saisie, puis réessayez.",
+      "failed": "L'IA n'a pas pu terminer. Votre texte n'a pas été modifié.",
+      "invalidResponse": "L'IA a renvoyé un résultat non valide. Votre texte n'a pas été modifié.",
+      "emptyResponse": "L'IA a renvoyé un résultat vide. Votre texte n'a pas été modifié.",
+      "truncatedResponse": "L'IA s'est arrêtée avant la fin. Votre texte n'a pas été modifié. Essayez avec moins de texte."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} n'a pas pu s'exécuter sur cette dictée"
+    }
   }
 }

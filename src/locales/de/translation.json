@@ -2480,6 +2480,14 @@
       "translationHotkey": {
         "title": "Übersetzungs-Hotkey",
         "description": "Diktiere in beliebiger Sprache — der eingefügte Text kommt übersetzt heraus"
+      },
+      "polishHotkey": {
+        "title": "Aufpolieren-Hotkey",
+        "description": "Markiere Text in einer beliebigen App und drücke diesen Hotkey, um ihn direkt umzuschreiben: Grammatik korrigiert, Füllwörter entfernt, klarer und in deinem Ton aus Ton & Stil. Verwendet dein Modell für die Diktat-Bereinigung."
+      },
+      "promptEngineerHotkey": {
+        "title": "Prompt-Engineer-Hotkey",
+        "description": "Markiere Text in einer beliebigen App und drücke diesen Hotkey, um ihn direkt in einen ausführlichen Prompt für einen KI-Assistenten umzuschreiben. Verwendet dein Modell für die Diktat-Bereinigung."
       }
     },
     "permissions": {
@@ -2721,6 +2729,30 @@
       "upgradeCta": "Jetzt upgraden",
       "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
       "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
+    },
+    "transforms": {
+      "title": "Aufpolieren und Prompt-Engineer",
+      "description": "Schreibe Text mit dem Modell für die Diktat-Bereinigung oben um, auch wenn die Textbereinigung aus ist. Markiere Text und drücke die Hotkeys aus Einstellungen → Hotkeys, oder wende einen davon auf jedes Diktat an.",
+      "autoApply": {
+        "label": "Nach jedem Diktat anwenden",
+        "description": "Schreibt jedes Diktat vor dem Einfügen um. Assistentenbefehle und Übersetzungen bleiben unverändert.",
+        "options": {
+          "off": "Aus",
+          "polish": "Aufpolieren",
+          "promptEngineer": "Prompt-Engineer"
+        }
+      },
+      "polishStrength": {
+        "label": "Stärke von Aufpolieren",
+        "options": {
+          "light": "Leicht",
+          "strong": "Stark"
+        },
+        "descriptions": {
+          "light": "Korrigiert Grammatik, Füllwörter und Zeichensetzung und lässt deine Sätze, wie sie sind. Sicher mit kleinen lokalen Modellen.",
+          "strong": "Schreibt wie ein Lektor um: stellt deinen Punkt an den Anfang, kürzt Weitschweifiges und macht Listen. Am besten mit einem großen oder gehosteten Modell."
+        }
+      }
     }
   },
   "models": {
@@ -5080,5 +5112,28 @@
     "permissionDenied": "Verweigert",
     "permissionRestricted": "Eingeschränkt",
     "permissionNotDetermined": "Nicht angefragt"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Aufpolieren",
+      "promptEngineer": "Prompt-Engineer"
+    },
+    "errors": {
+      "title": "{{name}} wurde nicht ausgeführt",
+      "notAppliedTitle": "{{name}} nicht angewendet",
+      "onClipboard": "Das Ergebnis liegt in deiner Zwischenablage.",
+      "noModel": "Richte zuerst ein Modell für die Diktat-Bereinigung unter Einstellungen → Sprachmodelle ein.",
+      "nothingSelected": "Markiere zuerst Text und drücke dann den Hotkey.",
+      "tooLarge": "Die Auswahl ist zu lang. Markiere höchstens 6.000 Zeichen.",
+      "changed": "Der markierte Text oder die App hat sich geändert, bevor OpenWhispr ihn lesen konnte. Es wurde nichts geändert.",
+      "unavailable": "OpenWhispr konnte den markierten Text nicht lesen. Prüfe die Berechtigungen für Bedienungshilfen oder Eingabeautomatisierung und versuche es erneut.",
+      "failed": "Die KI konnte nicht fertig werden. Dein Text wurde nicht geändert.",
+      "invalidResponse": "Die KI hat ein ungültiges Ergebnis geliefert. Dein Text wurde nicht geändert.",
+      "emptyResponse": "Die KI hat ein leeres Ergebnis geliefert. Dein Text wurde nicht geändert.",
+      "truncatedResponse": "Die KI hat vor dem Ende aufgehört. Dein Text wurde nicht geändert. Versuche es mit weniger Text."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} wurde bei diesem Diktat nicht ausgeführt"
+    }
   }
 }
