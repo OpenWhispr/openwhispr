@@ -220,7 +220,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
           );
           const finalText = processedResult.text;
 
-          await addTranscript({
+          const saved = await addTranscript({
             id: transcriptId,
             text: finalText,
             originalText: processedResult.originalText,
@@ -235,10 +235,15 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             cleanupWarning: processedResult.transcription.cleanupWarning,
             requestContext: 'file',
             jobId: transcriptId,
-          });
+          }).then(
+            () => true,
+            () => false,
+          );
 
           setCurrentText(finalText);
           options.onComplete?.(finalText);
+          if (!saved)
+            options.onError?.(new Error('Your transcript could not be saved to history.'));
         } finally {
           await AudioTools.cleanup(tempUris);
         }

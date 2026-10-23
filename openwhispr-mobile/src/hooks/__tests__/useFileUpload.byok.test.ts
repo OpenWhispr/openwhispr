@@ -7,6 +7,7 @@ const mockTranscribeAndCleanup = jest.fn();
 const mockRetainTranscriptAudio = jest.fn();
 const mockAddTranscript = jest.fn();
 const mockAddFailedTranscript = jest.fn();
+const mockIsLocalModelMissingError = jest.fn();
 
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: (...args: unknown[]): unknown => mockGetDocumentAsync(...args),
@@ -19,7 +20,7 @@ jest.mock('../../../modules/audio-tools/src', () => ({
 }));
 jest.mock('../../services/transcription/TranscriptionService', () => ({
   isOggOpus: () => false,
-  isLocalModelMissingError: () => false,
+  isLocalModelMissingError: (error: unknown): unknown => mockIsLocalModelMissingError(error),
 }));
 jest.mock('../../store/useTranscriptStore', () => ({
   createTranscriptId: () => 'upload-1',
@@ -78,6 +79,9 @@ async function upload(): Promise<{ error?: Error; onError: jest.Mock }> {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAddTranscript.mockResolvedValue(undefined);
+  mockAddFailedTranscript.mockResolvedValue(undefined);
+  mockIsLocalModelMissingError.mockReturnValue(false);
   mockSnapshotTranscriptionJob.mockReturnValue(byokRoute);
   mockGetInfoAsync.mockResolvedValue({ exists: true, size: 1 * MB });
   mockRetainTranscriptAudio.mockResolvedValue('file://docs/transcript-audio/upload-1.m4a');
@@ -128,4 +132,104 @@ describe('provider uploads that the provider would reject', () => {
     expect(error).toBeUndefined();
     expect(mockTranscribeAndCleanup).toHaveBeenCalled();
   });
+});
+
+describe('delivering a completed upload when history is unavailable', () => {
+  it('delivers the cleaned result exactly once and reports history failure separately', async () => {
+    mockSnapshotTranscriptionJob.mockReturnValue({ provider: 'cloud' });
+    pick({ name: 'voice.m4a', size: 1 * MB });
+    mockTranscribeAndCleanup.mockResolvedValue({
+      text: 'Final cleaned upload.',
+      originalText: 'raw upload',
+      transcription: { text: 'Final cleaned upload.', provider: 'cloud' },
+    });
+    mockAddTranscript.mockRejectedValueOnce(new Error('disk full'));
+    const onComplete = jest.fn();
+    const onError = jest.fn();
+    const { result } = renderHook(() => useFileUpload({ onComplete, onError }));
+    await act(async () => {
+      await result.current.pickAndTranscribeFile().catch(() => undefined);
+    });
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete).toHaveBeenCalledWith('Final cleaned upload.');
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('could not be saved') }),
+    );
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onComplete.mock.invocationCallOrder[0]).toBeLessThan(
+      onError.mock.invocationCallOrder[0],
+    );
+    expect(result.current.currentText).toBe('Final cleaned upload.');
+    expect(result.current.isProcessing).toBe(false);
+    expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+  });
+});
+
+it('delivers a successfully saved upload once', async () => {
+  pick({ name: 'voice.m4a', size: 1 * MB });
+  mockAddTranscript.mockResolvedValueOnce(undefined);
+  const onComplete = jest.fn();
+  const onError = jest.fn();
+  const { result } = renderHook(() => useFileUpload({ onComplete, onError }));
+  await act(async () => {
+    await result.current.pickAndTranscribeFile();
+  });
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith('hello');
+  expect(onError).not.toHaveBeenCalled();
+  expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+});
+
+it('still reports a genuine provider failure without delivering a result', async () => {
+  pick({ name: 'voice.m4a', size: 1 * MB });
+  const providerError = new Error('Provider unavailable');
+  mockTranscribeAndCleanup.mockRejectedValueOnce(providerError);
+  const onComplete = jest.fn();
+  const onError = jest.fn();
+  const { result } = renderHook(() => useFileUpload({ onComplete, onError }));
+  await act(async () => {
+    await expect(result.current.pickAndTranscribeFile()).rejects.toThrow('Provider unavailable');
+  });
+  expect(onComplete).not.toHaveBeenCalled();
+  expect(onError).toHaveBeenCalledWith(providerError);
+  expect(mockAddTranscript).not.toHaveBeenCalled();
+  expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+    expect.objectContaining({ errorMessage: 'Provider unavailable' }),
+  );
+});
+
+it('delivers a consented cloud retry even when its history write fails', async () => {
+  mockSnapshotTranscriptionJob.mockReturnValue({ provider: 'local' });
+  pick({ name: 'voice.m4a', size: 1 * MB });
+  const modelError = new Error('Local model missing');
+  mockIsLocalModelMissingError.mockImplementation((error) => error === modelError);
+  mockTranscribeAndCleanup.mockRejectedValueOnce(modelError);
+  const onLocalModelMissing = jest.fn();
+  const onComplete = jest.fn();
+  const onError = jest.fn();
+  const { result } = renderHook(() => useFileUpload({ onLocalModelMissing, onComplete, onError }));
+  await act(async () => {
+    await result.current.pickAndTranscribeFile();
+  });
+  expect(onLocalModelMissing).toHaveBeenCalledTimes(1);
+  expect(mockAddFailedTranscript).toHaveBeenCalledTimes(1);
+  expect(onComplete).not.toHaveBeenCalled();
+  mockAddTranscript.mockRejectedValueOnce(new Error('disk full'));
+  await act(async () => {
+    await onLocalModelMissing.mock.calls[0][0]();
+  });
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledTimes(2);
+  expect(mockTranscribeAndCleanup).toHaveBeenLastCalledWith(
+    expect.objectContaining({ provider: 'cloud' }),
+    expect.anything(),
+  );
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onComplete).toHaveBeenCalledWith('hello');
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(onError).toHaveBeenCalledWith(
+    expect.objectContaining({ message: 'Your transcript could not be saved to history.' }),
+  );
+  expect(mockAddFailedTranscript).toHaveBeenCalledTimes(1);
+  expect(result.current.isProcessing).toBe(false);
 });
