@@ -3413,7 +3413,11 @@ class DatabaseManager {
         params.push(spaceId);
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
-      const stmt = this.db.prepare(`SELECT * FROM notes ${where} ORDER BY updated_at DESC LIMIT ?`);
+      // Sort by time, not text: pulled notes keep the cloud's ISO updated_at
+      // ("...T...Z") while local writes store "YYYY-MM-DD HH:MM:SS".
+      const stmt = this.db.prepare(
+        `SELECT * FROM notes ${where} ORDER BY julianday(updated_at) DESC LIMIT ?`
+      );
       params.push(limit);
       return stmt.all(...params);
     } catch (error) {
@@ -3432,7 +3436,7 @@ class DatabaseManager {
         .prepare(
           `SELECT * FROM notes
            WHERE space_id = ? AND deleted_at IS NULL AND ${accountScope.sql}
-           ORDER BY updated_at DESC LIMIT ?`
+           ORDER BY julianday(updated_at) DESC LIMIT ?`
         )
         .all(spaceId, ...accountScope.params, limit);
     } catch (error) {
@@ -4768,7 +4772,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE c.note_id = ? AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY julianday(c.updated_at) DESC
           LIMIT ?`
         )
         .all(noteId, limit);
@@ -4804,7 +4808,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           WHERE ${scopeFilter} AND c.deleted_at IS NULL
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY julianday(c.updated_at) DESC
           LIMIT ?`
         )
         .all(...params);
@@ -4823,7 +4827,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY updated_at DESC LIMIT ?"
+          "SELECT * FROM agent_conversations WHERE deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL ORDER BY julianday(updated_at) DESC LIMIT ?"
         )
         .all(limit);
     } catch (error) {
@@ -6130,7 +6134,7 @@ class DatabaseManager {
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           ${archiveFilter}
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY julianday(c.updated_at) DESC
           LIMIT ? OFFSET ?`
         )
         .all(limit, offset);
@@ -6161,7 +6165,7 @@ class DatabaseManager {
             AND c.space_id IS NULL AND c.folder_id IS NULL
             AND (c.title LIKE ? OR ms.content LIKE ?)
           GROUP BY c.id
-          ORDER BY c.updated_at DESC
+          ORDER BY julianday(c.updated_at) DESC
           LIMIT ?`
         )
         .all(pattern, pattern, limit);

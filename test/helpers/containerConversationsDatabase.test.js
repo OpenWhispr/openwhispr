@@ -230,6 +230,70 @@ test("global conversation lists and search exclude space and folder chats", (t) 
   assert.equal(db.getConversationsForContainer(space.id, folder.id)[0].id, folderScoped.id);
 });
 
+test("conversation lists order cloud ISO and local SQLite timestamps by time", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const space = createTestTeamSpace(db, { name: "Eng" }).space;
+  const folder = db.createFolder("Docs", space.id).folder;
+  const note = db.saveNote("Roadmap source", "body").note;
+  const pinUpdatedAt = (id) =>
+    db.db
+      .prepare("UPDATE agent_conversations SET updated_at = '2026-10-22 03:44:07' WHERE id = ?")
+      .run(id);
+
+  // Pulled conversations keep the cloud's ISO updated_at; local writes store
+  // SQLite's "YYYY-MM-DD HH:MM:SS". On the same UTC day 'T' sorts above ' '.
+  const pulled = db.upsertConversationFromCloud(
+    {
+      id: "cloud-conv-pulled",
+      client_conversation_id: "client-conv-pulled",
+      title: "Roadmap pulled earlier",
+      note_id: note.id,
+      updated_at: "2026-10-22T03:43:07.531Z",
+    },
+    [{ role: "user", content: "roadmap" }]
+  );
+  const local = db.createAgentConversation("Roadmap edited here", note.id);
+  db.addAgentMessage(local.id, "user", "roadmap");
+  pinUpdatedAt(local.id);
+
+  const expected = [local.id, pulled.id];
+  assert.deepEqual(
+    db.getAgentConversations().map((c) => c.id),
+    expected
+  );
+  assert.deepEqual(
+    db.getAgentConversationsWithPreview().map((c) => c.id),
+    expected
+  );
+  assert.deepEqual(
+    db.searchAgentConversations("roadmap").map((c) => c.id),
+    expected
+  );
+  assert.deepEqual(
+    db.getConversationsForNote(note.id).map((c) => c.id),
+    expected
+  );
+
+  const folderPulled = db.createAgentConversation("Folder pulled", null, space.id, folder.id);
+  db.markConversationSynced(folderPulled.id, "cloud-conv-folder");
+  db.upsertConversationFromCloud(
+    {
+      id: "cloud-conv-folder",
+      client_conversation_id: folderPulled.client_conversation_id,
+      title: "Folder pulled",
+      updated_at: "2026-10-22T03:43:07.531Z",
+    },
+    []
+  );
+  const folderLocal = db.createAgentConversation("Folder local", null, space.id, folder.id);
+  pinUpdatedAt(folderLocal.id);
+  assert.deepEqual(
+    db.getConversationsForContainer(space.id, folder.id).map((c) => c.id),
+    [folderLocal.id, folderPulled.id]
+  );
+});
+
 test("searchNotes filters by folder", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -266,6 +330,45 @@ test("getNotesForSpace includes foldered notes, unlike the root-only getNotes", 
 
   const all = db.getNotesForSpace(space.id);
   assert.deepEqual(new Set(all.map((n) => n.id)), new Set([rootNote.id, keptNote.id]));
+});
+
+test("note lists order cloud ISO and local SQLite timestamps by time", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const folder = db.createFolder("Docs", privateId).folder;
+
+  // Pulled notes keep the cloud's ISO updated_at; local edits store SQLite's
+  // "YYYY-MM-DD HH:MM:SS". On the same UTC day 'T' sorts above ' ' as text.
+  const pulled = db.upsertNoteFromCloud(
+    {
+      id: "cloud-pulled",
+      client_note_id: "client-pulled",
+      title: "Pulled earlier",
+      content: "",
+      created_at: "2026-10-22T03:40:00.000Z",
+      updated_at: "2026-10-22T03:43:07.531Z",
+    },
+    folder.id,
+    privateId
+  );
+  const local = db.saveNote("Edited here", "", "personal", null, null, folder.id, privateId).note;
+  db.updateNote(local.id, { content: "edited" });
+  db.db.prepare("UPDATE notes SET updated_at = '2026-10-22 03:44:07' WHERE id = ?").run(local.id);
+
+  assert.deepEqual(
+    db.getNotes(null, 50, folder.id, privateId).map((n) => n.id),
+    [local.id, pulled.id]
+  );
+  assert.deepEqual(
+    db.getNotes(null, 1, folder.id, privateId).map((n) => n.id),
+    [local.id],
+    "LIMIT must keep the most recently edited note"
+  );
+  assert.deepEqual(
+    db.getNotesForSpace(privateId).map((n) => n.id),
+    [local.id, pulled.id]
+  );
 });
 
 test("getNoteIdsInFolder excludes deleted notes", (t) => {
