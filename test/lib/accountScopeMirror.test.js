@@ -81,7 +81,7 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
   let stop = () => {};
   t.after(() => stop());
   const events = windowEvents();
-  const calls = { policy: [], config: [] };
+  const calls = { policy: [], config: [], clearedCache: 0 };
   let onScopeChanged = null;
   const electronAPI = {
     getAppVersion: async () => ({ version: "1.10.0" }),
@@ -114,7 +114,9 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
         config: azureSttRequired,
       };
     },
-    clearManagedEnterpriseIdentity: async () => {},
+    clearManagedEnterpriseIdentity: async () => {
+      calls.clearedCache += 1;
+    },
   };
   const { storage } = installBrowserGlobals(t, {
     initialStorage: activeWorkspaceId ? { activeWorkspaceId } : {},
@@ -165,6 +167,8 @@ test("a window without a session hydrates managed transcription from the main pr
   );
   assert.deepEqual(calls.policy, [["account-a", 1]]);
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
+  // Main's disk cache is what an offline launch falls back to.
+  assert.equal(calls.clearedCache, 0);
 
   await t.test("a new credential generation re-resolves policy and identity", async () => {
     broadcast({ accountId: "account-a", authGeneration: 2 });
@@ -175,6 +179,7 @@ test("a window without a session hydrates managed transcription from the main pr
     assert.deepEqual(calls.policy.at(-1), ["account-a", 2]);
     assert.deepEqual(calls.config.at(-1), ["account-a", "workspace-a", 2]);
     assert.equal(managed.isManagedTranscriptionActive(), true);
+    assert.equal(calls.clearedCache, 0);
   });
 
   await t.test("a cleared scope (sign-out) clears the mirrored identity at once", () => {

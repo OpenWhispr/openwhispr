@@ -1932,6 +1932,10 @@
       "notSignedIn": "Not signed in",
       "notSignedInDescription": "Create an account to unlock premium features.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "You're offline",
+        "description": "Showing your account from your last sign-in. Sync and account changes resume when OpenWhispr can reach its servers."
+      },
       "pastDue": {
         "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
         "title": "We couldn't process your payment"
@@ -3095,6 +3099,7 @@
       "successTitle": "You're in",
       "successDescription": "You're a member of {{name}}. Manage it in Settings → Workspace.",
       "errorTitle": "Couldn't accept invitation",
+      "offlineDescription": "Joining a workspace needs a connection to OpenWhispr. Try again once you're back online.",
       "sentTo": "Invitation sent to {{email}}",
       "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
     }

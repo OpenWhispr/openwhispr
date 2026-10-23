@@ -1616,6 +1616,10 @@
       "notSignedIn": "Não conectado",
       "notSignedInDescription": "Crie uma conta para desbloquear recursos premium.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Você está offline",
+        "description": "Mostrando sua conta como no seu último login. A sincronização e as alterações da conta serão retomadas quando o OpenWhispr conseguir acessar seus servidores."
+      },
       "pastDue": {
         "description": "Você está no plano gratuito por enquanto. Atualize sua forma de pagamento para voltar ao Pro.",
         "title": "Não foi possível processar seu pagamento"
@@ -4833,6 +4837,7 @@
       "successTitle": "Você entrou",
       "successDescription": "Você é membro de {{name}}. Gerencie em Configurações → Espaço de trabalho.",
       "errorTitle": "Não foi possível aceitar o convite",
+      "offlineDescription": "Entrar em um espaço de trabalho requer conexão com o OpenWhispr. Tente novamente quando estiver online.",
       "sentTo": "Convite enviado para {{email}}",
       "wrongAccount": "Este convite foi enviado para {{email}}. Você está conectado como {{current}}."
     }

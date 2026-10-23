@@ -1637,6 +1637,10 @@
       "notSignedIn": "Non hai effettuato l'accesso",
       "notSignedInDescription": "Crea un account per sbloccare le funzionalità premium.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Sei offline",
+        "description": "Il tuo account è mostrato come al tuo ultimo accesso. La sincronizzazione e le modifiche all'account riprenderanno quando OpenWhispr potrà raggiungere i suoi server."
+      },
       "pastDue": {
         "description": "Sei nel piano gratuito per ora. Aggiorna il metodo di pagamento per tornare a Pro.",
         "title": "Non siamo riusciti a elaborare il pagamento"
@@ -4833,6 +4837,7 @@
       "successTitle": "Sei dentro",
       "successDescription": "Sei membro di {{name}}. Gestiscila in Impostazioni → Area di lavoro.",
       "errorTitle": "Impossibile accettare l'invito",
+      "offlineDescription": "Per unirti a uno spazio di lavoro serve una connessione a OpenWhispr. Riprova quando sarai di nuovo online.",
       "sentTo": "Invito inviato a {{email}}",
       "wrongAccount": "Questo invito è stato inviato a {{email}}. Hai effettuato l'accesso come {{current}}."
     }

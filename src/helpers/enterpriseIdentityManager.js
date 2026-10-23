@@ -42,9 +42,20 @@ function readCache(cachePath) {
   }
 }
 
+function credentialPrefix(cacheKey) {
+  return cacheKey.split("\n", 2).join("\n");
+}
+
 function writeCache(cachePath, identity, config) {
   const envelope = readCache(cachePath);
-  const entries = envelope.entries.filter((entry) => entry?.key !== identity.cacheKey);
+  // A rotated or replaced credential never matches its old entries again.
+  const prefix = credentialPrefix(identity.cacheKey);
+  const entries = envelope.entries.filter((entry) => {
+    if (typeof entry?.key !== "string" || entry.key === identity.cacheKey) return false;
+    return (
+      !entry.key.startsWith(`${identity.apiOrigin}\n`) || credentialPrefix(entry.key) === prefix
+    );
+  });
   entries.push({ key: identity.cacheKey, workspaceId: identity.workspaceId, config });
   fs.writeFileSync(cachePath, JSON.stringify({ version: CONFIG_CACHE_VERSION, entries }), {
     mode: 0o600,

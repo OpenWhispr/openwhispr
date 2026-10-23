@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   getUsageState,
   isPastDueUsage,
@@ -137,6 +138,8 @@ export function useUsage(): UseUsageResult | null {
     }): Promise<{ success: boolean; error?: string }> => {
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
+      // Main sends the stored bearer as is; only a validated session may act on it.
+      if (!hasValidatedAuthContext()) return { success: false };
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
         return { success: false, error: "App not ready" };
       }
@@ -164,6 +167,7 @@ export function useUsage(): UseUsageResult | null {
     code?: string;
   }> => {
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
+    if (!hasValidatedAuthContext()) return { success: false };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
       return { success: false, error: "App not ready" };
     }
@@ -193,6 +197,7 @@ export function useUsage(): UseUsageResult | null {
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
+      if (!hasValidatedAuthContext()) return { success: false };
       if (!window.electronAPI?.cloudSwitchPlan) {
         return { success: false, error: "App not ready" };
       }
@@ -212,6 +217,7 @@ export function useUsage(): UseUsageResult | null {
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
+      if (!hasValidatedAuthContext()) return { success: false as const };
       if (!window.electronAPI?.cloudPreviewSwitch) {
         return { success: false as const, error: "App not ready" };
       }

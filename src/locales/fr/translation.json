@@ -1932,6 +1932,10 @@
       "notSignedIn": "Non connecté",
       "notSignedInDescription": "Créez un compte pour débloquer les fonctionnalités premium.",
       "offline": "Hors ligne",
+      "offlineAccount": {
+        "title": "Vous êtes hors ligne",
+        "description": "Votre compte est affiché tel qu'il était lors de votre dernière connexion. La synchronisation et les modifications du compte reprendront dès qu'OpenWhispr pourra joindre ses serveurs."
+      },
       "pastDue": {
         "description": "Vous êtes temporairement sur le plan gratuit. Mettez à jour votre moyen de paiement pour revenir à Pro.",
         "title": "Nous n'avons pas pu traiter votre paiement"
@@ -3095,6 +3099,7 @@
       "successTitle": "Vous êtes membre",
       "successDescription": "Vous êtes membre de {{name}}. Gérez-le dans Paramètres → Espace de travail.",
       "errorTitle": "Impossible d'accepter l'invitation",
+      "offlineDescription": "Rejoindre un espace de travail nécessite une connexion à OpenWhispr. Réessayez une fois de nouveau en ligne.",
       "sentTo": "Invitation envoyée à {{email}}",
       "wrongAccount": "Cette invitation a été envoyée à {{email}}. Vous êtes connecté en tant que {{current}}."
     }

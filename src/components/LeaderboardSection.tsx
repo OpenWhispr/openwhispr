@@ -87,6 +87,8 @@ interface LeaderboardSectionProps {
   authGeneration: number | null;
   /** The session has settled, so a missing credential will not arrive on its own. */
   authSettled: boolean;
+  /** Presented from this device while the server can't confirm it: signing in won't help. */
+  accountOffline: boolean;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
@@ -153,6 +155,7 @@ export default function LeaderboardSection({
   accountId,
   authGeneration,
   authSettled,
+  accountOffline,
   isSignedIn,
   participating,
   cloudAccessAllowed,
@@ -260,7 +263,7 @@ export default function LeaderboardSection({
         // presenting a session whose refetch failed, so this would otherwise
         // be a spinner with no message and no way out.
         setAccessLoading(!authSettled);
-        setAccessError(authSettled ? "auth" : null);
+        setAccessError(authSettled ? (accountOffline ? "generic" : "auth") : null);
         return;
       }
       setAccessLoading(true);
@@ -283,7 +286,7 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId, authGeneration, authSettled]
+    [accountId, accountOffline, authGeneration, authSettled]
   );
 
   useEffect(() => {

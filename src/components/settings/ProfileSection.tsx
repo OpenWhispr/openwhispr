@@ -33,10 +33,16 @@ const AUTH_ERROR_KEYS: Record<string, string> = {
 
 interface ProfileSectionProps {
   name: string;
+  /** No validated session (offline): show the profile without offering changes. */
+  readOnly?: boolean;
   onSessionRefresh: () => void;
 }
 
-export default function ProfileSection({ name, onSessionRefresh }: ProfileSectionProps) {
+export default function ProfileSection({
+  name,
+  readOnly = false,
+  onSessionRefresh,
+}: ProfileSectionProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
 
@@ -105,10 +111,14 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
                 placeholder={t("settingsPage.account.profile.name.placeholder")}
                 aria-label={t("settingsPage.account.profile.name.label")}
                 maxLength={MAX_NAME_LENGTH}
-                disabled={savingName}
+                disabled={savingName || readOnly}
                 className="h-8 w-56 text-xs"
               />
-              <Button size="sm" onClick={handleSaveName} disabled={!nameDirty || savingName}>
+              <Button
+                size="sm"
+                onClick={handleSaveName}
+                disabled={!nameDirty || savingName || readOnly}
+              >
                 {savingName
                   ? t("settingsPage.account.profile.name.saving")
                   : t("settingsPage.account.profile.name.save")}
@@ -123,7 +133,12 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
               label={t("settingsPage.account.profile.password.label")}
               description={t("settingsPage.account.profile.password.description")}
             >
-              <Button variant="outline" size="sm" onClick={() => setPasswordOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPasswordOpen(true)}
+                disabled={readOnly}
+              >
                 <KeyRound className="me-1.5 h-3.5 w-3.5" />
                 {t("settingsPage.account.profile.password.change")}
               </Button>

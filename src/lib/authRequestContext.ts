@@ -1,3 +1,6 @@
+import { clearOfflineAccountProfile } from "./offlineAccountProfile";
+import { isControlPanelWindow } from "../utils/windowContext";
+
 const AUTH_REQUEST_GENERATION = "openWhisprAuthGeneration";
 
 export interface AuthTokenState {
@@ -10,6 +13,11 @@ export interface AuthTokenStateEvent {
   hasToken: boolean;
 }
 
+export interface OfflineAccount {
+  userId: string;
+  generation: number;
+}
+
 export interface RendererAuthContextSnapshot {
   revision: number;
   observedGeneration: number | null;
@@ -18,6 +26,14 @@ export interface RendererAuthContextSnapshot {
   sessionGeneration: number | null;
   sessionUserId: string | null;
   validatedGeneration: number | null;
+  /**
+   * The account main's token-bound binding names while get-session for this
+   * generation has no answer (offline, server down). Presentation only: it
+   * never validates the generation, so sync and cloud API calls stay fenced.
+   */
+  offlineAccount: OfflineAccount | null;
+  /** A generation get-session rejected (401) or resolved to no user: never presented offline. */
+  sessionRejectedGeneration: number | null;
 }
 
 type AuthRequest = {
@@ -27,21 +43,29 @@ type AuthRequest = {
   [AUTH_REQUEST_GENERATION]?: number;
 };
 
+type AuthErrorContext = {
+  request: AuthRequest;
+  response?: Response;
+};
+
 type AuthSuccessContext = {
   data?: unknown;
   response: Response;
   request: AuthRequest;
 };
 
-let snapshot: RendererAuthContextSnapshot = {
-  revision: 0,
+const EMPTY_SNAPSHOT: Omit<RendererAuthContextSnapshot, "revision"> = {
   observedGeneration: null,
   hasToken: false,
   sessionResolved: false,
   sessionGeneration: null,
   sessionUserId: null,
   validatedGeneration: null,
+  offlineAccount: null,
+  sessionRejectedGeneration: null,
 };
+
+let snapshot: RendererAuthContextSnapshot = { ...EMPTY_SNAPSHOT, revision: 0 };
 const subscribers = new Set<() => void>();
 
 function publish(next: Omit<RendererAuthContextSnapshot, "revision">): void {
@@ -77,6 +101,11 @@ function observeState(generation: number, hasToken: boolean): void {
       sessionGeneration: dropSession ? null : current.sessionGeneration,
       sessionUserId: dropSession ? null : current.sessionUserId,
       validatedGeneration: dropValidated ? null : current.validatedGeneration,
+      offlineAccount:
+        current.offlineAccount?.generation === generation && hasToken
+          ? current.offlineAccount
+          : null,
+      sessionRejectedGeneration: generationChanged ? null : current.sessionRejectedGeneration,
     };
   });
 }
@@ -179,6 +208,7 @@ export async function authContextFetch(
       // Fence sync, but keep the session binding so a transient refetch failure
       // keeps presenting the account. A real 401 clears it via handleAuthRequestError.
       invalidateValidatedAuthContext();
+      await noteSessionUnreachable(requestGeneration(init));
     }
     throw error;
   }
@@ -217,6 +247,10 @@ function recordSessionResolution(generation: number, userId: string | null): voi
       current.sessionGeneration === generation
         ? current.validatedGeneration
         : null,
+    offlineAccount: null,
+    // A resolution with no user is the server's verdict too: a later transport
+    // failure clears the resolution and must not bring the account back.
+    sessionRejectedGeneration: userId ? null : generation,
   }));
 }
 
@@ -265,10 +299,81 @@ export async function handleAuthRequestSuccess(context: AuthSuccessContext): Pro
   }
 }
 
-export async function handleAuthRequestError(context: { request: AuthRequest }): Promise<void> {
+export async function handleAuthRequestError(context: AuthErrorContext): Promise<void> {
   const generation = requestGeneration(context.request);
   await assertAuthRequestCurrent(context.request);
-  if (isGetSessionRequest(context.request)) clearSessionResolutionFor(generation);
+  if (!isGetSessionRequest(context.request)) return;
+  clearSessionResolutionFor(generation);
+  // Better Auth answers a dead credential with 401 (or 200 and no user). Any
+  // other status, a 403 or 404 from a proxy or firewall included, says nothing
+  // about the credential.
+  if (context.response?.status !== 401) {
+    await noteSessionUnreachable(generation);
+    return;
+  }
+  // The rejection outlives this run's generation counter only through the
+  // saved profile, so drop it: a later offline launch stays a guest.
+  clearOfflineAccountProfile();
+  update((current) => ({
+    ...current,
+    offlineAccount: null,
+    sessionRejectedGeneration: generation,
+  }));
+}
+
+function hasSessionVerdict(current: RendererAuthContextSnapshot, generation: number): boolean {
+  return (
+    (current.sessionResolved && current.sessionGeneration === generation) ||
+    current.sessionRejectedGeneration === generation
+  );
+}
+
+function offlineEligible(current: RendererAuthContextSnapshot, generation: number): boolean {
+  return (
+    current.observedGeneration === generation &&
+    current.hasToken &&
+    !hasSessionVerdict(current, generation)
+  );
+}
+
+/**
+ * get-session for `generation` got no answer. Main's account binding is keyed
+ * by a hash of the exact bearer it validated, so when it still names an
+ * account for this generation that account can be presented read-only.
+ */
+async function noteSessionUnreachable(generation: number): Promise<void> {
+  // Only the control panel resolves its own session. Every other window
+  // fails get-session by design and follows main's scope (accountScopeMirror).
+  if (!isControlPanelWindow() || !offlineEligible(snapshot, generation)) return;
+  let scope: { accountId: string; authGeneration: number } | null | undefined;
+  try {
+    scope = await window.electronAPI?.getActiveAccountScope?.();
+  } catch {
+    return;
+  }
+  const userId = typeof scope?.accountId === "string" ? scope.accountId : null;
+  update((current) => {
+    if (!userId || scope?.authGeneration !== generation || !offlineEligible(current, generation)) {
+      return current;
+    }
+    return { ...current, offlineAccount: { userId, generation } };
+  });
+}
+
+export function getOfflineAccount(): OfflineAccount | null {
+  const account = snapshot.offlineAccount;
+  if (!account || !offlineEligible(snapshot, account.generation)) return null;
+  return account;
+}
+
+/**
+ * An account is shown without a validated credential: offline, or bound by a
+ * session whose refetch then failed. Sync and account actions wait on a verdict.
+ */
+export function sessionAwaitsVerdict(): boolean {
+  if (getOfflineAccount()) return true;
+  const userId = snapshot.sessionUserId;
+  return userId != null && getBoundSessionGeneration(userId) != null && !hasValidatedAuthContext();
 }
 
 export function getBoundSessionGeneration(userId: string | null): number | null {
@@ -321,13 +426,5 @@ export async function assertAuthGenerationCurrent(generation: number): Promise<v
 }
 
 export function resetAuthRequestContextForTests(): void {
-  snapshot = {
-    revision: snapshot.revision + 1,
-    observedGeneration: null,
-    hasToken: false,
-    sessionResolved: false,
-    sessionGeneration: null,
-    sessionUserId: null,
-    validatedGeneration: null,
-  };
+  snapshot = { ...EMPTY_SNAPSHOT, revision: snapshot.revision + 1 };
 }

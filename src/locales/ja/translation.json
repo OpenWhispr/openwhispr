@@ -1637,6 +1637,10 @@
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",
       "offline": "オフライン",
+      "offlineAccount": {
+        "title": "オフラインです",
+        "description": "前回サインインしたときのアカウント情報を表示しています。OpenWhispr がサーバーに接続できるようになると、同期とアカウントの変更が再開されます。"
+      },
       "pastDue": {
         "description": "現在は無料プランをご利用中です。お支払い方法を更新して Pro に戻しましょう。",
         "title": "お支払いを処理できませんでした"
@@ -4833,6 +4837,7 @@
       "successTitle": "参加しました",
       "successDescription": "{{name}} のメンバーになりました。設定 → ワークスペースで管理できます。",
       "errorTitle": "招待を承諾できませんでした",
+      "offlineDescription": "ワークスペースに参加するには OpenWhispr への接続が必要です。オンラインに戻ってから再試行してください。",
       "sentTo": "{{email}} に送信された招待です",
       "wrongAccount": "この招待は {{email}} 宛てに送信されました。現在 {{current}} でサインインしています。"
     }

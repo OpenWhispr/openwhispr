@@ -1932,6 +1932,10 @@
       "notSignedIn": "Nicht angemeldet",
       "notSignedInDescription": "Erstellen Sie ein Konto, um Premium-Funktionen freizuschalten.",
       "offline": "Offline",
+      "offlineAccount": {
+        "title": "Du bist offline",
+        "description": "Dein Konto wird so angezeigt, wie es bei deiner letzten Anmeldung war. Synchronisierung und Kontoänderungen werden fortgesetzt, sobald OpenWhispr seine Server erreicht."
+      },
       "pastDue": {
         "description": "Sie sind vorerst im kostenlosen Tarif. Aktualisieren Sie Ihre Zahlungsmethode, um wieder Pro zu erhalten.",
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
@@ -3095,6 +3099,7 @@
       "successTitle": "Beigetreten",
       "successDescription": "Sie sind jetzt Mitglied von {{name}}. Verwalten Sie ihn unter Einstellungen → Workspace.",
       "errorTitle": "Einladung konnte nicht angenommen werden",
+      "offlineDescription": "Zum Beitreten eines Arbeitsbereichs ist eine Verbindung zu OpenWhispr nötig. Versuche es erneut, sobald du wieder online bist.",
       "sentTo": "Einladung gesendet an {{email}}",
       "wrongAccount": "Diese Einladung wurde an {{email}} gesendet. Sie sind als {{current}} angemeldet."
     }

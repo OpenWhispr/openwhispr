@@ -111,13 +111,9 @@ export function refreshManagedEnterpriseIdentity(
     enterprise.clear();
     return;
   }
-  if (
-    enterprise.workspaceId !== workspaceId ||
-    enterprise.accountId !== accountId ||
-    enterprise.authGeneration !== authGeneration
-  ) {
-    enterprise.clear();
-  }
+  // refresh() drops the previous identity's config itself. clear() would also
+  // delete main's disk cache, which is keyed by credential, account and
+  // workspace, so the new identity could never fall back to it offline.
   void enterprise.refresh(accountId, workspaceId, authGeneration);
 }
 

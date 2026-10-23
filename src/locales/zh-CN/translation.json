@@ -1637,6 +1637,10 @@
       "notSignedIn": "未登录",
       "notSignedInDescription": "创建账户以解锁高级功能。",
       "offline": "离线",
+      "offlineAccount": {
+        "title": "你已离线",
+        "description": "显示的是你上次登录时的账户信息。OpenWhispr 能连接到服务器后，将恢复同步和账户更改。"
+      },
       "pastDue": {
         "description": "你目前使用的是免费版。更新支付方式即可恢复 Pro 版。",
         "title": "我们无法处理你的付款"
@@ -4833,6 +4837,7 @@
       "successTitle": "你已加入",
       "successDescription": "你已成为 {{name}} 的成员。可在设置 → 工作区中管理。",
       "errorTitle": "无法接受邀请",
+      "offlineDescription": "加入工作区需要连接到 OpenWhispr。请在恢复联网后重试。",
       "sentTo": "邀请已发送至 {{email}}",
       "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
     }
