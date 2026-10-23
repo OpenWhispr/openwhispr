@@ -253,3 +253,14 @@ test("an earlier turn backs only a report of the same kind, to whoever it names"
   assert.equal(await unbacked("Yes, it was sent.", { earlierCalls: [call("create_note")] }), true);
   assert.equal(await unbacked("Yes, it was sent.", {}), true);
 });
+
+test("a Slack DM sent by its id backs a report that names a person, not a channel", async () => {
+  // Whose DM it is isn't known, so its label names no one.
+  const toDm = sent("slack_send_message", { destination: "Direct message (D0123ABC)" });
+  assert.equal(await unbacked("I sent it to Sam earlier.", { earlierCalls: [toDm] }), false);
+  assert.equal(
+    await unbacked("Yes, your message to Sam was sent.", { earlierCalls: [toDm] }),
+    false
+  );
+  assert.equal(await unbacked("I posted it in #eng earlier.", { earlierCalls: [toDm] }), true);
+});

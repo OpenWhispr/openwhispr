@@ -187,9 +187,12 @@ function argumentText(call: ToolCallInfo): string[] {
 }
 
 // An earlier result backs a report that names someone only if it went there.
+// A Slack DM sent by its id is labelled without whose it is (slackConnector's
+// "Direct message (D…)"), so it backs a report naming any person.
 function wentTo(call: ToolCallInfo, destination: string | null): boolean {
   const label = call.metadata && !Array.isArray(call.metadata) ? call.metadata.destination : null;
   if (!destination || typeof label !== "string") return true;
+  if (label.startsWith("Direct message (")) return !destination.startsWith("#");
   const [named, sent] = [destination.toLowerCase(), label.toLowerCase()];
   return sent.includes(named) || named.includes(sent);
 }
