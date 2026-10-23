@@ -2392,6 +2392,7 @@
         "description": "Verifique sua conexão e tente novamente.",
         "retry": "Tentar novamente"
       },
+      "staleList": "Não foi possível acessar o OpenWhispr. Mostrando seus espaços de trabalho da última vez que você se conectou.",
       "tab": {
         "general": "Geral",
         "members": "Membros",

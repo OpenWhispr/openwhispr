@@ -2413,6 +2413,7 @@
         "description": "Controlla la connessione e riprova.",
         "retry": "Riprova"
       },
+      "staleList": "Impossibile raggiungere OpenWhispr. Le aree di lavoro mostrate sono quelle dell'ultima connessione.",
       "tab": {
         "general": "Generale",
         "members": "Membri",

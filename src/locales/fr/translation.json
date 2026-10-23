@@ -1688,6 +1688,7 @@
         "description": "Vérifiez votre connexion et réessayez.",
         "retry": "Réessayer"
       },
+      "staleList": "Impossible de joindre OpenWhispr. Vos espaces de travail sont affichés tels qu'ils étaient lors de votre dernière connexion.",
       "tab": {
         "general": "Général",
         "members": "Membres",

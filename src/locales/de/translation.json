@@ -1688,6 +1688,7 @@
         "description": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
         "retry": "Erneut versuchen"
       },
+      "staleList": "OpenWhispr ist nicht erreichbar. Angezeigt werden Ihre Workspaces von Ihrer letzten Verbindung.",
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",

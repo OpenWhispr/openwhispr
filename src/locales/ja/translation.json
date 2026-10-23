@@ -2413,6 +2413,7 @@
         "description": "接続を確認して、もう一度お試しください。",
         "retry": "再試行"
       },
+      "staleList": "OpenWhispr に接続できませんでした。前回接続したときのワークスペースを表示しています。",
       "tab": {
         "general": "一般",
         "members": "メンバー",

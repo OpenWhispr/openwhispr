@@ -1699,6 +1699,68 @@ test("upsertSpaceFromCloud mirrors the direct role and clears it when the grant 
   assert.equal(updated.my_direct_role, null);
 });
 
+test("upsertSpaceFromCloud stores and returns capabilities", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: true,
+  };
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities,
+  });
+  assert.deepEqual(created.capabilities, capabilities);
+  assert.deepEqual(db.getSpaceByCloudSpaceId("space-1").capabilities, capabilities);
+
+  // A later pass replaces the stored object.
+  const promoted = { edit_notes: true, manage_members: true, manage_settings: true, leave: true };
+  const updated = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+    capabilities: promoted,
+  });
+  assert.equal(updated.id, created.id);
+  assert.deepEqual(updated.capabilities, promoted);
+});
+
+test("space rows without capabilities read as null", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  // An older API sends no capabilities at all.
+  const created = db.upsertSpaceFromCloud({
+    id: "space-1",
+    name: "Design space",
+    workspace_id: "ws-1",
+    teams: [],
+  });
+  assert.equal(created.capabilities, null);
+
+  const capabilities = {
+    edit_notes: true,
+    manage_members: false,
+    manage_settings: false,
+    leave: false,
+  };
+  db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [], capabilities });
+  // Dropping the field on the next pass must not leave stale capabilities behind.
+  assert.equal(
+    db.upsertSpaceFromCloud({ id: "space-1", name: "Design space", teams: [] }).capabilities,
+    null
+  );
+
+  // A corrupt column degrades to null, never throws.
+  db.db.prepare("UPDATE spaces SET capabilities = 'not json' WHERE id = ?").run(created.id);
+  assert.equal(db.getSpaces().find((s) => s.id === created.id).capabilities, null);
+});
+
 test("upsertSpaceFromCloud adopts a pre-spaces row via its single backfilled team", (t) => {
   const db = createDb(t);
   if (!db) return;

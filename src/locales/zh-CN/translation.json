@@ -2413,6 +2413,7 @@
         "description": "请检查网络连接后重试。",
         "retry": "重试"
       },
+      "staleList": "无法连接 OpenWhispr。显示的是你上次连接时的工作区。",
       "tab": {
         "general": "常规",
         "members": "成员",

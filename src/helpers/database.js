@@ -1471,6 +1471,14 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        // JSON object of server-computed capabilities (edit_notes, manage_members,
+        // manage_settings, leave) mirrored from GET /api/me/spaces; NULL from
+        // an older API, so callers fall back to the role.
+        this.db.exec("ALTER TABLE spaces ADD COLUMN capabilities TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
       );
@@ -4070,7 +4078,8 @@ class DatabaseManager {
     }
   }
 
-  // Parses the teams JSON mirror so renderer consumers only ever see an array.
+  // Parses the teams and capabilities JSON mirrors so renderer consumers only
+  // ever see an array and an object-or-null.
   _spaceRow(row) {
     if (!row) return row;
     let teams = [];
@@ -4081,7 +4090,18 @@ class DatabaseManager {
         teams = [];
       }
     }
-    return { ...row, teams };
+    let capabilities = null;
+    if (row.capabilities) {
+      try {
+        const parsed = JSON.parse(row.capabilities);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          capabilities = parsed;
+        }
+      } catch {
+        capabilities = null;
+      }
+    }
+    return { ...row, teams, capabilities };
   }
 
   getSpaces() {
@@ -4200,6 +4220,7 @@ class DatabaseManager {
       const updatedAt = space.updated_at || space.created_at || new Date().toISOString();
       const teams = Array.isArray(space.teams) ? space.teams : [];
       const teamsJson = JSON.stringify(teams);
+      const capabilitiesJson = space.capabilities ? JSON.stringify(space.capabilities) : null;
       let existing = this.db.prepare("SELECT * FROM spaces WHERE cloud_space_id = ?").get(space.id);
       if (!existing && teams.length === 1) {
         // Adopt a pre-spaces row: the server backfilled one space per legacy
@@ -4213,7 +4234,8 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE spaces SET cloud_space_id = ?, workspace_id = ?, name = ?, emoji = ?, my_role = ?,
-               my_direct_role = ?, member_count = ?, teams = ?, deleted_at = NULL, updated_at = ?
+               my_direct_role = ?, member_count = ?, teams = ?, capabilities = ?, deleted_at = NULL,
+               updated_at = ?
              WHERE id = ?`
           )
           .run(
@@ -4225,6 +4247,7 @@ class DatabaseManager {
             space.my_direct_role ?? null,
             space.member_count ?? null,
             teamsJson,
+            capabilitiesJson,
             updatedAt,
             existing.id
           );
@@ -4242,9 +4265,9 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `INSERT INTO spaces (client_space_id, cloud_space_id, workspace_id, kind, name, emoji,
-             sort_order, my_role, my_direct_role, member_count, teams, sync_status, created_at,
-             updated_at)
-           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+             sort_order, my_role, my_direct_role, member_count, teams, capabilities, sync_status,
+             created_at, updated_at)
+           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
         )
         .run(
           randomUUID(),
@@ -4257,6 +4280,7 @@ class DatabaseManager {
           space.my_direct_role ?? null,
           space.member_count ?? null,
           teamsJson,
+          capabilitiesJson,
           space.created_at || updatedAt,
           updatedAt
         );

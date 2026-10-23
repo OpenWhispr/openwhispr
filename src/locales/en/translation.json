@@ -1688,6 +1688,7 @@
         "description": "Check your connection and try again.",
         "retry": "Retry"
       },
+      "staleList": "Couldn't reach OpenWhispr. Showing your workspaces from the last time you were connected.",
       "tab": {
         "general": "General",
         "members": "Members",
