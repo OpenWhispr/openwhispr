@@ -224,6 +224,10 @@ export class SyncedNotesRepository implements NotesRepository {
   markNoteTerminal(localId: number): void {
     this.local.markNoteTerminal(localId);
   }
+  restoreDeniedNoteDelete(pushed: Note): boolean {
+    return this.local.restoreDeniedNoteDelete(pushed);
+  }
+
   dropNotePushAttempt(localId: number): void {
     this.local.dropNotePushAttempt(localId);
   }

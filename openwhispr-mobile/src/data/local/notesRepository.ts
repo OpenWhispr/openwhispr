@@ -478,8 +478,8 @@ export class LocalNotesRepository implements NotesRepository {
   }
 
   // FK cascade is inert (no PRAGMA foreign_keys=ON), so child diarization rows and the persisted
-  // meeting WAV must be removed explicitly on EVERY delete path (soft delete, hard delete,
-  // remote-delete apply, and full wipe) — otherwise they orphan in the DB and on disk.
+  // meeting WAV must be removed explicitly when a delete is final. Cloud-backed
+  // tombstones retain them until the server accepts the delete.
   private deleteNoteChildrenAndAudio(id: number): void {
     const row = this.database
       .select({ sourceFile: notes.sourceFile })
@@ -494,7 +494,8 @@ export class LocalNotesRepository implements NotesRepository {
   }
 
   deleteNote(id: number): void {
-    this.deleteNoteChildrenAndAudio(id);
+    const note = this.getNoteById(id);
+    if (!note?.remoteId || note.isPrivate) this.deleteNoteChildrenAndAudio(id);
     // Soft-delete the note row. Explicit user intent (delete) supersedes any
     // parked conflict — clear conflictServerNote too, otherwise getPendingNotes
     // would keep excluding this row and the delete would never push, silently
@@ -1095,6 +1096,66 @@ export class LocalNotesRepository implements NotesRepository {
         .where(eq(notes.id, localId))
         .run();
     });
+  }
+
+  restoreDeniedNoteDelete(pushed: Note): boolean {
+    const current = this.getNoteById(pushed.id);
+    if (
+      !current?.deletedAt ||
+      !current.pendingSync ||
+      current.isPrivate ||
+      current.remoteId !== pushed.remoteId ||
+      current.clientNoteId !== pushed.clientNoteId ||
+      current.updatedAt !== pushed.updatedAt ||
+      this.isNoteHeldByFolderDelete(current.id) ||
+      !NOTE_PUSH_ACK_FIELDS.every((field) => current[field] === pushed[field])
+    )
+      return false;
+
+    if (current.folderId != null) {
+      const folder = this.database
+        .select()
+        .from(folders)
+        .where(eq(folders.id, current.folderId))
+        .get();
+      if (folder?.deletedAt) return false;
+    }
+
+    this.database.transaction((tx) => {
+      const dirtySegment = tx
+        .select({ id: transcriptSegments.id })
+        .from(transcriptSegments)
+        .where(
+          and(eq(transcriptSegments.noteId, current.id), eq(transcriptSegments.pendingSync, 1)),
+        )
+        .get();
+      const dirtySpeaker = tx
+        .select({ id: speakers.id })
+        .from(speakers)
+        .where(and(eq(speakers.noteId, current.id), eq(speakers.pendingSync, 1)))
+        .get();
+      tx.update(notes)
+        .set({
+          deletedAt: null,
+          pendingSync: 0,
+          cloudUpdatedAt: null,
+          // Dirty normalized edits must not make an identical server raw look
+          // already applied when the rejected operation is repulled.
+          ...(dirtySegment || dirtySpeaker ? { transcript: null } : {}),
+        })
+        .where(eq(notes.id, current.id))
+        .run();
+      tx.update(transcriptSegments)
+        .set({ pendingSync: 0 })
+        .where(eq(transcriptSegments.noteId, current.id))
+        .run();
+      tx.update(speakers).set({ pendingSync: 0 }).where(eq(speakers.noteId, current.id)).run();
+      tx.insert(syncState)
+        .values({ key: pushRejectedKey(current.id), value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+    });
+    return true;
   }
 
   parkNoteConflict(localId: number, serverNote: RemoteNote): void {
