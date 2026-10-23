@@ -2455,7 +2455,8 @@ class WindowManager {
     }
     if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      // Queued prompts would only reach the same closed gate.
+      this.dismissMeetingNotification({ flushQueued: false });
       return false;
     }
 
@@ -2479,7 +2480,7 @@ class WindowManager {
   // "ready" must not clear the fallback that would force-show its replacement.
   showNotificationWindow(ownerWebContents) {
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      this.dismissMeetingNotification({ flushQueued: false });
       return;
     }
     const win = this.notificationWindow;
