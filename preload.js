@@ -749,6 +749,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
 
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
+  onLogLevelChanged: registerListener("log-level-changed", (callback) => () => callback()),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
 
   // ydotool status check

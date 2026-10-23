@@ -526,6 +526,35 @@ class EnvironmentManager {
     await fsPromises.writeFile(tmpPath, kept.join("\n"), "utf8");
     await fsPromises.rename(tmpPath, envPath);
   }
+
+  // Sets a single key's line in .env (appending it when absent), preserving
+  // every other line verbatim, on the queue every other .env write uses.
+  setKeyInEnvFile(key, value) {
+    const envPath = path.join(app.getPath("userData"), ".env");
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._setKeyLine(envPath, key, value));
+    return envWriteQueue;
+  }
+
+  async _setKeyLine(envPath, key, value) {
+    let content = "";
+    try {
+      content = await fsPromises.readFile(envPath, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const keyLine = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`);
+    const lines = content.split("\n");
+    const index = lines.findIndex((line) => keyLine.test(line));
+    if (index !== -1) {
+      lines[index] = `${key}=${value}`;
+    } else {
+      if (lines[lines.length - 1] === "") lines.pop();
+      lines.push(`${key}=${value}`, "");
+    }
+    const tmpPath = `${envPath}.tmp`;
+    await fsPromises.writeFile(tmpPath, lines.join("\n"), "utf8");
+    await fsPromises.rename(tmpPath, envPath);
+  }
 }
 
 // Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from
