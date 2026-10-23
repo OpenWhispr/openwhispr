@@ -9,6 +9,8 @@ import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { refreshSkills, setSkillEnabled, useSkillsStore } from "../../stores/skillsStore";
+import { useCloudBackupActive } from "../../hooks/useCloudBackupActive";
+import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
 import type { SkillDetail, SkillFileInfo } from "../../types/skills";
 import { SkillActionsMenu } from "./SkillActionsMenu";
 import { SkillTile } from "./SkillCards";
@@ -83,6 +85,7 @@ export function SkillDetailDialog({
   onTryNow,
 }: SkillDetailDialogProps): ReactElement {
   const { t } = useTranslation();
+  const backedUp = useCloudBackupActive();
   const { toast } = useToast();
   const summary = useSkillsStore((state) => state.skills.find((skill) => skill.name === name));
   const [detail, setDetail] = useState<SkillDetail | null>(null);
@@ -163,6 +166,7 @@ export function SkillDetailDialog({
         return;
       }
       uninstalled.current = true;
+      syncAfterLocalWrite("syncSkillsNow");
       close();
       toast({
         title: t("skills.toasts.uninstalled", { name: skill?.displayName }),
@@ -265,7 +269,12 @@ export function SkillDetailDialog({
                 className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/10 ps-3.5 pe-2 py-2"
               >
                 <p className="flex-1 basis-56 min-w-0 text-xs text-foreground/85 leading-relaxed">
-                  {t("skills.detail.uninstallConfirm", { name: skill.displayName })}
+                  {t(
+                    backedUp
+                      ? "skills.detail.uninstallConfirmSynced"
+                      : "skills.detail.uninstallConfirm",
+                    { name: skill.displayName }
+                  )}
                 </p>
                 <Button
                   ref={cancelRef}

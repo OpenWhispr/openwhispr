@@ -67,6 +67,7 @@ import type {
 import type { Snippet } from "../utils/snippets";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import { syncAfterLocalWrite } from "../services/syncAfterLocalWrite";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -1518,13 +1519,6 @@ function createSecretSetter(
 }
 
 export const MAX_TRANSLATION_TARGETS = 5;
-
-// Kick the matching cloud push once a local write has landed in SQLite.
-function syncAfterLocalWrite(method: "syncDictionaryNow" | "syncSnippetsNow"): void {
-  void import("../services/SyncService.js").then(({ syncService }) => {
-    if (syncService.canSync()) void syncService[method]();
-  });
-}
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(

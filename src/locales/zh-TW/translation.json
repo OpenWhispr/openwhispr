@@ -4568,6 +4568,7 @@
       "neverRun": "OpenWhispr 從不執行指令碼",
       "uninstall": "解除安裝",
       "uninstallConfirm": "要解除安裝 {{name}} 嗎？它會從這台電腦中移除。",
+      "uninstallConfirmSynced": "要解除安裝 {{name}} 嗎？它會從這台電腦和你的其他裝置中移除。",
       "problem": "此技能修正後才能使用：{{reason}}",
       "tryNow": "立即試用"
     },
@@ -4593,6 +4594,7 @@
     "manage": {
       "title": "管理技能",
       "description": "開啟或關閉技能，或移除不用的技能。每個技能都儲存在這台電腦上。",
+      "descriptionBackedUp": "開啟或關閉技能，或移除不用的技能。每個技能都儲存在這台電腦上，並透過雲端備份進行備份。",
       "noMatches": "沒有符合「{{query}}」的技能。",
       "none": "尚無技能。"
     },
@@ -4738,6 +4740,9 @@
       "pasteNote": "貼上時不會按 Enter 鍵，由您決定何時執行。",
       "pasted": "已貼上",
       "pasteFailed": "無法貼上，文字已在您的剪貼簿中。"
+    },
+    "sync": {
+      "tooLarge": "太大，無法備份"
     }
   },
   "calendar": {

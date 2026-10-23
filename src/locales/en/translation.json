@@ -4740,6 +4740,7 @@
       "neverRun": "OpenWhispr never runs scripts",
       "uninstall": "Uninstall",
       "uninstallConfirm": "Uninstall {{name}}? It's removed from this computer.",
+      "uninstallConfirmSynced": "Uninstall {{name}}? It's removed from this computer and your other devices.",
       "problem": "This skill can't be used until it's fixed: {{reason}}",
       "tryNow": "Try now"
     },
@@ -4765,6 +4766,7 @@
     "manage": {
       "title": "Manage skills",
       "description": "Turn skills on or off, or remove the ones you don't use. Each one is saved on this computer.",
+      "descriptionBackedUp": "Turn skills on or off, or remove the ones you don't use. Each one is saved on this computer and backed up with Cloud backup.",
       "noMatches": "No skills match \"{{query}}\".",
       "none": "No skills yet."
     },
@@ -4910,6 +4912,9 @@
       "pasteNote": "Pastes without pressing Enter, so you choose when to run it.",
       "pasted": "Pasted",
       "pasteFailed": "Couldn't paste. The text is on your clipboard."
+    },
+    "sync": {
+      "tooLarge": "Too large to back up"
     }
   },
   "notesView": {

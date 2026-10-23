@@ -16,6 +16,7 @@ import {
   useSkillsStore,
   type SkillCreateDraft,
 } from "../../stores/skillsStore";
+import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
 import type { SkillProblemCode } from "../../types/skills";
 import { MAX_SKILL_BYTES, problemKey, writeFailedToast } from "./skillCopy";
 
@@ -189,6 +190,7 @@ export function CreateSkillScreen({
     const result = await window.electronAPI?.skillsCreate?.(draft);
     setSaving(false);
     if (result?.ok) {
+      syncAfterLocalWrite("syncSkillsNow");
       draftsCleared.current += 1;
       setCreateDraft(null);
       // Listed before going home, so its card is there to play and take focus.

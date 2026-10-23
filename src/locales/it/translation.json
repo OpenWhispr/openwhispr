@@ -4568,6 +4568,7 @@
       "neverRun": "OpenWhispr non esegue mai script",
       "uninstall": "Disinstalla",
       "uninstallConfirm": "Disinstallare {{name}}? Verrà rimossa da questo computer.",
+      "uninstallConfirmSynced": "Disinstallare {{name}}? Verrà rimossa da questo computer e dagli altri tuoi dispositivi.",
       "problem": "Questa skill non può essere usata finché non viene corretta: {{reason}}",
       "tryNow": "Prova ora"
     },
@@ -4593,6 +4594,7 @@
     "manage": {
       "title": "Gestisci skill",
       "description": "Attiva o disattiva le skill, oppure rimuovi quelle che non usi. Ognuna è salvata su questo computer.",
+      "descriptionBackedUp": "Attiva o disattiva le skill, oppure rimuovi quelle che non usi. Ognuna è salvata su questo computer e nel Backup cloud.",
       "noMatches": "Nessuna skill corrisponde a \"{{query}}\".",
       "none": "Ancora nessuna skill."
     },
@@ -4738,6 +4740,9 @@
       "pasteNote": "Incolla senza premere Invio, così scegli tu quando eseguirlo.",
       "pasted": "Incollato",
       "pasteFailed": "Impossibile incollare. Il testo è negli appunti."
+    },
+    "sync": {
+      "tooLarge": "Troppo grande per il backup"
     }
   },
   "calendar": {

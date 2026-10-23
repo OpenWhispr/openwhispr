@@ -245,7 +245,7 @@ test("a Retry that fails again says so", async (t) => {
 
 test("pressing + again while a skill is being added adds it once", async (t) => {
   const added = [];
-  const { container, toasts } = await renderHome(t, {
+  const { container, toasts, pushes } = await renderHome(t, {
     api: {
       skillsAddRecommended: async (id) => {
         added.push(id);
@@ -265,10 +265,11 @@ test("pressing + again while a skill is being added adds it once", async (t) => 
 
   assert.equal(added.length, 1);
   assert.equal(toasts.length, 1);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "backed up once");
 });
 
 test("a failed add says why", async (t) => {
-  const { container, toasts } = await renderHome(t, {
+  const { container, toasts, pushes } = await renderHome(t, {
     api: { skillsAddRecommended: async () => ({ ok: false, error: "noSpace" }) },
   });
   const add = findElement(container, (node) =>
@@ -284,6 +285,7 @@ test("a failed add says why", async (t) => {
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(pushes, []);
 });
 
 test("an add refused because a skill already has that title says so", async (t) => {

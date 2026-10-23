@@ -4740,6 +4740,7 @@
       "neverRun": "OpenWhispr führt Skripte nie aus",
       "uninstall": "Deinstallieren",
       "uninstallConfirm": "{{name}} deinstallieren? Der Skill wird von diesem Computer entfernt.",
+      "uninstallConfirmSynced": "{{name}} deinstallieren? Der Skill wird von diesem Computer und deinen anderen Geräten entfernt.",
       "problem": "Dieser Skill kann erst verwendet werden, wenn er korrigiert ist: {{reason}}",
       "tryNow": "Jetzt ausprobieren"
     },
@@ -4765,6 +4766,7 @@
     "manage": {
       "title": "Skills verwalten",
       "description": "Schalte Skills ein oder aus oder entferne die, die du nicht nutzt. Jeder wird auf diesem Computer gespeichert.",
+      "descriptionBackedUp": "Schalte Skills ein oder aus oder entferne die, die du nicht nutzt. Jeder wird auf diesem Computer gespeichert und per Cloud-Backup gesichert.",
       "noMatches": "Keine Skills passen zu „{{query}}“.",
       "none": "Noch keine Skills."
     },
@@ -4910,6 +4912,9 @@
       "pasteNote": "Fügt ohne Enter ein, damit du selbst entscheidest, wann es ausgeführt wird.",
       "pasted": "Eingefügt",
       "pasteFailed": "Einfügen fehlgeschlagen. Der Text ist in deiner Zwischenablage."
+    },
+    "sync": {
+      "tooLarge": "Zu groß für das Backup"
     }
   },
   "notesView": {

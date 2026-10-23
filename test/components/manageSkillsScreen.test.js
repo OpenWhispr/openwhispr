@@ -5,6 +5,7 @@ const { findElement } = require("../lib/interactiveDom");
 const {
   ariaLabel,
   click,
+  cloudBackup,
   findAll,
   label,
   mountSkillsComponent,
@@ -15,12 +16,13 @@ const {
 
 const COPIED = "\uFEFF---\r\nname: x\r\n---\r\n";
 
-async function renderManage(t, { skills, api = {} }) {
+async function renderManage(t, { skills, api = {}, backup = false }) {
   const calls = { opened: [], focusedAtOpen: [], back: 0, revealed: [], clipboard: [], switched: [] };
   const mounted = await mountSkillsComponent(t, {
     modulePath: "/components/skills/ManageSkillsScreen.tsx",
     exportName: "ManageSkillsScreen",
     skills,
+    mocks: cloudBackup(backup),
     props: {
       onOpenSkill: (name, confirmUninstall) => {
         calls.opened.push([name, confirmUninstall]);
@@ -224,4 +226,25 @@ test("search narrows the list and says when nothing matches", async (t) => {
 test("an empty library says so", async (t) => {
   const { container } = await renderManage(t, { skills: [] });
   assert.match(label(container), /skills\.manage\.none/);
+});
+
+test("Manage marks a skill too large to back up", async (t) => {
+  const { container } = await renderManage(t, {
+    backup: true,
+    skills: [skill("big-one", { tooLargeToSync: true }), skill("small-one")],
+  });
+
+  assert.match(label(rowFor(container, "big one")), /skills\.sync\.tooLarge/);
+  assert.doesNotMatch(label(rowFor(container, "small one")), /skills\.sync\.tooLarge/);
+  assert.match(label(container), /skills\.manage\.descriptionBackedUp/);
+});
+
+test("free plans see no sync copy", async (t) => {
+  const { container } = await renderManage(t, {
+    backup: false,
+    skills: [skill("big-one", { tooLargeToSync: true })],
+  });
+
+  assert.doesNotMatch(label(container), /skills\.sync\.|descriptionBackedUp/);
+  assert.match(label(container), /skills\.manage\.description/);
 });

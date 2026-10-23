@@ -96,6 +96,7 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  const skills = new Map();
   const dictionary = new Map();
   const log = [];
   const failures = [];
@@ -232,6 +233,52 @@ function createFakeCloud(config = {}) {
     clientKey: "client_dict_id",
     prefix: "dict",
   };
+
+  // Skills follow the API's own rules (lib/skill-service.ts there): batch-create upserts on the
+  // name and revives a tombstone, the snapshot walks created_at forwards from `cursor`, and the
+  // delta walks updated_at forwards from `since`, tombstones included.
+  function skillMeta(row) {
+    const { files: _files, ...meta } = row;
+    return meta;
+  }
+
+  function writeSkill(input) {
+    const at = toIso(clock());
+    const existing = [...skills.values()].find((row) => row.name === input.name);
+    const row = existing ?? {
+      id: nextId("skill"),
+      created_at: toIso(input.created_at ?? at),
+    };
+    Object.assign(row, {
+      client_skill_id: input.client_skill_id ?? existing?.client_skill_id ?? null,
+      name: input.name,
+      enabled: input.enabled,
+      content_hash: input.content_hash,
+      files: input.files,
+      deleted_at: null,
+      updated_at: existing ? bump(existing, at) : at,
+    });
+    skills.set(row.id, row);
+    return row;
+  }
+
+  function skillPage(query) {
+    const limit = Number(query.get("limit")) || 50;
+    const since = query.get("since");
+    const cursor = query.get("cursor");
+    const key = since ? "updated_at" : "created_at";
+    const bound = normalizeTimestamp(since ?? cursor);
+    const boundId = query.get(since ? "since_id" : "cursor_id");
+    const rows = [...skills.values()]
+      .filter((row) => since || !row.deleted_at)
+      .filter((row) => {
+        if (!bound) return true;
+        const order = compare(normalizeTimestamp(row[key]), bound);
+        return order > 0 || (order === 0 && (!boundId || row.id > boundId));
+      })
+      .sort((a, b) => compare(a[key], b[key]) || compare(a.id, b.id));
+    return { entries: rows.slice(0, limit), hasMore: rows.length > limit };
+  }
 
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
@@ -432,6 +479,26 @@ function createFakeCloud(config = {}) {
         return { entries: [], hasMore: false };
       case "POST /api/snippets/batch-create":
         return { created: [] };
+      case "GET /api/skills/list":
+        return skillPage(query);
+      case "POST /api/skills/batch-create":
+        return { created: (body?.entries ?? []).map((entry) => skillMeta(writeSkill(entry))) };
+      case "PATCH /api/skills/update": {
+        const row = skills.get(body?.id);
+        if (!row || row.deleted_at) throw new HttpError(404, "Skill not found", "not_found");
+        if (body.enabled != null) row.enabled = body.enabled;
+        if (body.files) Object.assign(row, { files: body.files, content_hash: body.content_hash });
+        row.updated_at = bump(row, clock());
+        return skillMeta(row);
+      }
+      case "DELETE /api/skills/delete": {
+        const row = skills.get(body?.id);
+        if (!row) throw new HttpError(404, "Skill not found", "not_found");
+        if (!row.deleted_at) Object.assign(tombstone({ store: skills, prefix: "skill" }, row.id), {
+          files: [],
+        });
+        return {};
+      }
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
     }
@@ -509,6 +576,9 @@ function createFakeCloud(config = {}) {
     notes: () => [...notes.values()].map((row) => structuredClone(row)),
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),
+    seedSkill: (input) => structuredClone(writeSkill(input)),
+    deleteSkill: (id) => structuredClone(tombstone({ store: skills, prefix: "skill" }, id)),
+    skills: () => [...skills.values()].map((row) => structuredClone(row)),
     note: (id) => {
       const row = notes.get(id) ?? findByClientId(noteCollection, id);
       return row ? structuredClone(row) : null;

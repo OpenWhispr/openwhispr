@@ -3,6 +3,7 @@ import type { ToolExecutionContext } from "../services/tools/ToolRegistry";
 import type { SkillIssue, SkillProblemCode, SkillProposal, SkillUpdate } from "../types/skills";
 import { APPROVAL_TTL_MS, approvalKey } from "./connectorApprovalStore";
 import { playSkillIcon } from "./skillsStore";
+import { syncAfterLocalWrite } from "../services/syncAfterLocalWrite";
 
 // A skill card writes only on this computer, through the skills IPC. It never goes through
 // the connector approval path, which refuses signed out, on the free plan or under policy.
@@ -224,6 +225,7 @@ export async function saveSkillApproval(key: string): Promise<void> {
     settle(key, { state: "failed" }, { state: "failed" });
     return;
   }
+  syncAfterLocalWrite("syncSkillsNow");
   if (entry.kind === "create") playSkillIcon(result.name);
   const edited = JSON.stringify(entry.draft) !== JSON.stringify(entry.original);
   settle(
@@ -253,11 +255,16 @@ export async function undoSkillApproval(key: string): Promise<void> {
     const result = await window.electronAPI
       ?.skillsUndo?.(entry.name, entry.versionId)
       .catch(() => null);
-    if (result?.ok) patchEntry(key, { state: "undone" });
-    // Main refuses once a later save changed the skill: undoing this one would lose that.
-    else if (result?.error === "invalid") patchEntry(key, { state: "changed_since" });
-    // A write that failed leaves the save in place, so Undo can be tried again.
-    else patchEntry(key, { undoFailed: true });
+    if (result?.ok) {
+      patchEntry(key, { state: "undone" });
+      syncAfterLocalWrite("syncSkillsNow");
+    } else if (result?.error === "invalid") {
+      // Main refuses once a later save changed the skill: undoing this one would lose that.
+      patchEntry(key, { state: "changed_since" });
+    } else {
+      // A write that failed leaves the save in place, so Undo can be tried again.
+      patchEntry(key, { undoFailed: true });
+    }
   } finally {
     undoing.delete(key);
   }

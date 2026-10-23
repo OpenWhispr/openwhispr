@@ -2,6 +2,7 @@ const debugLogger = require("../debugLogger");
 const { isSkillFolderName, writeErrorCode } = require("./skillLibrary");
 
 const INVALID = { ok: false, error: "invalid" };
+const UNAVAILABLE = { ok: false, error: "unavailable" };
 
 function isUploadItem(item) {
   return Boolean(item) && typeof item.fileName === "string" && item.data instanceof Uint8Array;
@@ -256,6 +257,81 @@ function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
       debugLogger.warn("Could not stamp a skill's last use", { error: error.message }, "skills");
     }
   });
+
+  // Cloud backup, driven by the renderer's SyncService as for snippets. A pull tells the
+  // windows once, at its end, through skills-broadcast-updated. A step that fails answers as
+  // one and is logged, as the assistant's channels do; SyncService tries it again next pass.
+  const { database } = library;
+  const isCloudEntry = (entry) => typeof entry?.name === "string";
+  const NOT_SAVED = { success: false };
+  const answering = (failure, failed, run) => {
+    try {
+      return run();
+    } catch (error) {
+      debugLogger.warn(failure, { error: error.message }, "skills");
+      return typeof failed === "function" ? failed(error) : failed;
+    }
+  };
+  ipcMain.handle("skills-get-pending", () =>
+    answering("Could not list skills to back up", [], () => {
+      // A rescan first, so an edit or removal made outside the app is sent too.
+      library.scan();
+      return database.getPendingSkills();
+    })
+  );
+  ipcMain.handle("skills-get-pending-deletes", () =>
+    answering("Could not list skill removals to back up", [], () =>
+      database.getPendingSkillDeletes()
+    )
+  );
+  ipcMain.handle("skills-export-for-cloud", (_event, name) =>
+    isSkillFolderName(name)
+      ? answering("Could not read a skill to back up", null, () => library.exportForCloud(name))
+      : null
+  );
+  // Not null when the lookup fails: null means this computer has no such skill.
+  ipcMain.handle("skills-get-for-cloud-merge", (_event, entry) =>
+    isCloudEntry(entry)
+      ? answering("Could not look up a skill from Cloud backup", UNAVAILABLE, () =>
+          database.getSkillForCloudMerge(entry)
+        )
+      : null
+  );
+  // Not false when the write fails: false means the entry was skipped for good.
+  ipcMain.handle("skills-apply-from-cloud", (_event, entry) =>
+    isCloudEntry(entry)
+      ? answering(
+          "Could not write a skill from Cloud backup",
+          (error) => ({ ok: false, error: writeErrorCode(error) }),
+          () => library.applyFromCloud(entry)
+        )
+      : false
+  );
+  ipcMain.handle(
+    "skills-mark-synced",
+    (_event, name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) => {
+      if (!isSkillFolderName(name) || typeof cloudId !== "string") return null;
+      // Nothing marked, so the push checks whether the skill is still here, as for an edit.
+      return answering("Could not mark a skill backed up", { ...NOT_SAVED, changes: 0 }, () =>
+        database.markSkillSynced(name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled)
+      );
+    }
+  );
+  ipcMain.handle("skills-hard-delete", (_event, name) =>
+    isSkillFolderName(name)
+      ? answering("Could not forget a removed skill", NOT_SAVED, () =>
+          database.hardDeleteSkillState(name)
+        )
+      : null
+  );
+  ipcMain.handle("skills-clear-cloud-id", (_event, name) =>
+    isSkillFolderName(name)
+      ? answering("Could not reset a skill's backup", NOT_SAVED, () =>
+          database.clearSkillCloudId(name)
+        )
+      : null
+  );
+  ipcMain.handle("skills-broadcast-updated", () => changed());
 }
 
 module.exports = { registerSkillsIpc };

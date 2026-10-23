@@ -127,7 +127,7 @@ test(
 );
 
 test("a filled form creates the skill, clears the draft and toasts", async (t) => {
-  const { container, calls, toasts, store } = await renderCreate(t);
+  const { container, calls, toasts, store, pushes } = await renderCreate(t);
   await fill(container, {
     name: "Weekly status report",
     description: "Writes my update.",
@@ -150,6 +150,7 @@ test("a filled form creates the skill, clears the draft and toasts", async (t) =
   assert.deepEqual(toasts, [
     { title: 'skills.toasts.created{"name":"Weekly status report"}', variant: "success" },
   ]);
+  assert.deepEqual(pushes, ["syncSkillsNow"]);
 });
 
 test(
@@ -377,7 +378,7 @@ test("a problem with the attached files shows in a toast, named by the file", as
 });
 
 test("a write that fails says why", async (t) => {
-  const { container, toasts, calls } = await renderCreate(t, {
+  const { container, toasts, calls, pushes } = await renderCreate(t, {
     api: { skillsCreate: async () => ({ ok: false, error: "permission" }) },
   });
   await fill(container, { name: "Draft", description: "Does it.", instructions: "Go" });
@@ -393,6 +394,7 @@ test("a write that fails says why", async (t) => {
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(pushes, []);
 });
 
 test("an added file appears as a chip and can be removed", async (t) => {

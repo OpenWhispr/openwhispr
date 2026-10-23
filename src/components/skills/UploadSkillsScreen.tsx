@@ -8,6 +8,7 @@ import { SectionLabel, SettingsPanel } from "../ui/SettingsSection";
 import { useToast } from "../ui/useToast";
 import { IntegrationsPane } from "../integrations/IntegrationsPane";
 import { refreshSkills, useSkillsStore } from "../../stores/skillsStore";
+import { syncAfterLocalWrite } from "../../services/syncAfterLocalWrite";
 import type { SkillProblemCode, SkillUploadPreview } from "../../types/skills";
 import { MAX_SKILL_BYTES, problemKey, warningKey, writeFailedToast } from "./skillCopy";
 
@@ -180,6 +181,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
       setSubmitting(false);
       return;
     }
+    syncAfterLocalWrite("syncSkillsNow");
     // Stays busy from here: the screen closes once the list has reloaded.
     await refreshSkills();
     toast({

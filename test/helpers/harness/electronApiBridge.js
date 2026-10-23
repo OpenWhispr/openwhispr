@@ -22,6 +22,49 @@ function inertSnippetApi() {
   };
 }
 
+// The skill sync surface, served by skillsIpc.js over a real SkillLibrary when the test gives
+// one, otherwise empty so a notes pass doesn't trip the binding check.
+function skillApi(library, onBroadcast) {
+  if (!library) {
+    return {
+      getPendingSkills: async () => [],
+      getPendingSkillDeletes: async () => [],
+      exportSkillForCloud: async () => null,
+      getSkillForCloudMerge: async () => null,
+      applySkillFromCloud: async () => false,
+      markSkillSynced: async () => ({ success: true, changes: 1 }),
+      hardDeleteSkill: async () => ({ success: true }),
+      clearSkillCloudId: async () => ({ success: true }),
+      broadcastSkillsUpdated: async () => undefined,
+    };
+  }
+  // The real handlers, so what a failing step answers is what SyncService reads.
+  const { registerSkillsIpc } = require("../../../src/helpers/skills/skillsIpc");
+  const handlers = new Map();
+  registerSkillsIpc({
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+    library,
+    shell: {},
+    broadcast: onBroadcast,
+  });
+  const invoke =
+    (channel) =>
+    async (...args) =>
+      handlers.get(channel)({ sender: null }, ...args);
+  return {
+    skillsList: invoke("skills-list"),
+    getPendingSkills: invoke("skills-get-pending"),
+    getPendingSkillDeletes: invoke("skills-get-pending-deletes"),
+    exportSkillForCloud: invoke("skills-export-for-cloud"),
+    getSkillForCloudMerge: invoke("skills-get-for-cloud-merge"),
+    applySkillFromCloud: invoke("skills-apply-from-cloud"),
+    markSkillSynced: invoke("skills-mark-synced"),
+    hardDeleteSkill: invoke("skills-hard-delete"),
+    clearSkillCloudId: invoke("skills-clear-cloud-id"),
+    broadcastSkillsUpdated: invoke("skills-broadcast-updated"),
+  };
+}
+
 // Every analytics binding syncPendingAnalytics reaches for. A missing one does
 // not fail loudly here -- SyncService catches the TypeError and logs it -- so
 // the pass silently does nothing and the test that asserts it drained still
@@ -183,6 +226,7 @@ function createElectronApi(db, options = {}) {
     broadcastDictionaryUpdated: async () => ({ success: true }),
 
     ...inertSnippetApi(),
+    ...skillApi(options.skillLibrary, (name) => syncEvents.push({ name })),
     ...inertAnalyticsApi(),
   };
 }

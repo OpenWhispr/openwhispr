@@ -3,7 +3,13 @@ const React = require("react");
 const { createRendererServer, installBrowserGlobals } = require("./rendererTestHarness");
 const { installInteractiveDom } = require("./interactiveDom");
 
+// Cloud backup as the skills screens see it: on (signed in, paid, switched on, allowed) or not.
+const cloudBackup = (active) => ({
+  "/hooks/useCloudBackupActive": `export const useCloudBackupActive = () => ${active};`,
+});
+
 const SKILLS_MOCKS = {
+  ...cloudBackup(false),
   "react-i18next": `
     const t = (key, values) => (values ? key + JSON.stringify(values) : key);
     export const useTranslation = () => ({ t, i18n: { language: "en" } });
@@ -45,6 +51,10 @@ const SKILLS_MOCKS = {
       return createElement("button", { type: "button", role: "menuitem", onClick }, children);
     }
     export const DropdownMenuSeparator = () => createElement("div", { role: "separator" });
+  `,
+  // Each backup push a screen starts, so a test can count them.
+  "/services/syncAfterLocalWrite": `
+    export const syncAfterLocalWrite = (method) => globalThis.__skillPushes?.push(method);
   `,
   "/ui/useToast": `
     export const useToast = () => ({ toast: (props) => globalThis.__skillToasts.push(props) });
@@ -151,7 +161,16 @@ const settle = () => React.act(async () => new Promise((resolve) => setImmediate
  */
 async function mountSkillsComponent(
   t,
-  { modulePath, exportName, props = {}, skills = [], api = {}, wrap, platform = "darwin" }
+  {
+    modulePath,
+    exportName,
+    props = {},
+    skills = [],
+    api = {},
+    wrap,
+    platform = "darwin",
+    mocks = {},
+  }
 ) {
   let root = null;
   t.after(async () => {
@@ -160,6 +179,9 @@ async function mountSkillsComponent(
   const toasts = [];
   globalThis.__skillToasts = toasts;
   t.after(() => delete globalThis.__skillToasts);
+  const pushes = [];
+  globalThis.__skillPushes = pushes;
+  t.after(() => delete globalThis.__skillPushes);
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -175,7 +197,7 @@ async function mountSkillsComponent(
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-skills-screen-test-",
     noExternal: ["react-i18next"],
-    mockModules: SKILLS_MOCKS,
+    mockModules: { ...SKILLS_MOCKS, ...mocks },
   });
   const store = await vite.ssrLoadModule("/stores/skillsStore.ts");
   store.useSkillsStore.setState({ skills, loaded: true });
@@ -189,11 +211,13 @@ async function mountSkillsComponent(
     await React.act(async () => root.unmount());
     root = null;
   };
-  return { container, toasts, store, vite, unmount };
+  return { container, toasts, pushes, store, vite, unmount };
 }
+
 
 module.exports = {
   SKILLS_MOCKS,
+  cloudBackup,
   ariaLabel,
   click,
   dispatch,

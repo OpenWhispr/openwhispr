@@ -4568,6 +4568,7 @@
       "neverRun": "O OpenWhispr nunca executa scripts",
       "uninstall": "Desinstalar",
       "uninstallConfirm": "Desinstalar {{name}}? Ela será removida deste computador.",
+      "uninstallConfirmSynced": "Desinstalar {{name}}? Ela será removida deste computador e dos seus outros dispositivos.",
       "problem": "Esta habilidade não pode ser usada até ser corrigida: {{reason}}",
       "tryNow": "Experimentar agora"
     },
@@ -4593,6 +4594,7 @@
     "manage": {
       "title": "Gerenciar habilidades",
       "description": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador.",
+      "descriptionBackedUp": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador e no Backup na nuvem.",
       "noMatches": "Nenhuma habilidade corresponde a \"{{query}}\".",
       "none": "Nenhuma habilidade ainda."
     },
@@ -4738,6 +4740,9 @@
       "pasteNote": "Cola sem pressionar Enter, para você escolher quando executar.",
       "pasted": "Colado",
       "pasteFailed": "Não foi possível colar. O texto está na sua área de transferência."
+    },
+    "sync": {
+      "tooLarge": "Grande demais para o backup"
     }
   },
   "calendar": {

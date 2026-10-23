@@ -233,7 +233,7 @@ test("Replace and Skip decide what a duplicate does, with Undo", async (t) => {
 });
 
 test("Upload counts ready skills and replaced ones", async (t) => {
-  const { container, calls, toasts, drop } = await renderUpload(t, {
+  const { container, calls, toasts, drop, pushes } = await renderUpload(t, {
     skills: [skill("dup-skill")],
     previews: [ready("a.md", "ready-one"), duplicate("b.zip", "dup-skill")],
   });
@@ -256,6 +256,7 @@ test("Upload counts ready skills and replaced ones", async (t) => {
   ]);
   assert.deepEqual(calls.done, [["dup-skill", "ready-one"]]);
   assert.deepEqual(toasts, [{ title: 'skills.toasts.uploaded{"count":2}', variant: "success" }]);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "one backup for the whole upload");
 });
 
 test("a skill dropped again in a later drop asks Replace or Skip too", async (t) => {
@@ -482,7 +483,7 @@ test("every file that doesn't install gets its own toast, named", async (t) => {
 });
 
 test("a skill that appeared before Upload was pressed says so, then asks Replace or Skip", async (t) => {
-  const { container, calls, toasts, drop } = await renderUpload(t, {
+  const { container, calls, toasts, drop, pushes } = await renderUpload(t, {
     previews: [ready("a.md", "weekly")],
     commit: { installed: [], failed: [{ fileName: "a.md", error: "exists" }] },
     api: { skillsList: async () => ({ skills: calls.committed.length ? [skill("weekly")] : [] }) },
@@ -497,6 +498,7 @@ test("a skill that appeared before Upload was pressed says so, then asks Replace
   ]);
   assert.match(label(rows(container)[0]), /skills\.upload\.duplicate/);
   assert.equal(submit(container).getAttribute("disabled"), "");
+  assert.deepEqual(pushes, [], "nothing installed, nothing to back up");
 });
 
 test("chosen files are previewed like dropped ones, and the input takes skill files", async (t) => {

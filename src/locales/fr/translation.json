@@ -4740,6 +4740,7 @@
       "neverRun": "OpenWhispr n'exécute jamais de scripts",
       "uninstall": "Désinstaller",
       "uninstallConfirm": "Désinstaller {{name}} ? Elle sera supprimée de cet ordinateur.",
+      "uninstallConfirmSynced": "Désinstaller {{name}} ? Elle sera supprimée de cet ordinateur et de vos autres appareils.",
       "problem": "Cette compétence ne peut pas être utilisée tant qu'elle n'est pas corrigée : {{reason}}",
       "tryNow": "Essayer maintenant"
     },
@@ -4765,6 +4766,7 @@
     "manage": {
       "title": "Gérer les compétences",
       "description": "Activez ou désactivez des compétences, ou supprimez celles que vous n'utilisez pas. Chacune est enregistrée sur cet ordinateur.",
+      "descriptionBackedUp": "Activez ou désactivez des compétences, ou supprimez celles que vous n'utilisez pas. Chacune est enregistrée sur cet ordinateur et dans votre Sauvegarde cloud.",
       "noMatches": "Aucune compétence ne correspond à « {{query}} ».",
       "none": "Aucune compétence pour l'instant."
     },
@@ -4910,6 +4912,9 @@
       "pasteNote": "Colle sans appuyer sur Entrée : vous choisissez quand l'exécuter.",
       "pasted": "Collé",
       "pasteFailed": "Impossible de coller. Le texte est dans votre presse-papiers."
+    },
+    "sync": {
+      "tooLarge": "Trop volumineuse pour être sauvegardée"
     }
   },
   "notesView": {

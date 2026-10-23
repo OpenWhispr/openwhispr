@@ -4,6 +4,7 @@ const path = require("path");
 const debugLogger = require("../debugLogger");
 const {
   SKILL_LIMITS,
+  SKILL_NAME_PATTERN,
   parseSkillMarkdown,
   validateSkillFiles,
   displayNameFor,
@@ -27,6 +28,10 @@ const MODEL_FILES_MAX_BYTES = 200 * 1024;
 const PROPOSAL_LIMITS = { maxFiles: 20, maxFileBytes: 200 * 1024, maxBytes: 1024 * 1024 };
 // Copies kept per skill for Undo, newest first; older ones are deleted.
 const VERSIONS_KEPT = 5;
+// What Cloud backup carries per skill, the same caps as the server's. A bigger skill stays on
+// this computer only.
+const SYNC_LIMITS = { maxFiles: 100, maxBytes: 1024 * 1024 };
+
 // Where a replace puts the old copy while the new one is swapped in, named for its skill.
 const MOVED_ASIDE = /^\.replaced-[0-9a-f-]{36}-(.+)$/;
 
@@ -138,6 +143,7 @@ function toSummary(inspected, state) {
     enabled: state.enabled,
     valid: !problem,
     ...(problem ? { problem } : {}),
+    ...(inspected.tooLargeToSync ? { tooLargeToSync: true } : {}),
     addedAt: state.createdAt,
     updatedAt: state.updatedAt,
     lastUsedAt: state.lastUsedAt,
@@ -154,10 +160,47 @@ function titleTaken(skill) {
   return { code: "nameTaken", values: { name: skill.displayName } };
 }
 
-function sizeProblem(files) {
-  if (files.length > SKILL_LIMITS.maxFiles) return { code: "tooManyFiles" };
+function sizeProblem(files, limits = SKILL_LIMITS) {
+  if (files.length > limits.maxFiles) return { code: "tooManyFiles" };
   const bytes = files.reduce((total, file) => total + file.data.length, 0);
-  return bytes > SKILL_LIMITS.maxBytes ? { code: "tooLarge" } : null;
+  return bytes > limits.maxBytes ? { code: "tooLarge" } : null;
+}
+
+// Text crosses as UTF-8 when it comes back byte for byte and isn't larger as JSON than base64
+// would be (control characters escape to six bytes each); anything else as base64.
+function toCloudFile({ path: relPath, data }) {
+  const base64 = data.toString("base64");
+  const text = data.toString("utf8");
+  // A NUL anywhere goes as base64: the server's JSON storage can't hold one in text.
+  const asText =
+    isTextFile(data) &&
+    !data.includes(0) &&
+    Buffer.from(text, "utf8").equals(data) &&
+    Buffer.byteLength(JSON.stringify(text)) <= base64.length + 2;
+  return asText
+    ? { path: relPath, encoding: "utf8", content: text }
+    : { path: relPath, encoding: "base64", content: base64 };
+}
+
+// The server stores paths of at most 512 characters, with forward slashes only.
+const isCloudPath = (relPath) => relPath.length <= 512 && !relPath.includes("\\");
+
+// A cloud skill's files as bytes, or null when the list isn't one this library would write.
+function fromCloudFiles(files) {
+  if (!Array.isArray(files)) return null;
+  const decoded = [];
+  for (const file of files) {
+    if (
+      typeof file?.path !== "string" ||
+      typeof file.content !== "string" ||
+      !["utf8", "base64"].includes(file.encoding) ||
+      !isSafeArchivePath(file.path)
+    ) {
+      return null;
+    }
+    decoded.push({ path: file.path, data: Buffer.from(file.content, file.encoding) });
+  }
+  return hasClashingPaths(decoded.map((file) => file.path)) ? null : decoded;
 }
 
 function readBuiltin(name) {
@@ -267,7 +310,11 @@ class SkillLibrary {
   scan() {
     fs.mkdirSync(this.skillsDir, { recursive: true });
     const found = new Map();
+    // A skill a replace left moved aside isn't gone: the next start puts it back.
+    const waiting = new Set();
     for (const entry of fs.readdirSync(this.skillsDir, { withFileTypes: true })) {
+      const movedAside = MOVED_ASIDE.exec(entry.name)?.[1];
+      if (movedAside) waiting.add(movedAside);
       // Hidden names include the staging and trash folders of a write in progress. A name the
       // app can't address, such as a Windows device name, is left alone too: it couldn't be
       // opened, switched or removed from here.
@@ -290,7 +337,7 @@ class SkillLibrary {
       }
     }
     for (const name of states.keys()) {
-      if (!found.has(name)) this.database.deleteSkillState(name);
+      if (!found.has(name) && !waiting.has(name)) this.database.deleteSkillState(name);
     }
 
     return this.database
@@ -367,20 +414,7 @@ class SkillLibrary {
 
   uninstall(name) {
     if (!isSkillFolderName(name)) return;
-    const trash = path.join(this.skillsDir, `.trash-${crypto.randomUUID()}`);
-    try {
-      renameWithRetry(path.join(this.skillsDir, name), trash);
-    } catch (error) {
-      if (error.code !== "ENOENT") throw writeError(error);
-    }
-    this._removeQuietly(trash);
-    // Every copy goes: an old one a finished replace couldn't remove would otherwise come back
-    // as this skill when the library next opens.
-    for (const entry of fs.readdirSync(this.skillsDir)) {
-      if (MOVED_ASIDE.exec(entry)?.[1] === name) this._discard(path.join(this.skillsDir, entry));
-    }
-    this._removeQuietly(path.join(this.versionsDir, name));
-    this.inspected.delete(name);
+    this._removeSkill(name);
     this.database.deleteSkillState(name);
   }
 
@@ -629,6 +663,56 @@ class SkillLibrary {
     this.database.markSkillUsed(name);
   }
 
+  // A skill's files for Cloud backup, with the hash they make. Null when there's no such skill or
+  // it needs fixing; tooLargeToSync when it is over the backup caps.
+  exportForCloud(name) {
+    // skillDir refuses a link, so nothing outside the skills folder is ever sent.
+    if (!this.skillDir(name)) return null;
+    const inspected = this._inspect(name);
+    if (inspected.problems.length > 0) return null;
+    if (inspected.tooLargeToSync) return { tooLargeToSync: true };
+    const walked = walkSkillFolder(this.skillDir(name));
+    if (walked.unreadable || !walked.files.every((file) => isCloudPath(file.path))) return null;
+    const files = walked.files
+      .sort(byPath)
+      .map((file) => ({ path: file.path, data: fs.readFileSync(file.fullPath) }));
+    return { files: files.map(toCloudFile), contentHash: contentHash(files) };
+  }
+
+  // A skill from Cloud backup: checked like one found on disk, then written in one swap. A
+  // tombstone removes the skill and its versions. False when the entry was skipped.
+  applyFromCloud(entry) {
+    const name = entry?.name;
+    const skip = (reason) => {
+      debugLogger.warn("Skipped a skill from Cloud backup", { name, reason }, "skills");
+      return false;
+    };
+    if (!isSkillFolderName(name) || !SKILL_NAME_PATTERN.test(name)) return skip("name");
+    // One too large to back up stays as it is here; the cloud never had this copy of it. Nor
+    // does one whose files can't be read to compare: past this computer's own limits, holding
+    // a link, or not readable by the app.
+    if (this.skillDir(name)) {
+      const here = this._inspect(name);
+      if (here.tooLargeToSync) return skip("tooLargeToSync");
+      if (!here.hash) return skip("unreadable");
+    }
+    if (entry.deleted_at) {
+      this._removeSkill(name);
+      this.database.upsertSkillStateFromCloud(entry, null);
+      return true;
+    }
+    const files = fromCloudFiles(entry.files);
+    if (!files) return skip("files");
+    if (sizeProblem(files, SYNC_LIMITS)) return skip("size");
+    const { problems } = validateSkillFiles(files, { folderName: name, source: "disk" });
+    if (problems.length > 0) return skip(problems[0].code);
+    const hash = contentHash(files);
+    if (this._diskHash(name) !== hash) this._writeSkillFolder(name, files);
+    this.inspected.delete(name);
+    this.database.upsertSkillStateFromCloud(entry, hash);
+    return true;
+  }
+
   _inspect(name) {
     let walked;
     try {
@@ -657,6 +741,7 @@ class SkillLibrary {
       ...validateSkillFiles(files, { folderName: name, source: "disk" }),
       hash: contentHash(files),
       fingerprint: walked.fingerprint,
+      tooLargeToSync: sizeProblem(files, SYNC_LIMITS) !== null,
     };
     this.inspected.set(name, inspected);
     return inspected;
@@ -775,6 +860,35 @@ class SkillLibrary {
     return contentHash(
       walked.files.map((file) => ({ path: file.path, data: fs.readFileSync(file.fullPath) }))
     );
+  }
+
+  // The hash of what is on disk, or null when there's no readable skill folder.
+  _diskHash(name) {
+    try {
+      return this.skillDir(name) ? this._folderHash(name) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Removes a skill's folder and the versions kept for it.
+  _removeSkill(name) {
+    const trash = path.join(this.skillsDir, `.trash-${crypto.randomUUID()}`);
+    try {
+      renameWithRetry(path.join(this.skillsDir, name), trash);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw writeError(error);
+    }
+    this._removeQuietly(trash);
+    // Every copy goes: an old one a finished replace couldn't remove would otherwise come back
+    // as this skill when the library next opens. A tombstone pulled before any skill was
+    // written here finds no skills folder at all.
+    const entries = fs.existsSync(this.skillsDir) ? fs.readdirSync(this.skillsDir) : [];
+    for (const entry of entries) {
+      if (MOVED_ASIDE.exec(entry)?.[1] === name) this._discard(path.join(this.skillsDir, entry));
+    }
+    this._removeQuietly(path.join(this.versionsDir, name));
+    this.inspected.delete(name);
   }
 
   // A new skill starts on; one that replaces a skill keeps that skill's switch.

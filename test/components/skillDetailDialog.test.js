@@ -7,6 +7,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const {
   ariaLabel,
   click,
+  cloudBackup,
   dispatch,
   label,
   mountSkillsComponent,
@@ -22,12 +23,16 @@ const FILES = [
   { path: "scripts/export.sh", size: 11, text: true, script: true },
 ];
 
-async function openDetail(t, { summary = skill("meeting-prep"), confirm = false, api = {} } = {}) {
+async function openDetail(
+  t,
+  { summary = skill("meeting-prep"), confirm = false, api = {}, backup = false } = {}
+) {
   const calls = { openChange: [], uninstalled: 0, read: [], clipboard: [], switched: [] };
   const mounted = await mountSkillsComponent(t, {
     modulePath: "/components/skills/SkillDetailDialog.tsx",
     exportName: "SkillDetailDialog",
     skills: [summary],
+    mocks: cloudBackup(backup),
     api: {
       skillsGet: async (name) => ({ ...summary, name, markdown: MARKDOWN, files: FILES }),
       skillsSetEnabled: async (name, enabled) => {
@@ -126,7 +131,7 @@ test("Uninstall asks in the footer first and then removes the skill", async (t) 
 
 test("pressing Uninstall again while it runs uninstalls once", async (t) => {
   const uninstalled = [];
-  const { container, toasts } = await openDetail(t, {
+  const { container, toasts, pushes } = await openDetail(t, {
     api: {
       skillsUninstall: async (name) => {
         uninstalled.push(name);
@@ -145,6 +150,7 @@ test("pressing Uninstall again while it runs uninstalls once", async (t) => {
 
   assert.deepEqual(uninstalled, ["meeting-prep"]);
   assert.equal(toasts.length, 1);
+  assert.deepEqual(pushes, ["syncSkillsNow"], "backed up once");
 });
 
 test("Copy markdown copies what the pop-up shows, without reading the skill again", async (t) => {
@@ -179,7 +185,7 @@ test("a file that can't be copied says so", async (t) => {
 });
 
 test("a failed uninstall keeps the pop-up open and says why", async (t) => {
-  const { container, toasts, calls } = await openDetail(t, {
+  const { container, toasts, calls, pushes } = await openDetail(t, {
     api: { skillsUninstall: async () => ({ ok: false, error: "permission" }) },
   });
 
@@ -195,6 +201,7 @@ test("a failed uninstall keeps the pop-up open and says why", async (t) => {
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(pushes, []);
 });
 
 test("Esc in the confirm cancels it, and Esc again closes the pop-up", async (t) => {
@@ -272,7 +279,7 @@ test("scripts say OpenWhispr never runs them and binary files have no Copy butto
 });
 
 test("switching a skill on plays its icon once; switching it off doesn't", async (t) => {
-  const { container, store, calls } = await openDetail(t, {
+  const { container, store, calls, pushes } = await openDetail(t, {
     summary: skill("meeting-prep", { enabled: false }),
   });
   const icon = () =>
@@ -294,10 +301,11 @@ test("switching a skill on plays its icon once; switching it off doesn't", async
   ]);
   assert.equal(icon() === played, true);
   assert.equal(store.useSkillsStore.getState().iconPlays["meeting-prep"], 1);
+  assert.deepEqual(pushes, ["syncSkillsNow", "syncSkillsNow"], "each saved switch is backed up");
 });
 
 test("a switch that can't be saved says so", async (t) => {
-  const { container, toasts } = await openDetail(t, {
+  const { container, toasts, pushes } = await openDetail(t, {
     api: { skillsSetEnabled: async () => ({ ok: false, error: "unknown" }) },
   });
 
@@ -305,6 +313,7 @@ test("a switch that can't be saved says so", async (t) => {
   await settle();
 
   assert.deepEqual(toasts, [{ title: "skills.toasts.writeFailed", variant: "destructive" }]);
+  assert.deepEqual(pushes, []);
 });
 
 test("an invalid skill's switch is off and disabled, and its problem is shown", async (t) => {
@@ -407,5 +416,19 @@ test("the reveal label follows the platform", async (t) => {
       "controlPanel.history.showInFolderWindows",
       "controlPanel.history.showInFolderLinux",
     ]
+  );
+});
+
+test("with Cloud backup on, Uninstall says it is also removed from other devices", async (t) => {
+  const { container } = await openDetail(t, {
+    backup: true,
+    summary: skill("meeting-prep", { displayName: "Meeting prep" }),
+  });
+
+  await click(button(container, "skills.detail.uninstall"));
+
+  assert.match(
+    label(alert(container)),
+    /^skills\.detail\.uninstallConfirmSynced\{"name":"Meeting prep"\}/
   );
 });

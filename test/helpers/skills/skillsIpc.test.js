@@ -41,6 +41,16 @@ function fakeLibrary(overrides = {}) {
     markUsed: record("markUsed"),
     applyUpdate: record("applyUpdate", { name: "meeting-prep", versionId: "1760950800000" }),
     undo: record("undo", true),
+    exportForCloud: record("exportForCloud", { files: [], contentHash: "h" }),
+    applyFromCloud: record("applyFromCloud", true),
+    database: {
+      getPendingSkills: record("getPendingSkills", [{ name: "meeting-prep" }]),
+      getPendingSkillDeletes: record("getPendingSkillDeletes", []),
+      getSkillForCloudMerge: record("getSkillForCloudMerge", null),
+      markSkillSynced: record("markSkillSynced", { success: true, changes: 1 }),
+      hardDeleteSkillState: record("hardDeleteSkillState", { success: true }),
+      clearSkillCloudId: record("clearSkillCloudId", { success: true }),
+    },
     ...overrides,
   };
 }
@@ -391,5 +401,102 @@ test("an update or Undo that fails to write reports why", async () => {
     ok: false,
     error: "permission",
   });
+  assert.deepEqual(broadcasts, []);
+});
+
+test("the sync channels rescan before reading and broadcast only when told", async () => {
+  const { call, library, broadcasts } = setup();
+  const entry = { id: "c1", name: "meeting-prep", files: [] };
+
+  assert.deepEqual(await call("skills-get-pending"), [{ name: "meeting-prep" }]);
+  await call("skills-get-pending-deletes");
+  await call("skills-export-for-cloud", "meeting-prep");
+  await call("skills-get-for-cloud-merge", entry);
+  assert.equal(await call("skills-apply-from-cloud", entry), true);
+  await call("skills-mark-synced", "meeting-prep", "c1", "2026-10-21T09:00:00Z", "h", true);
+  await call("skills-hard-delete", "meeting-prep");
+  await call("skills-clear-cloud-id", "meeting-prep");
+  assert.deepEqual(broadcasts, [], "a pull tells the windows once, at its end");
+  await call("skills-broadcast-updated");
+
+  assert.deepEqual(
+    library.calls.map(([method]) => method),
+    [
+      "scan",
+      "getPendingSkills",
+      "getPendingSkillDeletes",
+      "exportForCloud",
+      "getSkillForCloudMerge",
+      "applyFromCloud",
+      "markSkillSynced",
+      "hardDeleteSkillState",
+      "clearSkillCloudId",
+    ]
+  );
+  assert.deepEqual(broadcasts, ["skills-changed"]);
+});
+
+test("the sync channels refuse a malformed name or entry", async () => {
+  const { call, library } = setup();
+
+  for (const name of [7, "../escape", ".hidden"]) {
+    assert.equal(await call("skills-export-for-cloud", name), null);
+    assert.equal(await call("skills-mark-synced", name, "c1", null, "h", true), null);
+    assert.equal(await call("skills-hard-delete", name), null);
+    assert.equal(await call("skills-clear-cloud-id", name), null);
+  }
+  for (const entry of [null, "x", { name: 7 }]) {
+    assert.equal(await call("skills-apply-from-cloud", entry), false);
+    assert.equal(await call("skills-get-for-cloud-merge", entry), null);
+  }
+  assert.equal(await call("skills-mark-synced", "meeting-prep", 3, null, "h", true), null);
+
+  assert.deepEqual(library.calls, []);
+});
+
+// As for the assistant's channels: a sync step that fails answers as one and is logged.
+// SyncService reads the answer and tries that step again next pass.
+test("the sync channels answer and log when the library or database fails", async (t) => {
+  const fail = () => {
+    throw Object.assign(new Error("EBUSY: resource busy, rename '/data/skills/recap'"), {
+      code: "unknown",
+    });
+  };
+  const { call, broadcasts } = setup({
+    scan: fail,
+    exportForCloud: fail,
+    applyFromCloud: fail,
+    database: {
+      getPendingSkills: fail,
+      getPendingSkillDeletes: fail,
+      getSkillForCloudMerge: fail,
+      markSkillSynced: fail,
+      hardDeleteSkillState: fail,
+      clearSkillCloudId: fail,
+    },
+  });
+  const warn = t.mock.method(debugLogger, "warn", () => {});
+  const entry = { id: "c1", name: "meeting-prep", files: [] };
+
+  assert.deepEqual(await call("skills-get-pending"), []);
+  assert.deepEqual(await call("skills-get-pending-deletes"), []);
+  assert.equal(await call("skills-export-for-cloud", "meeting-prep"), null);
+  assert.deepEqual(await call("skills-get-for-cloud-merge", entry), {
+    ok: false,
+    error: "unavailable",
+  });
+  assert.deepEqual(await call("skills-apply-from-cloud", entry), { ok: false, error: "unknown" });
+  assert.deepEqual(
+    await call("skills-mark-synced", "meeting-prep", "c1", null, "h", true),
+    { success: false, changes: 0 },
+    "nothing marked"
+  );
+  for (const answer of [
+    await call("skills-hard-delete", "meeting-prep"),
+    await call("skills-clear-cloud-id", "meeting-prep"),
+  ]) {
+    assert.deepEqual(answer, { success: false });
+  }
+  assert.equal(warn.mock.callCount(), 8);
   assert.deepEqual(broadcasts, []);
 });

@@ -43,6 +43,13 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+// A skill state write that changes something Cloud backup carries (or brings a removed name
+// back). SQLite evaluates it against the row as it was before the update.
+// Skill changes are stamped to the millisecond: a pull compares them with the server's own.
+const SKILL_NOW = "strftime('%Y-%m-%d %H:%M:%f', 'now')";
+const SKILL_CHANGED =
+  "(deleted_at IS NOT NULL OR (@enabled IS NOT NULL AND enabled IS NOT @enabled) OR " +
+  "(@contentHash IS NOT NULL AND content_hash IS NOT @contentHash))";
 
 // Text a local writer creates is the user's: recording it as a set lets
 // conflict Keep tell it from text this device merely pulled. A blank stays
@@ -1337,6 +1344,20 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      // Sync columns for skills (Cloud backup)
+      for (const column of [
+        "client_skill_id TEXT",
+        "cloud_id TEXT",
+        "sync_status TEXT DEFAULT 'pending'",
+        "deleted_at TEXT",
+      ]) {
+        try {
+          this.db.exec(`ALTER TABLE skills ADD COLUMN ${column}`);
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
+      }
+
       // Backfill client IDs for existing rows
       const syncTables = [
         { table: "notes", col: "client_note_id" },
@@ -1345,6 +1366,7 @@ class DatabaseManager {
         { table: "transcriptions", col: "client_transcription_id" },
         { table: "custom_dictionary", col: "client_dict_id" },
         { table: "snippets", col: "client_snippet_id" },
+        { table: "skills", col: "client_skill_id" },
       ];
       for (const { table, col } of syncTables) {
         const rows = this.db.prepare(`SELECT id FROM ${table} WHERE ${col} IS NULL`).all();
@@ -1435,6 +1457,12 @@ class DatabaseManager {
       );
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
+      );
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_client_id ON skills(client_skill_id) WHERE client_skill_id IS NOT NULL"
+      );
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_skills_pending_sync ON skills(sync_status) WHERE sync_status = 'pending'"
       );
 
       this.db.exec(`
@@ -3215,43 +3243,51 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const toIso = (value) => parseDbTimestamp(value)?.toISOString() ?? null;
-      return this.db
-        .prepare("SELECT * FROM skills ORDER BY created_at DESC, id DESC")
-        .all()
-        .map((row) => ({
-          name: row.name,
-          enabled: row.enabled === 1,
-          contentHash: row.content_hash,
-          lastUsedAt: toIso(row.last_used_at),
-          createdAt: toIso(row.created_at),
-          updatedAt: toIso(row.updated_at),
-        }));
+      return (
+        this.db
+          // julianday reads both the local and the cloud's ISO timestamps, which sort apart as text.
+          .prepare(
+            "SELECT * FROM skills WHERE deleted_at IS NULL ORDER BY julianday(created_at) DESC, id DESC"
+          )
+          .all()
+          .map((row) => ({
+            name: row.name,
+            enabled: row.enabled === 1,
+            contentHash: row.content_hash,
+            lastUsedAt: toIso(row.last_used_at),
+            createdAt: toIso(row.created_at),
+            updatedAt: toIso(row.updated_at),
+          }))
+      );
     } catch (error) {
       debugLogger.error("Error getting skill states", { error: error.message }, "database");
       throw error;
     }
   }
 
-  // Inserts the row (on unless told otherwise) or updates the states given; a new
-  // content hash also stamps updated_at.
+  // Inserts the row (on unless told otherwise) or updates the states given. A change, or a
+  // name coming back after an uninstall, stamps updated_at and waits for Cloud backup.
   upsertSkillState(name, { enabled, contentHash } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       this.db
         .prepare(
-          `INSERT INTO skills (name, enabled, content_hash)
-           VALUES (@name, COALESCE(@enabled, 1), @contentHash)
+          `INSERT INTO skills
+             (name, enabled, content_hash, client_skill_id, sync_status, created_at, updated_at)
+           VALUES (@name, COALESCE(@enabled, 1), @contentHash, @clientId, 'pending',
+             ${SKILL_NOW}, ${SKILL_NOW})
            ON CONFLICT(name) DO UPDATE SET
              enabled = COALESCE(@enabled, enabled),
              content_hash = COALESCE(@contentHash, content_hash),
-             updated_at = CASE
-               WHEN @contentHash IS NOT NULL AND content_hash IS NOT @contentHash
-               THEN datetime('now') ELSE updated_at END`
+             sync_status = CASE WHEN ${SKILL_CHANGED} THEN 'pending' ELSE sync_status END,
+             updated_at = CASE WHEN ${SKILL_CHANGED} THEN ${SKILL_NOW} ELSE updated_at END,
+             deleted_at = NULL`
         )
         .run({
           name,
           enabled: enabled === undefined ? null : Number(enabled),
           contentHash: contentHash ?? null,
+          clientId: randomUUID(),
         });
     } catch (error) {
       debugLogger.error("Error saving skill state", { error: error.message }, "database");
@@ -3263,8 +3299,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const result = this.db
-        .prepare("UPDATE skills SET enabled = ? WHERE name = ?")
-        .run(Number(enabled), name);
+        .prepare(
+          `UPDATE skills SET
+             sync_status = CASE WHEN enabled IS NOT @enabled THEN 'pending' ELSE sync_status END,
+             updated_at = CASE WHEN enabled IS NOT @enabled THEN ${SKILL_NOW} ELSE updated_at END,
+             enabled = @enabled
+           WHERE name = @name AND deleted_at IS NULL`
+        )
+        .run({ name, enabled: Number(enabled) });
       return result.changes > 0;
     } catch (error) {
       debugLogger.error("Error switching skill", { error: error.message }, "database");
@@ -3282,12 +3324,166 @@ class DatabaseManager {
     }
   }
 
+  // A skill Cloud backup holds stays as a tombstone until its delete is pushed.
   deleteSkillState(name) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      this.db.prepare("DELETE FROM skills WHERE name = ?").run(name);
+      this.db
+        .prepare(
+          `UPDATE skills SET deleted_at = ${SKILL_NOW}, updated_at = ${SKILL_NOW},
+             sync_status = 'pending'
+           WHERE name = ? AND cloud_id IS NOT NULL AND deleted_at IS NULL`
+        )
+        .run(name);
+      this.db.prepare("DELETE FROM skills WHERE name = ? AND cloud_id IS NULL").run(name);
     } catch (error) {
       debugLogger.error("Error deleting skill state", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingSkills() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare("SELECT * FROM skills WHERE sync_status = 'pending' AND deleted_at IS NULL")
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting pending skills", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingSkillDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM skills WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending skill deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // The local row a cloud skill is: by client id, then cloud id, then name.
+  getSkillForCloudMerge(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const find = (column, value) =>
+        typeof value === "string" && value
+          ? this.db.prepare(`SELECT * FROM skills WHERE ${column} = ? LIMIT 1`).get(value)
+          : undefined;
+      return (
+        find("client_skill_id", cloudEntry?.client_skill_id) ??
+        find("cloud_id", cloudEntry?.id) ??
+        find("name", cloudEntry?.name) ??
+        null
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Error getting skill for cloud merge",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // The state of a skill the library has just written (or removed) from the cloud.
+  upsertSkillStateFromCloud(cloudEntry, contentHash) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          `INSERT INTO skills (name, enabled, content_hash, client_skill_id, cloud_id,
+             sync_status, deleted_at, created_at, updated_at)
+           VALUES (@name, @enabled, @contentHash, @clientId, @cloudId, 'synced', @deletedAt,
+             @createdAt, @updatedAt)
+           ON CONFLICT(name) DO UPDATE SET
+             enabled = excluded.enabled,
+             content_hash = COALESCE(excluded.content_hash, content_hash),
+             client_skill_id = COALESCE(excluded.client_skill_id, client_skill_id),
+             cloud_id = excluded.cloud_id,
+             sync_status = 'synced',
+             deleted_at = excluded.deleted_at,
+             updated_at = excluded.updated_at`
+        )
+        .run({
+          name: cloudEntry.name,
+          enabled: Number(cloudEntry.enabled !== false),
+          contentHash: contentHash ?? null,
+          clientId: cloudEntry.client_skill_id || null,
+          cloudId: cloudEntry.id,
+          deletedAt: cloudEntry.deleted_at ?? null,
+          createdAt: cloudEntry.created_at,
+          updatedAt: cloudEntry.updated_at,
+        });
+    } catch (error) {
+      debugLogger.error("Error saving skill from cloud", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Synced only if the row still holds what was pushed: an edit that landed meanwhile stays
+  // pending, and keeps the cloud id so the next pass sends it as an update.
+  markSkillSynced(name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare("UPDATE skills SET cloud_id = ? WHERE name = ? AND deleted_at IS NULL")
+        .run(cloudId, name);
+      const result = this.db
+        .prepare(
+          `UPDATE skills
+           SET sync_status = 'synced', cloud_id = @cloudId,
+               updated_at = COALESCE(@serverUpdatedAt, updated_at)
+           WHERE name = @name AND deleted_at IS NULL
+             AND content_hash IS @expectedHash AND enabled = @expectedEnabled`
+        )
+        .run({
+          name,
+          cloudId,
+          serverUpdatedAt: serverUpdatedAt ?? null,
+          expectedHash,
+          expectedEnabled: Number(expectedEnabled),
+        });
+      return { success: result.changes > 0, changes: result.changes };
+    } catch (error) {
+      debugLogger.error("Error marking skill synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  clearSkillCloudId(name) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE skills SET cloud_id = NULL, sync_status = 'pending' WHERE name = ?")
+        .run(name);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error clearing skill cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Once its delete is pushed. A name installed again meanwhile is no longer a tombstone.
+  hardDeleteSkillState(name) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("DELETE FROM skills WHERE name = ? AND deleted_at IS NOT NULL")
+        .run(name);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error hard deleting skill state", { error: error.message }, "database");
       throw error;
     }
   }
