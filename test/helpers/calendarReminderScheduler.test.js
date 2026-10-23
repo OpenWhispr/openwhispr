@@ -244,7 +244,7 @@ test("clearing the cached meeting restores another reminded running meeting", (t
 
 // Calendar.app mirrors Google and Microsoft accounts. The database hides the
 // Apple copy once the REST copy is stored, which can be after the reminder.
-test("a meeting reminded from its Apple copy is not reminded again when the REST copy syncs", () => {
+function mirroredMeeting() {
   const appleCopy = activeEvent("apple", "apple-1");
   const restCopy = {
     ...appleCopy,
@@ -254,22 +254,73 @@ test("a meeting reminded from its Apple copy is not reminded again when the REST
     start_time: appleCopy.start_time.replace("Z", "+00:00"),
     end_time: appleCopy.end_time.replace("Z", "+00:00"),
   };
-  let events = [appleCopy];
-  const databaseManager = {
-    getUpcomingEvents: () => events,
-    getActiveEvents: () => events,
-  };
-  const scheduler = new CalendarReminderScheduler(databaseManager);
+  return { appleCopy, restCopy };
+}
+
+function schedulerOver(initialEvents) {
+  const state = { events: initialEvents };
+  const scheduler = new CalendarReminderScheduler({
+    getUpcomingEvents: () => state.events,
+    getActiveEvents: () => state.events,
+  });
   const reminded = [];
   scheduler.meetingDetectionEngine = {
     handleCalendarReminder: (event) => reminded.push(event.id),
   };
+  return { scheduler, reminded, state };
+}
+
+test("a meeting reminded from its Apple copy is not reminded again when the REST copy syncs", () => {
+  const { appleCopy, restCopy } = mirroredMeeting();
+  const { scheduler, reminded, state } = schedulerOver([appleCopy]);
 
   scheduler.scheduleNextMeeting();
   // The next Google sync stores the REST copy and refreshes the schedule.
-  events = [restCopy];
+  state.events = [restCopy];
   scheduler.scheduleNextMeeting();
 
   assert.deepEqual(reminded, ["apple-1"]);
+  assert.equal(scheduler.activeMeeting.id, "google-1", "notes link the copy the app shows");
   scheduler.stop();
+});
+
+test("a meeting reminded from its REST copy is not reminded again from the Apple copy", () => {
+  const { appleCopy, restCopy } = mirroredMeeting();
+  const { scheduler, reminded, state } = schedulerOver([restCopy]);
+
+  scheduler.scheduleNextMeeting();
+  // The REST copy is cancelled, so the database stops hiding the Apple copy.
+  state.events = [appleCopy];
+  scheduler.scheduleNextMeeting();
+
+  assert.deepEqual(reminded, ["google-1"]);
+  scheduler.stop();
+});
+
+test("Google and Microsoft meetings in one slot are separate meetings", () => {
+  const { restCopy } = mirroredMeeting();
+  const outlookMeeting = { ...restCopy, id: "microsoft-1", provider: "microsoft" };
+  const { scheduler, reminded } = schedulerOver([restCopy, outlookMeeting]);
+
+  scheduler.scheduleNextMeeting();
+
+  assert.deepEqual(reminded, ["google-1", "microsoft-1"]);
+  scheduler.stop();
+});
+
+test("disconnecting the reminded copy's provider does not remind its mirror again", () => {
+  for (const [first, mirror] of [
+    ["restCopy", "appleCopy"],
+    ["appleCopy", "restCopy"],
+  ]) {
+    const copies = mirroredMeeting();
+    const { scheduler, reminded, state } = schedulerOver([copies[first]]);
+
+    scheduler.scheduleNextMeeting();
+    state.events = [copies[mirror]];
+    scheduler.reset(copies[first].provider);
+
+    assert.deepEqual(reminded, [copies[first].id], `${mirror} after ${first}`);
+    scheduler.stop();
+  }
 });

@@ -10,7 +10,8 @@ function notificationKey(event) {
 // Calendar.app mirrors Google and Microsoft accounts, and the database hides
 // an Apple copy only once its REST copy is stored (dedupedEventsQuery). Pair
 // the copies the same way, by time slot and title, so a copy stored after the
-// other one's reminder is not reminded again.
+// other one's reminder is not reminded again. Timed rows only: the scheduler
+// never reads all-day rows, which the database pairs by local day instead.
 function mirrorSlotKey(event) {
   return `${Date.parse(event.start_time)}|${Date.parse(event.end_time)}|${event.summary || ""}`;
 }
@@ -23,7 +24,7 @@ function isReminderEligible(event) {
 
 // Provider-agnostic meeting reminder scheduling. Reads only the shared
 // calendar_events table (deduped across providers), so a single scheduler
-// serves both calendar managers without double-firing reminders.
+// serves every calendar provider without double-firing reminders.
 class CalendarReminderScheduler {
   constructor(databaseManager) {
     this.databaseManager = databaseManager;
@@ -217,10 +218,9 @@ class CalendarReminderScheduler {
     for (const key of this.notifiedMeetings) {
       if (key.startsWith(prefix)) this.notifiedMeetings.delete(key);
     }
-    for (const [slot, keys] of this.notifiedSlots) {
-      for (const key of keys) if (key.startsWith(prefix)) keys.delete(key);
-      if (keys.size === 0) this.notifiedSlots.delete(slot);
-    }
+    // notifiedSlots keeps this provider's entries: they only ever pair with
+    // the other kind of copy, so the meeting's mirror is still not reminded
+    // again once this provider's copy disappears.
 
     this.scheduleNextMeeting();
   }
