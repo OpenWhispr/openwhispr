@@ -22,6 +22,7 @@ import {
   llmRequestTimeoutError,
 } from "../../../helpers/llmRequestTimeout.js";
 import { extractApiErrorMessage } from "../apiErrorMessage";
+import { stripThinkingTags } from "../../../helpers/stripThinking.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { openCodeSessionHeaders } from "../openCodeSession";
 import {
@@ -453,6 +454,11 @@ export const openaiProvider: InferenceProvider = {
         }
       }
     }
+
+    // Self-hosted servers can leave <think> blocks in the text; strip them unless the
+    // user enabled thinking, as callChatCompletionsApi does. An all-reasoning reply
+    // then takes the empty-response path below.
+    if (config.disableThinking !== false) responseText = stripThinkingTags(responseText);
 
     logger.logReasoning("OPENAI_RESPONSE", {
       model,

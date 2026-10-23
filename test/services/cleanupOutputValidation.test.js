@@ -105,6 +105,34 @@ test("cleanup validates completed provider output using the request's prompt set
     }
   );
 
+  await t.test("Custom cleanup drops a reasoning block left in the reply", async (t) => {
+    setCustomPrompt("");
+    const originalFetch = globalThis.fetch;
+    t.after(() => {
+      globalThis.fetch = originalFetch;
+    });
+    // llama-server with --reasoning-format none leaves the thoughts in message.content.
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: { content: `<think>Remove filler, capitalize Friday.</think>${CLEAN}` },
+              finish_reason: "stop",
+            },
+          ],
+        }),
+        { headers: { "Content-Type": "application/json" } }
+      );
+    const result = await process({
+      provider: "custom",
+      baseUrl: "http://127.0.0.1:8080/v1/chat/completions",
+      customApiKey: "synthetic-key",
+      disableThinking: true,
+    });
+    assert.equal(result, "Can you send me the report by Friday?");
+  });
+
   await t.test("history retry keeps the raw row on rejected cleanup, flags partials", async () => {
     setCustomPrompt("");
     useSettingsStore.setState({
