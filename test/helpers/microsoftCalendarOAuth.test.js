@@ -59,11 +59,13 @@ test("a refresh without an id_token saves no tenant, so the stored one is kept",
   const oauth = createOAuth(saved);
   oauth.refreshAccessToken = async () => ({ access_token: "new", expires_in: 3600 });
 
-  await oauth._refreshAndSaveTokens({
+  const tokens = {
     microsoft_email: "chad@corp.test",
     refresh_token: "refresh",
     scope: "scope",
-  });
+  };
+  oauth.databaseManager.getMicrosoftTokensByEmail = () => tokens;
+  await oauth._refreshAndSaveTokens(tokens);
 
   assert.equal(saved[0].tenant_id, null);
   assert.equal(saved[0].refresh_token, "refresh");
@@ -78,7 +80,9 @@ test("a refresh with an id_token saves its tenant", async () => {
     id_token: idToken({ tid: "tenant-2" }),
   });
 
-  await oauth._refreshAndSaveTokens({ microsoft_email: "chad@corp.test", refresh_token: "r" });
+  const tokens = { microsoft_email: "chad@corp.test", refresh_token: "r" };
+  oauth.databaseManager.getMicrosoftTokensByEmail = () => tokens;
+  await oauth._refreshAndSaveTokens(tokens);
 
   assert.equal(saved[0].tenant_id, "tenant-2");
 });
