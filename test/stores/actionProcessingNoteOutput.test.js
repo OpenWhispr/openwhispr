@@ -22,9 +22,9 @@ async function loadStore(t, storedNote = STORED_NOTE) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        updateNote: async (noteId, payload) => {
+        updateNote: async (noteId, payload, options) => {
           updates.push({ noteId, payload });
-          return { success: !globalThis.__updateNoteFails };
+          return { success: !globalThis.__updateNoteFails, generatedTitleApplied: !!options };
         },
         // What the database holds now, so a snapshot read after the write would show it.
         getNote: async (noteId) =>
@@ -297,7 +297,7 @@ test("a summary action rewrites only the summary and never saves a clipped rewri
       modelId: "gpt-4.1",
       isCloudMode: true,
       isMeetingNote: true,
-      allowTitleGeneration: true,
+      titleGeneration: { expectedTitle: STORED_NOTE.title },
       fromSummary: true,
     },
     LABELS
@@ -638,7 +638,7 @@ test("a run hands Undo the summary fields it overwrote, and the title when it re
     "notes",
     "hash-16",
     ACTION,
-    { ...options, allowTitleGeneration: true },
+    { ...options, titleGeneration: { expectedTitle: STORED_NOTE.title } },
     LABELS
   );
   await waitFor(() => updates.length === 2, "the template run to be written");
@@ -707,7 +707,12 @@ test("material with nothing to summarize leaves the note as it was and says so",
       "## Meeting Transcript\nYou: Hi, can you hear me?",
       `hash-${noteId}`,
       ACTION,
-      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, allowTitleGeneration: true },
+      {
+        modelId: "gpt-4.1",
+        isCloudMode: true,
+        isMeetingNote: true,
+        titleGeneration: { expectedTitle: STORED_NOTE.title },
+      },
       LABELS
     );
     let errors = [];
