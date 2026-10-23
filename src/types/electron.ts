@@ -3693,7 +3693,8 @@ declare global {
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,
-        preserveFolder?: boolean
+        preserveFolder?: boolean,
+        options?: { expectedAuthGeneration?: number | null }
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
@@ -3701,6 +3702,7 @@ declare global {
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;
+        code?: string;
       }>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;

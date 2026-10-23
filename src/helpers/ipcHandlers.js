@@ -2916,7 +2916,19 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
+    ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder, opts) => {
+      // Relocated rows are stamped with the active account, so a sync that
+      // outlived its account must not move them, as db-purge-space guards.
+      if (opts?.expectedAuthGeneration !== undefined) {
+        const state = tokenStore.getState();
+        if (!state.token || state.generation !== opts.expectedAuthGeneration) {
+          return {
+            success: false,
+            error: "Authentication context changed before folder relocation",
+            code: "AUTH_CONTEXT_CHANGED",
+          };
+        }
+      }
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
@@ -2924,6 +2936,11 @@ class IPCHandlers {
         this.notifyVectorChanges();
         for (const note of result.relocatedNotes ?? []) {
           this._asyncMirrorWrite(note);
+        }
+        // Other accounts' notes were released to the space root; their mirror
+        // files leave with the folder directory, so rewrite the live ones.
+        for (const note of result.releasedNotes ?? []) {
+          if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
           this._asyncMirrorDelete(noteId);

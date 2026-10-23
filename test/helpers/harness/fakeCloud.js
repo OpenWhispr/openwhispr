@@ -53,7 +53,9 @@ const NOTE_FIELDS = [
   "expected_speaker_count",
 ];
 
-const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
+// access_removed is server-set: seeding it models the stub a folder leaves
+// behind when it moves out of one of the user's teams.
+const FOLDER_FIELDS = ["name", "is_default", "sort_order", "access_removed"];
 
 // Conversations are read-only here: only the pull is modelled, so `messages`
 // rides along as a plain stored field.

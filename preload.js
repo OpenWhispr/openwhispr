@@ -1249,8 +1249,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   restoreFolderAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-folder-after-denied-delete", id),
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
-  relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
-    ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
+  relocateRevokedFolder: (id, privateSpaceId, preserveFolder, options) =>
+    ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder, options),
 
   getPendingConversations: () => ipcRenderer.invoke("db-get-pending-conversations"),
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),

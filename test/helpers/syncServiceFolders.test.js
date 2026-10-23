@@ -449,6 +449,36 @@ test("the folders cursor advances and the next pass only receives folders change
   );
 });
 
+test("a revoked folder is relocated only under the auth generation its pull started with", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  db.createFolder("Shared");
+  await (await newSyncService(t)).syncAll(true);
+  const local = folderByName(db, "Shared");
+  const stamp = browserLocalStorage.getItem("lastSyncedAt.folders");
+  cloud.seedFolder({
+    name: "Shared",
+    client_folder_id: local.client_folder_id,
+    access_removed: true,
+    updated_at: shift(stamp, 1),
+  });
+
+  const relocations = [];
+  const relocate = browserWindow.electronAPI.relocateRevokedFolder;
+  browserWindow.electronAPI.relocateRevokedFolder = async (...args) => {
+    relocations.push(args);
+    return relocate(...args);
+  };
+  const { getValidatedAuthGeneration } = await import("../../src/lib/authRequestContext.ts");
+  const generation = getValidatedAuthGeneration();
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(relocations.length, 1);
+  assert.deepEqual(relocations[0][3], { expectedAuthGeneration: generation });
+});
+
 test("a folder tombstone arriving in the delta pull hard-deletes the local folder", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
