@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-const MARKER_RE = /__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+__/;
+const MARKER_RE = /__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/;
 
 // audioManager pulls in the whole renderer graph; ReasoningService is routed
 // through a globalThis slot so each test can script its responses.
