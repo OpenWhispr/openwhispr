@@ -89,3 +89,14 @@ test("command search matches user-authored folders on their own name only", asyn
   assert.equal(folderMatchesQuery(userMeetings, t, "اجتماع"), false);
   assert.equal(folderMatchesQuery(arabicFolder, t, "مشاريع"), true);
 });
+
+test("the account's own Personal wins over a device-owned one", async () => {
+  const { findDefaultFolder } = await load();
+  const legacy = { id: 1, name: "Personal", is_default: 1, account_id: null };
+  const own = { id: 7, name: "Personal", is_default: 1, account_id: "account-b" };
+  const userFolder = { id: 9, name: "Personal", is_default: 0, account_id: "account-b" };
+
+  assert.equal(findDefaultFolder([legacy, userFolder, own]), own);
+  assert.equal(findDefaultFolder([userFolder, legacy]), legacy);
+  assert.equal(findDefaultFolder([userFolder]), undefined);
+});

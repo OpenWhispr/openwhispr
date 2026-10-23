@@ -2568,6 +2568,9 @@ class IPCHandlers {
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
           }
+          for (const note of result.relocatedNotes) {
+            this._asyncMirrorWrite(note);
+          }
           return { success: true, ...result };
         } catch (error) {
           return { success: false, code: "LOCAL_ACCOUNT_CLEANUP_FAILED", error: error.message };

@@ -42,6 +42,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { findDefaultFolder } from "../components/notes/shared";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -2953,9 +2954,7 @@ export class SyncService {
         .filter((f) => f.cloud_id)
         .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
     );
-    const personalFolder = folders.find(
-      (f) => f.is_default && f.name === "Personal" && f.space_id === privateSpaceId
-    );
+    const personalFolder = findDefaultFolder(folders.filter((f) => f.space_id === privateSpaceId));
     return { cloudToLocal, defaultFolderId: personalFolder?.id ?? null };
   }
 }

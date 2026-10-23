@@ -621,6 +621,9 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // The local account that owns a private folder; NULL for team folders and
+  // device-owned ones not yet bound to an account's cloud.
+  account_id?: string | null;
   // 1 while a cloud-backed row that left a team space still owes its scope
   // retraction push (D6); cleared when the row settles.
   left_team?: number;

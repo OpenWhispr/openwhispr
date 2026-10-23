@@ -34,8 +34,11 @@ export function folderMatchesQuery(
   );
 }
 
+// Folders arrive account-scoped, so an attributed default is the active
+// account's own; a device-owned (NULL account) one only stands in for it.
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  const defaults = folders.filter((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
+  return defaults.find((f) => f.account_id) ?? defaults[0];
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
