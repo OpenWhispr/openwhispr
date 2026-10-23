@@ -762,7 +762,7 @@ for (const reason of ["not_found", "connection_changed"]) {
   });
 }
 
-test("a send that loses its login twice asks to connect instead of trying again", async (t) => {
+test("each lost login prepares a fresh card that waits for another Send", async (t) => {
   const card = await rebindCard(t, {
     commits: [{ state: "not_sent", reason: "not_found" }],
     prepares: [READY("a-new")],
