@@ -314,6 +314,12 @@ const {
   detectOutdatedGpuPacks,
 } = require("./src/helpers/gpuBinaryManager");
 const { resetWhisperGpuFailureOnUpgrade } = require("./src/helpers/whisperGpuUpgradeReset");
+const { parseHotkeyList } = require("./src/helpers/hotkeyList");
+const { canonicalizeHotkey } = require("./src/helpers/hotkeyCanonical");
+const {
+  parseConfig: parseDictationRowConfig,
+  rowsFromHotkeyList: dictationRowsFromHotkeyList,
+} = require("./src/helpers/dictationHotkeyConfig.js");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
 const AppleCalendarManager = require("./src/helpers/appleCalendarManager");
@@ -1177,6 +1183,24 @@ async function checkStartupHold() {
   await dropUnsupportedStartupHold();
 }
 
+// The committed dictation rows as stored, with the legacy flat key list as the
+// fallback. Never throws: a profile this cannot read leaves every row on the
+// app setting rather than stopping startup.
+function restoreDictationRows() {
+  try {
+    const stored = environmentManager.getDictationHotkeyConfig();
+    const rows = stored ? parseDictationRowConfig(stored, canonicalizeHotkey) : [];
+    if (rows.length > 0) return rows;
+    return dictationRowsFromHotkeyList(
+      parseHotkeyList(environmentManager.getDictationKey()),
+      canonicalizeHotkey
+    );
+  } catch (err) {
+    debugLogger?.warn("Could not restore the dictation hotkey rows", { error: err.message });
+    return [];
+  }
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
@@ -1201,6 +1225,13 @@ async function startApp() {
   await migrateCookieToBearerToken();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
+
+  // Dispatch resolves a recording's cleanup from main's row cache, so the rows
+  // have to be restored before any hotkey can fire. A profile written before
+  // the rows existed, or a hand-edited DICTATION_KEY, loads as rows that
+  // follow the app setting — a stored mode is never guessed from the current
+  // global preference.
+  windowManager.setDictationRows(restoreDictationRows());
 
   await windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
@@ -1524,11 +1555,24 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
 
-      // Handle dictation if Globe/Fn is one of the dictation hotkeys
-      const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
+      // Handle dictation if Globe/Fn is one of the dictation hotkeys. The row
+      // that MATCHED is what carries the cleanup mode: Globe can be the second
+      // or third dictation row, while getCurrentHotkey() is only ever the
+      // first, so resolving the mode from it ran this press under another
+      // row's setting.
+      const dictationGlobeHotkey = hotkeyManager
+        .getSlotHotkeys("dictation")
+        .find(isGlobeLikeHotkey);
+      const dictationUsesGlobe = Boolean(dictationGlobeHotkey);
       if (dictationUsesGlobe) {
         if (mainWindowLive && windowManager.isDictationProcessing()) {
           debugLogger?.debug("[Globe] Ignored — dictation processing");
+        } else if (mainWindowLive && windowManager.isHotkeyCommitInFlight()) {
+          // Checked before the press owner and the delayed start are created:
+          // a Hold claimed here would be started by a callback that fires
+          // after the commit has cleared the gate, under keys and modes that
+          // may no longer exist.
+          debugLogger?.debug("[Globe] Ignored — dictation rows are being committed");
         } else if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
@@ -1539,20 +1583,26 @@ async function startApp() {
               debugLogger?.debug("[Globe] Ignored — cooldown active");
               return;
             }
+            // Resolved at the accepted key-down, like every other Hold path,
+            // so an edit during the hold cannot change this recording.
+            const globeCleanupOverride = windowManager.resolveCleanupOverride(dictationGlobeHotkey);
             windowManager.showDictationPanel();
-            windowManager.sendPrepareDictation();
+            windowManager.sendPrepareDictation({ cleanupOverride: globeCleanupOverride });
             const pressTime = now;
+            windowManager.setNativePressOwner("globe");
             globeKeyDownTime = pressTime;
             globeKeyIsRecording = false;
             setTimeout(async () => {
               if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
                 globeKeyIsRecording = true;
                 debugLogger?.debug("[Globe] Starting dictation (push hold)");
-                windowManager.sendStartDictation();
+                windowManager.sendStartDictation({ cleanupOverride: globeCleanupOverride });
               }
             }, MIN_HOLD_DURATION_MS);
           } else {
-            windowManager.sendToggleDictation();
+            windowManager.sendToggleDictation({
+              cleanupOverride: windowManager.resolveCleanupOverride(dictationGlobeHotkey),
+            });
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
@@ -1594,6 +1644,7 @@ async function startApp() {
             debugLogger?.debug("[Globe] Release without a registered press — ignored");
           } else {
             globeKeyDownTime = 0;
+            windowManager.clearNativePressOwner("globe");
             globeLastStopTime = Date.now();
             if (globeKeyIsRecording) {
               globeKeyIsRecording = false;
@@ -1624,6 +1675,7 @@ async function startApp() {
       debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
       globeKeyDownTime = 0;
       globeKeyIsRecording = false;
+      windowManager.clearNativePressOwner("globe");
       globeLastStopTime = Date.now();
       if (wasRecording) {
         windowManager.sendCancelDictation();
@@ -1658,26 +1710,35 @@ async function startApp() {
       if (!isLiveWindow(windowManager.mainWindow)) return;
       if (windowManager.isDictationProcessing()) return;
 
+      if (windowManager.isHotkeyCommitInFlight()) return;
+
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
       if (activationMode === "push") {
         if (rightModActiveKey && rightModActiveKey !== modifier) return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
+        // Resolved at the accepted key-down, like every other Hold path, so an
+        // edit during the hold cannot change this recording — and the prepare
+        // and the delayed start describe the same one.
+        const rightModCleanupOverride = windowManager.resolveCleanupOverride(modifier);
         windowManager.showDictationPanel();
-        windowManager.sendPrepareDictation();
+        windowManager.sendPrepareDictation({ cleanupOverride: rightModCleanupOverride });
         const pressTime = now;
         rightModActiveKey = modifier;
+        windowManager.setNativePressOwner("right-modifier");
         rightModDownTime = pressTime;
         rightModIsRecording = false;
         setTimeout(() => {
           if (rightModDownTime === pressTime && !rightModIsRecording) {
             rightModIsRecording = true;
-            windowManager.sendStartDictation();
+            windowManager.sendStartDictation({ cleanupOverride: rightModCleanupOverride });
           }
         }, MIN_HOLD_DURATION_MS);
       } else {
-        windowManager.sendToggleDictation();
+        windowManager.sendToggleDictation({
+          cleanupOverride: windowManager.resolveCleanupOverride(modifier),
+        });
       }
     });
 
@@ -1693,6 +1754,7 @@ async function startApp() {
             debugLogger?.debug("[RightMod] Release without a registered press — ignored");
           } else {
             rightModActiveKey = null;
+            windowManager.clearNativePressOwner("right-modifier");
             rightModDownTime = 0;
             rightModLastStopTime = Date.now();
             if (rightModIsRecording) {
@@ -1746,6 +1808,8 @@ async function startApp() {
       if (!isLiveWindow(windowManager.mainWindow)) return;
       if (windowManager.isDictationProcessing()) return;
 
+      if (windowManager.isHotkeyCommitInFlight()) return;
+
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
@@ -1753,20 +1817,25 @@ async function startApp() {
         if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
+        // Resolved at the accepted press, not after the 150 ms delay.
+        const mouseCleanupOverride = windowManager.resolveCleanupOverride(button);
         windowManager.showDictationPanel();
-        windowManager.sendPrepareDictation();
+        windowManager.sendPrepareDictation({ cleanupOverride: mouseCleanupOverride });
         const pressTime = now;
         mouseButtonActiveButton = button;
+        windowManager.setNativePressOwner("mouse-button");
         mouseButtonDownTime = pressTime;
         mouseButtonIsRecording = false;
         setTimeout(() => {
           if (mouseButtonDownTime === pressTime && !mouseButtonIsRecording) {
             mouseButtonIsRecording = true;
-            windowManager.sendStartDictation();
+            windowManager.sendStartDictation({ cleanupOverride: mouseCleanupOverride });
           }
         }, MIN_HOLD_DURATION_MS);
       } else {
-        windowManager.sendToggleDictation();
+        windowManager.sendToggleDictation({
+          cleanupOverride: windowManager.resolveCleanupOverride(button),
+        });
       }
     });
 
@@ -1788,6 +1857,7 @@ async function startApp() {
           debugLogger?.debug("[MouseButton] Release without a registered press — ignored");
         } else {
           mouseButtonActiveButton = null;
+          windowManager.clearNativePressOwner("mouse-button");
           mouseButtonDownTime = 0;
           mouseButtonLastStopTime = Date.now();
           if (mouseButtonIsRecording) {
@@ -1858,6 +1928,11 @@ async function startApp() {
       rightModDownTime = 0;
       rightModIsRecording = false;
       rightModLastStopTime = 0;
+      rightModActiveKey = null;
+      mouseButtonActiveButton = null;
+      for (const owner of ["globe", "right-modifier", "mouse-button"]) {
+        windowManager.clearNativePressOwner(owner);
+      }
       mouseButtonDownTime = 0;
       mouseButtonIsRecording = false;
       mouseButtonLastStopTime = 0;
@@ -1882,7 +1957,9 @@ async function startApp() {
         if (windowManager.getActivationMode() === "push") {
           windowManager.startWindowsPushToTalk(key);
         } else {
-          windowManager.sendToggleDictation();
+          windowManager.sendToggleDictation({
+            cleanupOverride: windowManager.resolveCleanupOverride(key),
+          });
         }
         return;
       }

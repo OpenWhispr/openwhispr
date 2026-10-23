@@ -42,11 +42,17 @@ const electronStub = {
   MessageChannelMain: class {},
 };
 
+// Pure helpers stay real: the universal proxy below would turn
+// parseHotkeyList("F8") into a Proxy, and every string test downstream would
+// read as truthy.
+const REAL_HELPERS = new Set(["./hotkeyList", "./hotkeyCanonical", "./hotkeyBindingId"]);
+
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (
     parent?.filename === handlersModulePath &&
-    (request.startsWith("./") || request.startsWith("../"))
+    (request.startsWith("./") || request.startsWith("../")) &&
+    !REAL_HELPERS.has(request)
   ) {
     return anything();
   }

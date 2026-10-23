@@ -83,7 +83,8 @@ hyprlandTest("Hyprland slots reject equivalent modifier aliases and ordering", a
       },
     };
 
-    const callback = () => {};
+    const fired = [];
+    const callback = (hotkey, phase) => fired.push([hotkey, phase]);
     const registeredSlot = await manager.registerSlot("meeting", "Ctrl+Shift+F8", callback);
     assert.equal(registeredSlot.success, true);
     assert.deepEqual(manager.getSlotHotkeys("meeting"), ["Ctrl+Shift+F8"]);
@@ -91,7 +92,16 @@ hyprlandTest("Hyprland slots reject equivalent modifier aliases and ordering", a
     const conflict = await manager.registerSlot("translation", "Shift+Control+F8", () => {});
     assert.equal(conflict.success, false);
     assert.equal(conflict.reason, "slot_conflict");
-    assert.deepEqual(calls, [["Ctrl+Shift+F8", "meeting", callback]]);
+    // The backend now receives a per-binding wrapper rather than the raw
+    // callback: GNOME, KDE and Hyprland all call back without the hotkey, so
+    // identity has to come from the closure.
+    assert.deepEqual(
+      calls.map(([hotkey, bindingId]) => [hotkey, bindingId]),
+      [["Ctrl+Shift+F8", "meeting"]]
+    );
+    // and that wrapper supplies the identity the backend omits
+    calls[0][2](undefined, "down");
+    assert.deepEqual(fired, [["Ctrl+Shift+F8", "down"]]);
 
     const removal = manager.unregisterSlot("meeting");
     assert.deepEqual(manager.getSlotHotkeys("meeting"), ["Ctrl+Shift+F8"]);

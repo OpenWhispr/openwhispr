@@ -1398,7 +1398,8 @@
     "remove": "移除快捷键",
     "addAnother": "添加其他快捷键",
     "duplicate": "已添加",
-    "singleModifierNeedsRightSide": "{{key}} 单独不能作为快捷键。请按 {{alternative}}，或再加一个按键。"
+    "singleModifierNeedsRightSide": "{{key}} 单独不能作为快捷键。请按 {{alternative}}，或再加一个按键。",
+    "captureUnavailable": "系统未释放当前快捷键，因此无法记录按键。请重启 OpenWhispr 后重试。"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
@@ -1997,7 +1998,29 @@
         "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 键绑定不会持久保存",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。",
+        "cleanup": {
+          "customize": "自定义清理",
+          "label": "文本清理",
+          "useAppSetting": "使用应用设置",
+          "alwaysOn": "始终开启",
+          "alwaysOff": "始终关闭",
+          "alwaysOnHint": "即使 AI 清理已关闭，此快捷键也始终执行清理。",
+          "alwaysOffHint": "即使 AI 清理已开启，此快捷键也按原话粘贴听写内容。",
+          "summaryOn": "清理始终开启",
+          "summaryOff": "清理始终关闭",
+          "labelForRow": "{{hotkey}} 的文本清理",
+          "customizeForRow": "自定义 {{hotkey}} 的清理"
+        },
+        "holdUnsupportedForRow": "由于 {{hotkey}}，无法使用按住模式。{{reason}}",
+        "commitUncertain": "系统未确认此更改，这些快捷键可能未生效。请重新设置快捷键，或重启 OpenWhispr。",
+        "commitPartlyUnconfirmed": "新快捷键已生效，但系统未确认已释放原有快捷键。如果旧快捷键仍有响应，请重启 OpenWhispr。",
+        "captureFailed": {
+          "title": "快捷键可能未生效",
+          "releaseDescription": "设置新快捷键时 OpenWhispr 无法释放原有快捷键，因此未记录任何按键。请重启 OpenWhispr 后重试。",
+          "restoreDescription": "设置快捷键后，OpenWhispr 无法恢复原有快捷键。请重新设置快捷键，或重启 OpenWhispr。"
+        },
+        "commitBusy": "请先结束正在进行的听写，再更改此快捷键。"
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",

@@ -1492,7 +1492,8 @@
     "remove": "Supprimer le raccourci",
     "addAnother": "Ajouter un autre raccourci",
     "duplicate": "Déjà ajouté",
-    "singleModifierNeedsRightSide": "{{key}} seule ne peut pas être un raccourci. Appuyez plutôt sur {{alternative}}, ou ajoutez une deuxième touche."
+    "singleModifierNeedsRightSide": "{{key}} seule ne peut pas être un raccourci. Appuyez plutôt sur {{alternative}}, ou ajoutez une deuxième touche.",
+    "captureUnavailable": "Votre système n'a pas libéré le raccourci actuel : aucune touche ne peut être enregistrée. Redémarrez OpenWhispr et réessayez."
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
@@ -2291,7 +2292,29 @@
         "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous.",
         "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}} ; les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Vérifiez que le fichier existe et qu'il est accessible en écriture.",
-        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci."
+        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr réserve le raccourci sélectionné. Tout raccourci Hyprland existant utilisant la même combinaison de touches sera supprimé quand OpenWhispr enregistrera son raccourci.",
+        "cleanup": {
+          "customize": "Personnaliser le nettoyage",
+          "label": "Nettoyage du texte",
+          "useAppSetting": "Utiliser le réglage de l'application",
+          "alwaysOn": "Toujours activé",
+          "alwaysOff": "Toujours désactivé",
+          "alwaysOnHint": "Ce raccourci applique toujours le nettoyage par IA, même s'il est désactivé.",
+          "alwaysOffHint": "Ce raccourci colle la transcription telle que dictée, même si le nettoyage par IA est activé.",
+          "summaryOn": "Nettoyage toujours activé",
+          "summaryOff": "Nettoyage toujours désactivé",
+          "labelForRow": "Nettoyage du texte pour {{hotkey}}",
+          "customizeForRow": "Personnaliser le nettoyage de {{hotkey}}"
+        },
+        "holdUnsupportedForRow": "Le maintien est indisponible à cause de {{hotkey}}. {{reason}}",
+        "commitUncertain": "Votre système n'a pas confirmé la modification : ces raccourcis ne sont peut-être pas actifs. Redéfinissez le raccourci ou redémarrez OpenWhispr.",
+        "commitPartlyUnconfirmed": "Vos nouveaux raccourcis sont actifs, mais votre système n'a pas confirmé la libération des précédents. Redémarrez OpenWhispr si un ancien raccourci répond encore.",
+        "captureFailed": {
+          "title": "Les raccourcis ne sont peut-être pas actifs",
+          "releaseDescription": "OpenWhispr n'a pas pu libérer ses raccourcis pendant la définition, aucune touche n'a donc été enregistrée. Redémarrez OpenWhispr et réessayez.",
+          "restoreDescription": "OpenWhispr n'a pas pu rétablir vos raccourcis après la définition. Redéfinissez le raccourci ou redémarrez OpenWhispr."
+        },
+        "commitBusy": "Terminez la dictée en cours avant de modifier ce raccourci."
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",

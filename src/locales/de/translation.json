@@ -1492,7 +1492,8 @@
     "remove": "Hotkey entfernen",
     "addAnother": "Weiteren Hotkey hinzufügen",
     "duplicate": "Bereits hinzugefügt",
-    "singleModifierNeedsRightSide": "{{key}} allein kann kein Kürzel sein. Drücke stattdessen {{alternative}} oder füge eine zweite Taste hinzu."
+    "singleModifierNeedsRightSide": "{{key}} allein kann kein Kürzel sein. Drücke stattdessen {{alternative}} oder füge eine zweite Taste hinzu.",
+    "captureUnavailable": "Dein System hat das aktuelle Tastenkürzel nicht freigegeben, daher können keine Tasten aufgezeichnet werden. Starte OpenWhispr neu und versuche es erneut."
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",
@@ -2291,7 +2292,29 @@
         "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
-        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert.",
+        "cleanup": {
+          "customize": "Bereinigung anpassen",
+          "label": "Textbereinigung",
+          "useAppSetting": "App-Einstellung verwenden",
+          "alwaysOn": "Immer ein",
+          "alwaysOff": "Immer aus",
+          "alwaysOnHint": "Dieses Tastenkürzel führt immer die KI-Bereinigung aus, auch wenn sie aus ist.",
+          "alwaysOffHint": "Dieses Tastenkürzel fügt das Transkript so ein, wie es gesprochen wurde, auch wenn die KI-Bereinigung an ist.",
+          "summaryOn": "Bereinigung immer ein",
+          "summaryOff": "Bereinigung immer aus",
+          "labelForRow": "Textbereinigung für {{hotkey}}",
+          "customizeForRow": "Bereinigung für {{hotkey}} anpassen"
+        },
+        "holdUnsupportedForRow": "Halten ist wegen {{hotkey}} nicht verfügbar. {{reason}}",
+        "commitUncertain": "Dein System hat die Änderung nicht bestätigt, daher sind diese Tastenkürzel möglicherweise nicht aktiv. Lege das Tastenkürzel erneut fest oder starte OpenWhispr neu.",
+        "commitPartlyUnconfirmed": "Deine neuen Tastenkürzel sind aktiv, aber dein System hat die Freigabe der vorherigen nicht bestätigt. Starte OpenWhispr neu, falls ein altes Tastenkürzel noch reagiert.",
+        "captureFailed": {
+          "title": "Tastenkürzel sind möglicherweise nicht aktiv",
+          "releaseDescription": "OpenWhispr konnte seine Tastenkürzel beim Festlegen nicht freigeben, daher wurde nichts aufgezeichnet. Starte OpenWhispr neu und versuche es erneut.",
+          "restoreDescription": "OpenWhispr konnte deine Tastenkürzel nach dem Festlegen nicht wiederherstellen. Lege das Tastenkürzel erneut fest oder starte OpenWhispr neu."
+        },
+        "commitBusy": "Beende das laufende Diktat, bevor du dieses Tastenkürzel änderst."
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",

@@ -165,10 +165,25 @@ function getDBus() {
   }
 }
 
-function getSlotConfig(slotName) {
-  const config = SLOT_CONFIG[slotName];
+// Secondary bindings derive their own gsettings path and display name from
+// the base slot, so each row is a distinct custom keybinding. Index 0 keeps
+// the original path untouched for users who already have one hotkey.
+function getSlotConfig(bindingId) {
+  const marker = typeof bindingId === "string" ? bindingId.indexOf("#") : -1;
+  if (marker !== -1) {
+    const base = SLOT_CONFIG[bindingId.slice(0, marker)];
+    const index = Number(bindingId.slice(marker + 1));
+    if (!base || !Number.isInteger(index) || index < 1) {
+      throw new Error(`[GnomeShortcut] Unknown slot: "${bindingId}"`);
+    }
+    return {
+      path: `${base.path.replace(/\/$/, "")}-${index}/`,
+      name: `${base.name} ${index + 1}`,
+    };
+  }
+  const config = SLOT_CONFIG[bindingId];
   if (!config) {
-    throw new Error(`[GnomeShortcut] Unknown slot: "${slotName}"`);
+    throw new Error(`[GnomeShortcut] Unknown slot: "${bindingId}"`);
   }
   return config;
 }
@@ -180,6 +195,9 @@ class GnomeShortcutManager {
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    // Keyed by binding id ("dictation", "dictation#1", ...). The slot-named
+    // callbacks above remain the index-0 entries so nothing else changes.
+    this.bindingCallbacks = new Map();
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
@@ -213,31 +231,57 @@ class GnomeShortcutManager {
     debugLogger.log("[GnomeShortcut] Translation callback registered");
   }
 
+  /**
+   * Registers the callback for one binding. Secondary rows are reached through
+   * ToggleBinding(id); index 0 keeps using its slot-named method so a dconf
+   * entry written by an older build still works.
+   */
+  setBindingCallback(bindingId, callback) {
+    this.bindingCallbacks.set(bindingId, callback);
+    if (bindingId === "dictation") this.dictationCallback = callback;
+    else if (bindingId === "meeting") this.meetingCallback = callback;
+    else if (bindingId === "voiceAgent") this.voiceAgentCallback = callback;
+    else if (bindingId === "translation") this.translationCallback = callback;
+    debugLogger.log(`[GnomeShortcut] Binding callback registered for "${bindingId}"`);
+  }
+
+  clearBindingCallback(bindingId) {
+    this.bindingCallbacks.delete(bindingId);
+  }
+
   // Older builds persisted a gsettings keybinding for the removed chat-agent
   // slot; its dbus-send command targets a method this app no longer exports,
   // so the entry errors silently forever and squats its key. Prune it once.
+  // gsettings entries outlive the build that wrote them. A retired entry is
+  // not merely dead: it still holds its key at the OS level, so the user
+  // cannot rebind that combination anywhere else. The chat-agent slot, and the
+  // raw/cleaned dictation slots this revision replaces, are swept here.
   removeRetiredAgentKeybinding() {
-    const retiredPath =
-      "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/";
+    const base = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/";
+    const retiredPaths = [
+      `${base}openwhispr-agent/`,
+      `${base}openwhispr-raw-dictation/`,
+      `${base}openwhispr-cleaned-dictation/`,
+    ];
     try {
       const existing = this.getExistingKeybindings();
-      if (!existing.includes(retiredPath)) return;
-      const remaining = existing.filter((p) => p !== retiredPath);
+      const stale = retiredPaths.filter((p) => existing.includes(p));
+      if (stale.length === 0) return;
+      const remaining = existing.filter((p) => !stale.includes(p));
       const bindingsStr = remaining.length ? "['" + remaining.join("', '") + "']" : "[]";
       execFileSync(
         "gsettings",
         ["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", bindingsStr],
         { stdio: "pipe" }
       );
-      execFileSync("gsettings", ["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`], {
-        stdio: "pipe",
-      });
-      debugLogger.log("[GnomeShortcut] Removed retired chat-agent keybinding");
+      for (const retiredPath of stale) {
+        execFileSync("gsettings", ["reset-recursively", `${KEYBINDING_SCHEMA}:${retiredPath}`], {
+          stdio: "pipe",
+        });
+      }
+      debugLogger.log("[GnomeShortcut] Removed retired keybindings", { stale });
     } catch (err) {
-      debugLogger.log(
-        "[GnomeShortcut] Failed to remove retired chat-agent keybinding:",
-        err.message
-      );
+      debugLogger.log("[GnomeShortcut] Failed to remove retired keybindings:", err.message);
     }
   }
 
@@ -280,6 +324,12 @@ class GnomeShortcutManager {
               this.translationCallback();
             }
           },
+          // Secondary bindings carry their own id, so a stale dconf entry
+          // naming a binding that no longer exists resolves to nothing rather
+          // than falling back to the first row.
+          ToggleBinding: (bindingId) => {
+            this.bindingCallbacks.get(bindingId)?.();
+          },
         },
         DBUS_OBJECT_PATH,
         {
@@ -289,6 +339,7 @@ class GnomeShortcutManager {
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
+            ToggleBinding: ["s", ""],
           },
         }
       );
@@ -314,7 +365,60 @@ class GnomeShortcutManager {
     return this.globalShortcutsPortal.isAvailable();
   }
 
-  async registerPushToTalk(hotkey, callback) {
+  /**
+   * Binds every Hold row in one portal session. No gsettings fallback here:
+   * in a multi-row commit a per-row fallback leaves an orphan Tap binding for
+   * a row the commit then reports as failed. The caller unwinds and decides.
+   *
+   * `rows` is [{ bindingId, hotkey, callback }].
+   */
+  async registerPushToTalkBindings(rows) {
+    const entries = [];
+    for (const { bindingId, hotkey, callback } of rows) {
+      const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
+      if (!preferredTrigger) return false;
+      // Per row, the same keymap rule the single-row path follows: bind the
+      // keysym the active keymap gives an F13-F24 key, and refuse a row GNOME
+      // cannot grab at all with its reason instead of arming a dead shortcut.
+      const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+      const { keysym, reason } = tapShortcut ? this.resolveFunctionKey(tapShortcut) : {};
+      if (reason) {
+        debugLogger.log(
+          `[GnomeShortcut] GNOME can't grab "${tapShortcut}" for Hold with this keymap: ${reason}`
+        );
+        return reason;
+      }
+      entries.push({
+        bindingId,
+        preferredTrigger: keysym
+          ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym)
+          : preferredTrigger,
+        callback,
+      });
+      this.bindingCallbacks.set(bindingId, callback);
+    }
+    for (const { bindingId } of rows) await this.unregisterKeybinding(bindingId);
+
+    // A portal without the batch call still has to end up with every row
+    // bound: binding them one at a time re-binds the union each time, so the
+    // set is preserved. Never leave the slot with nothing.
+    if (typeof this.globalShortcutsPortal.registerKeybindings !== "function") {
+      for (const { bindingId, preferredTrigger, callback } of entries) {
+        const ok = await this.globalShortcutsPortal.registerKeybinding(
+          preferredTrigger,
+          callback,
+          bindingId
+        );
+        if (!ok) return false;
+      }
+      return true;
+    }
+    return this.globalShortcutsPortal.registerKeybindings(entries);
+  }
+
+  // Single-row path, kept for the one-hotkey case: here the Tap fallback is
+  // the intended behaviour when the portal is unavailable.
+  async registerPushToTalk(hotkey, callback, bindingId = "dictation") {
     const preferredTrigger = GnomeShortcutManager.convertToPortalFormat(hotkey);
     if (!preferredTrigger) return false;
     const tapShortcut = GnomeShortcutManager.convertToGnomeFormat(hotkey);
@@ -327,19 +431,28 @@ class GnomeShortcutManager {
       return reason;
     }
 
-    await this.unregisterKeybinding("dictation");
-    const registered = await this.globalShortcutsPortal.registerKeybinding(
-      keysym ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym) : preferredTrigger,
-      callback
-    );
+    await this.unregisterKeybinding(bindingId);
+    this.bindingCallbacks.set(bindingId, callback);
+    const trigger = keysym
+      ? preferredTrigger.replace(EXTENDED_FUNCTION_KEY, keysym)
+      : preferredTrigger;
+    const registered =
+      typeof this.globalShortcutsPortal.registerKeybindings === "function"
+        ? await this.globalShortcutsPortal.registerKeybindings([
+            { bindingId, preferredTrigger: trigger, callback },
+          ])
+        : await this.globalShortcutsPortal.registerKeybinding(trigger, callback, bindingId);
     if (!registered) {
-      await this.registerKeybinding(tapShortcut, "dictation", resolved);
+      // Reuses the keymap answer Hold already resolved rather than reading it again.
+      await this.registerKeybinding(tapShortcut, bindingId, resolved);
     }
     return registered;
   }
 
-  async unregisterPushToTalk() {
-    await this.globalShortcutsPortal.unregisterKeybinding();
+  // Propagates the portal's answer: a teardown it could not confirm must not
+  // read as a release.
+  async unregisterPushToTalk(bindingId = null) {
+    return this.globalShortcutsPortal.unregisterKeybinding(bindingId);
   }
 
   static isValidShortcut(shortcut) {
@@ -380,8 +493,10 @@ class GnomeShortcutManager {
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",
     };
-    const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
-    const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
+    const dbusMethod = SLOT_DBUS_METHOD[slotName];
+    const command = dbusMethod
+      ? `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`
+      : `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.ToggleBinding string:'${slotName}'`;
 
     try {
       const existing = this.getExistingKeybindings();

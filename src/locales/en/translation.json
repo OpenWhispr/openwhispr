@@ -1492,7 +1492,8 @@
     "remove": "Remove hotkey",
     "addAnother": "Add another hotkey",
     "duplicate": "Already added",
-    "singleModifierNeedsRightSide": "{{key}} on its own can't be a shortcut. Press {{alternative}} instead, or add a second key."
+    "singleModifierNeedsRightSide": "{{key}} on its own can't be a shortcut. Press {{alternative}} instead, or add a second key.",
+    "captureUnavailable": "Your system would not release the current shortcut, so keys cannot be recorded. Restart OpenWhispr and try again."
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
@@ -2291,7 +2292,29 @@
         "linuxPttSetupNote": "After running the command, log out and log back in.",
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
-        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
+        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut.",
+        "cleanup": {
+          "customize": "Customize cleanup",
+          "label": "Text cleanup",
+          "useAppSetting": "Use app setting",
+          "alwaysOn": "Always on",
+          "alwaysOff": "Always off",
+          "alwaysOnHint": "This shortcut always runs AI cleanup, even when it is off.",
+          "alwaysOffHint": "This shortcut pastes the transcript as spoken, even when AI cleanup is on.",
+          "summaryOn": "Cleanup always on",
+          "summaryOff": "Cleanup always off",
+          "labelForRow": "Text cleanup for {{hotkey}}",
+          "customizeForRow": "Customize cleanup for {{hotkey}}"
+        },
+        "holdUnsupportedForRow": "Hold is unavailable because of {{hotkey}}. {{reason}}",
+        "commitUncertain": "Your system did not confirm the change, so these shortcuts may not be active. Set the shortcut again, or restart OpenWhispr.",
+        "commitPartlyUnconfirmed": "Your new shortcuts are active, but your system did not confirm it released the previous ones. Restart OpenWhispr if an old shortcut still responds.",
+        "captureFailed": {
+          "title": "Shortcuts may not be active",
+          "releaseDescription": "OpenWhispr could not release its shortcuts while you set a new one, so nothing was recorded. Restart OpenWhispr and try again.",
+          "restoreDescription": "OpenWhispr could not put your shortcuts back after you set one. Set the shortcut again, or restart OpenWhispr."
+        },
+        "commitBusy": "Finish the dictation that is running before changing this shortcut."
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",

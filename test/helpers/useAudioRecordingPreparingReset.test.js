@@ -32,6 +32,7 @@ export default class FakeAudioManager {
   setTranslationRequested(value) {
     this.translationRequested = value;
   }
+  setCleanupOverride() {}
   shouldUseStreaming() {
     return false;
   }

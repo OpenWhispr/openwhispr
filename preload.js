@@ -102,11 +102,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
   captureDictationTarget: () => ipcRenderer.invoke("capture-dictation-target"),
   captureDictationAppCategory: () => ipcRenderer.invoke("capture-dictation-app-category"),
-  onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
+  onToggleDictation: registerListener(
+    "toggle-dictation",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
-  onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
+  onStartDictation: registerListener(
+    "start-dictation",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
     "prepare-dictation",
@@ -1038,6 +1044,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("hotkey-registration-failed", listener);
     return () => ipcRenderer.removeListener("hotkey-registration-failed", listener);
   },
+  // Capture mode could not release the shortcuts on the way in, or could not
+  // put them back on the way out. The field that started it may already be
+  // unmounted, so this reaches whichever window is open.
+  onHotkeyCaptureFailed: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("hotkey-capture-failed", listener);
+    return () => ipcRenderer.removeListener("hotkey-capture-failed", listener);
+  },
   onApiKeyUpdated: registerListener(
     "api-key-updated",
     (callback) => (_event, storeKey) => callback(storeKey)
@@ -1099,6 +1113,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
   updateTranslationHotkey: (hotkey) => ipcRenderer.invoke("update-translation-hotkey", hotkey),
   getTranslationKey: () => ipcRenderer.invoke("get-translation-key"),
+  applyDictationHotkeys: (request) => ipcRenderer.invoke("apply-dictation-hotkeys", request),
+  getDictationHotkeyConfig: () => ipcRenderer.invoke("get-dictation-hotkey-config"),
   onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
   onPreviewAppend: registerListener(
     "preview-append",

@@ -5,7 +5,10 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 
 async function loadStore(t, electronAPI) {
   installBrowserGlobals(t, {
-    initialStorage: { voiceAgentKey: "F9", translationKey: "F10" },
+    initialStorage: {
+      voiceAgentKey: "F9",
+      translationKey: "F10",
+    },
     window: { electronAPI },
   });
   const vite = await createRendererServer(t, {

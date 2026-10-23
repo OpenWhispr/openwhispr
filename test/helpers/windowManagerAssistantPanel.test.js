@@ -906,9 +906,19 @@ test("prepare-dictation carries the toggle's input kind to the renderer", () => 
   manager.sendPrepareDictation({ inputKind: "assistant" });
   manager.sendPrepareDictation();
 
+  // The prepare carries the row's cleanup override as well as the kind: the
+  // prepare that opens the mic and the toggle that starts the recording have
+  // to describe the SAME recording. A row with no override sends null, which
+  // the renderer reads as "follow the app setting".
   assert.deepEqual(sent, [
-    { channel: "prepare-dictation", payload: { inputKind: "assistant" } },
-    { channel: "prepare-dictation", payload: { inputKind: "dictation" } },
+    {
+      channel: "prepare-dictation",
+      payload: { inputKind: "assistant", cleanupOverride: null },
+    },
+    {
+      channel: "prepare-dictation",
+      payload: { inputKind: "dictation", cleanupOverride: null },
+    },
   ]);
 });
 
