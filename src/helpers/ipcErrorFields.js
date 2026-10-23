@@ -10,6 +10,9 @@ export const IPC_ERROR_FIELDS = Object.freeze([
   "technicalDetails",
   "status",
   "surface",
+  "action",
+  "actionKey",
+  "retryable",
 ]);
 
 export function ipcErrorFields(error) {
