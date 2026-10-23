@@ -57,9 +57,10 @@ const MOCKS = {
   `,
   "/integrations/SkillsPane": `
     import React from "react";
-    export function SkillsPane({ title, active }) {
-      const state = active ? " shown" : " hidden";
-      return React.createElement("div", null, "SKILLS PANE " + title + state);
+    export function SkillsPane(props) {
+      globalThis.__skillsPaneProps = props;
+      const state = props.active ? " shown" : " hidden";
+      return React.createElement("div", null, "SKILLS PANE " + props.title + state);
     }
   `,
   "/ui/select": `
@@ -126,6 +127,7 @@ async function renderView(
     statuses = {},
     gcalAccounts = [],
     connectorAccess = { isPaid, blockedByOrg: false, connectorsAllowed: true },
+    skillsProps = {},
   } = {}
 ) {
   let root = null;
@@ -152,6 +154,7 @@ async function renderView(
     delete globalThis.__gcalAccounts;
     delete globalThis.__connectorAccess;
     delete globalThis.__connectorsMounts;
+    delete globalThis.__skillsPaneProps;
   });
   const container = installInteractiveDom(t);
   const vite = await createRendererServer(t, {
@@ -170,6 +173,7 @@ async function renderView(
       onUpgrade: () => upgrades.count++,
       section: current,
       onSectionChange: setCurrent,
+      ...skillsProps,
     });
   }
   root = createRoot(container);
@@ -237,6 +241,26 @@ test("the Skills pane learns when its section is shown", async (t) => {
 
   // Still mounted, so a screen or draft in it survives the visit
   assert.match(container.textContent, /SKILLS PANE integrations\.nav\.sections\.skills hidden/);
+});
+
+test("an open-skill request opens the Skills section and that skill", async (t) => {
+  const request = { id: 1, name: "meeting-prep" };
+  const calls = { handled: 0, starts: [] };
+  const { container } = await renderView(t, {
+    section: "skills",
+    skillsProps: {
+      openSkillRequest: request,
+      onOpenSkillRequestHandled: () => (calls.handled += 1),
+      onStartSkillChat: (start) => calls.starts.push(start),
+    },
+  });
+
+  assert.match(shownText(container), /SKILLS PANE integrations\.nav\.sections\.skills shown/);
+  const props = globalThis.__skillsPaneProps;
+  assert.equal(props.openSkillRequest, request);
+  props.onOpenSkillRequestHandled();
+  props.onStartSkillChat({ kind: "create" });
+  assert.deepEqual(calls, { handled: 1, starts: [{ kind: "create" }] });
 });
 
 test("the nav lists every section and switches the pane it shows", async (t) => {

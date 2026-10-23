@@ -3968,6 +3968,9 @@
       "get_noteStatus": "Leyendo nota...",
       "create_noteStatus": "Creando nota...",
       "update_noteStatus": "Actualizando nota...",
+      "load_skillStatus": "Cargando habilidad…",
+      "propose_skillStatus": "Preparando la habilidad…",
+      "update_skillStatus": "Preparando el cambio…",
       "copiedToClipboard": "Copiado al portapapeles",
       "openNote": "Abrir nota",
       "unknownTool": "Herramienta desconocida: {{name}}",
@@ -3975,6 +3978,9 @@
       "search_openwhispr_helpName": "Buscar ayuda de OpenWhispr",
       "read_openwhispr_helpName": "Leer ayuda de OpenWhispr",
       "get_openwhispr_contextName": "Leer ajustes de OpenWhispr",
+      "load_skillName": "Cargar habilidad",
+      "propose_skillName": "Proponer habilidad",
+      "update_skillName": "Actualizar habilidad",
       "search_openwhispr_helpStatus": "Buscando en la ayuda de OpenWhispr...",
       "read_openwhispr_helpStatus": "Leyendo la ayuda de OpenWhispr...",
       "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr..."
@@ -4577,6 +4583,7 @@
       "manage": "Gestionar habilidades",
       "add": "Añadir",
       "addMenu": {
+        "createWithAssistant": "Crear con el asistente",
         "create": "Crear habilidad",
         "upload": "Subir habilidad"
       },
@@ -4596,7 +4603,8 @@
       "addRecommended": "Añadir {{name}}",
       "empty": {
         "title": "Aún no hay habilidades",
-        "description": "Crea una con el asistente o sube una que ya tengas."
+        "description": "Crea una con el asistente o sube una que ya tengas.",
+        "descriptionNoAssistant": "Sube una que ya tengas o crea la tuya."
       }
     },
     "breadcrumb": {
@@ -4612,7 +4620,8 @@
       "neverRun": "OpenWhispr nunca ejecuta scripts",
       "uninstall": "Desinstalar",
       "uninstallConfirm": "¿Desinstalar {{name}}? Se eliminará de este equipo.",
-      "problem": "Esta habilidad no se puede usar hasta que se corrija: {{reason}}"
+      "problem": "Esta habilidad no se puede usar hasta que se corrija: {{reason}}",
+      "tryNow": "Probar ahora"
     },
     "menu": {
       "copyMarkdown": "Copiar Markdown",
@@ -4683,7 +4692,8 @@
       "submit": "Crear",
       "unsaved": "Tienes cambios sin guardar",
       "keepEditing": "Seguir editando",
-      "discard": "Descartar"
+      "discard": "Descartar",
+      "draftWithAssistant": "Redactar con el asistente"
     },
     "problems": {
       "missingName": "Necesita un nombre al principio",
@@ -4734,6 +4744,57 @@
         "title": "Decisiones de reuniones",
         "description": "Encuentra las decisiones en las notas de mis reuniones, con la fecha y la reunión de cada una. Úsala cuando pregunte qué decidimos."
       }
+    },
+    "chat": {
+      "chipRemove": "Quitar {{name}} de este chat",
+      "placeholderWith": "Pregunta lo que quieras — este chat usa {{name}}",
+      "usingSkill": "Usando habilidad · {{name}}",
+      "usingSkillFailed": "No se pudo usar la habilidad · {{name}}",
+      "creatorName": "Creador de habilidades",
+      "creatorOpening": "¿Qué haces una y otra vez? Cuéntame cómo fue la última vez o elige una nota para empezar.",
+      "draftPrompt": "Ayúdame a terminar esta habilidad.\nNombre: {{name}}\nDescripción: {{description}}",
+      "draftInstructions": "Instrucciones hasta ahora:\n{{instructions}}",
+      "draftFiles": "Archivos que añadí: {{files}}",
+      "noneYet": "(aún nada)"
+    },
+    "approval": {
+      "createHeader": "Crear habilidad",
+      "newSkill": "Nueva habilidad",
+      "replacesExisting": "Ya tienes esta habilidad. Al guardar, se actualiza.",
+      "replacesExistingTurnsOn": "Ya tienes esta habilidad. Al guardar, se actualiza y se activa.",
+      "nameLabel": "Nombre de la habilidad",
+      "descriptionLabel": "Cuándo se usa",
+      "seeFull": "Ver la habilidad completa",
+      "save": "Guardar habilidad",
+      "saving": "Guardando…",
+      "saved": "Guardada",
+      "openSkill": "Abrir habilidad",
+      "skippedCreate": "Omitida. No se guardó nada.",
+      "updated": "Actualizada",
+      "undo": "Deshacer",
+      "undone": "Deshecho. La habilidad volvió a como estaba.",
+      "undoStale": "No se pudo deshacer. La habilidad ha cambiado desde entonces.",
+      "outdated": "No se guardó. La habilidad cambió después de crear esta tarjeta.",
+      "unchangedLines_one": "⋯ {{count}} línea sin cambios",
+      "unchangedLines_other": "⋯ {{count}} líneas sin cambios",
+      "undoFailed": "No se pudo deshacer. Inténtalo de nuevo.",
+      "failed": "No se pudo guardar la habilidad.",
+      "notSaved": "No se guardó nada.",
+      "updateHeader": "Actualizar habilidad",
+      "removes": "Se elimina:",
+      "learnedFrom": "Aprendida de: {{title}} · {{date}}",
+      "today": "Hoy",
+      "seeChanges": "Ver los cambios exactos",
+      "added": "Añadido:",
+      "removed": "Eliminado:",
+      "update": "Actualizar habilidad",
+      "skippedUpdate": "Omitida. La habilidad no se cambió."
+    },
+    "code": {
+      "paste": "Pegar en la app",
+      "pasteNote": "Pega sin pulsar Enter, así tú decides cuándo ejecutarlo.",
+      "pasted": "Pegado",
+      "pasteFailed": "No se pudo pegar. El texto está en tu portapapeles."
     }
   },
   "calendar": {

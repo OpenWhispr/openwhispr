@@ -3916,6 +3916,9 @@
       "get_noteStatus": "正在读取笔记...",
       "create_noteStatus": "正在创建笔记...",
       "update_noteStatus": "正在更新笔记...",
+      "load_skillStatus": "正在加载技能…",
+      "propose_skillStatus": "正在准备技能…",
+      "update_skillStatus": "正在准备更改…",
       "copiedToClipboard": "已复制到剪贴板",
       "openNote": "打开笔记",
       "unknownTool": "未知工具：{{name}}",
@@ -3923,6 +3926,9 @@
       "search_openwhispr_helpName": "搜索 OpenWhispr 帮助",
       "read_openwhispr_helpName": "阅读 OpenWhispr 帮助",
       "get_openwhispr_contextName": "读取 OpenWhispr 设置",
+      "load_skillName": "加载技能",
+      "propose_skillName": "提议技能",
+      "update_skillName": "更新技能",
       "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
       "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
       "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
@@ -4525,6 +4531,7 @@
       "manage": "管理技能",
       "add": "添加",
       "addMenu": {
+        "createWithAssistant": "用助手创建",
         "create": "创建技能",
         "upload": "上传技能"
       },
@@ -4544,7 +4551,8 @@
       "addRecommended": "添加 {{name}}",
       "empty": {
         "title": "还没有技能",
-        "description": "和助手一起创建一个，或上传您已有的技能。"
+        "description": "和助手一起创建一个，或上传您已有的技能。",
+        "descriptionNoAssistant": "上传您已有的技能，或自己创建一个。"
       }
     },
     "breadcrumb": {
@@ -4560,7 +4568,8 @@
       "neverRun": "OpenWhispr 从不运行脚本",
       "uninstall": "卸载",
       "uninstallConfirm": "要卸载 {{name}} 吗？它将从这台电脑中移除。",
-      "problem": "此技能修复后才能使用：{{reason}}"
+      "problem": "此技能修复后才能使用：{{reason}}",
+      "tryNow": "立即试用"
     },
     "menu": {
       "copyMarkdown": "复制 Markdown",
@@ -4631,7 +4640,8 @@
       "submit": "创建",
       "unsaved": "您有未保存的更改",
       "keepEditing": "继续编辑",
-      "discard": "放弃"
+      "discard": "放弃",
+      "draftWithAssistant": "用助手起草"
     },
     "problems": {
       "missingName": "开头需要名称",
@@ -4682,6 +4692,57 @@
         "title": "会议决策",
         "description": "在我的会议笔记中查找决策，并注明每项决策的日期和会议。当我问我们决定了什么时使用。"
       }
+    },
+    "chat": {
+      "chipRemove": "从此对话中移除 {{name}}",
+      "placeholderWith": "随便问点什么——此对话使用 {{name}}",
+      "usingSkill": "正在使用技能 · {{name}}",
+      "usingSkillFailed": "无法使用技能 · {{name}}",
+      "creatorName": "技能创建器",
+      "creatorOpening": "您经常反复做什么事？跟我讲讲上一次的情况，或者选一条笔记作为起点。",
+      "draftPrompt": "帮我完成这个技能。\n名称：{{name}}\n描述：{{description}}",
+      "draftInstructions": "目前的说明：\n{{instructions}}",
+      "draftFiles": "我添加的文件：{{files}}",
+      "noneYet": "（暂无）"
+    },
+    "approval": {
+      "createHeader": "创建技能",
+      "newSkill": "新技能",
+      "replacesExisting": "您已经有这个技能，保存后会更新它。",
+      "replacesExistingTurnsOn": "您已经有这个技能，保存后会更新并开启它。",
+      "nameLabel": "技能名称",
+      "descriptionLabel": "何时使用",
+      "seeFull": "查看完整技能",
+      "save": "保存技能",
+      "saving": "正在保存…",
+      "saved": "已保存",
+      "openSkill": "打开技能",
+      "skippedCreate": "已跳过，未保存任何内容。",
+      "updated": "已更新",
+      "undo": "撤销",
+      "undone": "已撤销，技能已恢复原样。",
+      "undoStale": "无法撤销，此后技能已被更改。",
+      "outdated": "未保存。此卡片创建后技能已被更改。",
+      "unchangedLines_one": "⋯ {{count}} 行未更改",
+      "unchangedLines_other": "⋯ {{count}} 行未更改",
+      "undoFailed": "无法撤销，请重试。",
+      "failed": "无法保存技能。",
+      "notSaved": "未保存任何内容。",
+      "updateHeader": "更新技能",
+      "removes": "将移除：",
+      "learnedFrom": "学习自：{{title}} · {{date}}",
+      "today": "今天",
+      "seeChanges": "查看具体更改",
+      "added": "新增：",
+      "removed": "移除：",
+      "update": "更新技能",
+      "skippedUpdate": "已跳过，技能未更改。"
+    },
+    "code": {
+      "paste": "粘贴到应用",
+      "pasteNote": "粘贴时不会按 Enter 键，由您决定何时运行。",
+      "pasted": "已粘贴",
+      "pasteFailed": "无法粘贴，文本已在您的剪贴板中。"
     }
   },
   "calendar": {

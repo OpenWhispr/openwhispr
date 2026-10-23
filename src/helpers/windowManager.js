@@ -221,6 +221,7 @@ class WindowManager {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
       this._assistantPanelBusy = false;
+      this.assistantPasteTarget?.clear();
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this._assistantPanelOpen) {
@@ -1158,6 +1159,15 @@ class WindowManager {
       return;
     }
 
+    // Each recording started over another app may become a voice command the panel answers;
+    // the panel takes that app as its paste target only then (assistantPasteTarget.js).
+    if (
+      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
+      nextState !== DICTATION_LIFECYCLE.IDLE &&
+      !this._assistantPanelOpen
+    ) {
+      this.assistantPasteTarget?.noteRecordingStart();
+    }
     this._dictationLifecycleState = nextState;
     this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);

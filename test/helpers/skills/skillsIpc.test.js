@@ -6,6 +6,7 @@ const { installElectronStub } = require("../harness/electronStub.js");
 
 installElectronStub();
 const { registerSkillsIpc } = require("../../../src/helpers/skills/skillsIpc");
+const debugLogger = require("../../../src/helpers/debugLogger");
 
 const INVALID = { ok: false, error: "invalid" };
 const SUMMARY = { name: "meeting-prep", enabled: true, valid: true };
@@ -34,6 +35,12 @@ function fakeLibrary(overrides = {}) {
     discardUploadsFrom: record("discardUploadsFrom"),
     create: record("create", { name: "weekly-recap" }),
     addRecommended: record("addRecommended", { name: "meeting-decisions" }),
+    readForModel: record("readForModel", { name: "meeting-prep", body: "Steps", files: [] }),
+    checkProposal: record("checkProposal", { name: "weekly-recap", existing: false, problems: [] }),
+    saveProposal: record("saveProposal", { name: "weekly-recap", versionId: "1760950800000" }),
+    markUsed: record("markUsed"),
+    applyUpdate: record("applyUpdate", { name: "meeting-prep", versionId: "1760950800000" }),
+    undo: record("undo", true),
     ...overrides,
   };
 }
@@ -80,7 +87,10 @@ test("a malformed name or upload item is refused before the library runs", async
   for (const input of [null, { ...draft, title: 3 }, { ...draft, files: [upload({ data: [] })] }]) {
     assert.deepEqual(await call("skills-create", input), INVALID);
   }
-  assert.deepEqual(await call("skills-add-recommended", "meeting-decisions", { title: 1 }), INVALID);
+  assert.deepEqual(
+    await call("skills-add-recommended", "meeting-decisions", { title: 1 }),
+    INVALID
+  );
   const copy = { title: "a", description: "b" };
   assert.deepEqual(await call("skills-add-recommended", "../x", copy), INVALID);
 
@@ -151,7 +161,11 @@ test("uploads a window was still reading when it closed or reloaded are let go o
 
     assert.deepEqual(await previewed, { items: [late] }, what);
     const discards = library.calls.filter(([method]) => method === "discardUploads");
-    assert.deepEqual(discards.map(([, tokens]) => tokens), discarded, what);
+    assert.deepEqual(
+      discards.map(([, tokens]) => tokens),
+      discarded,
+      what
+    );
   }
 });
 
@@ -230,4 +244,178 @@ test("reveal shows the skill's folder", async () => {
   assert.deepEqual(await call("skills-reveal", "meeting-prep"), { ok: true });
   assert.deepEqual(await call("skills-reveal", "missing"), { ok: false });
   assert.deepEqual(revealed, ["/data/skills/meeting-prep"]);
+});
+
+const proposal = { title: "Recap", description: "Recaps.", instructions: "Go", files: [] };
+
+test("malformed model reads, proposals and marks never reach the library", async () => {
+  const { call, library } = setup();
+
+  for (const ref of [
+    null,
+    "meeting-prep",
+    { name: 7 },
+    { name: "../escape" },
+    { name: "meeting-prep", builtin: "yes" },
+    { name: "meeting-prep", file: 7 },
+    { name: "meeting-prep", withFiles: 1 },
+  ]) {
+    assert.equal(await call("skills-read-for-model", ref), null, JSON.stringify(ref));
+  }
+  for (const bad of [
+    null,
+    { ...proposal, title: 7 },
+    { ...proposal, files: "notes.md" },
+    { ...proposal, files: [{ path: "a.md" }] },
+    { ...proposal, files: [{ path: 7, content: "x" }] },
+  ]) {
+    const request = { kind: "create", proposal: bad };
+    assert.deepEqual(await call("skills-check-proposal", request), INVALID);
+    assert.deepEqual(await call("skills-save-proposal", bad), INVALID);
+  }
+  assert.deepEqual(await call("skills-check-proposal", { kind: "other", proposal }), INVALID);
+  assert.equal(await call("skills-mark-used", "../escape"), undefined);
+  assert.deepEqual(library.calls, []);
+});
+
+test("a saved proposal broadcasts skills-changed; reads, checks and marks don't", async () => {
+  const { call, library, broadcasts } = setup();
+  const ref = { name: "meeting-prep", file: "references/a.md" };
+
+  assert.deepEqual(await call("skills-read-for-model", ref), {
+    name: "meeting-prep",
+    body: "Steps",
+    files: [],
+  });
+  assert.deepEqual(await call("skills-check-proposal", { kind: "create", proposal }), {
+    name: "weekly-recap",
+    existing: false,
+    problems: [],
+  });
+  await call("skills-mark-used", "meeting-prep");
+  assert.deepEqual(broadcasts, []);
+
+  assert.deepEqual(await call("skills-save-proposal", proposal), {
+    ok: true,
+    name: "weekly-recap",
+    versionId: "1760950800000",
+  });
+  assert.deepEqual(broadcasts, ["skills-changed"]);
+  assert.deepEqual(library.calls, [
+    ["readForModel", ref],
+    ["checkProposal", { kind: "create", proposal }],
+    ["markUsed", "meeting-prep"],
+    ["saveProposal", proposal],
+  ]);
+});
+
+// A throw would reach the chat as Electron's error text, folder path and all.
+test("the assistant's reads, checks and marks answer even when the library throws", async (t) => {
+  const fail = () => {
+    throw Object.assign(new Error("EACCES: permission denied, scandir '/data/skills'"), {
+      code: "EACCES",
+    });
+  };
+  const { call } = setup({ readForModel: fail, checkProposal: fail, markUsed: fail });
+  const warn = t.mock.method(debugLogger, "warn", () => {});
+
+  assert.equal(await call("skills-read-for-model", { name: "meeting-prep" }), null);
+  assert.deepEqual(await call("skills-check-proposal", { kind: "create", proposal }), INVALID);
+  assert.equal(await call("skills-mark-used", "meeting-prep"), undefined);
+  // Each is logged, so a folder that can't be read still shows up in the logs.
+  assert.equal(warn.mock.callCount(), 3);
+});
+
+test("a proposal that can't be saved reports why and broadcasts nothing", async () => {
+  const problems = [{ code: "placeholder" }];
+  const refused = setup({ saveProposal: () => ({ problems }) });
+  assert.deepEqual(await refused.call("skills-save-proposal", proposal), { ok: false, problems });
+
+  const full = setup({
+    saveProposal: () => {
+      throw Object.assign(new Error("disk"), { code: "noSpace" });
+    },
+  });
+  assert.deepEqual(await full.call("skills-save-proposal", proposal), {
+    ok: false,
+    error: "noSpace",
+  });
+  assert.deepEqual([...refused.broadcasts, ...full.broadcasts], []);
+});
+
+test("a save from a card made before the skill changed is refused without a broadcast", async () => {
+  const stale = setup({
+    saveProposal: () => ({ changed: true }),
+    applyUpdate: () => ({ changed: true }),
+  });
+  const update = { name: "meeting-prep", instructions: "New", files: [], baseHash: "a".repeat(64) };
+
+  assert.deepEqual(await stale.call("skills-save-proposal", { ...proposal, baseHash: "b" }), {
+    ok: false,
+    error: "changed",
+  });
+  assert.deepEqual(await stale.call("skills-apply-update", update), {
+    ok: false,
+    error: "changed",
+  });
+  assert.deepEqual(await stale.call("skills-apply-update", { ...update, baseHash: 1 }), INVALID);
+  assert.deepEqual(stale.broadcasts, []);
+});
+
+const update = { name: "meeting-prep", instructions: "New steps", files: [] };
+
+test("updates and Undo are checked before the library runs", async () => {
+  const { call, library } = setup();
+
+  for (const bad of [
+    null,
+    { ...update, name: "../escape" },
+    { ...update, description: 7 },
+    { ...update, files: [{ path: "a.md", content: 7 }] },
+  ]) {
+    assert.deepEqual(await call("skills-apply-update", bad), INVALID, JSON.stringify(bad));
+    assert.deepEqual(await call("skills-check-proposal", { kind: "update", update: bad }), INVALID);
+  }
+  for (const versionId of ["../1", "", 7, "12a"]) {
+    assert.deepEqual(await call("skills-undo", "meeting-prep", versionId), INVALID);
+  }
+  assert.deepEqual(await call("skills-undo", "../escape", "1"), INVALID);
+  assert.deepEqual(library.calls, []);
+});
+
+test("an applied update and its Undo broadcast; a missing version doesn't", async () => {
+  const { call, broadcasts } = setup();
+  assert.deepEqual(await call("skills-check-proposal", { kind: "update", update }), {
+    name: "weekly-recap",
+    existing: false,
+    problems: [],
+  });
+  assert.deepEqual(broadcasts, []);
+
+  assert.deepEqual(await call("skills-apply-update", update), {
+    ok: true,
+    name: "meeting-prep",
+    versionId: "1760950800000",
+  });
+  assert.deepEqual(await call("skills-undo", "meeting-prep", "1760950800000"), { ok: true });
+  assert.deepEqual(broadcasts, ["skills-changed", "skills-changed"]);
+
+  const gone = setup({ undo: () => false, checkProposal: () => null });
+  assert.deepEqual(await gone.call("skills-undo", "meeting-prep", "1"), INVALID);
+  assert.deepEqual(await gone.call("skills-check-proposal", { kind: "update", update }), INVALID);
+  assert.deepEqual(gone.broadcasts, []);
+});
+
+test("an update or Undo that fails to write reports why", async () => {
+  const fail = (code) => () => {
+    throw Object.assign(new Error("disk"), { code });
+  };
+  const { call, broadcasts } = setup({ applyUpdate: fail("noSpace"), undo: fail("permission") });
+
+  assert.deepEqual(await call("skills-apply-update", update), { ok: false, error: "noSpace" });
+  assert.deepEqual(await call("skills-undo", "meeting-prep", "1"), {
+    ok: false,
+    error: "permission",
+  });
+  assert.deepEqual(broadcasts, []);
 });

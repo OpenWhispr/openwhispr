@@ -244,6 +244,7 @@ test("user-authored names and previews detect direction at their display boundar
       "src/components/skills/SkillDetailDialog.tsx",
       /<DialogDescription\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
     ],
+    ["src/components/chat/SkillChip.tsx", /<span\s+dir="auto"[^>]*>\s*\{name\}/],
   ];
 
   for (const [file, pattern] of expectations) {

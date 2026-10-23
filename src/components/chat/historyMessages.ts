@@ -5,7 +5,7 @@ export interface HistoryMessage {
   content: string | Array<Record<string, unknown>>;
 }
 
-const HISTORY_LIMIT = 20;
+export const HISTORY_LIMIT = 20;
 const TRACE_ARG_MAX_CHARS = 80;
 const TRACE_OPENING = "[Tools used:";
 const ECHOED_TRACE = /^\s*\[Tools used:[^\]\n]*\]\s*/;
@@ -20,6 +20,7 @@ const TRACE_ARGUMENT: Record<string, string> = {
   github_search_issues: "query",
   find_contact: "name",
   create_note: "title",
+  load_skill: "name",
 };
 
 // A connector action's status (its saved result), as the model reads it. Without

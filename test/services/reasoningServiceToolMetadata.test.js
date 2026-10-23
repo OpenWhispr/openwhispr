@@ -137,7 +137,7 @@ test("a successful array tool output (search results) is forwarded as metadata",
   assert.deepEqual(toolResult.metadata, results);
 });
 
-test("a failed tool output yields no metadata and keeps the error as displayText", async (t) => {
+test("a failed tool output is marked failed, with no metadata and its error as displayText", async (t) => {
   const toolResult = await runToolMetadataScenario(
     t,
     "openwhispr-tool-metadata-error-test-",
@@ -150,6 +150,7 @@ test("a failed tool output yields no metadata and keeps the error as displayText
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "Something failed");
+  assert.equal(toolResult.failed, true);
 });
 
 test("a connector's failed result is still metadata, so its outcome reaches later turns", async (t) => {
@@ -163,6 +164,7 @@ test("a connector's failed result is still metadata, so its outcome reaches late
   );
 
   assert.deepEqual(toolResult.metadata, failed);
+  assert.equal(toolResult.failed, undefined, "the call ran; its outcome is in the metadata");
 });
 
 test("a successful string tool output yields no metadata", async (t) => {
@@ -178,6 +180,7 @@ test("a successful string tool output yields no metadata", async (t) => {
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "plain string result");
+  assert.equal(toolResult.failed, undefined);
 });
 
 test("a call the SDK rejects still settles, with its error as displayText", async (t) => {
@@ -197,4 +200,52 @@ test("a call the SDK rejects still settles, with its error as displayText", asyn
   assert.equal(toolResult.toolName, "ghost_tool");
   assert.match(toolResult.displayText, /^Error: .*ghost_tool/);
   assert.equal(toolResult.metadata, undefined);
+  assert.equal(toolResult.failed, true);
+});
+
+test("the cloud tool loop marks a call failed when its executor says so or throws", async (t) => {
+  const { reasoningService } = await loadReasoningService(
+    t,
+    "openwhispr-tool-metadata-cloud-failed-test-"
+  );
+  let step = 0;
+  t.mock.method(reasoningService, "streamFromIPC", () => {
+    step += 1;
+    const events =
+      step === 1
+        ? ["call-ok", "call-failed", "call-throws"].map((id) => ({
+            type: "tool_call",
+            id,
+            name: "test_tool",
+            arguments: "{}",
+          }))
+        : [{ type: "content", text: "done" }];
+    return {
+      stream: (async function* () {
+        for (const event of events) yield event;
+      })(),
+      wasCancelled: () => false,
+    };
+  });
+
+  const stream = reasoningService.processTextStreamingCloud([{ role: "user", content: "hi" }], {
+    systemPrompt: "s",
+    tools: [{ name: "test_tool", description: "d", parameters: {} }],
+    executeToolCall: async (_name, _args, toolCallId) => {
+      if (toolCallId === "call-throws") throw new Error("boom");
+      return toolCallId === "call-failed"
+        ? { data: "Something failed", displayText: "Something failed", failed: true }
+        : { data: "ok", displayText: "ok" };
+    },
+  });
+  const results = (await collectAllChunks(stream)).filter((chunk) => chunk.type === "tool_result");
+
+  assert.deepEqual(
+    results.map((chunk) => [chunk.callId, chunk.displayText, chunk.failed]),
+    [
+      ["call-ok", "ok", undefined],
+      ["call-failed", "Something failed", true],
+      ["call-throws", "Error: boom", true],
+    ]
+  );
 });

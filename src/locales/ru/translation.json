@@ -3960,6 +3960,9 @@
       "get_noteStatus": "Чтение заметки...",
       "create_noteStatus": "Создание заметки...",
       "update_noteStatus": "Обновление заметки...",
+      "load_skillStatus": "Загрузка навыка…",
+      "propose_skillStatus": "Подготовка навыка…",
+      "update_skillStatus": "Подготовка изменения…",
       "copiedToClipboard": "Скопировано в буфер обмена",
       "openNote": "Открыть заметку",
       "unknownTool": "Неизвестный инструмент: {{name}}",
@@ -3967,6 +3970,9 @@
       "search_openwhispr_helpName": "Поиск справки OpenWhispr",
       "read_openwhispr_helpName": "Чтение справки OpenWhispr",
       "get_openwhispr_contextName": "Чтение настроек OpenWhispr",
+      "load_skillName": "Загрузить навык",
+      "propose_skillName": "Предложить навык",
+      "update_skillName": "Обновить навык",
       "search_openwhispr_helpStatus": "Поиск в справке OpenWhispr...",
       "read_openwhispr_helpStatus": "Чтение справки OpenWhispr...",
       "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr..."
@@ -4569,6 +4575,7 @@
       "manage": "Управление навыками",
       "add": "Добавить",
       "addMenu": {
+        "createWithAssistant": "Создать с ассистентом",
         "create": "Создать навык",
         "upload": "Загрузить навык"
       },
@@ -4590,7 +4597,8 @@
       "addRecommended": "Добавить {{name}}",
       "empty": {
         "title": "Пока нет навыков",
-        "description": "Создайте навык с помощью ассистента или загрузите уже готовый."
+        "description": "Создайте навык с помощью ассистента или загрузите уже готовый.",
+        "descriptionNoAssistant": "Загрузите уже готовый навык или создайте свой."
       }
     },
     "breadcrumb": {
@@ -4606,7 +4614,8 @@
       "neverRun": "OpenWhispr никогда не запускает скрипты",
       "uninstall": "Удалить",
       "uninstallConfirm": "Удалить {{name}}? Навык будет удалён с этого компьютера.",
-      "problem": "Этот навык нельзя использовать, пока он не исправлен: {{reason}}"
+      "problem": "Этот навык нельзя использовать, пока он не исправлен: {{reason}}",
+      "tryNow": "Попробовать"
     },
     "menu": {
       "copyMarkdown": "Копировать Markdown",
@@ -4683,7 +4692,8 @@
       "submit": "Создать",
       "unsaved": "Есть несохранённые изменения",
       "keepEditing": "Продолжить редактирование",
-      "discard": "Отменить изменения"
+      "discard": "Отменить изменения",
+      "draftWithAssistant": "Составить с ассистентом"
     },
     "problems": {
       "missingName": "В начале нужно название",
@@ -4734,6 +4744,59 @@
         "title": "Решения со встреч",
         "description": "Находит решения в заметках моих встреч, с указанием даты и встречи для каждого. Применять, когда я спрашиваю, что мы решили."
       }
+    },
+    "chat": {
+      "chipRemove": "Убрать {{name}} из этого чата",
+      "placeholderWith": "Спросите что угодно — в этом чате используется {{name}}",
+      "usingSkill": "Используется навык · {{name}}",
+      "usingSkillFailed": "Не удалось использовать навык · {{name}}",
+      "creatorName": "Конструктор навыков",
+      "creatorOpening": "Что вы делаете снова и снова? Расскажите, как это было в последний раз, или выберите заметку для начала.",
+      "draftPrompt": "Помогите мне доделать этот навык.\nНазвание: {{name}}\nОписание: {{description}}",
+      "draftInstructions": "Инструкции на данный момент:\n{{instructions}}",
+      "draftFiles": "Добавленные файлы: {{files}}",
+      "noneYet": "(пока нет)"
+    },
+    "approval": {
+      "createHeader": "Создать навык",
+      "newSkill": "Новый навык",
+      "replacesExisting": "У вас уже есть этот навык. Сохранение обновит его.",
+      "replacesExistingTurnsOn": "У вас уже есть этот навык. Сохранение обновит и включит его.",
+      "nameLabel": "Название навыка",
+      "descriptionLabel": "Когда используется",
+      "seeFull": "Показать навык целиком",
+      "save": "Сохранить навык",
+      "saving": "Сохранение…",
+      "saved": "Сохранено",
+      "openSkill": "Открыть навык",
+      "skippedCreate": "Пропущено. Ничего не сохранено.",
+      "updated": "Обновлено",
+      "undo": "Отменить",
+      "undone": "Отменено. Навык снова такой, как был.",
+      "undoStale": "Не удалось отменить. Навык с тех пор изменился.",
+      "outdated": "Не сохранено. Навык изменился после создания этой карточки.",
+      "unchangedLines_one": "⋯ {{count}} строка без изменений",
+      "unchangedLines_few": "⋯ {{count}} строки без изменений",
+      "unchangedLines_many": "⋯ {{count}} строк без изменений",
+      "unchangedLines_other": "⋯ {{count}} строки без изменений",
+      "undoFailed": "Не удалось отменить. Попробуйте снова.",
+      "failed": "Не удалось сохранить навык.",
+      "notSaved": "Ничего не сохранено.",
+      "updateHeader": "Обновить навык",
+      "removes": "Будет удалено:",
+      "learnedFrom": "Источник: {{title}} · {{date}}",
+      "today": "Сегодня",
+      "seeChanges": "Показать точные изменения",
+      "added": "Добавлено:",
+      "removed": "Удалено:",
+      "update": "Обновить навык",
+      "skippedUpdate": "Пропущено. Навык не изменён."
+    },
+    "code": {
+      "paste": "Вставить в приложение",
+      "pasteNote": "Вставляется без нажатия Enter, чтобы вы сами решили, когда запускать.",
+      "pasted": "Вставлено",
+      "pasteFailed": "Не удалось вставить. Текст в буфере обмена."
     }
   },
   "calendar": {

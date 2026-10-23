@@ -3916,6 +3916,9 @@
       "get_noteStatus": "Lettura della nota...",
       "create_noteStatus": "Creazione della nota...",
       "update_noteStatus": "Aggiornamento della nota...",
+      "load_skillStatus": "Caricamento della skill…",
+      "propose_skillStatus": "Preparazione della skill…",
+      "update_skillStatus": "Preparazione della modifica…",
       "copiedToClipboard": "Copiato negli appunti",
       "openNote": "Apri nota",
       "unknownTool": "Strumento sconosciuto: {{name}}",
@@ -3923,6 +3926,9 @@
       "search_openwhispr_helpName": "Cerca nella guida di OpenWhispr",
       "read_openwhispr_helpName": "Leggi la guida di OpenWhispr",
       "get_openwhispr_contextName": "Leggi le impostazioni di OpenWhispr",
+      "load_skillName": "Carica skill",
+      "propose_skillName": "Proponi skill",
+      "update_skillName": "Aggiorna skill",
       "search_openwhispr_helpStatus": "Ricerca nella guida di OpenWhispr...",
       "read_openwhispr_helpStatus": "Lettura della guida di OpenWhispr...",
       "get_openwhispr_contextStatus": "Lettura delle impostazioni di OpenWhispr..."
@@ -4525,6 +4531,7 @@
       "manage": "Gestisci skill",
       "add": "Aggiungi",
       "addMenu": {
+        "createWithAssistant": "Crea con l'assistente",
         "create": "Crea skill",
         "upload": "Carica skill"
       },
@@ -4544,7 +4551,8 @@
       "addRecommended": "Aggiungi {{name}}",
       "empty": {
         "title": "Ancora nessuna skill",
-        "description": "Creane una con l'assistente o carica una skill che hai già."
+        "description": "Creane una con l'assistente o carica una skill che hai già.",
+        "descriptionNoAssistant": "Carica una skill che hai già o creane una tua."
       }
     },
     "breadcrumb": {
@@ -4560,7 +4568,8 @@
       "neverRun": "OpenWhispr non esegue mai script",
       "uninstall": "Disinstalla",
       "uninstallConfirm": "Disinstallare {{name}}? Verrà rimossa da questo computer.",
-      "problem": "Questa skill non può essere usata finché non viene corretta: {{reason}}"
+      "problem": "Questa skill non può essere usata finché non viene corretta: {{reason}}",
+      "tryNow": "Prova ora"
     },
     "menu": {
       "copyMarkdown": "Copia Markdown",
@@ -4631,7 +4640,8 @@
       "submit": "Crea",
       "unsaved": "Hai modifiche non salvate",
       "keepEditing": "Continua a modificare",
-      "discard": "Scarta"
+      "discard": "Scarta",
+      "draftWithAssistant": "Scrivi la bozza con l'assistente"
     },
     "problems": {
       "missingName": "Serve un nome in cima",
@@ -4682,6 +4692,57 @@
         "title": "Decisioni delle riunioni",
         "description": "Trova le decisioni nelle note delle mie riunioni, con la data e la riunione di ciascuna. Da usare quando chiedo cosa abbiamo deciso."
       }
+    },
+    "chat": {
+      "chipRemove": "Rimuovi {{name}} da questa chat",
+      "placeholderWith": "Chiedi qualsiasi cosa — questa chat usa {{name}}",
+      "usingSkill": "Skill in uso · {{name}}",
+      "usingSkillFailed": "Impossibile usare la skill · {{name}}",
+      "creatorName": "Creatore di skill",
+      "creatorOpening": "Cosa fai di continuo? Raccontami l'ultima volta, oppure scegli una nota da cui partire.",
+      "draftPrompt": "Aiutami a completare questa skill.\nNome: {{name}}\nDescrizione: {{description}}",
+      "draftInstructions": "Istruzioni finora:\n{{instructions}}",
+      "draftFiles": "File che ho aggiunto: {{files}}",
+      "noneYet": "(ancora niente)"
+    },
+    "approval": {
+      "createHeader": "Crea skill",
+      "newSkill": "Nuova skill",
+      "replacesExisting": "Hai già questa skill. Salvandola la aggiorni.",
+      "replacesExistingTurnsOn": "Hai già questa skill. Salvandola la aggiorni e la attivi.",
+      "nameLabel": "Nome della skill",
+      "descriptionLabel": "Quando si usa",
+      "seeFull": "Vedi la skill completa",
+      "save": "Salva skill",
+      "saving": "Salvataggio…",
+      "saved": "Salvata",
+      "openSkill": "Apri skill",
+      "skippedCreate": "Saltata. Non è stato salvato nulla.",
+      "updated": "Aggiornata",
+      "undo": "Annulla",
+      "undone": "Annullato. La skill è tornata com'era.",
+      "undoStale": "Impossibile annullare. La skill è cambiata nel frattempo.",
+      "outdated": "Non salvato. La skill è cambiata dopo la creazione di questa scheda.",
+      "unchangedLines_one": "⋯ {{count}} riga invariata",
+      "unchangedLines_other": "⋯ {{count}} righe invariate",
+      "undoFailed": "Impossibile annullare. Riprova.",
+      "failed": "Impossibile salvare la skill.",
+      "notSaved": "Non è stato salvato nulla.",
+      "updateHeader": "Aggiorna skill",
+      "removes": "Rimuove:",
+      "learnedFrom": "Imparata da: {{title}} · {{date}}",
+      "today": "Oggi",
+      "seeChanges": "Vedi le modifiche esatte",
+      "added": "Aggiunto:",
+      "removed": "Rimosso:",
+      "update": "Aggiorna skill",
+      "skippedUpdate": "Saltata. La skill non è stata modificata."
+    },
+    "code": {
+      "paste": "Incolla nell'app",
+      "pasteNote": "Incolla senza premere Invio, così scegli tu quando eseguirlo.",
+      "pasted": "Incollato",
+      "pasteFailed": "Impossibile incollare. Il testo è negli appunti."
     }
   },
   "calendar": {

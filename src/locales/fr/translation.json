@@ -4088,6 +4088,9 @@
       "get_noteStatus": "Lecture de la note...",
       "create_noteStatus": "Création de la note...",
       "update_noteStatus": "Mise à jour de la note...",
+      "load_skillStatus": "Chargement de la compétence…",
+      "propose_skillStatus": "Préparation de la compétence…",
+      "update_skillStatus": "Préparation de la modification…",
       "copiedToClipboard": "Copié dans le presse-papiers",
       "openNote": "Ouvrir la note",
       "unknownTool": "Outil inconnu : {{name}}",
@@ -4095,6 +4098,9 @@
       "search_openwhispr_helpName": "Rechercher dans l’aide OpenWhispr",
       "read_openwhispr_helpName": "Lire l’aide OpenWhispr",
       "get_openwhispr_contextName": "Lire les paramètres OpenWhispr",
+      "load_skillName": "Charger une compétence",
+      "propose_skillName": "Proposer une compétence",
+      "update_skillName": "Mettre à jour une compétence",
       "search_openwhispr_helpStatus": "Recherche dans l’aide OpenWhispr...",
       "read_openwhispr_helpStatus": "Lecture de l’aide OpenWhispr...",
       "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr..."
@@ -4697,6 +4703,7 @@
       "manage": "Gérer les compétences",
       "add": "Ajouter",
       "addMenu": {
+        "createWithAssistant": "Créer avec l'assistant",
         "create": "Créer une compétence",
         "upload": "Importer une compétence"
       },
@@ -4716,7 +4723,8 @@
       "addRecommended": "Ajouter {{name}}",
       "empty": {
         "title": "Aucune compétence pour l'instant",
-        "description": "Créez-en une avec l'assistant, ou importez une compétence que vous avez déjà."
+        "description": "Créez-en une avec l'assistant, ou importez une compétence que vous avez déjà.",
+        "descriptionNoAssistant": "Importez une compétence que vous avez déjà, ou créez la vôtre."
       }
     },
     "breadcrumb": {
@@ -4732,7 +4740,8 @@
       "neverRun": "OpenWhispr n'exécute jamais de scripts",
       "uninstall": "Désinstaller",
       "uninstallConfirm": "Désinstaller {{name}} ? Elle sera supprimée de cet ordinateur.",
-      "problem": "Cette compétence ne peut pas être utilisée tant qu'elle n'est pas corrigée : {{reason}}"
+      "problem": "Cette compétence ne peut pas être utilisée tant qu'elle n'est pas corrigée : {{reason}}",
+      "tryNow": "Essayer maintenant"
     },
     "menu": {
       "copyMarkdown": "Copier le Markdown",
@@ -4803,7 +4812,8 @@
       "submit": "Créer",
       "unsaved": "Vous avez des modifications non enregistrées",
       "keepEditing": "Continuer à modifier",
-      "discard": "Abandonner"
+      "discard": "Abandonner",
+      "draftWithAssistant": "Rédiger avec l'assistant"
     },
     "problems": {
       "missingName": "Il manque un nom en haut",
@@ -4854,6 +4864,57 @@
         "title": "Décisions de réunion",
         "description": "Retrouve les décisions dans les notes de mes réunions, avec la date et la réunion de chacune. À utiliser quand je demande ce que nous avons décidé."
       }
+    },
+    "chat": {
+      "chipRemove": "Retirer {{name}} de ce chat",
+      "placeholderWith": "Posez une question — ce chat utilise {{name}}",
+      "usingSkill": "Compétence utilisée · {{name}}",
+      "usingSkillFailed": "Impossible d'utiliser la compétence · {{name}}",
+      "creatorName": "Créateur de compétences",
+      "creatorOpening": "Que faites-vous encore et encore ? Racontez-moi la dernière fois, ou choisissez une note pour commencer.",
+      "draftPrompt": "Aidez-moi à terminer cette compétence.\nNom : {{name}}\nDescription : {{description}}",
+      "draftInstructions": "Instructions pour l’instant :\n{{instructions}}",
+      "draftFiles": "Fichiers ajoutés : {{files}}",
+      "noneYet": "(rien pour l'instant)"
+    },
+    "approval": {
+      "createHeader": "Créer une compétence",
+      "newSkill": "Nouvelle compétence",
+      "replacesExisting": "Vous avez déjà cette compétence. L'enregistrer la met à jour.",
+      "replacesExistingTurnsOn": "Vous avez déjà cette compétence. L'enregistrer la met à jour et l'active.",
+      "nameLabel": "Nom de la compétence",
+      "descriptionLabel": "Quand l'utiliser",
+      "seeFull": "Voir la compétence complète",
+      "save": "Enregistrer la compétence",
+      "saving": "Enregistrement…",
+      "saved": "Enregistrée",
+      "openSkill": "Ouvrir la compétence",
+      "skippedCreate": "Ignorée. Rien n'a été enregistré.",
+      "updated": "Mise à jour",
+      "undo": "Annuler",
+      "undone": "Annulé. La compétence est revenue à son état précédent.",
+      "undoStale": "Impossible d'annuler. La compétence a changé depuis.",
+      "outdated": "Non enregistré. La compétence a changé après la création de cette carte.",
+      "unchangedLines_one": "⋯ {{count}} ligne inchangée",
+      "unchangedLines_other": "⋯ {{count}} lignes inchangées",
+      "undoFailed": "Impossible d'annuler. Réessayez.",
+      "failed": "Impossible d'enregistrer la compétence.",
+      "notSaved": "Rien n'a été enregistré.",
+      "updateHeader": "Mettre à jour la compétence",
+      "removes": "Supprime :",
+      "learnedFrom": "Apprise de : {{title}} · {{date}}",
+      "today": "Aujourd'hui",
+      "seeChanges": "Voir les modifications exactes",
+      "added": "Ajouté :",
+      "removed": "Supprimé :",
+      "update": "Mettre à jour la compétence",
+      "skippedUpdate": "Ignorée. La compétence n'a pas été modifiée."
+    },
+    "code": {
+      "paste": "Coller dans l'app",
+      "pasteNote": "Colle sans appuyer sur Entrée : vous choisissez quand l'exécuter.",
+      "pasted": "Collé",
+      "pasteFailed": "Impossible de coller. Le texte est dans votre presse-papiers."
     }
   },
   "notesView": {

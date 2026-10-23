@@ -104,7 +104,8 @@ test("Markdown component types stay stable across streaming and parent rerenders
   let components;
   function InspectMarkdown(props) {
     const element = MarkdownRenderer(props);
-    components = element.props.children.props.children.props.components;
+    // div → footnote prefix → code block actions → Markdown
+    components = element.props.children.props.children.props.children.props.components;
     return element;
   }
   renderToStaticMarkup(createElement(InspectMarkdown, { content: TABLE_MARKDOWN }));
@@ -320,3 +321,38 @@ test(
     }
   }
 );
+
+async function renderWithActions(t, content, codeBlockActions) {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-markdown-code-actions-test-",
+  });
+  const mod = await vite.ssrLoadModule("/components/ui/MarkdownRenderer.tsx");
+  return renderToStaticMarkup(createElement(mod.default, { content, codeBlockActions }));
+}
+
+test(
+  "the code block's trailing newline from markdown is dropped, inner newlines kept",
+  async (t) => {
+    const codes = [];
+    const html = await renderWithActions(
+      t,
+      "Run `pwd` first, then:\n\n```sh\nls -la\ncd ..\n```\n",
+      (code) => {
+        codes.push(code);
+        return createElement("output", { "data-actions": "" });
+      }
+    );
+
+    assert.deepEqual(codes, ["ls -la\ncd .."], "inline code gets no actions");
+    assert.match(html, /<\/pre><output data-actions=""><\/output>/);
+  }
+);
+
+test("without codeBlockActions, code blocks render as before", async (t) => {
+  const html = await renderWithActions(t, "```sh\nls -la\n```\n");
+
+  const pre = '<pre dir="ltr" class="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">';
+  assert.ok(html.includes(pre), html);
+  assert.match(html, /<code[^>]*>ls -la\n<\/code><\/pre><\/div>$/, "nothing follows the block");
+});

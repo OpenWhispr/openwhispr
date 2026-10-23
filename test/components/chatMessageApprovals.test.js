@@ -79,3 +79,61 @@ test("a card shows only on the message whose tool call requested it", async (t) 
     "a different message reusing the same tool-call id shows no card"
   );
 });
+
+test("a skill card renders in place of its tool step", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  installBrowserGlobals(t);
+  const container = installInteractiveDom(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-message-skill-card-test-",
+  });
+  const store = await vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+  const { ChatMessage } = await vite.ssrLoadModule("/components/chat/ChatMessage.tsx");
+  const key = "msg-new::call-1";
+  const draft = {
+    title: "Weekly recap",
+    description: "Recaps my week.",
+    instructions: "Go",
+    files: [],
+  };
+  store.useSkillApprovalStore.setState({
+    entries: {
+      [key]: {
+        key,
+        messageId: "msg-new",
+        toolCallId: "call-1",
+        kind: "create",
+        name: "weekly-recap",
+        draft,
+        original: draft,
+        state: "pending",
+      },
+    },
+  });
+  root = createRoot(container);
+  const render = (messageId, status) =>
+    React.act(async () =>
+      root.render(
+        React.createElement(ChatMessage, {
+          messageId,
+          role: "assistant",
+          content: "",
+          isStreaming: false,
+          toolCalls: [{ id: "call-1", name: "propose_skill", arguments: "{}", status }],
+        })
+      )
+    );
+  const skillCard = () =>
+    findElement(container, (element) => element.getAttribute?.("data-approval-card") === key);
+
+  await render("msg-new", "executing");
+  assert.ok(skillCard(), "the card stands in for the tool step");
+  assert.doesNotMatch(container.textContent, /propose_skill/);
+
+  await render("msg-old", "completed");
+  assert.ok(!skillCard(), "another message's call shows no card");
+  assert.equal(container.textContent, "", "nor a bare propose_skill step");
+});

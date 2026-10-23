@@ -4088,6 +4088,9 @@
       "get_noteStatus": "Notiz wird gelesen...",
       "create_noteStatus": "Notiz wird erstellt...",
       "update_noteStatus": "Notiz wird aktualisiert...",
+      "load_skillStatus": "Skill wird geladen…",
+      "propose_skillStatus": "Skill wird vorbereitet…",
+      "update_skillStatus": "Änderung wird vorbereitet…",
       "copiedToClipboard": "In die Zwischenablage kopiert",
       "openNote": "Notiz öffnen",
       "unknownTool": "Unbekanntes Werkzeug: {{name}}",
@@ -4095,6 +4098,9 @@
       "search_openwhispr_helpName": "OpenWhispr-Hilfe suchen",
       "read_openwhispr_helpName": "OpenWhispr-Hilfe lesen",
       "get_openwhispr_contextName": "OpenWhispr-Einstellungen lesen",
+      "load_skillName": "Skill laden",
+      "propose_skillName": "Skill vorschlagen",
+      "update_skillName": "Skill aktualisieren",
       "search_openwhispr_helpStatus": "OpenWhispr-Hilfe wird durchsucht...",
       "read_openwhispr_helpStatus": "OpenWhispr-Hilfe wird gelesen...",
       "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen..."
@@ -4697,6 +4703,7 @@
       "manage": "Skills verwalten",
       "add": "Hinzufügen",
       "addMenu": {
+        "createWithAssistant": "Mit dem Assistenten erstellen",
         "create": "Skill erstellen",
         "upload": "Skill hochladen"
       },
@@ -4716,7 +4723,8 @@
       "addRecommended": "{{name}} hinzufügen",
       "empty": {
         "title": "Noch keine Skills",
-        "description": "Erstelle einen mit dem Assistenten oder lade einen hoch, den du schon hast."
+        "description": "Erstelle einen mit dem Assistenten oder lade einen hoch, den du schon hast.",
+        "descriptionNoAssistant": "Lade einen hoch, den du schon hast, oder erstelle deinen eigenen."
       }
     },
     "breadcrumb": {
@@ -4732,7 +4740,8 @@
       "neverRun": "OpenWhispr führt Skripte nie aus",
       "uninstall": "Deinstallieren",
       "uninstallConfirm": "{{name}} deinstallieren? Der Skill wird von diesem Computer entfernt.",
-      "problem": "Dieser Skill kann erst verwendet werden, wenn er korrigiert ist: {{reason}}"
+      "problem": "Dieser Skill kann erst verwendet werden, wenn er korrigiert ist: {{reason}}",
+      "tryNow": "Jetzt ausprobieren"
     },
     "menu": {
       "copyMarkdown": "Markdown kopieren",
@@ -4803,7 +4812,8 @@
       "submit": "Erstellen",
       "unsaved": "Du hast ungespeicherte Änderungen",
       "keepEditing": "Weiter bearbeiten",
-      "discard": "Verwerfen"
+      "discard": "Verwerfen",
+      "draftWithAssistant": "Mit dem Assistenten entwerfen"
     },
     "problems": {
       "missingName": "Braucht oben einen Namen",
@@ -4854,6 +4864,57 @@
         "title": "Meeting-Entscheidungen",
         "description": "Findet die Entscheidungen in meinen Meeting-Notizen, jeweils mit Datum und Meeting. Nutzen, wenn ich frage, was wir entschieden haben."
       }
+    },
+    "chat": {
+      "chipRemove": "{{name}} aus diesem Chat entfernen",
+      "placeholderWith": "Frag etwas – dieser Chat nutzt {{name}}",
+      "usingSkill": "Nutzt Skill · {{name}}",
+      "usingSkillFailed": "Skill konnte nicht genutzt werden · {{name}}",
+      "creatorName": "Skill-Ersteller",
+      "creatorOpening": "Was machst du immer wieder? Erzähl mir, wie es beim letzten Mal lief, oder wähle eine Notiz als Ausgangspunkt.",
+      "draftPrompt": "Hilf mir, diesen Skill fertigzustellen.\nName: {{name}}\nBeschreibung: {{description}}",
+      "draftInstructions": "Anweisungen bisher:\n{{instructions}}",
+      "draftFiles": "Hinzugefügte Dateien: {{files}}",
+      "noneYet": "(noch nichts)"
+    },
+    "approval": {
+      "createHeader": "Skill erstellen",
+      "newSkill": "Neuer Skill",
+      "replacesExisting": "Diesen Skill hast du schon. Beim Speichern wird er aktualisiert.",
+      "replacesExistingTurnsOn": "Diesen Skill hast du schon. Beim Speichern wird er aktualisiert und eingeschaltet.",
+      "nameLabel": "Name des Skills",
+      "descriptionLabel": "Wann er genutzt wird",
+      "seeFull": "Ganzen Skill ansehen",
+      "save": "Skill speichern",
+      "saving": "Wird gespeichert…",
+      "saved": "Gespeichert",
+      "openSkill": "Skill öffnen",
+      "skippedCreate": "Übersprungen. Es wurde nichts gespeichert.",
+      "updated": "Aktualisiert",
+      "undo": "Rückgängig",
+      "undone": "Rückgängig gemacht. Der Skill ist wieder wie vorher.",
+      "undoStale": "Rückgängig machen nicht möglich. Der Skill wurde seitdem geändert.",
+      "outdated": "Nicht gespeichert. Der Skill wurde geändert, nachdem diese Karte erstellt wurde.",
+      "unchangedLines_one": "⋯ {{count}} unveränderte Zeile",
+      "unchangedLines_other": "⋯ {{count}} unveränderte Zeilen",
+      "undoFailed": "Rückgängig machen nicht möglich. Versuche es erneut.",
+      "failed": "Der Skill konnte nicht gespeichert werden.",
+      "notSaved": "Es wurde nichts gespeichert.",
+      "updateHeader": "Skill aktualisieren",
+      "removes": "Wird entfernt:",
+      "learnedFrom": "Gelernt aus: {{title}} · {{date}}",
+      "today": "Heute",
+      "seeChanges": "Genaue Änderungen ansehen",
+      "added": "Hinzugefügt:",
+      "removed": "Entfernt:",
+      "update": "Skill aktualisieren",
+      "skippedUpdate": "Übersprungen. Der Skill wurde nicht geändert."
+    },
+    "code": {
+      "paste": "In App einfügen",
+      "pasteNote": "Fügt ohne Enter ein, damit du selbst entscheidest, wann es ausgeführt wird.",
+      "pasted": "Eingefügt",
+      "pasteFailed": "Einfügen fehlgeschlagen. Der Text ist in deiner Zwischenablage."
     }
   },
   "notesView": {
