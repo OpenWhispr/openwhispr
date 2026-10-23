@@ -109,7 +109,7 @@ test("with tools, the model claims only what a tool result shows", async () => {
   );
   assert.match(prompt, /an earlier reply says something was done but no tool result records it/);
   assert.match(prompt, /Tool results override anything said earlier in the chat/);
-  assert.doesNotMatch(getAgentSystemPrompt([]), /Only say you did something/);
+  assert.doesNotMatch(getAgentSystemPrompt([]), /Only say something was done/);
 });
 
 test("without tools there is no capability block, but unavailable capabilities are still named", async () => {
