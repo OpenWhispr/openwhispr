@@ -1262,7 +1262,8 @@ export class SyncService {
       localId,
       snapshot,
       cloudId,
-      sender.accountId
+      sender.accountId,
+      sender.authGeneration
     );
     if (!result?.success) return;
 
@@ -2605,7 +2606,8 @@ export class SyncService {
         await window.electronAPI.markConversationSynced?.(
           conv.id,
           conv.cloud_id!,
-          sender.accountId
+          sender.accountId,
+          sender.authGeneration
         );
       } catch (err) {
         console.error("Conversation migration sync failed:", err);

@@ -112,9 +112,17 @@ function isStaleSyncAck(expectedAuthGeneration) {
   );
 }
 const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
-// The account a chat push was sent as; without one, the active account.
-function syncSenderAccount(accountId) {
-  return typeof accountId === "string" && accountId ? accountId : undefined;
+// The account each sign-in (token generation) was scoped to. A chat ack names
+// the account it was sent as, and main accepts that only when it is the one
+// the push's sign-in was scoped to, so the renderer can't move a row to an
+// account of its choosing.
+const scopedAccountByGeneration = new Map();
+function syncSenderAccount(accountId, authGeneration) {
+  return typeof accountId === "string" &&
+    accountId &&
+    scopedAccountByGeneration.get(authGeneration) === accountId
+    ? accountId
+    : null;
 }
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
@@ -2798,8 +2806,10 @@ class IPCHandlers {
       }
       const scopeChanged = this.databaseManager.activeAccountId !== accountId;
       this.databaseManager.setActiveAccountId(accountId);
-      if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
-      else accountScopeBinding.clear();
+      if (accountId !== null) {
+        accountScopeBinding.persist(accountId, state.token);
+        scopedAccountByGeneration.set(state.generation, accountId);
+      } else accountScopeBinding.clear();
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -3284,17 +3294,19 @@ class IPCHandlers {
     // A chat create is not idempotent in the cloud (its messages are inserted
     // again), so its ack is never dropped: it is recorded for the account that
     // sent it, which may no longer be the active one.
-    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId, accountId) =>
-      this.databaseManager.acknowledgeConversationCreate(
-        id,
-        snapshot,
-        cloudId,
-        syncSenderAccount(accountId)
-      )
+    ipcMain.handle(
+      "db-acknowledge-conversation-create",
+      (_, id, snapshot, cloudId, accountId, authGeneration) => {
+        const sender = syncSenderAccount(accountId, authGeneration);
+        if (!sender) return { success: false, outcome: "unresolved", cloud_id: null };
+        return this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId, sender);
+      }
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, accountId) =>
-      this.databaseManager.markConversationSynced(id, cloudId, syncSenderAccount(accountId))
-    );
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, accountId, authGeneration) => {
+      const sender = syncSenderAccount(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return this.databaseManager.markConversationSynced(id, cloudId, sender);
+    });
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {

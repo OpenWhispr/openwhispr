@@ -165,7 +165,7 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
   assert.deepEqual(db.getDictionary(), ["Kubernetes"], "the current sign-in's row is written");
 });
 
-test("a chat ack is recorded for the account that sent it", async (t) => {
+test("a chat ack is recorded for the account its sign-in was scoped to, and no other", async (t) => {
   const db = setup(t);
   if (!db) return;
   const chat = db.createAgentConversation("Started signed out");
@@ -176,16 +176,22 @@ test("a chat ack is recorded for the account that sent it", async (t) => {
     updated_at: current.updated_at,
     message_count: 0,
   };
+  const signIn = tokenState.generation;
+  assert.equal((await invoke("set-active-account-scope", "account-a", signIn)).success, true);
+  // B signs in while A's create is in flight.
   db.setActiveAccountId("account-b");
 
-  const ack = await invoke(
-    "db-acknowledge-conversation-create",
-    chat.id,
-    snapshot,
-    "c-1",
-    "account-a"
+  const ack = (accountId, generation) =>
+    invoke("db-acknowledge-conversation-create", chat.id, snapshot, "c-1", accountId, generation);
+  assert.equal((await ack("account-c", signIn)).success, false, "not an account it never was");
+  assert.equal((await ack("account-a", signIn - 1)).success, false, "not for another sign-in");
+  assert.equal(
+    (await invoke("db-mark-conversation-synced", chat.id, "c-1", "account-c", signIn)).success,
+    false
   );
-  assert.equal(ack.outcome, "synced");
+  assert.equal(db.db.prepare("SELECT account_id FROM agent_conversations").get().account_id, null);
+
+  assert.equal((await ack("account-a", signIn)).outcome, "synced");
   const row = db.db
     .prepare("SELECT account_id, cloud_id FROM agent_conversations WHERE id = ?")
     .get(chat.id);

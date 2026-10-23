@@ -79,8 +79,8 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   await api.markTranscriptionSynced(1, "t", 7);
   await api.markDictionarySynced(1, "d", "now", "word", "manual", "manual", 7);
   await api.markSnippetSynced(1, "s", "now", "addr", "home", 7);
-  await api.acknowledgeConversationCreate(1, { title: "Chat" }, "c", "account-a");
-  await api.markConversationSynced(1, "c", "account-a");
+  await api.acknowledgeConversationCreate(1, { title: "Chat" }, "c", "account-a", 7);
+  await api.markConversationSynced(1, "c", "account-a", 7);
 
   assert.deepEqual(invocations, [
     ["db-upsert-transcription-from-cloud", { id: "t" }, 7],
@@ -90,8 +90,8 @@ test("sync writes forward the sign-in that read them and the account a chat was 
     ["db-mark-transcription-synced", 1, "t", 7],
     ["db-mark-dictionary-synced", 1, "d", "now", "word", "manual", "manual", 7],
     ["db-mark-snippet-synced", 1, "s", "now", "addr", "home", 7],
-    ["db-acknowledge-conversation-create", 1, { title: "Chat" }, "c", "account-a"],
-    ["db-mark-conversation-synced", 1, "c", "account-a"],
+    ["db-acknowledge-conversation-create", 1, { title: "Chat" }, "c", "account-a", 7],
+    ["db-mark-conversation-synced", 1, "c", "account-a", 7],
   ]);
 });
 

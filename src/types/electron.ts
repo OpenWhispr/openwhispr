@@ -3942,12 +3942,14 @@ declare global {
         id: number,
         snapshot: ConversationCreateSnapshot,
         cloudId: string,
-        accountId?: string
+        accountId: string,
+        authGeneration: number
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
         cloudId: string,
-        accountId?: string
+        accountId: string,
+        authGeneration: number
       ) => Promise<{ success: boolean } | undefined>;
       hardDeleteConversation?: (id: number) => Promise<void>;
 
