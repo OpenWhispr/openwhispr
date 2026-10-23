@@ -3857,6 +3857,16 @@ class DatabaseManager {
         if (!folder.cloud_id) {
           // There is no server operation to deny. Local-only folders can
           // finalize immediately, including their local-only child content.
+          // A synced note filed here still has a cloud row, so it leaves the
+          // folder as an ordinary pending note delete (as deleteNote does).
+          this.db
+            .prepare(
+              `UPDATE notes
+               SET folder_id = NULL, deleted_at = COALESCE(deleted_at, datetime('now')),
+                   sync_status = 'pending', updated_at = datetime('now')
+               WHERE folder_id = ? AND cloud_id IS NOT NULL`
+            )
+            .run(id);
           this._retireConversationsWhere(`note_id IN (${allChildNotes})`, [id], {
             scrubSyncedMessages: true,
           });

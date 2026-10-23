@@ -439,6 +439,74 @@ test("S3 a delete racing an unsynced edit is won by the cloud tombstone", async 
   assertNoContentRegression(beforeB, snapshotNotes(deviceB.db), cloud.notes());
 });
 
+test("S3 deleting a never-synced folder deletes its synced notes in the cloud and on the other device", async (t) => {
+  const cloud = freshCloud();
+  const deviceA = createDevice(t, cloud);
+  if (!deviceA) return;
+  const deviceB = createDevice(t, cloud);
+  if (!deviceB) return;
+
+  const note = deviceA.db.saveNote("Filed note", "filed body", "personal").note;
+  setNoteRow(deviceA.db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
+  await syncOnce(deviceA);
+  const clientNoteId = deviceA.db.getNote(note.id).client_note_id;
+  const cloudId = deviceA.db.getNote(note.id).cloud_id;
+
+  await syncOnce(deviceB);
+  assert.ok(noteByClientId(deviceB.db, clientNoteId), "B must have the note before it is deleted");
+  const bCursor = deviceB.storage["lastSyncedAt.notes"];
+
+  // Offline on A, with no pass in between: a new folder, the synced note filed
+  // into it beside a brand-new note, then the whole folder deleted.
+  cloud.setClock(() => shift(bCursor, 1));
+  const folder = deviceA.db.createFolder("Drafts").folder;
+  deviceA.db.updateNote(note.id, { folder_id: folder.id, space_id: folder.space_id });
+  const localOnly = deviceA.db.saveNote(
+    "Scratch",
+    "scratch body",
+    "personal",
+    null,
+    null,
+    folder.id,
+    folder.space_id
+  ).note;
+  assert.equal(deviceA.db.getNote(localOnly.id).folder_id, folder.id);
+  assert.equal(deviceA.db.deleteFolder(folder.id).success, true);
+
+  assert.equal(folderByName(deviceA.db, "Drafts"), null, "the local-only folder is gone at once");
+  assert.equal(
+    deviceA.db.db.prepare("SELECT id FROM notes WHERE id = ?").get(localOnly.id),
+    undefined,
+    "a never-synced child has nothing to retire and is dropped at once"
+  );
+
+  await syncOnce(deviceA);
+
+  const deletes = cloud.logFor("/api/notes/delete");
+  assert.equal(deletes.length, 1, "the synced child's delete must reach the cloud");
+  assert.deepEqual(deletes[0].body, { id: cloudId });
+  assert.ok(cloud.note(cloudId).deleted_at, "the cloud row must be tombstoned");
+  assert.equal(deviceA.db.getNote(note.id), null, "A drops the row after the cloud ack");
+  assert.ok(
+    !cloud.notes().some((row) => row.title === "Scratch"),
+    "the never-synced child must never be uploaded"
+  );
+
+  const beforeB = snapshotNotes(deviceB.db);
+  await syncOnce(deviceB);
+  assert.equal(noteByClientId(deviceB.db, clientNoteId), null, "the delete must reach B");
+  assert.equal(noteCount(deviceB.db), 0);
+  assertNoContentRegression(beforeB, snapshotNotes(deviceB.db), cloud.notes());
+
+  wipeCursors(deviceA);
+  await syncOnce(deviceA);
+  assert.equal(
+    noteByClientId(deviceA.db, clientNoteId),
+    null,
+    "a snapshot pull must not revive it"
+  );
+});
+
 test("S4 a quit before the push loses nothing and the next launch uploads the note", async (t) => {
   const cloud = freshCloud();
   const device = createDevice(t, cloud);
