@@ -195,6 +195,8 @@ function fakeWindow({ visible, focused = false }) {
       },
       isFocused: () => isFocused,
       setFocusable: (value) => calls.push(`focusable:${value}`),
+      setOpacity: (value) => calls.push(`opacity:${value}`),
+      setIgnoreMouseEvents: (ignore) => calls.push(`ignoreMouse:${ignore}`),
       setContentProtection: () => undefined,
       getBounds: () => ({ x: 0, y: 0, width: 96, height: 96 }),
     },
@@ -705,8 +707,31 @@ test("hideDictationPanel refuses while an assistant command is busy or the panel
   assert.deepEqual(calls, []);
   manager.setAssistantPanelOpen(false);
   calls.length = 0;
-  manager.hideDictationPanel();
+  withPlatform("linux", () => manager.hideDictationPanel());
   assert.deepEqual(calls, ["hide"]);
+});
+
+test("hideDictationPanel conceals a shown window on macOS instead of hiding it", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: true });
+    manager.hideDictationPanel();
+    // hide() takes the window out of what tiling window managers track.
+    assert.deepEqual(calls, ["opacity:0", "ignoreMouse:true"]);
+    assert.equal(manager.isDictationPanelVisible(), false);
+  });
+});
+
+test("a concealed window stays click-through until surfaced, then takes the latest interactivity", () => {
+  withPlatform("darwin", () => {
+    const { manager, calls } = makeManager({ visible: true });
+    manager.hideDictationPanel();
+    calls.length = 0;
+    manager.setMainWindowInteractivity(true);
+    assert.deepEqual(calls, []);
+    manager.showDictationPanel();
+    assert.deepEqual(calls, ["opacity:1", "ignoreMouse:false"]);
+    assert.equal(manager.isDictationPanelVisible(), true);
+  });
 });
 
 test("compact onboarding exposes the complete window-control contract", () => {
