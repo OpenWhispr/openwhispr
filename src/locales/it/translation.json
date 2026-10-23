@@ -879,6 +879,12 @@
     "groq": {
       "modelRetired": "Groq ha ritirato {{from}}. Passato a {{to}}."
     },
+    "gemini": {
+      "modelRetired": "Google ha ritirato {{from}}. Passato a {{to}}."
+    },
+    "vertex": {
+      "modelRetired": "Vertex AI ha ritirato {{from}}. Passato a {{to}}."
+    },
     "tinfoil": {
       "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
       "refreshingModels": "Aggiornamento dei modelli…"
@@ -2685,11 +2691,12 @@
         "anthropic_claude_sonnet_4_6": "Prestazioni bilanciate",
         "anthropic_claude_sonnet_4_5": "Generazione Sonnet precedente",
         "anthropic_claude_haiku_4_5": "Veloce con intelligenza quasi da frontiera",
-        "gemini_gemini_3_5_flash": "Ultimo modello Gemini veloce e ad alta capacità",
+        "gemini_gemini_3_8_flash": "Il modello Flash più intelligente per agenti e flussi aziendali",
+        "gemini_gemini_4_argon": "Il modello Gemini più capace, ragionamento di punta, contesto 1M",
+        "gemini_gemini_3_6_flash": "Flash di generazione precedente, velocità e multimodalità bilanciate",
         "gemini_gemini_3_5_flash_lite": "Il modello 3.5 più veloce ed economico",
         "gemini_gemini_3_1_pro_preview": "Modello di punta di nuova generazione per ragionamento complesso",
         "gemini_gemini_3_1_flash_lite": "Prestazioni di punta a basso costo",
-        "gemini_gemini_3_flash_preview": "Modello di nuova generazione ultra-veloce e ad alta capacità",
         "gemini_gemini_2_5_flash_lite": "Latenza e costo minimi",
         "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
         "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
@@ -2723,8 +2730,8 @@
         "bedrock_gpt_oss_120b": "Modello aperto di OpenAI. Ottimo ragionamento a basso costo.",
         "bedrock_deepseek_v3_2": "Modello frontier a pesi aperti. Ottimo valore per i compiti di assistente.",
         "bedrock_qwen3_next_80b": "Modello aperto sparso. Veloce e multilingue.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "vertex_gemini_3_8_flash": "Il modello Flash più intelligente tramite Vertex",
+        "vertex_gemini_4_argon": "Il modello Gemini più capace tramite Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modello ibrido potente",
