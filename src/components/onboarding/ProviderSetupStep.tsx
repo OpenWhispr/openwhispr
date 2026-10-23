@@ -222,6 +222,8 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.groqApiKey, set: store.setGroqApiKey };
     case "xai":
       return { value: store.xaiApiKey, set: store.setXaiApiKey };
+    case "minimax":
+      return { value: store.minimaxApiKey, set: store.setMinimaxApiKey };
     case "mistral":
       return { value: store.mistralApiKey, set: store.setMistralApiKey };
     case "openrouter":

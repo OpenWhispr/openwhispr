@@ -2661,6 +2661,7 @@
         "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
         "xai_grok_stt": "xAIによる高精度音声認識",
+        "minimax_asr_1": "MiniMaxによる音声認識（話者識別対応）",
         "tinfoil_voxtral": "検証可能なプライベート文字起こし",
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
@@ -2709,6 +2710,8 @@
         "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
         "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト",
         "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
+        "minimax_m3_1_flash": "高速モデル、100万トークンのコンテキスト、常に推論",
+        "minimax_m3": "MiniMaxで最も高性能なモデル、100万トークンのコンテキスト",
         "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
         "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
         "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"

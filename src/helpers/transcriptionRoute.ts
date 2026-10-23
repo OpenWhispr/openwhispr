@@ -116,7 +116,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "minimax" | "corti" | "gemini";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -172,6 +172,30 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
+// MiniMax asr-1.0 languages (the `language` header); anything else is sent as auto-detect.
+export const MINIMAX_STT_LANGUAGES = new Set([
+  "zh",
+  "yue",
+  "en",
+  "ja",
+  "ko",
+  "th",
+  "vi",
+  "id",
+  "ms",
+  "fil",
+  "ar",
+  "tr",
+  "fr",
+  "de",
+  "es",
+  "it",
+  "pt",
+  "pl",
+  "ru",
+  "uk",
+]);
+
 // Prefix-matched rather than registry-checked on purpose: this module loads in
 // the packaged main process without the registry, and strict validation would
 // reset the model of anyone still on a retired id. The registry-backed picker
@@ -197,6 +221,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
+  if (provider === "minimax") return "asr-1.0";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
@@ -341,6 +366,15 @@ export function resolveTranscriptionRoute({
       model: provider === "mistral" ? model : provider === "xai" ? "grok-stt" : null,
       language:
         provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "minimax") {
+    return {
+      transport: "proxied",
+      provider,
+      model: "asr-1.0",
+      language: language && MINIMAX_STT_LANGUAGES.has(language) ? language : undefined,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }

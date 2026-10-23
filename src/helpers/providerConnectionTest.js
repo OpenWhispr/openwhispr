@@ -2,6 +2,7 @@ const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
   xai: "https://api.x.ai/v1/models",
+  minimax: "https://api.minimax.io/v1/models",
   mistral: "https://api.mistral.ai/v1/models",
   // The largest page each API allows, so a valid but older model is still listed.
   anthropic: "https://api.anthropic.com/v1/models?limit=1000",
@@ -425,8 +426,13 @@ async function testProviderConnection(
     const next = await probe(endpoint, request, fetchImpl, async (response) => {
       if (!response.ok) return describeResponseFailure(response, provider);
       if (provider === "openrouter") return describeOpenRouterKey(response);
-      // AssemblyAI's probe lists transcripts, not models, so a 200 is the whole signal.
-      if (provider === "assemblyai" || (await responseOffersModel(response, model, provider))) {
+      // AssemblyAI's probe lists transcripts, not models, and MiniMax's model list has
+      // only its text models (never asr-1.0), so for both a 200 is the whole signal.
+      if (
+        provider === "assemblyai" ||
+        provider === "minimax" ||
+        (await responseOffersModel(response, model, provider))
+      ) {
         return null;
       }
       return MODEL_NOT_FOUND;

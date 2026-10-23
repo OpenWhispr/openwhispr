@@ -2759,6 +2759,7 @@
         "gemini_3_5_transcribe_live": "Spracherkennung per Echtzeit-Streaming",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
+        "minimax_asr_1": "Spracherkennung von MiniMax mit Sprechererkennung",
         "tinfoil_voxtral": "Nachweisbar private Transkription",
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
@@ -2807,6 +2808,8 @@
         "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
         "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext",
         "corti_corti_s1_instant": "Schnelles Gesundheitsmodell, ohne Reasoning-Spur",
+        "minimax_m3_1_flash": "Schnelles Modell mit 1M-Token-Kontext, denkt immer nach",
+        "minimax_m3": "Leistungsstärkstes MiniMax-Modell, 1M-Token-Kontext",
         "corti_corti_s1": "Leistungsfähigstes klinisches Modell mit Reasoning",
         "corti_corti_s1_mini_instant": "Kompaktes Gesundheitsmodell, am schnellsten und günstigsten",
         "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"

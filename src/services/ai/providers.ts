@@ -6,6 +6,7 @@ import type { LanguageModel } from "ai";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
+import { suppressThinking } from "./thinkingSuppressionDialects";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -13,15 +14,15 @@ import { openCodeSessionHeaders } from "./openCodeSession";
 // APIs (fs, process, AWS credential chain) that don't work in the browser.
 // See `src/helpers/enterpriseAiProviders.js` for the main-process counterpart.
 
-// OpenRouter's reasoning control is a top-level request field the AI SDK
-// can't emit — inject it at the fetch boundary.
-const withReasoning =
-  (reasoning: Record<string, unknown>): typeof fetch =>
+// OpenRouter's reasoning control and MiniMax's thinking fields are top-level
+// request fields the AI SDK can't emit — inject them at the fetch boundary.
+const withBodyFields =
+  (fields: Record<string, unknown>): typeof fetch =>
   (input, init) => {
     if (typeof init?.body === "string") {
       try {
         const body = JSON.parse(init.body);
-        body.reasoning = reasoning;
+        Object.assign(body, fields);
         init = { ...init, body: JSON.stringify(body) };
       } catch {}
     }
@@ -64,6 +65,17 @@ export async function getAIModel(
         baseURL,
         headers: openCodeSessionHeaders(baseURL),
       }).chat(model);
+    case "minimax": {
+      // reasoning_split keeps M3's thinking out of the streamed text, where it
+      // would otherwise arrive as <think> tags.
+      const fields: Record<string, unknown> = { reasoning_split: true };
+      if (opts?.disableThinking) suppressThinking(fields, "minimax", model);
+      return createOpenAI({
+        apiKey,
+        baseURL: API_ENDPOINTS.MINIMAX_BASE,
+        fetch: withBodyFields(fields),
+      }).chat(model);
+    }
     case "openrouter": {
       const reasoning = opts?.disableThinking
         ? { enabled: false }
@@ -74,7 +86,7 @@ export async function getAIModel(
       return createOpenAI({
         apiKey,
         baseURL,
-        ...(reasoning ? { fetch: withReasoning(reasoning) } : {}),
+        ...(reasoning ? { fetch: withBodyFields({ reasoning }) } : {}),
       }).chat(model);
     }
     case "local":

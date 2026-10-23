@@ -76,6 +76,7 @@ const BYOK_STREAM_PROVIDERS = [
   "custom",
   "openrouter",
   "corti",
+  "minimax",
 ] as const;
 
 type ByokStreamProvider = (typeof BYOK_STREAM_PROVIDERS)[number];
@@ -192,7 +193,15 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "corti"
+      | "minimax"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -233,6 +242,7 @@ class ReasoningService extends BaseReasoningService {
           openrouter: () => window.electronAPI.getOpenrouterKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
+          minimax: () => window.electronAPI.getMinimaxKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 
@@ -631,6 +641,7 @@ class ReasoningService extends BaseReasoningService {
             openai: API_ENDPOINTS.OPENAI_BASE,
             groq: API_ENDPOINTS.GROQ_BASE,
             corti: API_ENDPOINTS.CORTI_MODELS_BASE,
+            minimax: API_ENDPOINTS.MINIMAX_BASE,
             gemini: API_ENDPOINTS.GEMINI,
           } as Partial<Record<string, string>>
         )[provider];
@@ -923,7 +934,9 @@ class ReasoningService extends BaseReasoningService {
     const aiModel = isEnterprise
       ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
-          disableThinking: openrouterDisableThinking,
+          disableThinking:
+            openrouterDisableThinking ||
+            (provider === "minimax" && config.disableThinking === true),
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
         });
 
@@ -1427,6 +1440,7 @@ class ReasoningService extends BaseReasoningService {
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const cortiKey = await window.electronAPI?.getCortiKey?.();
+      const minimaxKey = await window.electronAPI?.getMinimaxKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
@@ -1437,6 +1451,7 @@ class ReasoningService extends BaseReasoningService {
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasCorti: !!cortiKey,
+        hasMinimax: !!minimaxKey,
         hasLocal: !!localAvailable,
       });
 
@@ -1448,6 +1463,7 @@ class ReasoningService extends BaseReasoningService {
         openrouterKey ||
         tinfoilKey ||
         cortiKey ||
+        minimaxKey ||
         localAvailable
       );
     } catch (error) {
@@ -1471,6 +1487,7 @@ class ReasoningService extends BaseReasoningService {
       | "custom"
       | "openrouter"
       | "corti"
+      | "minimax"
   ): void {
     if (provider) {
       if (provider !== "custom") {
