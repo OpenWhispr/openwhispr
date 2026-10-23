@@ -95,3 +95,22 @@ test("self-hosted cleanup sends a session id to OpenCode Go", async (t) => {
   assert.equal(sent[0].endpoint, "https://opencode.ai/zen/go/v1/chat/completions");
   assert.match(sent[0].headers["x-opencode-session"], UUID_RE);
 });
+
+test("cleanup and streaming requests attribute Custom OpenRouter endpoints", async (t) => {
+  const service = await loadReasoningService(t, "openwhispr-openrouter-attribution-");
+  const sent = [];
+  installCompletionRecorder(t, sent);
+  assert.equal(
+    await service.processText("clean this up", "some/model", null, {
+      lanUrl: "https://openrouter.ai/api/v1",
+    }),
+    "Cleaned"
+  );
+  installStreamRecorder(t, sent);
+  assert.equal(await streamAgainst(service, "https://openrouter.ai/api/v1"), "ok");
+  assert.equal(sent.length, 2);
+  for (const request of sent) {
+    assert.equal(request.headers["HTTP-Referer"], "https://openwhispr.com");
+    assert.equal(request.headers["X-OpenRouter-Title"], "OpenWhispr");
+  }
+});

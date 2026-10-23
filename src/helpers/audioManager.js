@@ -6,6 +6,7 @@ import {
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
+import { openRouterHeaders } from "./openRouterHeaders";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
 import { convertToWav, needsWavConversion } from "../utils/audioContainer";
@@ -4117,7 +4118,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       // Build headers - only include Authorization if we have an API key
-      const headers = {};
+      const headers = openRouterHeaders(endpoint);
       if (apiKey) {
         // Azure OpenAI authenticates API keys via the `api-key` header, not a
         // Bearer token (which it reserves for Entra ID access tokens).
