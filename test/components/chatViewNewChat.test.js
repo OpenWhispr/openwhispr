@@ -144,12 +144,92 @@ async function renderChatView(t, props = {}) {
   root = createRoot(container);
   const render = (next) => React.act(async () => root.render(React.createElement(ChatView, next)));
   await render(props);
-  return { rerender: render };
+  return { rerender: render, vite };
 }
 
 test("typed chat offers the connector tools", async (t) => {
   await renderChatView(t);
   assert.equal(globalThis.__chatStreamingOptions.allowConnectors, true);
+});
+
+test("hidden Chat reports only its own waiting interactions and approvals", async (t) => {
+  globalThis.__initialMessages = [
+    { id: "chat-reply", role: "assistant", content: "", toolCalls: [{ id: "card" }] },
+  ];
+  const attention = [];
+  const { vite } = await renderChatView(t, {
+    active: false,
+    onAttentionChange: (waiting) => attention.push(waiting),
+  });
+  const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const approvals = await vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  const context = (messageId) => {
+    const controller = new AbortController();
+    t.after(() => controller.abort());
+    return {
+      messageId,
+      toolCallId: "card",
+      signal: controller.signal,
+      onInteraction() {},
+    };
+  };
+  const payload = {
+    kind: "questions",
+    questions: [{ id: "city", kind: "text", prompt: "Which city?" }],
+  };
+  const elsewhere = interactions.requestInteraction(context("note-reply"), payload);
+  assert.equal(attention.at(-1), false);
+  let question;
+  await React.act(async () => {
+    question = interactions.requestInteraction(context("chat-reply"), payload);
+  });
+  assert.equal(attention.at(-1), true);
+  await React.act(async () => interactions.cancelInteraction("chat-reply::card"));
+  await question;
+  assert.equal(attention.at(-1), false);
+  globalThis.window.electronAPI.connectorCommit = async () => ({ state: "sent" });
+  let approval;
+  await React.act(async () => {
+    approval = approvals.requestApproval(
+      context("chat-reply"),
+      {
+        actionId: "action",
+        connectorId: "slack",
+        preview: { destinationLabel: "#eng", body: "Hello" },
+      },
+      async () => undefined
+    );
+  });
+  assert.equal(attention.at(-1), true);
+  await React.act(async () => approvals.approveAction("chat-reply::card"));
+  await approval;
+  assert.equal(attention.at(-1), false);
+  interactions.cancelInteraction("note-reply::card");
+  await elsewhere;
+});
+
+test("Chat navigation exposes the localized waiting marker", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    mockModules: {
+      "/WorkspaceSwitcher": "export default function WorkspaceSwitcher() { return null; }",
+      "/ui/SupportDropdown": "export default function SupportDropdown() { return null; }",
+      "/controlPanelNav": `
+        export const useControlPanelNavItems = () => [
+          { id: "chat", label: "Chat", icon: () => null }
+        ];
+      `,
+    },
+  });
+  await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
+  const { default: Sidebar } = await vite.ssrLoadModule("/components/ControlPanelSidebar.tsx");
+  const { renderToStaticMarkup } = require("react-dom/server");
+  const render = (chatNeedsAttention) =>
+    renderToStaticMarkup(
+      React.createElement(Sidebar, { activeView: "home", upsell: "hide", chatNeedsAttention })
+    );
+  assert.match(render(true), /role="status" aria-label="Waiting for answer"/);
+  assert.doesNotMatch(render(false), /role="status"/);
 });
 
 test("a peer refusal keeps the submitted draft and explains that nothing was sent", async (t) => {

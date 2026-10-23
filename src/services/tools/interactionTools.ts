@@ -109,13 +109,16 @@ function parseQuestions(value: unknown): InteractionQuestion[] | string {
       continue;
     }
     if (kind !== "single" && kind !== "multiple") return `unknown question kind for "${id}"`;
-    const options = (Array.isArray(raw.options) ? raw.options : [])
-      .slice(0, MAX_OPTIONS)
-      .map((option: Record<string, unknown>) => ({
+    if (Array.isArray(raw.options) && raw.options.length > MAX_OPTIONS) {
+      return `"${id}" needs at most ${MAX_OPTIONS} options`;
+    }
+    const options = (Array.isArray(raw.options) ? raw.options : []).map(
+      (option: Record<string, unknown>) => ({
         id: text(option?.id, 60),
         label: text(option?.label, MAX_LABEL_CHARS),
         ...(option?.recommended === true ? { recommended: true } : {}),
-      }));
+      })
+    );
     const ids = new Set(options.map((option) => option.id));
     if (
       options.length < 2 ||
@@ -123,6 +126,9 @@ function parseQuestions(value: unknown): InteractionQuestion[] | string {
       ids.size !== options.length
     ) {
       return `"${id}" needs at least two options, each with a unique id and a label`;
+    }
+    if (options.filter((option) => option.recommended).length > 1) {
+      return `"${id}" can recommend at most one option`;
     }
     questions.push({ id, kind, prompt, options });
   }
@@ -166,6 +172,8 @@ const askUserTool: ToolDefinition = {
             prompt: { type: "string", description: "The question, as the user reads it" },
             options: {
               type: "array",
+              minItems: 2,
+              maxItems: MAX_OPTIONS,
               items: {
                 type: "object",
                 properties: {

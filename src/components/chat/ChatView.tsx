@@ -17,6 +17,9 @@ import { observeChatComposerInset } from "./composerLayout";
 import { useToast } from "../ui/useToast";
 import { GitFork } from "../icons";
 import { unsentForkContext } from "../../utils/agentSelectionContext";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { findPendingCard } from "../agent/agentWindowState";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -30,9 +33,14 @@ interface ChatViewProps {
   active?: boolean;
   /** Bumped to start a new chat from outside (the New chat menu). */
   newChatRequest?: number;
+  onAttentionChange?: (waiting: boolean) => void;
 }
 
-export default function ChatView({ active = true, newChatRequest = 0 }: ChatViewProps) {
+export default function ChatView({
+  active = true,
+  newChatRequest = 0,
+  onAttentionChange,
+}: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
@@ -50,6 +58,18 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
       setRefreshKey((k) => k + 1);
     },
   });
+  const interactionWaiting = useAgentInteractionStore(
+    (store) =>
+      findPendingCard(persistence.messages, store.entries, {}, { includeRestored: true }) !== null
+  );
+  const approvalWaiting = useConnectorApprovalStore(
+    (store) => findPendingCard(persistence.messages, {}, store.entries) !== null
+  );
+  const waiting = interactionWaiting || approvalWaiting;
+  useEffect(() => {
+    onAttentionChange?.(waiting);
+    return () => onAttentionChange?.(false);
+  }, [onAttentionChange, waiting]);
 
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,

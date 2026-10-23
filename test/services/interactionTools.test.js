@@ -89,6 +89,33 @@ test("ask_user refuses a malformed question without asking anything", async () =
   assert.deepEqual(store.useAgentInteractionStore.getState().entries, {});
 });
 
+for (const kind of ["single", "multiple"]) {
+  for (const invalid of ["too many options", "two recommendations"]) {
+    test(`ask_user rejects invalid choice payload: ${kind}, ${invalid}`, async () => {
+      const { createInteractionTools } = await load();
+      const askUser = createInteractionTools(NOTHING)[0];
+      const store = await loadStore();
+      store.useAgentInteractionStore.setState({ entries: {} });
+      const options = Array.from({ length: invalid === "too many options" ? 9 : 2 }, (_, i) => ({
+        id: String(i),
+        label: `Choice ${i}`,
+        recommended: invalid === "two recommendations",
+      }));
+      const running = askUser.execute(
+        { questions: [{ id: "choice", kind, prompt: "Pick", options }] },
+        context(`${kind}-${invalid}`)
+      );
+      for (const key of Object.keys(store.useAgentInteractionStore.getState().entries))
+        store.cancelInteraction(key);
+      const result = await running;
+      assert.equal(result.data.status, "invalid", `${kind}: ${invalid}`);
+      assert.equal(result.data.guidance, "Fix the call and try again.");
+      assert.deepEqual(store.useAgentInteractionStore.getState().entries, {});
+      assert.equal(askUser.parameters.properties.questions.items.properties.options.maxItems, 8);
+    });
+  }
+}
+
 test("ask_user returns the chosen labels to the model", async () => {
   const { createInteractionTools } = await load();
   const store = await loadStore();

@@ -349,6 +349,59 @@ test("allowed screen access hands the screenshot to the turn, never to the resul
   assert.equal(store.takeGrantedImage("m1::call-12"), undefined, "handed over once");
 });
 
+test("forgetting restored access deletes an unconsumed screenshot", async () => {
+  const store = await loadStore({
+    checkScreenRecordingAccess: async () => ({ granted: true }),
+    captureScreenContext: async () => ({ data: "ABANDONED", mediaType: "image/jpeg" }),
+  });
+  store.restoreInteraction(
+    {
+      messageId: "restored",
+      toolCallId: "screen",
+      payload: { kind: "access", resource: "screen", reason: "Read the error" },
+    },
+    () => {}
+  );
+  await store.respondToAccess("restored::screen", true);
+  store.forgetInteraction("restored::screen");
+  assert.equal(store.takeGrantedImage("restored::screen"), undefined);
+});
+
+test("pruning preserves open waiters, working cards and current receipts", async () => {
+  let finishCapture;
+  const store = await loadStore({
+    checkScreenRecordingAccess: async () => ({ granted: true }),
+    captureScreenContext: () => new Promise((resolve) => (finishCapture = resolve)),
+  });
+  const pending = store.requestInteraction(context("pending").value, QUESTIONS);
+  const working = store.requestInteraction(context("working").value, {
+    kind: "access",
+    resource: "screen",
+    reason: "Read the error",
+  });
+  const capturing = store.respondToAccess("m1::working", true);
+  const settled = store.requestInteraction(context("settled").value, QUESTIONS);
+  store.cancelInteraction("m1::settled");
+  await settled;
+
+  store.pruneInteractions(["m1"]);
+  assert.equal(Object.keys(store.useAgentInteractionStore.getState().entries).length, 3);
+  store.pruneInteractions([]);
+  assert.deepEqual(Object.keys(store.useAgentInteractionStore.getState().entries).sort(), [
+    "m1::pending",
+    "m1::working",
+  ]);
+  store.cancelInteraction("m1::pending");
+  store.cancelInteraction("m1::working");
+  await Promise.all([pending, working]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(typeof finishCapture, "function");
+  finishCapture(null);
+  await capturing;
+  store.pruneInteractions([]);
+  assert.deepEqual(store.useAgentInteractionStore.getState().entries, {});
+});
+
 test("Not now on access is a refusal, and a failed capture is unavailable", async () => {
   const store = await loadStore({
     getPlatform: () => "linux",

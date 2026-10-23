@@ -162,6 +162,12 @@ async function mountWindow(t, { platform } = {}) {
       (element) => element.getAttribute("aria-label") === label || element.textContent === label
     );
   const layout = () => main.layouts.at(-1)?.layout;
+  const waitForLayout = async (expected) => {
+    const shown = () => layout() === expected && host.querySelector('[data-shown="true"]');
+    const deadline = Date.now() + 5000;
+    while (!shown() && Date.now() < deadline) await wait(20);
+    assert.ok(shown(), `the ${expected} layout finished its resize before teardown`);
+  };
   // A tool call of the running turn waits on this question or answer card.
   const toolContext = (toolCallId, messageId = "a1") => ({
     messageId,
@@ -197,6 +203,7 @@ async function mountWindow(t, { platform } = {}) {
     chat,
     button,
     layout,
+    waitForLayout,
     ask,
     askApproval,
     wait,
@@ -392,6 +399,7 @@ test("a refused agent submission restores its draft, selected context and screen
     selectedContext: { text: "Original selection", sourceMessageId: "", source: "external" },
     attachment: { image: "original-image", mediaType: "image/jpeg" },
   });
+  await view.waitForLayout("modal");
 });
 
 test("a late agent refusal cannot overwrite newer draft, context or screenshot", async (t) => {
@@ -423,6 +431,7 @@ test("a late agent refusal cannot overwrite newer draft, context or screenshot",
   await React.act(async () => view.button("Send").click());
   assert.equal(globalThis.__chat.sentOptions.at(-1).selectedContext.text, "New selection");
   assert.equal(globalThis.__chat.sentOptions.at(-1).attachment.image, "new-image");
+  await view.waitForLayout("modal");
 });
 
 test("a late agent refusal leaves a newer typed draft in the same chat alone", async (t) => {

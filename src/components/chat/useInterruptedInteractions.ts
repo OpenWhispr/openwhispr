@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   forgetInteraction,
+  pruneInteractions,
   restoreInteraction,
   takeGrantedImage,
+  useAgentInteractionStore,
 } from "../../stores/agentInteractionStore";
 import { approvalKey } from "../../stores/connectorApprovalStore";
 import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
@@ -12,6 +14,7 @@ import type { InteractionPayload, InteractionResult } from "../../types/agentInt
 import type { ChatPersistence } from "./useChatPersistence";
 import type { SendToAIOptions } from "./useChatStreaming";
 import { answerText } from "../../utils/interactionAnswers";
+import logger from "../../utils/logger";
 
 // The request that continues the task: what the user answered, as they would
 // say it. A dismissal starts no turn.
@@ -83,6 +86,7 @@ export function useInterruptedInteractions(
       payload: InteractionPayload,
       result: InteractionResult
     ) => {
+      const image = takeGrantedImage(approvalKey(messageId, toolCallId));
       if (version !== getSessionVersion?.()) return;
       const latest = latestRef.current;
       const message = latest.messages.find((m) => m.id === messageId);
@@ -93,17 +97,23 @@ export function useInterruptedInteractions(
           : call
       );
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)));
-      await saveAssistantMessage(messageId, message.content, toolCalls, {
-        turn: message.turn,
-        ...(conversationId != null ? { conversationId } : {}),
-      });
+      try {
+        await saveAssistantMessage(messageId, message.content, toolCalls, {
+          turn: message.turn,
+          ...(conversationId != null ? { conversationId } : {}),
+        });
+      } catch (error) {
+        logger.warn("Unable to save restored answer", { error }, "chat");
+        if (conversationId != null && version === getSessionVersion?.())
+          void releaseConversation?.(conversationId);
+        return;
+      }
       if (
         version !== getSessionVersion?.() ||
         !latestRef.current.messages.some((m) => m.id === messageId)
       )
         return;
       const text = followUpText(payload, result, latest.t);
-      const image = takeGrantedImage(approvalKey(messageId, toolCallId));
       if (text) {
         followUpRef.current = { text, version, options: image ? { attachment: image } : undefined };
         setMessages((prev) => [...prev]);
@@ -158,10 +168,19 @@ export function useInterruptedInteractions(
   }, [messages, send, getSessionVersion]);
 
   useEffect(() => {
+    pruneInteractions(messages.map((message) => message.id));
+  }, [messages]);
+
+  useEffect(() => {
     const restored = restoredRef.current;
+    const unsubscribe = useAgentInteractionStore.subscribe(() =>
+      pruneInteractions(latestRef.current.messages.map((message) => message.id))
+    );
     return () => {
+      unsubscribe();
       for (const key of restored) forgetInteraction(key);
       restored.clear();
+      pruneInteractions([]);
     };
   }, []);
 }

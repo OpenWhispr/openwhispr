@@ -151,6 +151,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // a trip to another view (Integrations, from an open_settings card).
   const [chatOpened, setChatOpened] = useState(false);
   if (activeView === "chat" && !chatOpened) setChatOpened(true);
+  const [chatNeedsAttention, setChatNeedsAttention] = useState(false);
   const [newChatRequest, setNewChatRequest] = useState(0);
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
@@ -1056,6 +1057,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         >
           <ControlPanelSidebar
             activeView={activeView}
+            chatNeedsAttention={activeView !== "chat" && chatNeedsAttention}
             onViewChange={setActiveView}
             onOpenSettings={() => {
               setSettingsSection(undefined);
@@ -1269,7 +1271,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {chatOpened && agentAllowedByPolicy && (
                 <div className={activeView === "chat" ? "contents" : "hidden"}>
                   <Suspense fallback={null}>
-                    <ChatView active={activeView === "chat"} newChatRequest={newChatRequest} />
+                    <ChatView
+                      active={activeView === "chat"}
+                      newChatRequest={newChatRequest}
+                      onAttentionChange={setChatNeedsAttention}
+                    />
                   </Suspense>
                 </div>
               )}

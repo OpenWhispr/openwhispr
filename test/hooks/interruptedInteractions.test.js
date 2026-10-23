@@ -30,11 +30,11 @@ const reply = (id, toolCalls) => ({
 });
 const user = (id) => ({ id, role: "user", content: "Hi", isStreaming: false });
 
-async function mount(t, initial) {
+async function mount(t, initial, options = {}) {
   let root;
   // Node runs after hooks in registration order: unmount while the DOM exists.
   t.after(() => root && React.act(async () => root.unmount()));
-  installBrowserGlobals(t, { window: { electronAPI: {} } });
+  installBrowserGlobals(t, { window: { electronAPI: options.electronAPI ?? {} } });
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-interrupted-interactions-test-",
@@ -50,7 +50,10 @@ async function mount(t, initial) {
 
   const saved = [];
   const sent = [];
+  const attachments = [];
+  const released = [];
   let messages = initial;
+  let version = 0;
   let sendLabel = "first";
   let rerender;
   function Harness() {
@@ -63,12 +66,18 @@ async function mount(t, initial) {
         messages: list,
         setMessages: setList,
         conversationId: 7,
-        saveAssistantMessage: async (...args) => saved.push(args),
+        getSessionVersion: () => version,
+        releaseConversation: async (id) => released.push(id),
+        saveAssistantMessage: async (...args) => {
+          saved.push(args);
+          await options.save?.();
+        },
       },
-      async (text) => {
+      async (text, options) => {
         // The messages this send would put in the model's history.
         const answered = list.at(-1)?.toolCalls?.[0]?.interaction?.state;
         sent.push([label, text, answered]);
+        attachments.push(options?.attachment);
         return true;
       }
     );
@@ -80,11 +89,20 @@ async function mount(t, initial) {
     store,
     saved,
     sent,
+    attachments,
+    released,
     entries: () => store.useAgentInteractionStore.getState().entries,
     setMessages: (next) => React.act(async () => rerender(next)),
+    switchChat: (next) => {
+      version++;
+      return React.act(async () => rerender(next));
+    },
     useSend: (label) => (sendLabel = label),
     act: (fn) => React.act(async () => fn()),
-    unmount: () => React.act(async () => root.unmount()),
+    unmount: () => {
+      version++;
+      return React.act(async () => root.unmount());
+    },
   };
 }
 
@@ -162,4 +180,65 @@ test("calls that shared one connect card come back as one card", async (t) => {
   });
   const chat = await mount(t, [user("u1"), reply("a1", [connection("s1"), connection("s2")])]);
   assert.deepEqual(Object.keys(chat.entries()), ["a1::s1"]);
+});
+
+for (const outcome of ["continue", "switch", "reject", "switch then reject", "unmount"]) {
+  test(`a restored screenshot is consumed once when persistence ends with ${outcome}`, async (t) => {
+    let finishSave, rejectSave;
+    const save = new Promise((resolve, reject) => {
+      finishSave = resolve;
+      rejectSave = reject;
+    });
+    const call = interrupted("screen");
+    call.interaction.payload = { kind: "access", resource: "screen", reason: "Read the error" };
+    const chat = await mount(t, [user("u1"), reply("a1", [call])], {
+      save: () => save,
+      electronAPI: {
+        checkScreenRecordingAccess: async () => ({ granted: true }),
+        captureScreenContext: async () => ({ data: "PRIVATE", mediaType: "image/jpeg" }),
+      },
+    });
+    await chat.act(() => chat.store.respondToAccess("a1::screen", true));
+    assert.equal(chat.saved.length, 1);
+    assert.equal(chat.store.takeGrantedImage("a1::screen"), undefined);
+    assert.deepEqual(chat.sent, []);
+    if (outcome.startsWith("switch")) await chat.switchChat([]);
+    if (outcome === "unmount") await chat.unmount();
+    await chat.act(() => {
+      if (outcome.endsWith("reject")) rejectSave(new Error("Save failed"));
+      else finishSave();
+    });
+    assert.equal(chat.store.takeGrantedImage("a1::screen"), undefined);
+    if (outcome === "continue") {
+      assert.equal(chat.sent.length, 1);
+      assert.deepEqual(chat.attachments, [{ image: "PRIVATE", mediaType: "image/jpeg" }]);
+    } else assert.deepEqual(chat.sent, []);
+    assert.deepEqual(chat.released, outcome === "reject" ? [7] : []);
+  });
+}
+
+test("a removed live card settles once while synchronous pruning removes its entry", async (t) => {
+  const chat = await mount(t, [reply("live", [])]);
+  const controller = new AbortController();
+  const records = [];
+  const pending = chat.store.requestInteraction(
+    {
+      messageId: "live",
+      toolCallId: "question",
+      signal: controller.signal,
+      onInteraction: (record) => records.push(record),
+    },
+    QUESTION
+  );
+  await chat.setMessages([]);
+  assert.equal(chat.entries()["live::question"].state, "pending");
+  await chat.act(() => {
+    chat.store.updateInteractionDraft("live::question", { city: "Lisbon" });
+    assert.equal(chat.store.answerQuestions("live::question"), true);
+  });
+  assert.deepEqual(await pending, { status: "answered", answers: { city: "Lisbon" } });
+  assert.deepEqual(chat.entries(), {});
+  assert.equal(records.filter((record) => record.state === "settled").length, 1);
+  controller.abort();
+  assert.equal(records.filter((record) => record.state === "settled").length, 1);
 });

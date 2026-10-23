@@ -218,9 +218,25 @@ export function restoreInteraction(
 export function forgetInteraction(key: string): void {
   cancelRunningConnect(entryFor(key));
   waiters.delete(key);
+  grantedImages.delete(key);
   useAgentInteractionStore.setState((state) => {
     const { [key]: _removed, ...entries } = state.entries;
     return { entries };
+  });
+}
+
+/** Current receipts stay visible; a card still resolving must keep its waiter. */
+export function pruneInteractions(messageIds: Iterable<string>): void {
+  const current = new Set(messageIds);
+  useAgentInteractionStore.setState((state) => {
+    const entries = Object.entries(state.entries).filter(([key, entry]) => {
+      const keep = entry.state !== "settled" || waiters.has(key) || current.has(entry.messageId);
+      if (!keep) grantedImages.delete(key);
+      return keep;
+    });
+    return entries.length === Object.keys(state.entries).length
+      ? state
+      : { entries: Object.fromEntries(entries) };
   });
 }
 
