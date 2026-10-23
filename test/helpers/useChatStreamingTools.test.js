@@ -1491,13 +1491,14 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
   assert.ok(offeredTools[0].includes("look_at_screen"));
   assert.doesNotMatch(configs[0].systemPrompt, /SCREEN CONTEXT:/);
   assert.match(configs[0].systemPrompt, /available only through look_at_screen/);
-  assert.deepEqual(asked, [
-    [
-      "What does the error say?",
-      { data: "base64-image", mediaType: "image/jpeg" },
-      LOOK_AT_SCREEN_PROMPT,
-    ],
+  assert.equal(asked.length, 1);
+  assert.deepEqual(asked[0].slice(0, 3), [
+    "What does the error say?",
+    { data: "base64-image", mediaType: "image/jpeg" },
+    LOOK_AT_SCREEN_PROMPT,
   ]);
+  assert.equal(asked[0][3], configs[0].signal, "screen interpretation belongs to the asking turn");
+  assert.equal(asked[0][3].aborted, true, "the completed turn releases its subrequests");
   // What the screen showed reaches the model, never the saved tool call.
   assert.equal(lookResult.data, "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.");
   const saved = getMessages().find((message) => message.role === "assistant").toolCalls;

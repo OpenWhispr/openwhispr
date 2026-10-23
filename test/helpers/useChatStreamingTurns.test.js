@@ -362,16 +362,13 @@ test("Stop while a question waits keeps the reply, marked stopped, and dismisses
 
 test("a tool still running at Stop ends stopped, and may still have acted", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
-  let endStream;
-  const streamEnded = new Promise((resolve) => (endStream = resolve));
-  t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
   const { toolTrace } = await harness.vite.ssrLoadModule("/components/chat/historyMessages.ts");
-  harness.setStream(() =>
+  harness.setStream((_tools, config) =>
     (async function* () {
       yield { type: "tool_calls", calls: [{ id: "w1", name: "web_search", arguments: "{}" }] };
-      await streamEnded;
+      await new Promise((resolve) =>
+        config.signal.addEventListener("abort", resolve, { once: true })
+      );
     })()
   );
   const sending = harness.captured.sendToAI("Look it up", []);
@@ -619,21 +616,18 @@ test("a send that lands after Stop is saved with the stopped reply", async (t) =
       },
     }
   );
-  const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-    .default;
   // Stop ends the model stream; the tool call, already committing, runs on.
-  let endStream;
-  const streamEnded = new Promise((resolve) => (endStream = resolve));
-  t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
   const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  harness.setStream((tools) =>
+  harness.setStream((tools, config) =>
     (async function* () {
       yield {
         type: "tool_calls",
         calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
       };
       void tools.slack_send_message.execute({ destination: "#eng", text: "hi" }, toolOptions("s1"));
-      await streamEnded;
+      await new Promise((resolve) =>
+        config.signal.addEventListener("abort", resolve, { once: true })
+      );
     })()
   );
   const sending = harness.captured.sendToAI("Post hi to #eng", []);
@@ -743,11 +737,6 @@ test("a regenerate stopped or failed before its first token shows the reply it r
   ]) {
     const label = `${end}${olderReply ? ", older reply" : ""}`;
     const harness = await renderChatStreaming(t, { allowInteractions: true });
-    const reasoningService = (await harness.vite.ssrLoadModule("/services/ReasoningService.ts"))
-      .default;
-    let endStream;
-    const streamEnded = new Promise((resolve) => (endStream = resolve));
-    t.mock.method(reasoningService, "cancelActiveStream", () => endStream());
     const request = { id: "u1", role: "user", content: "Post hi to #eng", isStreaming: false };
     const reply = {
       id: "a0",
@@ -768,11 +757,13 @@ test("a regenerate stopped or failed before its first token shows the reply it r
       ],
     };
     harness.seed([request, reply]);
-    harness.setStream(() =>
+    harness.setStream((_tools, config) =>
       (async function* () {
         yield { type: "reasoning", text: "Thinking it over." };
         if (end === "error") throw new Error("provider down");
-        await streamEnded;
+        await new Promise((resolve) =>
+          config.signal.addEventListener("abort", resolve, { once: true })
+        );
       })()
     );
     let failures = 0;
@@ -814,4 +805,115 @@ test("reasoning after a tool step starts a new paragraph", async (t) => {
 
   const [[, , , details]] = harness.completed;
   assert.equal(details.turn.reasoning, "Check the calendar.\n\nNow the notes.");
+});
+
+test("an idle sibling cannot stop the turn that owns a transport", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  const { useChatStreaming } = await harness.vite.ssrLoadModule(
+    "/components/chat/useChatStreaming.ts"
+  );
+  let sibling;
+  function Sibling() {
+    sibling = useChatStreaming({ setMessages() {} });
+    return null;
+  }
+  renderToStaticMarkup(React.createElement(Sibling));
+  let signal;
+  let finish;
+  harness.setStream((_tools, config) =>
+    (async function* () {
+      signal = config.signal;
+      yield { type: "content", text: "Partial" };
+      await new Promise((resolve) => {
+        finish = resolve;
+      });
+      yield { type: "content", text: " answer" };
+    })()
+  );
+  const sending = harness.captured.sendToAI("Go", []);
+  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(signal, "the stream receives its own cancellation signal");
+  sibling.cancelStream();
+  assert.equal(signal.aborted, false);
+  finish();
+  await sending;
+  assert.equal(harness.completed[0][1], "Partial answer");
+  assert.equal(harness.completed[0][3].turn.status, "complete");
+});
+
+test("reasoning truncated through an emoji remains valid persisted text", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "x".repeat(19_999) + "😀tail" };
+      yield { type: "content", text: "Answer" };
+    })()
+  );
+  await harness.captured.sendToAI("Go", []);
+  const saved = harness.completed[0][3].turn.reasoning;
+  assert.equal(saved.isWellFormed(), true);
+  assert.ok(saved.endsWith("…"));
+  assert.ok(saved.length <= 20_001);
+});
+
+test("a throwing cancelled transport saves the stopped reply exactly once", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  let fail;
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "content", text: "Partial" };
+      await new Promise((resolve) => {
+        fail = resolve;
+      });
+      throw new Error("aborted transport");
+    })()
+  );
+  const sending = harness.captured.sendToAI("Go", []);
+  while (!fail) await new Promise((resolve) => setImmediate(resolve));
+  harness.captured.cancelStream();
+  fail();
+  await sending;
+  assert.equal(harness.completed.length, 1);
+  assert.equal(harness.completed[0][1], "Partial");
+  assert.equal(harness.completed[0][3].turn.status, "stopped");
+});
+
+test("a local-only policy never advertises provider key setup", async (t) => {
+  const harness = await renderChatStreaming(
+    t,
+    { allowInteractions: true },
+    {
+      settings: {
+        chatAgentMode: "local",
+        chatAgentProvider: "local",
+        chatAgentModel: "qwen3-4b-q4_k_m",
+      },
+    }
+  );
+  const { usePolicyStore } = await harness.vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    policy: {
+      version: 1,
+      llm: { allowedModes: ["local"], allowedByokProviders: [], allowedEnterpriseProviders: [] },
+      transcription: { allowedModes: ["local"], allowedByokProviders: [] },
+      dataRetention: { cloudBackupAllowed: true, localHistoryMode: "user_choice" },
+      sharing: { externalLinkSharing: "allowed" },
+      features: { agentEnabled: true, webSearchEnabled: false },
+    },
+  });
+  await harness.captured.sendToAI("Help", []);
+  assert.equal(harness.offered[0].includes("request_api_key"), false);
+});
+
+test("a service-reported abort saves a stopped turn instead of a completed one", async (t) => {
+  const harness = await renderChatStreaming(t, { allowInteractions: true });
+  harness.setStream(() =>
+    (async function* () {
+      yield { type: "content", text: "Partial" };
+      yield { type: "done", finishReason: "abort" };
+    })()
+  );
+  await harness.captured.sendToAI("Go", []);
+  assert.equal(harness.completed[0][3].turn.status, "stopped");
 });

@@ -43,6 +43,8 @@ export interface ChatPersistence {
   loadConversation: (id: number) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
+  claimConversation: (id: number) => Promise<false | (() => Promise<void>)>;
+  releaseConversation: (id: number) => Promise<void>;
   saveUserMessage: (text: string, options?: UserMessageDetails) => Promise<void>;
   /** Saves a reply, or completes the one saved while it waited on the user. */
   saveAssistantMessage: (
@@ -75,13 +77,50 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   // completed in place rather than added twice.
   const savedRowsRef = useRef(new Map<string, Promise<number | null>>());
   const sessionVersionRef = useRef(0);
+  const ownerIdRef = useRef(crypto.randomUUID());
+  const ownedConversationRef = useRef<number | null>(null);
+  const blockedConversationRef = useRef<number | null>(null);
+  const releasingRef = useRef(Promise.resolve());
+  const releaseConversation = useCallback(
+    (id: number, expectedOwner = ownerIdRef.current): Promise<void> => {
+      if (ownedConversationRef.current !== id || expectedOwner !== ownerIdRef.current)
+        return releasingRef.current;
+      ownedConversationRef.current = null;
+      const ownerId = ownerIdRef.current;
+      releasingRef.current = (async () => {
+        await Promise.allSettled([...savedRowsRef.current.values()]);
+        await window.electronAPI?.releaseAgentConversation?.(id, ownerId);
+      })();
+      return releasingRef.current;
+    },
+    []
+  );
+  const claimConversation = useCallback(
+    async (id: number) => {
+      const version = sessionVersionRef.current;
+      const ownerId = ownerIdRef.current;
+      await releasingRef.current;
+      if (version !== sessionVersionRef.current) return false;
+      const claim = await window.electronAPI?.claimAgentConversation?.(id, ownerId);
+      if (claim && version !== sessionVersionRef.current) {
+        if (claim.owned) void window.electronAPI?.releaseAgentConversation?.(id, ownerId);
+        return false;
+      }
+      if (claim && !claim.owned) return false;
+      ownedConversationRef.current = id;
+      return () => releaseConversation(id, ownerId);
+    },
+    [releaseConversation]
+  );
   const getSessionVersion = useCallback(() => sessionVersionRef.current, []);
 
   useEffect(
     () => () => {
       sessionVersionRef.current += 1;
+      if (ownedConversationRef.current != null)
+        void releaseConversation(ownedConversationRef.current);
     },
-    []
+    [releaseConversation]
   );
 
   useEffect(() => {
@@ -94,22 +133,25 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     );
   }, []);
 
-  const showConversation = useCallback((conversation: AgentConversationWithMessages) => {
-    conversationIdRef.current = conversation.id;
-    setConversationId(conversation.id);
-    setForkOrigin(
-      conversation.parent_conversation_id != null
-        ? {
-            parentConversationId: conversation.parent_conversation_id,
-            parentTitle: conversation.parent_title ?? null,
-            title: conversation.title,
-            context: conversation.fork_context ?? null,
-            copiedMessageCount: conversation.fork_message_count ?? 0,
-          }
-        : null
-    );
-    setMessages(conversation.messages.map(messageFromRow));
-  }, []);
+  const showConversation = useCallback(
+    (conversation: AgentConversationWithMessages, recover = true) => {
+      conversationIdRef.current = conversation.id;
+      setConversationId(conversation.id);
+      setForkOrigin(
+        conversation.parent_conversation_id != null
+          ? {
+              parentConversationId: conversation.parent_conversation_id,
+              parentTitle: conversation.parent_title ?? null,
+              title: conversation.title,
+              context: conversation.fork_context ?? null,
+              copiedMessageCount: conversation.fork_message_count ?? 0,
+            }
+          : null
+      );
+      setMessages(conversation.messages.map((row) => messageFromRow(row, recover)));
+    },
+    []
+  );
 
   const createConversation = useCallback(
     async (title: string, noteId?: number | null, scope?: ContainerScope): Promise<number> => {
@@ -138,7 +180,24 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const loadConversation = useCallback(
     async (id: number) => {
       const version = ++sessionVersionRef.current;
-      const conv = await window.electronAPI?.getAgentConversation?.(id);
+      if (ownedConversationRef.current != null)
+        await releaseConversation(ownedConversationRef.current);
+      await releasingRef.current;
+      if (version !== sessionVersionRef.current) return false;
+      const ownerId = crypto.randomUUID();
+      ownerIdRef.current = ownerId;
+      blockedConversationRef.current = null;
+      const claim = await window.electronAPI?.claimAgentConversation?.(id, ownerId);
+      const conv = claim
+        ? claim.conversation
+        : await window.electronAPI?.getAgentConversation?.(id);
+      if (claim?.owned) {
+        if (version !== sessionVersionRef.current) {
+          void window.electronAPI?.releaseAgentConversation?.(id, ownerId);
+          return false;
+        }
+        ownedConversationRef.current = id;
+      }
       if (version !== sessionVersionRef.current) return false;
       if (!conv) {
         // The conversation was deleted elsewhere (e.g. ControlPanel history).
@@ -150,10 +209,28 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         setMessages([]);
         return null;
       }
-      showConversation(conv);
+      const recover = !claim || claim.owned;
+      if (!recover) blockedConversationRef.current = id;
+      showConversation(conv, recover);
+      const last = conv.messages.at(-1);
+      const metadata = last?.metadata ? tryParseMetadata(last.metadata) : undefined;
+      const hasRecovery = (metadata?.toolCalls as ToolCallInfo[] | undefined)?.some(
+        (call) => call.interaction?.state === "pending" || call.interaction?.state === "interrupted"
+      );
+      if (recover && !hasRecovery) void releaseConversation(id);
       return true;
     },
-    [showConversation]
+    [releaseConversation, showConversation]
+  );
+
+  useEffect(
+    () =>
+      window.electronAPI?.onAgentConversationReleased?.(({ conversationId: id }) => {
+        if (blockedConversationRef.current === id && conversationIdRef.current === id) {
+          void loadConversation(id);
+        }
+      }),
+    [loadConversation]
   );
 
   const saveUserMessage = useCallback(
@@ -237,19 +314,23 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       );
       if (version !== sessionVersionRef.current) return false;
       if (!fork) return null;
-      showConversation(fork);
-      return fork.id;
+      const opened = await loadConversation(fork.id);
+      return opened === true ? fork.id : opened;
     },
-    [showConversation]
+    [loadConversation]
   );
 
   const handleNewChat = useCallback(() => {
     sessionVersionRef.current += 1;
+    blockedConversationRef.current = null;
+    if (ownedConversationRef.current != null)
+      void releaseConversation(ownedConversationRef.current);
+    ownerIdRef.current = crypto.randomUUID();
     setMessages([]);
     setForkOrigin(null);
     conversationIdRef.current = null;
     setConversationId(null);
-  }, []);
+  }, [releaseConversation]);
 
   return {
     messages,
@@ -257,6 +338,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     conversationId,
     forkOrigin,
     getSessionVersion,
+    claimConversation,
+    releaseConversation,
     createConversation,
     loadConversation,
     saveUserMessage,
@@ -284,12 +367,20 @@ function settledOnLoad(turn: AssistantTurn | undefined, toolCalls: ToolCallInfo[
   };
 }
 
-function messageFromRow(row: AgentMessageRow): Message {
+function messageFromRow(row: AgentMessageRow, recover = true): Message {
   const metadata = row.metadata ? tryParseMetadata(row.metadata) : undefined;
-  const { turn, toolCalls } = settledOnLoad(
-    metadata?.turn as AssistantTurn | undefined,
-    metadata?.toolCalls as ToolCallInfo[] | undefined
-  );
+  const savedTurn = metadata?.turn as AssistantTurn | undefined;
+  const savedCalls = metadata?.toolCalls as ToolCallInfo[] | undefined;
+  const { turn, toolCalls } = recover
+    ? settledOnLoad(savedTurn, savedCalls)
+    : {
+        turn: savedTurn,
+        toolCalls: savedCalls?.map((call) =>
+          call.interaction?.state === "interrupted"
+            ? { ...call, interaction: { ...call.interaction, state: "pending" as const } }
+            : call
+        ),
+      };
   const selectedContext = metadata?.selectedContext;
   const fromAnotherApp = metadata?.selectedContextSource === "external";
   return {

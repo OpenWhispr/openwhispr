@@ -13,6 +13,8 @@ function fakeDb() {
   let nextId = 1;
   const rows = [];
   const conversations = new Map();
+  const owners = new Map();
+  const released = new Set();
   const calls = { add: [], update: [], fork: [], title: [] };
   const get = (id) => {
     const conversation = conversations.get(id);
@@ -25,6 +27,20 @@ function fakeDb() {
     };
   };
   const api = {
+    claimAgentConversation: async (id, owner) => {
+      const owned = !owners.has(id) || owners.get(id) === owner;
+      if (owned) owners.set(id, owner);
+      return { owned, conversation: get(id) };
+    },
+    releaseAgentConversation: async (id, owner) => {
+      if (owners.get(id) !== owner) return;
+      owners.delete(id);
+      for (const listener of released) listener({ conversationId: id });
+    },
+    onAgentConversationReleased: (listener) => {
+      released.add(listener);
+      return () => released.delete(listener);
+    },
     createAgentConversation: async (title) => {
       const conversation = { id: 100 + conversations.size, title, parent_conversation_id: null };
       conversations.set(conversation.id, conversation);
@@ -76,7 +92,7 @@ function fakeDb() {
   return { api, rows, calls, conversations };
 }
 
-async function mountPersistence(t) {
+async function mountPersistence(t, { instances = 1, restore = false } = {}) {
   const db = fakeDb();
   let root;
   // Node runs after hooks in registration order: unmount while the DOM exists.
@@ -86,15 +102,37 @@ async function mountPersistence(t) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-chat-persistence-test-" });
   const { useChatPersistence } = await vite.ssrLoadModule("/components/chat/useChatPersistence.ts");
   const { createRoot } = require("react-dom/client");
-  let persistence;
-  function Harness() {
-    persistence = useChatPersistence();
+  const { useInterruptedInteractions } = await vite.ssrLoadModule(
+    "/components/chat/useInterruptedInteractions.ts"
+  );
+  const store = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  store.useAgentInteractionStore.setState({ entries: {} });
+  const persistence = [];
+  const sent = [];
+  function Harness({ index }) {
+    const value = useChatPersistence();
+    persistence[index] = value;
+    if (restore)
+      useInterruptedInteractions(value, async (text) => {
+        sent.push([index, text]);
+        return true;
+      });
     return null;
   }
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () =>
+    root.render(
+      React.createElement(
+        React.Fragment,
+        null,
+        ...Array.from({ length: instances }, (_, index) =>
+          React.createElement(Harness, { key: index, index })
+        )
+      )
+    )
+  );
   const act = (fn) => React.act(async () => fn());
-  return { db, act, current: () => persistence };
+  return { db, act, current: (index = 0) => persistence[index], store, sent };
 }
 
 const message = (id, role, content, extra = {}) => ({
@@ -337,4 +375,68 @@ test("a fork is never named by an answer the app sends on, nor once it was renam
   await act(() => current().switchChat(renamedId));
   await act(() => current().send("Make it shorter"));
   assert.deepEqual(db.calls.title, [], "renamed before its first message");
+});
+
+async function waitingConversation(db) {
+  const conversation = await db.api.createAgentConversation("Waiting");
+  await db.api.addAgentMessage(conversation.id, "assistant", "", {
+    turn: { startedAt: 1, status: "waiting" },
+    toolCalls: [
+      {
+        id: "q",
+        name: "ask_user",
+        arguments: "{}",
+        status: "executing",
+        interaction: {
+          state: "pending",
+          payload: {
+            kind: "questions",
+            questions: [{ id: "city", kind: "text", prompt: "Which city?" }],
+          },
+        },
+      },
+    ],
+  });
+  return conversation.id;
+}
+
+test("a live peer's waiting conversation cannot be recovered until its owner leaves", async (t) => {
+  const chat = await mountPersistence(t, { restore: true });
+  const id = await waitingConversation(chat.db);
+  await chat.db.api.claimAgentConversation(id, "live-peer");
+  await chat.act(() => chat.current().loadConversation(id));
+  assert.deepEqual(chat.store.useAgentInteractionStore.getState().entries, {});
+  assert.equal(chat.current().messages[0].turn.status, "waiting");
+  assert.equal(
+    await chat.current().claimConversation(id),
+    false,
+    "a typed send cannot take over either"
+  );
+  await chat.act(() => chat.db.api.releaseAgentConversation(id, "live-peer"));
+  const entries = Object.values(chat.store.useAgentInteractionStore.getState().entries);
+  assert.equal(entries.length, 1, "an interrupted wait becomes answerable after owner exit");
+  assert.equal(entries[0].restored, true);
+});
+
+test("simultaneous recovery exposes one answer and peers reload its saved outcome", async (t) => {
+  const chat = await mountPersistence(t, { instances: 2, restore: true });
+  const id = await waitingConversation(chat.db);
+  await chat.act(() =>
+    Promise.all([chat.current(0).loadConversation(id), chat.current(1).loadConversation(id)])
+  );
+  const entries = Object.values(chat.store.useAgentInteractionStore.getState().entries);
+  assert.equal(entries.length, 1);
+  await chat.act(() => {
+    chat.store.updateInteractionDraft(entries[0].key, { city: "Lisbon" });
+    chat.store.answerQuestions(entries[0].key);
+  });
+  assert.equal(chat.sent.length, 1);
+  await chat.act(() => chat.current(0).releaseConversation(id));
+  assert.equal(chat.current(1).messages[0].toolCalls[0].interaction.state, "settled");
+  assert.equal(
+    Object.values(chat.store.useAgentInteractionStore.getState().entries).filter(
+      (entry) => entry.state === "pending"
+    ).length,
+    0
+  );
 });

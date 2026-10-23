@@ -60,8 +60,14 @@ export function useChatMessageSender({
       let submitted = false;
       const accepted = await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
+        let claimedId: number | null = null;
+        let streamStarted = false;
         try {
           const convId = conversationId ?? (await createConversation(text));
+          if (!isCurrent()) return;
+          if (persistence.claimConversation && !(await persistence.claimConversation(convId)))
+            return;
+          claimedId = convId;
           if (!isCurrent()) return;
           const previousMessages = persistence.messages;
           const context = normalizeAgentSelectionContext(options?.selectedContext);
@@ -90,6 +96,7 @@ export function useChatMessageSender({
           });
           if (!isCurrent()) return;
           submitted = true;
+          streamStarted = true;
           await streaming.sendToAI(text, [...previousMessages, userMessage], {
             ...options,
             conversationId: convId,
@@ -97,6 +104,8 @@ export function useChatMessageSender({
         } catch (error) {
           if (isCurrent()) throw error;
         } finally {
+          if (claimedId != null && !streamStarted)
+            await persistence.releaseConversation?.(claimedId);
           onSendingChange?.(false);
         }
       });

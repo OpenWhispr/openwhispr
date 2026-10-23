@@ -129,6 +129,15 @@ async function renderChatStreaming(
 
   return {
     captured,
+    createSibling() {
+      let sibling;
+      function Sibling() {
+        sibling = useChatStreaming({ setMessages() {} });
+        return null;
+      }
+      renderToStaticMarkup(React.createElement(Sibling));
+      return sibling;
+    },
     getMessages: () => messages,
     unmount,
   };
@@ -450,4 +459,49 @@ test("cloud screen context is sent with its grounding instruction", async (t) =>
   ]);
   assert.equal(streamOptions.screenContext, undefined);
   assert.doesNotMatch(streamOptions.systemPrompt, /SCREEN CONTEXT:/);
+});
+
+test("idle sibling cancellation leaves the real LAN stream running", async (t) => {
+  let signal;
+  let finish;
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    signal = init.signal;
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify(createOpenAiChunk({ content: "Partial" }))}\n\n`
+            )
+          );
+          signal.addEventListener(
+            "abort",
+            () => controller.error(new DOMException("aborted", "AbortError")),
+            { once: true }
+          );
+          finish = () => {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify(createOpenAiChunk({ content: " answer" }, "stop"))}\n\ndata: [DONE]\n\n`
+              )
+            );
+            controller.close();
+          };
+        },
+      }),
+      { headers: { "content-type": "text/event-stream" } }
+    );
+  });
+  const saved = [];
+  const chat = await renderChatStreaming(t, {
+    onStreamComplete: (_id, content) => saved.push(content),
+  });
+  const sibling = chat.createSibling();
+  const sending = chat.captured.sendToAI("Go", []);
+  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  sibling.cancelStream();
+  assert.equal(signal.aborted, false);
+  finish();
+  await sending;
+  assert.deepEqual(saved, ["Partial answer"]);
 });

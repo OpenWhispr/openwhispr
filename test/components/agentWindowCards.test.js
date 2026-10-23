@@ -15,6 +15,7 @@ const MOCKS = {
     globalThis.__chat = {
       set(next) { state = { ...state, ...next }; listeners.forEach((listener) => listener()); },
       sent: [],
+      sentOptions: [],
       // How many new chats had started when each request was sent.
       sentAfterNewChats: [],
       cancels: 0,
@@ -31,7 +32,8 @@ const MOCKS = {
         conversationId: 1,
         forkOrigin: current.forkOrigin ?? null,
         agentState: current.busy ? "streaming" : "idle",
-        send: async (text) => {
+        send: async (text, options) => {
+          globalThis.__chat.sentOptions.push(options);
           globalThis.__chat.sent.push(text);
           globalThis.__chat.sentAfterNewChats.push(globalThis.__chat.newChats);
           return true;
@@ -51,7 +53,7 @@ const MOCKS = {
     globalThis.__voice = {
       set(next) { status = next; listeners.forEach((listener) => listener()); },
     };
-    export function useAgentVoice() {
+    export function useAgentVoice(options) { globalThis.__voice.callbacks = options;
       const current = useSyncExternalStore(
         (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
         () => status
@@ -180,6 +182,7 @@ async function mountWindow(t, { platform } = {}) {
       );
     });
   return {
+    vite,
     happyWindow,
     host,
     main,
@@ -1251,4 +1254,62 @@ test("main's dismiss starts a new chat; Minimize keeps it", async (t) => {
   await React.act(async () => view.main.handlers.dismiss());
   await view.settle();
   assert.equal(globalThis.__chat.newChats, 1);
+});
+
+const defer = () => {
+  let resolve;
+  const promise = new Promise((r) => (resolve = r));
+  return { promise, resolve };
+};
+const write = async (view, text) => {
+  const field = view.host.querySelector("textarea");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(
+      view.happyWindow.HTMLTextAreaElement.prototype,
+      "value"
+    ).set.call(field, text);
+    field.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => view.button("Send").click());
+};
+test("late press capture cannot enter the next request", async (t) => {
+  const view = await mountWindow(t);
+  const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  settings.useSettingsStore.setState({ voiceAgentScreenContext: true });
+  const selection = defer(),
+    screen = defer();
+  view.happyWindow.electronAPI.captureSelectedText = () => selection.promise;
+  view.happyWindow.electronAPI.captureScreenContext = () => screen.promise;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await view.wait(20);
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("first unrelated request", "submit")
+  );
+  await view.wait(3150);
+  assert.equal(globalThis.__chat.sent.length, 1);
+  assert.equal(globalThis.__chat.sentOptions[0].attachment, undefined);
+  await React.act(async () => {
+    selection.resolve({ status: "selected", text: "OLD PRIVATE SELECTION" });
+    screen.resolve({ data: "OLD_SCREEN_IMAGE", mediaType: "image/jpeg" });
+  });
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  await write(view, "second unrelated request");
+  assert.equal(globalThis.__chat.sentOptions[1].selectedContext, undefined);
+  assert.equal(globalThis.__chat.sentOptions[1].attachment, undefined);
+});
+test("New chat drops the previous press capture", async (t) => {
+  const view = await mountWindow(t);
+  const selection = defer();
+  view.happyWindow.electronAPI.captureSelectedText = () => selection.promise;
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await React.act(async () => view.button("New chat").click());
+  await React.act(async () =>
+    selection.resolve({ status: "selected", text: "PREVIOUS CHAT CONTEXT" })
+  );
+  await write(view, "new chat request");
+  assert.equal(globalThis.__chat.newChats, 1);
+  assert.equal(globalThis.__chat.sentOptions[0].selectedContext, undefined);
 });

@@ -190,13 +190,16 @@ test("edits on the card survive a remount", async (t) => {
   assert.equal(bodyField.defaultValue, "Edited text");
 });
 
-test("Retry on the card after a failed Send prepares again and sends once", async (t) => {
+test("Retry after a failed Send prepares a fresh card that waits for Send", async (t) => {
   const { container, commits, toolResult, settle } = await mountApprovalTurn(t, {
     replies: [{ state: "failed", errorCode: "rate_limited", message: "Busy" }, SENT],
   });
   await React.act(async () => click(button(container, "connectors.approval.send")));
   await settle();
   await React.act(async () => click(button(container, "common.retry")));
+  await settle();
+  assert.equal(commits.length, 1, "Retry has not sent the newly prepared action");
+  await React.act(async () => click(button(container, "connectors.approval.send")));
   const result = await toolResult;
   assert.equal(result.data.status, "sent");
   assert.deepEqual(
@@ -205,7 +208,7 @@ test("Retry on the card after a failed Send prepares again and sends once", asyn
   );
 });
 
-test("Yes on the card's connect prompt connects, then sends once", async (t) => {
+test("Yes on the connect prompt prepares a fresh card that waits for Send", async (t) => {
   const { container, commits, connects, toolResult, settle } = await mountApprovalTurn(t, {
     replies: [{ state: "failed", errorCode: "reconnect_needed", message: "Reconnect" }, SENT],
   });
@@ -219,6 +222,9 @@ test("Yes on the card's connect prompt connects, then sends once", async (t) => 
       element.textContent.includes("agentMode.interactions.connection.yes")
   );
   await React.act(async () => click(yes));
+  await settle();
+  assert.equal(commits.length, 1, "connecting has not sent the newly prepared action");
+  await React.act(async () => click(button(container, "connectors.approval.send")));
   const result = await toolResult;
   assert.deepEqual(connects, ["slack"]);
   assert.equal(result.data.status, "sent");

@@ -58,7 +58,14 @@ export function useInterruptedInteractions(
   send: (text: string, options?: SendToAIOptions) => Promise<boolean>
 ): void {
   const { t } = useTranslation();
-  const { messages, setMessages, saveAssistantMessage, conversationId } = persistence;
+  const {
+    messages,
+    setMessages,
+    saveAssistantMessage,
+    conversationId,
+    getSessionVersion,
+    releaseConversation,
+  } = persistence;
   // An answer can come minutes after the restore (a connect), so it reads
   // the conversation as it is then.
   const latestRef = useRef({ messages, t });
@@ -67,12 +74,13 @@ export function useInterruptedInteractions(
   const followUpRef = useRef<{ text: string; options?: SendToAIOptions } | null>(null);
 
   useEffect(() => {
-    const continueTask = (
+    const continueTask = async (
       messageId: string,
       toolCallId: string,
       payload: InteractionPayload,
       result: InteractionResult
     ) => {
+      const version = getSessionVersion?.();
       const latest = latestRef.current;
       const message = latest.messages.find((m) => m.id === messageId);
       if (!message) return;
@@ -82,13 +90,21 @@ export function useInterruptedInteractions(
           : call
       );
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)));
-      void saveAssistantMessage(messageId, message.content, toolCalls, {
+      await saveAssistantMessage(messageId, message.content, toolCalls, {
         turn: message.turn,
         ...(conversationId != null ? { conversationId } : {}),
       });
+      if (
+        version !== getSessionVersion?.() ||
+        !latestRef.current.messages.some((m) => m.id === messageId)
+      )
+        return;
       const text = followUpText(payload, result, latest.t);
       const image = takeGrantedImage(approvalKey(messageId, toolCallId));
-      if (text) followUpRef.current = { text, options: image ? { attachment: image } : undefined };
+      if (text) {
+        followUpRef.current = { text, options: image ? { attachment: image } : undefined };
+        setMessages((prev) => [...prev]);
+      } else if (conversationId != null) releaseConversation?.(conversationId);
     };
 
     const restored = restoredRef.current;
@@ -108,8 +124,10 @@ export function useInterruptedInteractions(
         current.add(key);
         if (restored.has(key)) continue;
         const request = { messageId: last.id, toolCallId: call.id, payload };
-        const opened = restoreInteraction(request, (result) =>
-          continueTask(request.messageId, request.toolCallId, request.payload, result)
+        const opened = restoreInteraction(
+          request,
+          (result) =>
+            void continueTask(request.messageId, request.toolCallId, request.payload, result)
         );
         if (opened) restored.add(key);
       }
@@ -119,7 +137,14 @@ export function useInterruptedInteractions(
       forgetInteraction(key);
       restored.delete(key);
     }
-  }, [messages, setMessages, saveAssistantMessage, conversationId]);
+  }, [
+    messages,
+    setMessages,
+    saveAssistantMessage,
+    conversationId,
+    getSessionVersion,
+    releaseConversation,
+  ]);
 
   // Sent once the answer is in the messages, so the new turn's history has it.
   useEffect(() => {

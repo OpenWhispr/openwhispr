@@ -2628,6 +2628,55 @@ class IPCHandlers {
       return result;
     });
 
+    // One renderer owns a running turn or a recoverable question. Process lifecycle
+    // events release it even when the renderer cannot run its effect cleanup.
+    const conversationOwners = new Map();
+    const conversationScope = () =>
+      `${this.databaseManager.activeAccountId ?? ""}:${tokenStore.getState().generation}`;
+    ipcMain.handle("claim-agent-conversation", (event, id, ownerId) => {
+      if (
+        !Number.isSafeInteger(id) ||
+        typeof ownerId !== "string" ||
+        !ownerId ||
+        ownerId.length > 128
+      ) {
+        return { owned: false, conversation: null };
+      }
+      const conversation = this.databaseManager.getAgentConversation(id);
+      if (!conversation) return { owned: false, conversation: null };
+      const scope = conversationScope();
+      let owner = conversationOwners.get(id);
+      if (owner && owner.scope !== scope) {
+        owner.release();
+        owner = undefined;
+      }
+      if (owner) {
+        return { owned: owner.sender === event.sender && owner.id === ownerId, conversation };
+      }
+      const sender = event.sender;
+      const release = () => {
+        if (conversationOwners.get(id) !== entry) return;
+        conversationOwners.delete(id);
+        sender.removeListener("destroyed", release);
+        sender.removeListener("render-process-gone", release);
+        sender.removeListener("did-start-navigation", onNavigate);
+        broadcastToWindows("agent-conversation-released", { conversationId: id });
+      };
+      const onNavigate = (_event, _url, inPlace, mainFrame) => {
+        if (mainFrame && !inPlace) release();
+      };
+      const entry = { sender, id: ownerId, scope, release };
+      conversationOwners.set(id, entry);
+      sender.once("destroyed", release);
+      sender.once("render-process-gone", release);
+      sender.on("did-start-navigation", onNavigate);
+      return { owned: true, conversation };
+    });
+    ipcMain.handle("release-agent-conversation", (event, id, ownerId) => {
+      const owner = conversationOwners.get(id);
+      if (owner?.sender === event.sender && owner.id === ownerId) owner.release();
+    });
+
     // Agent conversation handlers
     ipcMain.handle(
       "db-create-agent-conversation",

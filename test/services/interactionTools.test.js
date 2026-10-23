@@ -412,3 +412,101 @@ test("every interaction tool has its tool-step copy", async () => {
     assert.ok(translation.agentMode.tools[`${name}Name`], name);
   }
 });
+
+test("API key cards recheck provider policy before opening and before saving", async () => {
+  const { createInteractionTools } = await load();
+  const store = await loadStore();
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const previous = usePolicyStore.getState();
+  const keyBefore = useSettingsStore.getState().openaiApiKey;
+  const tool = createInteractionTools({ ...NOTHING, missingKeyProviders: ["openai"] }).find(
+    (item) => item.name === "request_api_key"
+  );
+  const block = () =>
+    usePolicyStore.setState({
+      status: "managed",
+      policy: {
+        version: 1,
+        llm: {
+          allowedModes: ["providers"],
+          allowedByokProviders: ["anthropic"],
+          allowedEnterpriseProviders: [],
+        },
+        features: { agentEnabled: true },
+      },
+    });
+  try {
+    block();
+    const controller = new AbortController();
+    const blocked = tool.execute(
+      { provider: "openai" },
+      { ...context("blocked-key"), signal: controller.signal }
+    );
+    try {
+      assert.equal(store.useAgentInteractionStore.getState().entries["m1::blocked-key"], undefined);
+      assert.equal((await blocked).data.status, "unavailable");
+    } finally {
+      controller.abort();
+    }
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
+    const pending = tool.execute({ provider: "openai" }, context("late-blocked-key"));
+    block();
+    await store.submitApiKey("m1::late-blocked-key", "sk-never-save");
+    assert.equal((await pending).data.status, "unavailable");
+    assert.equal(useSettingsStore.getState().openaiApiKey, keyBefore);
+  } finally {
+    usePolicyStore.setState(previous);
+  }
+});
+
+test("managed required inference does not offer manual provider key setup", async () => {
+  const { createInteractionTools } = await load();
+  const store = await loadStore();
+  const tool = createInteractionTools({ ...NOTHING, missingKeyProviders: ["openai"] }).find(
+    (item) => item.name === "request_api_key"
+  );
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const previous = useEnterpriseIdentityStore.getState();
+  const policy = usePolicyStore.getState();
+  try {
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
+    useEnterpriseIdentityStore.setState({
+      config: {
+        providers: [
+          {
+            provider: "bedrock",
+            mode: "managed_required",
+            allowManualSetup: false,
+            config: { scopeDefaults: { chatIntelligence: "model" } },
+          },
+        ],
+      },
+    });
+    const controller = new AbortController();
+    const blocked = tool.execute(
+      { provider: "openai" },
+      { ...context("managed-key"), signal: controller.signal }
+    );
+    try {
+      assert.equal(store.useAgentInteractionStore.getState().entries["m1::managed-key"], undefined);
+      assert.equal((await blocked).data.status, "unavailable");
+    } finally {
+      controller.abort();
+    }
+    useEnterpriseIdentityStore.setState({ config: null });
+    const optional = tool.execute({ provider: "openai" }, context("optional-key"));
+    assert.equal(
+      store.useAgentInteractionStore.getState().entries["m1::optional-key"].state,
+      "pending"
+    );
+    store.cancelInteraction("m1::optional-key");
+    await optional;
+  } finally {
+    useEnterpriseIdentityStore.setState(previous);
+    usePolicyStore.setState(policy);
+  }
+});

@@ -341,13 +341,13 @@ export async function approveAction(key: string): Promise<void> {
     patchEntry(key, { reconnect: "prompt", connectError: undefined, notice: undefined });
     return;
   }
-  await commitDraft(key, { mayRebind: true });
+  await commitDraft(key);
 }
 
 /**
  * Sends the draft once more after a failure. Main already finished the failed
  * action, so it is prepared again on the current login; the tool has waited
- * all along, so this is still the same send. With the service no longer
+ * all along. The new action waits for Send. With the service no longer
  * connected, the card asks to connect first.
  */
 export async function retryApproval(key: string): Promise<void> {
@@ -365,7 +365,7 @@ export async function retryApproval(key: string): Promise<void> {
   await rebind(key);
 }
 
-/** The card's ✓ Yes: connect the service, then send what the card holds. */
+/** The card's ✓ Yes: connect the service, then prepare a fresh card for Send. */
 export async function connectToSend(key: string): Promise<void> {
   const entry = entryFor(key);
   const pending = resolutions.get(key);
@@ -413,13 +413,6 @@ export function dismissReconnect(key: string): void {
   patchEntry(key, { reconnect: undefined, connectError: undefined });
 }
 
-// The renderer only has the labels the user sees, so who a send goes out as
-// and where it goes are compared by those, not by ids.
-const sameIdentity = (a: ConnectorPreview, b: ConnectorPreview): boolean =>
-  a.accountLabel === b.accountLabel &&
-  a.workspaceLabel === b.workspaceLabel &&
-  a.destinationLabel === b.destinationLabel;
-
 // What failing to prepare again reads like on the card, for Retry.
 function prepareFailure(prepared: ConnectorPrepareResult | undefined): FailedOutcome {
   if (prepared?.status === "failed") {
@@ -441,7 +434,7 @@ function failAwaitingRetry(key: string, failure: FailedOutcome): void {
 }
 
 /**
- * Prepares the action again on the current login and sends the draft, once.
+ * Prepares the action again on the current login for a fresh Send.
  * Nothing can go out twice: the old action is gone (finished, invalidated or
  * refused by its binding), the new one is bound to the new login, and the tool
  * has held its send claim the whole time. A send that would now go to another
@@ -512,21 +505,24 @@ async function rebind(key: string): Promise<void> {
     else failAwaitingRetry(key, prepareFailure(prepared));
     return;
   }
-  const unchanged = sameIdentity(entry.preview, prepared.preview);
+  const identityChanged =
+    entry.preview.accountLabel !== prepared.preview.accountLabel ||
+    entry.preview.workspaceLabel !== prepared.preview.workspaceLabel ||
+    entry.preview.destinationLabel !== prepared.preview.destinationLabel;
   // Prepared again: an earlier failure is no longer what the card stands for.
   pending.failure = undefined;
   patchEntry(key, { actionId: prepared.actionId, preview: prepared.preview });
-  if (!unchanged) {
-    waitForUserAgain(key, { state: "pending", notice: "identity_changed" });
-    return;
-  }
-  await commitDraft(key, { mayRebind: false });
+  // Display labels cannot prove that a new action has the same sender or destination.
+  waitForUserAgain(key, {
+    state: "pending",
+    ...(identityChanged ? { notice: "identity_changed" } : {}),
+  });
 }
 
 // Commits what the card holds and settles the card on the outcome. A send that
 // lost its login prepares again on its own once per Send, when the service is
 // connected; otherwise the card asks to connect.
-async function commitDraft(key: string, { mayRebind }: { mayRebind: boolean }): Promise<void> {
+async function commitDraft(key: string): Promise<void> {
   const entry = entryFor(key);
   if (!entry) return;
   const { title, body, fields } = entry.draft;
@@ -557,7 +553,7 @@ async function commitDraft(key: string, { mayRebind }: { mayRebind: boolean }): 
   }
   if (lostConnection(result)) {
     const reconnectNeeded = result.state === "failed";
-    if (mayRebind && !reconnectNeeded && connectorReady(entry.connectorId)) await rebind(key);
+    if (!reconnectNeeded && connectorReady(entry.connectorId)) await rebind(key);
     else waitForUserAgain(key, { state: "pending", reconnect: "prompt" });
     return;
   }

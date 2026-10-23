@@ -75,6 +75,7 @@ export function useContainerChat({
     noteContext: containerContext,
     searchScope,
     onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
   });
 
   const fetchConversations = useCallback(

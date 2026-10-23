@@ -7,6 +7,7 @@ import type { DictationToneStyle } from "../config/toneStyle";
 import type { ScreenContextImage } from "../types/electron";
 
 export interface ReasoningConfig {
+  signal?: AbortSignal;
   maxTokens?: number;
   temperature?: number;
   contextSize?: number;

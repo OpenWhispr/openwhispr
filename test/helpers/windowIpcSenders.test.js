@@ -267,3 +267,40 @@ test("a window that reloads, crashes or closes while it holds Esc gives it back"
   first.emit("destroyed");
   assert.deepEqual(calls, []);
 });
+
+test("conversation recovery has one owner and releases on renderer loss or navigation", async () => {
+  target.databaseManager = {
+    activeAccountId: null,
+    getAgentConversation: (id) => ({ id, messages: [] }),
+  };
+  const first = makeContents();
+  const peer = makeContents();
+  const claim = handlers.get("claim-agent-conversation");
+  const release = handlers.get("release-agent-conversation");
+  assert.equal(typeof claim, "function");
+  assert.equal((await claim(frameOf(first), 501, "first")).owned, true);
+  assert.equal((await claim(frameOf(peer), 501, "peer")).owned, false);
+  await release(frameOf(peer), 501, "first");
+  assert.equal(
+    (await claim(frameOf(peer), 501, "peer")).owned,
+    false,
+    "another renderer cannot release it"
+  );
+  first.emit("did-start-navigation", {}, "about:blank", false, false);
+  assert.equal(
+    (await claim(frameOf(peer), 501, "peer")).owned,
+    false,
+    "subframes cannot release it"
+  );
+  first.emit("did-start-navigation", {}, "file:///app", false, true);
+  assert.equal(
+    (await claim(frameOf(peer), 501, "peer")).owned,
+    true,
+    "reload permits interrupted recovery"
+  );
+  peer.emit("render-process-gone");
+  assert.equal((await claim(frameOf(first), 501, "after-crash")).owned, true);
+  first.emit("destroyed");
+  assert.equal((await claim(frameOf(peer), 501, "after-close")).owned, true);
+  await release(frameOf(peer), 501, "after-close");
+});

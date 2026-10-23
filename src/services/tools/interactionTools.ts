@@ -1,3 +1,4 @@
+import { isApiKeySetupAllowed } from "../../helpers/agentApiKeyPolicy";
 import i18n from "../../i18n";
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { requestInteraction, takeGrantedImage } from "../../stores/agentInteractionStore";
@@ -317,7 +318,7 @@ const requestAccessTool: ToolDefinition = {
   },
 };
 
-function createApiKeyTool(providers: readonly string[]): ToolDefinition {
+function createApiKeyTool(providers: readonly string[], scope: ChatInferenceScope): ToolDefinition {
   return {
     name: "request_api_key",
     description: `Ask the user for their own API key for one of these model providers: ${providers.join(", ")}. Only when they want to use their own account with a provider whose key is missing. They enter it in a masked field that saves it straight to their settings; you never see the key.`,
@@ -337,9 +338,13 @@ function createApiKeyTool(providers: readonly string[]): ToolDefinition {
       const provider = providers.find((candidate) => candidate === args.provider);
       if (!provider) return invalidResult(`provider must be one of: ${providers.join(", ")}`);
       if (!context) return noContextResult();
+      if (!isApiKeySetupAllowed(provider, scope)) {
+        return unansweredResult({ status: "unavailable", reason: "policy_blocked" });
+      }
       const reason = text(args.reason, MAX_REASON_CHARS);
       const result = await requestInteraction(context, {
         kind: "apiKey",
+        scope,
         provider,
         providerName: getProviderDisplayName(provider),
         ...(reason ? { reason } : {}),
@@ -414,7 +419,12 @@ export function createInteractionTools(options: InteractionToolOptions): ToolDef
       : []),
     ...(options.screenAccess ? [requestAccessTool] : []),
     ...(options.missingKeyProviders.length > 0
-      ? [createApiKeyTool(options.missingKeyProviders)]
+      ? [
+          createApiKeyTool(
+            options.missingKeyProviders,
+            options.inferenceScope ?? "chatIntelligence"
+          ),
+        ]
       : []),
     createOpenSettingsTool(options.inferenceScope ?? "chatIntelligence"),
   ];

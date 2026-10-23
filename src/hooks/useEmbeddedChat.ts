@@ -129,6 +129,7 @@ export function useEmbeddedChat({
     allowConnectors: true,
     noteMeeting,
     onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
   });
 
   const fetchNoteConversations = useCallback(async () => {

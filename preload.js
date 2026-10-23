@@ -1141,6 +1141,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 
   // Agent conversation persistence
+  claimAgentConversation: (id, ownerId) =>
+    ipcRenderer.invoke("claim-agent-conversation", id, ownerId),
+  releaseAgentConversation: (id, ownerId) =>
+    ipcRenderer.invoke("release-agent-conversation", id, ownerId),
+  onAgentConversationReleased: registerListener(
+    "agent-conversation-released",
+    (_event, payload) => payload
+  ),
   createAgentConversation: (title, noteId, spaceId, folderId) =>
     ipcRenderer.invoke("db-create-agent-conversation", title, noteId, spaceId, folderId),
   getAgentConversations: (limit) => ipcRenderer.invoke("db-get-agent-conversations", limit),

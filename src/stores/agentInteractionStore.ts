@@ -1,3 +1,4 @@
+import { isApiKeySetupAllowed } from "../helpers/agentApiKeyPolicy";
 import { create } from "zustand";
 import type { ToolExecutionContext } from "../services/tools/ToolRegistry";
 import type { ChatImageAttachment } from "../components/chat/types";
@@ -198,6 +199,11 @@ export function restoreInteraction(
   onSettled: (result: InteractionResult) => void
 ): boolean {
   const key = approvalKey(request.messageId, request.toolCallId);
+  if (
+    request.payload.kind === "apiKey" &&
+    !isApiKeySetupAllowed(request.payload.provider, request.payload.scope ?? "chatIntelligence")
+  )
+    return false;
   if (isOpen(key)) return false;
   addEntry(key, request, { settle: onSettled, detach: () => {} }, true);
   return true;
@@ -434,6 +440,10 @@ export async function submitApiKey(key: string, value: string): Promise<void> {
   if (!secret || !Object.hasOwn(API_KEY_SETTERS, provider)) return;
   const { useSettingsStore } = await loadSettingsStore();
   if (!isOpen(key)) return;
+  if (!isApiKeySetupAllowed(provider, entry.payload.scope ?? "chatIntelligence")) {
+    settle(key, { status: "unavailable", reason: "policy_blocked" });
+    return;
+  }
   useSettingsStore.getState()[API_KEY_SETTERS[provider as ApiKeyProvider]](secret);
   settle(key, { status: "saved" });
 }

@@ -47,6 +47,7 @@ import { executeTool, type ToolRegistry } from "../../services/tools/ToolRegistr
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
 import type { InteractionToolOptions } from "../../services/tools/interactionTools";
+import { isApiKeySetupAllowed } from "../../helpers/agentApiKeyPolicy";
 import { API_KEY_PROVIDERS } from "../../stores/agentInteractionStore";
 import { getAgentToolActivityRemainingMs } from "../../helpers/agentToolPresentation";
 import type { ChatInferenceScope, ConnectionTarget } from "../../types/agentInteractions";
@@ -209,6 +210,7 @@ interface UseChatStreamingOptions {
    */
   noteMeeting?: NoteAttendeesRequest;
   onStreamComplete?: TurnHandler;
+  claimConversation?: (id: number) => Promise<false | (() => Promise<void>)>;
   /**
    * Saves a turn that is still running: when it starts or stops waiting on the
    * user (a question survives the app closing, an answered one isn't offered
@@ -296,6 +298,7 @@ export function useChatStreaming({
   noteMeeting,
   onStreamComplete,
   onTurnCheckpoint,
+  claimConversation,
 }: UseChatStreamingOptions): ChatStreaming {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("idle");
@@ -374,8 +377,6 @@ export function useChatStreaming({
       explicitCancelGenerationRef.current = sendGenerationRef.current;
     }
     toolScopeRef.current?.abort();
-    toolScopeRef.current = null;
-    ReasoningService.cancelActiveStream();
     setAgentState("idle");
     clearToolActivity();
   }, [clearToolActivity]);
@@ -397,7 +398,8 @@ export function useChatStreaming({
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
-      const cancelled = () => sendGeneration !== sendGenerationRef.current;
+      const cancelled = () =>
+        sendGeneration !== sendGenerationRef.current || toolScope.signal.aborted;
       // This send supersedes any still running, so that turn's tools are
       // released now rather than when (or if) they settle.
       toolScopeRef.current?.abort();
@@ -422,11 +424,19 @@ export function useChatStreaming({
       // Every exit, thrown errors included, releases tools still waiting on
       // this turn (an approval card would otherwise sit out its TTL). A newer
       // send may already own toolScopeRef.
+      let releaseClaim: (() => Promise<void>) | false | undefined;
       try {
-        await runSend();
+        if (options?.conversationId != null && claimConversation) {
+          releaseClaim = await claimConversation(options.conversationId);
+          if (!releaseClaim) return;
+        }
+        if (!cancelled()) await runSend();
       } finally {
         toolScope.abort();
-        if (toolScopeRef.current === toolScope) toolScopeRef.current = null;
+        if (toolScopeRef.current === toolScope) {
+          toolScopeRef.current = null;
+          if (releaseClaim) await releaseClaim();
+        }
       }
 
       async function runSend(): Promise<void> {
@@ -511,7 +521,8 @@ export function useChatStreaming({
                   calendarConnected,
                 }),
                 missingKeyProviders: API_KEY_PROVIDERS.filter(
-                  (provider) => !settings[`${provider}ApiKey`]
+                  (provider) =>
+                    !settings[`${provider}ApiKey`] && isApiKeySetupAllowed(provider, inferenceScope)
                 ),
                 // A screenshot reaches a BYOK model that can see; Cloud's chat
                 // path doesn't route images yet.
@@ -644,7 +655,12 @@ export function useChatStreaming({
         const lookAtScreen =
           cloudScreen && registry && allowInteractions
             ? createLookAtScreenTool((question) =>
-                ReasoningService.askAboutScreen(question, cloudScreen, LOOK_AT_SCREEN_PROMPT)
+                ReasoningService.askAboutScreen(
+                  question,
+                  cloudScreen,
+                  LOOK_AT_SCREEN_PROMPT,
+                  toolScope.signal
+                )
               )
             : null;
         const offeredTools = registry
@@ -740,7 +756,7 @@ export function useChatStreaming({
             ...turn,
             reasoning:
               reasoning.length > MAX_SAVED_REASONING_CHARS
-                ? `${reasoning.slice(0, MAX_SAVED_REASONING_CHARS)}…`
+                ? `${reasoning.slice(0, MAX_SAVED_REASONING_CHARS).replace(/[\uD800-\uDBFF]$/u, "")}…`
                 : reasoning,
           };
         };
@@ -853,6 +869,29 @@ export function useChatStreaming({
           );
         };
 
+        const finishStoppedReply = () => {
+          if (sendGeneration === sendGenerationRef.current) {
+            setAgentState("idle");
+            clearToolActivity();
+          }
+          const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+          if (restoresReplaced()) {
+            restoreReplaced();
+            return;
+          }
+          settleStoppedTurn(explicitlyCancelled);
+          flushContentNow();
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId ? { ...message, isStreaming: false } : message
+            )
+          );
+          const keepsReply = allowInteractions
+            ? fullContent.trim().length > 0 || toolCalls.length > 0
+            : !explicitlyCancelled && fullContent.trim().length > 0;
+          if (keepsReply) saveReply();
+        };
+
         // A call that ran into a step boundary starts the next text (and the
         // next reasoning) on a new paragraph.
         let afterToolCall = false;
@@ -933,6 +972,7 @@ export function useChatStreaming({
 
             stream = ReasoningService.processTextStreamingCloud(llmMessages, {
               systemPrompt,
+              signal: toolScope.signal,
               tools: offeredTools?.map((t) => ({
                 name: t.name,
                 description: t.description,
@@ -958,6 +998,7 @@ export function useChatStreaming({
               llmConfig.provider,
               {
                 systemPrompt,
+                signal: toolScope.signal,
                 // Policy and managed enforcement judge the scope that actually
                 // answers: the agent window's Chat fallback as Chat, and the vision
                 // override as the agent scope whose image lane it is.
@@ -978,7 +1019,6 @@ export function useChatStreaming({
 
           for await (const chunk of stream) {
             if (!mountedRef.current) {
-              ReasoningService.cancelActiveStream();
               break;
             }
             // Nothing a cancelled turn streams afterwards is shown or kept.
@@ -1056,6 +1096,10 @@ export function useChatStreaming({
               setAgentState("streaming");
               completeToolActivity();
             } else if (chunk.type === "done") {
+              if (chunk.finishReason === "abort") {
+                toolScope.abort();
+                break;
+              }
               stepLimitReached = chunk.finishReason === "tool-calls";
             }
           }
@@ -1068,22 +1112,7 @@ export function useChatStreaming({
             // waiting on; elsewhere an explicit cancel drops it. The unmount
             // cleanup cancels too, so cancelled() alone cannot tell the two
             // apart. Neither path may run the per-request delivery hook.
-            const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
-            if (restoresReplaced()) {
-              restoreReplaced();
-              return;
-            }
-            settleStoppedTurn(explicitlyCancelled);
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
-            const keepsReply = allowInteractions
-              ? fullContent.trim().length > 0 || toolCalls.length > 0
-              : !explicitlyCancelled && fullContent.trim().length > 0;
-            if (keepsReply) saveReply();
+            finishStoppedReply();
             return;
           }
 
@@ -1136,13 +1165,7 @@ export function useChatStreaming({
             restoreReplaced();
             if (!cancelled()) options?.onReplaceFailed?.();
           } else if (cancelled()) {
-            settleStoppedTurn(explicitCancelGenerationRef.current > sendGeneration);
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
+            finishStoppedReply();
           } else {
             cancelContentFlush();
             const failure = describeProviderError(error, t);
@@ -1179,6 +1202,7 @@ export function useChatStreaming({
     },
     [
       inferenceScope,
+      claimConversation,
       allowConnectors,
       allowInteractions,
       nameUnavailableCapabilities,

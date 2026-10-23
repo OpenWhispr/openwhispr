@@ -2999,6 +2999,17 @@ declare global {
           updated_at: string;
         }>
       >;
+      claimAgentConversation?: (
+        id: number,
+        ownerId: string
+      ) => Promise<{
+        owned: boolean;
+        conversation: AgentConversationWithMessages | null;
+      }>;
+      releaseAgentConversation?: (id: number, ownerId: string) => Promise<void>;
+      onAgentConversationReleased?: (
+        callback: (event: { conversationId: number }) => void
+      ) => () => void;
       getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;

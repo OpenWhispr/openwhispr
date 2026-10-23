@@ -11,6 +11,7 @@ export interface ToolContextRequest {
 }
 
 export interface ToolExecutionScope {
+  signal: AbortSignal;
   createContext: (request: ToolContextRequest) => ToolExecutionContext;
   abort: () => void;
 }
@@ -57,6 +58,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
   };
   const interaction = notify(handlers.onInteraction);
   return {
+    signal: controller.signal,
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
       toolCallId,

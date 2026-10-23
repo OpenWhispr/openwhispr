@@ -35,7 +35,13 @@ export type InteractionPayload =
   | { kind: "questions"; questions: InteractionQuestion[] }
   | { kind: "connection"; target: ConnectionTarget; reason?: string }
   | { kind: "access"; resource: "screen"; reason: string }
-  | { kind: "apiKey"; provider: string; providerName: string; reason?: string }
+  | {
+      kind: "apiKey";
+      provider: string;
+      providerName: string;
+      reason?: string;
+      scope?: ChatInferenceScope;
+    }
   | {
       kind: "settings";
       target: SettingsTarget;

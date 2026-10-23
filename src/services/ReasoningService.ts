@@ -165,9 +165,9 @@ class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
   private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
-  private streamAbortController: AbortController | null = null;
+  private streamAbortControllers = new Set<AbortController>();
   private activeRequestControllers = new Set<AbortController>();
-  private activeCloudStream: { requestId: string; cancel: () => void } | null = null;
+  private activeCloudStreams = new Map<string, () => void>();
   private cloudOperationGeneration = 0;
   private requestCancellationGeneration = 0;
 
@@ -622,13 +622,11 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
     const abortController = new AbortController();
-    this.streamAbortController = abortController;
+    this.streamAbortControllers.add(abortController);
     try {
       yield* this.processTextStreamingRaw(messages, model, provider, config, abortController);
     } finally {
-      if (this.streamAbortController === abortController) {
-        this.streamAbortController = null;
-      }
+      this.streamAbortControllers.delete(abortController);
     }
   }
 
@@ -639,6 +637,9 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     abortController: AbortController
   ): AsyncGenerator<string, void, unknown> {
+    const abortSignal = config.signal
+      ? AbortSignal.any([abortController.signal, config.signal])
+      : abortController.signal;
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -686,7 +687,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    if (abortController.signal.aborted) return;
+    if (abortSignal.aborted) return;
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -724,9 +725,9 @@ class ReasoningService extends BaseReasoningService {
     let timeoutId: ReturnType<typeof setTimeout>;
     const resetTimeout = (seconds: number) => {
       clearTimeout(timeoutId);
-      if (abortController.signal.aborted) return;
+      if (abortSignal.aborted) return;
       timeoutId = setTimeout(() => {
-        if (abortController.signal.aborted) return;
+        if (abortSignal.aborted) return;
         timeoutTriggered = true;
         abortController.abort();
       }, seconds * 1000);
@@ -749,14 +750,14 @@ class ReasoningService extends BaseReasoningService {
             method: "POST",
             headers,
             body: JSON.stringify(requestBody),
-            signal: abortController.signal,
+            signal: abortSignal,
           }),
         requestBody,
         logParamFallback("AGENT_STREAM_PARAM_FALLBACK")
       );
     } catch (error) {
       clearTimeout(timeoutId);
-      if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
+      if ((error as Error).name === "AbortError" && abortSignal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
           ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
@@ -848,7 +849,7 @@ class ReasoningService extends BaseReasoningService {
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
     } catch (error) {
-      if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
+      if ((error as Error).name === "AbortError" && abortSignal.aborted) {
         if (!timeoutTriggered) return;
         throw route.kind === "self-hosted"
           ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
@@ -900,7 +901,10 @@ class ReasoningService extends BaseReasoningService {
     // Both streaming transports share this owner so cancellation survives
     // asynchronous server, key, and model setup.
     const abortController = new AbortController();
-    this.streamAbortController = abortController;
+    this.streamAbortControllers.add(abortController);
+    const abortSignal = config.signal
+      ? AbortSignal.any([abortController.signal, config.signal])
+      : abortController.signal;
     const isEnterprise = route.kind === "enterprise";
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
@@ -918,14 +922,12 @@ class ReasoningService extends BaseReasoningService {
         for await (const text of contentGen) {
           yield { type: "content", text };
         }
-        yield { type: "done", finishReason: "stop" };
+        yield { type: "done", finishReason: abortSignal.aborted ? "abort" : "stop" };
       } catch (error) {
-        if (abortController.signal.aborted && (error as Error).name === "AbortError") return;
+        if (abortSignal.aborted && (error as Error).name === "AbortError") return;
         throw error;
       } finally {
-        if (this.streamAbortController === abortController) {
-          this.streamAbortController = null;
-        }
+        this.streamAbortControllers.delete(abortController);
       }
       return;
     }
@@ -936,6 +938,10 @@ class ReasoningService extends BaseReasoningService {
         : null;
     let apiKey = "";
     let baseURL: string | undefined;
+    const setupFailed = (error: unknown): never => {
+      this.streamAbortControllers.delete(abortController);
+      throw error;
+    };
 
     if (isEnterprise) {
       // Enterprise SDKs run in the main process; the model below proxies
@@ -944,13 +950,13 @@ class ReasoningService extends BaseReasoningService {
       apiKey = route.apiKey;
       baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
     } else if (isLocalProvider) {
-      const serverResult = await window.electronAPI.llamaServerStart(model);
+      const serverResult = await window.electronAPI.llamaServerStart(model).catch(setupFailed);
       if (!serverResult.success || !serverResult.port) {
-        throw new Error(serverResult.error || "Failed to start local model server");
+        setupFailed(new Error(serverResult.error || "Failed to start local model server"));
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config));
+      ({ apiKey, baseURL } = await this.resolveByokAccess(provider, config).catch(setupFailed));
     }
     const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking
@@ -964,10 +970,11 @@ class ReasoningService extends BaseReasoningService {
       : await getAIModel(aiProvider, model, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-        });
+        }).catch(setupFailed);
 
-    if (abortController.signal.aborted) {
-      yield { type: "done", finishReason: "stop" };
+    if (abortSignal.aborted) {
+      this.streamAbortControllers.delete(abortController);
+      yield { type: "done", finishReason: "abort" };
       return;
     }
 
@@ -1033,7 +1040,7 @@ class ReasoningService extends BaseReasoningService {
         prepareStep: ({ messages }) => ({
           messages: withStepImages(compactTranscriptHistory(messages), config.stepImages),
         }),
-        abortSignal: abortController.signal,
+        abortSignal,
         ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
         maxOutputTokens: config.maxTokens || 4096,
         ...(hasProviderOptions ? { providerOptions } : {}),
@@ -1133,13 +1140,14 @@ class ReasoningService extends BaseReasoningService {
           } else if (chunk.type === "abort") {
             canFlushFilteredText = false;
             finishFilteredText();
+            yield { type: "done", finishReason: "abort" };
           } else if (chunk.type === "error") {
             // streamText reports provider failures as error parts and then ends
             // the stream; swallowing them leaves callers with an empty reply and
             // no terminal signal. Re-throw unless we aborted on purpose.
             canFlushFilteredText = false;
             finishFilteredText();
-            if (!abortController.signal.aborted) {
+            if (!abortSignal.aborted) {
               const cause = (chunk as { error?: unknown }).error;
               throw cause instanceof Error ? cause : new Error(streamErrorMessage(cause));
             }
@@ -1173,8 +1181,8 @@ class ReasoningService extends BaseReasoningService {
     } catch (error) {
       canFlushFilteredText = false;
       finishFilteredText();
-      if (abortController.signal.aborted) {
-        yield { type: "done", finishReason: "stop" };
+      if (abortSignal.aborted) {
+        yield { type: "done", finishReason: "abort" };
         return;
       }
       // The answer at the cap is extra: when it fails, the turn ends at the cap.
@@ -1210,20 +1218,17 @@ class ReasoningService extends BaseReasoningService {
       }
       throw error;
     } finally {
-      if (this.streamAbortController === abortController) {
-        this.streamAbortController = null;
-      }
+      this.streamAbortControllers.delete(abortController);
     }
   }
 
   /** Aborts the chat/agent stream only (panel Esc, chat surface unmount). */
   cancelActiveStream(): void {
     this.cloudOperationGeneration += 1;
-    this.streamAbortController?.abort();
-    this.streamAbortController = null;
-    const activeCloudStream = this.activeCloudStream;
-    this.activeCloudStream = null;
-    activeCloudStream?.cancel();
+    for (const controller of this.streamAbortControllers) controller.abort();
+    this.streamAbortControllers.clear();
+    for (const cancel of this.activeCloudStreams.values()) cancel();
+    this.activeCloudStreams.clear();
   }
 
   /**
@@ -1248,6 +1253,7 @@ class ReasoningService extends BaseReasoningService {
     opts: {
       systemPrompt?: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+      signal?: AbortSignal;
       // Press-time screenshot; the server routes to its vision chain when present.
       screenContext?: { data: string; mediaType: string };
     }
@@ -1281,8 +1287,6 @@ class ReasoningService extends BaseReasoningService {
     const requestId = crypto.randomUUID();
     const electronAPI = window.electronAPI;
 
-    this.activeCloudStream?.cancel();
-
     const cleanupChunk = electronAPI?.onAgentStreamChunk?.((payload) => {
       if (payload.requestId !== requestId || closed || cancelled) return;
       queue.push(payload.chunk);
@@ -1305,7 +1309,8 @@ class ReasoningService extends BaseReasoningService {
       cleanupChunk?.();
       cleanupError?.();
       cleanupEnd?.();
-      if (this.activeCloudStream?.requestId === requestId) this.activeCloudStream = null;
+      this.activeCloudStreams.delete(requestId);
+      opts.signal?.removeEventListener("abort", cancel);
     };
 
     const cancel = () => {
@@ -1316,9 +1321,13 @@ class ReasoningService extends BaseReasoningService {
       queue.push({ type: "__end" });
       resolve?.();
     };
-    this.activeCloudStream = { requestId, cancel };
-
-    electronAPI?.startAgentStream?.(requestId, messages, opts);
+    this.activeCloudStreams.set(requestId, cancel);
+    opts.signal?.addEventListener("abort", cancel, { once: true });
+    if (opts.signal?.aborted) cancel();
+    else {
+      const { signal: _signal, ...requestOptions } = opts;
+      electronAPI?.startAgentStream?.(requestId, messages, requestOptions);
+    }
 
     const generator = (async function* () {
       try {
@@ -1349,11 +1358,13 @@ class ReasoningService extends BaseReasoningService {
   async askAboutScreen(
     question: string,
     screenContext: { data: string; mediaType: string },
-    systemPrompt: string
+    systemPrompt: string,
+    signal?: AbortSignal
   ): Promise<string> {
     const { stream } = this.streamFromIPC([{ role: "user", content: question }], {
       systemPrompt,
       screenContext,
+      signal,
     });
     let answer = "";
     for await (const ev of stream) if (ev.type === "content") answer += ev.text as string;
@@ -1364,6 +1375,7 @@ class ReasoningService extends BaseReasoningService {
     messages: Array<{ role: string; content: string | Array<unknown> }>,
     config: {
       systemPrompt: string;
+      signal?: AbortSignal;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       executeToolCall?: (
         name: string,
@@ -1376,7 +1388,7 @@ class ReasoningService extends BaseReasoningService {
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     // Capture synchronously so a cancel before the first next() is observed.
-    const operationGeneration = ++this.cloudOperationGeneration;
+    const operationGeneration = this.cloudOperationGeneration;
     return this._processTextStreamingCloud(messages, config, operationGeneration);
   }
 
@@ -1384,6 +1396,7 @@ class ReasoningService extends BaseReasoningService {
     messages: Array<{ role: string; content: string | Array<unknown> }>,
     config: {
       systemPrompt: string;
+      signal?: AbortSignal;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
       executeToolCall?: (
         name: string,
@@ -1398,7 +1411,7 @@ class ReasoningService extends BaseReasoningService {
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     assertAgentSessionAllowedByPolicy("openwhispr", "openwhispr");
     const operationWasCancelled = (): boolean =>
-      operationGeneration !== this.cloudOperationGeneration;
+      config.signal?.aborted === true || operationGeneration !== this.cloudOperationGeneration;
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
     // The Cloud API prepends systemPrompt itself. Keep any distinct system instructions.
     let currentMessages =
@@ -1417,6 +1430,7 @@ class ReasoningService extends BaseReasoningService {
       // its vision after tool results come back.
       const ipcStream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
+        signal: config.signal,
         tools: config.tools,
         screenContext: config.screenContext,
       });
@@ -1439,7 +1453,10 @@ class ReasoningService extends BaseReasoningService {
         }
       }
 
-      if (ipcStream.wasCancelled() || operationWasCancelled()) return;
+      if (ipcStream.wasCancelled() || operationWasCancelled()) {
+        yield { type: "done", finishReason: "abort" };
+        return;
+      }
 
       if (pendingToolCalls.length === 0 || !config.executeToolCall) {
         if (config.isUnbackedClaim?.(stepText)) {
@@ -1474,7 +1491,10 @@ class ReasoningService extends BaseReasoningService {
           const errMsg = `Error: ${(error as Error).message}`;
           toolResult = { data: errMsg, displayText: errMsg, isError: true };
         }
-        if (operationWasCancelled()) return;
+        if (operationWasCancelled()) {
+          yield { type: "done", finishReason: "abort" };
+          return;
+        }
         yield {
           type: "tool_result",
           callId: call.id,
@@ -1517,7 +1537,11 @@ class ReasoningService extends BaseReasoningService {
     // One more step, with no tools, answers with what it has.
     const answer = this.streamFromIPC(
       [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
-      { systemPrompt: config.systemPrompt, screenContext: config.screenContext }
+      {
+        systemPrompt: config.systemPrompt,
+        screenContext: config.screenContext,
+        signal: config.signal,
+      }
     );
     let answerText = "";
     try {
@@ -1535,7 +1559,10 @@ class ReasoningService extends BaseReasoningService {
       yield { type: "done", finishReason: "tool-calls" };
       return;
     }
-    if (answer.wasCancelled() || operationWasCancelled()) return;
+    if (answer.wasCancelled() || operationWasCancelled()) {
+      yield { type: "done", finishReason: "abort" };
+      return;
+    }
     // Checked like any answer, but not asked again: the turn has no steps left.
     if (config.isUnbackedClaim?.(answerText)) yield { type: "unbacked_claim", retry: false };
     yield { type: "done", finishReason: "tool-calls" };

@@ -111,9 +111,17 @@ async function renderChatStreaming(
   // setInterval that otherwise keeps the process alive after the test ends.
   t.after(() => reasoningService.destroy());
   if (stream) {
-    t.mock.method(reasoningService, "processTextStreamingAI", () => stream.read());
-    t.mock.method(reasoningService, "cancelActiveStream", () =>
-      stream.end(abortThrows ? new DOMException("aborted", "AbortError") : undefined)
+    t.mock.method(
+      reasoningService,
+      "processTextStreamingAI",
+      (_messages, _model, _provider, config) => {
+        config.signal.addEventListener(
+          "abort",
+          () => stream.end(abortThrows ? new DOMException("aborted", "AbortError") : undefined),
+          { once: true }
+        );
+        return stream.read();
+      }
     );
   }
 
@@ -452,3 +460,17 @@ for (const withContent of [true, false]) {
     await assertNoLateWrites(harness);
   });
 }
+
+test("a service abort releases the mounted chat's busy state", async (t) => {
+  const stream = {
+    async *read() {
+      yield { type: "content", text: "Partial" };
+      yield { type: "done", finishReason: "abort" };
+    },
+    end() {},
+  };
+  const chat = await renderChatStreaming(t, { stream, live: true });
+  await React.act(async () => chat.captured.sendToAI("Go", []));
+  assert.equal(chat.getAgentState(), "idle");
+  assert.equal(chat.getMessages()[0].isStreaming, false);
+});

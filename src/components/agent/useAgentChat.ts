@@ -27,6 +27,7 @@ export function useAgentChat({
     allowConnectors: true,
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
     onTurnCheckpoint: persistence.saveAssistantMessage,
   });
   const { cancelStream, sendToAI } = streaming;

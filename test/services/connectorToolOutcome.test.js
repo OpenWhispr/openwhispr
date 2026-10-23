@@ -502,7 +502,7 @@ test("an issue or comment's tool step says what was created, or where to check",
   );
 });
 
-test("a send that had to be prepared again is still one send for the request", async (t) => {
+test("a send prepared again needs fresh consent and remains one send for the request", async (t) => {
   const prepared = [];
   const commits = [
     { state: "not_sent", reason: "not_found" },
@@ -547,7 +547,11 @@ test("a send that had to be prepared again is still one send for the request", a
 
   const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
   await new Promise((resolve) => setImmediate(resolve));
-  await approveAction(approvalKey("m8", "call-1"));
+  const key = approvalKey("m8", "call-1");
+  await approveAction(key);
+  assert.equal(useConnectorApprovalStore.getState().entries[key].state, "pending");
+  assert.equal(commits.length, 1, "the newly prepared action has not been sent");
+  await approveAction(key);
   const result = await running;
 
   assert.equal(result.data.status, "sent");

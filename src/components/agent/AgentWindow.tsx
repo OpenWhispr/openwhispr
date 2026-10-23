@@ -278,6 +278,8 @@ export default function AgentWindow() {
   const submit = useCallback(
     (text: string, typed: boolean, extras?: RequestExtras) => {
       if (refuseIfRestricted()) return;
+      pressRef.current += 1;
+      pressCaptureRef.current = null;
       const current = stateRef.current;
       const selectedContext = extras ? extras.selectedContext : current.selectedContext;
       const attachment = extras ? extras.attachment : current.attachment;
@@ -320,7 +322,9 @@ export default function AgentWindow() {
       }
       const pending = pressCaptureRef.current;
       pressCaptureRef.current = null;
+      const press = pressRef.current;
       if (pending) await Promise.race([pending, delay(PRESS_CAPTURE_WAIT_MS)]);
+      if (press === pressRef.current) pressRef.current += 1;
       if (dropped()) return;
       submit(text, false);
     },
@@ -406,8 +410,12 @@ export default function AgentWindow() {
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
     droppedTakeRef.current = takeRef.current;
+    pressRef.current += 1;
+    pressCaptureRef.current = null;
+    dispatch({ type: "setAttachment", attachment: null });
+    dispatch({ type: "setContext", context: null });
     cancelTake();
-  }, [cancelTake]);
+  }, [cancelTake, dispatch]);
   // Bumped when the user opens another chat, so the list starts again at the
   // newest message instead of wherever the previous chat was scrolled.
   const [openedChat, setOpenedChat] = useState(0);
@@ -464,7 +472,7 @@ export default function AgentWindow() {
 
   const handleEscape = useCallback(() => {
     if (listening) {
-      cancelTake();
+      dropTake();
       if (openedByTakeRef.current && stateRef.current.layout === "pill") void close();
       return;
     }
@@ -473,7 +481,7 @@ export default function AgentWindow() {
       return;
     }
     void close();
-  }, [busy, cancelTake, cancelTurn, close, listening]);
+  }, [busy, cancelTurn, close, dropTake, listening]);
 
   // Main's messages, read through a ref so each listener is registered once.
   const handlersRef = useRef({

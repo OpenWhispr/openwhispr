@@ -55,6 +55,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
     allowConnectors: true,
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
     onTurnCheckpoint: persistence.saveAssistantMessage,
   });
   // useChatStreaming returns a fresh object every render; cancelStream is
