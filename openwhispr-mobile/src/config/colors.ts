@@ -21,6 +21,7 @@ const ANDROID_FALLBACKS: Record<string, string> = {
   quaternaryLabel: '#3C3C432E',
   systemBackground: APP_BACKGROUND,
   secondarySystemBackground: '#F2F2F7',
+  tertiarySystemBackground: '#FFFFFF',
   secondarySystemGroupedBackground: '#FFFFFF',
   tertiarySystemFill: '#76768014',
   quaternarySystemFill: '#7676800F',

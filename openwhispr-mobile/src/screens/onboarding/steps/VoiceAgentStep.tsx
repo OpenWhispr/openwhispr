@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { Keyboard, PlatformColor, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -11,7 +11,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingPracticeMode } from '@/hooks/useOnboardingPracticeMode';
 import { useOnboardingStep } from '@/hooks/useOnboardingStep';
-import { BRAND } from '@/config/colors';
+import { BRAND, iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
 import { hideKeyboardAgentHints, readKeyboardAgentDraft } from '@/lib/keyboardAgentSync';
 import { safeHaptics } from '@/lib/utils';
@@ -266,7 +266,7 @@ export function VoiceAgentStep(): ReactElement {
 const styles = StyleSheet.create({
   messageInput: {
     minHeight: 120,
-    color: PlatformColor('label') as unknown as string,
+    color: iosColor('label'),
     fontFamily: AppFont.regular,
     fontSize: 16,
     fontWeight: '400',
