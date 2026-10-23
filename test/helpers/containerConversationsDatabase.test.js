@@ -192,6 +192,51 @@ test("getConversationsForContainer excludes deleted conversations", (t) => {
   assert.equal(db.getConversationsForContainer(space.id, null).length, 0);
 });
 
+test("private-space root chats are owned by the account that created them", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateSpaceId = db.getPrivateSpaceId();
+  // A row from before root chats carried an owner stays visible to everyone,
+  // like a legacy personal note.
+  const legacy = db.createAgentConversation("Legacy root chat", null, privateSpaceId);
+  db.db.prepare("UPDATE agent_conversations SET account_id = NULL WHERE id = ?").run(legacy.id);
+
+  db.setActiveAccountId("account-a");
+  const chatA = db.createAgentConversation("A root chat", null, privateSpaceId);
+  db.addAgentMessage(chatA.id, "user", "private to A");
+  db.setActiveAccountId("account-b");
+  const chatB = db.createAgentConversation("B root chat", null, privateSpaceId);
+
+  assert.deepEqual(
+    db
+      .getConversationsForContainer(privateSpaceId, null)
+      .map((conversation) => conversation.id)
+      .sort((a, b) => a - b),
+    [legacy.id, chatB.id],
+    "another account on the device must not list A's root chats"
+  );
+  db.setActiveAccountId(null);
+  assert.deepEqual(
+    db.getConversationsForContainer(privateSpaceId, null).map((conversation) => conversation.id),
+    [legacy.id],
+    "signed out, only device-owned root chats are listed"
+  );
+
+  db.setActiveAccountId("account-a");
+  db.deleteAccountData("account-a");
+  const remaining = db.db
+    .prepare("SELECT id FROM agent_conversations ORDER BY id")
+    .all()
+    .map((row) => row.id);
+  assert.deepEqual(remaining, [legacy.id, chatB.id], "account deletion removes A's root chats");
+  assert.equal(
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM agent_messages WHERE conversation_id = ?")
+      .get(chatA.id).count,
+    0
+  );
+});
+
 test("global conversation lists and search exclude space and folder chats", (t) => {
   const db = createDb(t);
   if (!db) return;
