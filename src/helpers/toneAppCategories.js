@@ -211,7 +211,7 @@ const CHROMIUM_WINDOW_CLASS = /chrome_widgetwin_\d+/g;
 // A title segment that is the browser's own name, as a whole segment, so a
 // page such as "gmail - Brave Search" keeps its words.
 const BROWSER_TITLE_NAME =
-  /^(?:google chrome|chromium|microsoft edge|mozilla firefox|firefox|librewolf|waterfox|floorp|zen browser|brave|opera|vivaldi|thorium|yandex)(?: private browsing| \(.*\))?$/;
+  /^(?:google chrome|chromium|microsoft edge|mozilla firefox|firefox(?: developer edition| nightly)?|librewolf|waterfox|floorp|zen browser|brave|opera|vivaldi|thorium|yandex)(?: private browsing| \(.*\))?$/;
 const TITLE_SEPARATOR = /\s[-\u2013\u2014|\u00b7\u2022/]\s/;
 const ZERO_WIDTH = /[\u200b-\u200d\ufeff]/g;
 
