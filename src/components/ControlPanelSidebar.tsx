@@ -1,20 +1,11 @@
 import React, { useState } from "react";
-import {
-  Gift,
-  Lock,
-  Settings,
-  ShieldCheck,
-  HelpCircle,
-  UserCircle,
-  UserPlus,
-  X,
-  Zap,
-} from "./icons";
+import { Gift, Lock, Settings, ShieldCheck, HelpCircle, X, Zap } from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import { Button } from "./ui/button";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import type { UpsellDecision } from "../lib/upsell";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
@@ -32,14 +23,9 @@ interface ControlPanelSidebarProps {
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
-  onInviteTeam?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
-  userName?: string | null;
-  userEmail?: string | null;
-  userImage?: string | null;
   isSignedIn?: boolean;
-  authLoaded?: boolean;
   upsell: UpsellDecision;
   updateAction?: React.ReactNode;
 }
@@ -49,14 +35,9 @@ export default function ControlPanelSidebar({
   onViewChange,
   onOpenSettings,
   onOpenReferrals,
-  onInviteTeam,
   onUpgrade,
   isOverLimit,
-  userName,
-  userEmail,
-  userImage,
   isSignedIn,
-  authLoaded,
   upsell,
   updateAction,
 }: ControlPanelSidebarProps) {
@@ -64,9 +45,6 @@ export default function ControlPanelSidebar({
   const [upgradeDismissed, setUpgradeDismissed] = useState(
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
-  // A blocked or expired avatar URL falls back to the icon instead of the
-  // broken-image glyph, like AccountAvatar and MemberAvatar.
-  const [failedImage, setFailedImage] = useState<string | null>(null);
 
   const showLimitBanner = upsell === "show" && Boolean(isSignedIn) && Boolean(isOverLimit);
   const showUpgradeBanner = upsell === "show" && !showLimitBanner && !upgradeDismissed;
@@ -190,17 +168,6 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {onInviteTeam && (
-          <button
-            onClick={onInviteTeam}
-            aria-label={t("sidebar.inviteTeam")}
-            className={rowButtonClass}
-          >
-            <UserPlus size={16} className={rowIconClass} />
-            <span className={rowLabelClass}>{t("sidebar.inviteTeam")}</span>
-          </button>
-        )}
-
         {isSignedIn && onOpenReferrals && (
           <button
             onClick={onOpenReferrals}
@@ -230,40 +197,8 @@ export default function ControlPanelSidebar({
           }
         />
 
-        <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
-
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
-          {userImage && userImage !== failedImage ? (
-            <img
-              src={userImage}
-              alt=""
-              onError={() => setFailedImage(userImage)}
-              className="w-6 h-6 rounded-full shrink-0 object-cover"
-            />
-          ) : (
-            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
-          )}
-          <div className="flex-1 min-w-0">
-            {isSignedIn && (userName || userEmail) ? (
-              <>
-                <p
-                  dir="auto"
-                  className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight"
-                >
-                  {userName || t("sidebar.defaultUser")}
-                </p>
-                {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
-                    <bdi dir="ltr">{userEmail}</bdi>
-                  </p>
-                )}
-              </>
-            ) : authLoaded && !isSignedIn ? (
-              <p className="text-xs text-foreground/45 dark:text-foreground/55">
-                {t("sidebar.notSignedIn")}
-              </p>
-            ) : null}
-          </div>
+        <div className="pt-1">
+          <WorkspaceSwitcher />
         </div>
       </div>
     </div>

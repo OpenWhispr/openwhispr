@@ -1317,7 +1317,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "مساحات العمل",
-      "create": "إنشاء مساحة عمل…"
+      "create": "إنشاء مساحة عمل…",
+      "add": "إضافة مساحة عمل",
+      "invitePeople": "دعوة أشخاص"
     },
     "create": {
       "title": "إنشاء مساحة عمل",
@@ -3576,6 +3578,8 @@
       },
       "rollingWeeklyLimit": "حد أسبوعي متجدد",
       "signOut": {
+        "endMeetingDescription": "يؤدي تسجيل الخروج إلى إيقاف تسجيل الاجتماع الجاري. يبقى ما تم تسجيله حتى الآن في ملاحظته.",
+        "endMeetingTitle": "إنهاء تسجيل الاجتماع؟",
         "failedDescription": "حدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى.",
         "failedTitle": "تعذر تسجيل الخروج",
         "signOut": "تسجيل الخروج",
@@ -4764,7 +4768,6 @@
     "upload": "رفع",
     "dictionary": "القاموس",
     "referral": "احصل على شهر مجاني",
-    "inviteTeam": "ادعُ فريقك",
     "settings": "الإعدادات",
     "support": "الدعم",
     "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
@@ -4778,7 +4781,7 @@
     "learnMore": "معرفة المزيد",
     "integrations": "التكاملات",
     "defaultUser": "مستخدم",
-    "notSignedIn": "لم يتم تسجيل الدخول",
+    "accountMenu": "الحساب: {{name}}",
     "chat": "الدردشة",
     "collapse": "طي الشريط الجانبي",
     "expand": "توسيع الشريط الجانبي",
@@ -5008,6 +5011,12 @@
     "active": "تسريع GPU نشط",
     "ready": "تسريع GPU جاهز",
     "activating": "جاري تفعيل GPU...",
+    "activeBackend": "تسريع {{backend}} نشط",
+    "readyBackend": "تسريع {{backend}} جاهز",
+    "activatingBackend": "جاري تفعيل {{backend}}...",
+    "enableBackend": "تفعيل {{backend}}",
+    "cudaDescription": "تسريع CUDA لوحدات معالجة الرسومات NVIDIA المدعومة. يتطلب تعريف NVIDIA حديثًا ومتوافقًا.",
+    "vulkanDescription": "تسريع Vulkan لوحدات معالجة الرسومات المتوافقة من AMD وIntel وNVIDIA.",
     "activationFailed": "تسريع GPU غير متاح",
     "activationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للتفريغ الصوتي.",
     "reasoningActivationFailedDescription": "انتقل OpenWhispr إلى استخدام وحدة المعالجة المركزية (CPU) للمعالجة.",

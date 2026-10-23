@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Lock } from "../icons";
 import { Button } from "../ui/button";
 import { SettingsPanelRow } from "../ui/SettingsSection";
-import { BetaBadge } from "./BetaBadge";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../../stores/connectorStatusStore";
 import type { ConnectorRowSpec } from "./connectorRows";
 
@@ -223,10 +222,7 @@ export function ConnectorLoginRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className={dimmed}>
-            <div className="flex items-center gap-1.5">
-              <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
-              <BetaBadge />
-            </div>
+            <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
             <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
               {summary}
             </p>

@@ -8,6 +8,7 @@ import { ensureConnectorStatus, useConnectorStatusStore } from "../stores/connec
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
 import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
+import { BetaBadge } from "./connectors/BetaBadge";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { IntegrationsNav } from "./integrations/IntegrationsNav";
 import { IntegrationsPane, UpsellBar } from "./integrations/IntegrationsPane";
@@ -104,6 +105,7 @@ export default function IntegrationsView({
     connectors: (
       <IntegrationsPane
         title={titleOf("connectors")}
+        titleBadge={<BetaBadge />}
         description={t("integrations.connectors.description")}
       >
         <ConnectorsSection onUpgrade={onUpgrade} />

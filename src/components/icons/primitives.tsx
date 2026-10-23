@@ -262,6 +262,15 @@ const TextSelectMark = glyph(
   </>
 );
 
+// The sidebar's workspace switcher.
+const ChevronsUpDownMark = glyph(
+  <>
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </>
+);
+
+export const ChevronsUpDown = createIcon("chevrons-up-down", ChevronsUpDownMark);
 export const Circle = createIcon("circle", CircleMark);
 export const ArrowUp = createIcon("arrow-up", ArrowUpMark);
 export const Square = createIcon("square", SquareMark);

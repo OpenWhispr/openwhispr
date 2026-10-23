@@ -6,6 +6,7 @@ export type { IconComponent, IconProps } from "./createIcon";
 export {
   ArrowUp,
   Bold,
+  ChevronsUpDown,
   Circle,
   CopyRounded,
   FolderRounded,

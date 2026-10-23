@@ -2049,6 +2049,8 @@
       },
       "rollingWeeklyLimit": "Limite hebdomadaire glissante",
       "signOut": {
+        "endMeetingDescription": "La déconnexion arrête l'enregistrement de la réunion en cours. Ce qui a déjà été capturé reste dans sa note.",
+        "endMeetingTitle": "Arrêter l'enregistrement de la réunion ?",
         "failedDescription": "Un problème est survenu lors de la déconnexion. Veuillez réessayer.",
         "failedTitle": "Impossible de se déconnecter",
         "signOut": "Se déconnecter",
@@ -3000,7 +3002,6 @@
     "upload": "Importer",
     "dictionary": "Dictionnaire",
     "referral": "Obtenir un mois gratuit",
-    "inviteTeam": "Invitez votre équipe",
     "settings": "Paramètres",
     "support": "Assistance",
     "limitReached": "Limite cloud hebdomadaire atteinte",
@@ -3014,7 +3015,7 @@
     "learnMore": "En savoir plus",
     "integrations": "Intégrations",
     "defaultUser": "Utilisateur",
-    "notSignedIn": "Non connecté",
+    "accountMenu": "Compte : {{name}}",
     "chat": "Chat",
     "collapse": "Réduire la barre latérale",
     "expand": "Développer la barre latérale"
@@ -3022,7 +3023,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Espaces de travail",
-      "create": "Créer un espace de travail…"
+      "create": "Créer un espace de travail…",
+      "add": "Ajouter un espace de travail",
+      "invitePeople": "Inviter des personnes"
     },
     "create": {
       "title": "Créer un espace de travail",
@@ -3943,6 +3946,12 @@
     "active": "Accélération GPU active",
     "ready": "Accélération GPU prête",
     "activating": "Activation du GPU...",
+    "activeBackend": "Accélération {{backend}} active",
+    "readyBackend": "Accélération {{backend}} prête",
+    "activatingBackend": "Activation de {{backend}}...",
+    "enableBackend": "Activer {{backend}}",
+    "cudaDescription": "Accélération CUDA pour les GPU NVIDIA compatibles. Nécessite un pilote NVIDIA actuel et compatible.",
+    "vulkanDescription": "Accélération Vulkan pour les GPU AMD, Intel et NVIDIA compatibles.",
     "activationFailed": "Accélération GPU indisponible",
     "activationFailedDescription": "OpenWhispr est passé à la transcription par CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr est passé au traitement par CPU.",

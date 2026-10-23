@@ -21,11 +21,18 @@ def main():
     ).strip()
     with tempfile.TemporaryDirectory(prefix="keyboard-touch-") as directory:
         source = Path(directory) / "keyboard-with-touch-tests.swift"
-        # #sourceLocation keeps compiler errors and traps pointing at the test file.
+        # The tests reach the controller's private members, so they share its file. The
+        # other keyboard sources compile as files of their own, as in the extension target
+        # (a Jest test keeps that target's list equal to ios/*.swift). #sourceLocation keeps
+        # compiler errors and traps pointing at the real files.
+        controller = plugin / "ios/KeyboardViewController.swift"
+        others = sorted(set((plugin / "ios").glob("*.swift")) - {controller})
+
+        def located(path):
+            return f"#sourceLocation(file: {json.dumps(str(path), ensure_ascii=False)}, line: 1)\n"
+
         source.write_text(
-            (plugin / "ios/KeyboardViewController.swift").read_text()
-            + f"\n#sourceLocation(file: {json.dumps(str(tests), ensure_ascii=False)}, line: 1)\n"
-            + tests.read_text()
+            located(controller) + controller.read_text() + "\n" + located(tests) + tests.read_text()
         )
         executable = str(Path(directory) / "keyboard-touch-tests")
         subprocess.run([
@@ -33,7 +40,7 @@ def main():
             "-sdk", sdk,
             "-target", f"{platform.machine()}-apple-ios{DEPLOYMENT_TARGET}-macabi",
             "-Fsystem", f"{sdk}/System/iOSSupport/System/Library/Frameworks",
-            str(source), "-o", executable,
+            str(source), *map(str, others), "-o", executable,
         ], check=True)
         subprocess.run([executable], check=True)
 
