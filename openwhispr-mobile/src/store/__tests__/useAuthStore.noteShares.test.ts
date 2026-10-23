@@ -21,6 +21,7 @@ jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
 jest.mock('@/services/agent/AgentComposerService', () => ({ clearAllSessions: jest.fn() }));
+jest.mock('@/lib/chat/chatHistory', () => ({ clearChatHistory: jest.fn() }));
 jest.mock('@/services/providers/ProviderCredentials', () => ({
   clearProviderCredentials: jest.fn().mockResolvedValue(undefined),
 }));

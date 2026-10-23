@@ -33,10 +33,15 @@ export interface UseAudioRecordingOptions {
   onComplete?: (text: string) => void;
   onError?: (error: Error) => void;
   allowsBackgroundRecording?: boolean;
+  // Defaults to true. When false, nothing reaches transcript history (no row on
+  // success or failure) and the recording is deleted once its outcome is known.
+  saveToHistory?: boolean;
   // Private mode but the on-device model is unavailable. We never fall back to
   // the cloud silently — the caller prompts, and may invoke retryWithCloud to
-  // transcribe the recording we already captured.
-  onLocalModelMissing?: (retryWithCloud: () => void) => void;
+  // transcribe the recording we already captured. Call discard when the user
+  // declines; it deletes the recording only when saveToHistory is false, since
+  // otherwise the failed history row keeps it for a later retry.
+  onLocalModelMissing?: (retryWithCloud: () => void, discard: () => Promise<void>) => void;
   // Cloud quota is exhausted. The caller can present billing, refresh backend
   // usage, then invoke retryWithCloud only if quota/subscription now permits it.
   onUsageLimitReached?: (
@@ -72,11 +77,15 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
   const jobRouteRef = useRef<TranscriptionJobRoute>({ provider: 'cloud' });
+  // Held only across a native stop: whichever stop or cancel claims it owns the recording, so a
+  // second one never stops it again or deletes the file the first is transcribing.
+  const stoppingRef = useRef(false);
 
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
   const isSupported = isExpoAudioAvailable() && !!audioRecorder;
   const allowsBackgroundRecording = options.allowsBackgroundRecording === true;
+  const saveToHistory = options.saveToHistory !== false;
 
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
@@ -164,11 +173,16 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     try {
       const { audioRecorder: recorder } = ensureAudioSupport();
 
-      if (!isRecording) {
+      if (!isRecording || stoppingRef.current) {
         return;
       }
 
-      await recorder.stop();
+      stoppingRef.current = true;
+      try {
+        await recorder.stop();
+      } finally {
+        stoppingRef.current = false;
+      }
 
       const uri = recorder.uri;
 
@@ -199,6 +213,9 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
       const speechAnalysis = await analyzeSpeechActivity(uri, 'recording');
       if (speechAnalysis?.noSpeechLikely) {
+        if (!saveToHistory) {
+          await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+        }
         throw createNoSpeechError();
       }
       const clientTranscriptionId = `recording-${randomUUID()}`;
@@ -220,22 +237,35 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           isLocalModelMissingError(transcribeError) &&
           options.onLocalModelMissing
         ) {
-          await addFailedRecording(retained, transcriptionProvider, transcribeError);
-          options.onLocalModelMissing(() => {
-            retryWithCloud(retained, clientTranscriptionId);
-          });
+          if (saveToHistory) {
+            await addFailedRecording(retained, transcriptionProvider, transcribeError);
+          }
+          options.onLocalModelMissing(
+            () => {
+              retryWithCloud(retained, clientTranscriptionId);
+            },
+            () => (saveToHistory ? Promise.resolve() : discardRetainedAudio(retained)),
+          );
           return;
         }
         // Cloud quota exhausted. Keep the recording so an approved retry can
         // reuse it, then hand the billing/retry decision to the caller.
         if (isUsageLimitError(transcribeError) && options.onUsageLimitReached) {
-          await addFailedRecording(retained, transcriptionProvider, transcribeError);
+          if (saveToHistory) {
+            await addFailedRecording(retained, transcriptionProvider, transcribeError);
+          }
           await options.onUsageLimitReached(transcribeError, () =>
             retryWithCloud(retained, clientTranscriptionId),
           );
+          // Recovery is over, retried or declined; a retry already removed it.
+          if (!saveToHistory) await discardRetainedAudio(retained);
           return;
         }
-        await addFailedRecording(retained, transcriptionProvider, transcribeError);
+        if (saveToHistory) {
+          await addFailedRecording(retained, transcriptionProvider, transcribeError);
+        } else {
+          await discardRetainedAudio(retained);
+        }
         throw transcribeError;
       }
     } catch (error) {
@@ -256,6 +286,11 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       audioMimeType,
     });
     return { id, audioUrl, audioFileName, audioMimeType };
+  };
+
+  // Never lets a cleanup failure replace the result or error being reported.
+  const discardRetainedAudio = async (retained: RetainedRecordingAudio): Promise<void> => {
+    await deleteManagedTranscriptAudio(retained.audioUrl).catch(() => undefined);
   };
 
   const addFailedRecording = async (
@@ -315,6 +350,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
     const finalText = processedResult.text;
 
+    if (!saveToHistory) {
+      await discardRetainedAudio(retained);
+      setCurrentText(finalText);
+      options.onComplete?.(finalText);
+      return;
+    }
+
     // The transcript is already paid for, so a history write failure must not lose it.
     const saved = await addTranscript({
       id: retained.id,
@@ -357,9 +399,12 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         await options.onUsageLimitReached(error, () =>
           retryWithCloud(retained, clientTranscriptionId),
         );
+        if (!saveToHistory) await discardRetainedAudio(retained);
         return;
       }
-      if (!isNoSpeechError(error)) {
+      if (!saveToHistory) {
+        await discardRetainedAudio(retained);
+      } else if (!isNoSpeechError(error)) {
         await addFailedRecording(retained, 'cloud', error);
       }
       options.onError?.(
@@ -370,19 +415,40 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     }
   };
 
-  const cancelRecording = async () => {
-    if (audioRecorder?.isRecording) {
-      await audioRecorder.stop();
+  // A cancelled recording is discarded, so the file it was writing goes too. A recording another
+  // stop already claimed is left to it, file and processing state alike. The claim is held until
+  // the recording is gone, so a send landing meanwhile can't stop it again and read the deleted file.
+  const cancelRecording = async (): Promise<void> => {
+    if (stoppingRef.current) return;
+    if (!audioRecorder?.isRecording) {
+      setIsRecording(false);
+      return;
     }
-    setIsRecording(false);
-    setIsProcessing(false);
-    setCurrentText('');
+    stoppingRef.current = true;
+    // Read before stopping: the recorder may move on to a new file once it stops.
+    const uri = audioRecorder.uri;
+    try {
+      await audioRecorder.stop();
+      if (uri) {
+        await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+      }
+      setIsRecording(false);
+      setIsProcessing(false);
+      setCurrentText('');
+    } finally {
+      stoppingRef.current = false;
+    }
   };
 
   // Meeting-specific: stops recording and returns the raw URI without running the dictation finalize path.
   const stopRecordingRaw = async (): Promise<string | null> => {
     if (!audioRecorder.isRecording) return null;
-    await audioRecorder.stop();
+    stoppingRef.current = true;
+    try {
+      await audioRecorder.stop();
+    } finally {
+      stoppingRef.current = false;
+    }
     setIsRecording(false);
     setIsProcessing(false);
     return audioRecorder.uri ?? null;

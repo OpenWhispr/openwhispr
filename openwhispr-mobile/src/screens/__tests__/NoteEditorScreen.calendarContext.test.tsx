@@ -1805,6 +1805,24 @@ describe('NoteEditorScreen voice setup', () => {
     }
   });
 
+  it('opens the script on the stack the note was opened from', () => {
+    const platform = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      const { getByTestId } = render(
+        <NoteEditorScreen stack={{ root: '/(tabs)/(chat)', routePrefix: '/(tabs)/(chat)/note' }} />,
+      );
+      fireEvent.press(getByTestId('voice-setup-banner-set-up'));
+      fireEvent.press(getByTestId('thats-me-read-script'));
+
+      expect(mockPush).toHaveBeenCalledWith(
+        '/(tabs)/(chat)/note/voice-enrollment?owner=1&noteId=7',
+      );
+    } finally {
+      Platform.OS = platform;
+    }
+  });
+
   it("doesn't open the script for another note after switching mid-close", () => {
     const { getByTestId, UNSAFE_getAllByType, rerender } = render(<NoteEditorScreen />);
     fireEvent.press(getByTestId('voice-setup-banner-set-up'));

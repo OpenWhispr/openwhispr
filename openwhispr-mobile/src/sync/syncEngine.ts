@@ -181,6 +181,11 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
         level: 'info',
       });
       notesRepository.wipeAllSyncableData();
+      // Chat history never syncs, but it quotes the previous user's notes. Required lazily, since
+      // the chat store reaches SQLite through @/data, which imports this module.
+      const { clearChatHistory } =
+        require('@/lib/chat/chatHistory') as typeof import('@/lib/chat/chatHistory');
+      clearChatHistory();
       // The wipe also deleted the previous user's voice profiles; their meeting voice
       // samples held in memory go with them.
       useNotesStore.getState().loadVoiceProfiles();

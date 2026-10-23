@@ -1,4 +1,4 @@
-import type { ReasoningRequest, ReasoningResponse } from '../../types';
+import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '../../types';
 import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
@@ -244,14 +244,29 @@ export class ReasoningService {
   }
 
   static async chatOverNote(request: ChatOverNoteRequest): Promise<ReasoningResponse> {
-    const payload = buildChatOverNotePayload(request);
+    return this.chat({
+      ...buildChatOverNotePayload(request),
+      signal: request.signal,
+      routing: request.routing,
+      inferenceRoute: request.inferenceRoute,
+    });
+  }
+
+  /** Sends an already-built chat payload through the Note Chat route. */
+  static async chat(request: {
+    systemPrompt: string;
+    text: string;
+    signal?: AbortSignal;
+    routing?: ReasoningRoutingOptions;
+    inferenceRoute?: ReasoningRequest['inferenceRoute'];
+  }): Promise<ReasoningResponse> {
     const { getInferenceSelection } =
       require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const selection = request.inferenceRoute ?? getInferenceSelection('noteChat');
     if (selection?.mode === 'providers' || selection?.mode === 'local') {
       return this.processText({
-        text: payload.text,
-        systemPrompt: payload.systemPrompt,
+        text: request.text,
+        systemPrompt: request.systemPrompt,
         signal: request.signal,
         inferenceScope: 'noteChat',
         inferenceRoute: request.inferenceRoute,
@@ -260,8 +275,8 @@ export class ReasoningService {
     }
     // Cloud note chat keeps its pre-BYOK behavior: the consent dialog in the
     // editor is the privacy gate, and the answer always comes from the hosted model.
-    return this.callApi(payload.text, {
-      systemPrompt: payload.systemPrompt,
+    return this.callApi(request.text, {
+      systemPrompt: request.systemPrompt,
       signal: request.signal,
     });
   }

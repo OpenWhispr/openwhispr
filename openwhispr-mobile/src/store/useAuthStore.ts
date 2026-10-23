@@ -27,6 +27,13 @@ const GUEST_SESSION_KEY = 'openwhispr_guest_session';
 // including failures, so its late result cannot overwrite the chosen session.
 let anonymousSignInInFlight: Promise<void> | null = null;
 
+// Required lazily: the chat store reaches SQLite through @/data.
+const clearLocalChatHistory = (): void => {
+  const { clearChatHistory } =
+    require('@/lib/chat/chatHistory') as typeof import('@/lib/chat/chatHistory');
+  clearChatHistory();
+};
+
 type SessionResult = {
   user: AuthUser | null;
   sessionCookie: string | null;
@@ -183,6 +190,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     useUsageStore.getState().reset();
     clearAgentSessions();
+    clearLocalChatHistory();
     set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
   },
 
@@ -205,6 +213,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
       useUsageStore.getState().reset();
       clearAgentSessions();
+      clearLocalChatHistory();
       set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
     } catch (error) {
       set({ isLoading: false, error: error instanceof Error ? error.message : 'Delete failed' });
