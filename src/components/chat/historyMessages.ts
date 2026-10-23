@@ -183,14 +183,21 @@ export function connectsFirst(call: ToolCallInfo): boolean {
   return call.interaction?.payload.kind === "connection" && call.name !== "request_connection";
 }
 
-// Older versions stored built-in help evidence as a synthetic tool call. It
-// was never a model tool and must not teach future turns to invoke it. A look
-// at the screen belongs to the turn its screenshot came with: later turns
-// don't offer the tool, and a provider refuses a call to one it doesn't offer.
-const NOT_REPLAYED = new Set(["grounded_product_help", "look_at_screen"]);
+/** Whether this turn offers the tool. */
+type IsOffered = (toolName: string) => boolean;
 
-function replayedCalls(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): ToolCallInfo[] {
-  return (toolCalls ?? []).filter((call) => !NOT_REPLAYED.has(call.name));
+// Older versions stored built-in help evidence as a synthetic tool call. It
+// was never a model tool and must not teach future turns to invoke it. Nor is
+// a call to a tool this turn doesn't offer replayed (a look at an earlier
+// screenshot, a connector since disconnected, web search turned off): a
+// provider refuses a call to a tool it doesn't offer.
+const NOT_REPLAYED = new Set(["grounded_product_help"]);
+
+function replayedCalls(
+  toolCalls: ReadonlyArray<ToolCallInfo> | undefined,
+  isOffered: IsOffered = () => true
+): ToolCallInfo[] {
+  return (toolCalls ?? []).filter((call) => !NOT_REPLAYED.has(call.name) && isOffered(call.name));
 }
 
 // A tool that asked to connect its service first is recorded by what it then did.
@@ -301,12 +308,13 @@ function clipped(text: string): string {
     : chars.join("");
 }
 
-function ledgerTurns(dropped: ReadonlyArray<Message>): LedgerTurn[] {
+function ledgerTurns(dropped: ReadonlyArray<Message>, isOffered?: IsOffered): LedgerTurn[] {
   const turns: LedgerTurn[] = [];
   let request = "";
   for (const m of dropped) {
     if (m.role === "user") request = clipped(m.content);
-    const actions = m.role === "assistant" ? replayedCalls(m.toolCalls).filter(isLedgerAction) : [];
+    const actions =
+      m.role === "assistant" ? replayedCalls(m.toolCalls, isOffered).filter(isLedgerAction) : [];
     if (actions.length > 0) turns.push({ request, actions });
   }
   // The newest first, while they fit; the note takes one entry.
@@ -353,7 +361,7 @@ function ledgerText(turns: LedgerTurn[]): string {
  */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
-  { toolHistory }: { toolHistory: ToolHistory }
+  { toolHistory, isOffered }: { toolHistory: ToolHistory; isOffered?: IsOffered }
 ): HistoryMessage[] {
   // The request, the newest user message, always stays, however long it is.
   let request = messages.length - 1;
@@ -362,7 +370,7 @@ export function toHistoryMessages(
   const keptFrom = (maxEntries: number): number => {
     let first = messages.length;
     for (let entries = 0, tokens = 0; first > 0; first--) {
-      const replay = replayed(messages[first - 1], toolHistory, new Set());
+      const replay = replayed(messages[first - 1], toolHistory, new Set(), isOffered);
       entries += replay.length;
       tokens += estimateNoteTokens(JSON.stringify(replay));
       const full = entries > maxEntries || tokens > HISTORY_MAX_TOKENS;
@@ -372,12 +380,13 @@ export function toHistoryMessages(
     return first;
   };
   let first = keptFrom(HISTORY_MAX_ENTRIES);
-  const sendsLeftOut = toolHistory !== "none" && ledgerTurns(messages.slice(0, first)).length > 0;
+  const sendsLeftOut =
+    toolHistory !== "none" && ledgerTurns(messages.slice(0, first), isOffered).length > 0;
   if (sendsLeftOut) first = keptFrom(HISTORY_MAX_ENTRIES - LEDGER_MAX_ENTRIES);
-  const turns = sendsLeftOut ? ledgerTurns(messages.slice(0, first)) : [];
+  const turns = sendsLeftOut ? ledgerTurns(messages.slice(0, first), isOffered) : [];
   const callIds = new Set<string>();
   const ledger = toolHistory === "parts" ? ledgerParts(turns, callIds) : [];
-  const kept = messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds));
+  const kept = messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds, isOffered));
   if (toolHistory === "text" && turns.length > 0) {
     const [head, ...rest] = kept;
     return [{ ...head, content: `${ledgerText(turns)}\n\n${head.content}` }, ...rest];
@@ -386,7 +395,12 @@ export function toHistoryMessages(
 }
 
 /** One message as the model sees it (see toHistoryMessages). */
-function replayed(m: Message, toolHistory: ToolHistory, callIds: Set<string>): HistoryMessage[] {
+function replayed(
+  m: Message,
+  toolHistory: ToolHistory,
+  callIds: Set<string>,
+  isOffered?: IsOffered
+): HistoryMessage[] {
   if (m.role === "user" && m.selectedContext) {
     return [
       {
@@ -399,7 +413,7 @@ function replayed(m: Message, toolHistory: ToolHistory, callIds: Set<string>): H
       },
     ];
   }
-  const calls = m.role === "assistant" ? replayedCalls(m.toolCalls) : [];
+  const calls = m.role === "assistant" ? replayedCalls(m.toolCalls, isOffered) : [];
   if (toolHistory === "parts" && calls.length > 0) {
     return [
       ...calls.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),

@@ -901,6 +901,26 @@ test("an earlier turn's tool use reaches the model as its own call and outcome",
   ]);
 });
 
+test("an earlier call to a tool this turn doesn't offer isn't replayed", async (t) => {
+  const { captured, sentMessages, usePolicyStore } = await renderChatStreaming(t);
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      features: { ...MANAGED_POLICY.features, webSearchEnabled: false },
+    },
+  });
+
+  await captured.sendToAI("And tomorrow?", EARLIER_TOOL_TURN);
+
+  const [, ...sent] = sentMessages[0];
+  assert.deepEqual(sent.slice(0, 2), [
+    { role: "user", content: "Weather in Lisbon?" },
+    { role: "assistant", content: "Sunny, 24°C." },
+  ]);
+});
+
 test("a self-hosted server gets earlier tool use as a note on that answer", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
     t,

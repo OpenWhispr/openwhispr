@@ -765,24 +765,32 @@ test("history always starts with the user, however the cap cuts it", async () =>
   assert.deepEqual(capped, [{ role: "user", content: "Thanks" }]);
 });
 
-test("a look at the screen isn't replayed: later turns don't offer the tool", async () => {
+test("a call to a tool this turn doesn't offer isn't replayed: a provider would refuse it", async () => {
   const { toHistoryMessages } = await load();
+  // A look at an earlier screenshot, web search since turned off, a
+  // disconnected Slack.
+  const chat = [
+    user("What's this error?"),
+    assistant("It's a refused connection to port 3000.", [
+      call("look_at_screen", { question: "What does the error say?" }),
+      call("web_search", { query: "ECONNREFUSED" }),
+      call("slack_send_message", { destination: "#eng" }, { metadata: { status: "sent" } }),
+    ]),
+    user("Thanks"),
+  ];
+  const isOffered = (name) => name === "search_notes";
   for (const toolHistory of ["parts", "text"]) {
-    const history = toHistoryMessages(
-      [
-        user("What's this error?"),
-        assistant("It's a refused connection to port 3000.", [
-          call("look_at_screen", { question: "What does the error say?" }),
-        ]),
-        user("Thanks"),
-      ],
-      { toolHistory }
-    );
-    assert.deepEqual(history[1], {
+    assert.deepEqual(toHistoryMessages(chat, { toolHistory, isOffered })[1], {
       role: "assistant",
       content: "It's a refused connection to port 3000.",
     });
   }
+  // Offered again (a new screenshot), it replays like any call.
+  const [, look] = toHistoryMessages(chat, {
+    toolHistory: "parts",
+    isOffered: (name) => name === "look_at_screen",
+  });
+  assert.equal(look.content[0].toolName, "look_at_screen");
 });
 
 const LEDGER_NOTE =
@@ -842,6 +850,32 @@ test("a send that left the history stays known with its request, call and outcom
   // The ledger's room comes out of the 40 entries.
   assert.equal(history[3].content, "m10");
   assert.ok(history.length <= 40, String(history.length));
+});
+
+test("a send left out of the history stays known only while its tool is offered", async () => {
+  const { toHistoryMessages } = await load();
+  const chat = [
+    user("Email Gabe the roadmap and post it in #eng"),
+    assistant("Done.", [
+      sent("gabe"),
+      call(
+        "slack_send_message",
+        { destination: "#eng" },
+        { id: "eng", metadata: { status: "sent" } }
+      ),
+    ]),
+    ...smallTalk(40),
+  ];
+  const history = toHistoryMessages(chat, {
+    toolHistory: "parts",
+    isOffered: (name) => name === "email_draft",
+  });
+  assert.deepEqual(
+    history.flatMap((m) =>
+      Array.isArray(m.content) ? m.content.map((part) => part.toolName) : []
+    ),
+    ["email_draft", "email_draft"]
+  );
 });
 
 test("with a text trace, the sends left out open the first message, never a message of their own", async () => {

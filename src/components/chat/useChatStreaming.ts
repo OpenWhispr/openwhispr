@@ -665,7 +665,10 @@ export function useChatStreaming({
           settings.uiLanguage
         );
 
-        const history: HistoryMessage[] = toHistoryMessages(allMessages, { toolHistory });
+        const history: HistoryMessage[] = toHistoryMessages(allMessages, {
+          toolHistory,
+          isOffered: (name) => offeredTools?.some((tool) => tool.name === name) ?? false,
+        });
 
         const requestText = options?.requestText;
         if (requestText) {
