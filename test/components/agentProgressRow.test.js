@@ -54,7 +54,7 @@ test("several tools running at once show as one grouped step, with up to three l
   });
 
   assert.match(markup, /Calling 4 tools…/);
-  assert.equal((markup.match(/rounded-full border border-surface-0/g) ?? []).length, 3);
+  assert.equal((markup.match(/agent-step-badge/g) ?? []).length, 3);
 });
 
 test("a regenerated reply doesn't count the sends its earlier turn made", async (t) => {

@@ -71,7 +71,7 @@ const MOCKS = {
   "/notes/AssistantNoteUndoListener": `export default function Listener() { return null; }`,
 };
 
-async function mountWindow(t) {
+async function mountWindow(t, { platform } = {}) {
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
   // Ends the turn's waits (and their timers) while the DOM still exists. The
@@ -111,6 +111,7 @@ async function mountWindow(t) {
     onAgentWindowDismiss: on("dismiss"),
     onCancelHotkeyPressed: on("cancel"),
     connectorCancel: async () => ({ cancelled: true }),
+    ...(platform ? { getPlatform: () => platform } : {}),
   };
   // Frames as plain timers: the window fades through two of them around each resize.
   globalThis.requestAnimationFrame = (callback) => setTimeout(() => callback(Date.now()), 0);
@@ -567,6 +568,17 @@ test("the modal's glow is full on an empty chat, faint while speaking or working
   await React.act(async () => globalThis.__voice.set("recording"));
   assert.equal(glow(), "soft", "speaking a follow-up in the chat");
 });
+
+for (const [platform, blurs] of [
+  ["darwin", true],
+  ["win32", false],
+  ["linux", false],
+]) {
+  test(`the window ${blurs ? "blurs" : "doesn't blur"} behind its translucent surfaces on ${platform}`, async (t) => {
+    const view = await mountWindow(t, { platform });
+    assert.equal(view.host.querySelector(".agent-window").hasAttribute("data-blur"), blurs);
+  });
+}
 
 test("a fork with nothing of its own yet shows its chip, not the new-chat prompt", async (t) => {
   const view = await mountWindow(t);

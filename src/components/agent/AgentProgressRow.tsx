@@ -118,7 +118,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
         {executing.slice(0, MAX_GROUPED_ICONS).map((step) => (
           <span
             key={step.id}
-            className="flex size-[18px] items-center justify-center rounded-full border border-surface-0 bg-surface-2"
+            className="agent-step-badge flex size-[18px] items-center justify-center rounded-full border border-transparent bg-surface-2 bg-clip-padding"
           >
             <ToolMark name={step.name} size={11} />
           </span>

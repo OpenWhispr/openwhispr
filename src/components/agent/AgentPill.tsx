@@ -51,7 +51,7 @@ export function AgentPill({
     <div
       className={cn(
         "flex h-10 max-w-full items-center rounded-full border border-border ps-2.5 pe-1.25 text-muted-foreground shadow-[var(--shadow-card)]",
-        inModal ? "bg-surface-1 dark:bg-surface-2" : "bg-surface-0",
+        inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0",
         className
       )}
     >

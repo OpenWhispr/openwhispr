@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
+import { blurBehindAgentSurfaces } from "../ui/overlayBlur";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import AssistantNoteUndoListener from "../notes/AssistantNoteUndoListener";
 import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
@@ -774,7 +775,7 @@ export default function AgentWindow() {
             <div className="pb-2">{pendingContext(true)}</div>
           ) : null
         }
-        className={inModal ? "min-h-21" : "h-[145px] w-[510px]"}
+        className={inModal ? "min-h-21" : "agent-panel h-[145px] w-[510px]"}
       />
     );
   };
@@ -794,7 +795,7 @@ export default function AgentWindow() {
   ) : null;
 
   return (
-    <div className="agent-window">
+    <div className="agent-window" data-blur={blurBehindAgentSurfaces || undefined}>
       <div
         className={cn(
           "agent-window-content flex h-full w-full flex-col items-center justify-end",
@@ -863,7 +864,7 @@ export default function AgentWindow() {
               onPointerMove={(event) => {
                 if (event.movementX || event.movementY) nudge.cancel();
               }}
-              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 bg-surface-1 shadow-[var(--shadow-card)] *:my-0"
+              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] *:my-0"
             >
               <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />
             </div>

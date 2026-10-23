@@ -310,7 +310,7 @@ function SelectionToolbar({
       aria-label={t("agentWindow.selectionToolbar")}
       // Keeps the selection while a button is pressed.
       onMouseDown={(event) => event.preventDefault()}
-      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-surface-1 shadow-[var(--shadow-card)]"
+      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-popover shadow-[var(--shadow-card)]"
       style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
       <button type="button" onClick={onFollowUp} className={item}>

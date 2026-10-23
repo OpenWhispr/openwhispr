@@ -114,7 +114,7 @@ export function AgentModal({
 }: AgentModalProps) {
   const { t } = useTranslation();
   return (
-    <div className="agent-modal relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
+    <div className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
       <div
         data-glow={glow}
         className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"

@@ -21,27 +21,83 @@
   --agent-glow-faint: 0.16;
 }
 
-/* The assistant floats over any desktop, so in dark mode its surfaces are a
-   step deeper than the app's charcoal and neutral, with the brand blue (the
-   glass gradient's midpoint, as in light mode). Light mode keeps the app's
-   palette. The second selector reaches menus that portal out of the window's
-   tree (the chat switcher); the agent window is its own page. */
+/* The assistant floats over any desktop, so in dark mode its surfaces (set
+   below) are a step deeper than the app's charcoal and neutral, with the brand
+   blue (the glass gradient's midpoint, as in light mode). Light mode keeps the
+   app's palette. The second selector reaches menus that portal out of the
+   window's tree (the chat switcher); the agent window is its own page. */
 .dark .agent-window,
 .dark:has(.agent-window) {
   --agent-glow-full: 1;
   --agent-glow-faint: 0.4;
   --color-primary: #4577e9;
   --color-ring: #4577e9;
-  --color-surface-0: oklch(0.17 0 0);
-  --color-surface-1: oklch(0.218 0 0);
-  --color-surface-2: oklch(0.269 0 0);
-  --color-surface-3: oklch(0.29 0 0);
-  --color-surface-raised: oklch(0.31 0 0);
   --color-border: oklch(0.31 0 0);
-  --color-popover: var(--color-surface-1);
-  --color-muted: var(--color-surface-2);
   /* Within the window's 8px margin: a larger shadow is cut off at its edge. */
   --shadow-modal: 0 2px 8px -2px oklch(0 0 0 / 0.4);
+}
+
+/* Translucent surfaces: the desktop shows through the window's own panels
+   (.agent-panel: the modal, the pill, the composer above it), and each panel
+   through the layers on it (a card, a bubble, the modal's composer). A menu,
+   the selection toolbar and a toast float over the chat, so they let less of
+   it through, a little more where it is blurred. Set on the root, which
+   portals and toasts inherit from. */
+:root:has(.agent-window) {
+  --agent-surface-alpha: 0.9;
+  --agent-float-alpha: 0.95;
+}
+
+:root:has(.agent-window[data-blur]) {
+  --agent-float-alpha: 0.85;
+}
+
+.agent-panel > * {
+  --agent-surface-alpha: 0.78;
+}
+
+:root:has(.agent-window),
+.agent-panel > * {
+  --color-surface-0: rgb(255 255 255 / var(--agent-surface-alpha));
+  --color-surface-1: rgb(250 250 250 / var(--agent-surface-alpha));
+  --color-surface-2: rgb(255 255 255 / var(--agent-surface-alpha));
+  --color-surface-3: rgb(245 245 245 / var(--agent-surface-alpha));
+  --color-surface-raised: rgb(240 240 240 / var(--agent-surface-alpha));
+  --color-muted: rgb(245 245 245 / var(--agent-surface-alpha));
+  --color-popover: rgb(255 255 255 / var(--agent-float-alpha));
+}
+
+.dark:has(.agent-window),
+.dark .agent-panel > * {
+  --color-surface-0: oklch(0.17 0 0 / var(--agent-surface-alpha));
+  --color-surface-1: oklch(0.218 0 0 / var(--agent-surface-alpha));
+  --color-surface-2: oklch(0.269 0 0 / var(--agent-surface-alpha));
+  --color-surface-3: oklch(0.29 0 0 / var(--agent-surface-alpha));
+  --color-surface-raised: oklch(0.31 0 0 / var(--agent-surface-alpha));
+  --color-muted: oklch(0.269 0 0 / var(--agent-surface-alpha));
+  --color-popover: oklch(0.218 0 0 / var(--agent-float-alpha));
+}
+
+:root:has(.agent-window) .toast-surface {
+  background: oklch(0.15 0.006 260 / var(--agent-float-alpha));
+}
+
+/* macOS only (blurBehindAgentSurfaces): a menu, the selection toolbar or a
+   toast blurs the chat under it. A backdrop filter reads only the page, never
+   the desktop, and it draws a translucent fill under it a second time, so the
+   panels and the layers on them take none and stay as see-through. */
+:root:has(.agent-window[data-blur]) :is(.bg-popover, .toast-surface) {
+  backdrop-filter: blur(24px);
+}
+
+/* Step logos overlap in a row (AgentProgressRow): each is cut where the next
+   one sits, so the gap between them shows the panel, not a painted ring. */
+.agent-step-badge:not(:last-child) {
+  mask-image: radial-gradient(circle at calc(100% + 5px) 50%, transparent 9px, #000 9.5px);
+}
+
+.agent-step-badge:not(:last-child):dir(rtl) {
+  mask-image: radial-gradient(circle at -5px 50%, transparent 9px, #000 9.5px);
 }
 
 /* Transparent while the native window resizes (a stale frame then shows
