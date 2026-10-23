@@ -154,6 +154,9 @@ const SYNC_CURSOR_KEYS = [
 const SYNC_CURSOR_ACCOUNT_KEY = "lastSyncedAt.accountId";
 // Prefix of each signed-out account's saved cursors, restored when it returns.
 const SYNC_CURSOR_SAVED_PREFIX = "lastSyncedAt.byAccount.";
+// The account that claimed cursors stamped before owners were recorded, until
+// backfillUnownedCursors() has checked them.
+const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -439,10 +442,19 @@ export class SyncService {
   // skip every row this account changed before them. Each account gets its
   // own cursors back when it returns: a cursor-less pull lists live rows only
   // and would miss deletes made meanwhile. Cursors stamped before the
-  // account was recorded stay with whoever syncs first.
-  private claimSyncCursors(accountId: string): void {
+  // account was recorded stay with whoever syncs first, which then checks
+  // them once in backfillUnownedCursors(). Callers hold
+  // SYNC_ALL_LOCK, and a request that waited out an account switch claims
+  // nothing: it would stash the new account's cursors under the old one.
+  private claimSyncCursors(accountId: string, authGeneration: number): boolean {
+    if (
+      getValidatedAuthGeneration() !== authGeneration ||
+      getAuthRequestContextSnapshot().sessionUserId !== accountId
+    ) {
+      return false;
+    }
     const owner = localStorage.getItem(SYNC_CURSOR_ACCOUNT_KEY);
-    if (owner === accountId) return;
+    if (owner === accountId) return true;
     if (owner !== null) {
       const ownerCursors: Record<string, string> = {};
       for (const key of SYNC_CURSOR_KEYS) {
@@ -463,8 +475,24 @@ export class SyncService {
         else localStorage.removeItem(key);
       }
       localStorage.removeItem(savedKey);
+    } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
+      localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
     }
     localStorage.setItem(SYNC_CURSOR_ACCOUNT_KEY, accountId);
+    return true;
+  }
+
+  // Unowned cursors may be another account's when another account has used
+  // this device. One snapshot pull of the account-scoped rows brings back
+  // whatever they would skip; snapshots leave the cursors alone, so deletes
+  // keep arriving through them.
+  private async backfillUnownedCursors(accountId: string): Promise<void> {
+    if (localStorage.getItem(UNOWNED_CURSORS_ACCOUNT_KEY) !== accountId) return;
+    if (await window.electronAPI.hasOtherAccountRows?.()) {
+      if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+      await this.pullConversations(true);
+    }
+    localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and
@@ -560,11 +588,12 @@ export class SyncService {
       // reads the same local DB and cloud state, so it covers this request.
       // Manual passes wait so a user action is never silently dropped.
       await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
-        if (!lock) return;
-        this.claimSyncCursors(accountId);
+        if (!lock || !this.claimSyncCursors(accountId, authGeneration)) return;
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!hasValidatedAuthContext()) return;
         if (full) {
+          await this.backfillUnownedCursors(accountId);
+          if (!hasValidatedAuthContext()) return;
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes();
@@ -682,20 +711,28 @@ export class SyncService {
       return;
     }
     // Edits sync right away, possibly before this account's first syncAll()
-    // claimed the shared cursors.
+    // claimed the shared cursors, so they claim them under the same lock.
     const accountId = getAuthRequestContextSnapshot().sessionUserId;
-    if (!accountId) return;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return;
     this.syncing = true;
     try {
-      this.claimSyncCursors(accountId);
-      do {
-        this.dictionaryDirty = false;
-        await this.syncDictionary();
-      } while (this.dictionaryDirty);
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        do {
+          this.dictionaryDirty = false;
+          await this.syncDictionary();
+        } while (this.dictionaryDirty);
+      });
     } catch (err) {
       console.error("Dictionary sync failed:", err);
     } finally {
       this.syncing = false;
+    }
+    // A pass requested while this edit waited for the lock was deferred to it.
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
     }
   }
 
@@ -705,21 +742,26 @@ export class SyncService {
       this.snippetsDirty = true;
       return;
     }
-    // Edits sync right away, possibly before this account's first syncAll()
-    // claimed the shared cursors.
     const accountId = getAuthRequestContextSnapshot().sessionUserId;
-    if (!accountId) return;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return;
     this.syncing = true;
     try {
-      this.claimSyncCursors(accountId);
-      do {
-        this.snippetsDirty = false;
-        await this.syncSnippets();
-      } while (this.snippetsDirty);
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        do {
+          this.snippetsDirty = false;
+          await this.syncSnippets();
+        } while (this.snippetsDirty);
+      });
     } catch (err) {
       console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
+    }
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
     }
   }
 

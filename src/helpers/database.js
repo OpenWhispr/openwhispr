@@ -285,6 +285,21 @@ class DatabaseManager {
     return space?.kind === "team" ? null : this.activeAccountId;
   }
 
+  // Another local account has used this device if it owns any note or folder.
+  hasOtherAccountRows() {
+    if (!this.activeAccountId) return false;
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM notes WHERE account_id IS NOT NULL AND account_id != ?
+           UNION ALL
+           SELECT 1 FROM folders WHERE account_id IS NOT NULL AND account_id != ?
+           LIMIT 1`
+        )
+        .get(this.activeAccountId, this.activeAccountId)
+    );
+  }
+
   _getFolderInAccountScope(id) {
     const accountScope = this._accountScopeCondition("folders");
     return (

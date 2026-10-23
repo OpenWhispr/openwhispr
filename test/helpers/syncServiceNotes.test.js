@@ -629,6 +629,150 @@ test("a dictionary or snippet edit before the new account's first pass skips the
   }
 });
 
+test("a pass queued before an account switch leaves the new account's cursors alone", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  await accountA.syncAll(true);
+  const cursorA = localStorageStub.getItem("lastSyncedAt.notes");
+
+  const release = await acquireLock(SYNC_ALL_LOCK);
+  const stalePass = accountA.syncAll(true);
+  // Account B signs in and another window claims the cursors for it while
+  // A's pass still waits for the lock.
+  await signInAs(t, db, createFakeCloud(), "account-b");
+  localStorageStub.setItem(
+    "lastSyncedAt.byAccount.account-a",
+    JSON.stringify({ "lastSyncedAt.notes": cursorA })
+  );
+  localStorageStub.setItem("lastSyncedAt.accountId", "account-b");
+  localStorageStub.setItem("lastSyncedAt.notes", "2026-03-01T00:00:00.000Z");
+  release();
+  await stalePass;
+
+  assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-b");
+  assert.equal(localStorageStub.getItem("lastSyncedAt.notes"), "2026-03-01T00:00:00.000Z");
+  assert.equal(localStorageStub.getItem("lastSyncedAt.byAccount.account-b"), null);
+  assert.deepEqual(JSON.parse(localStorageStub.getItem("lastSyncedAt.byAccount.account-a")), {
+    "lastSyncedAt.notes": cursorA,
+  });
+});
+
+test("a dictionary or snippet edit claims the cursors only once another window's pass ends", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  await accountA.syncAll(true);
+  await accountA.purgeTeamSpacesForSignOut();
+  const accountB = await signInAs(t, db, createFakeCloud(), "account-b");
+
+  for (const syncNow of ["syncDictionaryNow", "syncSnippetsNow"]) {
+    localStorageStub.setItem("lastSyncedAt.accountId", "account-a");
+    const release = await acquireLock(SYNC_ALL_LOCK);
+    const edit = accountB[syncNow]();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      localStorageStub.getItem("lastSyncedAt.accountId"),
+      "account-a",
+      `${syncNow} must not claim while the lock is held`
+    );
+    release();
+    await edit;
+    assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-b", syncNow);
+  }
+});
+
+// Builds before cursors recorded their account left them unowned.
+function seedUnownedCursors() {
+  localStorageStub.setItem("lastSyncedAt.folders", "2026-06-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.notes", "2026-06-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.conversations", "2026-06-01T00:00:00.000Z");
+}
+
+test("unowned cursors on a device another account used get one snapshot pull", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  db.setActiveAccountId("account-a");
+  db.saveNote("A's draft", "left by account A", "personal");
+  seedUnownedCursors();
+  const cloudB = createFakeCloud();
+  cloudB.seedNote({
+    client_note_id: "b-note",
+    title: "B's note",
+    content: "older than the inherited cursor",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+  });
+
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncAll(true);
+  assert.deepEqual(
+    db.getNotes(null, 100, null).map((note) => note.title),
+    ["B's note"]
+  );
+  assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-b");
+
+  await accountB.syncAll(true);
+  const snapshotPulls = cloudB
+    .logFor("/api/notes/list")
+    .filter((entry) => queryParam(entry.path, "since") === null);
+  assert.equal(snapshotPulls.length, 1, "the snapshot runs once");
+});
+
+test("unowned cursors on a device only one account used download nothing extra", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  db.setActiveAccountId("account-a");
+  db.saveNote("A's note", "synced before the upgrade", "personal");
+  seedUnownedCursors();
+  const cloud = createFakeCloud();
+  const accountA = await signInAs(t, db, cloud, "account-a");
+  await accountA.syncAll(true);
+
+  // Folders are left out: pushing the default folders lists them without a cursor.
+  for (const path of ["/api/notes/list", "/api/conversations/list"]) {
+    assert.deepEqual(
+      cloud.logFor(path).map((entry) => queryParam(entry.path, "since")),
+      ["2026-06-01T00:00:00.000Z"],
+      `${path} pulls once, from the inherited cursor`
+    );
+  }
+});
+
+test("a pass requested during a dictionary edit runs once the edit finishes", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  resetBrowserGlobals();
+  installBrowserGlobals();
+  enableSync();
+
+  const cloud = createFakeCloud();
+  const service = await signInAs(t, db, cloud, "account-a");
+  const release = await acquireLock(SYNC_ALL_LOCK);
+  const edit = service.syncDictionaryNow();
+  await service.syncAll();
+  assert.equal(cloud.logFor("/api/notes/list").length, 0, "the pass waits behind the edit");
+  release();
+  await edit;
+  assert.equal(cloud.logFor("/api/notes/list").length, 1);
+});
+
 test("canSync gating: sign-out blocks every call; plan and backup gates protect personal notes", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

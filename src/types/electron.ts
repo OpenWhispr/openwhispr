@@ -1794,6 +1794,7 @@ declare global {
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      hasOtherAccountRows?: () => Promise<boolean>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number
