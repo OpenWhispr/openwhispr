@@ -257,3 +257,19 @@ test("em dashes that carry meaning survive the Tone & Style strip", async () => 
     assert.equal(pastes[0].text, expected, input);
   }
 });
+
+test("code keeps its em dashes when the target takes plain text", async () => {
+  const { deliverAssistantResponse } = await deliveryModule;
+  const toneDelivery = { ...PASTE_DELIVERY, plainText: true, appCategory: "other" };
+  const cases = [
+    ["run `a—b` now", "run a—b now"],
+    ["```\nx—y\n```", "x—y"],
+    ["`npm test` — then", "npm test, then"],
+  ];
+
+  for (const [input, expected] of cases) {
+    const { dependencies, pastes } = createDeliveryHarness(true);
+    await deliverAssistantResponse(toneDelivery, input, dependencies);
+    assert.equal(pastes[0].text, expected, input);
+  }
+});
