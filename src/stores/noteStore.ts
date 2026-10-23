@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
-import { resolveRendererCloudNoteCreateBatch } from "../services/noteCreateAck";
+import {
+  recordNoteCreateAttempts,
+  resolveRendererCloudNoteCreateBatch,
+} from "../services/noteCreateAck";
 import {
   createClearedAccountNoteState,
   invalidateKeyedLoadGenerations,
@@ -929,8 +932,11 @@ export async function startMigration(): Promise<void> {
     if (gen !== migrationGeneration) return;
     const chunk = unsynced.slice(i, i + CHUNK_SIZE);
     try {
+      const recorded = await recordNoteCreateAttempts(chunk.map((n) => n.client_note_id));
+      const sendable = chunk.filter((n) => recorded.has(n.client_note_id));
+      if (sendable.length === 0) continue;
       const { created } = await NotesService.batchCreate(
-        chunk.map((n) => ({
+        sendable.map((n) => ({
           client_note_id: n.client_note_id,
           title: n.title,
           content: n.content,
@@ -949,7 +955,7 @@ export async function startMigration(): Promise<void> {
       // Still run every response through the atomic identity/snapshot guard so
       // a purged fork is untouched and its proven cloud orphan is cleaned up.
       await resolveRendererCloudNoteCreateBatch(
-        chunk,
+        sendable,
         created,
         (cloudId) => NotesService.delete(cloudId),
         // Migration POSTs intentionally omit transcript/diarization fields,

@@ -68,6 +68,7 @@ function createDatabaseManager() {
       note_id INTEGER,
       folder_id INTEGER,
       cloud_id TEXT,
+      cloud_create_attempted INTEGER NOT NULL DEFAULT 0,
       sync_status TEXT NOT NULL DEFAULT 'synced',
       deleted_at TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
