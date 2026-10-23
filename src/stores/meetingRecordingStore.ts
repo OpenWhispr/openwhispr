@@ -177,6 +177,7 @@ const getMeetingTranscriptionOptions = () => {
     cortiEnvironment: state.cortiEnvironment,
     cortiTenant: state.cortiTenant,
     keyterms: (state.customDictionary ?? []).filter(Boolean),
+    customBaseUrl: resolved.cloudTranscriptionBaseUrl,
   });
 };
 

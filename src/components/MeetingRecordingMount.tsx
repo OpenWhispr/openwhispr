@@ -27,6 +27,7 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   signInRequired: "notes.meeting.signInRequired",
   // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
   signInExpired: "notes.meeting.signInExpired",
+  customEndpointNotConfigured: "notes.meeting.customEndpointNotConfigured",
 };
 
 export default function MeetingRecordingMount(): null {
