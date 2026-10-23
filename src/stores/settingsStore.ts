@@ -3634,11 +3634,14 @@ export async function initializeSettings(): Promise<void> {
         const currentDictionary = useSettingsStore.getState().customDictionary;
         const dbWords = await window.electronAPI.getDictionary();
         const decision = chooseDictionaryStartupAction(dbWords, currentDictionary);
-        if (decision.action === "push-local-to-db") {
-          await window.electronAPI.setDictionary(decision.words);
-        } else if (decision.action === "pull-db-to-local") {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(decision.words));
-          useSettingsStore.setState({ customDictionary: decision.words });
+        // A cache SQLite can't match may be another account's list, so main
+        // writes it only into a database that has never held a dictionary.
+        const seeded =
+          decision.action === "push-local-to-db" &&
+          (await window.electronAPI.seedDictionary?.(decision.words))?.seeded;
+        if (decision.action !== "noop" && !seeded) {
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(dbWords));
+          useSettingsStore.setState({ customDictionary: dbWords });
         }
         dictionarySyncSucceeded = true;
       }
@@ -3656,7 +3659,8 @@ export async function initializeSettings(): Promise<void> {
         const currentSnippets = useSettingsStore.getState().snippets;
         const dbSnippets = await window.electronAPI.getSnippets();
         if (dbSnippets.length === 0 && currentSnippets.length > 0) {
-          await window.electronAPI.setSnippets?.(currentSnippets);
+          // As with the dictionary: only into a database that has never held any.
+          await window.electronAPI.seedSnippets?.(currentSnippets);
           const normalizedSnippets = await window.electronAPI.getSnippets();
           if (isBrowser) localStorage.setItem("snippets", JSON.stringify(normalizedSnippets));
           useSettingsStore.setState({ snippets: normalizedSnippets });

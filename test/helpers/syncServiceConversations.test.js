@@ -33,7 +33,9 @@ async function setup(t) {
   const cloud = createFakeCloud();
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
-  await establishValidatedAuth();
+  // As useAuth leaves it: main scoped to the account the renderer signed in as.
+  db.setActiveAccountId("user-harness");
+  await establishValidatedAuth("user-harness");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   return { db, cloud, api, service };

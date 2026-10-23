@@ -1,8 +1,8 @@
 // In-memory stand-in for the cloud API behind window.electronAPI.cloudApiRequest.
 // Notes and folders are modelled with the hardened server's real write rules,
-// conversations only on the read side, dictionary words on the read side plus
-// delete; the other entity types exist only so a full syncAll() pass can
-// complete.
+// conversations only on the read side, dictionary words and snippets on the
+// read side plus create, update and delete; the other entity types exist only
+// so a full syncAll() pass can complete.
 //
 // Each hardening rule sits behind its own flag so a test can flip the server
 // back to the legacy behaviour and prove the client still does not lose data:
@@ -84,6 +84,10 @@ const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: 
 
 const DICTIONARY_DEFAULTS = { word: "", source: "manual" };
 
+const SNIPPET_FIELDS = ["trigger", "replacement"];
+
+const SNIPPET_DEFAULTS = { trigger: "", replacement: "" };
+
 function createFakeCloud(config = {}) {
   const cfg = {
     materialPatchGate: true,
@@ -97,6 +101,7 @@ function createFakeCloud(config = {}) {
   const folders = new Map();
   const conversations = new Map();
   const dictionary = new Map();
+  const snippets = new Map();
   const log = [];
   const failures = [];
   let seq = 0;
@@ -232,6 +237,13 @@ function createFakeCloud(config = {}) {
     clientKey: "client_dict_id",
     prefix: "dict",
   };
+  const snippetCollection = {
+    store: snippets,
+    fields: SNIPPET_FIELDS,
+    defaults: SNIPPET_DEFAULTS,
+    clientKey: "client_snippet_id",
+    prefix: "snip",
+  };
 
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
@@ -279,7 +291,7 @@ function createFakeCloud(config = {}) {
   // `cursor` continuation walk live rows by (created_at, id); `since` streams
   // every row, tombstones included, by (updated_at, id). Either timestamp
   // without its id half is an inclusive bound, as on the server.
-  function dictionaryPage(query) {
+  function dictionaryPage(query, collection = dictionaryCollection) {
     const limitRaw = Number(query.get("limit"));
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 200;
     const since = query.get("since");
@@ -293,7 +305,7 @@ function createFakeCloud(config = {}) {
     const orderKey = since ? "updated_at" : "created_at";
     const bound = since ?? cursor;
     const boundId = since ? sinceId : cursorId;
-    let rows = [...dictionary.values()];
+    let rows = [...collection.store.values()];
     if (!since) rows = rows.filter((r) => !r.deleted_at);
     if (bound) {
       const at = normalizeTimestamp(bound);
@@ -426,12 +438,27 @@ function createFakeCloud(config = {}) {
       case "DELETE /api/dictionary/delete":
         tombstone(dictionaryCollection, body?.id);
         return {};
-      case "POST /api/dictionary/batch-create":
-        return { created: [] };
+      case "PATCH /api/dictionary/update": {
+        const { id, ...updates } = body ?? {};
+        return applyWrite(dictionaryCollection, requireLive(dictionaryCollection, id), updates);
+      }
+      case "POST /api/dictionary/batch-create": {
+        const inputs = Array.isArray(body?.entries) ? body.entries : [];
+        return { created: inputs.map((input) => upsertRow(dictionaryCollection, input)) };
+      }
       case "GET /api/snippets/list":
-        return { entries: [], hasMore: false };
-      case "POST /api/snippets/batch-create":
-        return { created: [] };
+        return dictionaryPage(query, snippetCollection);
+      case "PATCH /api/snippets/update": {
+        const { id, ...updates } = body ?? {};
+        return applyWrite(snippetCollection, requireLive(snippetCollection, id), updates);
+      }
+      case "DELETE /api/snippets/delete":
+        tombstone(snippetCollection, body?.id);
+        return {};
+      case "POST /api/snippets/batch-create": {
+        const inputs = Array.isArray(body?.entries) ? body.entries : [];
+        return { created: inputs.map((input) => upsertRow(snippetCollection, input)) };
+      }
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
     }
@@ -506,6 +533,9 @@ function createFakeCloud(config = {}) {
       return structuredClone(row);
     },
     seedDictionaryEntry: (input) => structuredClone(insertRow(dictionaryCollection, input)),
+    seedSnippet: (input) => structuredClone(insertRow(snippetCollection, input)),
+    dictionary: () => [...dictionary.values()].map((row) => structuredClone(row)),
+    snippets: () => [...snippets.values()].map((row) => structuredClone(row)),
     notes: () => [...notes.values()].map((row) => structuredClone(row)),
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),

@@ -4,6 +4,13 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { parseDbTimestamp } = require("./dbTimestamp");
 
+// "OpenWhispr-...-{id}.webm", or legacy "{id}.webm".
+function transcriptionIdFromFile(file) {
+  const basename = path.basename(file, ".webm");
+  const lastDash = basename.lastIndexOf("-");
+  return lastDash !== -1 ? basename.slice(lastDash + 1) : basename;
+}
+
 class AudioStorageManager {
   constructor() {
     this.audioDir = path.join(app.getPath("userData"), "audio");
@@ -102,6 +109,32 @@ class AudioStorageManager {
     }
   }
 
+  // Deletes the recordings of many transcriptions with one directory read, so
+  // clearing a long history doesn't rescan the folder once per row.
+  deleteAudioForTranscriptions(transcriptionIds) {
+    const ids = new Set(transcriptionIds.map(String));
+    if (ids.size === 0) return { deleted: 0 };
+    let deleted = 0;
+    try {
+      for (const file of fs.readdirSync(this.audioDir)) {
+        if (!file.endsWith(".webm") || !ids.has(transcriptionIdFromFile(file))) continue;
+        try {
+          fs.unlinkSync(path.join(this.audioDir, file));
+          deleted++;
+        } catch (error) {
+          debugLogger.error(
+            "Failed to delete audio file",
+            { file, error: error.message },
+            "audio-storage"
+          );
+        }
+      }
+    } catch (error) {
+      debugLogger.error("Failed to delete audio", { error: error.message }, "audio-storage");
+    }
+    return { deleted };
+  }
+
   cleanupExpiredAudio(retentionDays, databaseManager) {
     try {
       const cutoffMs = Date.now() - retentionDays * 86400000;
@@ -115,11 +148,7 @@ class AudioStorageManager {
           const stats = fs.statSync(filePath);
           if (stats.mtimeMs < cutoffMs) {
             fs.unlinkSync(filePath);
-            // Extract ID from "OpenWhispr-...-{id}.webm" or legacy "{id}.webm"
-            const basename = path.basename(file, ".webm");
-            const lastDash = basename.lastIndexOf("-");
-            const id = lastDash !== -1 ? basename.slice(lastDash + 1) : basename;
-            expiredIds.push(id);
+            expiredIds.push(transcriptionIdFromFile(file));
           } else {
             kept++;
           }
