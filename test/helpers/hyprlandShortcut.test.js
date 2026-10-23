@@ -779,3 +779,16 @@ test("punctuation accelerators validate and convert to XKB key names", () => {
     "CTRL, plus"
   );
 });
+
+// Stock xkeyboard-config gives F13-F24 XF86 keysyms (F13 sends XF86Tools) and
+// no F13-F24 keysym, so a keysym bind on them never fires; bind the keycode.
+test("extended function keys bind by keycode", () => {
+  const HyprlandShortcutManager = loadManager(() => "ok\n");
+  const f13 = HyprlandShortcutManager.convertToHyprlandFormat("F13");
+  assert.equal(f13.bindKey, ", code:191");
+  assert.equal(f13.luaKeys, "code:191");
+  const ctrlF24 = HyprlandShortcutManager.convertToHyprlandFormat("Control+F24");
+  assert.equal(ctrlF24.bindKey, "CTRL, code:202");
+  assert.equal(ctrlF24.luaKeys, "CTRL + code:202");
+  assert.equal(HyprlandShortcutManager.convertToHyprlandFormat("F12").bindKey, ", F12");
+});

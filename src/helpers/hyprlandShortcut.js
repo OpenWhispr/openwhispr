@@ -404,6 +404,12 @@ class HyprlandShortcutManager {
       if (mappedKey) {
         key = mappedKey;
       }
+      // Stock xkeyboard-config gives F13-F24 XF86 keysyms (F13 sends XF86Tools)
+      // and no F13-F24 keysym, so bind their xkb keycodes (evdev + 8) instead.
+      const extended = /^F(1[3-9]|2[0-4])$/i.exec(key);
+      if (extended) {
+        key = `code:${Number(extended[1]) + 178}`;
+      }
     }
 
     // Deduplicate modifiers (e.g. if "Control+Ctrl" was somehow passed)
@@ -412,7 +418,7 @@ class HyprlandShortcutManager {
     return {
       mods: uniqueMods.join(" "),
       key: key,
-      luaKeys: [...uniqueMods, key].filter(Boolean).join(" + ").toUpperCase(),
+      luaKeys: [...uniqueMods, key.startsWith("code:") ? key : key.toUpperCase()].join(" + "),
       // Full bind key string for hyprctl keyword bind/unbind
       bindKey: uniqueMods.length > 0 ? `${uniqueMods.join(" ")}, ${key}` : `, ${key}`,
     };
