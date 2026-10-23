@@ -18,7 +18,9 @@ export type ToolHistory = "parts" | "text" | "none";
 
 // History is the newest whole messages within both limits. Tool messages
 // count too: the cloud's Gemma provider takes at most 64 messages a request,
-// the turn's own tool steps included.
+// the turn's own tool steps included. Each call adds two, so a full history
+// leaves room for about a dozen calls; a turn that makes more goes past it,
+// and the API answers the rest of that turn without Gemma.
 const HISTORY_MAX_ENTRIES = 40;
 const HISTORY_MAX_TOKENS = 16_000;
 const TRACE_ARG_MAX_CHARS = 80;
