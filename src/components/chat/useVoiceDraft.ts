@@ -24,6 +24,7 @@ interface UseVoiceDraftOptions {
   onEmpty?: () => void;
   /** The microphone didn't open; without it, that is reported through onError. */
   onMicError?: (message: string) => void;
+  onCaptureEnd?: () => void;
 }
 
 // The microphone picked in Settings, with dictation's constraints; the default
@@ -53,6 +54,7 @@ export function useVoiceDraft({
   onError,
   onEmpty,
   onMicError,
+  onCaptureEnd,
 }: UseVoiceDraftOptions) {
   // The settings copy, not useAuth(): a sandboxed window (the agent window)
   // can't resolve a session, and would send Cloud users down the BYOK route.
@@ -135,6 +137,8 @@ export function useVoiceDraft({
   onEmptyRef.current = onEmpty;
   const onMicErrorRef = useRef(onMicError);
   onMicErrorRef.current = onMicError;
+  const onCaptureEndRef = useRef(onCaptureEnd);
+  onCaptureEndRef.current = onCaptureEnd;
 
   useEffect(() => {
     if (status !== "recording") return;
@@ -156,6 +160,7 @@ export function useVoiceDraft({
     analyserRef.current = null;
     contextRef.current?.close().catch(() => {});
     contextRef.current = null;
+    onCaptureEndRef.current?.();
   }, []);
 
   const finishRecording = useCallback(async () => {

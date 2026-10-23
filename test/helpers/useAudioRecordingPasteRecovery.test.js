@@ -46,7 +46,7 @@ async function mount(t) {
         onStopDictation: noopDispose,
         hideDictationPreview: async () => hidden.push(true),
         completeDictationPreview: async () => {},
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
         openAccessibilitySettings: async () => {
           settingsCalls += 1;
           return { success: true };

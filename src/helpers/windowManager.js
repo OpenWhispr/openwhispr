@@ -109,6 +109,7 @@ class WindowManager {
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
     this._dictationLifecycleState = DICTATION_LIFECYCLE.IDLE;
+    this._dictationAttempt = null;
     this._pendingMeetingNoteNavigation = null;
     this._pendingNoteNavigation = null;
     this._pendingSettingsSection = null;
@@ -167,6 +168,15 @@ class WindowManager {
       }
     );
 
+    const dictationContents = this.mainWindow.webContents;
+    const releaseDictation = () => {
+      if (this.mainWindow?.webContents === dictationContents) {
+        this.setDictationLifecycleState(DICTATION_LIFECYCLE.IDLE);
+      }
+    };
+    dictationContents.on("did-navigate", releaseDictation);
+    dictationContents.on("render-process-gone", releaseDictation);
+    dictationContents.on("destroyed", releaseDictation);
     this.mainWindow.webContents.on("did-finish-load", () => {
       // A reload has not resolved its route yet. AppRouter releases this gate
       // after it renders the normal app; fresh onboarding keeps it active.
@@ -1004,14 +1014,23 @@ class WindowManager {
     }
   }
 
-  setDictationLifecycleState(state) {
+  setDictationLifecycleState(state, attempt) {
     const nextState = normalizeDictationLifecycle(state);
-    if (nextState === this._dictationLifecycleState) return;
+    if (attempt !== undefined) {
+      if (nextState === DICTATION_LIFECYCLE.PREPARING && !this._dictationAttempt) {
+        if (this.agentWindow?.isRecording()) return false;
+        this._dictationAttempt = attempt;
+      }
+      if (this._dictationAttempt !== attempt) return false;
+    }
+    if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
+    if (nextState === this._dictationLifecycleState) return true;
 
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
     this.onDictationStateChanged?.();
+    return true;
   }
 
   // The tray's listen item is a toggle over this state, like the pill's.

@@ -1608,7 +1608,8 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "agent-window-voice-state",
-      (event, state) => this.windowManager.agentWindow?.setVoiceState(event, state) ?? false
+      (event, state, attempt) =>
+        this.windowManager.agentWindow?.setVoiceState(event, state, attempt) ?? false
     );
     // The dictation window's ways into the assistant: its pill menu's Ask
     // assistant, and a conversational wake-word command it transcribed.
@@ -2117,18 +2118,14 @@ class IPCHandlers {
 
     // Hotkey handlers run in main, while AudioManager owns the real lifecycle
     // in the dictation renderer. Only confirmed renderer state may change the
-    // main-process recording gate; raw key presses are merely requests and can
-    // be declined while a transcript is still being finalized.
-    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
+    // main-process recording gate. Preparing reserves it before the renderer
+    // opens the mic; an older attempt cannot release a newer reservation.
+    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt) => {
       const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
+      if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
+        return false;
       }
-      this.windowManager.setDictationLifecycleState(state);
+      return this.windowManager.setDictationLifecycleState(state, attempt);
     });
 
     // Dictionary handlers

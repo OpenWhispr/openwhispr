@@ -40,6 +40,7 @@ class AgentWindowManager {
     this.anchor = null;
     this.displayId = null;
     this.voiceState = "idle";
+    this.voiceAttempt = null;
     this.keyboardFocus = false;
     // Bumped by every hide, so a show still resolving its display can't undo it.
     this.showGeneration = 0;
@@ -149,14 +150,23 @@ class AgentWindowManager {
   }
 
   // False refuses a recording while dictation owns the microphone.
-  setVoiceState(event, state) {
-    if (!isFromWindow(event, this.window) || !VOICE_STATES.has(state)) return false;
+  setVoiceState(event, state, attempt) {
+    if (
+      !isFromWindow(event, this.window) ||
+      !VOICE_STATES.has(state) ||
+      typeof attempt !== "string" ||
+      !attempt
+    )
+      return false;
     if (state === "recording" && this.windowManager.isDictationActive()) return false;
+    if (state === "recording" && !this.voiceAttempt) this.voiceAttempt = attempt;
+    if (this.voiceAttempt !== attempt) return false;
     this._applyVoiceState(state);
     return true;
   }
 
   _applyVoiceState(state) {
+    if (state === "idle") this.voiceAttempt = null;
     if (state === this.voiceState) return;
     const wasRecording = this.isRecording();
     this.voiceState = state;

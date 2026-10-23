@@ -25,6 +25,7 @@ function createFinalizingManager(AudioManager) {
   let providerStopCalls = 0;
   const manager = Object.assign(Object.create(AudioManager.prototype), {
     isRecording: true,
+    preparedMicCapture: { active: false },
     isProcessing: false,
     isStreaming: true,
     streamingStartInProgress: false,

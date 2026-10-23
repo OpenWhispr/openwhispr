@@ -119,12 +119,12 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
-test("dictation lifecycle reports reach main", () => {
-  const { api, sends } = loadPreloadApi();
+test("dictation lifecycle reports reach main", async () => {
+  const { api, invocations } = loadPreloadApi();
 
-  api.dictationLifecycleStateChanged("recording");
+  await api.dictationLifecycleStateChanged("preparing", "take-1");
 
-  assert.deepEqual(sends, [["dictation-lifecycle-state-changed", "recording"]]);
+  assert.deepEqual(invocations, [["dictation-lifecycle-state-changed", "preparing", "take-1"]]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {
@@ -134,7 +134,7 @@ test("the agent window's bridges reach their channels and strip the Electron eve
   api.agentWindowReady();
   await api.agentWindowSetLayout({ layout: "modal", focus: true });
   await api.agentWindowHide();
-  await api.agentWindowSetVoiceState("recording");
+  await api.agentWindowSetVoiceState("recording", "take-1");
   await api.openAgentWindow();
   await api.submitAgentCommand(command);
 
@@ -142,7 +142,7 @@ test("the agent window's bridges reach their channels and strip the Electron eve
   assert.deepEqual(invocations, [
     ["agent-window-set-layout", { layout: "modal", focus: true }],
     ["agent-window-hide"],
-    ["agent-window-voice-state", "recording"],
+    ["agent-window-voice-state", "recording", "take-1"],
     ["open-agent-window"],
     ["agent-window-submit-command", command],
   ]);

@@ -82,7 +82,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentWindowReady: () => ipcRenderer.send("agent-window-ready"),
   agentWindowSetLayout: (request) => ipcRenderer.invoke("agent-window-set-layout", request),
   agentWindowHide: () => ipcRenderer.invoke("agent-window-hide"),
-  agentWindowSetVoiceState: (state) => ipcRenderer.invoke("agent-window-voice-state", state),
+  agentWindowSetVoiceState: (state, attempt) =>
+    ipcRenderer.invoke("agent-window-voice-state", state, attempt),
   openAgentWindow: () => ipcRenderer.invoke("open-agent-window"),
   submitAgentCommand: (command) => ipcRenderer.invoke("agent-window-submit-command", command),
   onAgentWindowHotkey: registerListener(
@@ -139,8 +140,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state) =>
-    ipcRenderer.send("dictation-lifecycle-state-changed", state),
+  dictationLifecycleStateChanged: (state, attempt) =>
+    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>

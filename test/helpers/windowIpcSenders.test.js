@@ -177,11 +177,11 @@ test("only the main renderer can change its window's input region", async () => 
 test("lifecycle reports are accepted only from the dictation renderer", () => {
   const { stub, calls, mainContents } = makeWindowManagerStub();
   installWindowManager(stub);
-  const lifecycleHandler = onHandlers.get("dictation-lifecycle-state-changed");
+  const lifecycleHandler = handlers.get("dictation-lifecycle-state-changed");
 
-  lifecycleHandler({ sender: {} }, "recording");
+  assert.equal(lifecycleHandler({ sender: {} }, "recording", "take-1"), false);
   assert.deepEqual(calls.lifecycle, []);
-  lifecycleHandler({ sender: mainContents }, "recording");
+  lifecycleHandler(frameOf(mainContents), "recording", "take-1");
   assert.deepEqual(calls.lifecycle, ["recording"]);
 });
 

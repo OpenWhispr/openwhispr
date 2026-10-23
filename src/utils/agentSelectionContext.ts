@@ -54,11 +54,14 @@ export function buildAgentRequestText(
 
 /** The text a fork was made from, until its first request has carried it. */
 export function unsentForkContext(
-  forkOrigin: { context: string | null } | null,
+  forkOrigin: { context: string | null; copiedMessageCount: number } | null,
   messages: ReadonlyArray<Pick<Message, "role" | "selectedContext">>
 ): string | null {
   const text = normalizeAgentSelectionContext({ text: forkOrigin?.context ?? undefined })?.text;
-  return text && !messages.some((m) => m.role === "user" && m.selectedContext === text)
+  return text &&
+    !messages
+      .slice(forkOrigin?.copiedMessageCount ?? 0)
+      .some((m) => m.role === "user" && m.selectedContext === text)
     ? text
     : null;
 }

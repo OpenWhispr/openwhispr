@@ -75,6 +75,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const demoKindRef = useRef("dictation");
   const onDemoEventRef = useRef(options.onDemoEvent);
   const reportedLifecycleRef = useRef(null);
+  const recordingAttemptRef = useRef(null);
   const lastStartOptionsRef = useRef({
     voiceAgentRequested: false,
     translationRequested: false,
@@ -118,15 +119,46 @@ export const useAudioRecording = (toast, options = {}) => {
     onShowTranscriptRef.current = onShowTranscript;
   });
 
-  // Reads only refs and the global electronAPI bridge, so a single stable
-  // instance is safe to share between the mount effect (recording/processing
-  // transitions) and performStartRecording (the toggle path's own "preparing"
-  // report).
-  const reportLifecycle = useCallback((state) => {
-    if (reportedLifecycleRef.current === state) return;
+  const reportLifecycle = useCallback((state, attempt = recordingAttemptRef.current) => {
+    if (!attempt || attempt !== recordingAttemptRef.current) return Promise.resolve(false);
+    if (reportedLifecycleRef.current === state) return attempt.admission;
     reportedLifecycleRef.current = state;
-    window.electronAPI?.dictationLifecycleStateChanged?.(state);
+    const reply = Promise.resolve()
+      .then(() => window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id))
+      .then((accepted) => accepted === true)
+      .catch((error) => {
+        logger.warn("Dictation lifecycle request failed", { error: error?.message });
+        return false;
+      });
+    if (state === "idle") recordingAttemptRef.current = null;
+    return reply;
   }, []);
+
+  const reserveRecording = useCallback(() => {
+    if (recordingAttemptRef.current) return recordingAttemptRef.current;
+    const attempt = { id: crypto.randomUUID(), abandoned: false, admission: null };
+    recordingAttemptRef.current = attempt;
+    reportedLifecycleRef.current = null;
+    attempt.admission = reportLifecycle("preparing", attempt);
+    return attempt;
+  }, [reportLifecycle]);
+
+  const reportManagerLifecycle = useCallback(
+    (manager, attempt = recordingAttemptRef.current) => {
+      const state = manager.getState();
+      return reportLifecycle(
+        state.isRecording
+          ? "recording"
+          : state.isProcessing
+            ? "processing"
+            : startLockRef.current || state.isPreparing
+              ? "preparing"
+              : "idle",
+        attempt
+      );
+    },
+    [reportLifecycle]
+  );
 
   const performStartRecording = useCallback(
     async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
@@ -136,8 +168,10 @@ export const useAudioRecording = (toast, options = {}) => {
       stopRequestedDuringStartRef.current = false;
       pushForceStoppedRef.current = false;
       let recordingStarted = false;
+      const manager = audioManagerRef.current;
+      let attempt = null;
       try {
-        if (!audioManagerRef.current || agentRecordingRef.current) return false;
+        if (!manager || agentRecordingRef.current) return false;
         const policyState = usePolicyStore.getState();
         if (
           (!isManagedTranscriptionActive() &&
@@ -148,21 +182,30 @@ export const useAudioRecording = (toast, options = {}) => {
           return false;
         }
 
-        if (!canStartDictation(audioManagerRef.current.getState())) return false;
+        if (!canStartDictation(manager.getState())) return false;
 
         const preparationGeneration = ++preparationGenerationRef.current;
+        attempt = reserveRecording();
+        const current = () =>
+          recordingAttemptRef.current === attempt &&
+          audioManagerRef.current === manager &&
+          preparationGeneration === preparationGenerationRef.current &&
+          !attempt.abandoned;
         setIsStopping(false);
         setIsPreparing(true);
         // Preserve the requested identity while Windows is still opening the
         // microphone; AudioManager confirms the same value once recording.
         setIsAssistantVoice(voiceAgentRequested);
+        if (!(await attempt.admission) || !current()) return false;
         await waitForVisualFrames();
-        if (preparationGeneration !== preparationGenerationRef.current) return false;
+        if (!current()) return false;
 
         // Start acquisition only after the compact thinking frame has reached
         // the compositor. startRecording() joins this prepared capture, so the
         // device still opens exactly once.
-        void audioManagerRef.current.prepareMicCapture?.();
+        void Promise.resolve(manager.prepareMicCapture?.())
+          .catch((error) => logger.warn("Mic preparation failed", { error: error?.message }))
+          .finally(() => reportManagerLifecycle(manager, attempt));
 
         // The floating dictation panel never takes focus, so the foreground app
         // is still the user's actual editing target here. Refresh it for
@@ -174,14 +217,11 @@ export const useAudioRecording = (toast, options = {}) => {
         } catch (error) {
           logger.warn("Failed to refresh dictation target", { error: error?.message });
         }
+        if (!current()) return false;
 
         demoKindRef.current = getOnboardingDemoKind(voiceAgentRequested);
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
         audioManagerRef.current.setTranslationRequested(translationRequested);
-        // Covers the toggle path with freshly-set flags; the signature dedup
-        // makes this a no-op when the prepare handler already reported the
-        // same kind ahead of the flags being set.
-        reportLifecycle("preparing");
         if (voiceAgentRequested) {
           logger.info(
             "Voice agent recording start",
@@ -234,10 +274,19 @@ export const useAudioRecording = (toast, options = {}) => {
             await configFetch;
           }
         }
+        if (!current()) return false;
 
-        const didStart = audioManagerRef.current.shouldUseStreaming()
-          ? await audioManagerRef.current.startStreamingRecording()
-          : await audioManagerRef.current.startRecording();
+        const didStart = manager.shouldUseStreaming()
+          ? await manager.startStreamingRecording()
+          : await manager.startRecording();
+        if (!current()) {
+          if (manager.getState().isStreaming || manager.getState().isStreamingStartInProgress) {
+            await manager.cancelStreamingRecording();
+          } else {
+            manager.cancelRecording();
+          }
+          return false;
+        }
         recordingStarted = didStart;
         if (didStart) {
           dictationErrorGenerationRef.current += 1;
@@ -281,19 +330,12 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!recordingStarted) {
           setIsPreparing(false);
           setIsAssistantVoice(false);
-          // Covers every exit above that never started a recording — the
-          // policy-block early return, the mic-open failure, a stale
-          // preparation generation, etc. Without this, a failed start leaves
-          // the main process stuck reporting
-          // "preparing" forever, since startRecording's failure path only
-          // fires onError, never the onStateChange that normally reports
-          // "idle". The signature dedup makes this a no-op when
-          // onStateChange already reported it first.
-          if (reportedLifecycleRef.current === "preparing") reportLifecycle("idle");
+          manager?.cancelPreparedMicCapture?.();
         }
+        if (manager) reportManagerLifecycle(manager, attempt ?? recordingAttemptRef.current);
       }
     },
-    [t, toast, dismissDictationError, reportLifecycle]
+    [t, toast, dismissDictationError, reserveRecording, reportManagerLifecycle]
   );
 
   const performStopRecording = useCallback(async () => {
@@ -347,9 +389,6 @@ export const useAudioRecording = (toast, options = {}) => {
     void audioManagerRef.current.recoverInterruptedRecordings?.(
       t("hooks.audioRecording.interruptedRecordingRecovered")
     );
-
-    // Reset stale main-process state after a renderer reload or crash recovery.
-    reportLifecycle("idle");
 
     const getRecoverableTranscript = (fallback = "") =>
       buildLiveTranscriptionPreview(
@@ -498,8 +537,22 @@ export const useAudioRecording = (toast, options = {}) => {
     };
 
     audioManagerRef.current.setCallbacks({
-      onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
-        reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
+      onStateChange: ({
+        isRecording,
+        isProcessing,
+        isStreaming,
+        isPreparing,
+        micCaptureStatus,
+      }) => {
+        reportLifecycle(
+          isRecording
+            ? "recording"
+            : isProcessing
+              ? "processing"
+              : startLockRef.current || isPreparing
+                ? "preparing"
+                : "idle"
+        );
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
         } else if (isProcessing) {
@@ -517,6 +570,7 @@ export const useAudioRecording = (toast, options = {}) => {
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
         if (isRecording) setIsPreparing(false);
+        if (!startLockRef.current && !isPreparing) setIsPreparing(false);
         if (!isRecording) setIsStopping(false);
         // Only an assistant-routed recording (the onboarding demo's) shows as
         // the assistant's; a plain dictation takes the paste route.
@@ -1036,20 +1090,44 @@ export const useAudioRecording = (toast, options = {}) => {
     const disposePrepare = window.electronAPI.onPrepareDictation?.(async () => {
       if (!audioManagerRef.current || startLockRef.current) return;
       if (!canStartDictation(audioManagerRef.current.getState())) return;
+      const manager = audioManagerRef.current;
       const generation = ++preparationGenerationRef.current;
+      const attempt = reserveRecording();
       setIsAssistantVoice(false);
       setIsPreparing(true);
-      reportLifecycle("preparing");
+      if (!(await attempt.admission)) {
+        if (generation === preparationGenerationRef.current) setIsPreparing(false);
+        reportManagerLifecycle(manager, attempt);
+        return;
+      }
       await waitForVisualFrames();
-      if (generation !== preparationGenerationRef.current || startLockRef.current) return;
-      void audioManagerRef.current.prepareMicCapture?.();
+      if (
+        generation !== preparationGenerationRef.current ||
+        startLockRef.current ||
+        attempt.abandoned
+      )
+        return;
+      try {
+        await manager.prepareMicCapture?.();
+      } catch (error) {
+        logger.warn("Mic preparation failed", { error: error?.message });
+      } finally {
+        reportManagerLifecycle(manager, attempt);
+        if (
+          generation === preparationGenerationRef.current &&
+          !manager.getState().isPreparing &&
+          !startLockRef.current
+        )
+          setIsPreparing(false);
+      }
     });
 
     const disposeCancelPreparation = window.electronAPI.onCancelDictationPreparation?.(() => {
       preparationGenerationRef.current += 1;
+      if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       setIsPreparing(false);
       audioManagerRef.current?.cancelPreparedMicCapture?.();
-      if (reportedLifecycleRef.current === "preparing") reportLifecycle("idle");
+      if (audioManagerRef.current) reportManagerLifecycle(audioManagerRef.current);
     });
 
     const disposeStop = window.electronAPI.onStopDictation?.(() => {
@@ -1067,7 +1145,8 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
-      reportLifecycle("idle");
+      preparationGenerationRef.current += 1;
+      if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
@@ -1079,6 +1158,11 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeForceStopped?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();
+        if (!startLockRef.current && !audioManagerRef.current.getState().isPreparing) {
+          reportLifecycle("idle");
+        } else {
+          reportManagerLifecycle(audioManagerRef.current);
+        }
       }
     };
   }, [
@@ -1089,12 +1173,15 @@ export const useAudioRecording = (toast, options = {}) => {
     dismissDictationError,
     onDictationError,
     reportLifecycle,
+    reportManagerLifecycle,
+    reserveRecording,
     t,
   ]);
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
       preparationGenerationRef.current += 1;
+      if (recordingAttemptRef.current) recordingAttemptRef.current.abandoned = true;
       setIsPreparing(false);
       setIsStopping(false);
       audioManagerRef.current.cancelPreparedMicCapture?.();
@@ -1108,10 +1195,12 @@ export const useAudioRecording = (toast, options = {}) => {
       if (state.isStreaming || state.isStreamingStartInProgress) {
         return await audioManagerRef.current.cancelStreamingRecording();
       }
-      return audioManagerRef.current.cancelRecording();
+      const cancelled = audioManagerRef.current.cancelRecording();
+      reportManagerLifecycle(audioManagerRef.current);
+      return cancelled;
     }
     return false;
-  }, []);
+  }, [reportManagerLifecycle]);
 
   const cancelProcessing = useCallback(() => {
     if (audioManagerRef.current) {

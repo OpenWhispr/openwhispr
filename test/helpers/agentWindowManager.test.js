@@ -486,7 +486,7 @@ test("another window's messages are refused", async () => {
   assert.equal(manager.setLayout(foreign, { layout: "modal", focus: true }), false);
   assert.equal(manager.setLayout(subframe, { layout: "modal", focus: true }), false);
   assert.equal(manager.hide(foreign), false);
-  assert.equal(manager.setVoiceState(foreign, "recording"), false);
+  assert.equal(manager.setVoiceState(foreign, "recording", "take-1"), false);
   assert.equal(manager.layout, "pill");
   assert.ok(win.visible);
   assert.equal(manager.isRecording(), false);
@@ -498,13 +498,13 @@ test("the agent's take keeps dictation off the mic, and dictation keeps the agen
     windowManager: createWindowManager({ isDictationActive: () => dictating }),
   });
 
-  assert.equal(manager.setVoiceState(fromAgent(win), "recording"), true);
+  assert.equal(manager.setVoiceState(fromAgent(win), "recording", "take-1"), true);
   assert.equal(manager.isRecording(), true);
   assert.ok(windowManager.events.includes("syncUserRecording"));
-  manager.setVoiceState(fromAgent(win), "idle");
+  manager.setVoiceState(fromAgent(win), "idle", "take-1");
 
   dictating = true;
-  assert.equal(manager.setVoiceState(fromAgent(win), "recording"), false);
+  assert.equal(manager.setVoiceState(fromAgent(win), "recording", "take-1"), false);
   assert.equal(manager.isRecording(), false);
   win.sent.length = 0;
   manager.handleHotkey();
@@ -523,9 +523,9 @@ test("the dictation window hears when the agent takes and releases the mic", asy
   });
   const { manager, win } = await openedManager({ windowManager });
 
-  manager.setVoiceState(fromAgent(win), "recording");
-  manager.setVoiceState(fromAgent(win), "transcribing");
-  manager.setVoiceState(fromAgent(win), "idle");
+  manager.setVoiceState(fromAgent(win), "recording", "take-1");
+  manager.setVoiceState(fromAgent(win), "transcribing", "take-1");
+  manager.setVoiceState(fromAgent(win), "idle", "take-1");
   assert.deepEqual(toDictation, [
     ["agent-recording-changed", true],
     ["agent-recording-changed", false],
@@ -534,7 +534,7 @@ test("the dictation window hears when the agent takes and releases the mic", asy
 
 test("a crashed renderer releases the mic and the next press recreates the window", async () => {
   const { manager, win } = await openedManager();
-  manager.setVoiceState(fromAgent(win), "recording");
+  manager.setVoiceState(fromAgent(win), "recording", "take-1");
 
   win.contentsListeners.get("render-process-gone")({}, { reason: "crashed" });
   assert.equal(manager.isRecording(), false);
@@ -548,7 +548,7 @@ test("a crashed renderer releases the mic and the next press recreates the windo
 test("a reloaded renderer starts hidden and without a take, like a new one", async () => {
   const { manager, win } = await openedManager();
   manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
-  manager.setVoiceState(fromAgent(win), "recording");
+  manager.setVoiceState(fromAgent(win), "recording", "take-1");
 
   // Only a committed main-frame navigation is a new renderer: an in-page one
   // (a footnote link) never reports one, and a navigation will-navigate

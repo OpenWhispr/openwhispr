@@ -1417,7 +1417,7 @@ declare global {
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
       /** False refuses a recording while dictation is using the microphone. */
-      agentWindowSetVoiceState?: (state: AgentVoiceState) => Promise<boolean>;
+      agentWindowSetVoiceState?: (state: AgentVoiceState, attempt: string) => Promise<boolean>;
       openAgentWindow?: () => Promise<boolean>;
       submitAgentCommand?: (command: AgentWindowCommand) => Promise<boolean>;
       /** `external`: the press came from another app, whose selection may be captured. */
@@ -1529,8 +1529,9 @@ declare global {
       ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
-        state: "idle" | "preparing" | "recording" | "processing"
-      ) => void;
+        state: "idle" | "preparing" | "recording" | "processing",
+        attempt: string
+      ) => Promise<boolean>;
 
       // STT config
       getSttConfig?: () => Promise<

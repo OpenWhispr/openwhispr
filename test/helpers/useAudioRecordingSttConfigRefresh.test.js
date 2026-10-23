@@ -72,7 +72,7 @@ test("a recording start refreshes a stale STT config in the background", async (
         captureDictationTarget: async () => {},
         completeDictationPreview: async () => {},
         hideDictationPreview: async () => {},
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });

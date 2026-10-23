@@ -30,20 +30,40 @@ export function useAgentVoice({
   const intentRef = useRef<AgentVoiceIntent>("submit");
   // The microphone is opening: the pill already listens, its waveform still flat.
   const [opening, setOpening] = useState(false);
+  const attemptRef = useRef<{ id: string; abandoned: boolean } | null>(null);
+  const openingRef = useRef(false);
+  const captureEndedRef = useRef(true);
+  const report = useCallback((state: "idle" | "recording" | "transcribing") => {
+    const attempt = attemptRef.current;
+    if (!attempt) return;
+    if (state === "idle") attemptRef.current = null;
+    void window.electronAPI?.agentWindowSetVoiceState?.(state, attempt.id).catch(() => {});
+  }, []);
   const voice = useVoiceDraft({
     onTranscript: (text) =>
       onTranscript(expandSnippets(text, getSettings().snippets), intentRef.current),
     onEmpty,
     onError,
     onMicError,
+    onCaptureEnd: () => {
+      captureEndedRef.current = true;
+      if (attemptRef.current?.abandoned) report("idle");
+    },
   });
   const { status, start: startTake, stop: stopTake, cancel: cancelTake } = voice;
 
   useEffect(() => {
-    void window.electronAPI?.agentWindowSetVoiceState?.(status);
-  }, [status]);
-  // An error screen or a reload unmounts this mid-take: release the microphone lock.
-  useEffect(() => () => void window.electronAPI?.agentWindowSetVoiceState?.("idle"), []);
+    if (!openingRef.current) report(status);
+  }, [status, opening, report]);
+
+  const cancel = useCallback(() => {
+    if (attemptRef.current) attemptRef.current.abandoned = true;
+    cancelTake();
+    if (!openingRef.current && captureEndedRef.current) report("idle");
+  }, [cancelTake, report]);
+  const cancelRef = useRef(cancel);
+  cancelRef.current = cancel;
+  useEffect(() => () => cancelRef.current(), []);
 
   // Esc belongs to the take while it records, however it ends.
   useEffect(() => {
@@ -54,23 +74,41 @@ export function useAgentVoice({
 
   // Main refuses while dictation is using the microphone.
   const start = useCallback(async (): Promise<"started" | "refused" | "failed"> => {
-    if (!(await window.electronAPI?.agentWindowSetVoiceState?.("recording"))) return "refused";
+    if (attemptRef.current || openingRef.current || status !== "idle") return "failed";
+    const attempt = { id: crypto.randomUUID(), abandoned: false };
+    attemptRef.current = attempt;
+    openingRef.current = true;
     setOpening(true);
-    const started = await startTake();
-    setOpening(false);
-    if (!started) {
-      void window.electronAPI?.agentWindowSetVoiceState?.("idle");
-      return "failed";
+    let started = false;
+    try {
+      const admitted = await window.electronAPI?.agentWindowSetVoiceState?.(
+        "recording",
+        attempt.id
+      );
+      if (admitted !== true) return "refused";
+      if (attempt.abandoned) return "failed";
+      captureEndedRef.current = false;
+      started = await startTake();
+      if (!started || attempt.abandoned) {
+        if (started) cancelTake();
+        return "failed";
+      }
+      intentRef.current = "submit";
+      void playStartCue();
+      return "started";
+    } catch {
+      return "refused";
+    } finally {
+      openingRef.current = false;
+      setOpening(false);
+      if (!started && attemptRef.current === attempt) report("idle");
     }
-    // Only now: a refused start must not change what the last take was for.
-    intentRef.current = "submit";
-    void playStartCue();
-    return "started";
-  }, [startTake]);
+  }, [startTake, cancelTake, report, status]);
 
   const stop = useCallback(
     (intent: AgentVoiceIntent) => {
       intentRef.current = intent;
+      if (openingRef.current && attemptRef.current) attemptRef.current.abandoned = true;
       if (status === "recording") void playStopCue();
       stopTake();
     },
@@ -84,6 +122,6 @@ export function useAgentVoice({
     streamingOnlyProvider: voice.streamingOnlyProvider,
     start,
     stop,
-    cancel: cancelTake,
+    cancel,
   };
 }

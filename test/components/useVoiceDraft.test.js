@@ -1,20 +1,25 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const path = require("node:path");
+const sourceRoot = process.env.OPENWHISPR_TEST_SOURCE || path.resolve(__dirname, "../..");
 const {
   SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
   installMicCaptureGlobals,
-} = require("../lib/rendererTestHarness");
+} = require(path.join(sourceRoot, "test/lib/rendererTestHarness"));
 
 // The voice draft on the real hook: a take recorded with a fake MediaRecorder
 // and transcribed through a stubbed file transcription, so what reaches the
 // microphone and the transcription config can be read back. `gate` holds the
 // transcription open until it resolves; `agent` mounts the agent window's
 // useAgentVoice over it instead.
-async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent = false }) {
+async function mountVoiceDraft(
+  t,
+  { settings, getUserMedia, gate = null, agent = false, admission }
+) {
   const bridge = [];
   const scopes = new Set();
   let root = null;
@@ -39,9 +44,9 @@ async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent =
         saveTempAudio: async () => ({ path: "/tmp/take.webm" }),
         deleteTempAudio: async (path) => deleted.push(path),
         getSystemDefaultMicrophone: async () => null,
-        agentWindowSetVoiceState: async (state) => {
+        agentWindowSetVoiceState: async (state, attempt) => {
           bridge.push(`voice:${state}`);
-          return true;
+          return admission ? admission(state, attempt) : true;
         },
         registerCancelHotkey: async (key) => {
           bridge.push(`esc:${key}`);
@@ -420,3 +425,68 @@ test("a refused start leaves the transcribing take's intent alone", async (t) =>
   });
   assert.deepEqual(harness.transcripts, ["draft:for the draft"]);
 });
+
+for (const phase of ["admission", "microphone", "unmount", "stop"]) {
+  test(`the Agent abandons a pending ${phase} before releasing ownership`, async (t) => {
+    const pending = deferred();
+    let stopped = 0;
+    const h = await mountVoiceDraft(t, {
+      settings: SIGNED_IN_CLOUD,
+      agent: true,
+      admission: ["admission", "stop"].includes(phase)
+        ? async (state) => {
+            if (state === "recording") await pending.promise;
+            return true;
+          }
+        : undefined,
+      getUserMedia: async (_constraints, stream) => {
+        stream.getTracks()[0].stop = () => {
+          stopped++;
+        };
+        await pending.promise;
+        return stream;
+      },
+    });
+    h.bridge.length = 0;
+    let starting;
+    await React.act(async () => {
+      starting = h.voice().start();
+      await settle();
+    });
+    if (phase === "unmount") await h.unmount();
+    else
+      await React.act(async () =>
+        phase === "stop" ? h.voice().stop("submit") : h.voice().cancel()
+      );
+    assert.equal(h.bridge.includes("voice:idle"), false, "held acquisition still owns the mic");
+    await React.act(async () => {
+      pending.resolve();
+      await starting;
+    });
+    assert.equal(h.opened.length, ["admission", "stop"].includes(phase) ? 0 : 1);
+    assert.ok(h.bridge.includes("voice:idle"));
+    assert.equal(stopped, ["admission", "stop"].includes(phase) ? 0 : 1);
+    assert.deepEqual(h.transcripts, []);
+  });
+}
+
+for (const admission of [
+  undefined,
+  async () => false,
+  async () => {
+    throw Error("unavailable");
+  },
+]) {
+  test("missing, refused or rejected Agent admission never opens capture", async (t) => {
+    const h = await mountVoiceDraft(t, {
+      settings: SIGNED_IN_CLOUD,
+      agent: true,
+      getUserMedia: (_constraints, stream) => stream,
+    });
+    globalThis.window.electronAPI.agentWindowSetVoiceState = admission;
+    await React.act(async () => {
+      assert.equal(await h.voice().start(), "refused");
+    });
+    assert.equal(h.opened.length, 0);
+  });
+}

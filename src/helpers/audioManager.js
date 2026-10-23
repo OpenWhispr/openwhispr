@@ -623,7 +623,10 @@ class AudioManager {
     this._micOpenReported = false;
     this.preparedMicCapture = new PreparedMicCapture({
       dispose: (prepared) => this._disposePrepared(prepared),
-      onActiveChange: () => this._syncMicOpenGate(),
+      onActiveChange: () => {
+        this._syncMicOpenGate();
+        this.onStateChange?.(this.getState());
+      },
     });
     const micSettings = getSettings();
     this._micHoldSeconds = Number(micSettings.micWarmHoldSeconds) || 0;
@@ -941,6 +944,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isRecording: this.isRecording,
       isProcessing: this.isProcessing,
       isStreaming: this.isStreaming,
+      isPreparing: this.preparedMicCapture.active,
       micCaptureStatus: status,
     });
   }
@@ -4679,6 +4683,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isRecording: this.isRecording,
       isProcessing: this.isProcessing,
       isStreaming: this.isStreaming,
+      isPreparing: this.preparedMicCapture.active,
       isStreamingStartInProgress: this.streamingStartInProgress,
       isFinalizingStreaming: Boolean(this._streamingStopPromise),
       micCaptureStatus: this.micCaptureStatus,
@@ -6474,9 +6479,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.isStreaming) {
       this.cleanupStreaming();
     }
-    if (this.mediaRecorder?.state === "recording") {
+    const recorder = this.mediaRecorder;
+    if (recorder?.state === "recording") {
       this.stopRecording();
     }
+    // onstop may run after the owner unmounts and releases its reservation.
+    recorder?.stream?.getTracks().forEach((track) => track.stop());
     if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
       this.persistentAudioContext.close().catch(() => {});
       this.persistentAudioContext = null;

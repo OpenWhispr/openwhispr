@@ -4,7 +4,12 @@ const assert = require("node:assert/strict");
 let contextModule;
 
 test.before(async () => {
-  contextModule = await import("../../src/utils/agentSelectionContext.ts");
+  const path = require("node:path");
+  const { pathToFileURL } = require("node:url");
+  const root = process.env.OPENWHISPR_TEST_SOURCE || path.resolve(__dirname, "../..");
+  contextModule = await import(
+    pathToFileURL(path.join(root, "src/utils/agentSelectionContext.ts"))
+  );
 });
 
 test("a request without selected Agent text is unchanged", () => {
@@ -45,4 +50,17 @@ test("text selected in another app is quoted as such, and keeps its source when 
   const request = contextModule.buildAgentRequestText("summarize this", context);
   assert.match(request, /"source":"selected_in_another_app"/);
   assert.doesNotMatch(request, /previous_assistant_response/);
+});
+
+test("copied parent context is consumed only by the fork's own matching user message", () => {
+  const text = "Ship the quarterly report on Friday.";
+  const origin = { context: text, copiedMessageCount: 2 };
+  const copied = [{ role: "user", selectedContext: text }, { role: "assistant" }];
+  assert.equal(contextModule.unsentForkContext(origin, copied), text);
+  const own = [...copied, { role: "user", selectedContext: "another paragraph" }];
+  assert.equal(contextModule.unsentForkContext(origin, own), text);
+  own.push({ role: "user", selectedContext: text });
+  assert.equal(contextModule.unsentForkContext(origin, own), null);
+  assert.equal(contextModule.unsentForkContext(origin, [...own, { role: "assistant" }]), null);
+  assert.equal(contextModule.unsentForkContext(null, copied), null);
 });
