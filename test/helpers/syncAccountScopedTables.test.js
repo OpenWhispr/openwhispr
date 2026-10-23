@@ -568,3 +568,163 @@ test("an older build can still open a database where two accounts share a trigge
     )
   );
 });
+
+test("a word or snippet the account removes stays removed, with no signed-out copy left to resurface", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  cloudA.seedDictionaryEntry({ word: "OpenWhispr", client_dict_id: "a-dict" });
+  cloudA.seedSnippet({ trigger: "addr", replacement: "A's address", client_snippet_id: "a-addr" });
+  const signature = cloudA.seedSnippet({
+    trigger: "sig",
+    replacement: "A's signature",
+    client_snippet_id: "a-sig",
+  });
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  await accountA.syncAll(true);
+  db.setActiveAccountId(null);
+  db.applyDictionaryChanges({ add: ["OpenWhispr"] });
+  db.setSnippets([
+    { trigger: "addr", replacement: "typed while signed out" },
+    { trigger: "sig", replacement: "typed while signed out" },
+  ]);
+
+  const accountA2 = await signInAs(t, db, cloudA, "account-a");
+  await accountA2.syncAll(true);
+  // Removed here, and deleted on another device.
+  db.applyDictionaryChanges({ remove: ["OpenWhispr"] });
+  db.setSnippets([{ trigger: "sig", replacement: "A's signature" }]);
+  await cloudA.request({
+    method: "DELETE",
+    path: "/api/snippets/delete",
+    body: { id: signature.id },
+  });
+  await accountA2.syncAll(true);
+  await accountA2.syncAll(true);
+
+  assert.deepEqual(db.getDictionary(), [], "the word stays removed once its delete syncs");
+  assert.deepEqual(db.getSnippets(), [], "so do both snippets");
+  assert.deepEqual(db.getPendingDictionary(), [], "no hidden copy is left to upload");
+  assert.deepEqual(db.getPendingSnippets(), []);
+  const live = (rows) => rows.filter((row) => !row.deleted_at);
+  assert.deepEqual(live(cloudA.dictionary()), [], "nothing is re-created in A's cloud");
+  assert.deepEqual(live(cloudA.snippets()), []);
+  db.setActiveAccountId(null);
+  assert.deepEqual(db.getDictionary(), [], "the signed-out copy went with the account's word");
+});
+
+test("a chat acknowledged after an account switch stays with the account that sent it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  const chat = db.createAgentConversation("Started signed out");
+  db.addAgentMessage(chat.id, "user", "hello", null);
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  cloudA.failWith((call) => {
+    if (call.path !== "/api/conversations/create") return false;
+    db.setActiveAccountId("account-b");
+    windowStub.electronAPI.authState.generation += 1;
+    return false;
+  });
+  await accountA.syncAll(true);
+
+  const row = db.db
+    .prepare("SELECT account_id, cloud_id, sync_status FROM agent_conversations WHERE id = ?")
+    .get(chat.id);
+  assert.equal(row.account_id, "account-a", "the chat is A's: its cloud copy is in A's cloud");
+  assert.ok(row.cloud_id, "the row is linked to that copy");
+  assert.equal(row.sync_status, "synced");
+  assert.equal(cloudA.logFor("/api/conversations/delete").length, 0, "A's copy is kept");
+  assert.deepEqual(db.getAgentConversations(), [], "B never sees A's chat");
+
+  cloudA.clearFailures();
+  const accountA2 = await signInAs(t, db, cloudA, "account-a");
+  await accountA2.syncAll(true);
+  assert.equal(
+    cloudA.logFor("/api/conversations/create").length,
+    1,
+    "A's next pass doesn't create the chat, and its messages, a second time"
+  );
+});
+
+test("a pull page that lands after the account changed is not written for the next account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  cloudA.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "a-dict" });
+  cloudA.seedConversation({
+    client_conversation_id: "a-chat",
+    title: "A's chat",
+    messages: [{ role: "user", content: "hello from A" }],
+  });
+  // A signs out while the first page of a pull is on its way back.
+  let signOutDuring = null;
+  cloudA.failWith((call) => {
+    if (!signOutDuring || !call.path.startsWith(signOutDuring)) return false;
+    signOutDuring = null;
+    db.setActiveAccountId(null);
+    windowStub.electronAPI.authState.generation += 1;
+    return false;
+  });
+  for (const pull of ["/api/conversations/list", "/api/dictionary/list"]) {
+    signOutDuring = pull;
+    const accountA = await signInAs(t, db, cloudA, "account-a");
+    await accountA.syncAll(true);
+  }
+
+  db.setActiveAccountId(null);
+  assert.deepEqual(db.getAgentConversations(), [], "A's chat is not left for everyone to see");
+  assert.deepEqual(db.getDictionary(), [], "nor is A's word");
+  assert.equal(localStorageStub.getItem("lastSyncedAt.dictionary"), null, "the cursor stays put");
+
+  cloudA.clearFailures();
+  const accountA3 = await signInAs(t, db, cloudA, "account-a");
+  await accountA3.syncAll(true);
+  assert.deepEqual(db.getDictionary(), ["Kubernetes"], "A's next pull delivers them");
+  assert.equal(db.getConversationByClientId("a-chat")?.account_id, "account-a");
+});
+
+test("an unattributed row whose PATCH 404s waits for an edit, and the account's own is re-created", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  // An unattributed word and snippet carrying another account's cloud ids, and
+  // A's own word whose cloud row was purged.
+  db.db
+    .prepare(
+      `INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, updated_at)
+       VALUES ('Kubernetes', 'b-dict', 'b-cloud', 'pending', '2026-10-01 09:00:00')`
+    )
+    .run();
+  db.db
+    .prepare(
+      `INSERT INTO snippets (trigger, replacement, client_snippet_id, cloud_id, sync_status, updated_at)
+       VALUES ('addr', 'B''s address', 'b-snip', 'b-snip-cloud', 'pending', '2026-10-01 09:00:00')`
+    )
+    .run();
+  db.db
+    .prepare(
+      `INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, account_id)
+       VALUES ('Terraform', 'a-dict', 'purged', 'pending', 'account-a')`
+    )
+    .run();
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  await accountA.syncAll(true);
+  await accountA.syncAll(true);
+  await accountA.syncAll(true);
+  const patches = (path) => cloudA.logFor(path).filter((call) => call.body?.id !== "purged").length;
+  assert.equal(patches("/api/dictionary/update"), 1, "the dead PATCH is not repeated");
+  assert.equal(patches("/api/snippets/update"), 1);
+  assert.deepEqual(
+    cloudA.dictionary().map((row) => row.word),
+    ["Terraform"],
+    "only A's own word is re-created"
+  );
+
+  db.applyDictionaryChanges({ add: ["KUBERNETES"] });
+  await accountA.syncAll(true);
+  assert.equal(patches("/api/dictionary/update"), 2, "an edit tries again");
+});

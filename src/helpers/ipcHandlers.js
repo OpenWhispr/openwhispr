@@ -103,7 +103,8 @@ function assertAnalyticsSyncContext(context) {
 }
 // A push is acked only under the sign-in that sent it. After an account switch
 // the ack would hand an unattributed row to the new account although the cloud
-// copy is the old one's, so it is dropped and the row stays pending.
+// copy is the old one's, so it is dropped and the row stays pending. A pulled
+// row is written only under the sign-in that fetched it, for the same reason.
 function isStaleSyncAck(expectedAuthGeneration) {
   return (
     expectedAuthGeneration !== undefined &&
@@ -111,6 +112,10 @@ function isStaleSyncAck(expectedAuthGeneration) {
   );
 }
 const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
+// The account a chat push was sent as; without one, the active account.
+function syncSenderAccount(accountId) {
+  return typeof accountId === "string" && accountId ? accountId : undefined;
+}
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -2115,6 +2120,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("delete-transcription-audio", async (event, id) => {
+      // Only a recording of a dictation the active account can see.
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const result = this.audioStorageManager.deleteAudio(id);
       if (result.success) {
         this.databaseManager.updateTranscriptionAudio(id, {
@@ -2287,9 +2294,13 @@ class IPCHandlers {
       return this.databaseManager.getDictionaryEntryByClientId(clientDictId);
     });
 
-    ipcMain.handle("db-upsert-dictionary-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-dictionary-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-dictionary-synced",
@@ -2457,9 +2468,13 @@ class IPCHandlers {
       return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
     });
 
-    ipcMain.handle("db-upsert-snippet-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-snippet-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-snippet-synced",
@@ -3256,17 +3271,29 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
+    ipcMain.handle(
+      "db-upsert-conversation-from-cloud",
+      (_, cloudConv, messages, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertConversationFromCloud(cloudConv, messages)
     );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)
     );
-    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
-      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    // A chat create is not idempotent in the cloud (its messages are inserted
+    // again), so its ack is never dropped: it is recorded for the account that
+    // sent it, which may no longer be the active one.
+    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId, accountId) =>
+      this.databaseManager.acknowledgeConversationCreate(
+        id,
+        snapshot,
+        cloudId,
+        syncSenderAccount(accountId)
+      )
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
+    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, accountId) =>
+      this.databaseManager.markConversationSynced(id, cloudId, syncSenderAccount(accountId))
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
@@ -3283,9 +3310,13 @@ class IPCHandlers {
     ipcMain.handle("db-get-transcription-by-client-id", (_, clientId) =>
       this.databaseManager.getTranscriptionByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
-      return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
-    });
+    ipcMain.handle(
+      "db-upsert-transcription-from-cloud",
+      (_, cloudTranscription, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription)
+    );
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId, expectedAuthGeneration) =>
       isStaleSyncAck(expectedAuthGeneration)
         ? STALE_SYNC_ACK

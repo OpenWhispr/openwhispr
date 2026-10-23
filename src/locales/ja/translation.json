@@ -682,7 +682,7 @@
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
       "clearAllDescription": "履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
-      "clearAllDescriptionDevice": "この履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。アカウントに属する履歴とカウントには影響しません。",
+      "clearAllDescriptionDevice": "この履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。そのうちすでにアカウントと同期済みの文字起こしは、そのアカウントが次にこのデバイスでサインインしたときに、アカウントからも削除されます。",
       "clearAllSuccess": "履歴を削除しました",
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",

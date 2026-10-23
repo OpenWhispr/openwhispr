@@ -7,8 +7,9 @@
 const AUTH_TOKEN = "harness-token";
 const AUTH_GENERATION = 0;
 
-// Mirrors the push-ack handlers: an ack sent under a sign-in that has since
-// changed is dropped (isStaleSyncAck in ipcHandlers.js).
+// Mirrors the push-ack and pull-write handlers: an ack sent, or a pulled row
+// fetched, under a sign-in that has since changed is dropped (isStaleSyncAck in
+// ipcHandlers.js).
 const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
 
 // syncAll() asserts the whole snippet surface exists before doing any work and
@@ -19,7 +20,10 @@ function snippetApi(db, authState) {
     getPendingSnippets: async () => db.getPendingSnippets(),
     getPendingSnippetDeletes: async () => db.getPendingSnippetDeletes(),
     getSnippetForCloudMerge: async (cloudEntry) => db.getSnippetForCloudMerge(cloudEntry),
-    upsertSnippetFromCloud: async (cloudEntry) => db.upsertSnippetFromCloud(cloudEntry),
+    upsertSnippetFromCloud: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertSnippetFromCloud(cloudEntry),
     markSnippetSynced: async (
       id,
       cloudId,
@@ -199,12 +203,15 @@ function createElectronApi(db, options = {}) {
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
-    upsertConversationFromCloud: async (cloudConv, messages) =>
-      db.upsertConversationFromCloud(cloudConv, messages),
+    upsertConversationFromCloud: async (cloudConv, messages, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertConversationFromCloud(cloudConv, messages),
     markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
-    acknowledgeConversationCreate: async (id, snapshot, cloudId) =>
-      db.acknowledgeConversationCreate(id, snapshot, cloudId),
-    markConversationSynced: async (id, cloudId) => db.markConversationSynced(id, cloudId),
+    acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId) =>
+      db.acknowledgeConversationCreate(id, snapshot, cloudId, accountId || undefined),
+    markConversationSynced: async (id, cloudId, accountId) =>
+      db.markConversationSynced(id, cloudId, accountId || undefined),
     hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
 
     // Transcriptions
@@ -212,8 +219,10 @@ function createElectronApi(db, options = {}) {
     getPendingTranscriptions: async () => db.getPendingTranscriptions(),
     getPendingTranscriptionDeletes: async () => db.getPendingTranscriptionDeletes(),
     getTranscriptionByClientId: async (clientId) => db.getTranscriptionByClientId(clientId),
-    upsertTranscriptionFromCloud: async (cloudTranscription) =>
-      db.upsertTranscriptionFromCloud(cloudTranscription),
+    upsertTranscriptionFromCloud: async (cloudTranscription, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertTranscriptionFromCloud(cloudTranscription),
     markTranscriptionSynced: async (id, cloudId, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
@@ -224,7 +233,10 @@ function createElectronApi(db, options = {}) {
     getPendingDictionary: async () => db.getPendingDictionary(),
     getPendingDictionaryDeletes: async () => db.getPendingDictionaryDeletes(),
     getDictionaryByClientId: async (clientDictId) => db.getDictionaryEntryByClientId(clientDictId),
-    upsertDictionaryFromCloud: async (cloudEntry) => db.upsertDictionaryFromCloud(cloudEntry),
+    upsertDictionaryFromCloud: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertDictionaryFromCloud(cloudEntry),
     markDictionarySynced: async (
       id,
       cloudId,

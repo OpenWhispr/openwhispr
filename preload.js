@@ -1302,21 +1302,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  upsertConversationFromCloud: (cloudConv, messages, expectedAuthGeneration) =>
+    ipcRenderer.invoke(
+      "db-upsert-conversation-from-cloud",
+      cloudConv,
+      messages,
+      expectedAuthGeneration
+    ),
   markConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
-  acknowledgeConversationCreate: (id, snapshot, cloudId) =>
-    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
-  markConversationSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
+  acknowledgeConversationCreate: (id, snapshot, cloudId, accountId) =>
+    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId, accountId),
+  markConversationSynced: (id, cloudId, accountId) =>
+    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId, accountId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
   getTranscriptionByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-transcription-by-client-id", clientId),
-  upsertTranscriptionFromCloud: (cloudTranscription) =>
-    ipcRenderer.invoke("db-upsert-transcription-from-cloud", cloudTranscription),
+  upsertTranscriptionFromCloud: (cloudTranscription, expectedAuthGeneration) =>
+    ipcRenderer.invoke(
+      "db-upsert-transcription-from-cloud",
+      cloudTranscription,
+      expectedAuthGeneration
+    ),
   markTranscriptionSynced: (id, cloudId, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId, expectedAuthGeneration),
   getPendingTranscriptionDeletes: () => ipcRenderer.invoke("db-get-pending-transcription-deletes"),
@@ -1326,8 +1335,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingDictionaryDeletes: () => ipcRenderer.invoke("db-get-pending-dictionary-deletes"),
   getDictionaryByClientId: (clientDictId) =>
     ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
-  upsertDictionaryFromCloud: (cloudEntry) =>
-    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
+  upsertDictionaryFromCloud: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry, expectedAuthGeneration),
   markDictionarySynced: (
     id,
     cloudId,
@@ -1381,8 +1390,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),
   getSnippetForCloudMerge: (cloudEntry) =>
     ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry),
-  upsertSnippetFromCloud: (cloudEntry) =>
-    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry),
+  upsertSnippetFromCloud: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry, expectedAuthGeneration),
   markSnippetSynced: (
     id,
     cloudId,
