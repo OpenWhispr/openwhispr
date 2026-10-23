@@ -1324,7 +1324,8 @@ export class LocalNotesRepository implements NotesRepository {
     this.database.delete(dictionaryEntries).run();
     this.database.delete(snippets).run();
     // Wholesale, not per-key: also clears the team cursors/capability flag/park
-    // keys (teamCursors.ts, teamSpacesCapability.ts, pullParkTracker.ts) —
+    // keys (teamCursors.ts, teamSpacesCapability.ts, pullParkTracker.ts) and
+    // the shared dictionary state and cursors (`shared_dictionary.*`) —
     // every sync_state row is per-account bookkeeping with no reason to
     // survive a user switch. The caller re-seeds sync.user_id right after.
     this.database.delete(syncState).run();

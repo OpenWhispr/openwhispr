@@ -22,6 +22,7 @@ import { useUsageStore } from '@/store/useUsageStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { extractCorrections } from '@/lib/correctionLearner';
+import { buildDictationHintTiers, buildEffectiveDictionaryWords } from '@/lib/dictationHints';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
@@ -180,8 +181,6 @@ export default function NoteEditorScreen() {
   const providerNotes = notesMode === 'providers';
   // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
   const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
-  const dictionaryEntries = useDictionaryStore((s) => s.entries);
-  const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
 
   const actions = useActionsStore((s) => s.actions);
@@ -236,8 +235,6 @@ export default function NoteEditorScreen() {
   const learnedBaselineRef = useRef(note?.content ?? '');
   const autoLearnEnabledRef = useRef(autoLearnEnabled);
   autoLearnEnabledRef.current = autoLearnEnabled;
-  const dictionaryWordsRef = useRef(dictionaryWords);
-  dictionaryWordsRef.current = dictionaryWords;
   const chatAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -542,7 +539,8 @@ export default function NoteEditorScreen() {
       if (!autoLearnEnabledRef.current) return;
       const baseline = learnedBaselineRef.current;
       if (baseline === newContent) return;
-      const corrections = extractCorrections(baseline, newContent, dictionaryWordsRef.current);
+      // Shared words count as known, so a team word is never learned into Personal.
+      const corrections = extractCorrections(baseline, newContent, buildEffectiveDictionaryWords());
       if (corrections.length > 0) {
         addLearnedWords(corrections);
       }
@@ -834,7 +832,7 @@ export default function NoteEditorScreen() {
       lastEnhancementInputHashRef.current = makeContentHash(inputText);
       runAction(action, inputText, {
         inputKind: usesSegmentTranscriptRef.current ? 'meeting-transcript' : 'plain-note',
-        customDictionary: dictionaryWordsRef.current,
+        dictionaryTiers: buildDictationHintTiers(false),
         routing: {
           isPrivateNote: note?.isPrivate === 1,
           ...routing,

@@ -61,7 +61,7 @@ describe('LocalNotesRepository.wipeAllSyncableData', () => {
     expect(db.select().from(spaces).where(eq(spaces.id, teamId)).all()).toEqual([]);
   });
 
-  it('clears every sync_state row — team cursors, the team-spaces capability flag, park keys, and per-user flags alike', () => {
+  it('clears every sync_state row — team cursors, the team-spaces capability flag, park keys, the shared dictionary state, and per-user flags alike', () => {
     const { repo, db } = createMemoryRepository();
     const keys = [
       'sync.user_id',
@@ -74,6 +74,11 @@ describe('LocalNotesRepository.wipeAllSyncableData', () => {
       'notes.team.parked_row',
       'folders.team.parked_row',
       'initial_backfill_done.previous-user',
+      'shared_dictionary.state',
+      'shared_dictionary.last_sync_at',
+      'shared_dictionary.last_sync_id',
+      'shared_dictionary.hides_last_sync_at',
+      'shared_dictionary.hides_last_sync_id',
     ];
     for (const key of keys) repo.setSyncState(key, 'x');
     expect(db.select().from(syncState).all()).toHaveLength(keys.length);

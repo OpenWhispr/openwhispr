@@ -11,6 +11,8 @@ import { SnippetsView } from '@/components/features/SnippetsView';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
 import { safeHaptics, formatRelativeTime } from '@/lib/utils';
+import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
+import { sharedWordKey } from '@/lib/sharedDictionaryHints';
 import { iosColor } from '@/config/colors';
 
 type Filter = 'all' | 'manual' | 'learned';
@@ -42,6 +44,11 @@ function alphabetize(entries: DictionaryEntry[]): { title: string; data: Diction
 
 function DictionaryRow({ entry, onDelete }: { entry: DictionaryEntry; onDelete: () => void }) {
   const dotColor = entry.source === 'manual' ? LINK : PURPLE;
+  // A word moved into a shared list whose only copy the member hid: it shows here, but doesn't
+  // apply (dictationHints leaves it out), so say so.
+  const hiddenForYou = useSharedDictionaryStore(
+    (s) => !!entry.sharedAt && s.hiddenOnlyKeys.has(sharedWordKey(entry.word)),
+  );
   return (
     <SwipeableCard onDelete={onDelete} inset>
       <View className="flex-row items-center gap-3 bg-secondarySystemGroupedBackground px-4 py-2.5">
@@ -51,7 +58,7 @@ function DictionaryRow({ entry, onDelete }: { entry: DictionaryEntry; onDelete: 
             {entry.word}
           </Text>
           <Text className="text-[12px] text-tertiaryLabel" numberOfLines={1}>
-            {sourceLabel(entry)}
+            {hiddenForYou ? `${sourceLabel(entry)} · Hidden for you` : sourceLabel(entry)}
           </Text>
         </View>
       </View>
@@ -147,7 +154,39 @@ function EntryList({
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+const MAX_NAMED_MOVED_WORDS = 3;
+
+// Its own sentence, so one moved word reads as naturally as several.
+function movedWordsSentence(moved: string[], count: number): string {
+  if (moved.length === 0) return '';
+  if (moved.length > MAX_NAMED_MOVED_WORDS) {
+    const subject = moved.length === count ? `All ${count}` : `${moved.length} of them`;
+    return ` ${subject} were moved from your list.`;
+  }
+  if (moved.length === 1) return ` ${moved[0]} was moved there from your list.`;
+  const names = `${moved.slice(0, -1).join(', ')} and ${moved[moved.length - 1]}`;
+  return ` ${names} were moved there from your list.`;
+}
+
+// Shared words apply to dictation but are managed on desktop, so this is
+// read-only. It names the personal words moved into a shared list, which the
+// Personal list leaves out; adding one again takes it back.
+function SharedDictionaryLine({ moved, className }: { moved: string[]; className?: string }) {
+  const summary = useSharedDictionaryStore((s) => s.summary);
+  if (!summary) return null;
+  const { count } = summary;
+  // A workspace without a name reads as desktop's locked panel does.
+  const workspace = summary.workspaceName.trim() || 'your workspace';
+  const subject =
+    count === 1
+      ? `1 team word from ${workspace} also applies.`
+      : `${count} team words from ${workspace} also apply.`;
+  const manage = count === 1 ? 'Manage it on desktop.' : 'Manage them on desktop.';
+  const text = `${subject}${movedWordsSentence(moved, count)} ${manage}`;
+  return <Text className={`text-[12px] text-tertiaryLabel ${className ?? ''}`}>{text}</Text>;
+}
+
+function EmptyState({ onAdd, moved }: { onAdd: () => void; moved: string[] }) {
   return (
     <View className="flex-1 items-center px-8 pt-12">
       <View
@@ -176,6 +215,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <SystemIcon name="plus" mdName="Plus" size={15} color="#fff" />
         <Text className="text-[15px] font-semibold text-white">Add your first word</Text>
       </Pressable>
+      <SharedDictionaryLine moved={moved} className="mt-6 text-center" />
     </View>
   );
 }
@@ -216,7 +256,8 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
 }
 
 export default function DictionaryScreen() {
-  const entries = useDictionaryStore((s) => s.entries);
+  const allEntries = useDictionaryStore((s) => s.entries);
+  const sharedWordsLower = useSharedDictionaryStore((s) => s.sharedWordsLower);
   const isLoaded = useDictionaryStore((s) => s.isLoaded);
   const load = useDictionaryStore((s) => s.load);
   const addWords = useDictionaryStore((s) => s.addWords);
@@ -229,6 +270,19 @@ export default function DictionaryScreen() {
   useEffect(() => {
     if (!isLoaded) load();
   }, [isLoaded, load]);
+
+  // A word moved into a shared list stays a personal row, but applies as a
+  // team word until its shared copy is gone, so it leaves the Personal list and
+  // the shared line names it instead.
+  const { entries, movedWords } = useMemo(() => {
+    const kept: DictionaryEntry[] = [];
+    const moved: string[] = [];
+    for (const e of allEntries) {
+      if (e.sharedAt && sharedWordsLower.has(sharedWordKey(e.word))) moved.push(e.word);
+      else kept.push(e);
+    }
+    return { entries: kept, movedWords: moved };
+  }, [allEntries, sharedWordsLower]);
 
   const counts = useMemo(() => {
     let manual = 0;
@@ -287,7 +341,7 @@ export default function DictionaryScreen() {
       ) : (
         <>
           {isEmpty ? (
-            <EmptyState onAdd={() => setSheetOpen(true)} />
+            <EmptyState onAdd={() => setSheetOpen(true)} moved={movedWords} />
           ) : (
             <ScrollView
               keyboardShouldPersistTaps="handled"
@@ -306,6 +360,7 @@ export default function DictionaryScreen() {
 
               <View className="mx-4">
                 <SyncStatusLabel />
+                <SharedDictionaryLine moved={movedWords} />
               </View>
 
               <ScrollView

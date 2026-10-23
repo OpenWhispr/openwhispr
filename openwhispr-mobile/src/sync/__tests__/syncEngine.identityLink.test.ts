@@ -46,7 +46,13 @@ jest.mock('@/store/useDictionaryStore', () => ({ useDictionaryStore: noopStore }
 jest.mock('@/store/useSnippetsStore', () => ({ useSnippetsStore: noopStore }));
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: {
-    getState: () => ({ loadFolders: jest.fn(), loadSpaces: jest.fn(), loadNotes: jest.fn() }),
+    setState: jest.fn(),
+    getState: () => ({
+      loadFolders: jest.fn(),
+      loadSpaces: jest.fn(),
+      loadNotes: jest.fn(),
+      loadVoiceProfiles: jest.fn(),
+    }),
   },
 }));
 jest.mock('../useSyncStore', () => ({ useSyncStore: { getState: () => ({ set: jest.fn() }) } }));
@@ -90,18 +96,36 @@ jest.mock('../pushDictionary', () => ({ pushDictionary: jest.fn() }));
 jest.mock('../pullSnippets', () => ({ pullSnippets: jest.fn() }));
 jest.mock('../pushSnippets', () => ({ pushSnippets: jest.fn() }));
 jest.mock('../initialBackfill', () => ({ runInitialBackfillIfNeeded: jest.fn() }));
+jest.mock('../pullSharedDictionary', () => ({ pullSharedDictionary: jest.fn() }));
 
 import { initSyncTriggers, requestSync, teardownSyncTriggers } from '../syncEngine';
 import { notesRepository } from '@/data';
 import { fetchUsage } from '@/data/remote/usageApi';
 import { runInitialBackfillIfNeeded } from '../initialBackfill';
 import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from '../privateNoteDeletion';
+import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
 
 const mockRepo = notesRepository as jest.Mocked<typeof notesRepository>;
 const mockFetchUsage = fetchUsage as jest.MockedFunction<typeof fetchUsage>;
 const mockBackfill = runInitialBackfillIfNeeded as jest.MockedFunction<
   typeof runInitialBackfillIfNeeded
 >;
+
+// Stands in for the previous account's applied shared words.
+function seedSharedWords(): void {
+  useSharedDictionaryStore.setState({
+    hints: { space: ['Gizmo'], workspace: ['Acme'] },
+    sharedWordsLower: new Set(['gizmo', 'acme']),
+    summary: { count: 2, workspaceName: 'Acme' },
+  });
+}
+
+function expectSharedWordsCleared(): void {
+  const { hints, sharedWordsLower, summary } = useSharedDictionaryStore.getState();
+  expect(hints).toEqual({ space: [], workspace: [] });
+  expect(sharedWordsLower.size).toBe(0);
+  expect(summary).toBeNull();
+}
 
 function signIn(id: string, isAnonymous: boolean): void {
   setAuthState({ user: { id, isAnonymous }, isGuest: false, sessionCookie: 'session=test' });
@@ -184,6 +208,44 @@ describe('syncEngine identity transitions', () => {
 
     expect(mockRepo.wipeAllSyncableData).toHaveBeenCalledTimes(1);
     expect(mockRepo.dropRemoteIdsForAccountLink).not.toHaveBeenCalled();
+  });
+
+  it('fills the shared store from the stored row before any network call', async () => {
+    seedSyncState({
+      'sync.user_id': 'real-user',
+      'shared_dictionary.state': JSON.stringify({
+        workspaceId: 'ws-1',
+        workspaceName: 'Acme',
+        entries: { e1: { spaceId: null, word: 'Acme' } },
+        hiddenIds: [],
+        scopes: [{ space_id: null, name: 'Acme', member_count: 2, word_count: 1 }],
+        paused: false,
+      }),
+    });
+    useSharedDictionaryStore.getState().reset();
+    signIn('real-user', false);
+    // The first network step hasn't answered yet (offline, or just slow).
+    const pending = deferred<void>();
+    jest.mocked(pushPrivateNoteDeletes).mockReturnValueOnce(pending.promise);
+
+    requestSync('manual');
+    await flush();
+
+    expect(useSharedDictionaryStore.getState().hints.workspace).toEqual(['Acme']);
+    expect(mockSyncSpaces).not.toHaveBeenCalled();
+    pending.resolve();
+    await flush();
+  });
+
+  it('an account switch resets the shared store before anything else runs', () => {
+    seedSyncState({ 'sync.user_id': 'first-user' });
+    seedSharedWords();
+    signIn('second-user', false);
+
+    // The identity reconciliation runs before the run's first await.
+    requestSync('sign-in');
+
+    expectSharedWordsCleared();
   });
 
   // The server migrates billing only: every remote id and pull cursor on the
@@ -357,6 +419,21 @@ describe('syncEngine auth triggers', () => {
     emitAuthChange({ user: null, isGuest: false, sessionCookie: null });
 
     expect(state['sync.anonymous_user_id']).toBeUndefined();
+  });
+
+  it('sign-out resets the shared store', async () => {
+    seedSyncState({ 'sync.user_id': 'real-user' });
+    emitAuthChange({
+      user: { id: 'real-user', isAnonymous: false },
+      isGuest: false,
+      sessionCookie: 'c',
+    });
+    await flush();
+    seedSharedWords();
+
+    emitAuthChange({ user: null, isGuest: false, sessionCookie: null });
+
+    expectSharedWordsCleared();
   });
 
   // Sign Out is the only account action an anonymous user is shown. The rows
