@@ -131,7 +131,10 @@ export function effectiveAudioRetentionDays(
   return maximumDays === null ? personalPreference : Math.min(personalPreference, maximumDays);
 }
 
-/** Chat and meeting transcript retention: an org that always keeps history keeps them forever. */
+/**
+ * Dictation, chat and meeting transcript retention: an org that always keeps history
+ * keeps them forever.
+ */
 export function effectiveHistoryRetentionDays(
   state: PolicyDecisionSnapshot,
   personalPreference: number

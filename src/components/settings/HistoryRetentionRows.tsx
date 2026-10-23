@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next";
 import type { ConfirmDialogState } from "../../hooks/useDialogs";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
-import { effectiveHistoryRetentionDays, lockedLocalHistoryValue } from "../../stores/policyRules";
+import {
+  effectiveHistoryRetentionDays,
+  effectiveLocalHistoryEnabled,
+  lockedLocalHistoryValue,
+} from "../../stores/policyRules";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SettingsPanelRow, SettingsRow } from "../ui/SettingsSection";
 import { RETENTION_DAY_OPTIONS, RETENTION_SELECT_CLASS } from "./retentionOptions";
@@ -111,5 +115,43 @@ export function HistoryRetentionRows({ showConfirmDialog }: HistoryRetentionRows
         }),
       })}
     </>
+  );
+}
+
+export function TranscriptRetentionRow() {
+  const { t } = useTranslation();
+  const policy = usePolicySnapshot();
+  const managed = lockedLocalHistoryValue(policy) === true;
+  const dataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
+  const transcriptRetentionDays = useSettingsStore((s) => s.transcriptRetentionDays);
+  const setTranscriptRetentionDays = useSettingsStore((s) => s.setTranscriptRetentionDays);
+  const label = t("settingsPage.privacy.transcriptRetention");
+
+  return (
+    <SettingsPanelRow>
+      <SettingsRow
+        label={label}
+        description={
+          managed
+            ? t("common.managedByOrg")
+            : t("settingsPage.privacy.transcriptRetentionDescription")
+        }
+      >
+        <select
+          aria-label={label}
+          value={effectiveHistoryRetentionDays(policy, transcriptRetentionDays)}
+          disabled={managed || !effectiveLocalHistoryEnabled(policy, dataRetentionEnabled)}
+          onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+          className={RETENTION_SELECT_CLASS}
+        >
+          <option value={0}>{t("settingsPage.privacy.transcriptRetentionForever")}</option>
+          {RETENTION_DAY_OPTIONS.map((days) => (
+            <option key={days} value={days}>
+              {t("settingsPage.privacy.retentionDays", { count: days })}
+            </option>
+          ))}
+        </select>
+      </SettingsRow>
+    </SettingsPanelRow>
   );
 }

@@ -88,6 +88,19 @@ function chatRow(db, id) {
   return db.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(id);
 }
 
+function insertDictation(db, { daysAgo }) {
+  const { lastInsertRowid } = db.db
+    .prepare(
+      "INSERT INTO transcriptions (text, created_at) VALUES ('Call Sam', datetime('now', ?))"
+    )
+    .run(`-${daysAgo} days`);
+  return lastInsertRowid;
+}
+
+function dictationRow(db, id) {
+  return db.db.prepare("SELECT * FROM transcriptions WHERE id = ?").get(id);
+}
+
 function messageCount(db, id) {
   return db.db
     .prepare("SELECT COUNT(*) AS count FROM agent_messages WHERE conversation_id = ?")
@@ -377,16 +390,34 @@ test("a signed-in profile keeps chats and transcripts until its workspace policy
 
   const chat = insertChat(db, { activeDaysAgo: 10 });
   const note = insertNote(db, { daysAgo: 10 });
-  const period = { chatRetentionDays: 7, meetingTranscriptRetentionDays: 7 };
+  const dictation = insertDictation(db, { daysAgo: 10 });
+  const period = {
+    transcriptRetentionDays: 7,
+    chatRetentionDays: 7,
+    meetingTranscriptRetentionDays: 7,
+  };
   const signedIn = { _hasActiveAccountScope: () => true };
 
   cleanup(db, { ...period, localHistoryPolicyResolved: false }, signedIn);
   assert.equal(chatRow(db, chat).deleted_at, null);
   assert.equal(noteRow(db, note).transcript, TRANSCRIPT);
+  assert.notEqual(dictationRow(db, dictation), undefined);
 
   cleanup(db, { ...period, localHistoryPolicyResolved: true }, signedIn);
   assert.equal(chatRow(db, chat), undefined);
   assert.equal(noteRow(db, note).transcript, null);
+  assert.equal(dictationRow(db, dictation), undefined);
+});
+
+test("a signed-out profile clears old dictations without waiting for a policy", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const dictation = insertDictation(db, { daysAgo: 10 });
+
+  cleanup(db, { transcriptRetentionDays: 7 }, { _hasActiveAccountScope: () => false });
+
+  assert.equal(dictationRow(db, dictation), undefined);
 });
 
 test("the preview counts what a shorter period would remove", (t) => {

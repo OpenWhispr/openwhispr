@@ -90,3 +90,35 @@ test("a workspace that always keeps history keeps chats and transcripts forever"
   assert.equal(syncs.at(-1).chatRetentionDays, 0);
   assert.equal(syncs.at(-1).meetingTranscriptRetentionDays, 0);
 });
+
+function historyPolicy(localHistoryMode) {
+  const policy = managedPolicy();
+  policy.dataRetention.localHistoryMode = localHistoryMode;
+  return { status: "managed", appVersion: "1.10.0", policy };
+}
+
+test("a workspace that always keeps history keeps dictation transcripts forever", async (t) => {
+  const { syncs, usePolicyStore } = await mountSettings(t, { transcriptRetentionDays: "14" });
+
+  await React.act(async () => usePolicyStore.setState(historyPolicy("always_on")));
+
+  assert.equal(syncs.at(-1).transcriptRetentionDays, 0);
+});
+
+test("the dictation period applies again once the workspace leaves it to members", async (t) => {
+  const { syncs, usePolicyStore } = await mountSettings(t, { transcriptRetentionDays: "14" });
+
+  await React.act(async () => usePolicyStore.setState(historyPolicy("always_on")));
+  assert.equal(syncs.at(-1).transcriptRetentionDays, 0);
+
+  await React.act(async () => usePolicyStore.setState(historyPolicy("user_choice")));
+  assert.equal(syncs.at(-1).transcriptRetentionDays, 14);
+});
+
+test("a workspace that never keeps history leaves the dictation period as it is", async (t) => {
+  const { syncs, usePolicyStore } = await mountSettings(t, { transcriptRetentionDays: "14" });
+
+  await React.act(async () => usePolicyStore.setState(historyPolicy("always_off")));
+
+  assert.equal(syncs.at(-1).transcriptRetentionDays, 14);
+});

@@ -93,7 +93,7 @@ import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
-import { HistoryRetentionRows } from "./settings/HistoryRetentionRows";
+import { HistoryRetentionRows, TranscriptRetentionRow } from "./settings/HistoryRetentionRows";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { RETENTION_DAY_OPTIONS, RETENTION_SELECT_CLASS } from "./settings/retentionOptions";
@@ -1231,8 +1231,6 @@ export default function SettingsPage({
     setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
-    transcriptRetentionDays,
-    setTranscriptRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
     saveDiscardedTranscriptions,
@@ -4446,28 +4444,7 @@ EOF`,
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.transcriptRetention")}
-                    description={t("settingsPage.privacy.transcriptRetentionDescription")}
-                  >
-                    <select
-                      value={transcriptRetentionDays}
-                      disabled={!effectiveDataRetentionEnabled}
-                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
-                      className={RETENTION_SELECT_CLASS}
-                    >
-                      <option value={0}>
-                        {t("settingsPage.privacy.transcriptRetentionForever")}
-                      </option>
-                      {RETENTION_DAY_OPTIONS.map((days) => (
-                        <option key={days} value={days}>
-                          {t("settingsPage.privacy.retentionDays", { count: days })}
-                        </option>
-                      ))}
-                    </select>
-                  </SettingsRow>
-                </SettingsPanelRow>
+                <TranscriptRetentionRow />
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.saveDiscarded")}

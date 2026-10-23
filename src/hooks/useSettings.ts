@@ -209,6 +209,9 @@ function useSettingsInternal() {
   const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
     effectiveAudioRetentionDays(policyState, audioRetentionDays)
   );
+  const enforcedTranscriptRetentionDays = usePolicyStore((policyState) =>
+    effectiveHistoryRetentionDays(policyState, transcriptRetentionDays)
+  );
   const enforcedChatRetentionDays = usePolicyStore((policyState) =>
     effectiveHistoryRetentionDays(policyState, chatRetentionDays)
   );
@@ -226,7 +229,7 @@ function useSettingsInternal() {
   useEffect(() => {
     window.electronAPI?.syncRetentionSettings?.({
       audioRetentionDays: enforcedAudioRetentionDays,
-      transcriptRetentionDays,
+      transcriptRetentionDays: enforcedTranscriptRetentionDays,
       chatRetentionDays: enforcedChatRetentionDays,
       meetingTranscriptRetentionDays: enforcedMeetingTranscriptRetentionDays,
       dataRetentionEnabled: enforcedDataRetentionEnabled,
@@ -234,7 +237,7 @@ function useSettingsInternal() {
     });
   }, [
     enforcedAudioRetentionDays,
-    transcriptRetentionDays,
+    enforcedTranscriptRetentionDays,
     enforcedChatRetentionDays,
     enforcedMeetingTranscriptRetentionDays,
     enforcedDataRetentionEnabled,

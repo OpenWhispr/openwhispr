@@ -9,6 +9,7 @@ const {
 } = require("../lib/rendererTestHarness");
 const { managedPolicy } = require("../helpers/harness/policyFixtures");
 
+const DICTATION = "settingsPage.privacy.transcriptRetention";
 const CHATS = "settingsPage.privacy.chatRetention";
 const TRANSCRIPTS = "settingsPage.privacy.meetingTranscriptRetention";
 
@@ -53,7 +54,11 @@ async function mountRows(t, { settings = {}, policy = null, count = 0 } = {}) {
       `,
     },
   });
-  const [{ HistoryRetentionRows }, { useSettingsStore }, { usePolicyStore }] = await Promise.all([
+  const [
+    { HistoryRetentionRows, TranscriptRetentionRow },
+    { useSettingsStore },
+    { usePolicyStore },
+  ] = await Promise.all([
     vite.ssrLoadModule("/components/settings/HistoryRetentionRows.tsx"),
     vite.ssrLoadModule("/stores/settingsStore.ts"),
     vite.ssrLoadModule("/stores/policyStore.ts"),
@@ -63,7 +68,10 @@ async function mountRows(t, { settings = {}, policy = null, count = 0 } = {}) {
   const dialogs = [];
   let tree;
   function Harness() {
-    tree = HistoryRetentionRows({ showConfirmDialog: (options) => dialogs.push(options) });
+    tree = [
+      TranscriptRetentionRow(),
+      HistoryRetentionRows({ showConfirmDialog: (options) => dialogs.push(options) }),
+    ];
     return null;
   }
   const root = createRoot(container);
@@ -178,4 +186,43 @@ test("a workspace that never keeps history leaves the periods to the user", asyn
   assert.equal(rows.select(CHATS).props.disabled, false);
   assert.equal(rows.select(CHATS).props.value, 30);
   assert.notEqual(rows.row(CHATS).props.description, "common.managedByOrg");
+});
+
+test("the dictation period applies at once, with no confirmation", async (t) => {
+  const rows = await mountRows(t, { settings: { transcriptRetentionDays: "30" }, count: 5 });
+
+  await rows.choose(DICTATION, 7);
+
+  assert.equal(rows.state().transcriptRetentionDays, 7);
+  assert.deepEqual(rows.dialogs, []);
+  assert.deepEqual(rows.previews, []);
+});
+
+test("turning local history off disables the dictation period", async (t) => {
+  const rows = await mountRows(t, { settings: { dataRetentionEnabled: "false" } });
+
+  assert.equal(rows.select(DICTATION).props.disabled, true);
+  assert.equal(rows.row(DICTATION).props.description, `${DICTATION}Description`);
+});
+
+test("a workspace that always keeps history locks the dictation period at Forever", async (t) => {
+  const policy = managedPolicy();
+  policy.dataRetention.localHistoryMode = "always_on";
+  const rows = await mountRows(t, { settings: { transcriptRetentionDays: "14" }, policy });
+
+  assert.equal(rows.select(DICTATION).props.disabled, true);
+  assert.equal(rows.select(DICTATION).props.value, 0);
+  assert.equal(rows.row(DICTATION).props.description, "common.managedByOrg");
+  assert.equal(rows.state().transcriptRetentionDays, 14, "the member's own choice is kept");
+});
+
+test("a workspace that never keeps history shows the member's dictation period", async (t) => {
+  const policy = managedPolicy();
+  policy.dataRetention.localHistoryMode = "always_off";
+  const rows = await mountRows(t, { settings: { transcriptRetentionDays: "14" }, policy });
+
+  // Disabled because history is off, as before; the organization does not set this period.
+  assert.equal(rows.select(DICTATION).props.disabled, true);
+  assert.equal(rows.select(DICTATION).props.value, 14);
+  assert.equal(rows.row(DICTATION).props.description, `${DICTATION}Description`);
 });

@@ -1315,6 +1315,12 @@ class IPCHandlers {
       meetingTranscriptRetentionDays,
     } = this._retentionSettings;
     try {
+      if (audioRetentionDays > 0) {
+        this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);
+      }
+      // A workspace that always keeps history sends 0 for the periods below, but only
+      // once its policy has arrived; until then they are only the user's.
+      if (!this._isLocalHistoryPolicyKnown()) return;
       if (transcriptRetentionDays > 0) {
         const { ids, analyticsPurged } =
           this.databaseManager.deleteTranscriptionsExpiredBefore(transcriptRetentionDays);
@@ -1324,12 +1330,6 @@ class IPCHandlers {
         }
         if (analyticsPurged > 0) broadcastToWindows("analytics-changed");
       }
-      if (audioRetentionDays > 0) {
-        this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);
-      }
-      // A workspace that always keeps history sends 0 for both, but only once its
-      // policy has arrived; until then these periods are only the user's.
-      if (!this._isLocalHistoryPolicyKnown()) return;
       if (chatRetentionDays > 0) {
         const { ids } = this.databaseManager.deleteConversationsExpiredBefore(chatRetentionDays);
         if (this.vectorIndex?.isReady?.()) {
