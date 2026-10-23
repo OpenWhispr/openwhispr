@@ -130,11 +130,12 @@ export function useAuth() {
   // An offline launch has no session to keep. Main's binding vouches for the
   // bearer on disk, so the last validated account is presented read-only:
   // nothing validates this generation, so sync and cloud API calls stay fenced
-  // and reconciliation waits for a real get-session.
-  const offlineCandidate = isPending || sessionIsBound ? null : getOfflineAccount();
+  // and reconciliation waits for a real get-session. Not gated on isPending:
+  // Better Auth sets it for every refetch while it holds no session, and only
+  // a verdict (which clears the offline account first) may end this state.
+  const offlineCandidate = sessionIsBound ? null : getOfflineAccount();
   const offlineAccount = offlineCandidate
     ? resolveOfflineAccount({
-        isPending,
         sessionBound: sessionIsBound,
         offlineAccount: offlineCandidate,
         scopeAction: getAccountScopeAction(offlineCandidate.userId),
@@ -152,7 +153,8 @@ export function useAuth() {
   // (presented as a guest). Resolution failure must not hold windows hostage —
   // dictation works without an account, and sync stays fenced by
   // hasValidatedAuthContext either way.
-  const isLoaded = !isPending && (sessionResolutionFailed || !accountScopeBlocked);
+  const isLoaded =
+    offlineAccount != null || (!isPending && (sessionResolutionFailed || !accountScopeBlocked));
 
   useEffect(() => {
     if (!gracePeriodActive) return;
@@ -167,9 +169,9 @@ export function useAuth() {
     invalidateValidatedAuthContext();
   }, [sessionError]);
 
-  // Refreshed on every validated launch, so its age bounds how long an offline
-  // device keeps presenting an account the server may have revoked. Better
-  // Auth keeps an unchanged user's object identity, so this runs on changes.
+  // Refreshed on every server validation (Better Auth hands back a new user
+  // object on each successful refetch), so its age bounds how long an offline
+  // device keeps presenting an account the server may have revoked.
   useEffect(() => {
     if (validatedUser) writeOfflineAccountProfile(validatedUser);
   }, [validatedUser]);

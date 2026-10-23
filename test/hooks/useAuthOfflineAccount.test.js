@@ -49,7 +49,7 @@ async function mountUseAuth(t, { initialStorage }) {
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
     window: {
-      location: { origin: "https://desktop.openwhispr.test" },
+      location: { origin: "https://desktop.openwhispr.test", search: "?panel=true" },
       electronAPI: {
         authGetTokenState: async () => ({ ...token }),
         getActiveAccountScope: async () =>
@@ -189,6 +189,7 @@ async function mountUseAuth(t, { initialStorage }) {
     storage,
     authContext,
     goOffline,
+    setSession,
     answer,
     reject,
     result: () => result,
@@ -213,6 +214,20 @@ test("an offline launch presents the last validated account read-only", async (t
   assert.deepEqual(auth.calls.setActiveAccountScope, []);
   assert.deepEqual(auth.calls.setIsSignedIn, []);
   assert.equal(auth.authContext.getValidatedAuthGeneration(), null);
+});
+
+test("a session refetch while offline keeps presenting the account", async (t) => {
+  const auth = await mountUseAuth(t, { initialStorage: reconciledFor("user-a") });
+  await auth.goOffline();
+
+  // Better Auth marks every refetch pending while it holds no session.
+  await auth.setSession({ data: null, isPending: true, error: null });
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.result().isLoaded, true);
+  assert.equal(auth.result().user.id, "user-a");
+
+  await auth.goOffline();
+  assert.equal(auth.result().isOfflineAccount, true);
 });
 
 test("an offline launch never presents a scope reconciled for another account", async (t) => {
@@ -280,4 +295,5 @@ test("back online, a 401 drops to guest and the credential stays unpresented", a
   assert.equal(auth.result().isOfflineAccount, false);
   assert.equal(auth.authContext.getOfflineAccount(), null);
   assert.deepEqual(auth.calls.setActiveAccountScope, []);
+  assert.equal(auth.storage.getItem(PROFILE_KEY), null);
 });

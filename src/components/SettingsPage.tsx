@@ -1777,7 +1777,7 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch, isOfflineAccount } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
@@ -2165,8 +2165,21 @@ export default function SettingsPage({
             ) : isLoaded && isSignedIn && user ? (
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
+                {isOfflineAccount && (
+                  <SettingsPanel>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.account.offlineAccount.title")}
+                        description={t("settingsPage.account.offlineAccount.description")}
+                      >
+                        <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </SettingsPanel>
+                )}
                 <ProfileSection
                   name={user.name || ""}
+                  readOnly={isOfflineAccount}
                   onSessionRefresh={() => {
                     void refetch();
                   }}
@@ -2196,7 +2209,7 @@ export default function SettingsPage({
                       <Button
                         onClick={handleDeleteAccount}
                         variant="outline"
-                        disabled={isDeletingAccount}
+                        disabled={isDeletingAccount || isOfflineAccount}
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >

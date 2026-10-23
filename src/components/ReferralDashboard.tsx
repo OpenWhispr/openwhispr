@@ -7,6 +7,7 @@ import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
 import { SpectrogramCard } from "./referral-cards/SpectrogramCard";
 import logger from "../utils/logger";
+import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import { EMAIL_REGEX } from "../utils/validation";
 
 const REFERRAL_WORD_GOAL = 2000;
@@ -268,6 +269,8 @@ export function ReferralDashboard() {
 
     try {
       setSendingInvite(true);
+      // Main sends the stored bearer as is; only a validated session may act on it.
+      if (!hasValidatedAuthContext()) throw new Error("No validated session");
       const result = await window.electronAPI?.sendReferralInvite?.(emailInput.trim());
 
       if (result?.success) {

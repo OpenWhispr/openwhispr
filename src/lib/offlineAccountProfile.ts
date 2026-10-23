@@ -83,7 +83,6 @@ export function clearOfflineAccountProfile(): void {
 }
 
 export interface OfflineAccountInput {
-  isPending: boolean;
   sessionBound: boolean;
   offlineAccount: OfflineAccount | null;
   scopeAction: AccountScopeAction;
@@ -101,13 +100,12 @@ export interface PresentedOfflineAccount extends OfflineAccount {
  * until a real get-session runs reconciliation.
  */
 export function resolveOfflineAccount({
-  isPending,
   sessionBound,
   offlineAccount,
   scopeAction,
   profile,
 }: OfflineAccountInput): PresentedOfflineAccount | null {
-  if (isPending || sessionBound || !offlineAccount) return null;
+  if (sessionBound || !offlineAccount) return null;
   if (scopeAction !== "none") return null;
   if (!profile || profile.id !== offlineAccount.userId) return null;
   return { ...offlineAccount, profile };

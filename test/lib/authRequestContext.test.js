@@ -4,7 +4,12 @@ const assert = require("node:assert/strict");
 function installWindow(state) {
   const previousWindow = global.window;
   global.window = {
-    location: { origin: "https://desktop.openwhispr.test" },
+    // Only the control panel (?panel=true) resolves its own session.
+    location: {
+      origin: "https://desktop.openwhispr.test",
+      search: state.dictationWindow ? "" : "?panel=true",
+    },
+    localStorage: state.storage,
     electronAPI: {
       authGetTokenState: async () => ({ ...state.current }),
       authSetToken: async (token, expectedGeneration) => {
@@ -328,5 +333,94 @@ test("a confirmed session or a new credential ends the offline account", async (
   assert.deepEqual(auth.getOfflineAccount(), { userId: "user-a", generation: 8 });
   // Sign-out clears the token and crosses a generation.
   auth.observeAuthTokenStateEvent({ generation: 9, hasToken: false });
+  assert.equal(auth.getOfflineAccount(), null);
+});
+
+test("a window that follows main's scope never presents an offline account", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const state = {
+    current: { token: "token-a", generation: 10 },
+    binding: { accountId: "user-a", token: "token-a" },
+    dictationWindow: true,
+  };
+  t.after(installWindow(state));
+
+  // The dictation window's get-session always fails, online or not.
+  await failSessionFetch(t, auth);
+  await auth.handleAuthRequestError({
+    request: sessionRequest(10, "token-a"),
+    response: new Response("", { status: 503 }),
+  });
+
+  assert.equal(auth.getOfflineAccount(), null);
+});
+
+test("a proxy's 403 or 404 says nothing about the credential", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  for (const status of [403, 404, 407]) {
+    auth.resetAuthRequestContextForTests();
+    const state = {
+      current: { token: "token-a", generation: 11 },
+      binding: { accountId: "user-a", token: "token-a" },
+    };
+    const restore = installWindow(state);
+    try {
+      await auth.readAuthTokenState();
+      await auth.handleAuthRequestError({
+        request: sessionRequest(11, "token-a"),
+        response: new Response("<html></html>", { status }),
+      });
+      assert.deepEqual(auth.getOfflineAccount(), { userId: "user-a", generation: 11 }, `${status}`);
+    } finally {
+      restore();
+    }
+  }
+});
+
+test("a 401 drops the saved profile, so no later launch presents it offline", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const values = new Map([["openwhispr:accountProfile", "{}"]]);
+  const state = {
+    current: { token: "token-a", generation: 12 },
+    binding: { accountId: "user-a", token: "token-a" },
+    storage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+  t.after(installWindow(state));
+  await auth.readAuthTokenState();
+
+  await auth.handleAuthRequestError({
+    request: sessionRequest(12, "token-a"),
+    response: new Response("", { status: 401 }),
+  });
+
+  assert.equal(values.has("openwhispr:accountProfile"), false);
+});
+
+test("a session that resolved to no user stays a verdict through a later outage", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const state = {
+    current: { token: "token-a", generation: 13 },
+    binding: { accountId: "user-a", token: "token-a" },
+  };
+  t.after(installWindow(state));
+
+  await auth.handleAuthRequestSuccess({
+    data: null,
+    response: new Response("null", { status: 200 }),
+    request: sessionRequest(13, "token-a"),
+  });
+  // A refetch then hits a 503 while reconciliation is still purging.
+  await auth.handleAuthRequestError({
+    request: sessionRequest(13, "token-a"),
+    response: new Response("", { status: 503 }),
+  });
+
   assert.equal(auth.getOfflineAccount(), null);
 });

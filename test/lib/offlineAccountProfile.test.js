@@ -59,7 +59,6 @@ test("clearing removes the profile", async (t) => {
 const OFFLINE = { userId: "user-a", generation: 4 };
 const PROFILE = { id: "user-a", name: "Ada", email: "", image: null, emailVerified: false };
 const presentable = {
-  isPending: false,
   sessionBound: false,
   offlineAccount: OFFLINE,
   scopeAction: "none",
@@ -76,7 +75,6 @@ test("any pending reconciliation, a live session or a mismatched profile stays a
   for (const scopeAction of ["purge", "verify", "remember-user"]) {
     assert.equal(resolveOfflineAccount({ ...presentable, scopeAction }), null, scopeAction);
   }
-  assert.equal(resolveOfflineAccount({ ...presentable, isPending: true }), null);
   assert.equal(resolveOfflineAccount({ ...presentable, sessionBound: true }), null);
   assert.equal(resolveOfflineAccount({ ...presentable, offlineAccount: null }), null);
   assert.equal(resolveOfflineAccount({ ...presentable, profile: null }), null);

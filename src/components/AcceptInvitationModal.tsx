@@ -11,6 +11,7 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { InvitationsService } from "../services/InvitationsService";
+import { CloudApiError } from "../services/cloudApi";
 import {
   storePendingInvitationToken,
   clearPendingInvitationToken,
@@ -102,7 +103,13 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
     } catch (err) {
       toast({
         title: t("workspaces.accept.errorTitle"),
-        description: err instanceof Error ? err.message : t("common.unknownError"),
+        // An unvalidated session (offline) has no server error worth showing.
+        description:
+          err instanceof CloudApiError && err.code === "AUTH_CONTEXT_UNVALIDATED"
+            ? t("workspaces.accept.offlineDescription")
+            : err instanceof Error
+              ? err.message
+              : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
