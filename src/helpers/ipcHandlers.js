@@ -2490,6 +2490,10 @@ class IPCHandlers {
       return this.databaseManager.getSpaces();
     });
 
+    ipcMain.handle("db-has-other-account-rows", async () => {
+      return this.databaseManager.hasOtherAccountRows();
+    });
+
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
       const verdict = accountScopeBinding.evaluateScopeRequest({

@@ -138,6 +138,25 @@ const TEAM_SPACES_MAX_RETRY_MS = AUTO_SYNC_INTERVAL_MS;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
+// Every pull's delta cursor, and the account whose passes stamped them.
+const SYNC_CURSOR_KEYS = [
+  "lastSyncedAt.folders",
+  "lastSyncedAt.folders.team",
+  "lastSyncedAt.notes",
+  "lastSyncedAt.notes.team",
+  "lastSyncedAt.conversations",
+  "lastSyncedAt.transcriptions",
+  "lastSyncedAt.dictionary",
+  "lastSyncedAt.dictionary.id",
+  "lastSyncedAt.snippets",
+  "lastSyncedAt.snippets.id",
+];
+const SYNC_CURSOR_ACCOUNT_KEY = "lastSyncedAt.accountId";
+// Prefix of each signed-out account's saved cursors, restored when it returns.
+const SYNC_CURSOR_SAVED_PREFIX = "lastSyncedAt.byAccount.";
+// The account that claimed cursors stamped before owners were recorded, until
+// backfillUnownedCursors() has checked them.
+const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -419,6 +438,63 @@ export class SyncService {
     localStorage.removeItem("notesTree.expanded");
   }
 
+  // Pulls send their cursor as `since`, so another account's cursors would
+  // skip every row this account changed before them. Each account gets its
+  // own cursors back when it returns: a cursor-less pull lists live rows only
+  // and would miss deletes made meanwhile. Cursors stamped before the
+  // account was recorded stay with whoever syncs first, which then checks
+  // them once in backfillUnownedCursors(). Callers hold
+  // SYNC_ALL_LOCK, and a request that waited out an account switch claims
+  // nothing: it would stash the new account's cursors under the old one.
+  private claimSyncCursors(accountId: string, authGeneration: number): boolean {
+    if (
+      getValidatedAuthGeneration() !== authGeneration ||
+      getAuthRequestContextSnapshot().sessionUserId !== accountId
+    ) {
+      return false;
+    }
+    const owner = localStorage.getItem(SYNC_CURSOR_ACCOUNT_KEY);
+    if (owner === accountId) return true;
+    if (owner !== null) {
+      const ownerCursors: Record<string, string> = {};
+      for (const key of SYNC_CURSOR_KEYS) {
+        const value = localStorage.getItem(key);
+        if (value !== null) ownerCursors[key] = value;
+      }
+      localStorage.setItem(`${SYNC_CURSOR_SAVED_PREFIX}${owner}`, JSON.stringify(ownerCursors));
+      const savedKey = `${SYNC_CURSOR_SAVED_PREFIX}${accountId}`;
+      let saved: Record<string, unknown> = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(savedKey) ?? "{}") ?? {};
+      } catch {
+        // A corrupt entry only costs this account a cursor-less pull.
+      }
+      for (const key of SYNC_CURSOR_KEYS) {
+        const value = saved[key];
+        if (typeof value === "string") localStorage.setItem(key, value);
+        else localStorage.removeItem(key);
+      }
+      localStorage.removeItem(savedKey);
+    } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
+      localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
+    }
+    localStorage.setItem(SYNC_CURSOR_ACCOUNT_KEY, accountId);
+    return true;
+  }
+
+  // Unowned cursors may be another account's when another account has used
+  // this device. One snapshot pull of the account-scoped rows brings back
+  // whatever they would skip; snapshots leave the cursors alone, so deletes
+  // keep arriving through them.
+  private async backfillUnownedCursors(accountId: string): Promise<void> {
+    if (localStorage.getItem(UNOWNED_CURSORS_ACCOUNT_KEY) !== accountId) return;
+    if (await window.electronAPI.hasOtherAccountRows?.()) {
+      if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+      await this.pullConversations(true);
+    }
+    localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
+  }
+
   // lastSyncedAt is written only when a syncAll() pass completes, and
   // localStorage is shared across windows, so it doubles as the global
   // "last completed sync" stamp for throttling.
@@ -494,8 +570,9 @@ export class SyncService {
   async syncAll(waitForLock = false): Promise<void> {
     const full = this.canSync();
     if (!full && !this.canSyncTeamSpaces()) return;
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const authGeneration = getValidatedAuthGeneration();
-    if (authGeneration == null) return;
+    if (!accountId || authGeneration == null) return;
     // A pass already running may have synced past the data this request covers,
     // so flag a re-run instead of dropping it.
     if (this.syncing) {
@@ -511,10 +588,12 @@ export class SyncService {
       // reads the same local DB and cloud state, so it covers this request.
       // Manual passes wait so a user action is never silently dropped.
       await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
-        if (!lock) return;
+        if (!lock || !this.claimSyncCursors(accountId, authGeneration)) return;
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!hasValidatedAuthContext()) return;
         if (full) {
+          await this.backfillUnownedCursors(accountId);
+          if (!hasValidatedAuthContext()) return;
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes();
@@ -631,16 +710,29 @@ export class SyncService {
       this.dictionaryDirty = true;
       return;
     }
+    // Edits sync right away, possibly before this account's first syncAll()
+    // claimed the shared cursors, so they claim them under the same lock.
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return;
     this.syncing = true;
     try {
-      do {
-        this.dictionaryDirty = false;
-        await this.syncDictionary();
-      } while (this.dictionaryDirty);
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        do {
+          this.dictionaryDirty = false;
+          await this.syncDictionary();
+        } while (this.dictionaryDirty);
+      });
     } catch (err) {
       console.error("Dictionary sync failed:", err);
     } finally {
       this.syncing = false;
+    }
+    // A pass requested while this edit waited for the lock was deferred to it.
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
     }
   }
 
@@ -650,16 +742,26 @@ export class SyncService {
       this.snippetsDirty = true;
       return;
     }
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const authGeneration = getValidatedAuthGeneration();
+    if (!accountId || authGeneration == null) return;
     this.syncing = true;
     try {
-      do {
-        this.snippetsDirty = false;
-        await this.syncSnippets();
-      } while (this.snippetsDirty);
+      await navigator.locks.request(SYNC_ALL_LOCK, async () => {
+        if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        do {
+          this.snippetsDirty = false;
+          await this.syncSnippets();
+        } while (this.snippetsDirty);
+      });
     } catch (err) {
       console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
+    }
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
     }
   }
 

@@ -132,6 +132,7 @@ function createElectronApi(db, options = {}) {
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
+    hasOtherAccountRows: async () => db.hasOtherAccountRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),
     setSpaceSyncStatus: async (id, status) => db.setSpaceSyncStatus(id, status),
     purgeSpace: async (id, purgeOptions) => {
