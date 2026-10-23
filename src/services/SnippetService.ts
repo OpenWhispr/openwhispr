@@ -19,22 +19,26 @@ export interface CloudSnippetEntry {
 }
 
 async function batchCreate(
-  entries: SnippetEntryInput[]
+  entries: SnippetEntryInput[],
+  authGeneration?: number
 ): Promise<{ created: CloudSnippetEntry[] }> {
-  return cloudPost<{ created: CloudSnippetEntry[] }>("/api/snippets/batch-create", {
-    entries,
-  });
+  return cloudPost<{ created: CloudSnippetEntry[] }>(
+    "/api/snippets/batch-create",
+    { entries },
+    authGeneration
+  );
 }
 
 async function update(
   id: string,
-  updates: { trigger?: string; replacement?: string }
+  updates: { trigger?: string; replacement?: string },
+  authGeneration?: number
 ): Promise<CloudSnippetEntry> {
-  return cloudPatch<CloudSnippetEntry>("/api/snippets/update", { id, ...updates });
+  return cloudPatch<CloudSnippetEntry>("/api/snippets/update", { id, ...updates }, authGeneration);
 }
 
-async function deleteEntry(id: string): Promise<void> {
-  await cloudDelete("/api/snippets/delete", { id });
+async function deleteEntry(id: string, authGeneration?: number): Promise<void> {
+  await cloudDelete("/api/snippets/delete", { id }, authGeneration);
 }
 
 async function listSnapshot(

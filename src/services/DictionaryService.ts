@@ -26,23 +26,31 @@ export interface CloudDictionaryEntry {
 }
 
 async function batchCreate(
-  entries: DictionaryEntryInput[]
+  entries: DictionaryEntryInput[],
+  authGeneration?: number
 ): Promise<{ created: CloudDictionaryEntry[] }> {
-  return cloudPost<{ created: CloudDictionaryEntry[] }>("/api/dictionary/batch-create", {
-    entries,
-  });
+  return cloudPost<{ created: CloudDictionaryEntry[] }>(
+    "/api/dictionary/batch-create",
+    { entries },
+    authGeneration
+  );
 }
 
 async function update(
   id: string,
   // shared_at as for batchCreate: absent keeps, null clears.
-  updates: { word?: string; source?: DictionarySource; shared_at?: string | null }
+  updates: { word?: string; source?: DictionarySource; shared_at?: string | null },
+  authGeneration?: number
 ): Promise<CloudDictionaryEntry> {
-  return cloudPatch<CloudDictionaryEntry>("/api/dictionary/update", { id, ...updates });
+  return cloudPatch<CloudDictionaryEntry>(
+    "/api/dictionary/update",
+    { id, ...updates },
+    authGeneration
+  );
 }
 
-async function deleteEntry(id: string): Promise<void> {
-  await cloudDelete("/api/dictionary/delete", { id });
+async function deleteEntry(id: string, authGeneration?: number): Promise<void> {
+  await cloudDelete("/api/dictionary/delete", { id }, authGeneration);
 }
 
 async function listSnapshot(

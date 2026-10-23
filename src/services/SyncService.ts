@@ -1253,21 +1253,44 @@ export class SyncService {
   }
 
   private async pushTranscription(id: number): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const t = await window.electronAPI.getTranscriptionById?.(id);
     // A failed entry stays on this device until a retry completes it.
     if (!t || t.cloud_id || t.status === "failed") return;
 
-    const cloud = await TranscriptionsService.create({
-      client_transcription_id: t.client_transcription_id,
-      text: t.text,
-      raw_text: t.raw_text,
-      provider: t.provider,
-      model: t.model,
-      audio_duration_ms: t.audio_duration_ms,
-      status: t.status,
-      created_at: t.created_at,
-    });
-    await window.electronAPI.markTranscriptionSynced?.(t.id, cloud.id);
+    const cloud = await TranscriptionsService.create(
+      {
+        client_transcription_id: t.client_transcription_id,
+        text: t.text,
+        raw_text: t.raw_text,
+        provider: t.provider,
+        model: t.model,
+        audio_duration_ms: t.audio_duration_ms,
+        status: t.status,
+        created_at: t.created_at,
+      },
+      authGeneration
+    );
+    await this.acknowledgeTranscriptionCreate(t.id, cloud.id, authGeneration);
+  }
+
+  // Personal rows are read under one sign-in, so their pushes are pinned to it
+  // (`authGeneration`): after an account switch the request is refused rather
+  // than sent with the next account's token, and the ack is dropped.
+  private async acknowledgeTranscriptionCreate(
+    localId: number,
+    cloudId: string,
+    authGeneration: number
+  ): Promise<void> {
+    const result = await window.electronAPI.markTranscriptionSynced?.(
+      localId,
+      cloudId,
+      authGeneration
+    );
+    if (result?.orphaned) {
+      await TranscriptionsService.delete(cloudId, authGeneration);
+    }
   }
 
   // Runs first in every pass: probes spaces availability, mirrors the caller's
@@ -2679,6 +2702,8 @@ export class SyncService {
   }
 
   private async pushTranscriptionDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
     const withCloudId = deletes.filter((t) => t.cloud_id);
     if (withCloudId.length === 0) return;
@@ -2686,7 +2711,10 @@ export class SyncService {
     for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
       const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
       try {
-        const { deleted } = await TranscriptionsService.batchDelete(chunk.map((t) => t.cloud_id!));
+        const { deleted } = await TranscriptionsService.batchDelete(
+          chunk.map((t) => t.cloud_id!),
+          authGeneration
+        );
         for (const cloudId of deleted) {
           const local = chunk.find((t) => t.cloud_id === cloudId);
           if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
@@ -2698,6 +2726,8 @@ export class SyncService {
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const pending = ((await window.electronAPI.getPendingTranscriptions?.()) ?? []).filter(
       (t) => t.status !== "failed" && !!t.text?.trim()
     );
@@ -2716,13 +2746,14 @@ export class SyncService {
             audio_duration_ms: t.audio_duration_ms,
             status: t.status,
             created_at: t.created_at,
-          }))
+          })),
+          authGeneration
         );
         for (const cloudT of created) {
           const local = chunk.find(
             (t) => t.client_transcription_id === cloudT.client_transcription_id
           );
-          if (local) await window.electronAPI.markTranscriptionSynced?.(local.id, cloudT.id);
+          if (local) await this.acknowledgeTranscriptionCreate(local.id, cloudT.id, authGeneration);
         }
       } catch (err) {
         console.error("Transcription batch create failed:", err);
@@ -2802,6 +2833,8 @@ export class SyncService {
   }
 
   private async pushPendingDictionary(): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     const pending = (await window.electronAPI.getPendingDictionary?.()) ?? [];
     if (pending.length === 0) return true;
     let succeeded = true;
@@ -2811,13 +2844,17 @@ export class SyncService {
 
     for (const entry of updates) {
       try {
-        const server = await DictionaryService.update(entry.cloud_id!, {
-          word: entry.word,
-          source: entry.source,
-          // Only a local set or clear: an ordinary edit leaves the server's
-          // value alone, which another device may have set meanwhile.
-          ...(entry.shared_at_dirty ? { shared_at: toCloudSharedAt(entry.shared_at) } : {}),
-        });
+        const server = await DictionaryService.update(
+          entry.cloud_id!,
+          {
+            word: entry.word,
+            source: entry.source,
+            // Only a local set or clear: an ordinary edit leaves the server's
+            // value alone, which another device may have set meanwhile.
+            ...(entry.shared_at_dirty ? { shared_at: toCloudSharedAt(entry.shared_at) } : {}),
+          },
+          authGeneration
+        );
         await window.electronAPI.markDictionarySynced?.(
           entry.id,
           server.id,
@@ -2825,7 +2862,8 @@ export class SyncService {
           entry.word,
           entry.source,
           server.source,
-          entry
+          entry,
+          authGeneration
         );
       } catch (err) {
         succeeded = false;
@@ -2854,7 +2892,8 @@ export class SyncService {
             ...(e.shared_at || e.shared_at_dirty
               ? { shared_at: toCloudSharedAt(e.shared_at) }
               : {}),
-          }))
+          })),
+          authGeneration
         );
         const byClientId = new Map(created.map((c) => [c.client_dict_id, c]));
         let unmatched = 0;
@@ -2865,7 +2904,9 @@ export class SyncService {
             continue;
           }
           // 0 changes means the local row was deleted between snapshot and ack —
-          // delete the freshly-created server row so we don't orphan it.
+          // delete the freshly-created server row so we don't orphan it. A stale
+          // ack (the account changed) never cleans up: the server merges a create
+          // into an existing word, so that row may be the account's own.
           const result = await window.electronAPI.markDictionarySynced?.(
             local.id,
             server.id,
@@ -2873,11 +2914,12 @@ export class SyncService {
             local.word,
             local.source,
             server.source,
-            local
+            local,
+            authGeneration
           );
-          if (result && result.changes === 0) {
+          if (result && result.changes === 0 && !result.stale) {
             try {
-              await DictionaryService.delete(server.id);
+              await DictionaryService.delete(server.id, authGeneration);
             } catch (deleteErr) {
               succeeded = false;
               console.error("Dictionary orphan cleanup failed:", deleteErr);
@@ -2899,12 +2941,14 @@ export class SyncService {
   }
 
   private async pushDictionaryDeletes(): Promise<boolean> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return false;
     let succeeded = true;
     const deletes = (await window.electronAPI.getPendingDictionaryDeletes?.()) ?? [];
     for (const entry of deletes) {
       if (!entry.cloud_id) continue;
       try {
-        await DictionaryService.delete(entry.cloud_id);
+        await DictionaryService.delete(entry.cloud_id, authGeneration);
         await window.electronAPI.hardDeleteDictionary?.(entry.id);
       } catch (err) {
         // 404 means the row is already gone server-side — treat as success.
@@ -3380,6 +3424,8 @@ export class SyncService {
   }
 
   private async pushPendingSnippets(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const pending = (await window.electronAPI.getPendingSnippets?.()) ?? [];
     if (pending.length === 0) return;
 
@@ -3388,16 +3434,18 @@ export class SyncService {
 
     for (const entry of updates) {
       try {
-        const server = await SnippetService.update(entry.cloud_id!, {
-          trigger: entry.trigger,
-          replacement: entry.replacement,
-        });
+        const server = await SnippetService.update(
+          entry.cloud_id!,
+          { trigger: entry.trigger, replacement: entry.replacement },
+          authGeneration
+        );
         await window.electronAPI.markSnippetSynced?.(
           entry.id,
           server.id,
           server.updated_at,
           entry.trigger,
-          entry.replacement
+          entry.replacement,
+          authGeneration
         );
       } catch (err) {
         if (isHttpStatus(err, 404)) {
@@ -3412,7 +3460,8 @@ export class SyncService {
             entry.cloud_id!,
             undefined,
             entry.trigger,
-            entry.replacement
+            entry.replacement,
+            authGeneration
           );
         } else {
           console.error("Snippet update sync failed:", err);
@@ -3430,7 +3479,8 @@ export class SyncService {
             replacement: e.replacement,
             created_at: e.created_at,
             updated_at: e.updated_at,
-          }))
+          })),
+          authGeneration
         );
         const byClientId = new Map(created.map((c) => [c.client_snippet_id, c]));
         let unmatched = 0;
@@ -3440,16 +3490,18 @@ export class SyncService {
             unmatched += 1;
             continue;
           }
+          // As with dictionary words, a stale ack never cleans up.
           const result = await window.electronAPI.markSnippetSynced?.(
             local.id,
             server.id,
             server.updated_at,
             local.trigger,
-            local.replacement
+            local.replacement,
+            authGeneration
           );
-          if (result && result.changes === 0) {
+          if (result && result.changes === 0 && !result.stale) {
             try {
-              await SnippetService.delete(server.id);
+              await SnippetService.delete(server.id, authGeneration);
             } catch (deleteErr) {
               console.error("Snippet orphan cleanup failed:", deleteErr);
             }
@@ -3467,11 +3519,13 @@ export class SyncService {
   }
 
   private async pushSnippetDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const deletes = (await window.electronAPI.getPendingSnippetDeletes?.()) ?? [];
     for (const entry of deletes) {
       if (!entry.cloud_id) continue;
       try {
-        await SnippetService.delete(entry.cloud_id);
+        await SnippetService.delete(entry.cloud_id, authGeneration);
         await window.electronAPI.hardDeleteSnippet?.(entry.id);
       } catch (err) {
         if (isHttpStatus(err, 404)) {

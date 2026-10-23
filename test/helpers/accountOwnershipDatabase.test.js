@@ -101,6 +101,10 @@ function createDatabaseManager() {
       account_id TEXT PRIMARY KEY,
       cleared_through TEXT NOT NULL
     );
+    CREATE TABLE analytics_account_clear_state (
+      account_scope TEXT PRIMARY KEY,
+      cleared_through TEXT NOT NULL
+    );
     CREATE TABLE connector_actions (
       id TEXT PRIMARY KEY,
       account_id TEXT

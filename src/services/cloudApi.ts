@@ -107,8 +107,14 @@ export async function cloudGetPublic<T = unknown>(path: string): Promise<T> {
   return cloudRequest<T>("GET", path, undefined, true);
 }
 
-export async function cloudPost<T = unknown>(path: string, body?: unknown): Promise<T> {
-  return cloudRequest<T>("POST", path, body);
+// `authGeneration` pins the request to the sign-in that read the data it
+// carries; a replacement session's token is then refused, not used.
+export async function cloudPost<T = unknown>(
+  path: string,
+  body?: unknown,
+  authGeneration?: number
+): Promise<T> {
+  return cloudRequest<T>("POST", path, body, undefined, authGeneration);
 }
 
 export async function cloudPostForAuthGeneration<T = unknown>(
@@ -119,8 +125,12 @@ export async function cloudPostForAuthGeneration<T = unknown>(
   return cloudRequest<T>("POST", path, body, false, authGeneration);
 }
 
-export async function cloudPatch<T = unknown>(path: string, body?: unknown): Promise<T> {
-  return cloudRequest<T>("PATCH", path, body);
+export async function cloudPatch<T = unknown>(
+  path: string,
+  body?: unknown,
+  authGeneration?: number
+): Promise<T> {
+  return cloudRequest<T>("PATCH", path, body, undefined, authGeneration);
 }
 
 export async function cloudPatchForAuthGeneration<T = unknown>(
@@ -131,8 +141,12 @@ export async function cloudPatchForAuthGeneration<T = unknown>(
   return cloudRequest<T>("PATCH", path, body, false, authGeneration);
 }
 
-export async function cloudDelete<T = unknown>(path: string, body?: unknown): Promise<T> {
-  return cloudRequest<T>("DELETE", path, body);
+export async function cloudDelete<T = unknown>(
+  path: string,
+  body?: unknown,
+  authGeneration?: number
+): Promise<T> {
+  return cloudRequest<T>("DELETE", path, body, undefined, authGeneration);
 }
 
 export async function cloudDeleteForAuthGeneration<T = unknown>(

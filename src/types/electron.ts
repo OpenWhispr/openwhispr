@@ -1767,6 +1767,8 @@ declare global {
       getDictionary: () => Promise<string[]>;
       /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      /** Writes the cached list only into a database that has never held one. */
+      seedDictionary?: (words: string[]) => Promise<{ success: boolean; seeded: boolean }>;
       applyDictionaryChanges?: (changes: {
         add?: string[];
         remove?: string[];
@@ -1776,6 +1778,9 @@ declare global {
       setSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
       ) => Promise<{ success: boolean }>;
+      seedSnippets?: (
+        snippets: Array<{ trigger: string; replacement: string }>
+      ) => Promise<{ success: boolean; seeded: boolean }>;
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
       ) => () => void;
@@ -3940,7 +3945,11 @@ declare global {
       upsertTranscriptionFromCloud?: (
         cloudTranscription: Record<string, unknown>
       ) => Promise<TranscriptionItem>;
-      markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
+      markTranscriptionSynced?: (
+        id: number,
+        cloudId: string,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; orphaned?: boolean; stale?: boolean }>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
 
@@ -3958,8 +3967,9 @@ declare global {
         expectedWord?: string,
         expectedSource?: DictionaryEntryItem["source"],
         serverSource?: DictionaryEntryItem["source"],
-        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">
-      ) => Promise<{ success: boolean; changes: number }>;
+        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
@@ -4025,8 +4035,9 @@ declare global {
         cloudId: string,
         serverUpdatedAt?: string,
         expectedTrigger?: string,
-        expectedReplacement?: string
-      ) => Promise<{ success: boolean; changes: number }>;
+        expectedReplacement?: string,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
       hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;

@@ -633,10 +633,10 @@ test("clearing history and deleting account data both erase analytics rows", (t)
   recordEvent(db, "event-1");
   db.clearTranscriptions();
   assert.equal(db.getAnalyticsSummary().totalDictations, 0);
-  const { cleared_through: deviceClearedThrough } = db.db
-    .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
+  const { cleared_through: clearedThrough } = db.db
+    .prepare("SELECT cleared_through FROM analytics_account_clear_state WHERE account_scope = ''")
     .get();
-  const afterClear = new Date(Date.parse(deviceClearedThrough) + 1_000).toISOString();
+  const afterClear = new Date(Date.parse(clearedThrough) + 1_000).toISOString();
 
   db.setActiveAccountId("account-a");
   recordEvent(db, "event-2", { occurredAt: afterClear });
@@ -673,7 +673,11 @@ test("clearing history tombstones only the counters the cloud actually holds", (
 
   db.clearTranscriptions();
 
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(
+    db.getAnalyticsSummary().totalDictations,
+    1,
+    "only account-b's counter is left in the device summary"
+  );
   assert.deepEqual(db.getPendingAnalyticsEvents(), []);
   assert.equal(db.countUnclaimedAnalyticsEvents(), 0);
   assert.deepEqual(
@@ -691,9 +695,10 @@ test("clearing history tombstones only the counters the cloud actually holds", (
     db.db
       .prepare("SELECT event_id FROM analytics_events WHERE account_id = 'account-b'")
       .all()
-      .map((row) => row.event_id),
-    ["other-account-tombstone"],
-    "another account's pending cloud deletion survives"
+      .map((row) => row.event_id)
+      .sort(),
+    ["other-account", "other-account-tombstone"],
+    "another account's counters stay with its history, pending cloud deletion included"
   );
 
   // A batch already in flight when the clear landed still gets accepted; the
@@ -710,7 +715,7 @@ test("clearing history tombstones only the counters the cloud actually holds", (
 
   // A delayed producer for the same dictation must not revive a tombstone.
   recordEvent(db, "pending-1", { wordCount: 99 });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
   assert.deepEqual(
     db
       .getPendingAnalyticsDeletes()
@@ -724,14 +729,14 @@ test("clearing history tombstones only the counters the cloud actually holds", (
   recordEvent(db, "late-pre-clear", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
 
   db.setActiveAccountId("account-b");
   assert.equal(db.getPendingAnalyticsClear(), null, "the clear belongs to the active account");
   recordEvent(db, "late-other-account", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
   db.setActiveAccountId("account-a");
   recordEvent(db, "newer-retention", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) + 1_000).toISOString(),
@@ -751,7 +756,7 @@ test("clearing history tombstones only the counters the cloud actually holds", (
   recordEvent(db, "later-pre-clear", {
     occurredAt: new Date(Date.parse(pendingClear.cleared_through) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
   assert.deepEqual(db.getPendingAnalyticsDeletes(), [{ event_id: "newer-retention" }]);
 });
 
@@ -784,7 +789,7 @@ test("pre-sign-in analytics are attributed only by an explicit claim", (t) => {
   );
 });
 
-test("signed-out clearing is device-only and preserves queued account deletions", (t) => {
+test("signed-out clearing leaves account counters and their queued deletions alone", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -796,19 +801,27 @@ test("signed-out clearing is device-only and preserves queued account deletions"
       "UPDATE analytics_events SET deleted_at = datetime('now') WHERE event_id = 'pending-account-delete'"
     )
     .run();
+  recordEvent(db, "guest-event", { occurredAt: new Date().toISOString() });
+  db.db
+    .prepare("UPDATE analytics_events SET account_id = NULL WHERE event_id = 'guest-event'")
+    .run();
   db.setActiveAccountId(null);
 
   db.clearTranscriptions();
 
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(
+    db.getAnalyticsSummary().totalDictations,
+    1,
+    "the guest counter goes; the account's live counter stays"
+  );
   assert.equal(db.getPendingAnalyticsClear(), null);
-  const { cleared_through: deviceClearedThrough } = db.db
-    .prepare("SELECT cleared_through FROM analytics_device_clear_state WHERE id = 1")
+  const { cleared_through: clearedThrough } = db.db
+    .prepare("SELECT cleared_through FROM analytics_account_clear_state WHERE account_scope = ''")
     .get();
   recordEvent(db, "late-guest-event", {
-    occurredAt: new Date(Date.parse(deviceClearedThrough) - 1).toISOString(),
+    occurredAt: new Date(Date.parse(clearedThrough) - 1).toISOString(),
   });
-  assert.equal(db.getAnalyticsSummary().totalDictations, 0);
+  assert.equal(db.getAnalyticsSummary().totalDictations, 1);
   db.setActiveAccountId("account-a");
   assert.deepEqual(db.getPendingAnalyticsDeletes(), [{ event_id: "pending-account-delete" }]);
 });

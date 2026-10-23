@@ -405,3 +405,166 @@ test("reconstructed Insights counters stay with the account that dictated them",
     "A's Insights opt-in has nothing of B's to claim"
   );
 });
+
+test("a word or snippet re-added while signed out stays hidden behind the account's own and never breaks its sync", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  cloudA.seedDictionaryEntry({ word: "OpenWhispr", client_dict_id: "a-dict" });
+  cloudA.seedSnippet({ trigger: "addr", replacement: "A's address", client_snippet_id: "a-snip" });
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  await accountA.syncAll(true);
+
+  // Signed out, the account's rows are out of scope: startup re-adds the agent
+  // name and the user types the same trigger again.
+  db.setActiveAccountId(null);
+  assert.deepEqual(db.getDictionary(), []);
+  db.applyDictionaryChanges({ add: ["OpenWhispr"] });
+  db.setSnippets([{ trigger: "addr", replacement: "typed while signed out" }]);
+
+  const accountA2 = await signInAs(t, db, cloudA, "account-a");
+  assert.deepEqual(db.getDictionary(), ["OpenWhispr"], "the word is listed once");
+  assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's address" }]);
+  assert.deepEqual(db.getPendingDictionary(), [], "the hidden copy is never pushed");
+  assert.deepEqual(db.getPendingSnippets(), []);
+
+  await accountA2.syncAll(true);
+  assert.equal(cloudA.dictionary().length, 1);
+  assert.equal(cloudA.snippets().length, 1);
+
+  db.applyDictionaryChanges({ remove: ["OpenWhispr"] });
+  assert.deepEqual(db.getDictionary(), [], "removing the word removes it from the list");
+});
+
+test("another account's pull never takes over a word or snippet someone already synced", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  // From before attribution: account A's synced word and snippet.
+  db.db
+    .prepare(
+      `INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, legacy_unattributed)
+       VALUES ('foo', 'a-dict', 'a-cloud', 'synced', 1)`
+    )
+    .run();
+  db.db
+    .prepare(
+      `INSERT INTO snippets (trigger, replacement, client_snippet_id, cloud_id, sync_status, legacy_unattributed)
+       VALUES ('addr', 'A''s address', 'a-snip', 'a-snip-cloud', 'synced', 1)`
+    )
+    .run();
+  const cloudB = createFakeCloud();
+  cloudB.seedDictionaryEntry({ word: "Foo", client_dict_id: "b-dict" });
+  cloudB.seedSnippet({ trigger: "addr", replacement: "B's address", client_snippet_id: "b-snip" });
+
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncAll(true);
+  assert.deepEqual(db.getDictionary(), ["Foo"], "B sees its own word, once");
+  assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "B's address" }]);
+
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(db.getDictionary(), ["foo"], "A's word is still A's");
+  assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's address" }]);
+  assert.equal(db.getDictionaryEntryByClientId("a-dict")?.cloud_id, "a-cloud");
+});
+
+test("pushing a row from before attribution doesn't hand it to the pushing account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.saveTranscription("dictated before the upgrade", null, { clientTranscriptionId: "legacy" });
+  db.db.prepare("UPDATE transcriptions SET legacy_unattributed = 1").run();
+  db.saveTranscription("dictated signed out", null, { clientTranscriptionId: "signed-out" });
+  const cloudB = createFakeCloud();
+
+  const accountB = await signInAs(t, db, cloudB, "account-b");
+  await accountB.syncAll(true);
+
+  const owner = (clientId) =>
+    db.db
+      .prepare("SELECT account_id FROM transcriptions WHERE client_transcription_id = ?")
+      .get(clientId).account_id;
+  assert.equal(owner("legacy"), null, "an upload proves nothing about who dictated it");
+  assert.equal(owner("signed-out"), "account-b", "a signed-out dictation joins the account");
+  db.setActiveAccountId("account-a");
+  assert.deepEqual(
+    db.getTranscriptions().map((row) => row.client_transcription_id),
+    ["legacy"],
+    "the other account still sees the legacy row"
+  );
+});
+
+test("an account switch while a push is in flight neither claims the row nor cleans up the cloud copy", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createFakeCloud();
+  db.setActiveAccountId("account-a");
+  db.applyDictionaryChanges({ add: ["Kubernetes"] });
+  db.setActiveAccountId(null);
+  db.saveTranscription("dictated signed out", null, { clientTranscriptionId: "signed-out" });
+
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  // The cloud answers each create after the user has switched to account B.
+  const switchAccount = () => {
+    db.setActiveAccountId("account-b");
+    windowStub.electronAPI.authState.generation += 1;
+    return false;
+  };
+  cloudA.failWith((call) => call.path === "/api/transcriptions/batch-create" && switchAccount());
+  cloudA.failWith((call) => call.path === "/api/dictionary/batch-create" && switchAccount());
+  await accountA.syncAll(true);
+
+  const transcription = db.db
+    .prepare("SELECT account_id, sync_status FROM transcriptions WHERE client_transcription_id = ?")
+    .get("signed-out");
+  assert.equal(transcription.account_id, null, "account B never claims A's upload");
+  assert.equal(transcription.sync_status, "pending");
+  assert.equal(cloudA.logFor("/api/dictionary/delete").length, 0, "no cleanup after a stale ack");
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getPendingDictionary()[0]?.word, "Kubernetes", "A's word stays pending for A");
+});
+
+test("clearing one account's history leaves another account's Insights rebuildable", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-b");
+  db.saveTranscription("B dictated this one", null, { clientTranscriptionId: "b-1" });
+  db.setActiveAccountId("account-a");
+  db.saveTranscription("A dictated this one", null, { clientTranscriptionId: "a-1" });
+
+  db.clearTranscriptions();
+  db.backfillAnalyticsHistoryBatch();
+
+  const events = db.db.prepare("SELECT event_id, account_id FROM analytics_events").all();
+  assert.deepEqual(events, [{ event_id: "b-1", account_id: "account-b" }]);
+});
+
+test("a cached list is seeded only into a database that has never held one", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  assert.equal(db.seedDictionary(["Kubernetes"]).seeded, true);
+  assert.equal(db.seedSnippets([{ trigger: "addr", replacement: "A's address" }]).seeded, true);
+
+  db.db.prepare("UPDATE custom_dictionary SET account_id = 'account-a'").run();
+  db.db.prepare("UPDATE snippets SET account_id = 'account-a'").run();
+  db.setActiveAccountId("account-b");
+  assert.equal(db.seedDictionary(["Kubernetes"]).seeded, false);
+  assert.equal(db.seedSnippets([{ trigger: "addr", replacement: "A's address" }]).seeded, false);
+  assert.deepEqual(db.getDictionary(), [], "A's cached words never land in B");
+  assert.deepEqual(db.getSnippets(), []);
+});
+
+test("an older build can still open a database where two accounts share a trigger", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.setSnippets([{ trigger: "addr", replacement: "A" }]);
+  db.setActiveAccountId("account-b");
+  db.setSnippets([{ trigger: "addr", replacement: "B" }]);
+
+  // What every build before per-account triggers runs at launch.
+  assert.doesNotThrow(() =>
+    db.db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_trigger_lower_active ON snippets(lower(trigger)) WHERE deleted_at IS NULL"
+    )
+  );
+});

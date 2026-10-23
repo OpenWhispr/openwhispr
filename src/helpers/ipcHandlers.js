@@ -101,6 +101,16 @@ function assertAnalyticsSyncContext(context) {
   }
   return context.accountId;
 }
+// A push is acked only under the sign-in that sent it. After an account switch
+// the ack would hand an unattributed row to the new account although the cloud
+// copy is the old one's, so it is dropped and the row stays pending.
+function isStaleSyncAck(expectedAuthGeneration) {
+  return (
+    expectedAuthGeneration !== undefined &&
+    tokenStore.getState().generation !== expectedAuthGeneration
+  );
+}
+const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -2029,7 +2039,7 @@ class IPCHandlers {
       const result = this.databaseManager.clearTranscriptions();
       if (result?.success) {
         // Only the cleared history's recordings: another account's stay.
-        for (const id of result.ids) this.audioStorageManager.deleteAudio(id);
+        this.audioStorageManager.deleteAudioForTranscriptions(result.ids);
         setImmediate(() => {
           broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
@@ -2037,7 +2047,7 @@ class IPCHandlers {
           broadcastToWindows("analytics-changed");
         });
       }
-      return result;
+      return { success: result.success, cleared: result.cleared };
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
@@ -2247,6 +2257,13 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
+    ipcMain.handle("db-seed-dictionary", async (_event, words) => {
+      if (!Array.isArray(words)) {
+        throw new Error("words must be an array");
+      }
+      return this.databaseManager.seedDictionary(words);
+    });
+
     ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
       const { add, remove } = changes ?? {};
       if (add !== undefined && !Array.isArray(add)) {
@@ -2284,8 +2301,10 @@ class IPCHandlers {
         expectedWord,
         expectedSource,
         serverSource,
-        pushed
+        pushed,
+        expectedAuthGeneration
       ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markDictionaryEntrySynced(
           id,
           cloudId,
@@ -2419,6 +2438,13 @@ class IPCHandlers {
       return this.databaseManager.setSnippets(snippets);
     });
 
+    ipcMain.handle("db-seed-snippets", async (_event, snippets) => {
+      if (!Array.isArray(snippets)) {
+        throw new Error("snippets must be an array");
+      }
+      return this.databaseManager.seedSnippets(snippets);
+    });
+
     ipcMain.handle("db-get-pending-snippets", async () => {
       return this.databaseManager.getPendingSnippets();
     });
@@ -2437,7 +2463,16 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-mark-snippet-synced",
-      async (_event, id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) => {
+      async (
+        _event,
+        id,
+        cloudId,
+        serverUpdatedAt,
+        expectedTrigger,
+        expectedReplacement,
+        expectedAuthGeneration
+      ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markSnippetSynced(
           id,
           cloudId,
@@ -2793,9 +2828,7 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
-          for (const id of result.deletedTranscriptionIds) {
-            this.audioStorageManager.deleteAudio(id);
-          }
+          this.audioStorageManager.deleteAudioForTranscriptions(result.deletedTranscriptionIds);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
@@ -3253,8 +3286,10 @@ class IPCHandlers {
     ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
       return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
     });
-    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
-      this.databaseManager.markTranscriptionSynced(id, cloudId)
+    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
