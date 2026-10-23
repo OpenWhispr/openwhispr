@@ -44,6 +44,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { describeProviderError } from "../../utils/describeProviderError";
 import {
+  enterpriseProviderName,
   getAllReasoningModels,
   getBatchTranscriptionModel,
   getParakeetModelInfo,
@@ -79,7 +80,10 @@ import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
 import { saveUploadNote, uploadTitleFallback } from "../../services/uploadNotes";
-import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import {
+  getManagedScopeResolution,
+  useManagedScopeResolution,
+} from "../../stores/enterpriseIdentityStore";
 import { isManagedTranscriptionActive } from "../../services/managedTranscription";
 import { UploadCompleteWarnings, UploadModelSettingsButton } from "./UploadAudioFeedback";
 import { isSupportedUploadFile, uploadFileUrlPattern } from "../../utils/uploadAudioFormats";
@@ -159,6 +163,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [transcribingLabel, setTranscribingLabel] = useState<string | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [chunkProgress, setChunkProgress] = useState<{
     chunksTotal: number;
@@ -327,8 +332,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
   );
-  const managedActive =
-    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedActive = managed.kind === "managed";
+  const managedError =
+    managed.kind === "error"
+      ? managed.messageKey
+        ? t(managed.messageKey)
+        : managed.message
+      : null;
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
@@ -495,6 +506,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   ]);
 
   const getActiveModelLabel = (): string => {
+    if (managedError) return managedError;
+    if (managed.kind === "managed")
+      return `${enterpriseProviderName(managed.provider)} · ${managed.model}`;
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
@@ -668,6 +682,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const runId = ++runIdRef.current;
     const requestId = crypto.randomUUID();
     activeRequestIdRef.current = requestId;
+    setTranscribingLabel(getTranscribingLabel());
     setState("transcribing");
     setError(null);
     setProgress(0);
@@ -701,6 +716,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
     try {
       const diarization = await buildDiarizationSettings();
+      // Match the call-time managed resolution used by transcribeFile, then
+      // retain it if setup changes while this request is in flight.
+      setTranscribingLabel(
+        getTranscribingLabel(
+          getManagedScopeResolution("transcription", getSettings().enterpriseTranscriptionSetupMode)
+        )
+      );
       const res: FileTranscriptionResult = await transcribeFileWithSpeakers(
         currentFile.path,
         buildTranscriptionConfig(),
@@ -953,7 +975,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setUploadUseLocalWhisper(false);
   };
 
-  const getTranscribingLabel = (): string => {
+  const getTranscribingLabel = (resolution = managed): string => {
+    if (resolution.kind === "error")
+      return resolution.messageKey ? t(resolution.messageKey) : resolution.message;
+    if (resolution.kind === "managed") {
+      return t("notes.upload.transcribingProvider", {
+        provider: enterpriseProviderName(resolution.provider),
+      });
+    }
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
     if (isSelfHosted) {
@@ -970,11 +999,24 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        {state === "idle" && providerReady === false && (
+        {managedError && (
+          <div role="alert" className="mb-3 space-y-3">
+            <p className="text-sm text-destructive">{managedError}</p>
+            {state === "idle" && (
+              <Button
+                onClick={() => onOpenSettings?.("uploadTranscription")}
+                className={PRIMARY_ACTION_CLASS}
+              >
+                {t("notes.upload.noProviderAction")}
+              </Button>
+            )}
+          </div>
+        )}
+        {state === "idle" && providerReady === false && !managedError && (
           <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
         )}
 
-        {state === "idle" && providerReady !== false && (
+        {state === "idle" && providerReady !== false && !managedError && (
           <>
             <IdleView
               t={t}
@@ -1127,7 +1169,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 <Button
                   onClick={startBatchProcessing}
                   disabled={
-                    !uploadAllowedByPolicy || state === "downloading" || state === "transcribing"
+                    !!managedError ||
+                    !uploadAllowedByPolicy ||
+                    state === "downloading" ||
+                    state === "transcribing"
                   }
                   className={PRIMARY_ACTION_CLASS}
                 >
@@ -1145,7 +1190,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             getActiveModelLabel={getActiveModelLabel}
             reset={reset}
             handleTranscribe={handleTranscribe}
-            transcribeDisabled={batch.isProcessing || !uploadAllowedByPolicy}
+            transcribeDisabled={!!managedError || batch.isProcessing || !uploadAllowedByPolicy}
             requiresUpgrade={!!requiresUpgrade}
             fileTooLarge={fileTooLarge}
             isLargeFile={isLargeFile}
@@ -1204,7 +1249,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           <TranscribingView
             t={t}
             progress={progress}
-            getTranscribingLabel={getTranscribingLabel}
+            getTranscribingLabel={() => transcribingLabel ?? getTranscribingLabel()}
             file={file}
             chunkProgress={chunkProgress}
             onCancel={cancelTranscription}
