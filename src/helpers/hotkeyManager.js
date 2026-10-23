@@ -453,6 +453,17 @@ class HotkeyManager extends EventEmitter {
     return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
   }
 
+  // Debug-log line for a hotkey press or release: where it came from, which slots
+  // own the key, and the activation mode when the caller knows it. Key names and
+  // timings only, never dictated text.
+  logHotkeyEvent(source, action, key, details = {}) {
+    const slots = [];
+    for (const [slotName, slot] of this.slots) {
+      if ((slot.hotkeys ?? []).includes(key)) slots.push(slotName);
+    }
+    debugLogger.debug("Hotkey event", { source, action, key, slots, ...details }, "hotkey");
+  }
+
   // Name of the slot that owns `key`, or null. First match wins.
   findSlotByHotkey(key) {
     if (!key) return null;
@@ -746,7 +757,10 @@ class HotkeyManager extends EventEmitter {
       }
 
       // Pass the triggering hotkey so shared callbacks act on the one that fired.
-      const success = globalShortcut.register(accelerator, () => callback(hotkey));
+      const success = globalShortcut.register(accelerator, () => {
+        this.logHotkeyEvent("global-shortcut", "press", hotkey);
+        return callback(hotkey);
+      });
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
       if (success) {
         return { success: true, hotkey, accelerator };
