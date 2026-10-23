@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { PlatformColor, TextInput } from 'react-native';
+import { TextInput } from 'react-native';
+import { iosColor } from '@/config/colors';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
@@ -47,13 +48,13 @@ export function NewFolderSheet({ visible, onClose, onCreate }: NewFolderSheetPro
         value={name}
         onChangeText={setName}
         placeholder="Folder name"
-        placeholderTextColor={PlatformColor('tertiaryLabel') as unknown as string}
+        placeholderTextColor={iosColor('tertiaryLabel')}
         returnKeyType="done"
         onSubmitEditing={handleCreate}
         autoCapitalize="sentences"
         className="h-12 px-3 text-[17px] text-label"
         style={{
-          backgroundColor: PlatformColor('tertiarySystemFill') as unknown as string,
+          backgroundColor: iosColor('tertiarySystemFill'),
           borderRadius: NOTES_BUTTON_RADIUS,
           borderCurve: 'continuous',
           fontFamily: AppFont.regular,
