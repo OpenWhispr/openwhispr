@@ -546,8 +546,10 @@ test("a dictation's end cooldown cannot show a queued prompt during the next dic
 
   engine.setUserRecording(true);
   engine.handleCalendarReminder({ id: "standup", summary: "Standup" });
-  // The dictation lifecycle reports recording -> processing -> idle, and
-  // both later states mean "not recording".
+  // The dictation lifecycle reports recording -> processing -> idle ->
+  // preparing -> recording, and all three states between mean "not recording".
+  engine.setUserRecording(false);
+  t.mock.timers.tick(500);
   engine.setUserRecording(false);
   t.mock.timers.tick(500);
   engine.setUserRecording(false);
@@ -559,4 +561,21 @@ test("a dictation's end cooldown cannot show a queued prompt during the next dic
   engine.setUserRecording(false);
   t.mock.timers.tick(2500);
   assert.equal(shown.length, 1);
+});
+
+test("a card closing on its own during a dictation holds the queue until the dictation ends", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { engine, audioDetector, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true, processDetection: true });
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000, detectedAt: 0 });
+  assert.equal(shown.length, 1);
+
+  engine.setUserRecording(true);
+  engine.handleCalendarReminder({ id: "standup", summary: "Standup" });
+  engine.handleDetectionNotificationClosed(shown[0].detectionId);
+  assert.equal(shown.length, 1, "the reminder must not appear mid-dictation");
+
+  engine.setUserRecording(false);
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 2);
 });
