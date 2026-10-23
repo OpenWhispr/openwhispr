@@ -48,6 +48,11 @@ async function collect(stream) {
   return chunks;
 }
 
+const groqToolCall = (id) =>
+  groqChunk({
+    tool_calls: [{ index: 0, id, type: "function", function: { name: "lookup", arguments: "{}" } }],
+  });
+
 async function groqTools(vite, tool) {
   const { ToolRegistry } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
   const registry = new ToolRegistry();
@@ -107,18 +112,12 @@ test("a failed tool step is flagged as an error, and a cut-short run answers wit
   const { reasoningService, vite } = await loadReasoningService(t, {
     electronAPI: { getGroqKey: async () => "gsk_test" },
   });
-  const toolCall = (id) =>
-    groqChunk({
-      tool_calls: [
-        { index: 0, id, type: "function", function: { name: "lookup", arguments: "{}" } },
-      ],
-    });
   // Every step ends in a tool call until the cap stops the run; one more
   // request, with no tools, gives the answer.
   const bodies = stubFetch(t, [
     ...Array.from(
       { length: STEP_CAP },
-      (_, i) => () => sse(toolCall(`c${i}`), groqChunk({}, "tool_calls"))
+      (_, i) => () => sse(groqToolCall(`c${i}`), groqChunk({}, "tool_calls"))
     ),
     () => sse(groqChunk({ content: "The lookups failed." }), groqChunk({}, "stop")),
   ]);
@@ -146,6 +145,94 @@ test("a failed tool step is flagged as an error, and a cut-short run answers wit
     { type: "content", text: "The lookups failed." },
     { type: "done", finishReason: "tool-calls" },
   ]);
+});
+
+// The answer at the cap is extra: a provider that refuses it, or one that
+// can't take it, ends the turn at the cap as before.
+test("a BYOK answer at the step cap that fails ends the turn at the cap", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(t, {
+    electronAPI: { getGroqKey: async () => "gsk_test" },
+  });
+  const bodies = stubFetch(t, [
+    ...Array.from(
+      { length: STEP_CAP },
+      (_, i) => () => sse(groqToolCall(`c${i}`), groqChunk({}, "tool_calls"))
+    ),
+    () =>
+      new Response(
+        JSON.stringify({ error: { message: "Tools are required", type: "invalid_request_error" } }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      ),
+  ]);
+  const tools = await groqTools(vite, async () => ({ success: true, data: "ok", displayText: "" }));
+  const chunks = await collect(
+    reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "hi" }],
+      "openai/gpt-oss-120b",
+      "groq",
+      GROQ_CONFIG,
+      tools
+    )
+  );
+  assert.equal(bodies.length, STEP_CAP + 1);
+  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
+  assert.equal(chunks.filter((chunk) => chunk.type === "done").length, 1);
+});
+
+test("on Anthropic the step cap ends the turn without a last answer", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(t, {
+    electronAPI: { getAnthropicKey: async () => "sk-ant-test" },
+  });
+  const toolUse = (id) =>
+    sse(
+      {
+        type: "message_start",
+        message: {
+          id: `msg_${id}`,
+          type: "message",
+          role: "assistant",
+          model: "claude-sonnet-4-6",
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      },
+      {
+        type: "content_block_start",
+        index: 0,
+        content_block: { type: "tool_use", id, name: "lookup", input: {} },
+      },
+      {
+        type: "content_block_delta",
+        index: 0,
+        delta: { type: "input_json_delta", partial_json: "{}" },
+      },
+      { type: "content_block_stop", index: 0 },
+      {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use", stop_sequence: null },
+        usage: { output_tokens: 1 },
+      },
+      { type: "message_stop" }
+    );
+  const bodies = stubFetch(
+    t,
+    Array.from({ length: STEP_CAP }, (_, i) => () => toolUse(`toolu_${i}`))
+  );
+  const tools = await groqTools(vite, async () => ({ success: true, data: "ok", displayText: "" }));
+  const chunks = await collect(
+    reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "hi" }],
+      "claude-sonnet-4-6",
+      "anthropic",
+      GROQ_CONFIG,
+      tools
+    )
+  );
+  assert.equal(bodies.length, STEP_CAP);
+  assert.equal(chunks.filter((chunk) => chunk.type === "tool_result").length, STEP_CAP);
+  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
 });
 
 test("a screenshot attached mid-turn reaches every later step as an image", async (t) => {
@@ -200,6 +287,10 @@ function cloudBridge() {
       const [requestId] = startCalls.at(-1);
       for (const chunk of chunks) listeners.chunk({ requestId, chunk });
       listeners.end({ requestId });
+    },
+    fail(error) {
+      const [requestId] = startCalls.at(-1);
+      listeners.error({ requestId, error });
     },
   };
 }
@@ -293,6 +384,28 @@ test("a cloud run whose every step calls a tool answers once more, without tools
     { type: "content", text: "Here is what I found so far." },
     { type: "done", finishReason: "tool-calls" },
   ]);
+});
+
+test("a cloud answer at the step cap that fails ends the turn at the cap", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Loop" }], {
+      systemPrompt: "Answer.",
+      tools: [{ name: "lookup", description: "Look up", parameters: {} }],
+      executeToolCall: async () => ({ data: "ok", displayText: "ok" }),
+    })
+  );
+  for (let step = 0; step < STEP_CAP; step++) {
+    await settle();
+    bridge.step([{ type: "tool_call", id: `c${step}`, name: "lookup", arguments: "{}" }]);
+  }
+  await settle();
+  bridge.fail("Tool messages need tools");
+  const chunks = await output;
+
+  assert.equal(bridge.startCalls.length, STEP_CAP + 1);
+  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
 });
 
 test("a cloud answer at the step cap that claims an unbacked action is flagged, not asked again", async (t) => {

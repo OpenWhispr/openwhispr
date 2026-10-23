@@ -93,7 +93,8 @@ function toByokStreamProvider(provider: string): ByokStreamProvider {
 /**
  * A run that ends with finishReason "tool-calls" stopped at the step cap while
  * the model still wanted to call tools; one more step, with no tools, gave
- * its answer (STEP_LIMIT_NOTE). "unbacked_claim" follows a final
+ * its answer (STEP_LIMIT_NOTE), unless that step failed or the provider is
+ * Anthropic or Bedrock. "unbacked_claim" follows a final
  * answer that claims an action no tool call in its turn did: with `retry`, its
  * text is withdrawn and the model asked once more (CLAIM_CHECK_NOTE).
  */
@@ -1044,6 +1045,10 @@ class ReasoningService extends BaseReasoningService {
     let stepsLeft = tools ? ReasoningService.MAX_TOOL_STEPS : 1;
     let claimRetried = false;
     // Once the cap stops a run that still wanted tools, one last step with no tools answers.
+    // Not on Anthropic, whose SDK drops the tools but keeps the turn's tool
+    // calls, which the API refuses, nor on Bedrock, which drops the calls and
+    // results the answer would need: there the cap ends the turn as it stands.
+    const answersAtCap = Boolean(tools) && provider !== "anthropic" && provider !== "bedrock";
     let answeringAtCap = false;
 
     let canFlushFilteredText = true;
@@ -1148,7 +1153,7 @@ class ReasoningService extends BaseReasoningService {
               retry = !claimRetried && stepsTaken < stepsLeft;
               yield { type: "unbacked_claim", retry };
             }
-            capped = chunk.finishReason === "tool-calls" && !answeringAtCap && Boolean(tools);
+            capped = chunk.finishReason === "tool-calls" && !answeringAtCap && answersAtCap;
             if (answeringAtCap) yield { type: "done", finishReason: "tool-calls" };
             else if (!retry && !capped) yield { type: "done", finishReason: chunk.finishReason };
           }
@@ -1170,6 +1175,15 @@ class ReasoningService extends BaseReasoningService {
       finishFilteredText();
       if (abortController.signal.aborted) {
         yield { type: "done", finishReason: "stop" };
+        return;
+      }
+      // The answer at the cap is extra: when it fails, the turn ends at the cap.
+      if (answeringAtCap) {
+        logger.logReasoning("AGENT_STEP_LIMIT_ANSWER_FAILED", {
+          provider,
+          error: (error as Error)?.message,
+        });
+        yield { type: "done", finishReason: "tool-calls" };
         return;
       }
       // BYOK and LAN-with-tools failures arrive as AI SDK errors; enterprise
@@ -1506,10 +1520,20 @@ class ReasoningService extends BaseReasoningService {
       { systemPrompt: config.systemPrompt, screenContext: config.screenContext }
     );
     let answerText = "";
-    for await (const ev of answer.stream) {
-      if (ev.type !== "content") continue;
-      answerText += ev.text as string;
-      yield { type: "content", text: ev.text as string };
+    try {
+      for await (const ev of answer.stream) {
+        if (ev.type !== "content") continue;
+        answerText += ev.text as string;
+        yield { type: "content", text: ev.text as string };
+      }
+    } catch (error) {
+      // The answer is extra: when it fails, the turn ends at the cap.
+      logger.logReasoning("AGENT_STEP_LIMIT_ANSWER_FAILED", {
+        provider: "openwhispr",
+        error: (error as Error)?.message,
+      });
+      yield { type: "done", finishReason: "tool-calls" };
+      return;
     }
     if (answer.wasCancelled() || operationWasCancelled()) return;
     // Checked like any answer, but not asked again: the turn has no steps left.
