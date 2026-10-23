@@ -192,6 +192,14 @@ const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
   WHERE r.folder_id = folders.id AND r.entity_type = 'folder'
 ))`;
 
+// A space's container chats: its root chats, plus every chat in a folder it
+// holds now. Folder chats match only through their folder, because a folder
+// moved to another space (locally before its chats followed it, or by a pull)
+// leaves a stale space_id on them, and container chats never sync, so
+// retiring one by that stale space deletes it for good. Binds the space twice.
+const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NULL)
+  OR folder_id IN (SELECT id FROM folders WHERE space_id = ?))`;
+
 // A meeting synced by both a REST provider (Google/Microsoft) and Apple
 // (Calendar.app mirrors the same accounts) would double-fire reminders and
 // duplicate UI rows; suppress the Apple copy when a REST row occupies the same
@@ -4417,8 +4425,7 @@ class DatabaseManager {
           // container scope before deleting their parent rows.
           this._hardDeleteConversationsWhere(
             `note_id IN (SELECT id FROM notes WHERE space_id = ?)
-             OR space_id = ?
-             OR folder_id IN (SELECT id FROM folders WHERE space_id = ?)`,
+             OR ${SPACE_CONTAINER_CONVERSATION_FILTER}`,
             [localSpaceId, localSpaceId, localSpaceId]
           );
           this.db
@@ -4446,7 +4453,7 @@ class DatabaseManager {
           .run(localSpaceId, localSpaceId);
         if (!destructive) {
           this._retireConversationsWhere(
-            "space_id = ? OR folder_id IN (SELECT id FROM folders WHERE space_id = ?)",
+            SPACE_CONTAINER_CONVERSATION_FILTER,
             [localSpaceId, localSpaceId],
             { scrubSyncedMessages: true }
           );
@@ -7724,9 +7731,19 @@ class DatabaseManager {
             );
         })();
       }
-      return this.db
+      const folder = this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
+      // A move made on another device arrives as a new space_id; the folder's
+      // chats follow it, as they do in moveFolderToSpace.
+      if (folder) {
+        this.db
+          .prepare(
+            "UPDATE agent_conversations SET space_id = ? WHERE folder_id = ? AND space_id IS NOT ?"
+          )
+          .run(folder.space_id, folder.id, folder.space_id);
+      }
+      return folder;
     } catch (error) {
       debugLogger.error("Error upserting folder from cloud", { error: error.message }, "database");
       throw error;
