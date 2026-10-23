@@ -8,7 +8,22 @@ const AUTH_TOKEN = "harness-token";
 const AUTH_GENERATION = 0;
 
 // syncAll() asserts the whole snippet surface exists before doing any work and
-// aborts the pass if a name is missing, so it is present but inert.
+// aborts the pass if a name is missing, so it is present but inert unless a
+// test opts into the real bindings with { snippets: true }.
+function snippetApi(db) {
+  return {
+    getPendingSnippets: async () => db.getPendingSnippets(),
+    getPendingSnippetDeletes: async () => db.getPendingSnippetDeletes(),
+    getSnippetForCloudMerge: async (cloudEntry) => db.getSnippetForCloudMerge(cloudEntry),
+    upsertSnippetFromCloud: async (cloudEntry) => db.upsertSnippetFromCloud(cloudEntry),
+    markSnippetSynced: async (id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) =>
+      db.markSnippetSynced(id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement),
+    hardDeleteSnippet: async (id) => db.hardDeleteSnippet(id),
+    clearSnippetCloudId: async (id) => db.clearSnippetCloudId(id),
+    broadcastSnippetsUpdated: async () => ({ success: true }),
+  };
+}
+
 function inertSnippetApi() {
   return {
     getPendingSnippets: async () => [],
@@ -184,7 +199,7 @@ function createElectronApi(db, options = {}) {
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
 
-    ...inertSnippetApi(),
+    ...(options.snippets ? snippetApi(db) : inertSnippetApi()),
     ...inertAnalyticsApi(),
   };
 }
