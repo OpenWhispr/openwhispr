@@ -2885,7 +2885,19 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
+    ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder, opts) => {
+      // Relocated rows are stamped with the active account, so a sync that
+      // outlived its account must not move them, as db-purge-space guards.
+      if (opts?.expectedAuthGeneration !== undefined) {
+        const state = tokenStore.getState();
+        if (!state.token || state.generation !== opts.expectedAuthGeneration) {
+          return {
+            success: false,
+            error: "Authentication context changed before folder relocation",
+            code: "AUTH_CONTEXT_CHANGED",
+          };
+        }
+      }
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by

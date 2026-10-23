@@ -30,3 +30,13 @@ test("folder delete handlers rewrite relocated notes into the markdown mirror", 
     assert.ok(source.includes("_asyncMirrorWrite"), `${channel} rewrites relocated mirror files`);
   }
 });
+
+// Revoked-folder relocation releases other accounts' notes the same way, and
+// stamps the moved rows with the active account, so it refuses to run once the
+// account the sync started under has changed.
+test("revoked folder relocation rewrites released notes and checks the auth generation", () => {
+  const source = handlerBody("db-relocate-revoked-folder", "broadcast-sync-event");
+  assert.ok(source.includes("releasedNotes"), "consumes releasedNotes");
+  assert.ok(source.includes("_asyncMirrorWrite"), "rewrites released mirror files");
+  assert.ok(source.includes("expectedAuthGeneration"), "checks the expected auth generation");
+});

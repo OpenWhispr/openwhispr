@@ -1483,6 +1483,23 @@ test("relocateRevokedFolder releases another account's draft from a preserved le
   assert.ok(db.getNotes(null, 100, null, privateId).some((n) => n.id === theirs.id));
 });
 
+test("a preserved folder keeps its name when only another account's folder has it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  db.setActiveAccountId("other");
+  db.createFolder("Shared");
+  db.setActiveAccountId(null);
+  const legacy = db.createFolder("Legacy").folder;
+  db.markFolderSynced(legacy.id, "cloud-legacy-folder");
+  db.db.prepare("UPDATE folders SET name = 'Shared' WHERE id = ?").run(legacy.id);
+  db.setActiveAccountId("test-account");
+
+  const result = db.relocateRevokedFolder(legacy.id, privateId, true);
+  assert.ok(result.success);
+  assert.equal(result.folder.name, "Shared");
+});
+
 test("getFolderNoteCounts attributes space-root notes per space", (t) => {
   const db = createDb(t);
   if (!db) return;

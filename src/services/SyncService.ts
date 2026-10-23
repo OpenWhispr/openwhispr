@@ -119,6 +119,9 @@ interface SpaceSyncContext {
   privateSpace: SpaceItem | null;
   // Guard: at most one mid-pass spaces re-pull per pass.
   refreshedSpaces: boolean;
+  // The validated session this context was built under. Relocations stamp
+  // rows with the active account, so main refuses them under any other.
+  authGeneration: number | null;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -1096,6 +1099,7 @@ export class SyncService {
   }
 
   private async buildSpaceContext(): Promise<SpaceSyncContext> {
+    const authGeneration = getValidatedAuthGeneration();
     const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
     return {
       byId: new Map(spaces.map((s) => [s.id, s])),
@@ -1104,6 +1108,7 @@ export class SyncService {
       ),
       privateSpace: spaces.find((s) => s.kind === "private") ?? null,
       refreshedSpaces: false,
+      authGeneration,
     };
   }
 
@@ -1269,7 +1274,13 @@ export class SyncService {
   // identity so the next push re-creates it as personal (plan §7.2).
   private async handleRevokedFolderPush(folder: FolderItem, ctx: SpaceSyncContext): Promise<void> {
     if (!ctx.privateSpace) return;
-    await window.electronAPI.relocateRevokedFolder?.(folder.id, ctx.privateSpace.id, true);
+    const result = await window.electronAPI.relocateRevokedFolder?.(
+      folder.id,
+      ctx.privateSpace.id,
+      true,
+      { expectedAuthGeneration: ctx.authGeneration }
+    );
+    if (result?.code === "AUTH_CONTEXT_CHANGED") return;
     this.dispatchNoteRelocated(folder.name, ctx.byId.get(folder.space_id)?.name);
   }
 
@@ -1307,7 +1318,13 @@ export class SyncService {
       console.error(`Cannot preserve denied folder ${folder.id}: private space is missing`);
       return;
     }
-    await window.electronAPI.relocateRevokedFolder?.(folder.id, ctx.privateSpace.id, true);
+    const result = await window.electronAPI.relocateRevokedFolder?.(
+      folder.id,
+      ctx.privateSpace.id,
+      true,
+      { expectedAuthGeneration: ctx.authGeneration }
+    );
+    if (result?.code === "AUTH_CONTEXT_CHANGED") return;
     this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
     this.emitSyncUiEvent("folder-update-denied", { name: folder.name });
   }
@@ -1602,7 +1619,8 @@ export class SyncService {
               const result = await window.electronAPI.relocateRevokedFolder?.(
                 local.id,
                 ctx.privateSpace.id,
-                preserveFolder
+                preserveFolder,
+                { expectedAuthGeneration: ctx.authGeneration }
               );
               if (result?.success) {
                 const spaceName = ctx.byCloudSpaceId.get(cloudFolder.previous_space_id ?? "")?.name;

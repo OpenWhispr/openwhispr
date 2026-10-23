@@ -7578,10 +7578,15 @@ class DatabaseManager {
         let preservedFolder = null;
         if (preserveFolder) {
           let name = folder.name;
+          // Only this account's names clash, as in moveFolderToSpace: the
+          // folder is stamped with this account below.
+          const folderScope = this._accountScopeCondition("folders");
           const taken = this.db.prepare(
-            "SELECT 1 FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
+            `SELECT 1 FROM folders
+             WHERE name = ? AND space_id = ? AND id != ? AND ${FOLDER_NAME_TAKEN_FILTER}
+               AND ${folderScope.sql}`
           );
-          for (let n = 2; taken.get(name, privateSpaceId, id); n++) {
+          for (let n = 2; taken.get(name, privateSpaceId, id, ...folderScope.params); n++) {
             name = `${folder.name} (${n})`;
           }
           this.db
