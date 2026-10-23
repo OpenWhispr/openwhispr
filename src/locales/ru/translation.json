@@ -3285,6 +3285,7 @@
       "emptyEditorDescription": "Выберите действие из списка или создайте новое",
       "done": "Готово",
       "chunkProgress": "Часть {{step}} из {{total}}",
+      "waitingForModel": "Ожидание локальной модели",
       "emptyReply": "Модель вернула пустой ответ. Попробуйте снова или выберите другую модель.",
       "builtin": {
         "generateNotes": {

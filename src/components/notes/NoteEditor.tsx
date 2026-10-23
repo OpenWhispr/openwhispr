@@ -218,6 +218,7 @@ interface NoteEditorProps {
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   actionProgress?: NoteActionProgress | null;
+  actionWaitingForModel?: boolean;
   onCancelAction?: () => void;
   diarizationSessionId?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
@@ -256,6 +257,7 @@ export default function NoteEditor({
   actionProcessingState,
   actionName,
   actionProgress,
+  actionWaitingForModel = false,
   onCancelAction,
   diarizationSessionId,
   onLiveSpeakerLock,
@@ -1460,6 +1462,7 @@ export default function NoteEditor({
             state={actionProcessingState ?? "idle"}
             actionName={actionName ?? null}
             progress={actionProgress ?? null}
+            waitingForModel={actionWaitingForModel}
             onCancel={onCancelAction}
           />
           <div

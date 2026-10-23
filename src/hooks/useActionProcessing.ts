@@ -22,6 +22,7 @@ export function useActionProcessing(noteId: number | null) {
     status: state,
     actionName,
     progress,
+    waitingForModel,
   } = useActionProcessingStore(useShallow((s) => selectNoteActionState(s, noteId)));
 
   const runAction = useCallback(
@@ -42,5 +43,12 @@ export function useActionProcessing(noteId: number | null) {
     if (noteId != null) storeCancelAction(noteId);
   }, [noteId]);
 
-  return { state, actionName, progress: progress ?? null, runAction, cancel };
+  return {
+    state,
+    actionName,
+    progress: progress ?? null,
+    waitingForModel: !!waitingForModel,
+    runAction,
+    cancel,
+  };
 }

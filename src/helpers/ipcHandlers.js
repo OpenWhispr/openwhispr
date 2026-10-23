@@ -5641,7 +5641,18 @@ class IPCHandlers {
     ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
       try {
         const LocalReasoningService = require("../services/localReasoningBridge").default;
-        const result = await LocalReasoningService.processText(text, modelId, config);
+        const sender = event.sender;
+        const requestConfig = config && typeof config === "object" ? config : {};
+        const result = await LocalReasoningService.processText(text, modelId, {
+          ...requestConfig,
+          onQueueState: (state) => {
+            if (sender.isDestroyed()) return;
+            sender.send("local-reasoning-queue", {
+              requestId: requestConfig.requestId ?? null,
+              state,
+            });
+          },
+        });
         return { success: true, text: result };
       } catch (error) {
         // code/details carry the machine-readable failure across to the
