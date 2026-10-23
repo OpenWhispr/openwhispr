@@ -1291,7 +1291,7 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
-  /** Set on a fork: the chat it was copied from (local only, never synced). */
+  /** Set on a fork once the chat it was copied from is on this device. */
   parent_conversation_id?: number | null;
 }
 
@@ -1313,14 +1313,14 @@ export interface AgentConversationWithMessages {
   created_at: string;
   updated_at: string;
   parent_conversation_id?: number | null;
-  /** The parent message the fork's history runs through. */
-  fork_message_id?: number | null;
+  /** The parent's client id, which every device shares. */
+  parent_client_conversation_id?: string | null;
   /** Text the fork was made from, sent as context with its next request. */
   fork_context?: string | null;
   /** The parent's title, while the parent still exists. */
   parent_title?: string | null;
   /** How many of a fork's first messages it copied from its parent. */
-  fork_message_count?: number;
+  fork_message_count?: number | null;
   messages: AgentMessageRow[];
 }
 

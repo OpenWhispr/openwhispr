@@ -1006,6 +1006,9 @@ export class SyncService {
         title: full.title,
         created_at: full.created_at,
         updated_at: full.updated_at,
+        parent_client_conversation_id: full.parent_client_conversation_id,
+        fork_message_count: full.fork_message_count,
+        fork_context: full.fork_context,
         messages: full.messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -2297,6 +2300,9 @@ export class SyncService {
           title: full.title,
           created_at: full.created_at,
           updated_at: full.updated_at,
+          parent_client_conversation_id: full.parent_client_conversation_id,
+          fork_message_count: full.fork_message_count,
+          fork_context: full.fork_context,
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,

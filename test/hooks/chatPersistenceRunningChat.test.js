@@ -21,11 +21,6 @@ function fakeDb() {
     return {
       ...conversation,
       parent_title: parent?.title ?? null,
-      fork_message_count: rows.filter(
-        (row) =>
-          row.conversation_id === conversation.parent_conversation_id &&
-          row.id <= conversation.fork_message_id
-      ).length,
       messages: rows.filter((row) => row.conversation_id === id),
     };
   };
@@ -63,17 +58,16 @@ function fakeDb() {
     forkAgentConversation: async (conversationId, throughId, context) => {
       calls.fork.push({ conversationId, throughId, context });
       const source = conversations.get(conversationId);
+      const copied = rows.filter((r) => r.conversation_id === conversationId && r.id <= throughId);
       const fork = {
         id: 100 + conversations.size,
         title: source.title,
         parent_conversation_id: conversationId,
-        fork_message_id: throughId,
+        fork_message_count: copied.length,
         fork_context: context,
       };
       conversations.set(fork.id, fork);
-      for (const row of rows.filter(
-        (r) => r.conversation_id === conversationId && r.id <= throughId
-      )) {
+      for (const row of copied) {
         rows.push({ ...row, id: nextId++, conversation_id: fork.id });
       }
       return get(fork.id);

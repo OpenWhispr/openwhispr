@@ -717,12 +717,13 @@ class DatabaseManager {
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
-      // A fork records the chat it was copied from, the message its history
-      // runs through and the text it was forked with. Local only: the cloud
-      // conversation has no columns for them.
+      // A fork records the chat it was copied from, here and by the client id
+      // every device shares, how many of its first messages it copied and the
+      // text it was forked with. All but the local parent id sync.
       for (const column of [
         "parent_conversation_id INTEGER",
-        "fork_message_id INTEGER",
+        "parent_client_conversation_id TEXT",
+        "fork_message_count INTEGER",
         "fork_context TEXT",
       ]) {
         try {
@@ -4820,10 +4821,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const conversation = this.db
         .prepare(
-          `SELECT c.*, p.title AS parent_title,
-             (SELECT COUNT(*) FROM agent_messages pm
-               WHERE pm.conversation_id = c.parent_conversation_id
-                 AND pm.id <= c.fork_message_id) AS fork_message_count
+          `SELECT c.*, p.title AS parent_title
            FROM agent_conversations c
            LEFT JOIN agent_conversations p
              ON p.id = c.parent_conversation_id AND p.deleted_at IS NULL
@@ -4996,7 +4994,11 @@ class DatabaseManager {
           .prepare("SELECT * FROM agent_conversations WHERE id = ? AND deleted_at IS NULL")
           .get(conversationId);
         const through = this.db
-          .prepare("SELECT id FROM agent_messages WHERE id = ? AND conversation_id = ?")
+          .prepare(
+            `SELECT (SELECT COUNT(*) FROM agent_messages
+                      WHERE conversation_id = m.conversation_id AND id <= m.id) AS position
+             FROM agent_messages m WHERE m.id = ? AND m.conversation_id = ?`
+          )
           .get(throughMessageId, conversationId);
         if (!source || !through) return null;
 
@@ -5004,8 +5006,9 @@ class DatabaseManager {
           .prepare(
             `INSERT INTO agent_conversations
                (title, note_id, space_id, folder_id, client_conversation_id,
-                parent_conversation_id, fork_message_id, fork_context)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+                parent_conversation_id, parent_client_conversation_id,
+                fork_message_count, fork_context)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             source.title,
@@ -5014,7 +5017,8 @@ class DatabaseManager {
             source.folder_id,
             randomUUID(),
             conversationId,
-            throughMessageId,
+            source.client_conversation_id,
+            through.position,
             forkContext || null
           );
         this.db
@@ -8084,15 +8088,21 @@ class DatabaseManager {
         }
         if (existing?.deleted_at) return existing;
 
+        // A fork's origin never changes, so a cloud copy without it (from an
+        // API or app that predates it) keeps the one this device has.
         const convStmt = this.db.prepare(`
-          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'synced', ?, ?)
+          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at,
+            parent_client_conversation_id, fork_message_count, fork_context)
+          VALUES (?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?)
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             cloud_id = excluded.cloud_id,
             title = excluded.title,
             note_id = excluded.note_id,
             sync_status = 'synced',
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            parent_client_conversation_id = COALESCE(parent_client_conversation_id, excluded.parent_client_conversation_id),
+            fork_message_count = COALESCE(fork_message_count, excluded.fork_message_count),
+            fork_context = COALESCE(fork_context, excluded.fork_context)
         `);
         convStmt.run(
           cloudConv.client_conversation_id ?? null,
@@ -8100,11 +8110,28 @@ class DatabaseManager {
           cloudConv.title ?? "Untitled",
           cloudConv.note_id ?? null,
           cloudConv.created_at ?? new Date().toISOString(),
-          cloudConv.updated_at ?? new Date().toISOString()
+          cloudConv.updated_at ?? new Date().toISOString(),
+          cloudConv.parent_client_conversation_id ?? null,
+          cloudConv.fork_message_count ?? null,
+          cloudConv.fork_context ?? null
         );
         const conv = this.db
           .prepare("SELECT * FROM agent_conversations WHERE client_conversation_id = ?")
           .get(cloudConv.client_conversation_id);
+        // Link this fork to its parent, or the forks waiting on this chat to it,
+        // whichever arrived first. A parent deleted or never synced here leaves
+        // the fork a plain chat.
+        this.db
+          .prepare(
+            `UPDATE agent_conversations
+             SET parent_conversation_id = (
+               SELECT parent.id FROM agent_conversations parent
+               WHERE parent.client_conversation_id = agent_conversations.parent_client_conversation_id
+                 AND parent.deleted_at IS NULL)
+             WHERE parent_conversation_id IS NULL
+               AND (id = ? OR parent_client_conversation_id = ?)`
+          )
+          .run(conv.id, conv.client_conversation_id);
         this.db.prepare("DELETE FROM agent_messages WHERE conversation_id = ?").run(conv.id);
         if (messages && messages.length > 0) {
           const msgStmt = this.db.prepare(

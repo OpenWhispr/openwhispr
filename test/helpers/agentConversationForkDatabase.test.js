@@ -26,7 +26,8 @@ test("a fork copies the history through its message, in order, with metadata", (
   assert.notEqual(fork.id, conversation.id);
   assert.equal(fork.title, "Plan the launch");
   assert.equal(fork.parent_conversation_id, conversation.id);
-  assert.equal(fork.fork_message_id, rows[1].id);
+  assert.equal(fork.parent_client_conversation_id, conversation.client_conversation_id);
+  assert.equal(fork.fork_message_count, 2);
   assert.equal(fork.fork_context, null);
   assert.equal(fork.parent_title, "Plan the launch");
   assert.notEqual(fork.client_conversation_id, null);
@@ -69,7 +70,78 @@ test("a fork knows how much of its history came from its parent", (t) => {
 
   assert.equal(db.getAgentConversation(fork.id).fork_message_count, 2);
   assert.equal(forkOfFork.fork_message_count, 2);
-  assert.equal(db.getAgentConversation(conversation.id).fork_message_count, 0);
+  assert.equal(db.getAgentConversation(conversation.id).fork_message_count, null);
+});
+
+test("a fork keeps how much it copied when its parent is pulled again", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation, rows } = seedConversation(db);
+  const fork = db.forkAgentConversation(conversation.id, rows[1].id, null);
+
+  // A newer cloud copy of the parent replaces its messages with new rows.
+  db.upsertConversationFromCloud(
+    {
+      id: "cloud-parent",
+      client_conversation_id: conversation.client_conversation_id,
+      title: "Renamed in the cloud",
+      updated_at: new Date().toISOString(),
+    },
+    rows.map((row) => ({ role: row.role, content: row.content }))
+  );
+
+  assert.equal(db.getAgentConversation(fork.id).fork_message_count, 2);
+});
+
+function pullFork(db, clientId, parentClientId) {
+  return db.upsertConversationFromCloud(
+    {
+      id: `cloud-${clientId}`,
+      client_conversation_id: clientId,
+      title: "Plan the launch",
+      updated_at: new Date().toISOString(),
+      parent_client_conversation_id: parentClientId,
+      fork_message_count: 1,
+      fork_context: "Draft",
+    },
+    [{ role: "user", content: "Draft the launch email" }]
+  );
+}
+
+test("a pulled fork links to its parent by client id, whichever arrives first", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const fork = pullFork(db, "fork-chat", "parent-chat");
+  assert.equal(db.getAgentConversation(fork.id).parent_conversation_id, null);
+
+  const parent = db.upsertConversationFromCloud(
+    {
+      id: "cloud-parent-chat",
+      client_conversation_id: "parent-chat",
+      title: "Plan the launch",
+      updated_at: new Date().toISOString(),
+    },
+    [{ role: "user", content: "Draft the launch email" }]
+  );
+
+  const linked = db.getAgentConversation(fork.id);
+  assert.equal(linked.parent_conversation_id, parent.id);
+  assert.equal(linked.parent_title, "Plan the launch");
+  assert.equal(linked.fork_message_count, 1);
+  assert.equal(linked.fork_context, "Draft");
+  const later = pullFork(db, "second-fork", "parent-chat");
+  assert.equal(db.getAgentConversation(later.id).parent_conversation_id, parent.id);
+});
+
+test("a pulled fork whose parent was deleted here stays a plain chat", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation } = seedConversation(db);
+  db.deleteAgentConversation(conversation.id);
+
+  const fork = pullFork(db, "fork-chat", conversation.client_conversation_id);
+
+  assert.equal(db.getAgentConversation(fork.id).parent_conversation_id, null);
 });
 
 test("a fork refuses a message from another chat, and a deleted chat", (t) => {
@@ -159,7 +231,12 @@ test("the fork columns migrate idempotently on an existing database", (t) => {
     .prepare("PRAGMA table_info(agent_conversations)")
     .all()
     .map((column) => column.name);
-  for (const name of ["parent_conversation_id", "fork_message_id", "fork_context"]) {
+  for (const name of [
+    "parent_conversation_id",
+    "parent_client_conversation_id",
+    "fork_message_count",
+    "fork_context",
+  ]) {
     assert.equal(columns.filter((column) => column === name).length, 1);
   }
 });
