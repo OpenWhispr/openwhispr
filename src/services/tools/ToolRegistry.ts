@@ -42,7 +42,7 @@ export interface ToolExecutionContext {
    * already made it (or may have), or the same call is running now.
    */
   claimAction: (actionKey: string) => boolean;
-  /** Gives back a claim whose send didn't happen, so the same call may try again. */
+  /** Gives back a claim; completed actions are recorded under their final key. */
   releaseAction: (actionKey: string) => void;
   /** Records a claimed send that happened or may have, on its tool call. */
   recordCompletedAction: (actionKey: string, outcome?: CompletedActionOutcome) => void;

@@ -39,8 +39,8 @@ export async function runApprovalAction(
   options: { unknownGuidance?: string } = {}
 ): Promise<ToolResult> {
   if (!context) return unavailableResult("no_chat_context");
-  // A step can make the same call twice, and a resumed tool can repeat a send
-  // this request already made; either is refused before any card appears.
+  // Claim before preparing a card: a concurrent call or a completed action in
+  // this request may already hold this key.
   const actionKey = connectorActionKey(connectorId, action, args);
   if (!context.claimAction(actionKey)) return duplicateActionResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.

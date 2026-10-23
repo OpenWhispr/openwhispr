@@ -44,7 +44,7 @@ export interface ApprovalEntry {
   destinationLabel?: string;
   /** What a sent action created, as the connector named it ("ENG-124"). */
   resultLabel?: string;
-  /** Failed, and the tool still waits: Retry sends the draft again. */
+  /** Failed, and the tool still waits: Retry prepares the draft for a fresh Send. */
   awaitingRetry?: true;
   /** Send needs the service connected first: the card asks, then connects. */
   reconnect?: "prompt" | "connecting";
@@ -345,7 +345,7 @@ export async function approveAction(key: string): Promise<void> {
 }
 
 /**
- * Sends the draft once more after a failure. Main already finished the failed
+ * Prepares the draft again after a failure. Main already finished the failed
  * action, so it is prepared again on the current login; the tool has waited
  * all along. The new action waits for Send. With the service no longer
  * connected, the card asks to connect first.
@@ -437,8 +437,8 @@ function failAwaitingRetry(key: string, failure: FailedOutcome): void {
  * Prepares the action again on the current login for a fresh Send.
  * Nothing can go out twice: the old action is gone (finished, invalidated or
  * refused by its binding), the new one is bound to the new login, and the tool
- * has held its send claim the whole time. A send that would now go to another
- * account, workspace or destination waits for the user's Send instead.
+ * has held its send claim the whole time. The new action always waits for
+ * the user's Send, even when the displayed identity is unchanged.
  */
 async function rebind(key: string): Promise<void> {
   const entry = entryFor(key);
@@ -463,7 +463,7 @@ async function rebind(key: string): Promise<void> {
     notice: undefined,
   });
   // The old action, if main still holds it. No receipt reason fits one
-  // replaced by a new action; it reads as cancelled, and the new one sends.
+  // replaced by a new action; it reads as cancelled, and the new one waits for Send.
   void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
   const prepared = await pending.reprepare().catch(() => undefined);
   // The turn ended or the card expired meanwhile: the new action goes, and the
