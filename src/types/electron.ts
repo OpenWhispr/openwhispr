@@ -3295,6 +3295,7 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
