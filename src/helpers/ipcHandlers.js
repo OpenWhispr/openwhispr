@@ -1079,7 +1079,7 @@ class IPCHandlers {
     this.getSemanticSearch?.()?.notifyChanges();
   }
 
-  _mirrorDeleteFolderIfUnshared(folderName) {
+  _mirrorDeleteFolderIfUnshared(folderName, { onlyIfEmpty = false } = {}) {
     if (!this._noteFilesEnabled) return;
     // Folder names are only unique per space — a live same-named folder in
     // another space shares the mirror directory, so leave it on disk.
@@ -1088,7 +1088,8 @@ class IPCHandlers {
       .get(folderName);
     if (stillLive) return;
     const markdownMirror = require("./markdownMirror");
-    markdownMirror.deleteFolder(folderName);
+    if (onlyIfEmpty) markdownMirror.deleteFolder(folderName, { onlyIfEmpty });
+    else markdownMirror.deleteFolder(folderName);
   }
 
   _asyncMirrorWrite(note) {
@@ -2426,13 +2427,26 @@ class IPCHandlers {
 
     ipcMain.handle("db-rename-folder", async (event, id, name) => {
       const oldName = this._noteFilesEnabled ? this._getFolderName(id) : null;
+      const accountId = this.databaseManager.activeAccountId;
       const result = this.databaseManager.renameFolder(id, name);
       if (result?.success && result?.folder) {
         setImmediate(() => {
           broadcastToWindows("folder-renamed", result.folder);
-          if (this._noteFilesEnabled && oldName) {
+          if (
+            this._noteFilesEnabled &&
+            oldName &&
+            this.databaseManager.activeAccountId === accountId
+          ) {
+            const folder = this.databaseManager._getFolderInAccountScope(id);
+            if (!folder || folder.deleted_at) return;
             const markdownMirror = require("./markdownMirror");
-            markdownMirror.renameFolder(oldName, name);
+            const noteIds = this.databaseManager.db
+              .prepare("SELECT id FROM notes WHERE folder_id = ? AND deleted_at IS NULL")
+              .all(id)
+              .map((note) => note.id);
+            if (markdownMirror.moveNotesToFolder(noteIds, folder.name)) {
+              this._mirrorDeleteFolderIfUnshared(oldName, { onlyIfEmpty: true });
+            }
           }
         });
       }
