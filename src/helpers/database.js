@@ -6540,6 +6540,9 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      // A note created through the public API without a title has none in the
+      // cloud; the local column requires one.
+      if (cloudNote.title == null) cloudNote.title = "Untitled Note";
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
       if (clearsSummary) {
