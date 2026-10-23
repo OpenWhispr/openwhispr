@@ -4,6 +4,7 @@ import {
   accountScopeHasMandatoryReconciliation,
   accountScopeRequiresPurge,
   accountScopeRequiresReconciliation,
+  getAccountScopeAction,
   getAccountScopeRevision,
   getAccountScopeServerRevision,
   isAccountScopeRetryWaiting,
@@ -21,10 +22,17 @@ import {
   getAuthRequestContextServerSnapshot,
   getAuthRequestContextSnapshot,
   getBoundSessionGeneration,
+  getOfflineAccount,
   getValidatedAuthGeneration,
   invalidateValidatedAuthContext,
   subscribeAuthRequestContext,
 } from "../lib/authRequestContext";
+import {
+  clearOfflineAccountProfile,
+  readOfflineAccountProfile,
+  resolveOfflineAccount,
+  writeOfflineAccountProfile,
+} from "../lib/offlineAccountProfile";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
@@ -52,6 +60,7 @@ async function loadAccountDependencies() {
   ]);
 
   const resetRendererCaches = () => {
+    clearOfflineAccountProfile();
     invalidateSpaceRoster();
     resetForAccountChange();
     useWorkspaceStore.getState().resetForAccountChange();
@@ -118,7 +127,27 @@ export function useAuth() {
     !requiresReconciliation &&
     !accountScopeHasMandatoryReconciliation();
   const accountScopePresentable = !accountScopeBlocked || transientlyAuthenticated;
-  const isSignedIn = rawIsSignedIn && accountScopePresentable;
+  // An offline launch has no session to keep. Main's binding vouches for the
+  // bearer on disk, so the last validated account is presented read-only:
+  // nothing validates this generation, so sync and cloud API calls stay fenced
+  // and reconciliation waits for a real get-session.
+  const offlineCandidate = isPending || sessionIsBound ? null : getOfflineAccount();
+  const offlineAccount = offlineCandidate
+    ? resolveOfflineAccount({
+        isPending,
+        sessionBound: sessionIsBound,
+        offlineAccount: offlineCandidate,
+        scopeAction: getAccountScopeAction(offlineCandidate.userId),
+        profile: readOfflineAccountProfile(offlineCandidate.userId),
+      })
+    : null;
+  const offlineUserId = offlineAccount?.userId ?? null;
+  const offlineGeneration = offlineAccount?.generation ?? null;
+  const isSignedIn = (rawIsSignedIn && accountScopePresentable) || offlineAccount != null;
+  const validatedUser =
+    rawIsSignedIn && boundGeneration != null && getValidatedAuthGeneration() === boundGeneration
+      ? ambientUser
+      : null;
   // Loaded means the session settled: fully validated, or failed/signed-out
   // (presented as a guest). Resolution failure must not hold windows hostage —
   // dictation works without an account, and sync stays fenced by
@@ -137,6 +166,20 @@ export function useAuth() {
     if (!sessionError) return;
     invalidateValidatedAuthContext();
   }, [sessionError]);
+
+  // Refreshed on every validated launch, so its age bounds how long an offline
+  // device keeps presenting an account the server may have revoked. Better
+  // Auth keeps an unchanged user's object identity, so this runs on changes.
+  useEffect(() => {
+    if (validatedUser) writeOfflineAccountProfile(validatedUser);
+  }, [validatedUser]);
+
+  useEffect(() => {
+    if (!offlineUserId || offlineGeneration == null) return;
+    // Main serves both from its caches for this account and credential.
+    void usePolicyStore.getState().fetchPolicy(offlineUserId, offlineGeneration);
+    void refreshManagedEnterpriseIdentity(offlineUserId, offlineGeneration);
+  }, [offlineUserId, offlineGeneration]);
 
   useEffect(() => {
     if (!sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
@@ -247,7 +290,8 @@ export function useAuth() {
     isGracePeriodOnly: gracePeriodActive,
     isLoaded,
     session: sessionIsBound && accountScopePresentable ? ambientSession : null,
-    user: isSignedIn ? ambientUser : null,
+    user: offlineAccount ? offlineAccount.profile : isSignedIn ? ambientUser : null,
+    isOfflineAccount: offlineAccount != null,
     refetch,
   };
 }

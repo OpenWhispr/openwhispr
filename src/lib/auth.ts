@@ -9,6 +9,7 @@ import {
   observeAuthTokenStateEvent,
   prepareAuthRequest,
 } from "./authRequestContext";
+import { clearOfflineAccountProfile } from "./offlineAccountProfile";
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
 export const authClient = createAuthClient({
@@ -109,6 +110,8 @@ function markSignedOutState(): void {
   const storage = getLocalStorageSafe();
   storage?.setItem("isSignedIn", "false");
   clearLastSignInTime();
+  // A sign-out while offline never reaches reconciliation's purge.
+  clearOfflineAccountProfile();
 }
 
 export function updateLastSignInTime(): void {
