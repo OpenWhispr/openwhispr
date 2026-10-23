@@ -29,8 +29,10 @@ export function createLookAtScreenTool(
       'A screenshot of the user\'s screen, taken with this message, is available only through look_at_screen. Use it when the request refers to something on screen ("this", "here", "this email", "the error", "my screen") or can\'t be done without it. Never use it for greetings or small talk, and never to read the calendar, notes or email, which have their own tools. Use what it returns as reported; don\'t add details it doesn\'t give.',
     async execute(args): Promise<ToolResult> {
       const answer = (await describe(String(args.question ?? ""))).trim();
+      // As text, not an object: an object result is saved with the tool call
+      // (and synced), and what the screen showed belongs to this turn only.
       return answer
-        ? { success: true, data: { answer }, displayText: "Read the screen." }
+        ? { success: true, data: answer, displayText: "Read the screen." }
         : { success: false, data: null, displayText: "The screen couldn't be read." };
     },
   };

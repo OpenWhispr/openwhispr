@@ -1425,7 +1425,7 @@ test("open_settings carries the model scope of the chat that asked", async (t) =
 
 test("in the agent window a Cloud screenshot is read through look_at_screen, not sent", async (t) => {
   const { LOOK_AT_SCREEN_PROMPT } = await import("../../src/services/tools/lookAtScreenTool.ts");
-  const { captured, reasoningService, offeredTools } = await renderChatStreaming(t, {
+  const { captured, reasoningService, offeredTools, getMessages } = await renderChatStreaming(t, {
     inferenceScope: "dictationAgent",
     allowInteractions: true,
   });
@@ -1436,11 +1436,21 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
     offeredTools.push((config.tools ?? []).map((tool) => tool.name));
     return (async function* () {
       if (config.tools.some((tool) => tool.name === "look_at_screen")) {
-        lookResult = await config.executeToolCall(
-          "look_at_screen",
-          '{"question":"What does the error say?"}',
-          "c1"
-        );
+        const args = '{"question":"What does the error say?"}';
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "c1", name: "look_at_screen", arguments: args }],
+        };
+        lookResult = await config.executeToolCall("look_at_screen", args, "c1");
+        // As the Cloud loop yields it.
+        yield {
+          type: "tool_result",
+          callId: "c1",
+          toolName: "look_at_screen",
+          displayText: lookResult.displayText,
+          ...(lookResult.metadata ? { metadata: lookResult.metadata } : {}),
+        };
+        yield { type: "content", text: "It's a refused connection." };
       }
       yield { type: "done", finishReason: "stop" };
     })();
@@ -1468,11 +1478,12 @@ test("in the agent window a Cloud screenshot is read through look_at_screen, not
       LOOK_AT_SCREEN_PROMPT,
     ],
   ]);
-  assert.deepEqual(JSON.parse(lookResult.data), {
-    answer: "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.",
-  });
-  // What the screen showed reaches the model, not the saved conversation.
-  assert.equal(lookResult.displayText, "Read the screen.");
+  // What the screen showed reaches the model, never the saved tool call.
+  assert.equal(lookResult.data, "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.");
+  const saved = getMessages().find((message) => message.role === "assistant").toolCalls;
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].result, "Read the screen.");
+  assert.doesNotMatch(JSON.stringify(saved), /ECONNREFUSED/);
 
   await captured.sendToAI("Thanks!", [{ id: "u2", role: "user", content: "Thanks!" }]);
   assert.ok(!offeredTools[1].includes("look_at_screen"), "only the turn with a screenshot has it");
