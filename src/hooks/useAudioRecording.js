@@ -664,13 +664,20 @@ export const useAudioRecording = (toast, options = {}) => {
             const {
               screenContext,
               transcript,
+              selectedText,
               selectedContext,
               deliverySessionId,
               deliveryAcceptsMarkdown,
               deliveryAppCategory,
             } = result.assistantConversation;
+            // Only the spoken command is dictation; the quoted selection is
+            // document text and reaches the panel verbatim.
+            const spokenCommand = expandSnippets(transcript, getSettings().snippets);
             const command = {
-              text: expandSnippets(transcript, getSettings().snippets),
+              text:
+                selectedText === undefined
+                  ? spokenCommand
+                  : `${spokenCommand}\n\n"${selectedText}"`,
               attachment: screenContext
                 ? { image: screenContext.data, mediaType: screenContext.mediaType }
                 : null,
