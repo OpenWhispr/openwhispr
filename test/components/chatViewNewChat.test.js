@@ -25,7 +25,8 @@ const MOCKS = {
     }
   `,
   "/useChatPersistence": `
-    export function useChatPersistence() {
+    export function useChatPersistence(options) {
+      globalThis.__persistenceOptions = options;
       return {
         conversationId: null,
         messages: [],
@@ -74,6 +75,7 @@ async function renderChatView(t) {
     delete globalThis.__createCount;
     delete globalThis.__loadResult;
     delete globalThis.__chatStreamingOptions;
+    delete globalThis.__persistenceOptions;
     delete globalThis.__keydown;
   });
   installBrowserGlobals(t, {
@@ -102,6 +104,17 @@ async function renderChatView(t) {
 test("typed chat offers the connector tools", async (t) => {
   await renderChatView(t);
   assert.equal(globalThis.__chatStreamingOptions.allowConnectors, true);
+});
+
+test("an open chat deleted elsewhere returns the view to a new chat", async (t) => {
+  globalThis.__loadResult = true;
+  await renderChatView(t);
+  await React.act(async () => globalThis.__conversationList.onSelectConversation(7));
+  assert.equal(globalThis.__conversationList.activeConversationId, 7);
+
+  await React.act(async () => globalThis.__persistenceOptions.onConversationDeleted());
+
+  assert.equal(globalThis.__conversationList.activeConversationId, null);
 });
 
 // Each way of leaving the conversation cancels its running reply.

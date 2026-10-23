@@ -32,6 +32,10 @@ export default function ChatView() {
       setActiveConversationId(id);
       setRefreshKey((k) => k + 1);
     },
+    onConversationDeleted: () => {
+      setActiveConversationId(null);
+      setIsNewChat(true);
+    },
   });
 
   const streaming = useChatStreaming({

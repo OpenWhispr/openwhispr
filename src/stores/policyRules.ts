@@ -131,6 +131,14 @@ export function effectiveAudioRetentionDays(
   return maximumDays === null ? personalPreference : Math.min(personalPreference, maximumDays);
 }
 
+/** Chat and meeting transcript retention: an org that always keeps history keeps them forever. */
+export function effectiveHistoryRetentionDays(
+  state: PolicyDecisionSnapshot,
+  personalPreference: number
+): number {
+  return lockedLocalHistoryValue(state) === true ? 0 : personalPreference;
+}
+
 /** The org cap on audio retention days, or null when uncapped. */
 export function maxAudioRetentionDays(state: PolicyDecisionSnapshot): number | null {
   return managedPolicy(state)?.dataRetention.audioRetentionMaxDays ?? null;

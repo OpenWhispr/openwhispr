@@ -4,6 +4,8 @@
 const DEFAULT_RETENTION_SETTINGS = {
   audioRetentionDays: 30,
   transcriptRetentionDays: 0, // 0 = keep transcripts forever
+  chatRetentionDays: 0, // 0 = keep chats forever
+  meetingTranscriptRetentionDays: 0, // 0 = keep meeting transcripts forever
   // The renderer's policy-aware "keep local history" switch. Defaults to true
   // so a renderer that predates this field is never read as history-off, and
   // so the value only becomes trustworthy once hasSynced() says it is real.
@@ -26,6 +28,11 @@ function applyRetentionSettings(current, incoming) {
       incoming?.transcriptRetentionDays,
       current.transcriptRetentionDays
     ),
+    chatRetentionDays: toDays(incoming?.chatRetentionDays, current.chatRetentionDays),
+    meetingTranscriptRetentionDays: toDays(
+      incoming?.meetingTranscriptRetentionDays,
+      current.meetingTranscriptRetentionDays
+    ),
     dataRetentionEnabled:
       typeof incoming?.dataRetentionEnabled === "boolean"
         ? incoming.dataRetentionEnabled
@@ -38,6 +45,8 @@ function applyRetentionSettings(current, incoming) {
   const changed =
     settings.audioRetentionDays !== current.audioRetentionDays ||
     settings.transcriptRetentionDays !== current.transcriptRetentionDays ||
+    settings.chatRetentionDays !== current.chatRetentionDays ||
+    settings.meetingTranscriptRetentionDays !== current.meetingTranscriptRetentionDays ||
     settings.dataRetentionEnabled !== current.dataRetentionEnabled ||
     // The policy settling is what unblocks reconstruction, so it has to count
     // as a change even when every other value stayed put.

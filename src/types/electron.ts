@@ -1636,9 +1636,15 @@ declare global {
       syncRetentionSettings?: (settings: {
         audioRetentionDays: number;
         transcriptRetentionDays: number;
+        chatRetentionDays: number;
+        meetingTranscriptRetentionDays: number;
         dataRetentionEnabled: boolean;
         localHistoryPolicyResolved: boolean;
       }) => void;
+      retentionPreview: (
+        kind: "chats" | "meetingTranscripts",
+        days: number
+      ) => Promise<{ count: number }>;
       retryTranscription: (
         id: number,
         settings?: {
@@ -1960,6 +1966,7 @@ declare global {
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
       onNoteUpdated?: (callback: (note: NoteItem) => void) => () => void;
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+      onNoteTranscriptsCleared?: (callback: (payload: { ids: number[] }) => void) => () => void;
       onNoteSynced?: (callback: (note: NoteItem) => void) => () => void;
       onFolderSynced?: (callback: (folder: FolderItem) => void) => () => void;
       onFolderDeleted?: (callback: (payload: { id: number }) => void) => () => void;
@@ -3021,6 +3028,7 @@ declare global {
           created_at: string;
         }>
       >;
+      onConversationsDeleted?: (callback: (payload: { ids: number[] }) => void) => () => void;
       getAgentConversationsWithPreview?: (
         limit?: number,
         offset?: number,

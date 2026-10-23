@@ -82,6 +82,28 @@ export function removeNoteFromLists(state: NoteListsState, id: number): RemoveNo
 }
 
 /**
+ * Clear the transcript of these notes in every list that holds them, in place. A note
+ * no list holds is not added: these are old notes, and adding one would push a recent
+ * note off its list.
+ */
+export function clearTranscriptsInLists(
+  state: Pick<NoteListsState, "notesByContainer" | "notes">,
+  ids: number[]
+): Omit<RemoveNoteResult, "activeNoteId"> {
+  const cleared = new Set(ids);
+  let changed = false;
+  const clear = (items: NoteItem[]) => {
+    if (!items.some((note) => cleared.has(note.id) && note.transcript)) return items;
+    changed = true;
+    return items.map((note) => (cleared.has(note.id) ? { ...note, transcript: null } : note));
+  };
+  const notesByContainer = Object.fromEntries(
+    Object.entries(state.notesByContainer).map(([key, items]) => [key, clear(items)])
+  );
+  return { notesByContainer, notes: clear(state.notes), changed };
+}
+
+/**
  * Remove cached note containers and all renderer state that points into them.
  * Folder deletion and space purging share this operation; callers remain
  * responsible for choosing a replacement active context.

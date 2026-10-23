@@ -898,7 +898,10 @@ class IPCHandlers {
   // is the only authority there is. Mid-scan arrival needs no separate check:
   // a policy that resolves "always_off" flips the switch, which the loop reads.
   _mayStartAnalyticsHistoryReconstruction() {
-    if (!this._canReconstructAnalyticsHistory()) return false;
+    return this._canReconstructAnalyticsHistory() && this._isLocalHistoryPolicyKnown();
+  }
+
+  _isLocalHistoryPolicyKnown() {
     if (this._retentionSettings.localHistoryPolicyResolved === true) return true;
     return !this._hasActiveAccountScope();
   }
@@ -1311,7 +1314,12 @@ class IPCHandlers {
   }
 
   _runRetentionCleanup() {
-    const { audioRetentionDays, transcriptRetentionDays } = this._retentionSettings;
+    const {
+      audioRetentionDays,
+      transcriptRetentionDays,
+      chatRetentionDays,
+      meetingTranscriptRetentionDays,
+    } = this._retentionSettings;
     try {
       if (transcriptRetentionDays > 0) {
         const { ids, analyticsPurged } =
@@ -1325,9 +1333,42 @@ class IPCHandlers {
       if (audioRetentionDays > 0) {
         this.audioStorageManager.cleanupExpiredAudio(audioRetentionDays, this.databaseManager);
       }
+      // A workspace that always keeps history sends 0 for both, but only once its
+      // policy has arrived; until then these periods are only the user's.
+      if (!this._isLocalHistoryPolicyKnown()) return;
+      if (chatRetentionDays > 0) {
+        const { ids } = this.databaseManager.deleteConversationsExpiredBefore(chatRetentionDays);
+        if (this.vectorIndex?.isReady?.()) {
+          for (const id of ids) this.vectorIndex.deleteConversationChunks(id).catch(() => {});
+        }
+        if (ids.length) broadcastToWindows("conversations-deleted", { ids });
+      }
+      if (meetingTranscriptRetentionDays > 0) {
+        const { ids } = this.databaseManager.clearMeetingTranscriptsExpiredBefore(
+          meetingTranscriptRetentionDays
+        );
+        if (ids.length) {
+          if (this._noteFilesEnabled) require("./markdownMirror").deleteTranscripts(ids);
+          // Windows update only the notes they already show: these are old notes, and
+          // nothing here is pushed, because the cloud keeps its copy.
+          broadcastToWindows("note-transcripts-cleared", { ids });
+        }
+      }
     } catch (error) {
       debugLogger.error("Retention cleanup failed", { error: error.message }, "audio-storage");
     }
+  }
+
+  // How many items a shorter period would remove now, for its confirmation.
+  _previewRetention(kind, days) {
+    if (!Number.isInteger(days) || days <= 0) throw new Error("Invalid retention period");
+    if (kind === "chats") {
+      return { count: this.databaseManager.countConversationsExpiredBefore(days) };
+    }
+    if (kind === "meetingTranscripts") {
+      return { count: this.databaseManager.countMeetingTranscriptsExpiredBefore(days) };
+    }
+    throw new Error("Unknown retention kind");
   }
 
   _setupTextEditMonitor() {
@@ -2037,6 +2078,8 @@ class IPCHandlers {
         },
       })
     );
+
+    ipcMain.handle("retention-preview", (event, kind, days) => this._previewRetention(kind, days));
 
     ipcMain.handle("delete-all-audio", async () => {
       const result = this.audioStorageManager.deleteAllAudio();
@@ -2990,7 +3033,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-conversation", (_, id) => {
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {
-        setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
+        setImmediate(() => broadcastToWindows("conversations-deleted", { ids: [id] }));
       }
       return result;
     });

@@ -230,6 +230,20 @@ class MarkdownMirror {
     }
   }
 
+  deleteTranscripts(noteIds) {
+    for (const file of this._globTranscriptFiles(...noteIds)) {
+      try {
+        fs.unlinkSync(file);
+      } catch (err) {
+        debugLogger.error(
+          "Failed to delete transcript file",
+          { file, error: err.message },
+          "note-files"
+        );
+      }
+    }
+  }
+
   ensureFolder(folderName) {
     if (!this._baseRealPath) return;
     try {
@@ -356,11 +370,12 @@ class MarkdownMirror {
     return results;
   }
 
-  _globTranscriptFiles(noteId) {
+  // Several notes are found in one pass over the mirror.
+  _globTranscriptFiles(...noteIds) {
     if (!this._baseRealPath) return [];
     const results = [];
     try {
-      const prefix = `${noteId}-`;
+      const prefixes = noteIds.map((noteId) => `${noteId}-`);
       const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
       for (const dir of dirs) {
         if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
@@ -380,7 +395,7 @@ class MarkdownMirror {
           } catch {}
           if (
             isRegularFile &&
-            file.startsWith(prefix) &&
+            prefixes.some((prefix) => file.startsWith(prefix)) &&
             (file.endsWith("-transcript.txt") ||
               (file.endsWith("-transcript.md") && !this._isNoteMarkdownFile(filePath)))
           ) {

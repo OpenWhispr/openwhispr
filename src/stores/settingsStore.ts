@@ -336,6 +336,8 @@ const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
   "audioRetentionDays",
   "transcriptRetentionDays",
+  "chatRetentionDays",
+  "meetingTranscriptRetentionDays",
   "whisperVadThreshold",
   "whisperVadMinSpeechDurationMs",
   "whisperVadMinSilenceDurationMs",
@@ -1236,6 +1238,8 @@ export interface SettingsState
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
   setTranscriptRetentionDays: (days: number) => void;
+  setChatRetentionDays: (days: number) => void;
+  setMeetingTranscriptRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
@@ -1655,6 +1659,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioRetentionDays: readNumber("audioRetentionDays", 30),
   transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
+  chatRetentionDays: readNumber("chatRetentionDays", 0),
+  meetingTranscriptRetentionDays: readNumber("meetingTranscriptRetentionDays", 0),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
@@ -2430,6 +2436,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAudioRetentionDays: createNumberSetter("audioRetentionDays"),
   setTranscriptRetentionDays: createNumberSetter("transcriptRetentionDays"),
+  setChatRetentionDays: createNumberSetter("chatRetentionDays"),
+  setMeetingTranscriptRetentionDays: createNumberSetter("meetingTranscriptRetentionDays"),
   setDataRetentionEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));
     set({ dataRetentionEnabled: value });

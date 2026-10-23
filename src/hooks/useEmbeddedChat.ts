@@ -85,6 +85,7 @@ export function useEmbeddedChat({
     onConversationCreated: (id) => {
       setConversationId(id);
     },
+    onConversationDeleted: () => setConversationId(null),
   });
 
   const transcript = noteTranscript ?? "";
@@ -141,6 +142,11 @@ export function useEmbeddedChat({
     setNoteConversations(conversations ?? []);
     return conversations ?? [];
   }, [noteId]);
+
+  useEffect(
+    () => window.electronAPI?.onConversationsDeleted?.(() => void fetchNoteConversations()),
+    [fetchNoteConversations]
+  );
 
   if (noteId !== prevNoteId) {
     setPrevNoteId(noteId);

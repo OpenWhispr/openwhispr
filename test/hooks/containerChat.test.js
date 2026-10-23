@@ -22,7 +22,8 @@ const MOCKS = {
     }
   `,
   "/chat/useChatPersistence": `
-    export function useChatPersistence() {
+    export function useChatPersistence(options) {
+      globalThis.__persistenceOptions = options;
       return {
         messages: [],
         setMessages() {},
@@ -36,15 +37,16 @@ const MOCKS = {
   `,
 };
 
-async function renderContainerChat(t) {
+async function renderContainerChat(t, electronAPI = {}) {
   let root;
   globalThis.__calls = [];
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__finishSend;
     delete globalThis.__calls;
+    delete globalThis.__persistenceOptions;
   });
-  installBrowserGlobals(t);
+  installBrowserGlobals(t, { window: { electronAPI } });
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-container-chat-test-",
@@ -72,6 +74,44 @@ test("switching container conversations cancels the running reply before loading
 
   // A reply still streaming would otherwise save into conversation 42 when it settles.
   assert.deepEqual(globalThis.__calls, ["cancel", "load:42"]);
+});
+
+test("an open container chat deleted elsewhere is no longer the active one", async (t) => {
+  const chat = await renderContainerChat(t);
+  await React.act(async () => {
+    await chat.current.switchConversation(42);
+  });
+  assert.equal(chat.current.activeConversationId, 42);
+
+  await React.act(async () => globalThis.__persistenceOptions.onConversationDeleted());
+
+  assert.equal(chat.current.activeConversationId, null);
+});
+
+test("the folder chat history drops a chat deleted elsewhere", async (t) => {
+  let listed = [{ id: 41 }, { id: 42 }];
+  const listeners = [];
+  const chat = await renderContainerChat(t, {
+    getConversationsForContainer: async () => listed,
+    onConversationsDeleted: (callback) => {
+      listeners.push(callback);
+      return () => {};
+    },
+  });
+  assert.deepEqual(
+    chat.current.conversations.map(({ id }) => id),
+    [41, 42]
+  );
+
+  listed = [{ id: 42 }];
+  await React.act(async () => {
+    for (const listener of listeners) listener({ ids: [41] });
+  });
+
+  assert.deepEqual(
+    chat.current.conversations.map(({ id }) => id),
+    [42]
+  );
 });
 
 test("picking the open container conversation leaves its reply running", async (t) => {
