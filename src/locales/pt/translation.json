@@ -3743,7 +3743,9 @@
     "fork": "Bifurcar",
     "forked": "Conversa bifurcada",
     "forkedFrom": "Bifurcada de \"{{title}}\"",
-    "forkFailed": "Não foi possível bifurcar esta conversa"
+    "forkFailed": "Não foi possível bifurcar esta conversa",
+    "sendNotStarted": "Esta conversa está ocupada. Sua mensagem não foi enviada. Tente novamente quando a solicitação atual terminar.",
+    "openFailed": "Esta conversa não está mais disponível."
   },
   "support": {
     "documentation": "Documentação",
@@ -4355,7 +4357,7 @@
           "targetTitle": "Em \"{{title}}\""
         }
       },
-      "sentEarlier": "Você já enviou isto antes nesta conversa.",
+      "sentEarlier": "Você já tentou isto antes nesta conversa. Confira se deu certo antes de enviar novamente.",
       "slack": {
         "channelLabel": "Canal",
         "asLabel": "Como",

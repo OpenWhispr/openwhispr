@@ -25,6 +25,23 @@ const call = (name, extra = {}) => ({
 const sent = (name = "email_draft", extra = {}) =>
   call(name, { metadata: { status: "sent", ...extra } });
 
+test("a send cannot back a claim that a note was created, this turn or earlier", async () => {
+  for (const calls of ["turnCalls", "earlierCalls"]) {
+    assert.equal(
+      await unbacked("I've created the note.", { [calls]: [sent("slack_send_message")] }),
+      true
+    );
+    assert.equal(
+      await unbacked("The issue has been created.", { [calls]: [sent("email_draft")] }),
+      true
+    );
+    assert.equal(
+      await unbacked("The note has been created.", { [calls]: [call("create_note")] }),
+      false
+    );
+  }
+});
+
 const context = (overrides = {}) => ({
   turnCalls: [],
   earlierCalls: [],

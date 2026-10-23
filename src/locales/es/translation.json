@@ -3795,7 +3795,9 @@
     "fork": "Bifurcar",
     "forked": "Chat bifurcado",
     "forkedFrom": "Bifurcado de «{{title}}»",
-    "forkFailed": "No se pudo bifurcar este chat"
+    "forkFailed": "No se pudo bifurcar este chat",
+    "sendNotStarted": "Este chat está ocupado. Tu mensaje no se envió. Inténtalo de nuevo cuando termine la solicitud actual.",
+    "openFailed": "Este chat ya no está disponible."
   },
   "support": {
     "documentation": "Documentación",
@@ -4407,7 +4409,7 @@
           "targetTitle": "En «{{title}}»"
         }
       },
-      "sentEarlier": "Ya enviaste esto antes en este chat.",
+      "sentEarlier": "Ya lo intentaste antes en este chat. Comprueba si se completó antes de volver a enviarlo.",
       "slack": {
         "channelLabel": "Canal",
         "asLabel": "Como",

@@ -36,10 +36,14 @@ const MOCKS = {
           globalThis.__chat.sentOptions.push(options);
           globalThis.__chat.sent.push(text);
           globalThis.__chat.sentAfterNewChats.push(globalThis.__chat.newChats);
-          return true;
+          return globalThis.__chat.sendResult ?? true;
         },
         cancel() { globalThis.__chat.cancels += 1; },
-        switchChat: async () => true,
+        switchChat: async (_id, beforeOpen) => {
+          const result = await ("switchResult" in globalThis.__chat ? globalThis.__chat.switchResult : true);
+          if (result === true) beforeOpen?.();
+          return result;
+        },
         newChat() { globalThis.__chat.newChats += 1; },
         fork: async () => null,
         regenerate() {},
@@ -363,6 +367,94 @@ const setDraft = (view, field, text) =>
     ).set.call(field, text);
     field.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
   });
+
+test("a refused agent submission restores its draft, selected context and screenshot", async (t) => {
+  const view = await mountWindow(t);
+  await view.chat({ busy: true });
+  globalThis.__chat.sendResult = false;
+  await React.act(async () =>
+    view.main.handlers.command({
+      text: "Explain this",
+      selectedContext: { text: "Original selection", source: "external" },
+      attachment: { image: "original-image", mediaType: "image/jpeg" },
+    })
+  );
+  await view.chat({ busy: false });
+  await view.settle();
+  await React.act(async () => view.button("Send").click());
+  await view.settle();
+  assert.equal(view.host.querySelector(COMPOSER).value, "Explain this");
+  assert.match(view.host.textContent, /Original selection/);
+  assert.match(view.host.textContent, /message wasn't sent/);
+  globalThis.__chat.sendResult = true;
+  await React.act(async () => view.button("Send").click());
+  assert.deepEqual(globalThis.__chat.sentOptions.at(-1), {
+    selectedContext: { text: "Original selection", sourceMessageId: "", source: "external" },
+    attachment: { image: "original-image", mediaType: "image/jpeg" },
+  });
+});
+
+test("a late agent refusal cannot overwrite newer draft, context or screenshot", async (t) => {
+  const view = await mountWindow(t);
+  let refuse;
+  globalThis.__chat.sendResult = new Promise((resolve) => {
+    refuse = resolve;
+  });
+  await React.act(async () =>
+    view.main.handlers.command({
+      text: "Old request",
+      selectedContext: { text: "Old selection" },
+      attachment: { image: "old-image", mediaType: "image/jpeg" },
+    })
+  );
+  await view.settle();
+  await React.act(async () =>
+    view.main.handlers.command({
+      text: "New request",
+      selectedContext: { text: "New selection" },
+      attachment: { image: "new-image", mediaType: "image/jpeg" },
+    })
+  );
+  await React.act(async () => refuse(false));
+  assert.equal(view.host.querySelector(COMPOSER).value, "New request");
+  assert.match(view.host.textContent, /New selection/);
+  assert.doesNotMatch(view.host.textContent, /Old selection/);
+  globalThis.__chat.sendResult = true;
+  await React.act(async () => view.button("Send").click());
+  assert.equal(globalThis.__chat.sentOptions.at(-1).selectedContext.text, "New selection");
+  assert.equal(globalThis.__chat.sentOptions.at(-1).attachment.image, "new-image");
+});
+
+test("a late agent refusal leaves a newer typed draft in the same chat alone", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  let refuse;
+  globalThis.__chat.sendResult = new Promise((resolve) => {
+    refuse = resolve;
+  });
+  await React.act(async () => view.main.handlers.command({ text: "Old request" }));
+  await view.settle();
+  await setDraft(view, view.host.querySelector(COMPOSER), "Newer typed request");
+  await React.act(async () => refuse(false));
+  assert.equal(view.host.querySelector(COMPOSER).value, "Newer typed request");
+  assert.match(view.host.textContent, /message wasn't sent/);
+});
+
+test("a deleted parent chip leaves the agent's take and current chat untouched", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.chat({
+    forkOrigin: { parentConversationId: 9, parentTitle: "Deleted parent", copiedMessageCount: 0 },
+  });
+  await view.settle();
+  globalThis.__chat.switchResult = null;
+  const cancellations = globalThis.__voice.cancels;
+  await React.act(async () => view.button('Forked from "Deleted parent"').click());
+  assert.equal(globalThis.__voice.cancels, cancellations);
+  assert.equal(globalThis.__chat.cancels, 0);
+  assert.match(view.host.textContent, /Deleted parent/);
+  assert.match(view.host.textContent, /no longer available/);
+});
 const pointer = (view, target, type, init = {}) =>
   React.act(async () =>
     target.dispatchEvent(new view.happyWindow.PointerEvent(type, { bubbles: true, ...init }))

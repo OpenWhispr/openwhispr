@@ -1,4 +1,11 @@
-import { memo, useRef, useState, type MutableRefObject, type ReactElement } from "react";
+import {
+  memo,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactElement,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Copy,
@@ -161,20 +168,53 @@ function useToolCallCard(
   const key = approvalKey(messageId, toolCall.id);
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
   const interaction = useAgentInteractionStore((state) => state.entries[key]);
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const ownedFocusRef = useRef(false);
+  useLayoutEffect(() => {
+    if (
+      interaction?.state === "settled" &&
+      ownedFocusRef.current &&
+      document.hasFocus() &&
+      (!document.activeElement || document.activeElement === document.body)
+    ) {
+      receiptRef.current?.focus({ preventScroll: true });
+    }
+  }, [interaction?.state]);
+  if (!interaction) return approval ? <ApprovalCard entry={approval} /> : null;
+  let card: ReactElement;
   // An open question goes first: after Retry, the Slack picker waits under the
   // key of the answer card it settled.
-  if (interaction && interaction.state !== "settled")
-    return <InteractionCard entry={interaction} heightRef={cardHeightRef} />;
-  if (approval) return <ApprovalCard entry={approval} />;
-  if (!interaction) return null;
+  if (interaction.state !== "settled") {
+    card = <InteractionCard entry={interaction} heightRef={cardHeightRef} />;
+  } else if (approval) {
+    card = <ApprovalCard entry={approval} />;
+  }
   // A saved key stays visible as saved; every other settled card gives way to
   // its step, or where steps don't show, to its outcome row.
-  if (interaction.payload.kind === "apiKey" && interaction.result?.status === "saved") {
-    return <ApiKeySavedRow payload={interaction.payload} />;
+  else if (interaction.payload.kind === "apiKey" && interaction.result?.status === "saved") {
+    card = <ApiKeySavedRow payload={interaction.payload} />;
+  } else {
+    card = cardHeightRef ? (
+      <InteractionOutcomeRow entry={interaction} fromHeight={cardHeightRef.current} />
+    ) : (
+      <ToolCallStep toolCall={toolCall} />
+    );
   }
-  return cardHeightRef ? (
-    <InteractionOutcomeRow entry={interaction} fromHeight={cardHeightRef.current} />
-  ) : null;
+  return (
+    <div
+      ref={receiptRef}
+      tabIndex={-1}
+      className="outline-none"
+      onFocusCapture={() => {
+        ownedFocusRef.current = true;
+      }}
+      onBlurCapture={(event) => {
+        ownedFocusRef.current = event.currentTarget.contains(event.relatedTarget);
+      }}
+    >
+      {card}
+    </div>
+  );
 }
 
 /** The agent window's card for a call; its steps show in the progress row instead. */

@@ -26,9 +26,10 @@ const MOCKS = {
     }
   `,
   "/useChatPersistence": `
-    import { useState } from "react";
+    import { useRef, useState } from "react";
     export function useChatPersistence() {
       const [messages, setMessages] = useState(globalThis.__initialMessages ?? []);
+      const version = useRef(0);
       return {
         conversationId: null,
         messages,
@@ -42,13 +43,20 @@ const MOCKS = {
           (globalThis.__savedUserMessages ??= []).push(options);
         },
         saveAssistantMessage() {},
-        loadConversation: async () => globalThis.__loadResult,
+        getSessionVersion: () => version.current,
+        claimConversation: async () => globalThis.__claimResult,
+        loadConversation: async (_id, beforeOpen) => {
+          const result = globalThis.__loadResult;
+          if (result === true) { version.current++; beforeOpen?.(); }
+          return result;
+        },
         forkConversation: async (_message, _context, beforeOpen) => {
           const result = globalThis.__forkResult;
           if (typeof result === "number") beforeOpen?.();
           return result;
         },
         handleNewChat() {
+          version.current++;
           globalThis.__newChatCount = (globalThis.__newChatCount ?? 0) + 1;
         },
       };
@@ -95,6 +103,7 @@ const GLOBALS = [
   "__newChatCount",
   "__chatMessages",
   "__toasts",
+  "__claimResult",
 ];
 
 async function renderChatView(t, props = {}) {
@@ -124,10 +133,12 @@ async function renderChatView(t, props = {}) {
   const container = installInteractiveDom(t);
   globalThis.__cancelCount = 0;
   globalThis.__createCount = 0;
+  if (globalThis.__loadResult === undefined) globalThis.__loadResult = true;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-view-new-chat-test-",
     mockModules: MOCKS,
   });
+  await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
@@ -140,6 +151,38 @@ test("typed chat offers the connector tools", async (t) => {
   await renderChatView(t);
   assert.equal(globalThis.__chatStreamingOptions.allowConnectors, true);
 });
+
+test("a peer refusal keeps the submitted draft and explains that nothing was sent", async (t) => {
+  globalThis.__claimResult = false;
+  await renderChatView(t);
+  await React.act(async () => globalThis.__chatInput.onTextSubmit("Keep this question"));
+  assert.equal(globalThis.__chatInput.draftText, "Keep this question");
+  assert.match(globalThis.__toasts.at(-1).title, /message wasn't sent/);
+  assert.equal(globalThis.__sends, undefined);
+});
+
+for (const replacement of ["new draft", "new chat"]) {
+  test(`a late peer refusal does not overwrite a ${replacement}`, async (t) => {
+    let refuse;
+    globalThis.__claimResult = new Promise((resolve) => {
+      refuse = resolve;
+    });
+    await renderChatView(t);
+    let sending;
+    await React.act(async () => {
+      sending = globalThis.__chatInput.onTextSubmit("Old question");
+    });
+    await React.act(async () => {
+      if (replacement === "new chat") globalThis.__conversationList.onNewChat();
+      globalThis.__chatInput.onDraftChange("Newer question");
+    });
+    await React.act(async () => {
+      refuse(false);
+      await sending;
+    });
+    assert.equal(globalThis.__chatInput.draftText, "Newer question");
+  });
+}
 
 test("a failed Control Panel fork leaves the running parent untouched", async (t) => {
   globalThis.__initialMessages = [
@@ -183,11 +226,13 @@ for (const [leave, leaveConversation] of Object.entries(LEAVE_CONVERSATION)) {
   });
 }
 
-test("a follow-up after reopening a deleted conversation starts a new one", async (t) => {
+test("a missing conversation does not stop the current chat, and an empty chat still sends", async (t) => {
   globalThis.__loadResult = null;
   await renderChatView(t);
 
   await React.act(async () => globalThis.__conversationList.onSelectConversation(7));
+  assert.equal(globalThis.__cancelCount, 0);
+  assert.equal(globalThis.__conversationList.activeConversationId, null);
   await React.act(async () => globalThis.__chatInput.onTextSubmit("A follow-up"));
 
   assert.equal(globalThis.__createCount, 1);

@@ -3129,7 +3129,9 @@
     "fork": "Abzweigen",
     "forked": "Abgezweigter Chat",
     "forkedFrom": "Abgezweigt von „{{title}}“",
-    "forkFailed": "Chat konnte nicht abgezweigt werden"
+    "forkFailed": "Chat konnte nicht abgezweigt werden",
+    "sendNotStarted": "Dieser Chat ist beschäftigt. Deine Nachricht wurde nicht gesendet. Versuche es nach Abschluss der aktuellen Anfrage erneut.",
+    "openFailed": "Dieser Chat ist nicht mehr verfügbar."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -4527,7 +4529,7 @@
           "targetTitle": "Zu „{{title}}“"
         }
       },
-      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet.",
+      "sentEarlier": "Du hast dies schon in diesem Chat versucht. Prüfe vor dem erneuten Senden, ob es geklappt hat.",
       "slack": {
         "channelLabel": "Kanal",
         "asLabel": "Als",

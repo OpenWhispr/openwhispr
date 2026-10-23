@@ -3129,7 +3129,9 @@
     "fork": "Dupliquer",
     "forked": "Discussion dupliquée",
     "forkedFrom": "Dupliquée depuis « {{title}} »",
-    "forkFailed": "Impossible de dupliquer cette discussion"
+    "forkFailed": "Impossible de dupliquer cette discussion",
+    "sendNotStarted": "Cette discussion est occupée. Votre message n’a pas été envoyé. Réessayez une fois la demande en cours terminée.",
+    "openFailed": "Cette discussion n’est plus disponible."
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",
@@ -4527,7 +4529,7 @@
           "targetTitle": "Sur « {{title}} »"
         }
       },
-      "sentEarlier": "Vous avez déjà envoyé ceci plus tôt dans cette discussion.",
+      "sentEarlier": "Vous avez déjà essayé ceci dans cette discussion. Vérifiez si cela a abouti avant de renvoyer.",
       "slack": {
         "channelLabel": "Canal",
         "asLabel": "En tant que",

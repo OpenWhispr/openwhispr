@@ -86,7 +86,12 @@ function useCardFocus(
   const shapeRef = useRef(shape);
   useLayoutEffect(() => {
     if (!rootRef.current || restored || !document.hasFocus() || draftInProgress()) return;
-    if (focusLost() || (keyField && emptyComposerFocused())) focusCard(rootRef.current);
+    if (
+      focusLost() ||
+      document.activeElement === rootRef.current.parentElement ||
+      (keyField && emptyComposerFocused())
+    )
+      focusCard(rootRef.current);
   }, [keyField, restored, rootRef]);
   useLayoutEffect(() => {
     if (shapeRef.current === shape) return;

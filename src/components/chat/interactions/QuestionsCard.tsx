@@ -136,7 +136,10 @@ export function QuestionsCard({
               <button
                 type="button"
                 // Nothing picked yet (a typed answer counts until a pick replaces it).
-                disabled={!(Array.isArray(value) && value.length > 0) && typed === undefined}
+                disabled={
+                  !(Array.isArray(value) && value.length > 0) &&
+                  !(value === undefined && typed !== undefined)
+                }
                 onClick={() => commitQuestion(entry.key, step)}
                 className={PILL_BUTTON}
               >

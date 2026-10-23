@@ -225,7 +225,12 @@ export function isUnbackedClaim(
   return claimsIn(text).some(({ kind, report, destination, phrase }) => {
     const { tools, did } = KINDS[kind];
     if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
-    if (turnCalls.some(did)) return false;
-    return !report || !earlierCalls.some((call) => did(call) && wentTo(call, destination));
+    if (turnCalls.some((call) => tools.includes(call.name) && did(call))) return false;
+    return (
+      !report ||
+      !earlierCalls.some(
+        (call) => tools.includes(call.name) && did(call) && wentTo(call, destination)
+      )
+    );
   });
 }

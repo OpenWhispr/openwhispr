@@ -372,11 +372,13 @@ test("Not now on access is a refusal, and a failed capture is unavailable", asyn
   assert.deepEqual(await failed, { status: "unavailable", reason: "capture_failed" });
 });
 
-test("settings open the destination and re-check it when the user is done", async () => {
+test("generic connector settings acknowledge Done without inferring service readiness", async () => {
   const opened = [];
   const store = await loadStore({
     openSettingsSection: async (section) => opened.push(section),
-    connectorStatus: async () => [],
+    connectorStatus: async () => [
+      { id: "github", connected: true, configured: true, needsReconnect: false },
+    ],
   });
   const pending = store.requestInteraction(context("call-15").value, {
     kind: "settings",
@@ -386,7 +388,7 @@ test("settings open the destination and re-check it when the user is done", asyn
   store.openInteractionSettings("m1::call-15");
   assert.deepEqual(opened, ["integrations.connectors"]);
   await store.confirmSettingsDone("m1::call-15");
-  assert.deepEqual(await pending, { status: "done", ready: false });
+  assert.deepEqual(await pending, { status: "done" });
 });
 
 test("a restored interaction reports to its handler, and a forgotten one never does", async () => {
@@ -400,9 +402,19 @@ test("a restored interaction reports to its handler, and a forgotten one never d
   assert.equal(restore("call-16"), false, "already open");
 
   store.updateInteractionDraft("m9::call-16", { goal: "balanced", include: [], notes: "ok" });
+  assert.equal(
+    store.answerQuestions("m9::call-16"),
+    false,
+    "a restored checkbox still needs an answer"
+  );
+  store.updateInteractionDraft("m9::call-16", {
+    goal: "balanced",
+    include: ["wireframes"],
+    notes: "ok",
+  });
   store.answerQuestions("m9::call-16");
   assert.deepEqual(settled, [
-    { status: "answered", answers: { goal: "balanced", include: [], notes: "ok" } },
+    { status: "answered", answers: { goal: "balanced", include: ["wireframes"], notes: "ok" } },
   ]);
 
   restore("call-17");
@@ -460,10 +472,17 @@ test("the last question submits once; with one still unanswered it goes back to 
   store.updateInteractionDraft(key, { ...entry().draft, goal: "speed" });
   store.goToQuestion(key, 2);
   store.commitQuestion(key, 2);
+  assert.equal(entry().state, "pending", "the untouched checkbox question still needs an answer");
+  assert.equal(entry().step, 1);
+  store.updateInteractionDraft(key, { ...entry().draft, include: [] });
+  store.goToQuestion(key, 2);
+  store.commitQuestion(key, 2);
+  assert.equal(entry().state, "pending", "clearing every selection is not a submitted answer");
+  store.answerWithText(key, "Only the wireframes");
   store.commitQuestion(key, 2);
   await Promise.resolve();
   assert.deepEqual(results, [
-    { status: "answered", answers: { goal: "speed", include: [], notes: "n" } },
+    { status: "answered", answers: { goal: "speed", include: "Only the wireframes", notes: "n" } },
   ]);
 });
 

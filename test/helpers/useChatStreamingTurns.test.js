@@ -424,64 +424,77 @@ test("a tool still running at Stop ends stopped, and may still have acted", asyn
   assert.equal(toolTrace(toolCalls), "[Tools used: web_search (outcome not recorded)]");
 });
 
-test("a send an earlier request made shows its card again, saying so", async (t) => {
-  const harness = await renderChatStreaming(
-    t,
-    { allowConnectors: true },
-    {
-      statuses: SLACK_READY,
-      electronAPI: {
-        connectorPrepare: async () => ({
-          status: "ready",
-          actionId: "a1",
-          preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
-        }),
-        connectorCancel: async () => ({ cancelled: true }),
-      },
-    }
-  );
-  const { connectorActionKey } = await harness.vite.ssrLoadModule(
-    "/services/tools/connectors/actionKey.ts"
-  );
-  const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  let output;
-  harness.setStream((tools) =>
-    (async function* () {
-      const running = tools.slack_send_message.execute(
-        { destination: "#eng", text: "PR  #12 merged!" },
-        toolOptions("s2")
-      );
-      await new Promise((resolve) => setImmediate(resolve));
-      const [entry] = Object.values(approvals.useConnectorApprovalStore.getState().entries);
-      assert.deepEqual(entry.preview.notes, [{ key: "connectors.approval.sentEarlier" }]);
-      approvals.cancelApproval(entry.key);
-      output = await running;
-      yield { type: "done", finishReason: "stop" };
-    })()
-  );
-  const earlier = {
-    id: "a0",
-    role: "assistant",
-    content: "Posted.",
-    isStreaming: false,
-    toolCalls: [
+for (const previousOutcome of ["sent", "unknown"]) {
+  test(`an earlier ${previousOutcome} attempt still needs approval and makes no definite delivery claim`, async (t) => {
+    const harness = await renderChatStreaming(
+      t,
+      { allowConnectors: true },
       {
-        id: "s1",
-        name: "slack_send_message",
-        arguments: "{}",
-        status: "completed",
-        actionKey: connectorActionKey("slack", "send_message", {
-          destination: "#eng",
-          text: "PR #12 merged!",
-        }),
-      },
-    ],
-  };
-  await harness.captured.sendToAI("Post it again", [earlier]);
+        statuses: SLACK_READY,
+        electronAPI: {
+          connectorPrepare: async () => ({
+            status: "ready",
+            actionId: "a1",
+            preview: {
+              verbKey: "post",
+              destinationLabel: "#eng",
+              accountLabel: "chad",
+              body: "hi",
+            },
+          }),
+          connectorCancel: async () => ({ cancelled: true }),
+        },
+      }
+    );
+    const { connectorActionKey } = await harness.vite.ssrLoadModule(
+      "/services/tools/connectors/actionKey.ts"
+    );
+    const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+    let output, note;
+    harness.setStream((tools) =>
+      (async function* () {
+        const running = tools.slack_send_message.execute(
+          { destination: "#eng", text: "PR  #12 merged!" },
+          toolOptions("s2")
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        const [entry] = Object.values(approvals.useConnectorApprovalStore.getState().entries);
+        assert.deepEqual(entry.preview.notes, [{ key: "connectors.approval.sentEarlier" }]);
+        const i18n = (await harness.vite.ssrLoadModule("/i18n.ts")).default;
+        note = i18n.t(entry.preview.notes[0].key);
+        approvals.cancelApproval(entry.key);
+        output = await running;
+        yield { type: "done", finishReason: "stop" };
+      })()
+    );
+    const earlier = {
+      id: "a0",
+      role: "assistant",
+      content: "Posted.",
+      isStreaming: false,
+      toolCalls: [
+        {
+          id: "s1",
+          name: "slack_send_message",
+          arguments: "{}",
+          status: "completed",
+          metadata: { status: previousOutcome },
+          actionKey: connectorActionKey("slack", "send_message", {
+            destination: "#eng",
+            text: "PR #12 merged!",
+          }),
+        },
+      ],
+    };
+    await harness.captured.sendToAI("Post it again", [earlier]);
 
-  // The user's Send or Cancel decides; the model is never told it was already done.
-  assert.equal(output.status, "cancelled_by_user");
-});
+    assert.match(note, /tried.*earlier/);
+    assert.match(note, /Check whether it went through/);
+    assert.doesNotMatch(note, /already sent/);
+    // The user's Send or Cancel decides; the model is never told it was already done.
+    assert.equal(output.status, "cancelled_by_user");
+  });
+}
 
 test("regenerating replaces the reply in place and keeps the sends it made", async (t) => {
   const harness = await renderChatStreaming(

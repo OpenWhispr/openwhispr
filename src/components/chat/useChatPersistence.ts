@@ -49,7 +49,7 @@ export interface ChatPersistence {
     scope?: ContainerScope
   ) => Promise<number>;
   /** False for an obsolete load; null for a missing conversation; true when loaded. */
-  loadConversation: (id: number) => Promise<boolean | null>;
+  loadConversation: (id: number, beforeOpen?: () => void) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
   claimConversation: (id: number) => Promise<false | ConversationClaim>;
@@ -198,7 +198,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   );
 
   const loadConversation = useCallback(
-    async (id: number) => {
+    async (id: number, beforeOpen?: () => void) => {
+      if (beforeOpen) {
+        const version = sessionVersionRef.current;
+        const target = await window.electronAPI?.getAgentConversation?.(id);
+        if (version !== sessionVersionRef.current) return false;
+        if (!target) return null;
+        beforeOpen();
+      }
       const version = ++sessionVersionRef.current;
       if (ownedConversationRef.current != null)
         await releaseConversation(ownedConversationRef.current);

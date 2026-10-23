@@ -3743,7 +3743,9 @@
     "fork": "Dirama",
     "forked": "Chat diramata",
     "forkedFrom": "Diramata da «{{title}}»",
-    "forkFailed": "Impossibile diramare questa chat"
+    "forkFailed": "Impossibile diramare questa chat",
+    "sendNotStarted": "Questa chat è occupata. Il messaggio non è stato inviato. Riprova al termine della richiesta in corso.",
+    "openFailed": "Questa chat non è più disponibile."
   },
   "support": {
     "documentation": "Documentazione",
@@ -4355,7 +4357,7 @@
           "targetTitle": "Su «{{title}}»"
         }
       },
-      "sentEarlier": "Hai già inviato questo in precedenza in questa chat.",
+      "sentEarlier": "Hai già tentato questa operazione in questa chat. Verifica se è riuscita prima di inviare di nuovo.",
       "slack": {
         "channelLabel": "Canale",
         "asLabel": "Come",

@@ -228,6 +228,60 @@ const message = (id, role, content, extra = {}) => ({
   ...extra,
 });
 
+test("a missing parent preflight preserves the current session, messages and owner", async (t) => {
+  const h = await mountPersistence(t);
+  await h.act(() => h.current().createConversation("Current fork"));
+  const id = h.current().conversationId;
+  await h.act(() => h.current().claimConversation(id));
+  await h.act(() => h.current().setMessages([message("u1", "user", "Keep working")]));
+  const version = h.current().getSessionVersion();
+  let stopped = false;
+  let result;
+  await h.act(async () => {
+    result = await h.current().loadConversation(999, () => {
+      stopped = true;
+    });
+  });
+  assert.equal(result, null);
+  assert.equal(stopped, false);
+  assert.equal(h.current().conversationId, id);
+  assert.equal(h.current().messages[0].content, "Keep working");
+  assert.equal(h.current().getSessionVersion(), version);
+  assert.equal((await h.db.api.claimAgentConversation(id, "peer")).owned, false);
+});
+
+for (const leave of ["new chat", "account"]) {
+  test(`a parent preflight that resolves after ${leave} cannot stop or replace it`, async (t) => {
+    const h = await mountPersistence(t);
+    let finish;
+    h.db.api.getAgentConversation = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    let stopped = false;
+    let opening;
+    await h.act(() => {
+      opening = h.current().loadConversation(9, () => {
+        stopped = true;
+      });
+    });
+    await h.act(() => {
+      if (leave === "account") h.db.emitScope({ accountId: "account-b", authGeneration: 2 });
+      else h.current().handleNewChat();
+      h.current().setMessages([message("new", "user", "Replacement")]);
+    });
+    let result;
+    await h.act(async () => {
+      finish({ id: 9, title: "Old parent", messages: [] });
+      result = await opening;
+    });
+    assert.equal(result, false);
+    assert.equal(stopped, false);
+    assert.equal(h.current().conversationId, null);
+    assert.equal(h.current().messages[0].content, "Replacement");
+  });
+}
+
 test("saved messages carry their row id, and a waiting reply is completed in place", async (t) => {
   const { db, act, current } = await mountPersistence(t);
   await act(() => current().createConversation("Plan"));

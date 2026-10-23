@@ -39,6 +39,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
+  const [draft, setDraft] = useState("");
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const { toast } = useToast();
 
@@ -65,15 +66,16 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
   const handleSelectConversation = useCallback(
     async (id: number) => {
       if (id === activeConversationId) return;
-      cancelStream();
-      setActiveConversationId(id);
-      setIsNewChat(false);
-      if ((await persistence.loadConversation(id)) === null) {
-        setActiveConversationId(null);
-        setIsNewChat(true);
+      const opened = await persistence.loadConversation(id, () => {
+        cancelStream();
+        setActiveConversationId(id);
+        setIsNewChat(false);
+      });
+      if (opened === null) {
+        toast({ title: t("chat.openFailed"), variant: "destructive" });
       }
     },
-    [activeConversationId, cancelStream, persistence]
+    [activeConversationId, cancelStream, persistence, t, toast]
   );
 
   const handleNewChat = useCallback(() => {
@@ -119,14 +121,21 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
   const { forkOrigin } = persistence;
   const forkContext = unsentForkContext(forkOrigin, persistence.messages);
   const handleTextSubmit = useCallback(
-    (text: string, options?: SendToAIOptions) =>
-      sendMessage(
+    async (text: string, options?: SendToAIOptions) => {
+      const version = persistence.getSessionVersion?.();
+      const sent = await sendMessage(
         text,
         forkContext
           ? { ...options, selectedContext: { text: forkContext, sourceMessageId: "" } }
           : options
-      ),
-    [forkContext, sendMessage]
+      );
+      if (!sent && version === persistence.getSessionVersion?.()) {
+        setDraft((current) => current || text);
+        toast({ title: t("chat.sendNotStarted"), variant: "destructive" });
+      }
+      return sent;
+    },
+    [forkContext, persistence, sendMessage, t, toast]
   );
   useInterruptedInteractions(persistence, handleTextSubmit);
 
@@ -293,6 +302,8 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
                   : streaming.agentState
               }
               partialTranscript=""
+              draftText={draft}
+              onDraftChange={setDraft}
               onTextSubmit={handleTextSubmit}
               onCancel={streaming.cancelStream}
               voiceDraft

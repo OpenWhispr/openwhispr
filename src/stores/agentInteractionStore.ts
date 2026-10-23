@@ -10,11 +10,7 @@ import type {
   InteractionResult,
 } from "../types/agentInteractions";
 import { APPROVAL_TTL_MS, approvalKey } from "./connectorApprovalStore";
-import {
-  isConnectorReady,
-  readyConnectorIds,
-  refreshConnectorStatus,
-} from "./connectorStatusStore";
+import { isConnectorReady, refreshConnectorStatus } from "./connectorStatusStore";
 import type { CalendarProvider } from "../utils/calendarConnect";
 import type { SettingsState } from "./settingsStore";
 import { getCachedPlatform } from "../utils/platform";
@@ -245,7 +241,9 @@ function answerFor(
   }
   const typedText = typed?.trim() || null;
   if (question.kind === "single") return isOption(value) ? (value as string) : typedText;
-  return Array.isArray(value) ? value.filter(isOption) : (typedText ?? []);
+  if (!Array.isArray(value)) return typedText;
+  const picked = value.filter(isOption);
+  return picked.length > 0 ? picked : null;
 }
 
 // Every question answered, or null.
@@ -487,10 +485,6 @@ async function settingsReady(
     }).config;
     if (mode !== "providers" || !Object.hasOwn(API_KEY_SETTERS, provider)) return undefined;
     return Boolean(settings[`${provider as ApiKeyProvider}ApiKey`]);
-  }
-  if (target === "integrations.connectors") {
-    await refreshConnectorStatus();
-    return readyConnectorIds().length > 0;
   }
   if (target === "integrations.calendars") {
     const { getSettings, selectCalendarConnected } = await loadSettingsStore();

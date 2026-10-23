@@ -3743,7 +3743,9 @@
     "fork": "分岐",
     "forked": "分岐したチャット",
     "forkedFrom": "「{{title}}」から分岐",
-    "forkFailed": "このチャットを分岐できませんでした"
+    "forkFailed": "このチャットを分岐できませんでした",
+    "sendNotStarted": "このチャットは処理中です。メッセージは送信されませんでした。現在のリクエストが完了してから再試行してください。",
+    "openFailed": "このチャットは利用できなくなりました。"
   },
   "support": {
     "documentation": "ドキュメント",
@@ -4355,7 +4357,7 @@
           "targetTitle": "「{{title}}」へ"
         }
       },
-      "sentEarlier": "このチャットで以前に送信済みです。",
+      "sentEarlier": "このチャットで以前に試みています。再送信する前に、完了しているか確認してください。",
       "slack": {
         "channelLabel": "チャンネル",
         "asLabel": "送信者",

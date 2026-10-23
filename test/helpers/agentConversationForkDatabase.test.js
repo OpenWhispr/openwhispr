@@ -16,6 +16,23 @@ function seedConversation(db, title = "Plan the launch") {
   return { conversation, rows };
 }
 
+test("history and search previews use the newest row when saved timestamps tie", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation } = seedConversation(db);
+  db.db
+    .prepare("UPDATE agent_messages SET created_at = ? WHERE conversation_id = ?")
+    .run("2026-10-23 10:00:00", conversation.id);
+  for (const rows of [
+    db.getAgentConversationsWithPreview(),
+    db.searchAgentConversations("launch"),
+  ]) {
+    const preview = rows.find((row) => row.id === conversation.id);
+    assert.equal(preview.last_message, "Shorter draft.");
+    assert.equal(preview.last_message_role, "assistant");
+  }
+});
+
 test("a fork copies the history through its message, in order, with metadata", (t) => {
   const db = createDb(t);
   if (!db) return;

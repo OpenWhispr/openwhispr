@@ -3129,7 +3129,9 @@
     "fork": "Fork",
     "forked": "Forked chat",
     "forkedFrom": "Forked from \"{{title}}\"",
-    "forkFailed": "Couldn't fork this chat"
+    "forkFailed": "Couldn't fork this chat",
+    "sendNotStarted": "This chat is busy. Your message wasn't sent. Try again when the current request finishes.",
+    "openFailed": "This chat is no longer available."
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -4527,7 +4529,7 @@
           "targetTitle": "On \"{{title}}\""
         }
       },
-      "sentEarlier": "You already sent this earlier in this chat.",
+      "sentEarlier": "You tried this earlier in this chat. Check whether it went through before sending again.",
       "slack": {
         "channelLabel": "Channel",
         "asLabel": "As",

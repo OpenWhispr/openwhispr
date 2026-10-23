@@ -303,10 +303,29 @@ export default function AgentWindow() {
       stopReading();
       openedByTakeRef.current = false;
       dispatch({ type: "submitted", typed });
-      void sendRef.current(text, {
-        ...(selectedContext ? { selectedContext } : {}),
-        ...(attachment ? { attachment } : {}),
-      });
+      const press = pressRef.current;
+      const restoreUnsent = () => {
+        if (press !== pressRef.current) return;
+        busyRef.current = false;
+        const latest = stateRef.current;
+        if (latest.draft === (typed ? "" : current.draft)) {
+          dispatch({
+            type: "held",
+            text,
+            context: latest.selectedContext ?? selectedContext ?? null,
+            attachment: latest.attachment ?? attachment ?? null,
+          });
+        }
+        dispatch({ type: "notice", notice: "chat.sendNotStarted" });
+      };
+      void sendRef
+        .current(text, {
+          ...(selectedContext ? { selectedContext } : {}),
+          ...(attachment ? { attachment } : {}),
+        })
+        .then((sent) => {
+          if (!sent) restoreUnsent();
+        }, restoreUnsent);
     },
     [dispatch, refuseIfRestricted, stopReading]
   );
@@ -635,14 +654,16 @@ export default function AgentWindow() {
     (id: number) => {
       // The chat already open: nothing to stop or drop.
       if (id === conversationId) return;
-      stopReading();
-      dropTake();
-      void openChat(id).then((opened) => {
+      void openChat(id, () => {
+        stopReading();
+        dropTake();
+      }).then((opened) => {
         // False: another switch overtook this one and owns the list.
-        if (opened !== false) setOpenedChat((count) => count + 1);
+        if (opened === true) setOpenedChat((count) => count + 1);
+        else if (opened === null) dispatch({ type: "notice", notice: "chat.openFailed" });
       });
     },
-    [conversationId, dropTake, openChat, stopReading]
+    [conversationId, dispatch, dropTake, openChat, stopReading]
   );
 
   const readAloudState = useMemo(

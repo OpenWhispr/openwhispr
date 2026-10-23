@@ -250,7 +250,7 @@ test("Not now on an access card is a refusal", async (t) => {
   assert.deepEqual(card.results, [{ status: "declined" }]);
 });
 
-test("Open Settings, then Done checks again before the task goes on", async (t) => {
+test("Open Settings, then Done acknowledges the generic connector setup", async (t) => {
   const opened = [];
   const card = await mountCard(
     t,
@@ -276,7 +276,7 @@ test("Open Settings, then Done checks again before the task goes on", async (t) 
   assert.deepEqual(opened, ["integrations.connectors"]);
   await card.click(card.button("I'm done"));
   await card.wait(0);
-  assert.deepEqual(card.results, [{ status: "done", ready: false }]);
+  assert.deepEqual(card.results, [{ status: "done" }]);
 });
 
 test("Esc in the settings card dismisses it, and never reaches the window", async (t) => {
@@ -397,6 +397,81 @@ test("Continue waits for a pick", async (t) => {
   assert.equal(card.button("Continue").disabled, true);
   await card.click(checkboxes(card)[0]);
   assert.equal(card.button("Continue").disabled, false);
+});
+
+test("answering the final question returns to a skipped checkbox instead of submitting it", async (t) => {
+  const card = await mountCard(t, PLAN);
+  await card.click(radios(card)[0]);
+  await card.wait(260);
+  await card.click(card.button("Next question"));
+  await card.type(card.host.querySelector("input"), "Friday");
+  await card.click(card.host.querySelector('button[type="submit"]'));
+  assert.deepEqual(card.results, []);
+  assert.equal(card.entry().step, 1);
+  assert.equal(card.button("Continue").disabled, true);
+  await card.click(checkboxes(card)[0]);
+  await card.click(card.button("Continue"));
+  await card.click(card.host.querySelector('button[type="submit"]'));
+  assert.deepEqual(card.results[0].answers, {
+    goal: "balanced",
+    include: ["research"],
+    deadline: "Friday",
+  });
+});
+
+for (const focus of ["card", "other draft", "other app"]) {
+  test(`a settled interaction preserves focus owned by ${focus}`, async (t) => {
+    const card = await mountCard(t, { kind: "questions", questions: [PLAN.questions[0]] });
+    const { document } = card.happyWindow;
+    document.hasFocus = () => focus !== "other app";
+    const option = radios(card)[0];
+    option.focus();
+    await card.click(option);
+    const other = document.createElement("textarea");
+    document.body.append(other);
+    if (focus === "other draft") {
+      other.value = "Keep typing";
+      other.focus();
+    }
+    await card.wait(260);
+    assert.equal(card.results[0].status, "answered");
+    if (focus === "card") {
+      assert.ok(
+        card.host.contains(document.activeElement),
+        "the completed receipt keeps the keyboard"
+      );
+      assert.match(document.activeElement.textContent, /Answered/);
+    } else if (focus === "other draft") {
+      assert.ok(document.activeElement === other);
+    } else {
+      assert.ok(
+        !card.host.contains(document.activeElement),
+        "the card never takes another app's keyboard"
+      );
+    }
+  });
+}
+
+test("a new question under a focused receipt takes the keyboard back into its controls", async (t) => {
+  const payload = { kind: "questions", questions: [PLAN.questions[0]] };
+  const card = await mountCard(t, payload);
+  const { document } = card.happyWindow;
+  document.hasFocus = () => true;
+  radios(card)[0].focus();
+  await card.click(radios(card)[0]);
+  await card.wait(260);
+  assert.ok(card.host.contains(document.activeElement));
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  await React.act(async () => {
+    void card.store.requestInteraction(
+      { messageId: "m1", toolCallId: "c1", signal: controller.signal, onInteraction() {} },
+      payload
+    );
+  });
+  assert.ok(document.activeElement === radios(card)[0]);
+  await card.press(document.activeElement, "Escape");
+  assert.equal(card.entry().result.status, "cancelled");
 });
 
 test("a connect card says what connecting is for when the model doesn't", async (t) => {

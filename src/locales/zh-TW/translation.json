@@ -3743,7 +3743,9 @@
     "fork": "分支",
     "forked": "分支的對話",
     "forkedFrom": "分支自「{{title}}」",
-    "forkFailed": "無法分支此對話"
+    "forkFailed": "無法分支此對話",
+    "sendNotStarted": "此對話正忙。你的訊息未傳送。請在目前的請求完成後重試。",
+    "openFailed": "此對話已無法使用。"
   },
   "support": {
     "documentation": "文件",
@@ -4355,7 +4357,7 @@
           "targetTitle": "關於「{{title}}」"
         }
       },
-      "sentEarlier": "你已在此對話中傳送過此內容。",
+      "sentEarlier": "你之前已在此對話中嘗試過。再次傳送前，請先確認是否已完成。",
       "slack": {
         "channelLabel": "頻道",
         "asLabel": "身分",

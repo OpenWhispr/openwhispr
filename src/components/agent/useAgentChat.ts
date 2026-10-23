@@ -77,10 +77,11 @@ export function useAgentChat({
   );
 
   const switchChat = useCallback(
-    async (id: number) => {
-      cancelStream();
-      return loadConversation(id);
-    },
+    (id: number, beforeOpen?: () => void) =>
+      loadConversation(id, () => {
+        cancelStream();
+        beforeOpen?.();
+      }),
     [cancelStream, loadConversation]
   );
 
