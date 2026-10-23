@@ -338,7 +338,8 @@ test("Windows suggestions skip keys other slots hold and never come back empty",
     ]);
 
     assert.equal(manager.setupShortcuts("F8", () => undefined).success, true);
-    assert.deepEqual(manager.getSuggestions("RightControl"), ["F9", "F10", "Pause"]);
+    // Pause needs the same missing listener on Windows (#2675).
+    assert.deepEqual(manager.getSuggestions("RightControl"), ["F9", "F10", "ScrollLock"]);
     const refused = manager.setupShortcuts("RightControl", () => undefined);
     assert.doesNotMatch(refused.error, /\bF8\b/);
   });
