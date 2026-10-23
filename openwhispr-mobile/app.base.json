@@ -81,6 +81,7 @@
       "./plugins/settings-bundle/withSettingsBundle",
       "./plugins/hotkey-dictation/withHotkeyDictation",
       "./plugins/speaker-diarization/withSpeakerDiarization",
+      "./plugins/android-build-fixes/withAndroidBuildFixes",
       "expo-web-browser",
       "expo-image",
       "expo-video",
