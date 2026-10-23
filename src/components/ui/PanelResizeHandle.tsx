@@ -30,6 +30,14 @@ export function PanelResizeHandle({
       )}
     >
       <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-y-0 w-px bg-foreground/20 opacity-0 transition-opacity duration-150",
+          edge === "end" ? "-end-px" : "start-0",
+          isResizing && "opacity-100"
+        )}
+      />
+      <span
         className={cn(
           "absolute top-1/2 start-1/2 h-8 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground/20 opacity-0 transition-opacity duration-150 group-hover/resize:opacity-100 rtl:translate-x-1/2",
           isResizing && "opacity-100"
