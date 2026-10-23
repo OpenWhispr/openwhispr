@@ -4054,6 +4054,7 @@
       },
       "sections": {
         "connectors": "连接器",
+        "skills": "技能",
         "calendars": "日历",
         "api": "API 密钥",
         "mcp": "MCP 服务器",
@@ -4516,6 +4517,172 @@
     "beta": "测试版",
     "upsell": "连接器包含在付费方案中。升级后，助手即可在您的工具中执行操作。",
     "locked": "付费方案包含此功能"
+  },
+  "skills": {
+    "pane": {
+      "description": "把您的工作流程教给助手一次，之后在合适的时候它都会使用。",
+      "search": "搜索技能",
+      "manage": "管理技能",
+      "add": "添加",
+      "addMenu": {
+        "create": "创建技能",
+        "upload": "上传技能"
+      },
+      "installed": "已安装",
+      "recommended": "推荐",
+      "seeOne": "查看 {{first}}",
+      "seeTwo": "查看 {{first}} 和 {{second}}",
+      "seeMore_one": "查看 {{first}}、{{second}} 及另外 {{count}} 个",
+      "seeMore_other": "查看 {{first}}、{{second}} 及另外 {{count}} 个",
+      "noMatches": "没有与“{{query}}”匹配的已安装技能。",
+      "stateOn": "已开启",
+      "stateOff": "已关闭",
+      "stateNeedsFix": "需要修复",
+      "off": "关闭",
+      "needsFix": "需要修复",
+      "cardLabel": "{{name}}，{{state}}。打开详情",
+      "addRecommended": "添加 {{name}}",
+      "empty": {
+        "title": "还没有技能",
+        "description": "和助手一起创建一个，或上传您已有的技能。"
+      }
+    },
+    "breadcrumb": {
+      "label": "面包屑导航",
+      "root": "技能"
+    },
+    "detail": {
+      "skillLabel": "技能",
+      "toggle": "开启或关闭 {{name}}",
+      "more": "{{name}} 的更多操作",
+      "files": "文件",
+      "copyFile": "复制 {{path}}",
+      "neverRun": "OpenWhispr 从不运行脚本",
+      "uninstall": "卸载",
+      "uninstallConfirm": "要卸载 {{name}} 吗？它将从这台电脑中移除。",
+      "problem": "此技能修复后才能使用：{{reason}}"
+    },
+    "menu": {
+      "copyMarkdown": "复制 Markdown",
+      "uninstall": "卸载"
+    },
+    "toasts": {
+      "added": "已添加 {{name}}",
+      "created": "已创建 {{name}}",
+      "uploaded_one": "已上传 {{count}} 个技能",
+      "uploaded_other": "已上传 {{count}} 个技能",
+      "uninstalled": "已卸载 {{name}}",
+      "removedFromComputer": "已从这台电脑中移除。",
+      "copiedMarkdown": "已复制 Markdown",
+      "copyFailed": "无法复制",
+      "revealFailed": "无法找到该技能的文件夹",
+      "writeFailed": "无法保存技能",
+      "writeFailedNoSpace": "您的磁盘已满。",
+      "writeFailedPermission": "OpenWhispr 无法写入其技能文件夹。",
+      "loadFailed": "无法读取您的技能"
+    },
+    "manage": {
+      "title": "管理技能",
+      "description": "开启或关闭技能，或移除不用的技能。每个技能都保存在这台电脑上。",
+      "noMatches": "没有与“{{query}}”匹配的技能。",
+      "none": "还没有技能。"
+    },
+    "upload": {
+      "title": "上传技能",
+      "description": "添加您在其他地方创建的技能，例如在 Claude 或 Codex 中。",
+      "crumb": "上传技能",
+      "drop": "将技能文件拖到这里，或浏览",
+      "dropActive": "松开即可添加",
+      "several": "可以一次添加多个。",
+      "ruleMd": ".md 文件开头需要名称和描述",
+      "ruleZip": ".zip 和 .skill 文件中需要包含 SKILL.md",
+      "fileCount_one": "{{count}} 个文件",
+      "fileCount_other": "{{count}} 个文件",
+      "ready": "就绪",
+      "duplicate": "您已有此技能",
+      "replace": "替换",
+      "willReplace": "将替换您当前的技能",
+      "willReplaceCopy": "将代替另一个文件使用",
+      "alsoInUpload": "此次上传的另一个文件包含相同的技能",
+      "skipped": "已跳过",
+      "undo": "撤销",
+      "chooseFile": "选择一个文件以继续。",
+      "submit": "上传",
+      "submitCount_one": "上传 {{count}} 个技能",
+      "submitCount_other": "上传 {{count}} 个技能"
+    },
+    "create": {
+      "title": "创建技能",
+      "description": "自己编写。只要请求符合描述，助手就会使用它。",
+      "crumb": "创建技能",
+      "name": "名称",
+      "namePlaceholder": "每周状态报告",
+      "nameMissing": "请添加名称。",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "它的作用以及何时使用。例如：根据本周的笔记撰写我的每周更新。当我要每周更新时使用。",
+      "descriptionHint": "助手会读取这段内容来决定何时使用该技能。",
+      "descriptionMissing": "请添加描述，让助手知道何时使用它。",
+      "instructions": "指令",
+      "instructionsPlaceholder": "## 何时使用\n当我要每周更新时。\n\n## 步骤\n1. 阅读本周的笔记。\n2. 将它们分为成果、阻碍和下周计划。\n\n## 输出格式\n三个简短的列表。",
+      "instructionsMissing": "请添加指令。",
+      "addFile": "添加文件",
+      "filesTooLarge": "一个技能的文件总共不能超过 25 MB。",
+      "removeFile": "移除 {{path}}",
+      "submit": "创建",
+      "unsaved": "您有未保存的更改",
+      "keepEditing": "继续编辑",
+      "discard": "放弃"
+    },
+    "problems": {
+      "missingName": "开头需要名称",
+      "missingDescription": "开头需要描述",
+      "frontmatterMissing": "开头需要名称和描述",
+      "frontmatterInvalid": "无法读取开头的信息",
+      "frontmatterNotMapping": "开头的信息格式不符合预期",
+      "nameFormat": "名称只能使用小写字母、数字和单个连字符",
+      "nameTooLong": "名称超过 64 个字符",
+      "descriptionTooLong": "描述超过 {{max}} 个字符",
+      "descriptionAngleBrackets": "描述不能包含 < 或 >",
+      "noSkillFile": "其中没有 SKILL.md",
+      "multipleSkillFiles": "其中有多个 SKILL.md",
+      "skillFileTooDeep": "SKILL.md 必须位于顶层，或在一个文件夹内",
+      "unsafePath": "包含不允许的文件名或路径",
+      "symlink": "包含指向其他文件的链接，这是不允许的",
+      "tooLarge": "大于 25 MB",
+      "tooManyFiles": "文件超过 500 个",
+      "unsupportedFile": "只能添加 .md、.zip 和 .skill 文件",
+      "unreadableArchive": "无法打开此文件",
+      "nameMismatch": "SKILL.md 中的名称与其文件夹不一致",
+      "unreadable": "无法读取该技能的文件",
+      "skillFileNotUtf8": "SKILL.md 必须保存为 UTF-8 文本",
+      "placeholder": "请先替换 [TODO: …] 占位符",
+      "nameTaken": "您已有名为“{{name}}”的技能"
+    },
+    "warnings": {
+      "folderRenamed": "文件夹将重命名为与技能名称一致",
+      "reservedWord": "包含“claude”或“anthropic”的名称无法上传到 Claude",
+      "longBody": "指令超过 500 行，可能会拖慢助手",
+      "longDescription": "描述超过 300 个字符；较短的描述更容易被准确选中",
+      "unknownKeys": "开头有额外的信息，OpenWhispr 会保留但不会使用"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "行动项同步到 Linear",
+        "description": "从会议中提取行动项，并起草 Linear 议题供我批准。会议结束后我要行动项时使用。"
+      },
+      "meeting-summary-to-slack": {
+        "title": "会议摘要发到 Slack",
+        "description": "撰写简短的会议摘要，并起草发送到 Slack 频道的消息。当我要分享会议摘要时使用。"
+      },
+      "one-on-one-prep": {
+        "title": "1 对 1 准备",
+        "description": "汇总自我上次与某人一对一会议以来的变化。当我要准备 1 对 1 时使用。"
+      },
+      "meeting-decisions": {
+        "title": "会议决策",
+        "description": "在我的会议笔记中查找决策，并注明每项决策的日期和会议。当我问我们决定了什么时使用。"
+      }
+    }
   },
   "calendar": {
     "title": "Google 日历",

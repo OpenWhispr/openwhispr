@@ -211,6 +211,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("snippets-updated", listener);
     return () => ipcRenderer.removeListener("snippets-updated", listener);
   },
+  skillsList: () => ipcRenderer.invoke("skills-list"),
+  skillsGet: (name) => ipcRenderer.invoke("skills-get", name),
+  skillsReadFile: (name, path) => ipcRenderer.invoke("skills-read-file", name, path),
+  skillsSetEnabled: (name, enabled) => ipcRenderer.invoke("skills-set-enabled", name, enabled),
+  skillsUninstall: (name) => ipcRenderer.invoke("skills-uninstall", name),
+  skillsReveal: (name) => ipcRenderer.invoke("skills-reveal", name),
+  skillsPreviewUpload: (items) => ipcRenderer.invoke("skills-preview-upload", items),
+  skillsCommitUpload: (request) => ipcRenderer.invoke("skills-commit-upload", request),
+  skillsDiscardUploads: (tokens) => ipcRenderer.invoke("skills-discard-uploads", tokens),
+  skillsCreate: (input) => ipcRenderer.invoke("skills-create", input),
+  skillsAddRecommended: (id, copy) => ipcRenderer.invoke("skills-add-recommended", id, copy),
+  onSkillsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("skills-changed", listener);
+    return () => ipcRenderer.removeListener("skills-changed", listener);
+  },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);

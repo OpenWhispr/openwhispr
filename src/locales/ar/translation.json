@@ -752,6 +752,7 @@
       },
       "sections": {
         "connectors": "الموصلات",
+        "skills": "المهارات",
         "calendars": "التقويمات",
         "api": "مفاتيح API",
         "mcp": "خادم MCP",
@@ -1214,6 +1215,188 @@
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
     "locked": "متاح ضمن الخطط المدفوعة"
+  },
+  "skills": {
+    "pane": {
+      "description": "علّم المساعد طرق عملك مرة واحدة، وسيستخدمها كلما كانت مناسبة.",
+      "search": "البحث في المهارات",
+      "manage": "إدارة المهارات",
+      "add": "إضافة",
+      "addMenu": {
+        "create": "إنشاء مهارة",
+        "upload": "رفع مهارة"
+      },
+      "installed": "المثبّتة",
+      "recommended": "الموصى بها",
+      "seeOne": "عرض {{first}}",
+      "seeTwo": "عرض {{first}} و{{second}}",
+      "seeMore_zero": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_one": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_two": "عرض {{first}} و{{second}} و{{count}} مهارتين أخريين",
+      "seeMore_few": "عرض {{first}} و{{second}} و{{count}} مهارات أخرى",
+      "seeMore_many": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_other": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "noMatches": "لا توجد مهارات مثبّتة تطابق \"{{query}}\".",
+      "stateOn": "مفعّلة",
+      "stateOff": "متوقفة",
+      "stateNeedsFix": "تحتاج إلى إصلاح",
+      "off": "متوقفة",
+      "needsFix": "تحتاج إلى إصلاح",
+      "cardLabel": "{{name}}، {{state}}. فتح التفاصيل",
+      "addRecommended": "إضافة {{name}}",
+      "empty": {
+        "title": "لا توجد مهارات بعد",
+        "description": "أنشئ مهارة مع المساعد، أو ارفع مهارة لديك بالفعل."
+      }
+    },
+    "breadcrumb": {
+      "label": "مسار التنقل",
+      "root": "المهارات"
+    },
+    "detail": {
+      "skillLabel": "مهارة",
+      "toggle": "تفعيل {{name}} أو إيقافها",
+      "more": "مزيد من الخيارات لـ {{name}}",
+      "files": "الملفات",
+      "copyFile": "نسخ {{path}}",
+      "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
+      "uninstall": "إلغاء التثبيت",
+      "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
+      "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}"
+    },
+    "menu": {
+      "copyMarkdown": "نسخ Markdown",
+      "uninstall": "إلغاء التثبيت"
+    },
+    "toasts": {
+      "added": "تمت إضافة {{name}}",
+      "created": "تم إنشاء {{name}}",
+      "uploaded_zero": "تم رفع {{count}} مهارة",
+      "uploaded_one": "تم رفع {{count}} مهارة",
+      "uploaded_two": "تم رفع {{count}} مهارتين",
+      "uploaded_few": "تم رفع {{count}} مهارات",
+      "uploaded_many": "تم رفع {{count}} مهارة",
+      "uploaded_other": "تم رفع {{count}} مهارة",
+      "uninstalled": "تم إلغاء تثبيت {{name}}",
+      "removedFromComputer": "تمت إزالتها من هذا الكمبيوتر.",
+      "copiedMarkdown": "تم نسخ Markdown",
+      "copyFailed": "تعذّر النسخ",
+      "revealFailed": "تعذّر العثور على مجلد المهارة",
+      "writeFailed": "تعذّر حفظ المهارة",
+      "writeFailedNoSpace": "القرص ممتلئ.",
+      "writeFailedPermission": "لا يستطيع OpenWhispr الكتابة في مجلد المهارات الخاص به.",
+      "loadFailed": "تعذّرت قراءة مهاراتك"
+    },
+    "manage": {
+      "title": "إدارة المهارات",
+      "description": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر.",
+      "noMatches": "لا توجد مهارات تطابق \"{{query}}\".",
+      "none": "لا توجد مهارات بعد."
+    },
+    "upload": {
+      "title": "رفع مهارة",
+      "description": "أضف مهارات أنشأتها في مكان آخر، مثل Claude أو Codex.",
+      "crumb": "رفع مهارة",
+      "drop": "اسحب ملفات المهارات إلى هنا، أو تصفّح",
+      "dropActive": "أفلت للإضافة",
+      "several": "يمكنك إضافة عدة مهارات دفعة واحدة.",
+      "ruleMd": "تحتاج ملفات ‎.md إلى اسم ووصف في أعلاها",
+      "ruleZip": "تحتاج ملفات ‎.zip و‎.skill إلى ملف SKILL.md بداخلها",
+      "fileCount_zero": "{{count}} ملف",
+      "fileCount_one": "{{count}} ملف",
+      "fileCount_two": "{{count}} ملفان",
+      "fileCount_few": "{{count}} ملفات",
+      "fileCount_many": "{{count}} ملفًا",
+      "fileCount_other": "{{count}} ملف",
+      "ready": "جاهزة",
+      "duplicate": "لديك هذه المهارة بالفعل",
+      "replace": "استبدال",
+      "willReplace": "ستحل محل مهارتك الحالية",
+      "willReplaceCopy": "سيُستخدم بدلًا من الملف الآخر",
+      "alsoInUpload": "ملف آخر في عملية الرفع هذه يحتوي على المهارة نفسها",
+      "skipped": "تم التخطي",
+      "undo": "تراجع",
+      "chooseFile": "اختر ملفًا للمتابعة.",
+      "submit": "رفع",
+      "submitCount_zero": "رفع {{count}} مهارة",
+      "submitCount_one": "رفع {{count}} مهارة",
+      "submitCount_two": "رفع {{count}} مهارتين",
+      "submitCount_few": "رفع {{count}} مهارات",
+      "submitCount_many": "رفع {{count}} مهارة",
+      "submitCount_other": "رفع {{count}} مهارة"
+    },
+    "create": {
+      "title": "إنشاء مهارة",
+      "description": "اكتبها بنفسك. يستخدمها المساعد كلما توافق طلبٌ مع الوصف.",
+      "crumb": "إنشاء مهارة",
+      "name": "الاسم",
+      "namePlaceholder": "تقرير الحالة الأسبوعي",
+      "nameMissing": "أضف اسمًا.",
+      "descriptionLabel": "الوصف",
+      "descriptionPlaceholder": "ما الذي تفعله ومتى تُستخدم. مثال: تكتب تحديثي الأسبوعي من ملاحظات هذا الأسبوع. استخدمها عندما أطلب تحديثًا أسبوعيًا.",
+      "descriptionHint": "يقرأ المساعد هذا ليقرر متى يستخدم المهارة.",
+      "descriptionMissing": "أضف وصفًا ليعرف المساعد متى يستخدمها.",
+      "instructions": "التعليمات",
+      "instructionsPlaceholder": "## متى تُستخدم\nعندما أطلب تحديثي الأسبوعي.\n\n## الخطوات\n1. اقرأ ملاحظات هذا الأسبوع.\n2. صنّفها إلى إنجازات وعوائق والأسبوع القادم.\n\n## صيغة الإخراج\nثلاث قوائم قصيرة.",
+      "instructionsMissing": "أضف التعليمات.",
+      "addFile": "إضافة ملف",
+      "filesTooLarge": "يمكن أن يصل الحجم الإجمالي لملفات المهارة إلى 25 ميغابايت كحد أقصى.",
+      "removeFile": "إزالة {{path}}",
+      "submit": "إنشاء",
+      "unsaved": "لديك تغييرات غير محفوظة",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل"
+    },
+    "problems": {
+      "missingName": "تحتاج إلى اسم في الأعلى",
+      "missingDescription": "تحتاج إلى وصف في الأعلى",
+      "frontmatterMissing": "تحتاج إلى اسم ووصف في الأعلى",
+      "frontmatterInvalid": "تتعذر قراءة التفاصيل في الأعلى",
+      "frontmatterNotMapping": "التفاصيل في الأعلى ليست بالصيغة المتوقعة",
+      "nameFormat": "يمكن أن يحتوي الاسم على أحرف إنجليزية صغيرة وأرقام وشرطات مفردة فقط",
+      "nameTooLong": "الاسم أطول من 64 حرفًا",
+      "descriptionTooLong": "يتجاوز الوصف الحد الأقصى لعدد الأحرف ({{max}})",
+      "descriptionAngleBrackets": "لا يمكن أن يحتوي الوصف على < أو >",
+      "noSkillFile": "لا يوجد ملف SKILL.md بداخله",
+      "multipleSkillFiles": "يوجد أكثر من ملف SKILL.md بداخله",
+      "skillFileTooDeep": "يجب أن يكون SKILL.md في المستوى الأعلى، أو داخل مجلد واحد",
+      "unsafePath": "يحتوي على اسم ملف أو مسار غير مسموح به",
+      "symlink": "يحتوي على رابط إلى ملف آخر، وهذا غير مسموح به",
+      "tooLarge": "حجمه أكبر من 25 ميغابايت",
+      "tooManyFiles": "يحتوي على أكثر من 500 ملف",
+      "unsupportedFile": "يمكن إضافة ملفات ‎.md و‎.zip و‎.skill فقط",
+      "unreadableArchive": "يتعذر فتح هذا الملف",
+      "nameMismatch": "الاسم داخل SKILL.md لا يطابق اسم مجلده",
+      "unreadable": "تتعذر قراءة ملفات المهارة",
+      "skillFileNotUtf8": "يجب حفظ SKILL.md كنص بترميز UTF-8",
+      "placeholder": "استبدل العنصر النائب [TODO: …‎] أولًا",
+      "nameTaken": "لديك بالفعل مهارة باسم {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "ستتم إعادة تسمية المجلد ليطابق اسم المهارة",
+      "reservedWord": "لا يمكن رفع الأسماء التي تحتوي على \"claude\" أو \"anthropic\" إلى Claude",
+      "longBody": "تتجاوز التعليمات 500 سطر، وقد يؤدي ذلك إلى إبطاء المساعد",
+      "longDescription": "يتجاوز الوصف 300 حرف؛ الأوصاف الأقصر تُختار بدقة أكبر",
+      "unknownKeys": "توجد تفاصيل إضافية في الأعلى يحتفظ بها OpenWhispr لكنه لا يستخدمها"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "المهام إلى Linear",
+        "description": "تستخرج المهام من الاجتماع وتُعدّ لها مسودات في Linear لأوافق عليها. استخدمها بعد الاجتماع عندما أطلب المهام."
+      },
+      "meeting-summary-to-slack": {
+        "title": "ملخص الاجتماع إلى Slack",
+        "description": "تكتب ملخصًا قصيرًا للاجتماع وتُعدّ مسودة له لقناة في Slack. استخدمها عندما أطلب مشاركة ملخص الاجتماع."
+      },
+      "one-on-one-prep": {
+        "title": "التحضير لاجتماع فردي",
+        "description": "تجمع ما تغيّر منذ آخر اجتماع فردي لي مع شخص ما. استخدمها عندما أطلب التحضير لاجتماع فردي."
+      },
+      "meeting-decisions": {
+        "title": "قرارات الاجتماعات",
+        "description": "تجد القرارات في ملاحظات اجتماعاتي، مع تاريخ كل قرار واجتماعه. استخدمها عندما أسأل عمّا قررناه."
+      }
+    }
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",

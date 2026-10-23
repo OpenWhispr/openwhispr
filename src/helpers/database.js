@@ -431,6 +431,19 @@ class DatabaseManager {
         )
       `);
 
+      // A skill's content is its folder under userData/skills; this keeps its on/off state.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS skills (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          content_hash TEXT,
+          last_used_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS notes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3194,6 +3207,87 @@ class DatabaseManager {
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error clearing snippet cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getSkillStates() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const toIso = (value) => parseDbTimestamp(value)?.toISOString() ?? null;
+      return this.db
+        .prepare("SELECT * FROM skills ORDER BY created_at DESC, id DESC")
+        .all()
+        .map((row) => ({
+          name: row.name,
+          enabled: row.enabled === 1,
+          contentHash: row.content_hash,
+          lastUsedAt: toIso(row.last_used_at),
+          createdAt: toIso(row.created_at),
+          updatedAt: toIso(row.updated_at),
+        }));
+    } catch (error) {
+      debugLogger.error("Error getting skill states", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Inserts the row (on unless told otherwise) or updates the states given; a new
+  // content hash also stamps updated_at.
+  upsertSkillState(name, { enabled, contentHash } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          `INSERT INTO skills (name, enabled, content_hash)
+           VALUES (@name, COALESCE(@enabled, 1), @contentHash)
+           ON CONFLICT(name) DO UPDATE SET
+             enabled = COALESCE(@enabled, enabled),
+             content_hash = COALESCE(@contentHash, content_hash),
+             updated_at = CASE
+               WHEN @contentHash IS NOT NULL AND content_hash IS NOT @contentHash
+               THEN datetime('now') ELSE updated_at END`
+        )
+        .run({
+          name,
+          enabled: enabled === undefined ? null : Number(enabled),
+          contentHash: contentHash ?? null,
+        });
+    } catch (error) {
+      debugLogger.error("Error saving skill state", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  setSkillEnabled(name, enabled) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE skills SET enabled = ? WHERE name = ?")
+        .run(Number(enabled), name);
+      return result.changes > 0;
+    } catch (error) {
+      debugLogger.error("Error switching skill", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  markSkillUsed(name) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("UPDATE skills SET last_used_at = datetime('now') WHERE name = ?").run(name);
+    } catch (error) {
+      debugLogger.error("Error marking skill used", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  deleteSkillState(name) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("DELETE FROM skills WHERE name = ?").run(name);
+    } catch (error) {
+      debugLogger.error("Error deleting skill state", { error: error.message }, "database");
       throw error;
     }
   }

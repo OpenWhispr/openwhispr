@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Sparkles } from "../icons";
 import { Button } from "../ui/button";
@@ -10,6 +10,9 @@ interface IntegrationsPaneProps {
   description: ReactNode;
   docsUrl?: string;
   actions?: ReactNode;
+  /** A trail above the title, for a screen opened from another one. */
+  breadcrumb?: ReactNode;
+  headingRef?: Ref<HTMLHeadingElement>;
   children: ReactNode;
 }
 
@@ -20,39 +23,44 @@ export function IntegrationsPane({
   description,
   actions,
   docsUrl,
+  breadcrumb,
+  headingRef,
   children,
 }: IntegrationsPaneProps): ReactElement {
   const { t } = useTranslation();
   return (
     <div className="space-y-4">
-      {/* The actions wrap under the title when both don't fit, as with long translations. */}
-      <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="flex-1 basis-60 min-w-0">
-          {/* Focusable so a link that opens another section can move focus here. */}
-          <div className="flex items-center gap-2">
-            <h2 tabIndex={-1} className="text-base text-foreground outline-none">
-              {title}
-            </h2>
-            {titleBadge}
+      <div>
+        {breadcrumb}
+        {/* The actions wrap under the title when both don't fit, as with long translations. */}
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+          <div className="flex-1 basis-60 min-w-0">
+            {/* Focusable so a link that opens another section can move focus here. */}
+            <div className="flex items-center gap-2">
+              <h2 ref={headingRef} tabIndex={-1} className="text-base text-foreground outline-none">
+                {title}
+              </h2>
+              {titleBadge}
+            </div>
+            <p className="text-xs text-muted-foreground/80 mt-1 leading-relaxed">{description}</p>
           </div>
-          <p className="text-xs text-muted-foreground/80 mt-1 leading-relaxed">{description}</p>
+          {(docsUrl || actions) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {docsUrl && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.electronAPI?.openExternal?.(docsUrl)}
+                  className="gap-1.5 text-muted-foreground"
+                >
+                  {t("integrations.readDocs")}
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+              )}
+              {actions}
+            </div>
+          )}
         </div>
-        {(docsUrl || actions) && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {docsUrl && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.electronAPI?.openExternal?.(docsUrl)}
-                className="gap-1.5 text-muted-foreground"
-              >
-                {t("integrations.readDocs")}
-                <ExternalLink className="h-3 w-3" />
-              </Button>
-            )}
-            {actions}
-          </div>
-        )}
       </div>
       {children}
     </div>

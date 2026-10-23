@@ -40,6 +40,10 @@ const ARABIC_PLURAL_BASES = [
   "insights.dayTooltip",
   "insights.claimDescription",
   "insights.enableDescription",
+  "skills.pane.seeMore",
+  "skills.toasts.uploaded",
+  "skills.upload.fileCount",
+  "skills.upload.submitCount",
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",

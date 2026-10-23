@@ -4226,6 +4226,7 @@
       },
       "sections": {
         "connectors": "Konnektoren",
+        "skills": "Skills",
         "calendars": "Kalender",
         "api": "API-Schlüssel",
         "mcp": "MCP-Server",
@@ -4688,6 +4689,172 @@
     "beta": "Beta",
     "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",
     "locked": "In kostenpflichtigen Tarifen enthalten"
+  },
+  "skills": {
+    "pane": {
+      "description": "Bring dem Assistenten deine Abläufe einmal bei. Er nutzt sie, wann immer sie passen.",
+      "search": "Skills durchsuchen",
+      "manage": "Skills verwalten",
+      "add": "Hinzufügen",
+      "addMenu": {
+        "create": "Skill erstellen",
+        "upload": "Skill hochladen"
+      },
+      "installed": "Installiert",
+      "recommended": "Empfohlen",
+      "seeOne": "{{first}} anzeigen",
+      "seeTwo": "{{first}} und {{second}} anzeigen",
+      "seeMore_one": "{{first}}, {{second}} und {{count}} weiteren anzeigen",
+      "seeMore_other": "{{first}}, {{second}} und {{count}} weitere anzeigen",
+      "noMatches": "Keine installierten Skills passen zu „{{query}}“.",
+      "stateOn": "an",
+      "stateOff": "aus",
+      "stateNeedsFix": "muss korrigiert werden",
+      "off": "Aus",
+      "needsFix": "Muss korrigiert werden",
+      "cardLabel": "{{name}}, {{state}}. Details öffnen",
+      "addRecommended": "{{name}} hinzufügen",
+      "empty": {
+        "title": "Noch keine Skills",
+        "description": "Erstelle einen mit dem Assistenten oder lade einen hoch, den du schon hast."
+      }
+    },
+    "breadcrumb": {
+      "label": "Brotkrümelnavigation",
+      "root": "Skills"
+    },
+    "detail": {
+      "skillLabel": "Skill",
+      "toggle": "{{name}} ein- oder ausschalten",
+      "more": "Weitere Aktionen für {{name}}",
+      "files": "Dateien",
+      "copyFile": "{{path}} kopieren",
+      "neverRun": "OpenWhispr führt Skripte nie aus",
+      "uninstall": "Deinstallieren",
+      "uninstallConfirm": "{{name}} deinstallieren? Der Skill wird von diesem Computer entfernt.",
+      "problem": "Dieser Skill kann erst verwendet werden, wenn er korrigiert ist: {{reason}}"
+    },
+    "menu": {
+      "copyMarkdown": "Markdown kopieren",
+      "uninstall": "Deinstallieren"
+    },
+    "toasts": {
+      "added": "{{name}} hinzugefügt",
+      "created": "{{name}} erstellt",
+      "uploaded_one": "{{count}} Skill hochgeladen",
+      "uploaded_other": "{{count}} Skills hochgeladen",
+      "uninstalled": "{{name}} deinstalliert",
+      "removedFromComputer": "Von diesem Computer entfernt.",
+      "copiedMarkdown": "Markdown kopiert",
+      "copyFailed": "Kopieren fehlgeschlagen",
+      "revealFailed": "Ordner des Skills konnte nicht gefunden werden",
+      "writeFailed": "Skill konnte nicht gespeichert werden",
+      "writeFailedNoSpace": "Deine Festplatte ist voll.",
+      "writeFailedPermission": "OpenWhispr kann nicht in seinen Skills-Ordner schreiben.",
+      "loadFailed": "Deine Skills konnten nicht gelesen werden"
+    },
+    "manage": {
+      "title": "Skills verwalten",
+      "description": "Schalte Skills ein oder aus oder entferne die, die du nicht nutzt. Jeder wird auf diesem Computer gespeichert.",
+      "noMatches": "Keine Skills passen zu „{{query}}“.",
+      "none": "Noch keine Skills."
+    },
+    "upload": {
+      "title": "Skill hochladen",
+      "description": "Füge Skills hinzu, die du anderswo erstellt hast, etwa in Claude oder Codex.",
+      "crumb": "Skill hochladen",
+      "drop": "Skill-Dateien hierher ziehen oder durchsuchen",
+      "dropActive": "Zum Hinzufügen ablegen",
+      "several": "Du kannst mehrere auf einmal hinzufügen.",
+      "ruleMd": ".md-Dateien brauchen oben einen Namen und eine Beschreibung",
+      "ruleZip": ".zip- und .skill-Dateien brauchen eine SKILL.md darin",
+      "fileCount_one": "{{count}} Datei",
+      "fileCount_other": "{{count}} Dateien",
+      "ready": "Bereit",
+      "duplicate": "Du hast diesen Skill schon",
+      "replace": "Ersetzen",
+      "willReplace": "Ersetzt deinen aktuellen Skill",
+      "willReplaceCopy": "Wird statt der anderen Datei verwendet",
+      "alsoInUpload": "Eine andere Datei in diesem Upload enthält denselben Skill",
+      "skipped": "Übersprungen",
+      "undo": "Rückgängig",
+      "chooseFile": "Wähle eine Datei aus, um fortzufahren.",
+      "submit": "Hochladen",
+      "submitCount_one": "{{count}} Skill hochladen",
+      "submitCount_other": "{{count}} Skills hochladen"
+    },
+    "create": {
+      "title": "Skill erstellen",
+      "description": "Schreib ihn selbst. Der Assistent nutzt ihn immer, wenn eine Anfrage zur Beschreibung passt.",
+      "crumb": "Skill erstellen",
+      "name": "Name",
+      "namePlaceholder": "Wöchentlicher Statusbericht",
+      "nameMissing": "Gib einen Namen ein.",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Was er tut und wann er genutzt wird. Zum Beispiel: Schreibt mein Wochen-Update aus den Notizen dieser Woche. Nutzen, wenn ich nach einem Wochen-Update frage.",
+      "descriptionHint": "Der Assistent liest das, um zu entscheiden, wann er den Skill nutzt.",
+      "descriptionMissing": "Füge eine Beschreibung hinzu, damit der Assistent weiß, wann er den Skill nutzen soll.",
+      "instructions": "Anweisungen",
+      "instructionsPlaceholder": "## Wann nutzen\nWenn ich nach meinem Wochen-Update frage.\n\n## Schritte\n1. Lies die Notizen dieser Woche.\n2. Ordne sie nach Erfolgen, Hindernissen und nächster Woche.\n\n## Ausgabeformat\nDrei kurze Listen.",
+      "instructionsMissing": "Füge die Anweisungen hinzu.",
+      "addFile": "Datei hinzufügen",
+      "filesTooLarge": "Die Dateien eines Skills dürfen zusammen höchstens 25 MB groß sein.",
+      "removeFile": "{{path}} entfernen",
+      "submit": "Erstellen",
+      "unsaved": "Du hast ungespeicherte Änderungen",
+      "keepEditing": "Weiter bearbeiten",
+      "discard": "Verwerfen"
+    },
+    "problems": {
+      "missingName": "Braucht oben einen Namen",
+      "missingDescription": "Braucht oben eine Beschreibung",
+      "frontmatterMissing": "Braucht oben einen Namen und eine Beschreibung",
+      "frontmatterInvalid": "Die Angaben oben können nicht gelesen werden",
+      "frontmatterNotMapping": "Die Angaben oben haben nicht das erwartete Format",
+      "nameFormat": "Der Name darf nur Kleinbuchstaben, Zahlen und einzelne Bindestriche enthalten",
+      "nameTooLong": "Der Name ist länger als 64 Zeichen",
+      "descriptionTooLong": "Die Beschreibung ist länger als {{max}} Zeichen",
+      "descriptionAngleBrackets": "Die Beschreibung darf kein < oder > enthalten",
+      "noSkillFile": "Darin ist keine SKILL.md",
+      "multipleSkillFiles": "Darin ist mehr als eine SKILL.md",
+      "skillFileTooDeep": "SKILL.md muss ganz oben oder in einem einzigen Ordner liegen",
+      "unsafePath": "Enthält einen Dateinamen oder Pfad, der nicht erlaubt ist",
+      "symlink": "Enthält einen Link auf eine andere Datei, was nicht erlaubt ist",
+      "tooLarge": "Ist größer als 25 MB",
+      "tooManyFiles": "Hat mehr als 500 Dateien",
+      "unsupportedFile": "Nur .md-, .zip- und .skill-Dateien können hinzugefügt werden",
+      "unreadableArchive": "Diese Datei kann nicht geöffnet werden",
+      "nameMismatch": "Der Name in SKILL.md passt nicht zu seinem Ordner",
+      "unreadable": "Die Dateien des Skills können nicht gelesen werden",
+      "skillFileNotUtf8": "SKILL.md muss als UTF-8-Text gespeichert sein",
+      "placeholder": "Ersetze zuerst den Platzhalter [TODO: …]",
+      "nameTaken": "Du hast schon einen Skill namens {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "Der Ordner wird passend zum Namen des Skills umbenannt",
+      "reservedWord": "Namen mit „claude“ oder „anthropic“ können nicht zu Claude hochgeladen werden",
+      "longBody": "Die Anweisungen haben mehr als 500 Zeilen, was den Assistenten verlangsamen kann",
+      "longDescription": "Die Beschreibung hat mehr als 300 Zeichen; kürzere werden zuverlässiger ausgewählt",
+      "unknownKeys": "Oben stehen zusätzliche Angaben, die OpenWhispr behält, aber nicht nutzt"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "Aufgaben nach Linear",
+        "description": "Zieht die Aufgaben aus einem Meeting und entwirft Linear-Issues, die ich freigebe. Nutzen nach einem Meeting, wenn ich nach den Aufgaben frage."
+      },
+      "meeting-summary-to-slack": {
+        "title": "Meeting-Zusammenfassung nach Slack",
+        "description": "Schreibt eine kurze Meeting-Zusammenfassung und entwirft eine Nachricht für einen Slack-Kanal. Nutzen, wenn ich eine Meeting-Zusammenfassung teilen möchte."
+      },
+      "one-on-one-prep": {
+        "title": "1:1-Vorbereitung",
+        "description": "Sammelt, was sich seit meinem letzten Einzelgespräch mit jemandem geändert hat. Nutzen, wenn ich mich auf ein 1:1 vorbereiten möchte."
+      },
+      "meeting-decisions": {
+        "title": "Meeting-Entscheidungen",
+        "description": "Findet die Entscheidungen in meinen Meeting-Notizen, jeweils mit Datum und Meeting. Nutzen, wenn ich frage, was wir entschieden haben."
+      }
+    }
   },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",

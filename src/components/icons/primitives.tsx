@@ -186,6 +186,22 @@ const SquareSparkleMark = glyph(
   </>
 );
 
+// The skill icon: a tile on two layers. Each layer is its own group, drawn bottom first,
+// so skills/SkillIcon.tsx can drop them in one after another.
+const SkillStackMark = glyph(
+  <>
+    <g data-layer="3">
+      <path d="M2.5 16.5 12 21.5l9.5-5" />
+    </g>
+    <g data-layer="2">
+      <path d="M2.5 12 12 17l9.5-5" />
+    </g>
+    <g data-layer="1">
+      <path d="M12 2 2.5 7 12 12l9.5-5L12 2z" />
+    </g>
+  </>
+);
+
 // The sidebar's workspace switcher.
 const ChevronsUpDownMark = glyph(
   <>
@@ -208,6 +224,7 @@ export const ListChecks = createIcon("list-checks", ListChecksMark);
 export const ListEnd = createIcon("list-end", ListEndMark);
 export const ListOrdered = createIcon("list-ordered", ListOrderedMark);
 export const Quote = createIcon("quote", QuoteMark);
+export const SkillStack = createIcon("skill-stack", SkillStackMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
 export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);

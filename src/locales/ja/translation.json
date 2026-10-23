@@ -4054,6 +4054,7 @@
       },
       "sections": {
         "connectors": "コネクタ",
+        "skills": "スキル",
         "calendars": "カレンダー",
         "api": "APIキー",
         "mcp": "MCPサーバー",
@@ -4516,6 +4517,172 @@
     "beta": "ベータ",
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
     "locked": "有料プランに含まれます"
+  },
+  "skills": {
+    "pane": {
+      "description": "ワークフローを一度アシスタントに教えると、合う場面でいつでも使われます。",
+      "search": "スキルを検索",
+      "manage": "スキルを管理",
+      "add": "追加",
+      "addMenu": {
+        "create": "スキルを作成",
+        "upload": "スキルをアップロード"
+      },
+      "installed": "インストール済み",
+      "recommended": "おすすめ",
+      "seeOne": "{{first}}を表示",
+      "seeTwo": "{{first}}と{{second}}を表示",
+      "seeMore_one": "{{first}}、{{second}}、ほか{{count}}件を表示",
+      "seeMore_other": "{{first}}、{{second}}、ほか{{count}}件を表示",
+      "noMatches": "「{{query}}」に一致するインストール済みのスキルはありません。",
+      "stateOn": "オン",
+      "stateOff": "オフ",
+      "stateNeedsFix": "要修正",
+      "off": "オフ",
+      "needsFix": "要修正",
+      "cardLabel": "{{name}}、{{state}}。詳細を開く",
+      "addRecommended": "{{name}}を追加",
+      "empty": {
+        "title": "スキルはまだありません",
+        "description": "アシスタントと一緒に作成するか、お持ちのスキルをアップロードしてください。"
+      }
+    },
+    "breadcrumb": {
+      "label": "パンくずリスト",
+      "root": "スキル"
+    },
+    "detail": {
+      "skillLabel": "スキル",
+      "toggle": "{{name}}のオン/オフ",
+      "more": "{{name}}のその他の操作",
+      "files": "ファイル",
+      "copyFile": "{{path}}をコピー",
+      "neverRun": "OpenWhisprはスクリプトを実行しません",
+      "uninstall": "アンインストール",
+      "uninstallConfirm": "{{name}}をアンインストールしますか？このコンピューターから削除されます。",
+      "problem": "このスキルは修正するまで使えません: {{reason}}"
+    },
+    "menu": {
+      "copyMarkdown": "Markdownをコピー",
+      "uninstall": "アンインストール"
+    },
+    "toasts": {
+      "added": "{{name}}を追加しました",
+      "created": "{{name}}を作成しました",
+      "uploaded_one": "{{count}}件のスキルをアップロードしました",
+      "uploaded_other": "{{count}}件のスキルをアップロードしました",
+      "uninstalled": "{{name}}をアンインストールしました",
+      "removedFromComputer": "このコンピューターから削除しました。",
+      "copiedMarkdown": "Markdownをコピーしました",
+      "copyFailed": "コピーできませんでした",
+      "revealFailed": "スキルのフォルダーが見つかりませんでした",
+      "writeFailed": "スキルを保存できませんでした",
+      "writeFailedNoSpace": "ディスクの空き容量がありません。",
+      "writeFailedPermission": "OpenWhisprがスキルフォルダーに書き込めません。",
+      "loadFailed": "スキルを読み込めませんでした"
+    },
+    "manage": {
+      "title": "スキルを管理",
+      "description": "スキルのオン/オフを切り替えたり、使わないスキルを削除したりできます。スキルはすべてこのコンピューターに保存されます。",
+      "noMatches": "「{{query}}」に一致するスキルはありません。",
+      "none": "スキルはまだありません。"
+    },
+    "upload": {
+      "title": "スキルをアップロード",
+      "description": "ClaudeやCodexなど、他の場所で作成したスキルを追加できます。",
+      "crumb": "スキルをアップロード",
+      "drop": "スキルファイルをここにドラッグ、または参照",
+      "dropActive": "ドロップして追加",
+      "several": "複数を一度に追加できます。",
+      "ruleMd": ".mdファイルには先頭に名前と説明が必要です",
+      "ruleZip": ".zipと.skillファイルには中にSKILL.mdが必要です",
+      "fileCount_one": "{{count}}個のファイル",
+      "fileCount_other": "{{count}}個のファイル",
+      "ready": "準備完了",
+      "duplicate": "このスキルはすでにあります",
+      "replace": "置き換える",
+      "willReplace": "現在のスキルを置き換えます",
+      "willReplaceCopy": "もう一方のファイルの代わりに使われます",
+      "alsoInUpload": "このアップロードの別のファイルに同じスキルがあります",
+      "skipped": "スキップ",
+      "undo": "元に戻す",
+      "chooseFile": "続けるにはファイルを選択してください。",
+      "submit": "アップロード",
+      "submitCount_one": "{{count}}件のスキルをアップロード",
+      "submitCount_other": "{{count}}件のスキルをアップロード"
+    },
+    "create": {
+      "title": "スキルを作成",
+      "description": "自分で書きます。リクエストが説明に合うと、アシスタントがいつでも使います。",
+      "crumb": "スキルを作成",
+      "name": "名前",
+      "namePlaceholder": "週次ステータスレポート",
+      "nameMissing": "名前を入力してください。",
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "何をするか、いつ使うか。例: 今週のメモから週次報告を作成します。週次報告を頼んだときに使います。",
+      "descriptionHint": "アシスタントはこれを読んで、スキルを使うタイミングを判断します。",
+      "descriptionMissing": "アシスタントが使うタイミングを判断できるよう、説明を入力してください。",
+      "instructions": "指示",
+      "instructionsPlaceholder": "## 使うタイミング\n週次報告を頼んだとき。\n\n## 手順\n1. 今週のメモを読む。\n2. 成果、課題、来週の予定に分ける。\n\n## 出力形式\n短いリストを3つ。",
+      "instructionsMissing": "指示を入力してください。",
+      "addFile": "ファイルを追加",
+      "filesTooLarge": "スキルのファイルは合計25 MBまでです。",
+      "removeFile": "{{path}}を削除",
+      "submit": "作成",
+      "unsaved": "保存されていない変更があります",
+      "keepEditing": "編集を続ける",
+      "discard": "破棄"
+    },
+    "problems": {
+      "missingName": "先頭に名前が必要です",
+      "missingDescription": "先頭に説明が必要です",
+      "frontmatterMissing": "先頭に名前と説明が必要です",
+      "frontmatterInvalid": "先頭の情報を読み取れません",
+      "frontmatterNotMapping": "先頭の情報が想定された形式ではありません",
+      "nameFormat": "名前には小文字の英字、数字、単独のハイフンのみ使えます",
+      "nameTooLong": "名前が64文字を超えています",
+      "descriptionTooLong": "説明が{{max}}文字を超えています",
+      "descriptionAngleBrackets": "説明に < や > は使えません",
+      "noSkillFile": "中にSKILL.mdがありません",
+      "multipleSkillFiles": "中にSKILL.mdが複数あります",
+      "skillFileTooDeep": "SKILL.mdは最上位か、1つのフォルダー内に置く必要があります",
+      "unsafePath": "使用できないファイル名またはパスが含まれています",
+      "symlink": "他のファイルへのリンクが含まれていますが、これは使用できません",
+      "tooLarge": "25 MBを超えています",
+      "tooManyFiles": "ファイルが500個を超えています",
+      "unsupportedFile": "追加できるのは.md、.zip、.skillファイルのみです",
+      "unreadableArchive": "このファイルを開けません",
+      "nameMismatch": "SKILL.md内の名前がフォルダー名と一致しません",
+      "unreadable": "スキルのファイルを読み取れません",
+      "skillFileNotUtf8": "SKILL.mdはUTF-8のテキストとして保存する必要があります",
+      "placeholder": "先に [TODO: …] のプレースホルダーを置き換えてください",
+      "nameTaken": "「{{name}}」という名前のスキルはすでにあります"
+    },
+    "warnings": {
+      "folderRenamed": "フォルダー名はスキル名に合わせて変更されます",
+      "reservedWord": "「claude」または「anthropic」を含む名前はClaudeにアップロードできません",
+      "longBody": "指示が500行を超えているため、アシスタントの動作が遅くなることがあります",
+      "longDescription": "説明が300文字を超えています。短い説明のほうが確実に選ばれます",
+      "unknownKeys": "先頭に追加の情報があります。OpenWhisprは保持しますが使用しません"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "アクションをLinearへ",
+        "description": "会議からアクションを抽出し、承認用のLinearの課題を下書きします。会議の後にアクションの洗い出しを頼んだときに使います。"
+      },
+      "meeting-summary-to-slack": {
+        "title": "会議の要約をSlackへ",
+        "description": "会議の短い要約を書き、Slackチャンネル向けに下書きします。会議の要約を共有したいと頼んだときに使います。"
+      },
+      "one-on-one-prep": {
+        "title": "1on1の準備",
+        "description": "特定の相手との前回の1on1以降に変わったことをまとめます。1on1の準備を頼んだときに使います。"
+      },
+      "meeting-decisions": {
+        "title": "会議の決定事項",
+        "description": "会議メモから決定事項を探し、それぞれの日付と会議を示します。何を決めたか尋ねたときに使います。"
+      }
+    }
   },
   "calendar": {
     "title": "Google カレンダー",

@@ -292,3 +292,31 @@ test("<br> in inline code stays literal", async (t) => {
   assert.ok(html.includes("&lt;br&gt;"), "code shows the tag as written");
   assert.ok(!/<br\/?>/.test(html), "no line break is inserted");
 });
+
+test(
+  "hideFrontmatter drops a leading header block, CRLF included, and leaves other content alone",
+  async (t) => {
+    installBrowserGlobals(t);
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-markdown-frontmatter-test-",
+    });
+    const { default: MarkdownRenderer } = await vite.ssrLoadModule(
+      "/components/ui/MarkdownRenderer.tsx"
+    );
+    const render = (content, hideFrontmatter) =>
+      renderToStaticMarkup(createElement(MarkdownRenderer, { content, hideFrontmatter }));
+    const skill = "---\nname: recap\ndescription: Recaps.\n---\n\n## Steps\n\nGo";
+
+    const hidden = render(skill, true);
+    assert.doesNotMatch(hidden, /name: recap/);
+    assert.match(hidden, /<h2[^>]*>Steps<\/h2>/);
+    assert.equal(render(skill.replace(/\n/g, "\r\n"), true), hidden);
+    assert.equal(render(`\uFEFF${skill}`, true), hidden);
+    // Without the prop a leading header renders as it always has
+    assert.match(render(skill, false), /name: recap/);
+    // A rule later on is content, and an unclosed opening line isn't a header
+    for (const content of ["Intro\n\n---\n\nMore", "---\nname: recap\n\nNo closing line"]) {
+      assert.equal(render(content, true), render(content, false), content);
+    }
+  }
+);

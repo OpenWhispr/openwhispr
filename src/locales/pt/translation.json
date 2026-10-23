@@ -4054,6 +4054,7 @@
       },
       "sections": {
         "connectors": "Conectores",
+        "skills": "Habilidades",
         "calendars": "Calendários",
         "api": "Chaves de API",
         "mcp": "Servidor MCP",
@@ -4516,6 +4517,172 @@
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
     "locked": "Incluído nos planos pagos"
+  },
+  "skills": {
+    "pane": {
+      "description": "Ensine seus fluxos de trabalho ao assistente uma vez. Ele os usa sempre que fizerem sentido.",
+      "search": "Pesquisar habilidades",
+      "manage": "Gerenciar habilidades",
+      "add": "Adicionar",
+      "addMenu": {
+        "create": "Criar habilidade",
+        "upload": "Enviar habilidade"
+      },
+      "installed": "Instaladas",
+      "recommended": "Recomendadas",
+      "seeOne": "Ver {{first}}",
+      "seeTwo": "Ver {{first}} e {{second}}",
+      "seeMore_one": "Ver {{first}}, {{second}} e mais {{count}}",
+      "seeMore_other": "Ver {{first}}, {{second}} e mais {{count}}",
+      "noMatches": "Nenhuma habilidade instalada corresponde a \"{{query}}\".",
+      "stateOn": "ativada",
+      "stateOff": "desativada",
+      "stateNeedsFix": "precisa de correção",
+      "off": "Desativada",
+      "needsFix": "Precisa de correção",
+      "cardLabel": "{{name}}, {{state}}. Abrir detalhes",
+      "addRecommended": "Adicionar {{name}}",
+      "empty": {
+        "title": "Nenhuma habilidade ainda",
+        "description": "Crie uma com o assistente ou envie uma que você já tenha."
+      }
+    },
+    "breadcrumb": {
+      "label": "Trilha de navegação",
+      "root": "Habilidades"
+    },
+    "detail": {
+      "skillLabel": "Habilidade",
+      "toggle": "Ativar ou desativar {{name}}",
+      "more": "Mais opções para {{name}}",
+      "files": "Arquivos",
+      "copyFile": "Copiar {{path}}",
+      "neverRun": "O OpenWhispr nunca executa scripts",
+      "uninstall": "Desinstalar",
+      "uninstallConfirm": "Desinstalar {{name}}? Ela será removida deste computador.",
+      "problem": "Esta habilidade não pode ser usada até ser corrigida: {{reason}}"
+    },
+    "menu": {
+      "copyMarkdown": "Copiar Markdown",
+      "uninstall": "Desinstalar"
+    },
+    "toasts": {
+      "added": "Habilidade adicionada: {{name}}",
+      "created": "Habilidade criada: {{name}}",
+      "uploaded_one": "{{count}} habilidade enviada",
+      "uploaded_other": "{{count}} habilidades enviadas",
+      "uninstalled": "Habilidade desinstalada: {{name}}",
+      "removedFromComputer": "Removida deste computador.",
+      "copiedMarkdown": "Markdown copiado",
+      "copyFailed": "Não foi possível copiar",
+      "revealFailed": "Não foi possível encontrar a pasta da habilidade",
+      "writeFailed": "Não foi possível salvar a habilidade",
+      "writeFailedNoSpace": "Seu disco está cheio.",
+      "writeFailedPermission": "O OpenWhispr não consegue gravar na pasta de habilidades.",
+      "loadFailed": "Não foi possível ler suas habilidades"
+    },
+    "manage": {
+      "title": "Gerenciar habilidades",
+      "description": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador.",
+      "noMatches": "Nenhuma habilidade corresponde a \"{{query}}\".",
+      "none": "Nenhuma habilidade ainda."
+    },
+    "upload": {
+      "title": "Enviar uma habilidade",
+      "description": "Adicione habilidades que você criou em outro lugar, como no Claude ou no Codex.",
+      "crumb": "Enviar habilidade",
+      "drop": "Arraste arquivos de habilidade para cá ou procure",
+      "dropActive": "Solte para adicionar",
+      "several": "Você pode adicionar várias de uma vez.",
+      "ruleMd": "Arquivos .md precisam de um nome e uma descrição no topo",
+      "ruleZip": "Arquivos .zip e .skill precisam ter um SKILL.md dentro",
+      "fileCount_one": "{{count}} arquivo",
+      "fileCount_other": "{{count}} arquivos",
+      "ready": "Pronta",
+      "duplicate": "Você já tem esta habilidade",
+      "replace": "Substituir",
+      "willReplace": "Vai substituir sua habilidade atual",
+      "willReplaceCopy": "Será usado no lugar do outro arquivo",
+      "alsoInUpload": "Outro arquivo deste envio tem a mesma habilidade",
+      "skipped": "Ignorada",
+      "undo": "Desfazer",
+      "chooseFile": "Escolha um arquivo para continuar.",
+      "submit": "Enviar",
+      "submitCount_one": "Enviar {{count}} habilidade",
+      "submitCount_other": "Enviar {{count}} habilidades"
+    },
+    "create": {
+      "title": "Criar uma habilidade",
+      "description": "Escreva-a você mesmo. O assistente a usa sempre que um pedido corresponder à descrição.",
+      "crumb": "Criar habilidade",
+      "name": "Nome",
+      "namePlaceholder": "Relatório de status semanal",
+      "nameMissing": "Adicione um nome.",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "O que ela faz e quando usá-la. Por exemplo: Escreve minha atualização semanal com base nas notas desta semana. Use quando eu pedir uma atualização semanal.",
+      "descriptionHint": "O assistente lê isto para decidir quando usar a habilidade.",
+      "descriptionMissing": "Adicione uma descrição para que o assistente saiba quando usá-la.",
+      "instructions": "Instruções",
+      "instructionsPlaceholder": "## Quando usar\nQuando eu pedir minha atualização semanal.\n\n## Etapas\n1. Leia as notas desta semana.\n2. Agrupe-as em conquistas, bloqueios e próxima semana.\n\n## Formato de saída\nTrês listas curtas.",
+      "instructionsMissing": "Adicione as instruções.",
+      "addFile": "Adicionar arquivo",
+      "filesTooLarge": "Os arquivos de uma habilidade podem somar no máximo 25 MB.",
+      "removeFile": "Remover {{path}}",
+      "submit": "Criar",
+      "unsaved": "Você tem alterações não salvas",
+      "keepEditing": "Continuar editando",
+      "discard": "Descartar"
+    },
+    "problems": {
+      "missingName": "Precisa de um nome no topo",
+      "missingDescription": "Precisa de uma descrição no topo",
+      "frontmatterMissing": "Precisa de um nome e uma descrição no topo",
+      "frontmatterInvalid": "Não é possível ler os detalhes do topo",
+      "frontmatterNotMapping": "Os detalhes do topo não estão no formato esperado",
+      "nameFormat": "O nome só pode ter letras minúsculas, números e hífens simples",
+      "nameTooLong": "O nome tem mais de 64 caracteres",
+      "descriptionTooLong": "A descrição tem mais de {{max}} caracteres",
+      "descriptionAngleBrackets": "A descrição não pode conter < ou >",
+      "noSkillFile": "Não há nenhum SKILL.md dentro",
+      "multipleSkillFiles": "Há mais de um SKILL.md dentro",
+      "skillFileTooDeep": "O SKILL.md precisa estar no topo ou dentro de uma única pasta",
+      "unsafePath": "Contém um nome de arquivo ou caminho não permitido",
+      "symlink": "Contém um link para outro arquivo, o que não é permitido",
+      "tooLarge": "Tem mais de 25 MB",
+      "tooManyFiles": "Tem mais de 500 arquivos",
+      "unsupportedFile": "Só é possível adicionar arquivos .md, .zip e .skill",
+      "unreadableArchive": "Não é possível abrir este arquivo",
+      "nameMismatch": "O nome dentro do SKILL.md não corresponde à pasta",
+      "unreadable": "Não é possível ler os arquivos da habilidade",
+      "skillFileNotUtf8": "O SKILL.md precisa ser salvo como texto UTF-8",
+      "placeholder": "Substitua primeiro o marcador [TODO: …]",
+      "nameTaken": "Você já tem uma habilidade chamada {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "A pasta é renomeada para corresponder ao nome da habilidade",
+      "reservedWord": "Nomes com \"claude\" ou \"anthropic\" não podem ser enviados ao Claude",
+      "longBody": "As instruções têm mais de 500 linhas, o que pode deixar o assistente mais lento",
+      "longDescription": "A descrição tem mais de 300 caracteres; as mais curtas são escolhidas com mais confiabilidade",
+      "unknownKeys": "Há detalhes extras no topo que o OpenWhispr mantém, mas não usa"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "Ações para o Linear",
+        "description": "Extrai as ações de uma reunião e prepara rascunhos de issues do Linear para eu aprovar. Use depois de uma reunião quando eu pedir as ações."
+      },
+      "meeting-summary-to-slack": {
+        "title": "Resumo da reunião para o Slack",
+        "description": "Escreve um resumo curto da reunião e prepara um rascunho para um canal do Slack. Use quando eu pedir para compartilhar um resumo da reunião."
+      },
+      "one-on-one-prep": {
+        "title": "Preparação para 1:1",
+        "description": "Reúne o que mudou desde a minha última reunião individual com alguém. Use quando eu pedir para me preparar para um 1:1."
+      },
+      "meeting-decisions": {
+        "title": "Decisões das reuniões",
+        "description": "Encontra as decisões nas notas das minhas reuniões, com a data e a reunião de cada uma. Use quando eu perguntar o que decidimos."
+      }
+    }
   },
   "calendar": {
     "title": "Google Agenda",

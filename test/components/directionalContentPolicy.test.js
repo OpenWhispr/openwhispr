@@ -113,6 +113,15 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<span\s+dir="ltr"[\s\S]*?\{info\?\.name \?\? modelId\}/,
     ],
     ["src/components/TranscriptionModelPicker.tsx", /<p\s+dir="ltr"[^>]*>\s*\{gpuFailReason\}/],
+    [
+      "src/components/skills/UploadSkillsScreen.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{row\.preview\.fileName\}/,
+    ],
+    ["src/components/skills/SkillDetailDialog.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.path\}/],
+    [
+      "src/components/skills/CreateSkillScreen.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/,
+    ],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -216,6 +225,24 @@ test("user-authored names and previews detect direction at their display boundar
     [
       "src/components/notes/NoteEditor.tsx",
       /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
+    ],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<DialogDescription\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
     ],
   ];
 
