@@ -354,10 +354,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       const scope = current.requestContext === 'file' ? 'upload' : 'dictation';
       // Provider recordings keep their original route. Cloud and On-Device
       // recordings follow the current mode, including the provider it now selects;
-      // in Local Mode, uploads follow what is chosen for them.
+      // uploads follow what is chosen for them, which can be On-Device in Cloud Mode.
       const rerouted =
-        current.provider !== 'byok' &&
-        (activeMode === 'providers' || (activeMode === 'private' && scope === 'upload'))
+        current.provider !== 'byok' && (activeMode === 'providers' || scope === 'upload')
           ? snapshotTranscriptionJob(scope)
           : undefined;
       const provider =
