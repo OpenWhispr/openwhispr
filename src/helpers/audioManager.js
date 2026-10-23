@@ -886,10 +886,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Check the dictionary on its own as well as the full prompt: the echo filter needs
   // 70% of the prompt's words to appear, and a Chinese script bias counts as one more
   // word, which alone pushes a one- or two-term dictionary under the threshold.
-  isDictionaryEcho(text) {
+  // Pass the prompt the request actually carried when it was trimmed: an exact
+  // echo of a capped prompt can't clear that threshold against the full join (#1636).
+  isDictionaryEcho(text, sentPrompt) {
     return (
       matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
-      matchesDictionaryPrompt(text, this.getWhisperPrompt())
+      matchesDictionaryPrompt(text, this.getWhisperPrompt()) ||
+      matchesDictionaryPrompt(text, sentPrompt)
     );
   }
 
@@ -4253,14 +4256,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
-        if (this.isDictionaryEcho(result.text)) {
+        const echoablePrompt = model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt;
+        if (this.isDictionaryEcho(result.text, echoablePrompt)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-        const rawText = this.stripTrailingDictionaryEcho(
-          result.text,
-          model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt
-        );
+        const rawText = this.stripTrailingDictionaryEcho(result.text, echoablePrompt);
 
         const reasoningStart = performance.now();
         const text = await this.processTranscription(rawText, "openai", wasCancelled);
