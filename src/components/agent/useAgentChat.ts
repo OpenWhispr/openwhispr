@@ -90,9 +90,11 @@ export function useAgentChat({
   }, [cancelStream, handleNewChat]);
 
   const fork = useCallback(
-    (message: Message, selectedText?: string) => {
-      cancelStream();
-      return forkConversation(message, selectedText);
+    (message: Message, selectedText?: string, beforeOpen?: () => void) => {
+      return forkConversation(message, selectedText, () => {
+        cancelStream();
+        beforeOpen?.();
+      });
     },
     [cancelStream, forkConversation]
   );

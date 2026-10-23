@@ -235,9 +235,10 @@ async function assertNoLateWrites(harness) {
   assert.deepEqual(harness.getMessages(), messages);
 }
 
-const ERROR_PREFIX = JSON.parse(
+const ENGLISH_TRANSLATION = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")
-).agentMode.chat.errorPrefix;
+);
+const SELF_HOSTED_ERROR = `${ENGLISH_TRANSLATION.agentMode.chat.errorPrefix}: ${ENGLISH_TRANSLATION.providerErrors.selfHosted.unknown}`;
 
 function sseEvent(delta, finishReason = null) {
   return `data: ${JSON.stringify(createOpenAiChunk(delta, finishReason))}\n\n`;
@@ -306,12 +307,13 @@ test(
       1,
       "only the error was written before the clock advanced"
     );
-    assert.equal(harness.getMessages()[0].content, `${ERROR_PREFIX}: boom`);
+    assert.equal(harness.getMessages()[0].content, SELF_HOSTED_ERROR);
+    assert.equal(harness.getMessages()[0].error.technicalDetails.underlyingError, "boom");
     assert.equal(harness.getMessages()[0].isStreaming, false);
     const dispatches = harness.getDispatches();
     t.mock.timers.tick(1000);
     assert.equal(harness.getDispatches(), dispatches, "the pending flush was cancelled");
-    assert.equal(harness.getMessages()[0].content, `${ERROR_PREFIX}: boom`);
+    assert.equal(harness.getMessages()[0].content, SELF_HOSTED_ERROR);
   }
 );
 
@@ -395,7 +397,8 @@ test("an error after a consumed token cancels its pending flush", async (t) => {
   await harness.emit({ type: "content", text: "Partial reply" });
   assert.equal(harness.getCommittedMessages()[0].content, "");
   await harness.finish(new Error("boom"));
-  assert.equal(harness.getCommittedMessages()[0].content, `${ERROR_PREFIX}: boom`);
+  assert.equal(harness.getCommittedMessages()[0].content, SELF_HOSTED_ERROR);
+  assert.equal(harness.getCommittedMessages()[0].error.technicalDetails.underlyingError, "boom");
   assert.equal(harness.getCommittedMessages()[0].isStreaming, false);
   assert.deepEqual(harness.persisted, []);
   assert.deepEqual(harness.delivered, []);

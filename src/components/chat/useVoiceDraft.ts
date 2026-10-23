@@ -13,6 +13,7 @@ import {
   type FileTranscriptionConfig,
 } from "../../services/fileTranscription";
 import { analyserRms } from "../../utils/audioLevel";
+import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 
 export type VoiceDraftStatus = "idle" | "recording" | "transcribing";
 
@@ -174,8 +175,10 @@ export function useVoiceDraft({
     let tempPath: string | null = null;
     try {
       const buffer = await blob.arrayBuffer();
+      if (!current()) return;
       const saved = await window.electronAPI.saveTempAudio(buffer);
       tempPath = saved.path;
+      if (!current()) return;
       const result = await transcribeFile(tempPath, buildConfigRef.current(), false);
       const text = result.text?.trim();
       if (!current()) return;
@@ -264,6 +267,7 @@ export function useVoiceDraft({
 
   // Discard silently if the surface unmounts mid-take.
   useEffect(() => cancel, [cancel]);
+  useEffect(() => subscribeAuthBoundary(cancel), [cancel]);
 
   return { status, elapsed, readLevel, start, stop, cancel, streamingOnlyProvider };
 }

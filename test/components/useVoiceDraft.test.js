@@ -16,10 +16,12 @@ const {
 // useAgentVoice over it instead.
 async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent = false }) {
   const bridge = [];
+  const scopes = new Set();
   let root = null;
   // After hooks run in registration order: unmount while the globals exist.
   t.after(() => root && React.act(async () => root.unmount()));
   const transcribed = [];
+  const deleted = [];
   globalThis.__voiceDraftTranscribed = transcribed;
   globalThis.__voiceDraftGate = gate;
   t.after(() => {
@@ -29,8 +31,13 @@ async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent =
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        getActiveAccountScope: async () => ({ accountId: "a", authGeneration: 1 }),
+        onActiveAccountScopeChanged: (listener) => {
+          scopes.add(listener);
+          return () => scopes.delete(listener);
+        },
         saveTempAudio: async () => ({ path: "/tmp/take.webm" }),
-        deleteTempAudio: async () => undefined,
+        deleteTempAudio: async (path) => deleted.push(path),
         getSystemDefaultMicrophone: async () => null,
         agentWindowSetVoiceState: async (state) => {
           bridge.push(`voice:${state}`);
@@ -112,14 +119,75 @@ async function mountVoiceDraft(t, { settings, getUserMedia, gate = null, agent =
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
   return {
+    vite,
+    emitScope: (scope) => scopes.forEach((listener) => listener(scope)),
     voice: () => voice,
     opened,
     transcribed,
+    deleted,
     transcripts,
     bridge,
     unmount: () => React.act(async () => root.unmount()).then(() => (root = null)),
   };
 }
+
+test("voice drafts discard pending acquisition and local or BYOK transcription across auth boundaries", async (t) => {
+  for (const phase of ["opening", "preparing", "transcribing"])
+    for (const route of ["local", "byok"])
+      for (const boundary of ["account", "generation", "signout"]) {
+        await t.test(`${route}/${phase}/${boundary}`, async (t) => {
+          const pending = deferred();
+          const h = await mountVoiceDraft(t, {
+            settings: {
+              ...SIGNED_IN_CLOUD,
+              useLocalWhisper: route === "local",
+              cloudTranscriptionMode: "byok",
+              cloudTranscriptionProvider: "openai",
+            },
+            getUserMedia: async (_constraints, stream) =>
+              phase === "opening" ? (await pending.promise, stream) : stream,
+            gate: phase === "transcribing" ? pending.promise : null,
+            agent: true,
+          });
+          if (phase === "preparing")
+            globalThis.window.electronAPI.saveTempAudio = async () => {
+              await pending.promise;
+              return { path: "/tmp/take.webm" };
+            };
+          const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
+          await React.act(async () =>
+            auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true })
+          );
+          let opening;
+          if (phase === "opening")
+            await React.act(async () => {
+              opening = h.voice().start();
+            });
+          else await recordTake(h);
+          await React.act(async () => {
+            if (boundary === "generation")
+              auth.observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+            else h.emitScope(boundary === "signout" ? null : { accountId: "b", authGeneration: 1 });
+            pending.resolve("previous account request");
+            await settle();
+          });
+          if (opening) assert.equal(await opening, "failed");
+          if (phase === "preparing") {
+            assert.deepEqual(
+              h.transcribed,
+              [],
+              "cancelled audio must not start a new transcription"
+            );
+            assert.deepEqual(
+              h.deleted,
+              ["/tmp/take.webm"],
+              "abandoned temp audio is still removed"
+            );
+          }
+          assert.deepEqual(h.transcripts, [], "old speech must never reach the current callback");
+        });
+      }
+});
 
 const SIGNED_IN_CLOUD = {
   isSignedIn: true,

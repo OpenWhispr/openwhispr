@@ -113,6 +113,48 @@ async function renderChatStreaming(
 
 const toolOptions = (toolCallId) => ({ toolCallId, messages: [] });
 
+test("unclassified live provider failures use generic copy and preserve only separate details", async (t) => {
+  for (const error of [
+    new Error("RAW_PROVIDER_SECRET"),
+    { message: "NESTED_PROVIDER_SECRET", cause: { message: "RAW_BODY" } },
+  ]) {
+    await t.test(error.message, async (t) => {
+      const h = await renderChatStreaming(t, { allowInteractions: true });
+      h.setStream(() =>
+        (async function* () {
+          yield { type: "reasoning", text: "" };
+          throw error;
+        })()
+      );
+      await h.captured.sendToAI("Go", [], { conversationId: 1 });
+      assert.match(h.assistant().content, /unexpected error/);
+      assert.doesNotMatch(h.assistant().content, /PROVIDER_SECRET|RAW_BODY/);
+      assert.equal(h.assistant().turn.status, "error");
+      assert.equal(h.checkpoints[0][1], "", "raw failures never enter the saved checkpoint");
+    });
+  }
+});
+
+test("classified live provider failures retain their actionable copy and details", async (t) => {
+  const h = await renderChatStreaming(t, { allowInteractions: true });
+  const { providerHttpError } = await h.vite.ssrLoadModule("/helpers/providerHttpErrors.js");
+  h.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "" };
+      throw providerHttpError({
+        provider: "OpenAI",
+        status: 401,
+        body: "invalid_api_key",
+        surface: "llm",
+      });
+    })()
+  );
+  await h.captured.sendToAI("Go", [], { conversationId: 1 });
+  assert.match(h.assistant().content, /rejected your API key/);
+  assert.equal(h.assistant().error.settingsTarget, "llms");
+  assert.equal(h.assistant().error.technicalDetails.status, 401);
+});
+
 test("a turn records when it ran, how it ended, its reasoning and each step", async (t) => {
   const harness = await renderChatStreaming(t, { allowInteractions: true });
   harness.setStream(() =>

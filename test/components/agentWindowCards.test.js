@@ -51,6 +51,7 @@ const MOCKS = {
     const listeners = new Set();
     let status = "idle";
     globalThis.__voice = {
+      cancels: 0,
       set(next) { status = next; listeners.forEach((listener) => listener()); },
     };
     export function useAgentVoice(options) { globalThis.__voice.callbacks = options;
@@ -60,7 +61,7 @@ const MOCKS = {
       );
       return {
         status: current, opening: false, readLevel: () => 0, streamingOnlyProvider: false,
-        start: async () => globalThis.__voice.startResult ?? "started", stop() {}, cancel() {},
+        start: async () => globalThis.__voice.startResult ?? "started", stop() {}, cancel() { globalThis.__voice.cancels++; },
       };
     }
   `,
@@ -1312,4 +1313,36 @@ test("New chat drops the previous press capture", async (t) => {
   await write(view, "new chat request");
   assert.equal(globalThis.__chat.newChats, 1);
   assert.equal(globalThis.__chat.sentOptions[0].selectedContext, undefined);
+});
+
+test("an account boundary drops a transcript already waiting on press capture", async (t) => {
+  const view = await mountWindow(t);
+  const selection = defer();
+  view.happyWindow.electronAPI.captureSelectedText = () => selection.promise;
+  const auth = await view.vite.ssrLoadModule("/lib/authRequestContext.ts");
+  await React.act(async () => auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true }));
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("previous account task", "submit")
+  );
+  await React.act(async () => {
+    auth.observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+    selection.resolve({ status: "selected", text: "previous account selection" });
+  });
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
+test("an unsuccessful agent fork leaves the current take intact", async (t) => {
+  const view = await mountWindow(t);
+  await view.chat({
+    messages: [
+      { id: "saved", dbId: 1, role: "assistant", content: "Saved reply", isStreaming: false },
+    ],
+  });
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await React.act(async () => globalThis.__voice.set("recording"));
+  const cancelled = globalThis.__voice.cancels;
+  await React.act(async () => view.button("Fork").click());
+  assert.equal(globalThis.__voice.cancels, cancelled);
 });

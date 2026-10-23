@@ -43,7 +43,11 @@ const MOCKS = {
         },
         saveAssistantMessage() {},
         loadConversation: async () => globalThis.__loadResult,
-        forkConversation: async () => globalThis.__forkResult,
+        forkConversation: async (_message, _context, beforeOpen) => {
+          const result = globalThis.__forkResult;
+          if (typeof result === "number") beforeOpen?.();
+          return result;
+        },
         handleNewChat() {
           globalThis.__newChatCount = (globalThis.__newChatCount ?? 0) + 1;
         },
@@ -135,6 +139,19 @@ async function renderChatView(t, props = {}) {
 test("typed chat offers the connector tools", async (t) => {
   await renderChatView(t);
   assert.equal(globalThis.__chatStreamingOptions.allowConnectors, true);
+});
+
+test("a failed Control Panel fork leaves the running parent untouched", async (t) => {
+  globalThis.__initialMessages = [
+    { id: "saved", dbId: 1, role: "assistant", content: "Old reply", isStreaming: false },
+  ];
+  globalThis.__forkResult = null;
+  await renderChatView(t);
+  await React.act(async () => globalThis.__chatMessages.onForkMessage("saved"));
+  assert.equal(globalThis.__cancelCount, 0);
+  globalThis.__forkResult = 2;
+  await React.act(async () => globalThis.__chatMessages.onForkMessage("saved"));
+  assert.equal(globalThis.__cancelCount, 1);
 });
 
 // Each way of leaving the conversation cancels its running reply.

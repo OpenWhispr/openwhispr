@@ -1326,7 +1326,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
   // Google Calendar
-  gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
+  gcalStartOAuth: (requestId) => ipcRenderer.invoke("gcal-start-oauth", requestId),
+  calendarCancelConnect: (requestId) => ipcRenderer.invoke("calendar-cancel-connect", requestId),
   gcalDisconnect: (email) => ipcRenderer.invoke("gcal-disconnect", email),
   gcalGetConnectionStatus: () => ipcRenderer.invoke("gcal-get-connection-status"),
   gcalGetCalendars: () => ipcRenderer.invoke("gcal-get-calendars"),
@@ -1369,13 +1370,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   calendarGetLinkableEvents: () => ipcRenderer.invoke("calendar-get-linkable-events"),
 
   // Microsoft Calendar
-  mcalStartOAuth: () => ipcRenderer.invoke("mcal-start-oauth"),
+  mcalStartOAuth: (requestId) => ipcRenderer.invoke("mcal-start-oauth", requestId),
   mcalDisconnect: (email) => ipcRenderer.invoke("mcal-disconnect", email),
   mcalGetConnectionStatus: () => ipcRenderer.invoke("mcal-get-connection-status"),
   mcalSetPrimaryOnly: (value) => ipcRenderer.invoke("mcal-set-primary-only", value),
 
   // Apple Calendar (macOS EventKit)
-  acalConnect: () => ipcRenderer.invoke("acal-connect"),
+  acalConnect: (requestId) => ipcRenderer.invoke("acal-connect", requestId),
   acalDisconnect: () => ipcRenderer.invoke("acal-disconnect"),
   acalGetConnectionStatus: () => ipcRenderer.invoke("acal-get-connection-status"),
   openCalendarPrivacySettings: () => ipcRenderer.invoke("open-calendar-privacy-settings"),

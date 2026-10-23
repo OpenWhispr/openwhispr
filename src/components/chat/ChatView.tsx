@@ -139,8 +139,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
     async (messageId: string) => {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
-      cancelStream();
-      const forkId = await forkConversation(message);
+      const forkId = await forkConversation(message, undefined, cancelStream);
       if (forkId === false) return;
       if (forkId === null) {
         toast({ title: t("chat.forkFailed"), variant: "destructive" });

@@ -85,6 +85,7 @@ export const useAgentInteractionStore = create<InteractionStoreState>(() => ({ e
 interface Waiter {
   settle: (result: InteractionResult) => void;
   detach: () => void;
+  cancelConnect?: () => void;
 }
 
 // Resolvers stay outside zustand state: they are not renderable.
@@ -142,6 +143,11 @@ function isOpen(key: string): boolean {
 
 function cancelRunningConnect(entry: InteractionEntry | undefined): void {
   if (entry?.state !== "working" || entry.payload.kind !== "connection") return;
+  const cancel = waiters.get(entry.key)?.cancelConnect;
+  if (cancel) {
+    cancel();
+    return;
+  }
   void window.electronAPI?.connectorCancelConnect?.(entry.payload.target);
 }
 
@@ -333,11 +339,12 @@ type ConnectOutcome =
 
 /** The real connect flow for one service; connected only once main's status says so. */
 export async function connectTarget(
-  target: Exclude<ConnectionTarget, "calendar">
+  target: Exclude<ConnectionTarget, "calendar">,
+  signal?: AbortSignal
 ): Promise<ConnectOutcome> {
   if (target === "google" || target === "microsoft" || target === "apple") {
     const { connectCalendar } = await import("../utils/calendarConnect");
-    const result = await connectCalendar(target);
+    const result = await connectCalendar(target, signal);
     if (result === "connected" || result === "cancelled") return { status: result };
     return {
       status: "failed",
@@ -372,8 +379,14 @@ export async function connectInteraction(key: string, provider?: CalendarProvide
   if (entry?.state !== "pending" || entry.payload.kind !== "connection") return;
   const target = entry.payload.target === "calendar" ? provider : entry.payload.target;
   if (!target) return;
+  const controller = new AbortController();
+  const waiter = waiters.get(key);
+  if (waiter && (target === "google" || target === "microsoft" || target === "apple")) {
+    waiter.cancelConnect = () => controller.abort();
+  }
   patchEntry(key, { state: "working", error: undefined });
-  const outcome = await connectTarget(target);
+  const outcome = await connectTarget(target, controller.signal);
+  if (waiter) waiter.cancelConnect = undefined;
   if (!isOpen(key)) return;
   if (outcome.status === "connected") settle(key, { status: "connected", target });
   else if (outcome.status === "unavailable") {

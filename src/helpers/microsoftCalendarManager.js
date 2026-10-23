@@ -104,8 +104,9 @@ class MicrosoftCalendarManager {
     }
   }
 
-  async startOAuth() {
-    const result = await this.oauth.startOAuthFlow();
+  async startOAuth({ signal } = {}) {
+    const result = await this.oauth.startOAuthFlow({ signal });
+    signal?.throwIfAborted();
     this.addAccount(result.email);
 
     await this.fetchCalendars(result.email);

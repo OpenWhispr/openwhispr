@@ -3197,7 +3197,10 @@ declare global {
       >;
 
       // Google Calendar
-      gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gcalStartOAuth?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; email?: string; error?: string }>;
+      calendarCancelConnect?: (requestId: string) => Promise<boolean>;
       gcalDisconnect?: (email?: string) => Promise<{ success: boolean; error?: string }>;
       gcalGetConnectionStatus?: () => Promise<{
         connected: boolean;
@@ -3497,7 +3500,7 @@ declare global {
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Microsoft Calendar
-      mcalStartOAuth?: () => Promise<{
+      mcalStartOAuth?: (requestId?: string) => Promise<{
         success: boolean;
         email?: string;
         tenantId?: string | null;
@@ -3513,7 +3516,9 @@ declare global {
       onMcalEventsSynced?: (callback: (data: any) => void) => () => void;
 
       // Apple Calendar (macOS EventKit)
-      acalConnect?: () => Promise<{ success: boolean; reason?: string; error?: string }>;
+      acalConnect?: (
+        requestId?: string
+      ) => Promise<{ success: boolean; reason?: string; error?: string }>;
       acalDisconnect?: () => Promise<{ success: boolean; error?: string }>;
       acalGetConnectionStatus?: () => Promise<{ connected: boolean; sourceNames: string[] }>;
       openCalendarPrivacySettings?: () => Promise<{ success: boolean; error?: string }>;

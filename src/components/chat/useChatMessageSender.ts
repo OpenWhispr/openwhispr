@@ -67,11 +67,11 @@ export function useChatMessageSender({
             (conversationId === persistence.conversationId ? conversationId : null) ??
             (await createConversation(text));
           if (!isCurrent()) return;
-          if (persistence.claimConversation && !(await persistence.claimConversation(convId)))
-            return;
+          const claim = await persistence.claimConversation?.(convId);
+          if (claim === false) return;
           claimedId = convId;
           if (!isCurrent()) return;
-          const previousMessages = persistence.messages;
+          const previousMessages = claim?.messages ?? persistence.messages;
           const context = normalizeAgentSelectionContext(options?.selectedContext);
           const selectedContext = context?.text;
           const selectedContextSource = context?.source === "external" ? "external" : undefined;

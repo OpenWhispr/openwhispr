@@ -1,11 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
-import { getCloudModel, isEnterpriseProvider } from "../../models/ModelRegistry";
+import {
+  getCloudModel,
+  getProviderDisplayName,
+  isEnterpriseProvider,
+} from "../../models/ModelRegistry";
 import { providerSupportsImages } from "../../services/ai/inferenceProviders";
 import { getSettings, selectCalendarConnected, useSettingsStore } from "../../stores/settingsStore";
 import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
 import { describeProviderError } from "../../utils/describeProviderError";
+import {
+  asProviderError,
+  providerError,
+  PROVIDER_ERROR_CODES,
+  redactProviderBody,
+} from "../../helpers/providerHttpErrors.js";
 import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
 import {
@@ -70,6 +80,7 @@ import {
 import { isUnbackedClaim } from "./actionClaims";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
+import type { ConversationClaim } from "./useChatPersistence";
 import {
   buildAgentRequestText,
   type AgentSelectionContext,
@@ -211,7 +222,7 @@ interface UseChatStreamingOptions {
    */
   noteMeeting?: NoteAttendeesRequest;
   onStreamComplete?: TurnHandler;
-  claimConversation?: (id: number) => Promise<false | (() => Promise<void>)>;
+  claimConversation?: (id: number) => Promise<false | ConversationClaim>;
   /**
    * Saves a turn that is still running: when it starts or stops waiting on the
    * user (a question survives the app closing, an answered one isn't offered
@@ -419,6 +430,31 @@ export function useChatStreaming({
       // This send supersedes any still running, so that turn's tools are
       // released now rather than when (or if) they settle.
       toolScopeRef.current?.abort();
+      toolScopeRef.current = null;
+      const claim =
+        options?.conversationId != null && claimConversation
+          ? await claimConversation(options.conversationId)
+          : undefined;
+      if (claim === false) return;
+      if (sendGeneration !== sendGenerationRef.current) {
+        await claim?.release();
+        return;
+      }
+      if (claim?.messages) {
+        if (options?.replaceMessage) {
+          const latest = claim.messages.at(-1);
+          if (latest?.dbId !== options.replaceMessage.dbId || latest?.role !== "assistant") {
+            options.onReplaceFailed?.();
+            await claim.release();
+            return;
+          }
+          options = { ...options, replaceMessage: latest };
+          allMessages = claim.messages.slice(0, -1);
+          userText =
+            [...allMessages].reverse().find((message) => message.role === "user")?.content ??
+            userText;
+        } else allMessages = claim.messages;
+      }
       // Filled in once the reply exists; a tool may report before then.
       const turnHooks: {
         annotate?: (toolCallId: string, patch: Partial<ToolCallInfo>) => void;
@@ -445,18 +481,13 @@ export function useChatStreaming({
       // Every exit, thrown errors included, releases tools still waiting on
       // this turn (an approval card would otherwise sit out its TTL). A newer
       // send may already own toolScopeRef.
-      let releaseClaim: (() => Promise<void>) | false | undefined;
       try {
-        if (options?.conversationId != null && claimConversation) {
-          releaseClaim = await claimConversation(options.conversationId);
-          if (!releaseClaim) return;
-        }
         if (!cancelled()) await runSend();
       } finally {
         toolScope.abort();
         if (toolScopeRef.current === toolScope) {
           toolScopeRef.current = null;
-          if (releaseClaim) await releaseClaim();
+          if (claim) await claim.release();
         }
       }
 
@@ -1199,7 +1230,26 @@ export function useChatStreaming({
             finishStoppedReply();
           } else {
             cancelContentFlush();
-            const failure = describeProviderError(error, t);
+            const errorContext = {
+              provider: getProviderDisplayName(llmConfig.provider),
+              model: llmConfig.model,
+              surface: "llm",
+              selfHosted: isLanAgent || isCustomAgent,
+            };
+            const classified = asProviderError(error, errorContext);
+            const failure = describeProviderError(
+              classified?.messageKey
+                ? classified
+                : providerError(PROVIDER_ERROR_CODES.ERROR, {
+                    ...errorContext,
+                    technicalDetails: {
+                      underlyingError: redactProviderBody(
+                        error instanceof Error ? error.message : error
+                      ),
+                    },
+                  }),
+              t
+            );
             // Set on every failed reply: the chat then knows the failure is on screen.
             const messageError: MessageError = {
               ...(failure.technicalDetails ? { technicalDetails: failure.technicalDetails } : {}),

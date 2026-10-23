@@ -320,7 +320,7 @@ test("a reply saved mid-turn loads as stopped, with every call it had running", 
   assert.equal(loaded.toolCalls[0].status, "stopped");
 });
 
-test("a reply whose row a cloud pull replaced is saved again as a new row", async (t) => {
+test("a missing saved reply is never reinserted by a later checkpoint", async (t) => {
   const { db, act, current } = await mountPersistence(t);
   await act(() => current().createConversation("Plan"));
   await act(() => current().setMessages([message("a1", "assistant", "")]));
@@ -330,9 +330,230 @@ test("a reply whose row a cloud pull replaced is saved again as a new row", asyn
 
   assert.deepEqual(
     db.calls.add.map((call) => call.content),
-    ["Waiting.", "Done."]
+    ["Waiting."]
   );
-  assert.equal(current().messages[0].dbId, 2);
+  assert.equal(current().messages[0].dbId, 1);
+});
+
+test("rejected and unsuccessful updates preserve the exact known saved row", async (t) => {
+  for (const result of ["reject", null, false])
+    await t.test(String(result), async (t) => {
+      const h = await mountPersistence(t);
+      await h.act(() => h.current().createConversation("Plan"));
+      await h.act(() => h.current().setMessages([message("reply", "assistant", "")]));
+      await h.act(() => h.current().saveAssistantMessage("reply", "Waiting."));
+      const update = h.db.api.updateAgentMessage;
+      const attempted = [];
+      h.db.api.updateAgentMessage = async (id) => {
+        attempted.push(id);
+        if (result === "reject") throw new Error("disk failure");
+        return result;
+      };
+      await assert.doesNotReject(async () =>
+        h.act(() => h.current().saveAssistantMessage("reply", "Checkpoint"))
+      );
+      h.db.api.updateAgentMessage = update;
+      await h.act(() => h.current().saveAssistantMessage("reply", "Finished"));
+      assert.deepEqual(attempted, [1]);
+      assert.equal(h.db.calls.add.length, 1);
+      assert.equal(h.db.calls.update.at(-1).id, 1);
+      assert.equal(h.db.rows[0].content, "Finished");
+    });
+});
+
+test("an idle peer's next send uses reclaimed messages and completed-action history", async (t) => {
+  const h = await mountPersistence(t, { streaming: true });
+  const conversation = await h.db.api.createAgentConversation("Shared");
+  await h.db.api.addAgentMessage(conversation.id, "user", "Original task");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "Original reply");
+  await h.act(() => h.current().loadConversation(conversation.id));
+  await h.db.api.addAgentMessage(conversation.id, "user", "Send it to Gabe");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "Sent to Gabe", {
+    toolCalls: [
+      {
+        id: "sent",
+        name: "slack_send_message",
+        arguments: "{}",
+        status: "completed",
+        actionKey: "completed-peer-send",
+        metadata: { status: "sent", destination: "Gabe" },
+      },
+    ],
+  });
+  let history;
+  let backed;
+  t.mock.method(h.service, "processTextStreamingAI", (messages, _model, _provider, config) =>
+    (async function* () {
+      history = messages;
+      backed = !config.isUnbackedClaim("I already sent it to Gabe.");
+      yield { type: "content", text: "Current reply" };
+    })()
+  );
+  await h.act(() => h.send("What happened?"));
+  assert.ok(history.some((row) => row.content === "Send it to Gabe"));
+  assert.equal(backed, true);
+  assert.equal(h.current().messages[3].toolCalls[0].actionKey, "completed-peer-send");
+  assert.equal(h.current().messages.filter((row) => row.content === "What happened?").length, 1);
+});
+
+test("a stale regenerate refreshes history and refuses to replace an older reply", async (t) => {
+  const h = await mountPersistence(t, { streaming: true });
+  const conversation = await h.db.api.createAgentConversation("Shared");
+  await h.db.api.addAgentMessage(conversation.id, "user", "First request");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "First reply");
+  await h.act(() => h.current().loadConversation(conversation.id));
+  const stale = h.current().messages;
+  await h.db.api.addAgentMessage(conversation.id, "user", "Peer request");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "Peer reply");
+  let runs = 0,
+    refused = 0;
+  t.mock.method(h.service, "processTextStreamingAI", () =>
+    (async function* () {
+      runs++;
+      yield { type: "content", text: "Wrong replacement" };
+    })()
+  );
+  await h.act(() =>
+    h.stream().sendToAI("First request", stale.slice(0, -1), {
+      conversationId: conversation.id,
+      replaceMessage: stale.at(-1),
+      onReplaceFailed: () => refused++,
+    })
+  );
+  assert.equal(runs, 0);
+  assert.equal(refused, 1);
+  assert.equal(h.current().messages.at(-1).content, "Peer reply");
+});
+
+test("claiming a conversation already owned locally keeps its unsaved turn state", async (t) => {
+  const h = await mountPersistence(t);
+  const conversation = await h.db.api.createAgentConversation("Owned");
+  await h.db.api.addAgentMessage(conversation.id, "user", "Saved");
+  await h.act(() => h.current().loadConversation(conversation.id));
+  await h.act(() => h.current().claimConversation(conversation.id));
+  await h.act(() =>
+    h.current().setMessages((previous) => [...previous, message("live", "assistant", "Streaming")])
+  );
+  await h.act(() => h.current().claimConversation(conversation.id));
+  assert.equal(h.current().messages.at(-1).content, "Streaming");
+});
+
+test("reclaimed action keys reach the next turn's approval guard", async (t) => {
+  const h = await mountPersistence(t, { streaming: true });
+  const conversation = await h.db.api.createAgentConversation("Shared action");
+  await h.act(() => h.current().loadConversation(conversation.id));
+  const { connectorActionKey } = await h.vite.ssrLoadModule(
+    "/services/tools/connectors/actionKey.ts"
+  );
+  const args = { destination: "#eng", text: "Ready" };
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "Sent", {
+    toolCalls: [
+      {
+        id: "peer",
+        name: "slack_send_message",
+        arguments: JSON.stringify(args),
+        status: "completed",
+        actionKey: connectorActionKey("slack", "send_message", args),
+        metadata: { status: "sent" },
+      },
+    ],
+  });
+  const { useConnectorStatusStore } = await h.vite.ssrLoadModule("/stores/connectorStatusStore.ts");
+  useConnectorStatusStore.setState({
+    loaded: true,
+    statuses: { slack: { connected: true, configured: true, needsReconnect: false } },
+  });
+  h.db.api.connectorPrepare = async () => ({
+    status: "ready",
+    actionId: "new",
+    preview: {
+      verbKey: "slackPost",
+      destinationLabel: "#eng",
+      accountLabel: "Fixture",
+      body: "Ready",
+    },
+  });
+  const approvals = await h.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+  t.mock.method(
+    h.service,
+    "processTextStreamingAI",
+    (_messages, _model, _provider, _config, tools) =>
+      (async function* () {
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "again", name: "slack_send_message", arguments: JSON.stringify(args) }],
+        };
+        await tools.slack_send_message.execute(args, { toolCallId: "again", messages: [] });
+      })()
+  );
+  let sending;
+  await h.act(() => {
+    sending = h.send("Send again");
+  });
+  const entry = Object.values(approvals.useConnectorApprovalStore.getState().entries)[0];
+  assert.ok(entry?.preview.notes?.some((note) => note.key === "connectors.approval.sentEarlier"));
+  await h.act(() => approvals.cancelApproval(entry.key));
+  await h.act(() => sending);
+});
+
+test("a restored connect-before-send call is authoritative not_sent in saved and replayed history", async (t) => {
+  const h = await mountPersistence(t, { restore: true });
+  const conversation = await h.db.api.createAgentConversation("Connect first");
+  await h.db.api.addAgentMessage(conversation.id, "assistant", "", {
+    turn: { status: "waiting", startedAt: 1 },
+    toolCalls: [
+      {
+        id: "email",
+        name: "email_draft",
+        arguments: "{}",
+        status: "executing",
+        interaction: { state: "pending", payload: { kind: "connection", target: "gmail" } },
+      },
+    ],
+  });
+  await h.act(() => h.current().loadConversation(conversation.id));
+  const entry = Object.values(h.store.useAgentInteractionStore.getState().entries)[0];
+  await h.act(() => h.store.cancelInteraction(entry.key));
+  const calls = JSON.parse(h.db.rows[0].metadata).toolCalls;
+  assert.equal(calls[0].metadata?.status, "not_sent");
+  const { toolTrace } = await h.vite.ssrLoadModule("/components/chat/historyMessages.ts");
+  assert.match(toolTrace(calls), /not sent/);
+  assert.doesNotMatch(toolTrace(calls), /outcome not recorded/);
+});
+
+test("failed fork creation keeps the parent session and runs stop-before-open only on success", async (t) => {
+  for (const failure of [null, "reject"])
+    await t.test(String(failure), async (t) => {
+      const h = await mountPersistence(t);
+      const conversation = await h.db.api.createAgentConversation("Parent");
+      await h.db.api.addAgentMessage(conversation.id, "assistant", "Reply");
+      await h.act(() => h.current().loadConversation(conversation.id));
+      const version = h.current().getSessionVersion();
+      const fork = h.db.api.forkAgentConversation;
+      h.db.api.forkAgentConversation = async () => {
+        if (failure === "reject") throw new Error("disk failure");
+        return null;
+      };
+      let stopped = 0;
+      let result;
+      await assert.doesNotReject(async () =>
+        h.act(async () => {
+          result = await h
+            .current()
+            .forkConversation(h.current().messages[0], undefined, () => stopped++);
+        })
+      );
+      assert.equal(result, null);
+      assert.equal(stopped, 0);
+      assert.equal(h.current().getSessionVersion(), version);
+      assert.equal(h.current().conversationId, conversation.id);
+      h.db.api.forkAgentConversation = fork;
+      await h.act(() =>
+        h.current().forkConversation(h.current().messages[0], undefined, () => stopped++)
+      );
+      assert.equal(stopped, 1);
+      assert.notEqual(h.current().conversationId, conversation.id);
+    });
 });
 
 test("a fork opens a new chat through the chosen reply, with its origin", async (t) => {
@@ -369,24 +590,36 @@ test("a fork opens a new chat through the chosen reply, with its origin", async 
 });
 
 test("a fork the user left before it finished reports that, not a failure", async (t) => {
-  const { db, act, current } = await mountPersistence(t);
-  const conversation = await db.api.createAgentConversation("Launch plan");
-  await db.api.addAgentMessage(conversation.id, "assistant", "Draft one.");
-  await act(() => current().loadConversation(conversation.id));
-  let finishFork;
-  const fork = db.api.forkAgentConversation;
-  db.api.forkAgentConversation = (...args) =>
-    new Promise((resolve) => (finishFork = () => resolve(fork(...args))));
+  for (const leave of ["new chat", "account", "conversation"])
+    await t.test(leave, async (t) => {
+      const { db, act, current } = await mountPersistence(t);
+      const conversation = await db.api.createAgentConversation("Launch plan");
+      const replacement = await db.api.createAgentConversation("Replacement");
+      await db.api.addAgentMessage(conversation.id, "assistant", "Draft one.");
+      await act(() => current().loadConversation(conversation.id));
+      let finishFork;
+      const fork = db.api.forkAgentConversation;
+      db.api.forkAgentConversation = (...args) =>
+        new Promise((resolve) => (finishFork = () => resolve(fork(...args))));
 
-  let result;
-  await act(async () => {
-    const forking = current().forkConversation(current().messages[0]);
-    current().handleNewChat();
-    finishFork();
-    result = await forking;
-  });
-  assert.equal(result, false);
-  assert.equal(current().conversationId, null, "the new chat stays open");
+      let result,
+        stopped = 0;
+      await act(async () => {
+        const forking = current().forkConversation(
+          current().messages[0],
+          undefined,
+          () => stopped++
+        );
+        if (leave === "conversation") await current().loadConversation(replacement.id);
+        else if (leave === "account") db.emitScope({ accountId: "account-b", authGeneration: 1 });
+        else current().handleNewChat();
+        finishFork();
+        result = await forking;
+      });
+      assert.equal(result, false);
+      assert.equal(stopped, 0, "the replacement session is never stopped");
+      assert.equal(current().conversationId, leave === "conversation" ? replacement.id : null);
+    });
 });
 
 // The agent window's chat, with the reply itself stood in for.

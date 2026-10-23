@@ -71,6 +71,70 @@ const QUESTIONS = {
   ],
 };
 
+test("dismissing a calendar card cancels its actual request and fences late settings writes", async () => {
+  for (const provider of ["google", "microsoft", "apple"]) {
+    let finish, requestId;
+    const cancelled = [],
+      wrongCancels = [];
+    const connect = (id) => {
+      requestId = id;
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    };
+    const store = await loadStore({
+      gcalStartOAuth: connect,
+      mcalStartOAuth: connect,
+      acalConnect: connect,
+      calendarCancelConnect: async (id) => {
+        cancelled.push(id);
+        return true;
+      },
+      connectorCancelConnect: async (id) => wrongCancels.push(id),
+    });
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    useSettingsStore.setState({
+      gcalAccounts: [],
+      mcalAccounts: [],
+      appleCalendarConnected: false,
+    });
+    const wait = store.requestInteraction(context(`calendar-${provider}`).value, {
+      kind: "connection",
+      target: "calendar",
+    });
+    const key = `m1::calendar-${provider}`;
+    const connecting = store.connectInteraction(key, provider);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    store.cancelInteraction(key);
+    finish({ success: true, email: "late@calendar.test" });
+    await connecting;
+    assert.deepEqual(await wait, { status: "cancelled" });
+    assert.deepEqual(cancelled, [requestId], provider);
+    assert.deepEqual(wrongCancels, [], provider);
+    assert.deepEqual(useSettingsStore.getState().gcalAccounts, []);
+    assert.deepEqual(useSettingsStore.getState().mcalAccounts, []);
+    assert.equal(useSettingsStore.getState().appleCalendarConnected, false);
+  }
+});
+
+test("legacy Settings and onboarding calendar calls still save successful connections", async () => {
+  await loadStore({
+    gcalStartOAuth: async () => ({ success: true, email: "google@test" }),
+    mcalStartOAuth: async () => ({ success: true, email: "microsoft@test", tenantId: "tenant" }),
+    acalConnect: async () => ({ success: true }),
+  });
+  const { connectCalendar } = await vite.ssrLoadModule("/utils/calendarConnect.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.setState({ gcalAccounts: [], mcalAccounts: [], appleCalendarConnected: false });
+  for (const provider of ["google", "microsoft", "apple"])
+    assert.equal(await connectCalendar(provider), "connected");
+  assert.deepEqual(useSettingsStore.getState().gcalAccounts, [{ email: "google@test" }]);
+  assert.deepEqual(useSettingsStore.getState().mcalAccounts, [
+    { email: "microsoft@test", tenantId: "tenant" },
+  ]);
+  assert.equal(useSettingsStore.getState().appleCalendarConnected, true);
+});
+
 test("a question waits, keeps its draft, and resolves only once every answer is in", async () => {
   const store = await loadStore();
   const ctx = context("call-1");

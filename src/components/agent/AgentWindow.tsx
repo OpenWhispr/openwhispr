@@ -5,6 +5,7 @@ import { blurBehindAgentSurfaces } from "../ui/overlayBlur";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import AssistantNoteUndoListener from "../notes/AssistantNoteUndoListener";
 import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
+import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
 import { getSettings } from "../../stores/settingsStore";
@@ -416,6 +417,15 @@ export default function AgentWindow() {
     dispatch({ type: "setContext", context: null });
     cancelTake();
   }, [cancelTake, dispatch]);
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        dropTake();
+        stopReading();
+        dispatch({ type: "setDraft", draft: "" });
+      }),
+    [dispatch, dropTake, stopReading]
+  );
   // Bumped when the user opens another chat, so the list starts again at the
   // newest message instead of wherever the previous chat was scrolled.
   const [openedChat, setOpenedChat] = useState(0);
@@ -588,12 +598,15 @@ export default function AgentWindow() {
     async (messageId: string, selectedText?: string) => {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message) return;
-      stopReading();
-      dropTake();
-      if ((await fork(message, selectedText)) === null) {
+      const forkId = await fork(message, selectedText, () => {
+        stopReading();
+        dropTake();
+      });
+      if (forkId === null) {
         dispatch({ type: "notice", notice: "chat.forkFailed" });
         return;
       }
+      if (forkId === false) return;
       setOpenedChat((count) => count + 1);
     },
     [dispatch, dropTake, fork, stopReading]

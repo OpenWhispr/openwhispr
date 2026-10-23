@@ -4,6 +4,8 @@ import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
 import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
 import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
+import { connectsFirst } from "./historyMessages";
+import logger from "../../utils/logger";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -29,6 +31,12 @@ interface UserMessageDetails {
   selectedContextSource?: Message["selectedContextSource"];
 }
 
+export interface ConversationClaim {
+  release: () => Promise<void>;
+  /** Present when this window reacquired an idle conversation. */
+  messages?: Message[];
+}
+
 export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -44,7 +52,7 @@ export interface ChatPersistence {
   loadConversation: (id: number) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
-  claimConversation: (id: number) => Promise<false | (() => Promise<void>)>;
+  claimConversation: (id: number) => Promise<false | ConversationClaim>;
   releaseConversation: (id: number) => Promise<void>;
   saveUserMessage: (text: string, options?: UserMessageDetails) => Promise<void>;
   /** Saves a reply, or completes the one saved while it waited on the user. */
@@ -60,7 +68,8 @@ export interface ChatPersistence {
    */
   forkConversation: (
     throughMessage: Message,
-    forkContext?: string
+    forkContext?: string,
+    beforeOpen?: () => void
   ) => Promise<number | false | null>;
   handleNewChat: () => void;
 }
@@ -109,8 +118,17 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         return false;
       }
       if (claim && !claim.owned) return false;
+      let messages: Message[] | undefined;
+      if (claim?.conversation && ownedConversationRef.current !== id) {
+        messages = claim.conversation.messages.map((row) => {
+          const existing = messagesRef.current.find((message) => message.dbId === row.id);
+          return { ...messageFromRow(row), ...(existing ? { id: existing.id } : {}) };
+        });
+        messagesRef.current = messages;
+        setMessages(messages);
+      }
       ownedConversationRef.current = id;
-      return () => releaseConversation(id, ownerId);
+      return { release: () => releaseConversation(id, ownerId), ...(messages ? { messages } : {}) };
     },
     [releaseConversation]
   );
@@ -292,11 +310,12 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
       const saving = savedRow.then(async (rowId) => {
         if (!accountCurrent()) return null;
-        // A cloud pull can replace the rows, and the old id with them; the reply is then added again.
-        if (
-          rowId != null &&
-          (await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata))
-        ) {
+        if (rowId != null) {
+          try {
+            await window.electronAPI?.updateAgentMessage?.(rowId, content, metadata);
+          } catch (error) {
+            logger.warn("Unable to update saved reply", { error }, "chat");
+          }
           return rowId;
         }
         if (!accountCurrent()) return null;
@@ -319,17 +338,23 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   );
 
   const forkConversation = useCallback(
-    async (throughMessage: Message, forkContext?: string) => {
+    async (throughMessage: Message, forkContext?: string, beforeOpen?: () => void) => {
       const sourceId = conversationIdRef.current;
       if (!sourceId || throughMessage.dbId == null) return null;
-      const version = ++sessionVersionRef.current;
-      const fork = await window.electronAPI?.forkAgentConversation?.(
-        sourceId,
-        throughMessage.dbId,
-        forkContext ?? null
-      );
+      const version = sessionVersionRef.current;
+      let fork;
+      try {
+        fork = await window.electronAPI?.forkAgentConversation?.(
+          sourceId,
+          throughMessage.dbId,
+          forkContext ?? null
+        );
+      } catch {
+        return version === sessionVersionRef.current ? null : false;
+      }
       if (version !== sessionVersionRef.current) return false;
       if (!fork) return null;
+      beforeOpen?.();
       const opened = await loadConversation(fork.id);
       return opened === true ? fork.id : opened;
     },
@@ -385,6 +410,14 @@ function settledOnLoad(turn: AssistantTurn | undefined, toolCalls: ToolCallInfo[
   return {
     turn: turn && status ? { ...turn, status } : turn,
     toolCalls: toolCalls?.map((call): ToolCallInfo => {
+      const outcome = call.metadata && !Array.isArray(call.metadata) ? call.metadata.status : null;
+      if (
+        connectsFirst(call) &&
+        (call.interaction?.state === "pending" || call.interaction?.state === "interrupted") &&
+        !outcome
+      ) {
+        call = { ...call, metadata: { status: "not_sent" } };
+      }
       if (call.status !== "executing") return call;
       return call.interaction?.state === "pending"
         ? { ...call, status: "stopped", interaction: { ...call.interaction, state: "interrupted" } }

@@ -687,6 +687,7 @@ class IPCHandlers {
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
     this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
     this._enterpriseReasoningRequests = new AgentStreamRequestRegistry();
+    this._calendarAuthorizationRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -861,6 +862,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this._cancelCalendarAuthorizations();
     this.windowManager.retireMeetingNotificationScope();
     this.enterpriseIdentityManager?.clear();
     if (!token) {
@@ -876,6 +878,12 @@ class IPCHandlers {
     });
     // A sign-out or another account changes whose login shows.
     void this.connectorManager?.notifyStatusChanged();
+  }
+
+  _cancelCalendarAuthorizations() {
+    for (const senderId of this._calendarAuthorizationRequests?.requestsBySender.keys() ?? []) {
+      this._calendarAuthorizationRequests.cancelSender(senderId);
+    }
   }
 
   // Reconstructing counters from the transcripts already on disk records exactly
@@ -2521,6 +2529,7 @@ class IPCHandlers {
         (accountId !== null && previousScope?.accountId !== accountId)
       ) {
         this.windowManager.retireMeetingNotificationScope();
+        this._cancelCalendarAuthorizations();
       }
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
@@ -6162,47 +6171,75 @@ class IPCHandlers {
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", async (event) => {
-      // Capture immediately so the screenshot reflects the invocation moment;
-      // the policy verdict resolves concurrently and decides whether to
-      // return it. A signed-out user has no workspace and no policy; managed
-      // users are gated even if a stale renderer asks. null matches capture's
-      // contract — a screenshot must never break the dictation it accompanies.
-      // The target's window rect picks the display it is on rather than the one
-      // under the cursor, and the panel reposition has normally cached it already.
-      // A failed rect read falls back to the cursor rather than rejecting: the
-      // policy branch below can abandon this promise, and capture's contract is
-      // to yield null, never to throw.
-      const targetPid = this.textEditMonitor?.lastTargetPid;
-      const capturePromise = Promise.resolve(
-        targetPid ? this.textEditMonitor.getTargetWindowBounds?.(targetPid) : null
-      )
-        .catch(() => null)
-        .then((targetBounds) => screenContextCapture.captureActiveDisplay(targetBounds));
-      const authHeaders = await getAuthHeader(event);
-      if (authHeaders.Authorization || authHeaders.Cookie) {
-        // Bound the verdict wait: a lapsed policy TTL on a degraded network
-        // must not stall an allowed user's capture past the renderer's 3s
-        // consume race. The renderer gate already fails closed while policy
-        // is unresolved, so this defense-in-depth gate lets an unresolved
-        // verdict through while the refresh completes in flight — a resolved
-        // denial (cached or fresh) still blocks.
-        const snapshot = await Promise.race([
-          workspacePolicyManager.getPolicy({
-            expectedAuthGeneration: tokenStore.getState().generation,
-            authHeaders,
-          }),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-        ]);
-        if (snapshot && isScreenContextBlocked(snapshot)) {
-          debugLogger.warn(
-            "Screen context capture blocked by org policy",
-            { code: snapshot.code ?? null },
-            "screenContext"
-          );
-          return null;
+      const panel = this.windowManager.controlPanelWindow;
+      const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
+      const focused = hidePanel && panel.isFocused();
+      const panelBounds = hidePanel ? panel.getBounds() : null;
+      let restorePanel = hidePanel;
+      const closed = () => {
+        restorePanel = false;
+      };
+      if (hidePanel) {
+        panel.once("close", closed);
+        panel.hide();
+      }
+      try {
+        if (hidePanel) await new Promise((resolve) => setTimeout(resolve, 80));
+        // Outside the Control Panel, capture immediately at the invocation moment;
+        // the policy verdict resolves concurrently and decides whether to
+        // return it. A signed-out user has no workspace and no policy; managed
+        // users are gated even if a stale renderer asks. null matches capture's
+        // contract — a screenshot must never break the dictation it accompanies.
+        // The target's window rect picks the display it is on rather than the one
+        // under the cursor, and the panel reposition has normally cached it already.
+        // A failed rect read falls back to the cursor rather than rejecting: the
+        // policy branch below can abandon this promise, and capture's contract is
+        // to yield null, never to throw.
+        const targetPid = this.textEditMonitor?.lastTargetPid;
+        const capturePromise = Promise.resolve(
+          panelBounds ??
+            (targetPid ? this.textEditMonitor.getTargetWindowBounds?.(targetPid) : null)
+        )
+          .catch(() => null)
+          .then((targetBounds) => screenContextCapture.captureActiveDisplay(targetBounds));
+        const authHeaders = await getAuthHeader(event);
+        if (authHeaders.Authorization || authHeaders.Cookie) {
+          // Bound the verdict wait: a lapsed policy TTL on a degraded network
+          // must not stall an allowed user's capture past the renderer's 3s
+          // consume race. The renderer gate already fails closed while policy
+          // is unresolved, so this defense-in-depth gate lets an unresolved
+          // verdict through while the refresh completes in flight — a resolved
+          // denial (cached or fresh) still blocks.
+          const snapshot = await Promise.race([
+            workspacePolicyManager.getPolicy({
+              expectedAuthGeneration: tokenStore.getState().generation,
+              authHeaders,
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+          ]);
+          if (snapshot && isScreenContextBlocked(snapshot)) {
+            debugLogger.warn(
+              "Screen context capture blocked by org policy",
+              { code: snapshot.code ?? null },
+              "screenContext"
+            );
+            return null;
+          }
+        }
+        return await capturePromise;
+      } finally {
+        if (hidePanel) panel.removeListener("close", closed);
+        if (
+          restorePanel &&
+          this.windowManager.controlPanelWindow === panel &&
+          !panel.isDestroyed()
+        ) {
+          if (focused) {
+            panel.show();
+            panel.focus();
+          } else panel.showInactive();
         }
       }
-      return capturePromise;
     });
 
     // Snapshot the launch-time TCC status so a mid-session grant (which macOS
@@ -12189,15 +12226,36 @@ class IPCHandlers {
       }
     });
 
-    // Google Calendar
-    ipcMain.handle("gcal-start-oauth", async () => {
+    const authorizeCalendar = async (event, requestId, authorize) => {
+      requestId = requestId || crypto.randomUUID();
+      const requests = this._calendarAuthorizationRequests;
+      const controller = requests.begin(event.sender.id, requestId);
+      const abort = () => controller.abort();
+      event.sender.once("destroyed", abort);
       try {
-        return await this.googleCalendarManager.startOAuth();
+        const result = await authorize(controller.signal);
+        controller.signal.throwIfAborted();
+        return result;
       } catch (error) {
-        debugLogger.error("Google Calendar OAuth failed", { error: error.message }, "calendar");
+        if (controller.signal.aborted)
+          return { success: false, error: "oauth_cancelled", reason: "cancelled" };
+        debugLogger.error("Calendar authorization failed", { error: error.message }, "calendar");
         return { success: false, error: error.message };
+      } finally {
+        event.sender.removeListener("destroyed", abort);
+        requests.complete(event.sender.id, requestId, controller);
       }
-    });
+    };
+    ipcMain.handle("calendar-cancel-connect", (event, requestId) =>
+      this._calendarAuthorizationRequests.cancel(event.sender.id, requestId)
+    );
+
+    // Google Calendar
+    ipcMain.handle("gcal-start-oauth", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) =>
+        this.googleCalendarManager.startOAuth({ signal })
+      )
+    );
 
     ipcMain.handle("gcal-disconnect", async (_event, email) => {
       try {
@@ -12296,14 +12354,11 @@ class IPCHandlers {
     });
 
     // Microsoft Calendar
-    ipcMain.handle("mcal-start-oauth", async () => {
-      try {
-        return await this.microsoftCalendarManager.startOAuth();
-      } catch (error) {
-        debugLogger.error("Microsoft Calendar OAuth failed", { error: error.message }, "calendar");
-        return { success: false, error: error.message };
-      }
-    });
+    ipcMain.handle("mcal-start-oauth", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) =>
+        this.microsoftCalendarManager.startOAuth({ signal })
+      )
+    );
 
     ipcMain.handle("mcal-disconnect", async (_event, email) => {
       try {
@@ -12342,14 +12397,9 @@ class IPCHandlers {
     });
 
     // Apple Calendar (macOS EventKit)
-    ipcMain.handle("acal-connect", async () => {
-      try {
-        return await this.appleCalendarManager.connect();
-      } catch (error) {
-        debugLogger.error("Apple Calendar connect failed", { error: error.message }, "acal");
-        return { success: false, error: error.message };
-      }
-    });
+    ipcMain.handle("acal-connect", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) => this.appleCalendarManager.connect({ signal }))
+    );
 
     ipcMain.handle("acal-disconnect", async () => {
       try {
