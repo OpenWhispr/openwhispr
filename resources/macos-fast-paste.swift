@@ -60,6 +60,59 @@ func lookupVirtualKey(for character: String) -> CGKeyCode? {
     }
 }
 
+// Chromium browsers drop a synthetic ⌘V's insert at random, in waves (Chrome 155:
+// the paste and beforeinput events fire with the right text, nothing is inserted,
+// focus never moves), with this helper and the osascript fallback alike. Typing
+// the clipboard text as keyboard unicode events never dropped, so those browsers
+// get the text typed; every other app keeps the ⌘V paste.
+let typedBrowsers: Set<String> = [
+    "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.dev", "com.google.Chrome.canary",
+    "org.chromium.Chromium", "com.brave.Browser", "com.microsoft.edgemac", "company.thebrowser.Browser",
+    "com.vivaldi.Vivaldi", "com.operasoftware.Opera",
+]
+
+func typeText(_ text: String) {
+    // ⇧↩ for line breaks: a newline in a chat box or textarea instead of a send.
+    for (index, line) in text.components(separatedBy: "\n").enumerated() {
+        if index > 0 {
+            for down in [true, false] {
+                guard let e = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(kVK_Return), keyDown: down) else { continue }
+                e.flags = .maskShift
+                e.post(tap: .cgSessionEventTap)
+            }
+            usleep(2000)
+        }
+        // At most 20 UTF-16 units per event, never splitting a surrogate pair.
+        var chunk: [UniChar] = []
+        func flush() {
+            guard !chunk.isEmpty else { return }
+            for down in [true, false] {
+                guard let e = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down) else { continue }
+                e.flags = []
+                e.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+                e.post(tap: .cgSessionEventTap)
+            }
+            usleep(2000)
+            chunk = []
+        }
+        for scalar in line.replacingOccurrences(of: "\r", with: "").unicodeScalars {
+            let units = Array(String(scalar).utf16)
+            if chunk.count + units.count > 20 { flush() }
+            chunk.append(contentsOf: units)
+        }
+        flush()
+    }
+}
+
+if !copyMode,
+   let bundleId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+   typedBrowsers.contains(bundleId),
+   let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
+    typeText(text)
+    usleep(20000)
+    exit(0)
+}
+
 // Do not post the old US-ANSI fallback key code: on a non-QWERTY layout it
 // can invoke a different shortcut while still reporting a successful paste.
 guard let virtualKey = lookupVirtualKey(for: shortcutCharacter) else {
