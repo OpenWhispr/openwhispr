@@ -540,6 +540,51 @@ test("a server that already died is not restored to a window it no longer has", 
   assert.deepEqual(attempts, [32768], "no second attempt at a window that was already gone");
 });
 
+test("a model prewarmed while another is still loading is the one its requests run on", async (t) => {
+  // At launch main.js prewarms the cleanup model and, without waiting, the
+  // dictation-agent model. The agent's start joined the cleanup load already in
+  // flight, so the bridge recorded the agent model while llama-server held the
+  // cleanup one, and agent requests ran on it until another model was asked for.
+  const { modelManager, modelId: cleanupId, serverManager } = await setup(t, { tokenCount: 40 });
+  const [cleanupModel, agentModel] = modelRegistryData.localProviders[0].models;
+  await fs.copyFile(
+    path.join(modelManager.modelsDir, cleanupModel.fileName),
+    path.join(modelManager.modelsDir, agentModel.fileName)
+  );
+  serverManager.ready = false;
+  serverManager.process = null;
+  serverManager.contextSize = null;
+  modelManager.currentServerModelId = null;
+
+  // The cleanup load stays in flight until the agent's start has arrived.
+  const port = serverManager.port;
+  const cleanupLoading = Promise.withResolvers();
+  const agentRequested = Promise.withResolvers();
+  const start = serverManager.start.bind(serverManager);
+  serverManager.start = (modelPath, options) => {
+    if (path.basename(modelPath) === agentModel.fileName) agentRequested.resolve();
+    return start(modelPath, options);
+  };
+  serverManager._doStart = async (modelPath) => {
+    cleanupLoading.resolve();
+    await agentRequested.promise;
+    serverManager.modelPath = modelPath;
+    serverManager.ready = true;
+    serverManager.process = {};
+    serverManager.port = port;
+  };
+
+  const cleanupPrewarm = modelManager.prewarmServer(cleanupId);
+  await cleanupLoading.promise;
+  await Promise.all([cleanupPrewarm, modelManager.prewarmServer(agentModel.id)]);
+  const result = await modelManager.runInference(agentModel.id, SHORT_PROMPT, {
+    systemPrompt: "Answer the question.",
+  });
+
+  assert.equal(result, "done");
+  assert.equal(path.basename(serverManager.modelPath), agentModel.fileName);
+});
+
 test("only Apple Silicon is treated as memory the GPU already shares", async (t) => {
   // discreteGpuUnverified reads darwin as unified memory, but an Intel Mac's
   // Radeon has its own few GB. Sizing against system RAM there hands the card
