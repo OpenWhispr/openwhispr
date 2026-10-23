@@ -2,6 +2,7 @@ const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
@@ -77,6 +78,79 @@ const MANAGED_HEADER_VARIANTS = new Set([
   ...MANAGED_HEADER_TEXT,
   "If you delete this file, also remove the matching source line from your Hyprland config.",
 ]);
+
+function hasLuaLoadDirective(content, bindsPath) {
+  const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const quoted = `${escape(JSON.stringify(bindsPath))}|${escape(
+    `'${bindsPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`
+  )}`;
+  const loader = new RegExp(
+    `^\\s*(?:(?:require|dofile)\\s*(?:\\(\\s*(?:${quoted})\\s*\\)|(?:${quoted}))|` +
+      `pcall\\s*\\(\\s*(?:require|dofile)\\s*,\\s*(?:${quoted})\\s*\\))\\s*;?\\s*(?=\\r?\\n|$)`
+  );
+  // Keep quoted literals, but ignore comments and long strings containing example code.
+  const code = content.replace(
+    /"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|--\[(=*)\[[\s\S]*?(?:\]\1\]|$)|--[^\n]*|\[(=*)\[[\s\S]*?(?:\]\2\]|$)/g,
+    (token) => (/^["']/.test(token) ? token : token.replace(/[^\r\n]/g, " "))
+  );
+  const structure = code
+    .replace(/"(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'/g, (token) =>
+      token.replace(/[^\r\n]/g, " ")
+    )
+    .split("\n");
+  let depth = 0;
+  let offset = 0;
+  for (const [index, line] of code.split("\n").entries()) {
+    if (depth === 0 && /^\s*return\b/.test(line)) break;
+    if (depth === 0 && loader.test(code.slice(offset))) return true;
+    for (const word of structure[index].match(/\b(?:function|if|do|repeat|end|until)\b/g) || []) {
+      depth += word === "end" || word === "until" ? -1 : 1;
+    }
+    offset += line.length + 1;
+  }
+  return false;
+}
+
+function writeConfigAtomically(filePath, content) {
+  let entry;
+  try {
+    entry = fs.lstatSync(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  // Resolve existing links before replacing: rename must update the dotfile
+  // target, never replace the user's symlink with a regular file.
+  const target = entry ? fs.realpathSync(filePath) : filePath;
+  const metadata = entry ? fs.statSync(target) : null;
+  if (metadata && (!metadata.isFile() || metadata.nlink > 1)) {
+    throw new Error(`Cannot atomically replace non-regular or hard-linked config: ${filePath}`);
+  }
+  if (metadata) fs.accessSync(target, fs.constants.W_OK);
+  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.tmp`);
+  let fd;
+  try {
+    fd = fs.openSync(temp, "wx", 0o600);
+    fs.writeFileSync(fd, content, "utf-8");
+    if (metadata) {
+      const current = fs.fstatSync(fd);
+      if (current.uid !== metadata.uid || current.gid !== metadata.gid) {
+        fs.fchownSync(fd, metadata.uid, metadata.gid);
+      }
+    }
+    fs.fchmodSync(fd, metadata ? metadata.mode & 0o7777 : 0o666 & ~process.umask());
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    fs.renameSync(temp, target);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+    try {
+      fs.unlinkSync(temp);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+}
 
 function isManagedHeaderLine(line) {
   return MANAGED_HEADER_VARIANTS.has(line.trim().replace(/^(#|--)\s*/, ""));
@@ -444,7 +518,7 @@ class HyprlandShortcutManager {
     }
 
     const newContent = buildManagedBindsContent([...userLines, ...bindLines], config.format);
-    fs.writeFileSync(config.bindsPath, newContent, "utf-8");
+    if (newContent !== content) writeConfigAtomically(config.bindsPath, newContent);
   }
 
   _persistBinds(config, desiredBinds) {
@@ -464,6 +538,8 @@ class HyprlandShortcutManager {
       if (err.code === "ENOENT") return false;
       throw err;
     }
+
+    if (config.format === "lua" && hasLuaLoadDirective(content, config.bindsPath)) return true;
 
     const sourceLine =
       config.format === "lua"
@@ -493,7 +569,7 @@ class HyprlandShortcutManager {
     const newContent = lines.join("\n");
     if (newContent === content) return true;
 
-    fs.writeFileSync(config.path, newContent, "utf-8");
+    writeConfigAtomically(config.path, newContent);
     debugLogger.log(`[HyprlandShortcut] Added binding load directive to ${config.path}`);
     return true;
   }
