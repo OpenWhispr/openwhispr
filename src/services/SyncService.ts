@@ -193,7 +193,11 @@ function conversationCreateSnapshot(
 // its question again. A turn that old was cut off (the app quit) and goes as is.
 const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
 
-function hasTurnInProgress(conversation: { messages: ReadonlyArray<{ metadata?: unknown }> }) {
+function hasTurnInProgress(conversation: {
+  has_active_turn?: boolean;
+  messages: ReadonlyArray<{ metadata?: unknown }>;
+}) {
+  if (conversation.has_active_turn || conversation.messages.length === 0) return true;
   return conversation.messages.some((message) => {
     let metadata = message.metadata;
     if (typeof metadata === "string") {
@@ -209,6 +213,15 @@ function hasTurnInProgress(conversation: { messages: ReadonlyArray<{ metadata?: 
       Date.now() - (turn.startedAt ?? 0) < TURN_IN_PROGRESS_MAX_AGE_MS
     );
   });
+}
+
+function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
+  const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const { turn, ...rest } = parsed as Record<string, unknown>;
+  if (!turn || typeof turn !== "object" || Array.isArray(turn)) return parsed;
+  const { reasoning: _reasoning, ...savedTurn } = turn as Record<string, unknown>;
+  return { ...rest, turn: savedTurn };
 }
 
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
@@ -1012,11 +1025,7 @@ export class SyncService {
         messages: full.messages.map((m) => ({
           role: m.role,
           content: m.content,
-          metadata: m.metadata
-            ? typeof m.metadata === "string"
-              ? JSON.parse(m.metadata)
-              : m.metadata
-            : null,
+          metadata: conversationMessageMetadata(m.metadata),
         })),
       });
       await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
@@ -2306,11 +2315,7 @@ export class SyncService {
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,
-            metadata: m.metadata
-              ? typeof m.metadata === "string"
-                ? JSON.parse(m.metadata)
-                : m.metadata
-              : null,
+            metadata: conversationMessageMetadata(m.metadata),
           })),
         });
         await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);

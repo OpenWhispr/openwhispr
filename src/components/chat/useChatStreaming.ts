@@ -19,6 +19,7 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { useAuth } from "../../hooks/useAuth";
+import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
 import { hasConnectorPlan } from "../../utils/connectorEligibility";
@@ -232,7 +233,7 @@ export type TurnHandler = (
   content: string,
   toolCalls: ToolCallInfo[] | undefined,
   details: TurnDetails
-) => void;
+) => void | Promise<void>;
 
 export interface SendToAIOptions {
   /** The conversation this turn is saved into. */
@@ -365,6 +366,7 @@ export function useChatStreaming({
   }, [clearToolActivity, clearToolActivityTimer]);
 
   const sendGenerationRef = useRef(0);
+  const accountVersionRef = useRef(0);
   // Generation stamped by the most recent cancel issued while still mounted
   // (Esc, a Stop button). The unmount cleanup below flips mountedRef off
   // before routing through cancelStream, so it never stamps this — which is
@@ -380,6 +382,15 @@ export function useChatStreaming({
     setAgentState("idle");
     clearToolActivity();
   }, [clearToolActivity]);
+
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        accountVersionRef.current += 1;
+        cancelStream();
+      }),
+    [cancelStream]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -398,6 +409,11 @@ export function useChatStreaming({
   const sendToAI = useCallback(
     async (userText: string, allMessages: Message[], options?: SendToAIOptions) => {
       const sendGeneration = ++sendGenerationRef.current;
+      const accountVersion = accountVersionRef.current;
+      const authGeneration = getAuthRequestContextSnapshot().observedGeneration;
+      const accountCurrent = () =>
+        accountVersion === accountVersionRef.current &&
+        authGeneration === getAuthRequestContextSnapshot().observedGeneration;
       const cancelled = () =>
         sendGeneration !== sendGenerationRef.current || toolScope.signal.aborted;
       // This send supersedes any still running, so that turn's tools are
@@ -412,8 +428,13 @@ export function useChatStreaming({
         onInteraction: ({ toolCallId, record }) =>
           turnHooks.annotate?.(toolCallId, { interaction: record }),
         onImageAttached: (image) => stepImages.push(image),
-        onActionCompleted: ({ toolCallId, actionKey }) =>
-          turnHooks.annotate?.(toolCallId, { actionKey }),
+        onActionCompleted: ({ toolCallId, actionKey, outcome }) =>
+          turnHooks.annotate?.(toolCallId, {
+            actionKey,
+            ...(outcome
+              ? { metadata: { ...outcome }, status: "completed", finishedAt: Date.now() }
+              : {}),
+          }),
         completedActions: completedActionKeys(
           options?.replaceMessage ? [...allMessages, options.replaceMessage] : allMessages
         ),
@@ -809,7 +830,9 @@ export function useChatStreaming({
         };
 
         const checkpoint = () =>
-          onTurnCheckpoint?.(assistantId, fullContent, currentToolCalls(), turnDetails());
+          accountCurrent()
+            ? onTurnCheckpoint?.(assistantId, fullContent, currentToolCalls(), turnDetails())
+            : undefined;
         const updateWaiting = () => {
           const waiting = hasPendingInteraction();
           const saves = waiting || turn.status === "waiting";
@@ -818,8 +841,11 @@ export function useChatStreaming({
           if (saves) checkpoint();
         };
         const saveReply = () =>
-          onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails());
+          accountCurrent()
+            ? onStreamComplete?.(assistantId, fullContent, currentToolCalls(), turnDetails())
+            : undefined;
         turnHooks.annotate = (toolCallId, patch) => {
+          if (!accountCurrent()) return;
           annotations.set(toolCallId, { ...annotations.get(toolCallId), ...patch });
           if (!toolCalls.some((call) => call.id === toolCallId)) return;
           toolCalls = toolCalls.map((call) =>
@@ -887,7 +913,7 @@ export function useChatStreaming({
             )
           );
           const keepsReply = allowInteractions
-            ? fullContent.trim().length > 0 || toolCalls.length > 0
+            ? fullContent.trim().length > 0 || toolCalls.length > 0 || !!onTurnCheckpoint
             : !explicitlyCancelled && fullContent.trim().length > 0;
           if (keepsReply) saveReply();
         };
@@ -921,6 +947,11 @@ export function useChatStreaming({
           : undefined;
 
         try {
+          if (!replaced) await checkpoint();
+          if (cancelled() || !mountedRef.current) {
+            finishStoppedReply();
+            return;
+          }
           let stream: AsyncGenerator<AgentStreamChunk>;
           // Each call's own step text on the AI SDK path, whose tool results
           // carry only the model-facing output (the cloud path yields it).

@@ -24,9 +24,7 @@ function followUpText(
     case "answered":
       if (payload.kind !== "questions") return null;
       return payload.questions
-        .map(
-          (question) => `${question.prompt}\n${answerText(question, result.answers[question.id])}`
-        )
+        .map((question) => answerText(question, result.answers[question.id]))
         .join("\n\n");
     case "connected":
       return t("agentMode.interactions.followUp.connected", {
@@ -71,16 +69,21 @@ export function useInterruptedInteractions(
   const latestRef = useRef({ messages, t });
   latestRef.current = { messages, t };
   const restoredRef = useRef(new Set<string>());
-  const followUpRef = useRef<{ text: string; options?: SendToAIOptions } | null>(null);
+  const followUpRef = useRef<{
+    text: string;
+    version: number | undefined;
+    options?: SendToAIOptions;
+  } | null>(null);
 
   useEffect(() => {
+    const version = getSessionVersion?.();
     const continueTask = async (
       messageId: string,
       toolCallId: string,
       payload: InteractionPayload,
       result: InteractionResult
     ) => {
-      const version = getSessionVersion?.();
+      if (version !== getSessionVersion?.()) return;
       const latest = latestRef.current;
       const message = latest.messages.find((m) => m.id === messageId);
       if (!message) return;
@@ -102,7 +105,7 @@ export function useInterruptedInteractions(
       const text = followUpText(payload, result, latest.t);
       const image = takeGrantedImage(approvalKey(messageId, toolCallId));
       if (text) {
-        followUpRef.current = { text, options: image ? { attachment: image } : undefined };
+        followUpRef.current = { text, version, options: image ? { attachment: image } : undefined };
         setMessages((prev) => [...prev]);
       } else if (conversationId != null) releaseConversation?.(conversationId);
     };
@@ -151,8 +154,8 @@ export function useInterruptedInteractions(
     const followUp = followUpRef.current;
     if (!followUp) return;
     followUpRef.current = null;
-    void send(followUp.text, followUp.options);
-  }, [messages, send]);
+    if (followUp.version === getSessionVersion?.()) void send(followUp.text, followUp.options);
+  }, [messages, send, getSessionVersion]);
 
   useEffect(() => {
     const restored = restoredRef.current;

@@ -1307,6 +1307,8 @@ export interface AgentMessageRow {
 export interface AgentConversationWithMessages {
   id: number;
   title: string;
+  /** Main's live ownership claim; never stored or uploaded. */
+  has_active_turn?: boolean;
   archived_at?: string;
   cloud_id?: string | null;
   client_conversation_id?: string | null;

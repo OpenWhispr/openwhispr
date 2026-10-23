@@ -1,4 +1,7 @@
-import type { ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type {
+  CompletedActionOutcome,
+  ToolExecutionContext,
+} from "../../services/tools/ToolRegistry";
 import type { InteractionRecord } from "../../types/agentInteractions";
 import type { ChatImageAttachment } from "./types";
 
@@ -21,7 +24,11 @@ interface ToolExecutionHandlers {
   onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
   onImageAttached?: (image: ChatImageAttachment) => void;
   /** A send happened (or may have); the key belongs on its tool call. */
-  onActionCompleted?: (request: { toolCallId: string; actionKey: string }) => void;
+  onActionCompleted?: (request: {
+    toolCallId: string;
+    actionKey: string;
+    outcome?: CompletedActionOutcome;
+  }) => void;
   /** Sends earlier requests in the conversation made, from its saved tool calls. */
   completedActions?: Iterable<string>;
 }
@@ -77,7 +84,10 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       releaseAction: (actionKey) => {
         claimedActions.delete(actionKey);
       },
-      recordCompletedAction: (actionKey) => handlers.onActionCompleted?.({ toolCallId, actionKey }),
+      recordCompletedAction: (actionKey, outcome) => {
+        claimedActions.add(actionKey);
+        handlers.onActionCompleted?.({ toolCallId, actionKey, ...(outcome ? { outcome } : {}) });
+      },
       sentEarlier: (actionKey) => earlierActions.has(actionKey),
     }),
     abort: () => controller.abort(),

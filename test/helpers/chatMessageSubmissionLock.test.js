@@ -48,6 +48,7 @@ test("message sender reports whether the submission lock accepted the send", asy
     resolveCreate = resolve;
   });
   const persistence = {
+    conversationId: null,
     messages: [],
     setMessages() {},
     async saveUserMessage() {},
@@ -84,6 +85,7 @@ test("leaving a session while its message saves prevents inference and releases 
   let releaseSave;
   let streams = 0;
   const persistence = {
+    conversationId: 1,
     messages: [],
     getSessionVersion: () => version,
     setMessages() {},

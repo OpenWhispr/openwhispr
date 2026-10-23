@@ -307,8 +307,9 @@ test("a turn waiting on a question is saved as waiting, as answered, then comple
   const sending = harness.captured.sendToAI("Write the update", []);
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(harness.checkpoints.length, 1);
-  const [assistantId, , waitingCalls, waitingDetails] = harness.checkpoints[0];
+  assert.equal(harness.checkpoints.length, 2);
+  assert.equal(harness.checkpoints[0][3].turn.status, "running");
+  const [assistantId, , waitingCalls, waitingDetails] = harness.checkpoints[1];
   assert.equal(waitingDetails.turn.status, "waiting");
   assert.equal(waitingCalls[0].interaction.state, "pending");
   assert.equal(harness.assistant().turn.status, "waiting");
@@ -318,8 +319,8 @@ test("a turn waiting on a question is saved as waiting, as answered, then comple
   store.answerQuestions(key);
   // Saved again at once: the app closing before the turn ends must not offer
   // the answered question again.
-  assert.equal(harness.checkpoints.length, 2);
-  const [, , answeredCalls, answeredDetails] = harness.checkpoints[1];
+  assert.equal(harness.checkpoints.length, 3);
+  const [, , answeredCalls, answeredDetails] = harness.checkpoints[2];
   assert.equal(answeredDetails.turn.status, "running");
   assert.equal(answeredCalls[0].interaction.state, "settled");
   await sending;
@@ -544,9 +545,9 @@ test("the same send twice in one step gets one card", async (t) => {
   assert.equal(prepares.length, 1);
   assert.deepEqual(
     outputs.map((output) => output.status),
-    ["failed", "already_sent"]
+    ["failed", "not_sent"]
   );
-  assert.match(outputs[1].guidance, /earlier in this request, so it was not done again/);
+  assert.match(outputs[1].guidance, /may still be waiting for the user/);
 });
 
 test("a send that went out is keyed on its tool call, for later turns", async (t) => {
@@ -593,58 +594,80 @@ test("a send that went out is keyed on its tool call, for later turns", async (t
   await harness.captured.sendToAI("Post hi to #eng", []);
   assert.match(harness.completed[0][2][0].actionKey, /^slack\.send_message:/);
   // Saved the moment it was sent, before the turn ended.
-  assert.match(harness.checkpoints[0][2][0].actionKey, /^slack\.send_message:/);
+  assert.match(harness.checkpoints.at(-1)[2][0].actionKey, /^slack\.send_message:/);
 });
 
 test("a send that lands after Stop is saved with the stopped reply", async (t) => {
-  let finishCommit;
-  const harness = await renderChatStreaming(
-    t,
-    { allowConnectors: true, allowInteractions: true },
-    {
-      statuses: SLACK_READY,
-      electronAPI: {
-        connectorPrepare: async () => ({
-          status: "ready",
-          actionId: "a1",
-          preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
-        }),
-        connectorCommit: () =>
-          new Promise((resolve) => {
-            finishCommit = () => resolve({ state: "sent", url: "https://slack.test/1" });
-          }),
-      },
-    }
-  );
-  // Stop ends the model stream; the tool call, already committing, runs on.
-  const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
-  harness.setStream((tools, config) =>
-    (async function* () {
-      yield {
-        type: "tool_calls",
-        calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
-      };
-      void tools.slack_send_message.execute({ destination: "#eng", text: "hi" }, toolOptions("s1"));
-      await new Promise((resolve) =>
-        config.signal.addEventListener("abort", resolve, { once: true })
+  for (const state of ["sent", "unknown"])
+    await t.test(state, async (t) => {
+      let finishCommit;
+      const harness = await renderChatStreaming(
+        t,
+        { allowConnectors: true, allowInteractions: true },
+        {
+          statuses: SLACK_READY,
+          electronAPI: {
+            connectorPrepare: async () => ({
+              status: "ready",
+              actionId: "a1",
+              preview: {
+                verbKey: "post",
+                destinationLabel: "#eng",
+                accountLabel: "chad",
+                body: "hi",
+              },
+            }),
+            connectorCommit: () =>
+              new Promise((resolve) => {
+                finishCommit = () => resolve({ state, url: "https://slack.test/1" });
+              }),
+          },
+        }
       );
-    })()
-  );
-  const sending = harness.captured.sendToAI("Post hi to #eng", []);
-  await new Promise((resolve) => setImmediate(resolve));
-  const [key] = Object.keys(approvals.useConnectorApprovalStore.getState().entries);
-  void approvals.approveAction(key);
-  await new Promise((resolve) => setImmediate(resolve));
-  harness.captured.cancelStream();
-  await sending;
-  assert.equal(harness.completed[0][3].turn.status, "stopped");
-  assert.equal(harness.completed[0][2][0].actionKey, undefined);
+      // Stop ends the model stream; the tool call, already committing, runs on.
+      const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+      harness.setStream((tools, config) =>
+        (async function* () {
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
+          };
+          void tools.slack_send_message.execute(
+            { destination: "#eng", text: "hi" },
+            toolOptions("s1")
+          );
+          await new Promise((resolve) =>
+            config.signal.addEventListener("abort", resolve, { once: true })
+          );
+        })()
+      );
+      const sending = harness.captured.sendToAI("Post hi to #eng", []);
+      await new Promise((resolve) => setImmediate(resolve));
+      const [key] = Object.keys(approvals.useConnectorApprovalStore.getState().entries);
+      void approvals.approveAction(key);
+      await new Promise((resolve) => setImmediate(resolve));
+      harness.captured.cancelStream();
+      await sending;
+      assert.equal(harness.completed[0][3].turn.status, "stopped");
+      assert.equal(harness.completed[0][2][0].actionKey, undefined);
 
-  finishCommit();
-  await new Promise((resolve) => setImmediate(resolve));
-  const [, , toolCalls, details] = harness.checkpoints.at(-1);
-  assert.match(toolCalls[0].actionKey, /^slack\.send_message:/, "the send is never repeated");
-  assert.equal(details.turn.status, "stopped");
+      finishCommit();
+      await new Promise((resolve) => setImmediate(resolve));
+      const [, , toolCalls, details] = harness.checkpoints.at(-1);
+      assert.match(toolCalls[0].actionKey, /^slack\.send_message:/, "the send is never repeated");
+      assert.equal(details.turn.status, "stopped");
+      assert.deepEqual(toolCalls[0].metadata, {
+        status: state,
+        ...(state === "sent" ? { url: "https://slack.test/1" } : {}),
+      });
+      const { toolTrace } = await harness.vite.ssrLoadModule("/components/chat/historyMessages.ts");
+      assert.equal(
+        toolTrace(toolCalls),
+        state === "sent"
+          ? "[Tools used: slack_send_message (sent: https://slack.test/1)]"
+          : "[Tools used: slack_send_message (may have been sent)]"
+      );
+    });
 });
 
 test("a tool stopped while it waits for its service to connect is recorded as not sent", async (t) => {
@@ -675,7 +698,7 @@ test("a tool stopped while it waits for its service to connect is recorded as no
   );
   const sending = harness.captured.sendToAI("Post hi to #eng", []);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(harness.checkpoints[0][2][0].interaction.payload.target, "slack");
+  assert.equal(harness.checkpoints.at(-1)[2][0].interaction.payload.target, "slack");
   harness.captured.cancelStream();
   await sending;
 
@@ -778,6 +801,11 @@ test("a regenerate stopped or failed before its first token shows the reply it r
 
     assert.deepEqual(harness.messages()[1], reply, label);
     assert.deepEqual(harness.completed, [], `${label}: nothing is saved over it`);
+    assert.deepEqual(
+      harness.checkpoints,
+      [],
+      `${label}: its saved row is never overwritten before a replacement exists`
+    );
     // A failure is said (the agent window shows a notice); a stop is the user's own.
     assert.equal(failures, end === "error" ? 1 : 0, label);
   }

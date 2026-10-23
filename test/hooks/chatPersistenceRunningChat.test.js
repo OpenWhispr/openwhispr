@@ -5,6 +5,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
+  SIGNED_OUT_AUTH_MOCK,
 } = require("../lib/rendererTestHarness");
 
 // useChatPersistence mounted for real against an in-memory stand-in for the
@@ -15,6 +16,9 @@ function fakeDb() {
   const conversations = new Map();
   const owners = new Map();
   const released = new Set();
+  const scopeListeners = new Set();
+  const writes = [];
+  let accountId = "account-a";
   const calls = { add: [], update: [], fork: [], title: [] };
   const get = (id) => {
     const conversation = conversations.get(id);
@@ -27,6 +31,11 @@ function fakeDb() {
     };
   };
   const api = {
+    getActiveAccountScope: async () => ({ accountId, authGeneration: 1 }),
+    onActiveAccountScopeChanged: (listener) => {
+      scopeListeners.add(listener);
+      return () => scopeListeners.delete(listener);
+    },
     claimAgentConversation: async (id, owner) => {
       const owned = !owners.has(id) || owners.get(id) === owner;
       if (owned) owners.set(id, owner);
@@ -46,9 +55,13 @@ function fakeDb() {
       conversations.set(conversation.id, conversation);
       return conversation;
     },
-    getAgentConversation: async (id) => get(id),
+    getAgentConversation: async (id) => {
+      const conversation = get(id);
+      return conversation ? { ...conversation, has_active_turn: owners.has(id) } : null;
+    },
     addAgentMessage: async (conversation_id, role, content, metadata) => {
       calls.add.push({ conversation_id, role, content, metadata });
+      writes.push({ operation: "add", accountId });
       const row = {
         id: nextId++,
         conversation_id,
@@ -61,6 +74,7 @@ function fakeDb() {
     },
     updateAgentMessage: async (id, content, metadata) => {
       calls.update.push({ id, content, metadata });
+      writes.push({ operation: "update", accountId });
       const row = rows.find((r) => r.id === id);
       if (!row) return null;
       Object.assign(row, { content, metadata: metadata ? JSON.stringify(metadata) : null });
@@ -89,17 +103,36 @@ function fakeDb() {
       return get(fork.id);
     },
   };
-  return { api, rows, calls, conversations };
+  return {
+    api,
+    rows,
+    calls,
+    conversations,
+    writes,
+    emitScope: (scope) => {
+      accountId = scope?.accountId ?? null;
+      scopeListeners.forEach((listener) => listener(scope));
+    },
+  };
 }
 
-async function mountPersistence(t, { instances = 1, restore = false } = {}) {
+async function mountPersistence(
+  t,
+  { instances = 1, restore = false, streaming = false, senderConversationId } = {}
+) {
   const db = fakeDb();
   let root;
   // Node runs after hooks in registration order: unmount while the DOM exists.
   t.after(() => root && React.act(async () => root.unmount()));
-  installBrowserGlobals(t, { window: { electronAPI: db.api } });
+  installBrowserGlobals(t, {
+    initialStorage: { isSubscribed: "true" },
+    window: { electronAPI: db.api },
+  });
   const container = installHookDom(t);
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-chat-persistence-test-" });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-chat-persistence-test-",
+    mockModules: SIGNED_OUT_AUTH_MOCK,
+  });
   const { useChatPersistence } = await vite.ssrLoadModule("/components/chat/useChatPersistence.ts");
   const { createRoot } = require("react-dom/client");
   const { useInterruptedInteractions } = await vite.ssrLoadModule(
@@ -109,9 +142,47 @@ async function mountPersistence(t, { instances = 1, restore = false } = {}) {
   store.useAgentInteractionStore.setState({ entries: {} });
   const persistence = [];
   const sent = [];
+  const streams = [];
+  const senders = [];
+  let useChatStreaming, useChatMessageSender, service;
+  if (streaming) {
+    ({ useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts"));
+    ({ useChatMessageSender } = await vite.ssrLoadModule(
+      "/components/chat/useChatMessageSender.ts"
+    ));
+    service = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+    t.after(() => service.destroy());
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+    useSettingsStore.setState({
+      isSignedIn: true,
+      cloudBackupEnabled: false,
+      chatAgentMode: "providers",
+      chatAgentProvider: "openai",
+      chatAgentModel: "gpt-5-mini",
+    });
+    usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
+  }
   function Harness({ index }) {
     const value = useChatPersistence();
     persistence[index] = value;
+    if (streaming) {
+      const stream = useChatStreaming({
+        setMessages: value.setMessages,
+        allowInteractions: true,
+        allowConnectors: true,
+        onStreamComplete: value.saveAssistantMessage,
+        onTurnCheckpoint: value.saveAssistantMessage,
+        claimConversation: value.claimConversation,
+      });
+      streams[index] = stream;
+      senders[index] = useChatMessageSender({
+        conversationId: senderConversationId ?? value.conversationId,
+        persistence: value,
+        streaming: stream,
+        createConversation: (text) => value.createConversation(text),
+      });
+    }
     if (restore)
       useInterruptedInteractions(value, async (text) => {
         sent.push([index, text]);
@@ -132,7 +203,21 @@ async function mountPersistence(t, { instances = 1, restore = false } = {}) {
     )
   );
   const act = (fn) => React.act(async () => fn());
-  return { db, act, current: (index = 0) => persistence[index], store, sent };
+  return {
+    db,
+    act,
+    current: (index = 0) => persistence[index],
+    store,
+    sent,
+    vite,
+    service,
+    stream: () => streams[0],
+    send: (...args) => senders[0](...args),
+    unmount: async () => {
+      await React.act(async () => root.unmount());
+      root = null;
+    },
+  };
 }
 
 const message = (id, role, content, extra = {}) => ({
@@ -439,4 +524,297 @@ test("simultaneous recovery exposes one answer and peers reload its saved outcom
     ).length,
     0
   );
+});
+
+test("account and credential boundaries stop a live question without writing its continuation", async (t) => {
+  for (const boundary of ["account", "generation", "scopeGeneration", "signout"]) {
+    await t.test(boundary, async (t) => {
+      const h = await mountPersistence(t, { streaming: true, senderConversationId: 100 });
+      const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
+      await h.act(() => auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true }));
+      let signal;
+      h.service.processTextStreamingAI = async function* (_m, _model, _p, config, tools) {
+        signal = config.signal;
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "question", name: "ask_user", arguments: "{}" }],
+        };
+        await tools.ask_user.execute(
+          { questions: [{ id: "city", kind: "text", prompt: "City?" }] },
+          { toolCallId: "question", messages: [] }
+        );
+        yield { type: "content", text: "Old task continued" };
+      };
+      let sending;
+      await h.act(async () => {
+        sending = h.send("Plan the trip");
+        await new Promise(setImmediate);
+      });
+      assert.equal(h.current().messages.at(-1).turn.status, "waiting");
+      const version = h.current().getSessionVersion();
+      await h.act(() => {
+        auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true });
+        h.db.emitScope({ accountId: "account-a", authGeneration: 1 });
+      });
+      assert.equal(signal.aborted, false, "unchanged credentials and account keep the turn");
+      assert.equal(h.current().getSessionVersion(), version);
+      const writes = h.db.writes.length;
+      await h.act(async () => {
+        if (boundary === "generation")
+          auth.observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+        else if (boundary === "scopeGeneration")
+          h.db.emitScope({ accountId: "account-a", authGeneration: 2 });
+        else
+          h.db.emitScope(
+            boundary === "signout" ? null : { accountId: "account-b", authGeneration: 1 }
+          );
+      });
+      assert.equal(signal.aborted, true);
+      await h.act(() => sending);
+      assert.ok(h.current().getSessionVersion() > version);
+      assert.equal(h.current().conversationId, null);
+      assert.deepEqual(h.current().messages, []);
+      assert.equal(
+        h.db.writes.length,
+        writes,
+        "the old turn cannot checkpoint or complete under the new context"
+      );
+      assert.ok(
+        Object.values(h.store.useAgentInteractionStore.getState().entries).every(
+          (entry) => entry.state === "settled"
+        )
+      );
+      h.service.processTextStreamingAI = async function* () {
+        yield { type: "content", text: "New account reply" };
+        yield { type: "done", finishReason: "stop" };
+      };
+      await h.act(() => h.send("New account task"));
+      assert.equal(
+        h.current().conversationId,
+        101,
+        "a stale parent selection cannot reuse A's conversation"
+      );
+      assert.equal(h.db.rows.filter((row) => row.conversation_id === 100).length, 2);
+    });
+  }
+});
+
+test("a deferred reply save cannot run its queued update after an account boundary", async (t) => {
+  const h = await mountPersistence(t);
+  await h.act(() => h.current().createConversation("A task"));
+  await h.act(() => h.current().saveAssistantMessage("a1", "first"));
+  const update = h.db.api.updateAgentMessage;
+  let finish;
+  h.db.api.updateAgentMessage = async (...args) => {
+    const result = await update(...args);
+    return new Promise((resolve) => {
+      finish = () => resolve(result);
+    });
+  };
+  let first, queued;
+  await h.act(async () => {
+    first = h.current().saveAssistantMessage("a1", "started under A");
+    queued = h.current().saveAssistantMessage("a1", "queued under A");
+    await new Promise(setImmediate);
+  });
+  await h.act(async () => {
+    h.db.emitScope({ accountId: "account-b", authGeneration: 2 });
+    finish();
+    await new Promise(setImmediate);
+  });
+  assert.equal(h.db.calls.update.length, 1);
+  await h.act(() => Promise.all([first, queued]));
+  assert.ok(h.db.writes.every((write) => write.accountId === "account-a"));
+  assert.equal(h.db.rows[0].content, "started under A");
+});
+
+test("a send landing after an account switch cannot checkpoint into the replacement account", async (t) => {
+  for (const unmounted of [false, true])
+    await t.test(unmounted ? "after unmount" : "mounted", async (t) => {
+      let finishCommit, turnSignal;
+      t.after(() => finishCommit?.());
+      const h = await mountPersistence(t, { streaming: true });
+      const { useConnectorStatusStore } = await h.vite.ssrLoadModule(
+        "/stores/connectorStatusStore.ts"
+      );
+      useConnectorStatusStore.setState({
+        loaded: true,
+        statuses: {
+          slack: {
+            id: "slack",
+            connected: true,
+            configured: true,
+            needsReconnect: false,
+            accountLabel: "A",
+            workspaceLabel: "Fixture",
+          },
+        },
+      });
+      h.db.api.connectorPrepare = async () => ({
+        status: "ready",
+        actionId: "late-a",
+        preview: { verbKey: "post", destinationLabel: "#eng", accountLabel: "A", body: "hi" },
+      });
+      h.db.api.connectorCommit = () =>
+        new Promise((resolve) => {
+          finishCommit = () => resolve({ state: "sent", url: "https://fixture.invalid/sent" });
+        });
+      h.service.processTextStreamingAI = async function* (_m, _model, _p, config, tools) {
+        turnSignal = config.signal;
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "send", name: "slack_send_message", arguments: "{}" }],
+        };
+        void tools.slack_send_message.execute(
+          { destination: "#eng", text: "hi" },
+          { toolCallId: "send", messages: [] }
+        );
+        await new Promise((resolve) =>
+          config.signal.addEventListener("abort", resolve, { once: true })
+        );
+      };
+      let sending;
+      await h.act(async () => {
+        sending = h.send("Post hi");
+        await new Promise(setImmediate);
+      });
+      const approvals = await h.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+      const [key] = Object.keys(approvals.useConnectorApprovalStore.getState().entries);
+      await h.act(async () => {
+        void approvals.approveAction(key);
+        await new Promise(setImmediate);
+      });
+      if (unmounted) await h.unmount();
+      if (unmounted) await sending;
+      const writes = h.db.writes.length;
+      const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
+      await h.act(async () => {
+        if (unmounted) auth.observeAuthTokenStateEvent({ generation: 2, hasToken: true });
+        else h.db.emitScope({ accountId: "account-b", authGeneration: 2 });
+      });
+      assert.equal(turnSignal.aborted, true);
+      await h.act(async () => {
+        await sending;
+        finishCommit();
+        await new Promise(setImmediate);
+      });
+      assert.equal(h.db.writes.length, writes);
+      if (!unmounted) assert.equal(h.current().conversationId, null);
+    });
+});
+
+test("sync defers both the user-only preparation gap and a held real lookup until its reply is saved", async (t) => {
+  let resumePreparation, resumeLookup, preparationStarted, lookupStarted;
+  t.after(() => {
+    resumePreparation?.();
+    resumeLookup?.();
+  });
+  const h = await mountPersistence(t, { streaming: true });
+  const preparing = new Promise((resolve) => {
+    preparationStarted = resolve;
+  });
+  const looking = new Promise((resolve) => {
+    lookupStarted = resolve;
+  });
+  const preparationGate = new Promise((resolve) => {
+    resumePreparation = resolve;
+  });
+  const lookupGate = new Promise((resolve) => {
+    resumeLookup = resolve;
+  });
+  h.db.api.getSpaces = async () => [];
+  h.db.api.semanticSearchNotes = async (query) => {
+    if (query === "Look up the project") {
+      preparationStarted();
+      await preparationGate;
+    } else {
+      lookupStarted();
+      await lookupGate;
+    }
+    return [];
+  };
+  h.service.processTextStreamingAI = async function* (_m, _model, _p, _config, tools) {
+    yield {
+      type: "tool_calls",
+      calls: [{ id: "lookup", name: "search_notes", arguments: '{"query":"needle"}' }],
+    };
+    await tools.search_notes.execute({ query: "needle" }, { toolCallId: "lookup", messages: [] });
+    yield { type: "reasoning", text: "Private connector fact" };
+    yield { type: "content", text: "No matching notes" };
+    yield { type: "done", finishReason: "stop" };
+  };
+  const { SyncService } = await h.vite.ssrLoadModule("/services/SyncService.ts");
+  const { ConversationsService } = await h.vite.ssrLoadModule("/services/ConversationsService.ts");
+  const uploads = [];
+  ConversationsService.create = async (input) => {
+    uploads.push(input);
+    return { id: `cloud-${uploads.length}` };
+  };
+  h.db.api.acknowledgeConversationCreate = async () => ({ success: true, outcome: "synced" });
+  const sync = new SyncService();
+  let sending;
+  await h.act(async () => {
+    sending = h.send("Look up the project");
+    await preparing;
+  });
+  const id = h.current().conversationId;
+  assert.equal(h.db.rows.length, 1, "only the user is saved before preparation finishes");
+  await sync.pushConversation(id);
+  assert.equal(uploads.length, 0, "main's live claim covers the gap before the checkpoint");
+  await h.act(async () => {
+    resumePreparation();
+    await looking;
+  });
+  assert.equal(JSON.parse(h.db.rows[1].metadata).turn.status, "running");
+  await sync.pushConversation(id);
+  assert.equal(uploads.length, 0, "the held real search tool still owns its conversation");
+  await h.act(async () => {
+    resumeLookup();
+    await sending;
+  });
+  await sync.pushConversation(id);
+  assert.deepEqual(
+    uploads[0].messages.map((message) => message.content),
+    ["Look up the project", "No matching notes"]
+  );
+  assert.equal(uploads[0].messages[1].metadata.turn.reasoning, undefined);
+  assert.equal(JSON.parse(h.db.rows[1].metadata).turn.reasoning, "Private connector fact");
+});
+
+test("Stop during the initial checkpoint settles the saved running row before releasing ownership", async (t) => {
+  let finishSave;
+  t.after(() => finishSave?.());
+  const h = await mountPersistence(t, { streaming: true });
+  const add = h.db.api.addAgentMessage;
+  let started;
+  const saving = new Promise((resolve) => {
+    started = resolve;
+  });
+  h.db.api.addAgentMessage = async (...args) => {
+    const row = await add(...args);
+    if (args[1] !== "assistant") return row;
+    started();
+    return new Promise((resolve) => {
+      finishSave = () => resolve(row);
+    });
+  };
+  let modelStarted = false;
+  h.service.processTextStreamingAI = async function* () {
+    modelStarted = true;
+    yield { type: "done", finishReason: "stop" };
+  };
+  let sending;
+  await h.act(async () => {
+    sending = h.send("Look up a note");
+    await saving;
+  });
+  const id = h.current().conversationId;
+  await h.act(async () => {
+    h.stream().cancelStream();
+    finishSave();
+    await sending;
+  });
+  assert.equal(modelStarted, false);
+  assert.equal(JSON.parse(h.db.rows[1].metadata).turn.status, "stopped");
+  assert.equal((await h.db.api.getAgentConversation(id)).has_active_turn, false);
 });

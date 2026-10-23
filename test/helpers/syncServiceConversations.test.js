@@ -417,3 +417,38 @@ test("chats from an API without fork fields arrive plain, and a local fork keeps
   assert.equal(pulled.fork_context, "Here is a draft.");
   assert.equal(db.getConversationByClientId("plain-elsewhere").parent_conversation_id, null);
 });
+
+test("both conversation upload paths omit reasoning while retaining local turn and selected context metadata", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  for (const method of ["pushConversation", "pushPendingConversations"]) {
+    const conversation = db.createAgentConversation(method);
+    const selected = { selectedContext: "Selected text", selectedContextSource: "external" };
+    db.addAgentMessage(conversation.id, "user", "Explain this", selected);
+    const metadata = {
+      turn: {
+        status: "complete",
+        startedAt: 1,
+        finishedAt: 2,
+        reasoning: "Private connector fact",
+      },
+      toolCalls: [{ id: "lookup", name: "find_contact", status: "completed" }],
+    };
+    const reply = db.addAgentMessage(conversation.id, "assistant", "Public answer", metadata);
+    await service[method](conversation.id);
+    const uploaded = cloud.logFor("/api/conversations/create").at(-1).body;
+    assert.deepEqual(uploaded.messages[0].metadata, selected);
+    assert.deepEqual(uploaded.messages[1].metadata, {
+      ...metadata,
+      turn: { status: "complete", startedAt: 1, finishedAt: 2 },
+    });
+    assert.deepEqual(
+      JSON.parse(
+        db.getAgentConversation(conversation.id).messages.find((row) => row.id === reply.id)
+          .metadata
+      ),
+      metadata
+    );
+  }
+});

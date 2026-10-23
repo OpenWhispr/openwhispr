@@ -3,6 +3,7 @@ import type { AssistantTurn, AssistantTurnStatus, Message, ToolCallInfo } from "
 import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
 import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
+import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -77,6 +78,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   // completed in place rather than added twice.
   const savedRowsRef = useRef(new Map<string, Promise<number | null>>());
   const sessionVersionRef = useRef(0);
+  const accountVersionRef = useRef(0);
   const ownerIdRef = useRef(crypto.randomUUID());
   const ownedConversationRef = useRef<number | null>(null);
   const blockedConversationRef = useRef<number | null>(null);
@@ -240,7 +242,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     ) => {
       const conversationId = conversationIdRef.current;
       if (!conversationId) return;
-      // Not awaited: the reply starts while the message is written.
+      const accountVersion = accountVersionRef.current;
+      const authGeneration = getAuthRequestContextSnapshot().observedGeneration;
       void window.electronAPI
         ?.addAgentMessage?.(
           conversationId,
@@ -251,7 +254,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
             : undefined
         )
         .then((row) => {
-          if (row && messageId) setDbId(messageId, row.id);
+          if (
+            accountVersion === accountVersionRef.current &&
+            authGeneration === getAuthRequestContextSnapshot().observedGeneration &&
+            row &&
+            messageId
+          )
+            setDbId(messageId, row.id);
         });
     },
     [setDbId]
@@ -266,6 +275,11 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     ) => {
       const conversationId = details.conversationId ?? conversationIdRef.current;
       if (!conversationId) return;
+      const accountVersion = accountVersionRef.current;
+      const authGeneration = getAuthRequestContextSnapshot().observedGeneration;
+      const accountCurrent = () =>
+        accountVersion === accountVersionRef.current &&
+        authGeneration === getAuthRequestContextSnapshot().observedGeneration;
       const metadata =
         toolCalls?.length || details.turn
           ? {
@@ -277,6 +291,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         savedRowsRef.current.get(messageId) ??
         Promise.resolve(messagesRef.current.find((m) => m.id === messageId)?.dbId ?? null);
       const saving = savedRow.then(async (rowId) => {
+        if (!accountCurrent()) return null;
         // A cloud pull can replace the rows, and the old id with them; the reply is then added again.
         if (
           rowId != null &&
@@ -284,6 +299,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         ) {
           return rowId;
         }
+        if (!accountCurrent()) return null;
         const row = await window.electronAPI?.addAgentMessage?.(
           conversationId,
           "assistant",
@@ -297,7 +313,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         saving.catch(() => null)
       );
       const rowId = await saving;
-      if (rowId != null) setDbId(messageId, rowId);
+      if (accountCurrent() && rowId != null) setDbId(messageId, rowId);
     },
     [setDbId]
   );
@@ -331,6 +347,16 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     conversationIdRef.current = null;
     setConversationId(null);
   }, [releaseConversation]);
+
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        accountVersionRef.current += 1;
+        handleNewChat();
+        savedRowsRef.current.clear();
+      }),
+    [handleNewChat]
+  );
 
   return {
     messages,

@@ -1,3 +1,5 @@
+import type { ActiveAccountScope } from "../types/electron";
+
 const AUTH_REQUEST_GENERATION = "openWhisprAuthGeneration";
 
 export interface AuthTokenState {
@@ -92,6 +94,37 @@ export function observeAuthTokenStateEvent(state: AuthTokenStateEvent): void {
 export function subscribeAuthRequestContext(onChange: () => void): () => void {
   subscribers.add(onChange);
   return () => subscribers.delete(onChange);
+}
+
+/** Ends account-bound work on a credential or main-process account change. */
+export function subscribeAuthBoundary(onChange: () => void): () => void {
+  let generation = snapshot.observedGeneration;
+  let accountScope: ActiveAccountScope | null | undefined;
+  let active = true;
+  let broadcastReceived = false;
+  const unsubscribeAuth = subscribeAuthRequestContext(() => {
+    if (generation === snapshot.observedGeneration) return;
+    generation = snapshot.observedGeneration;
+    onChange();
+  });
+  const unsubscribeScope = window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
+    broadcastReceived = true;
+    if (
+      accountScope?.accountId !== scope?.accountId ||
+      accountScope?.authGeneration !== scope?.authGeneration
+    ) {
+      accountScope = scope;
+      onChange();
+    }
+  });
+  void window.electronAPI?.getActiveAccountScope?.().then((scope) => {
+    if (active && !broadcastReceived) accountScope = scope;
+  });
+  return () => {
+    active = false;
+    unsubscribeAuth();
+    unsubscribeScope?.();
+  };
 }
 
 export function getAuthRequestContextSnapshot(): RendererAuthContextSnapshot {

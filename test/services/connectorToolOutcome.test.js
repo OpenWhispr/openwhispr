@@ -532,18 +532,11 @@ test("a send prepared again needs fresh consent and remains one send for the req
   const { runApprovalAction } = await loadRun();
   const { approvalKey, approveAction, useConnectorApprovalStore } = await loadStore();
   useConnectorApprovalStore.setState({ entries: {} });
-  const ledger = { claimed: 0, released: 0, recorded: 0 };
-  const context = {
-    messageId: "m8",
-    toolCallId: "call-1",
-    signal: new AbortController().signal,
-    claimTurnSlot: () => true,
-    releaseTurnSlot() {},
-    claimAction: () => (ledger.claimed += 1) === 1,
-    releaseAction: () => (ledger.released += 1),
-    sentEarlier: () => false,
-    recordCompletedAction: () => (ledger.recorded += 1),
-  };
+  const { createToolExecutionScope } =
+    await import("../../src/components/chat/toolExecutionScope.ts");
+  const recorded = [];
+  const scope = createToolExecutionScope({ onActionCompleted: (action) => recorded.push(action) });
+  const context = scope.createContext({ messageId: "m8", toolCallId: "call-1" });
 
   const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
   await new Promise((resolve) => setImmediate(resolve));
@@ -556,7 +549,12 @@ test("a send prepared again needs fresh consent and remains one send for the req
 
   assert.equal(result.data.status, "sent");
   assert.deepEqual(prepared, [0, 1], "prepared again after main lost the first action");
-  assert.deepEqual(ledger, { claimed: 1, released: 0, recorded: 1 });
+  assert.equal(recorded.length, 1);
+  assert.equal(
+    context.claimAction(recorded[0].actionKey),
+    false,
+    "the actual send remains claimed"
+  );
 });
 
 test("a send prepared again that needs the user to say where asks the model that", async (t) => {
@@ -586,18 +584,12 @@ test("a send prepared again that needs the user to say where asks the model that
   const { approvalKey, approveAction, cancelApproval, useConnectorApprovalStore } =
     await loadStore();
   useConnectorApprovalStore.setState({ entries: {} });
-  const ledger = { released: 0, recorded: 0 };
-  const context = {
-    messageId: "m9",
-    toolCallId: "call-1",
-    signal: new AbortController().signal,
-    claimTurnSlot: () => true,
-    releaseTurnSlot() {},
-    claimAction: () => true,
-    releaseAction: () => (ledger.released += 1),
-    sentEarlier: () => false,
-    recordCompletedAction: () => (ledger.recorded += 1),
-  };
+  const { createToolExecutionScope } =
+    await import("../../src/components/chat/toolExecutionScope.ts");
+  const { connectorActionKey } = await import("../../src/services/tools/connectors/actionKey.ts");
+  const recorded = [];
+  const scope = createToolExecutionScope({ onActionCompleted: (action) => recorded.push(action) });
+  const context = scope.createContext({ messageId: "m9", toolCallId: "call-1" });
 
   const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
   await new Promise((resolve) => setImmediate(resolve));
@@ -614,7 +606,11 @@ test("a send prepared again that needs the user to say where asks the model that
     message: "#eng is archived.",
     candidates: ["#eng-2"],
   });
-  assert.deepEqual(ledger, { released: 1, recorded: 0 }, "nothing went out");
+  assert.equal(recorded.length, 0, "nothing went out");
+  assert.equal(
+    context.claimAction(connectorActionKey("slack", "send_message", { text: "hi" })),
+    true
+  );
 });
 
 test("a cancelled or withdrawn card still tells the model what the user wrote", async () => {

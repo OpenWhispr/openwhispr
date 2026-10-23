@@ -279,6 +279,10 @@ test("conversation recovery has one owner and releases on renderer loss or navig
   const release = handlers.get("release-agent-conversation");
   assert.equal(typeof claim, "function");
   assert.equal((await claim(frameOf(first), 501, "first")).owned, true);
+  assert.equal(
+    (await handlers.get("db-get-agent-conversation")(frameOf(peer), 501)).has_active_turn,
+    true
+  );
   assert.equal((await claim(frameOf(peer), 501, "peer")).owned, false);
   await release(frameOf(peer), 501, "first");
   assert.equal(
@@ -303,4 +307,8 @@ test("conversation recovery has one owner and releases on renderer loss or navig
   first.emit("destroyed");
   assert.equal((await claim(frameOf(peer), 501, "after-close")).owned, true);
   await release(frameOf(peer), 501, "after-close");
+  assert.equal(
+    (await handlers.get("db-get-agent-conversation")(frameOf(peer), 501)).has_active_turn,
+    false
+  );
 });

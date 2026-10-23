@@ -1,15 +1,19 @@
 import i18n from "../../../i18n";
 import type { ToolExecutionContext, ToolResult } from "../ToolRegistry";
 import type { ConnectorPrepareResult } from "../../../types/connectors";
-import { requestApproval } from "../../../stores/connectorApprovalStore";
 import {
-  alreadySentResult,
+  approvalKey,
+  requestApproval,
+  useConnectorApprovalStore,
+} from "../../../stores/connectorApprovalStore";
+import {
+  duplicateActionResult,
   approvalOutcomeResult,
   notSentResult,
   prepareFailureResult,
   unavailableResult,
 } from "./toolOutcome";
-import { connectorActionKey } from "./actionKey";
+import { approvalActionKey, connectorActionKey } from "./actionKey";
 
 /**
  * Cards one turn can raise, across every connector. "File these eight action
@@ -38,7 +42,7 @@ export async function runApprovalAction(
   // A step can make the same call twice, and a resumed tool can repeat a send
   // this request already made; either is refused before any card appears.
   const actionKey = connectorActionKey(connectorId, action, args);
-  if (!context.claimAction(actionKey)) return alreadySentResult();
+  if (!context.claimAction(actionKey)) return duplicateActionResult();
   // Claimed before the first await, so calls running in parallel can't overshoot.
   if (!context.claimTurnSlot(CARD_SLOT, MAX_APPROVAL_CARDS_PER_TURN)) {
     context.releaseAction(actionKey);
@@ -54,7 +58,12 @@ export async function runApprovalAction(
     const result = await window.electronAPI
       ?.connectorPrepare?.(connectorId, action, args)
       .catch(() => undefined);
-    if (result?.status !== "ready" || !context.sentEarlier(actionKey)) return result;
+    if (
+      result?.status !== "ready" ||
+      (!context.sentEarlier(actionKey) &&
+        !context.sentEarlier(approvalActionKey(connectorId, action, args, result.preview)))
+    )
+      return result;
     const { preview } = result;
     const notes = [...(preview.notes ?? []), { key: "connectors.approval.sentEarlier" }];
     return { ...result, preview: { ...preview, notes } };
@@ -71,6 +80,13 @@ export async function runApprovalAction(
     context.releaseAction(actionKey);
     return prepareFailureResult(prepared, connectorId);
   }
+  const preparedKey = approvalActionKey(connectorId, action, args, prepared.preview);
+  if (preparedKey !== actionKey && !context.claimAction(preparedKey)) {
+    void window.electronAPI?.connectorCancel?.(prepared.actionId, "cancelled_by_user");
+    context.releaseAction(actionKey);
+    context.releaseTurnSlot(CARD_SLOT);
+    return duplicateActionResult();
+  }
 
   // Retry and a reconnect prepare the same action again while the tool
   // still waits, so it stays this one send.
@@ -79,10 +95,29 @@ export async function runApprovalAction(
     { actionId: prepared.actionId, connectorId, preview: prepared.preview },
     prepare
   );
+  context.releaseAction(actionKey);
+  if (preparedKey !== actionKey) context.releaseAction(preparedKey);
   if (outcome.state === "sent" || outcome.state === "unknown") {
-    context.recordCompletedAction(actionKey);
-  } else {
-    context.releaseAction(actionKey);
+    const card =
+      useConnectorApprovalStore.getState().entries[
+        approvalKey(context.messageId, context.toolCallId)
+      ];
+    const completedKey = approvalActionKey(
+      connectorId,
+      action,
+      args,
+      card?.preview ?? prepared.preview,
+      card?.draft.fields ?? (card ? { title: card.draft.title, body: card.draft.body } : undefined)
+    );
+    context.recordCompletedAction(completedKey, {
+      status: outcome.state,
+      ...(outcome.state === "sent"
+        ? {
+            ...(outcome.url ? { url: outcome.url } : {}),
+            ...(outcome.resultLabel ? { reference: outcome.resultLabel } : {}),
+          }
+        : {}),
+    });
   }
   if (outcome.state === "not_sent" && outcome.clarification) {
     // With what the user wrote on the card, so asking where keeps it.

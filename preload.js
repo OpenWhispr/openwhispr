@@ -1147,7 +1147,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("release-agent-conversation", id, ownerId),
   onAgentConversationReleased: registerListener(
     "agent-conversation-released",
-    (_event, payload) => payload
+    (callback) => (_event, payload) => callback(payload)
   ),
   createAgentConversation: (title, noteId, spaceId, folderId) =>
     ipcRenderer.invoke("db-create-agent-conversation", title, noteId, spaceId, folderId),

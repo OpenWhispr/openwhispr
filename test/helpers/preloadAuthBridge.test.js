@@ -3,19 +3,25 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
+const { EventEmitter } = require("node:events");
 
 function loadPreloadApi() {
   let exposedApi;
   const listeners = new Map();
   const invocations = [];
   const sends = [];
+  const events = new EventEmitter();
   const ipcRenderer = {
     invoke: async (...args) => {
       invocations.push(args);
       return undefined;
     },
-    on: (channel, listener) => listeners.set(channel, listener),
+    on: (channel, listener) => {
+      events.on(channel, listener);
+      listeners.set(channel, listener);
+    },
     removeListener: (channel, listener) => {
+      events.removeListener(channel, listener);
       if (listeners.get(channel) === listener) listeners.delete(channel);
     },
     send: (...args) => sends.push(args),
@@ -40,6 +46,17 @@ function loadPreloadApi() {
   });
   return { api: exposedApi, invocations, listeners, sends };
 }
+
+test("conversation release subscribes with a real listener and forwards only its payload", () => {
+  const { api, listeners } = loadPreloadApi();
+  let received;
+  const unsubscribe = api.onAgentConversationReleased((payload) => (received = payload));
+  const payload = { conversationId: 42 };
+  listeners.get("agent-conversation-released")({ sender: {} }, payload);
+  assert.equal(received, payload);
+  unsubscribe();
+  assert.equal(listeners.has("agent-conversation-released"), false);
+});
 
 test("auth token-state listener strips the Electron event object", () => {
   const { api, listeners } = loadPreloadApi();

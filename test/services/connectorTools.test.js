@@ -655,7 +655,7 @@ test("the same draft asked for twice in one step opens once", async (t) => {
   assert.equal(opened, 1);
   assert.deepEqual(
     results.map((result) => result.data.status),
-    ["not_sent", "already_sent"]
+    ["not_sent", "not_sent"]
   );
   // That one never opened, so asking again opens it.
   assert.equal((await draft("3")).data.status, "not_sent");
@@ -2218,4 +2218,158 @@ test("an email body loses its Markdown before the Gmail card is prepared", async
     gmailContext("m-md", "call-md")
   );
   assert.equal(prepared[0].body, PLAIN_BODY);
+});
+
+test("a duplicate pending approval never claims a send when the original is declined", async (t) => {
+  let sends = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async () => ({
+          status: "ready",
+          actionId: "duplicate-pending",
+          preview: {
+            verbKey: "post",
+            destinationLabel: "#eng",
+            accountLabel: "Tester",
+            body: "hi",
+          },
+        }),
+        connectorCommit: async () => {
+          sends++;
+          return { state: "sent" };
+        },
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { runApprovalAction } =
+    await import("../../src/services/tools/connectors/runApprovalAction.ts");
+  const { createToolExecutionScope } = await loadScope();
+  const approvals = await loadApprovals();
+  const scope = createToolExecutionScope();
+  const args = { destination: "#eng", text: "hi" };
+  const first = runApprovalAction(
+    scope.createContext({ messageId: "pending", toolCallId: "first" }),
+    "slack",
+    "send_message",
+    args
+  );
+  await until(() => approvals.useConnectorApprovalStore.getState().entries["pending::first"]);
+  const duplicate = await runApprovalAction(
+    scope.createContext({ messageId: "pending", toolCallId: "second" }),
+    "slack",
+    "send_message",
+    args
+  );
+  approvals.cancelApproval("pending::first");
+  assert.equal((await first).data.status, "cancelled_by_user");
+  assert.equal(duplicate.data.status, "not_sent");
+  assert.equal(duplicate.data.reason, "duplicate_action");
+  assert.equal(sends, 0);
+});
+
+test("approved edits replace the claimed destination and content for every approval connector", async (t) => {
+  let next = 0;
+  const commits = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (connector, action, args) => ({
+          status: "ready",
+          actionId: `edited-${++next}`,
+          preview: {
+            verbKey: connector === "gmail" ? "email" : connector === "slack" ? "post" : "issue",
+            destinationLabel:
+              connector === "gmail" ? args.to[0] : connector === "slack" ? "#eng" : "ENG",
+            accountLabel: "Tester",
+            body: args.body ?? args.text ?? args.description,
+            ...(connector === "gmail"
+              ? { fields: { to: args.to, cc: [], subject: "Hi", body: args.body } }
+              : connector === "slack"
+                ? {}
+                : { fields: { title: args.title, body: args.body ?? args.description } }),
+          },
+        }),
+        connectorCommit: async (_id, edits) => {
+          commits.push(edits);
+          return { state: "sent" };
+        },
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { useConnectorStatusStore } = await import("../../src/stores/connectorStatusStore.ts");
+  useConnectorStatusStore.setState({ loaded: false });
+  const { runApprovalAction } =
+    await import("../../src/services/tools/connectors/runApprovalAction.ts");
+  const { createToolExecutionScope } = await loadScope();
+  const approvals = await loadApprovals();
+  const cases = [
+    [
+      "gmail",
+      "send",
+      { to: ["alice@example.com"], cc: [], subject: "Hi", body: "original" },
+      { fields: { to: ["Bob <bob@example.com>"] } },
+      { to: ["bob@example.com"], cc: [], subject: "Hi", body: "original" },
+    ],
+    [
+      "slack",
+      "send_message",
+      { destination: "eng", text: "original" },
+      { body: "edited" },
+      { destination: "#eng", text: "edited" },
+    ],
+    [
+      "github",
+      "create_issue",
+      { repo: "ENG", title: "Original", body: "original" },
+      { fields: { title: "Edited", body: "edited" } },
+      { repo: "ENG", title: "Edited", body: "edited" },
+    ],
+    [
+      "linear",
+      "create_issue",
+      { team: "ENG", title: "Original", description: "original" },
+      { fields: { title: "Edited", body: "edited" } },
+      { team: "ENG", title: "Edited", description: "edited" },
+    ],
+  ];
+  for (const [connector, action, original, edits, approved] of cases) {
+    const scope = createToolExecutionScope();
+    const call = (id, args) =>
+      runApprovalAction(
+        scope.createContext({ messageId: connector, toolCallId: id }),
+        connector,
+        action,
+        args
+      );
+    const sending = call("edited", original);
+    await until(
+      () => approvals.useConnectorApprovalStore.getState().entries[`${connector}::edited`]
+    );
+    approvals.updateApprovalDraft(`${connector}::edited`, edits);
+    await approvals.approveAction(`${connector}::edited`);
+    assert.equal((await sending).data.status, "sent");
+    const repeating = call("repeat-approved", approved);
+    await new Promise(setImmediate);
+    approvals.cancelApproval(`${connector}::repeat-approved`);
+    const repeated = await repeating;
+    assert.equal(
+      repeated.data.reason,
+      "duplicate_action",
+      `${connector}: approved action stays claimed`
+    );
+    const unsent = call("original-again", original);
+    await until(
+      () => approvals.useConnectorApprovalStore.getState().entries[`${connector}::original-again`]
+    );
+    approvals.cancelApproval(`${connector}::original-again`);
+    assert.equal(
+      (await unsent).data.status,
+      "cancelled_by_user",
+      `${connector}: original unsent action can be prepared`
+    );
+  }
+  assert.equal(commits.length, 4);
 });

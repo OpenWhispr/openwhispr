@@ -9,6 +9,12 @@ export interface ToolResult {
   displayText: string;
 }
 
+export interface CompletedActionOutcome {
+  status: "sent" | "unknown" | "draft_opened";
+  url?: string;
+  reference?: string;
+}
+
 /**
  * Per-call context from the chat turn that invoked the tool. Absent when a
  * tool runs outside a chat turn (tests, direct calls).
@@ -39,7 +45,7 @@ export interface ToolExecutionContext {
   /** Gives back a claim whose send didn't happen, so the same call may try again. */
   releaseAction: (actionKey: string) => void;
   /** Records a claimed send that happened or may have, on its tool call. */
-  recordCompletedAction: (actionKey: string) => void;
+  recordCompletedAction: (actionKey: string, outcome?: CompletedActionOutcome) => void;
   /** Whether an earlier request in this conversation made this send (the user may want it again). */
   sentEarlier: (actionKey: string) => boolean;
 }

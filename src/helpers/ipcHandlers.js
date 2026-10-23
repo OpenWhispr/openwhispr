@@ -2701,7 +2701,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-get-agent-conversation", async (event, id) => {
-      return this.databaseManager.getAgentConversation(id);
+      const conversation = this.databaseManager.getAgentConversation(id);
+      return conversation
+        ? {
+            ...conversation,
+            has_active_turn: conversationOwners.get(id)?.scope === conversationScope(),
+          }
+        : null;
     });
 
     ipcMain.handle("db-delete-agent-conversation", async (event, id) => {

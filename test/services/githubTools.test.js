@@ -417,6 +417,45 @@ test("github_create_issue takes a single label given as a string", async (t) => 
   );
 });
 
+test("an unedited issue stays claimed when main resolves its omitted repository", async (t) => {
+  let sends = 0;
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async (_connector, _action, args) => ({
+          status: "ready",
+          actionId: "resolved-issue",
+          preview: { ...ISSUE_PREVIEW, fields: { title: args.title, body: args.body } },
+        }),
+        connectorCommit: async () => {
+          sends += 1;
+          return { state: "sent" };
+        },
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  await setGithubStatus(t);
+  const [{ githubCreateIssueTool }, approvals] = await Promise.all([loadTools(), resetApprovals()]);
+  const { context } = await turn();
+  const args = { title: "Bug", body: "Steps to reproduce" };
+  const pending = githubCreateIssueTool.execute(args, context());
+  await approvals.approveAction(await cardFor(approvals, "call-1"));
+  assert.equal((await pending).data.status, "sent");
+
+  for (const [index, repeatedArgs] of [args, { ...args, repo: "acme/api" }].entries()) {
+    const repeated = githubCreateIssueTool.execute(repeatedArgs, context());
+    await new Promise(setImmediate);
+    const key = approvals.approvalKey("m1", `call-${index + 2}`);
+    const card = approvals.useConnectorApprovalStore.getState().entries[key];
+    // Settle an unexpected card before asserting, so a regression cannot hang the run.
+    if (card) approvals.cancelApproval(key);
+    assert.equal((await repeated).data.reason, "duplicate_action");
+    assert.equal(card, undefined);
+  }
+  assert.equal(sends, 1);
+});
+
 test("a description or label that isn't text is refused, never dropped", async (t) => {
   let prepared = 0;
   installBrowserGlobals(t, {
@@ -847,9 +886,13 @@ test("a sixth card in one turn is refused by the shared card cap", async (t) => 
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
-        connectorPrepare: async () => {
+        connectorPrepare: async (_connector, _action, args) => {
           prepared += 1;
-          return { status: "ready", actionId: `a${prepared}`, preview: ISSUE_PREVIEW };
+          return {
+            status: "ready",
+            actionId: `a${prepared}`,
+            preview: { ...ISSUE_PREVIEW, fields: { title: args.title, body: args.body } },
+          };
         },
         connectorCancel: async () => ({ cancelled: true }),
       },

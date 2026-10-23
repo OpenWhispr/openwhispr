@@ -63,7 +63,9 @@ export function useChatMessageSender({
         let claimedId: number | null = null;
         let streamStarted = false;
         try {
-          const convId = conversationId ?? (await createConversation(text));
+          const convId =
+            (conversationId === persistence.conversationId ? conversationId : null) ??
+            (await createConversation(text));
           if (!isCurrent()) return;
           if (persistence.claimConversation && !(await persistence.claimConversation(convId)))
             return;

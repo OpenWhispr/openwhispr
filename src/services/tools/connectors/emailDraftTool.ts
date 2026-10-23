@@ -14,7 +14,7 @@ import { connectorErrorText } from "../../../utils/connectorErrorCopy";
 import { connectFirst } from "../interactionTools";
 import { runApprovalAction } from "./runApprovalAction";
 import {
-  alreadySentResult,
+  duplicateActionResult,
   failedResult,
   needsClarificationResult,
   notSentResult,
@@ -274,7 +274,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         subject: draft.subject,
         body: draft.body,
       });
-      if (context && !context.claimAction(actionKey)) return alreadySentResult();
+      if (context && !context.claimAction(actionKey)) return duplicateActionResult();
       if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
         context.releaseAction(actionKey);
         return notSentResult(
@@ -318,7 +318,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       // An unknown run may have opened a window and used the clipboard, so
       // it keeps its slots.
       if (result.state === "unknown") {
-        context?.recordCompletedAction(actionKey);
+        context?.recordCompletedAction(actionKey, { status: "unknown" });
         return unknownResult(
           to.join(", "),
           `The draft to ${destination} may or may not have opened. Ask the user to check for a draft window.`,
@@ -327,7 +327,8 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       }
       if (result.state !== "sent") releaseSlots();
       else if (result.copyFailed) context?.releaseTurnSlot("clipboard");
-      if (result.state === "sent") context?.recordCompletedAction(actionKey);
+      if (result.state === "sent")
+        context?.recordCompletedAction(actionKey, { status: "draft_opened" });
       if (result.state === "not_sent") return notSentResult(result.reason);
       if (result.state === "unavailable") return unavailableResult(result.reason);
       if (result.state === "failed") return failedResult(result.errorCode, result.message);

@@ -1,3 +1,6 @@
+import { bareEmailAddress } from "../../../helpers/connectors/emailCompose";
+import type { ConnectorEdits, ConnectorPreview } from "../../../types/connectors";
+
 // Whitespace, letter case and recipient order don't make a send a new one.
 function normalize(value: unknown): unknown {
   if (typeof value === "string") return value.replace(/\s+/g, " ").trim().toLowerCase();
@@ -28,8 +31,8 @@ function hash53(text: string): string {
 }
 
 /**
- * One key per send: the connector, the action, where it goes and what it
- * says. A conversation never repeats a send whose key it already recorded.
+ * The connector, action, destination and content, for this turn's duplicate
+ * guard and an earlier request's "sent before" note.
  */
 export function connectorActionKey(
   connectorId: string,
@@ -37,4 +40,36 @@ export function connectorActionKey(
   args: Record<string, unknown>
 ): string {
   return `${connectorId}.${action}:${hash53(JSON.stringify(normalize(args)))}`;
+}
+
+/** The resolved destination and the fields actually shown for Send. */
+export function approvalActionKey(
+  connectorId: string,
+  action: string,
+  args: Record<string, unknown>,
+  preview: Pick<ConnectorPreview, "destinationLabel" | "fields" | "title" | "body">,
+  fields: ConnectorEdits = preview.fields ?? {
+    ...(preview.title !== undefined ? { title: preview.title } : {}),
+    body: preview.body,
+  }
+): string {
+  const approved: Record<string, unknown> = { ...args, ...fields };
+  if (connectorId === "gmail") {
+    for (const field of ["to", "cc"]) {
+      if (Array.isArray(approved[field])) approved[field] = approved[field].map(bareEmailAddress);
+    }
+  } else if (connectorId === "slack") {
+    approved.destination = preview.destinationLabel;
+    approved.text = fields.body;
+    delete approved.body;
+  } else if (connectorId === "github") {
+    approved[action === "comment" ? "target" : "repo"] = preview.destinationLabel;
+  } else if (connectorId === "linear") {
+    approved[action === "comment" ? "issue" : "team"] = preview.destinationLabel;
+    if (action === "create_issue") {
+      approved.description = fields.body;
+      delete approved.body;
+    }
+  }
+  return connectorActionKey(connectorId, action, approved);
 }
