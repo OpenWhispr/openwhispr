@@ -177,6 +177,8 @@ const getMeetingTranscriptionOptions = () => {
     cortiEnvironment: state.cortiEnvironment,
     cortiTenant: state.cortiTenant,
     keyterms: (state.customDictionary ?? []).filter(Boolean),
+    realtimeUrl: state.meetingRealtimeUrl,
+    realtimeModel: state.meetingRealtimeModel,
   });
 };
 

@@ -80,6 +80,14 @@ const BYOK_API_KEYS = [
     save: "saveAssemblyAIKey",
     storeKey: "assemblyaiApiKey",
   },
+  // Optional key for a self-hosted OpenAI Realtime server (Note Recording only).
+  {
+    base: "openai-compatible-realtime",
+    env: "OPENAI_COMPATIBLE_REALTIME_API_KEY",
+    get: "getOpenAICompatibleRealtimeKey",
+    save: "saveOpenAICompatibleRealtimeKey",
+    storeKey: "openaiCompatibleRealtimeApiKey",
+  },
   // Per-scope Custom-endpoint keys. Dictation cleanup's counterpart predates
   // this manifest and keeps its bespoke accessors (CUSTOM_CLEANUP_API_KEY).
   {

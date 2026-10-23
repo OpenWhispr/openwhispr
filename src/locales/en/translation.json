@@ -183,7 +183,6 @@
     "managedByOrg": "Managed by your organization",
     "signInRequired": "Sign in Required",
     "signIn": "Sign in",
-    "comingSoon": "Coming Soon",
     "cloud": "Cloud",
     "local": "Local",
     "apiKey": "API Key",
@@ -2679,7 +2678,14 @@
         }
       },
       "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
-      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above.",
+      "selfHostedRealtime": {
+        "urlLabel": "Realtime WebSocket URL",
+        "urlInvalid": "Use wss://, or ws:// for a server on your local network.",
+        "modelRequired": "Required: the model your server should load, such as Whisper-Large-v3-Turbo.",
+        "apiKeyLabel": "API key (optional)",
+        "help": "Your server must speak the OpenAI Realtime transcription protocol over WebSocket. There is no HTTP fallback."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3560,7 +3566,9 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
+      "selfHostedRealtimeUrlMissing": "Note Recording's Self-Hosted mode needs a realtime WebSocket URL. Open Settings and enter your server's URL, or choose another mode.",
+      "selfHostedRealtimeUrlInvalid": "Note Recording's self-hosted URL must start with wss://, or ws:// for a server on your local network. Open Settings and correct the URL.",
+      "selfHostedRealtimeModelMissing": "Note Recording's Self-Hosted mode needs a model name. Open Settings and enter the model your server should use.",
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "signInRequired": "Note Recording requires you to be signed in. Please sign in.",

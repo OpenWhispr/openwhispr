@@ -10,7 +10,9 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 // MeetingRecordingMount looks up. A healed legacy profile can reach any of them,
 // so an untranslated one would show a bare sentinel in the failure toast.
 const SENTINEL_KEYS = {
-  unsupportedSelfHosted: "unsupportedSelfHosted",
+  selfHostedRealtimeUrlMissing: "selfHostedRealtimeUrlMissing",
+  selfHostedRealtimeUrlInvalid: "selfHostedRealtimeUrlInvalid",
+  selfHostedRealtimeModelMissing: "selfHostedRealtimeModelMissing",
   unsupportedProvider: "unsupportedProvider",
   noProviderSelected: "noProviderSelected",
 };
@@ -95,14 +97,137 @@ test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable"
 test("self-hosted mode never follows a stale Tinfoil provider", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
+  // No realtime URL: the stale BYOK selection must not be used instead.
   assert.throws(
     () =>
       resolveMeetingTranscriptionOptions({
         ...baseOptions,
         transcriptionMode: "self-hosted",
       }),
-    { message: "unsupportedSelfHosted" }
+    { message: "selfHostedRealtimeUrlMissing" }
   );
+
+  // With one but no model of its own, the Tinfoil model is not carried over.
+  assert.throws(
+    () =>
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "self-hosted",
+        realtimeUrl: "ws://192.168.1.20:9000/v1/realtime",
+      }),
+    { message: "selfHostedRealtimeModelMissing" }
+  );
+});
+
+test("self-hosted mode requires a model, from the field or the URL query", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+  const selfHosted = { ...baseOptions, transcriptionMode: "self-hosted" };
+  const url = "ws://192.168.1.20:9000/v1/realtime";
+
+  // A blank model must never reach the client, which would otherwise send the
+  // OpenAI default model id to the user's server.
+  for (const realtimeModel of [undefined, null, "", "   ", 42]) {
+    assert.throws(
+      () => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: url, realtimeModel }),
+      { message: "selfHostedRealtimeModelMissing" },
+      JSON.stringify(realtimeModel)
+    );
+  }
+  assert.throws(
+    () => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: `${url}?model=%20` }),
+    { message: "selfHostedRealtimeModelMissing" }
+  );
+
+  const fromQuery = resolveMeetingTranscriptionOptions({
+    ...selfHosted,
+    realtimeUrl: `${url}?model=whisper`,
+  });
+  assert.equal(fromQuery.provider, "openai-compatible-realtime");
+  assert.equal(fromQuery.model, "");
+  assert.equal(new URL(fromQuery.url).searchParams.get("model"), "whisper");
+
+  // The URL is checked first, so a bad URL is reported even with no model.
+  assert.throws(() => resolveMeetingTranscriptionOptions({ ...selfHosted, realtimeUrl: "" }), {
+    message: "selfHostedRealtimeUrlMissing",
+  });
+});
+
+test("self-hosted mode routes to the OpenAI-compatible realtime client", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      realtimeUrl: "  ws://192.168.1.20:9000/v1/realtime  ",
+      realtimeModel: " whisper-large-v3-turbo ",
+    }),
+    {
+      provider: "openai-compatible-realtime",
+      url: "ws://192.168.1.20:9000/v1/realtime",
+      model: "whisper-large-v3-turbo",
+      mode: "self-hosted",
+      language: "en",
+    }
+  );
+});
+
+test("self-hosted mode fails closed on a missing or unsafe WebSocket URL", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const [realtimeUrl, message] of [
+    [undefined, "selfHostedRealtimeUrlMissing"],
+    ["", "selfHostedRealtimeUrlMissing"],
+    ["   ", "selfHostedRealtimeUrlMissing"],
+    ["http://192.168.1.20:9000/v1/realtime", "selfHostedRealtimeUrlInvalid"],
+    ["https://example.com/v1/realtime", "selfHostedRealtimeUrlInvalid"],
+    ["192.168.1.20:9000", "selfHostedRealtimeUrlInvalid"],
+    ["not a url", "selfHostedRealtimeUrlInvalid"],
+    // Cleartext to a public host would send the key unencrypted.
+    ["ws://example.com/v1/realtime", "selfHostedRealtimeUrlInvalid"],
+    ["ws://8.8.8.8:9000/v1/realtime", "selfHostedRealtimeUrlInvalid"],
+  ]) {
+    assert.throws(
+      () =>
+        resolveMeetingTranscriptionOptions({
+          ...baseOptions,
+          transcriptionMode: "self-hosted",
+          realtimeUrl,
+        }),
+      { message },
+      JSON.stringify(realtimeUrl)
+    );
+  }
+
+  for (const realtimeUrl of [
+    "wss://stt.example.com/v1/realtime",
+    "ws://localhost:9000/v1/realtime",
+    "ws://10.0.0.5/realtime",
+    "ws://box.local:9000/api/v1/realtime",
+    "ws://box.tailnet.ts.net:9000/v1/realtime",
+  ]) {
+    assert.equal(
+      resolveMeetingTranscriptionOptions({
+        ...baseOptions,
+        transcriptionMode: "self-hosted",
+        realtimeUrl,
+        realtimeModel: "whisper",
+      }).url,
+      realtimeUrl
+    );
+  }
+});
+
+test("other modes ignore a configured self-hosted realtime URL", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  const resolved = resolveMeetingTranscriptionOptions({
+    ...baseOptions,
+    realtimeUrl: "ws://192.168.1.20:9000/v1/realtime",
+    realtimeModel: "whisper",
+  });
+  assert.equal(resolved.provider, "tinfoil-realtime");
+  assert.equal("url" in resolved, false);
 });
 
 test("local mode wins over stale cloud provider state", async () => {
