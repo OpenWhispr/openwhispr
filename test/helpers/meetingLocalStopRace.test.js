@@ -46,6 +46,7 @@ function harness({
   };
   const context = {
     events,
+    _audioFeaturePolicy: { failure: () => null, signalFor: () => undefined },
     chunkGates,
     lateStreamingFinals,
     win,
@@ -166,6 +167,7 @@ function harness({
 
     ${sliceBetween("const transcribeAllLocalBuffers =", "const dropMeetingMicDiarizationCapture =")}
     ${sliceBetween("const rollbackMeetingTranscriptionStart =", "const setupDictationCallbacks =")}
+    ${sliceBetween("const assertMeetingAllowed =", "const fetchRealtimeToken =")}
     ${sliceBetween("const startMeetingTranscription =", "const sendMeetingAudio =")}
     ${sliceBetween("const stopMeetingTranscription =", "const meetingTranscriptionLifecycle =")}
 
@@ -196,8 +198,31 @@ function harness({
     return gate;
   };
 
-  return { api: context.api, events, sent, diarizations, holdChunk, lateStreamingFinals };
+  return {
+    api: context.api,
+    policy: context._audioFeaturePolicy,
+    events,
+    sent,
+    diarizations,
+    holdChunk,
+    lateStreamingFinals,
+  };
 }
+
+test("policy revocation during system decode prevents the microphone decode from starting", async () => {
+  const { api, policy, events, holdChunk } = harness();
+  api.beginLocalSession();
+  const system = holdChunk("system audio");
+  const mic = holdChunk("microphone audio", "mic");
+  mic.resolve();
+
+  const pending = api.timerTick();
+  policy.failure = () => ({ code: "POLICY_MEETING_RECORDING_DISABLED" });
+  system.resolve();
+  await pending;
+
+  assert.deepEqual(events, ["chunk-done:system"]);
+});
 
 test("stop waits for a timer pass still transcribing before it captures the session", async () => {
   const { api, events, sent, diarizations, holdChunk } = harness();

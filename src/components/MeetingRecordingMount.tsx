@@ -11,6 +11,8 @@ import {
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import { isAudioFeatureAllowed } from "../stores/policyRules";
 import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
@@ -32,6 +34,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
+  const policy = usePolicySnapshot();
+  const meetingAllowed = isAudioFeatureAllowed(policy, "meeting");
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
@@ -42,6 +46,9 @@ export default function MeetingRecordingMount(): null {
     (s) => s.systemAudioInterruptedNonce
   );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  useEffect(() => {
+    if (isRecording && !meetingAllowed) void stopRecording();
+  }, [isRecording, meetingAllowed]);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
 

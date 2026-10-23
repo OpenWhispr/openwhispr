@@ -2,6 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
+const { audioFeatureFailure } = require("../../src/helpers/audioFeaturePolicy");
+const { i18nMain, changeLanguage } = require("../../src/helpers/i18nMain");
+const esTranslation = require("../../src/locales/es/translation.json");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -21,12 +24,13 @@ const START_ARGS = {
   autoEndEligible: true,
 };
 const TOAST_MOCK = `
-  const toast = () => "1";
+  export const toasts = [];
+  const toast = (config) => { toasts.push(config); return "1"; };
   const dismiss = () => {};
   export const useToast = () => ({ toast, dismiss });
 `;
 
-async function setup(t) {
+async function setup(t, { language = "en" } = {}) {
   let root;
   let store;
   t.after(async () => {
@@ -72,6 +76,7 @@ async function setup(t) {
     onMeetingAutoEndRequested: noop,
   };
   installBrowserGlobals(t, {
+    initialStorage: { uiLanguage: language },
     window: { electronAPI: api, setTimeout: (fn, ms) => setTimeout(fn, ms) },
   });
   installMicCaptureGlobals(t);
@@ -83,6 +88,7 @@ async function setup(t) {
     mockModules: { "/ui/useToast": TOAST_MOCK },
   });
   const { default: Mount } = await vite.ssrLoadModule("/components/MeetingRecordingMount.tsx");
+  const { toasts } = await vite.ssrLoadModule("/ui/useToast");
   store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
   t.mock.timers.enable({ apis: ["setInterval"] });
   root = createRoot(container);
@@ -95,9 +101,8 @@ async function setup(t) {
     );
   const deleteNote = (id) => listeners.noteDeleted?.({ id });
   const tick = (ms) => React.act(async () => t.mock.timers.tick(ms));
-  const savedTranscripts = () =>
-    writes.filter(([, patch]) => typeof patch.transcript === "string");
-  return { start, say, deleteNote, tick, writes, savedTranscripts };
+  const savedTranscripts = () => writes.filter(([, patch]) => typeof patch.transcript === "string");
+  return { start, say, deleteNote, tick, writes, savedTranscripts, api, toasts };
 }
 
 test("the 30-second save writes the live transcript while a recording runs", async (t) => {
@@ -124,4 +129,20 @@ test("the 30-second save skips a note deleted mid-recording", async (t) => {
   await tick(30_000);
 
   assert.deepEqual(savedTranscripts(), [], "a deleted note is not written back");
+});
+
+test("a main policy refusal appears in a Spanish meeting-start toast", async (t) => {
+  const previousLanguage = i18nMain.language;
+  changeLanguage("es");
+  t.after(() => changeLanguage(previousLanguage));
+  const { start, api, toasts } = await setup(t, { language: "es" });
+  api.meetingTranscriptionStart = async () =>
+    audioFeatureFailure(
+      { success: true, managed: true, policy: { features: { meetingRecordingEnabled: false } } },
+      "meeting"
+    );
+
+  await start();
+
+  assert.equal(toasts.at(-1)?.description, esTranslation.notes.meeting.restrictedByOrg);
 });

@@ -74,7 +74,7 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isTranscriptionContextAllowed } from "../../stores/policyRules";
+import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
@@ -284,6 +284,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     customTranscriptionApiKey,
   } = apiKeys;
   const policyState = usePolicySnapshot();
+  const uploadRestrictionKey =
+    policyState.status !== "managed" || !policyState.policy
+      ? "common.policyUnresolved"
+      : policyState.policy.features.audioUploadEnabled === false
+        ? "notes.upload.disabledByOrg"
+        : "common.policyTranscriptionRestricted";
 
   const {
     useLocalWhisper,
@@ -552,6 +558,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBrowse = async () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const res = await window.electronAPI.selectAudioFile({ multiple: true });
     if (res.canceled) return;
 
@@ -581,6 +588,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
@@ -645,8 +653,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const cancelTranscription = () => {
-    // True backend abort for cloud and local uploads; the run-id bump still
-    // discards any late result from providers that can't be aborted (BYOK).
+    // Abort the provider request and discard late results from a cancelled run.
     if (activeRequestIdRef.current) {
       window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
       activeRequestIdRef.current = null;
@@ -654,11 +661,33 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     runIdRef.current++;
     reset();
   };
+  useEffect(() => {
+    return usePolicyStore.subscribe((policy) => {
+      if (isAudioFeatureAllowed(policy, "upload")) return;
+      const active = activeRequestIdRef.current || singleDownloadIdRef.current;
+      runIdRef.current++;
+      if (active) {
+        if (progressRef.current) clearInterval(progressRef.current);
+        progressCleanupRef.current?.();
+        progressCleanupRef.current = null;
+        setState("error");
+        setError(t("common.managedByOrg"));
+      }
+      if (activeRequestIdRef.current) {
+        window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
+        activeRequestIdRef.current = null;
+      }
+      if (singleDownloadIdRef.current)
+        window.electronAPI.cancelUrlDownload(singleDownloadIdRef.current);
+    });
+  }, [t]);
+
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
     if (
-      !isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+      !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
+      (!isManagedTranscriptionActive() &&
+        !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
     ) {
       setError(t("common.managedByOrg"));
       return;
@@ -707,9 +736,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         diarization,
         currentFile.durationSeconds,
         { requestId, timestamps: true }
-      ).finally(() => {
-        if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
-      });
+      );
 
       if (runId !== runIdRef.current) return;
 
@@ -781,10 +808,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         );
       }
       setState("error");
+    } finally {
+      if (activeRequestIdRef.current === requestId) activeRequestIdRef.current = null;
     }
   };
 
   const handleUrlSubmit = async () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const trimmed = urlInput.trim();
     if (!trimmed) return;
 
@@ -902,8 +932,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const startBatchProcessing = async () => {
     if (state === "downloading" || state === "transcribing") return;
     if (
-      !isManagedTranscriptionActive() &&
-      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+      !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
+      (!isManagedTranscriptionActive() &&
+        !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
     ) {
       setSkippedNotice(t("common.managedByOrg"));
       return;
@@ -970,6 +1001,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
+        {!isAudioFeatureAllowed(policyState, "upload") && (
+          <p
+            role="status"
+            className="mb-5 rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-foreground/80"
+          >
+            {t(uploadRestrictionKey)}
+          </p>
+        )}
         {state === "idle" && providerReady === false && (
           <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
         )}

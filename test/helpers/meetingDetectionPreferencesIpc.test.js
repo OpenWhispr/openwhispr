@@ -125,3 +125,35 @@ test("a non-object payload is rejected without touching the detectors", async ()
   assert.deepEqual(await sync(null), { success: false, error: "Invalid preferences" });
   assert.deepEqual(applied, []);
 });
+
+test("disabled audio features refuse direct IPC calls before native, network or file work", async () => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  target._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({
+      success: true,
+      managed: true,
+      policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: false } },
+    }),
+  });
+  for (const channel of [
+    "meeting-transcription-prepare",
+    "meeting-transcription-start",
+    "start-manual-meeting",
+    "select-audio-file",
+    "download-url-audio",
+    "transcribe-audio-file",
+    "diarize-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+  ]) {
+    const result = await handlers.get(channel)({ sender: {} });
+    assert.equal(result.success, false, channel);
+    assert.equal(
+      result.code,
+      channel.includes("meeting")
+        ? "POLICY_MEETING_RECORDING_DISABLED"
+        : "POLICY_AUDIO_UPLOAD_DISABLED",
+      channel
+    );
+  }
+});

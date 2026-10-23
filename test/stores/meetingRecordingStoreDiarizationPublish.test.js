@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { deferred } = require("../helpers/harness/deferred");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -19,6 +20,7 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
   const state = {
     diarizationCallback: null,
     segmentCallback: null,
+    errorCallback: null,
     updatedTranscripts: [],
     stopDiarizationSessionId,
     stopTranscript: "",
@@ -72,7 +74,12 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
     onMeetingSpeakerIdentified: noopListener,
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
-    onMeetingTranscriptionError: noopListener,
+    onMeetingTranscriptionError: (callback) => {
+      state.errorCallback = callback;
+      return () => {
+        state.errorCallback = null;
+      };
+    },
     onMeetingTranscriptionFatalError: noopListener,
     onMeetingSystemAudioSilent: noopListener,
   };
@@ -234,6 +241,53 @@ test("a resumed note's diarization labels the resumed session's row, not an earl
       ["Yeah.", 3.0, "Dave"],
     ]
   );
+});
+
+test("a policy stop's early diarization waits for the resumed session's stop result and persistence", async (t) => {
+  const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "diar-policy" });
+  const { store, parseTranscriptSegments } = await loadModules(t, api);
+  const note = notes.get(NOTE_ID);
+  note.transcript = JSON.stringify([diarized("Yeah.", 1.0, "Carol")]);
+  const reply = deferred();
+  const stop = api.meetingTranscriptionStop;
+  api.meetingTranscriptionStop = async () => {
+    await reply.promise;
+    return stop();
+  };
+  t.after(() => reply.resolve());
+  assert.equal(
+    await store.startRecording({
+      ...START_ARGS,
+      seedSegments: parseTranscriptSegments(note.transcript),
+    }),
+    true
+  );
+  state.segmentCallback({
+    type: "final",
+    source: "system",
+    text: "Yeah.",
+    timestamp: 1760000100000,
+  });
+
+  state.errorCallback("policyRestricted");
+  state.diarizationCallback({
+    noteId: NOTE_ID,
+    sessionId: "diar-policy",
+    segments: [diarized("Yeah.", 2.0, "Dave")],
+  });
+  await settle();
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.deepEqual(rowsOf(note)[0], ["Yeah.", 1.0, "Carol"]);
+  assert.equal(rowsOf(note).length, 2);
+
+  const finished = store.stopRecording();
+  reply.resolve();
+  await finished;
+  await settle();
+  assert.deepEqual(rowsOf(note), [
+    ["Yeah.", 1.0, "Carol"],
+    ["Yeah.", 2.0, "Dave"],
+  ]);
 });
 
 const diarized = (text, timestamp, speakerName) => ({

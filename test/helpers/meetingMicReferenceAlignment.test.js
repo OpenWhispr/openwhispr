@@ -21,6 +21,7 @@ function harness() {
   const dispatched = [];
   const context = {
     Buffer,
+    _audioFeaturePolicy: { failure: () => null },
     Date: { now: () => now },
     ...micGate,
     meetingPendingMicChunks: [],

@@ -904,3 +904,38 @@ test("the note header hands its event link to the dropdown, changeable only by e
     await unmount();
   }
 });
+
+test("disabled meeting recording has a visible feature-specific explanation and re-enabling removes it", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const messages = () => {
+    const out = [];
+    walk(latest(), (node) => {
+      if (node.props.role === "status") out.push(node.props.children);
+    });
+    return out;
+  };
+  for (const audioUploadEnabled of [true, false]) {
+    await React.act(async () => {
+      usePolicyStore.setState({
+        status: "managed",
+        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: false });
+    assert.ok(messages().includes("notes.meeting.recordingDisabledByOrg"));
+    assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
+    await React.act(async () => {
+      usePolicyStore.setState({
+        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: true });
+    assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
+  }
+  await React.act(async () => usePolicyStore.setState({ status: "loading", policy: null }));
+  await render(undefined, { recordingAllowed: false });
+  assert.ok(messages().includes("common.policyUnresolved"));
+  assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
+  await unmount();
+});

@@ -419,7 +419,23 @@ export function isTranscriptionContextAllowed(
   settings: SettingsState,
   context: TranscriptionPolicyContext
 ): boolean {
-  return isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context));
+  return (
+    isAudioFeatureAllowed(state, context) &&
+    isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
+  );
+}
+
+export function isAudioFeatureAllowed(
+  state: PolicyDecisionSnapshot,
+  context: TranscriptionPolicyContext
+): boolean {
+  return managedPolicyDecision(state, (policy) =>
+    context === "meeting"
+      ? policy.features.meetingRecordingEnabled !== false
+      : context === "upload"
+        ? policy.features.audioUploadEnabled !== false
+        : true
+  );
 }
 
 /** Whether a note share visibility is allowed under the org's external-sharing mode. */

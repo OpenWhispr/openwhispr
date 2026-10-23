@@ -3204,7 +3204,8 @@
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
       "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
       "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações.",
-      "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas."
+      "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
+      "disabledByOrg": "O envio de áudio foi desativado pela sua organização."
     },
     "meeting": {
       "title": "Notas de reunião",
@@ -3231,7 +3232,8 @@
       "systemAudioQuiet": {
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
-      }
+      },
+      "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",

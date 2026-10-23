@@ -41,6 +41,7 @@ interface NoteRecordControlProps {
   isRecording: boolean;
   isProcessing: boolean;
   disabled?: boolean;
+  disabledReason?: string;
   onStart: () => void;
   onStop: () => void;
 }
@@ -50,6 +51,7 @@ export default function NoteRecordControl({
   isRecording,
   isProcessing,
   disabled = false,
+  disabledReason,
   onStart,
   onStop,
 }: NoteRecordControlProps) {
@@ -110,7 +112,7 @@ export default function NoteRecordControl({
           onClick={onStart}
           disabled={disabled || isProcessing}
           aria-label={t("notes.editor.transcribe")}
-          title={disabled ? t("common.managedByOrg") : undefined}
+          title={disabled ? (disabledReason ?? t("common.managedByOrg")) : undefined}
           className={cn(
             "flex h-[30px] w-[30px] items-center justify-center rounded-full",
             GRADIENT_CIRCLE,

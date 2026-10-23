@@ -3556,7 +3556,8 @@
       "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
       "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment.",
       "customEndpointInvalid": "Le point de terminaison de transcription personnalisé n'est pas configuré ou est invalide. Mettez-le à jour dans les réglages.",
-      "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives."
+      "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
+      "disabledByOrg": "L’importation de fichiers audio est désactivée par votre organisation."
     },
     "meeting": {
       "title": "Notes de réunion",
@@ -3583,7 +3584,8 @@
       "systemAudioQuiet": {
         "title": "L'audio de la réunion est devenu silencieux",
         "description": "Personne n'a été entendu depuis quelques minutes. Si l'appel est toujours en cours, vérifiez votre périphérique de sortie audio."
-      }
+      },
+      "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",

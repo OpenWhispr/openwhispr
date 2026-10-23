@@ -3556,7 +3556,8 @@
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
       "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
-      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+      "disabledByOrg": "Audio upload is disabled by your organization."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -3583,7 +3584,8 @@
       "systemAudioQuiet": {
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
-      }
+      },
+      "recordingDisabledByOrg": "Meeting recording is disabled by your organization."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",

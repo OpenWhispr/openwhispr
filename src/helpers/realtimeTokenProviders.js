@@ -37,7 +37,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       });
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/streaming-token");
+      const data = await postServerToken("/api/streaming-token", {
+        purpose: options.purpose || "dictation",
+      });
       if (!data.token) throw new Error("No AssemblyAI token received");
       return data.token;
     });
@@ -52,7 +54,9 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     return dual(streams, async () => {
-      const data = await postServerToken("/api/deepgram-streaming-token");
+      const data = await postServerToken("/api/deepgram-streaming-token", {
+        purpose: options.purpose || "dictation",
+      });
       if (!data.token) throw new Error("No Deepgram token received");
       return data.token;
     });
@@ -70,7 +74,7 @@ const REALTIME_TOKEN_PROVIDERS = {
     }
     // Managed tokens are minted with uses:1, so N sockets need N mints.
     return dual(streams, async () => {
-      const data = await postServerToken("/api/gemini-live-token");
+      const data = await postServerToken("/api/gemini-live-token", { purpose: "dictation" });
       if (!data.token) throw new Error("No Gemini token received");
       return data.token;
     });
@@ -99,6 +103,7 @@ const REALTIME_TOKEN_PROVIDERS = {
       return duplicate(streams, apiKey);
     }
     const data = await postServerToken("/api/openai-realtime-token", {
+      purpose: options.purpose || "dictation",
       model: options.model,
       language: options.language,
       streams: streams || 1,

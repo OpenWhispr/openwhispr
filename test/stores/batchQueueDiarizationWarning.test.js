@@ -40,9 +40,10 @@ test("batch uploads retain diarization warnings separately from transcription wa
         export function uploadTitleFallback() { return "Uploaded note"; }
       `,
       "/stores/settingsStore": "export function getSettings() { return {}; }",
-      "/stores/policyRules": "export function isTranscriptionContextAllowed() { return true; }",
+      "/stores/policyRules":
+        "export function isTranscriptionContextAllowed() { return true; } export function isAudioFeatureAllowed() { return true; }",
       "/stores/policyStore": `
-        export const usePolicyStore = { getState() { return {}; } };
+        export const usePolicyStore = { getState() { return {}; }, subscribe() { return () => {}; } };
       `,
     },
   });

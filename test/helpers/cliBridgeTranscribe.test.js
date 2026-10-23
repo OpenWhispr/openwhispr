@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+const { deferred } = require("./harness/deferred");
 
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -23,10 +25,12 @@ const MODELS = [
   { provider: "nvidia", model: "parakeet-tdt-0.6b-v3", downloaded: true, default: false },
 ];
 
-function createBridge(models = MODELS) {
+function createBridge(models = MODELS, snapshot = { success: true, managed: false }) {
   const calls = { approved: [], transcribed: [] };
+  const policy = createAudioFeaturePolicy({ getPolicy: async () => snapshot });
   const bridge = new CliBridge({
     databaseManager: {},
+    _audioFeaturePolicy: policy,
     listLocalTranscriptionModels: () => models,
     approveAudioPath: (p) => calls.approved.push(p),
     transcribeLocalFile: async (p, options) => {
@@ -34,7 +38,7 @@ function createBridge(models = MODELS) {
       return { success: true, text: "hello from disk" };
     },
   });
-  return { bridge, calls };
+  return { bridge, calls, policy };
 }
 
 function audioFile() {
@@ -59,12 +63,11 @@ test("POST /v1/transcribe approves the real path and runs the app's default mode
     data: { text: "hello from disk", provider: "whisper", model: "base" },
   });
   assert.deepEqual(calls.approved, [fs.realpathSync(file)]);
-  assert.deepEqual(calls.transcribed, [
-    {
-      path: fs.realpathSync(file),
-      options: { provider: "whisper", model: "base", language: undefined },
-    },
-  ]);
+  assert.equal(calls.transcribed.length, 1);
+  const { signal, ...options } = calls.transcribed[0].options;
+  assert.equal(calls.transcribed[0].path, fs.realpathSync(file));
+  assert.deepEqual(options, { provider: "whisper", model: "base", language: undefined });
+  assert.equal(signal.aborted, false);
 });
 
 test("POST /v1/transcribe honors an explicit model and language", async () => {
@@ -77,11 +80,13 @@ test("POST /v1/transcribe honors an explicit model and language", async () => {
     language: "de",
   });
 
-  assert.deepEqual(calls.transcribed[0].options, {
+  const { signal, ...options } = calls.transcribed[0].options;
+  assert.deepEqual(options, {
     provider: "nvidia",
     model: "parakeet-tdt-0.6b-v3",
     language: "de",
   });
+  assert.equal(signal.aborted, false);
 });
 
 test("POST /v1/transcribe reports silence as empty text, not an error", async () => {
@@ -140,4 +145,67 @@ test("POST /v1/transcribe validates the path before touching anything", async ()
   );
   assert.equal(calls.approved.length, 0);
   assert.equal(calls.transcribed.length, 0);
+});
+
+test("CLI files remain uploads even when callers request dictation; policy refusals return 403 before inference", async () => {
+  const { file } = audioFile();
+  for (const [snapshot, code] of [
+    [
+      {
+        success: true,
+        managed: true,
+        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled: false } },
+      },
+      "POLICY_AUDIO_UPLOAD_DISABLED",
+    ],
+    [{ success: false }, "POLICY_UNRESOLVABLE"],
+  ]) {
+    const { bridge, calls } = createBridge(MODELS, snapshot);
+    let failure;
+    await assert.rejects(
+      call(bridge, "POST", "/v1/transcribe", { path: file, purpose: "dictation" }),
+      (error) => {
+        failure = error;
+        return error.code === code;
+      }
+    );
+    assert.deepEqual(calls.approved, []);
+    assert.deepEqual(calls.transcribed, []);
+    const response = {
+      writeHead(status) {
+        this.status = status;
+      },
+      end(body) {
+        this.body = JSON.parse(body);
+      },
+    };
+    bridge._sendError(response, failure);
+    assert.equal(response.status, 403);
+    assert.equal(response.body.error.code, code.toLowerCase());
+    assert.equal(response.body.error.message, failure.message);
+  }
+});
+
+test("upload revocation aborts CLI inference and suppresses a late result", async () => {
+  const { bridge, policy } = createBridge();
+  const { file } = audioFile();
+  const entered = deferred();
+  const finish = deferred();
+  let signal;
+  bridge.ipcHandlers.transcribeLocalFile = async (_path, options) => {
+    signal = options.signal;
+    entered.resolve();
+    await finish.promise;
+    return { success: true, text: "late transcript" };
+  };
+  const pending = call(bridge, "POST", "/v1/transcribe", { path: file });
+  await entered.promise;
+  policy.update({
+    success: true,
+    managed: true,
+    policy: { features: { audioUploadEnabled: false } },
+  });
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  await assert.rejects(pending, { code: "POLICY_AUDIO_UPLOAD_DISABLED" });
 });

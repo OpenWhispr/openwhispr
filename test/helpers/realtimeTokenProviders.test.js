@@ -71,7 +71,7 @@ test("openai cloud mints per-stream client secrets and validates the dual pair",
   );
   assert.deepEqual(calls[0], {
     path: "/api/openai-realtime-token",
-    body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 1 },
+    body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 1, purpose: "dictation" },
   });
   assert.equal(calls[1].body.streams, 2);
 
@@ -204,7 +204,7 @@ test("missing byok keys throw configuration errors, not token errors", async () 
   }
 });
 
-test("wire bodies: dictation posts language+streams; meetings post model+language+streams", async () => {
+test("wire bodies identify dictation and meetings explicitly, including single-stream meetings", async () => {
   const { fetchRealtimeTokenForProvider } = await load();
   const wire = [];
   const cloudDeps = deps({
@@ -231,7 +231,7 @@ test("wire bodies: dictation posts language+streams; meetings post model+languag
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
     cloudDeps,
-    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en" },
+    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: "en", purpose: "meeting" },
     { streams: 2 }
   );
   // Meeting whose system audio is unsupported (connectRealtimeStreaming's single-stream
@@ -239,23 +239,37 @@ test("wire bodies: dictation posts language+streams; meetings post model+languag
   await fetchRealtimeTokenForProvider(
     "openai-realtime",
     cloudDeps,
-    { mode: "openwhispr", model: "gpt-4o-mini-transcribe", language: undefined },
+    {
+      mode: "openwhispr",
+      model: "gpt-4o-mini-transcribe",
+      language: undefined,
+      purpose: "meeting",
+    },
     { streams: 1 }
   );
 
-  // Gemini's endpoint reads nothing from the request; it must post a bare body.
+  // Gemini is dictation-only and carries the same explicit purpose.
   await fetchRealtimeTokenForProvider("gemini-realtime", cloudDeps, { mode: "openwhispr" });
 
-  assert.deepEqual(wire, [
-    { path: "/api/openai-realtime-token", json: '{"language":"de","streams":1}' },
-    { path: "/api/openai-realtime-token", json: '{"streams":1}' },
-    {
-      path: "/api/openai-realtime-token",
-      json: '{"model":"gpt-4o-mini-transcribe","language":"en","streams":2}',
-    },
-    { path: "/api/openai-realtime-token", json: '{"model":"gpt-4o-mini-transcribe","streams":1}' },
-    { path: "/api/gemini-live-token", json: "{}" },
-  ]);
+  assert.deepEqual(
+    wire.map(({ path, json }) => ({ path, body: JSON.parse(json) })),
+    [
+      {
+        path: "/api/openai-realtime-token",
+        body: { language: "de", streams: 1, purpose: "dictation" },
+      },
+      { path: "/api/openai-realtime-token", body: { streams: 1, purpose: "dictation" } },
+      {
+        path: "/api/openai-realtime-token",
+        body: { model: "gpt-4o-mini-transcribe", language: "en", streams: 2, purpose: "meeting" },
+      },
+      {
+        path: "/api/openai-realtime-token",
+        body: { model: "gpt-4o-mini-transcribe", streams: 1, purpose: "meeting" },
+      },
+      { path: "/api/gemini-live-token", body: { purpose: "dictation" } },
+    ]
+  );
 });
 
 // A Cloud note recording whose token request is refused used to toast the API's

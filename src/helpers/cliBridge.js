@@ -254,6 +254,10 @@ class CliBridge {
       sendV1Error(res, 400, "validation_error", err.message);
       return;
     }
+    if (err.code === "POLICY_AUDIO_UPLOAD_DISABLED" || err.code === "POLICY_UNRESOLVABLE") {
+      sendV1Error(res, 403, err.code.toLowerCase(), err.message);
+      return;
+    }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");
     sendV1Error(res, 500, "internal_error", err.message || "Internal server error");
   }
@@ -551,13 +555,24 @@ class CliBridge {
         );
         const language =
           typeof body?.language === "string" && body.language ? body.language : undefined;
-        ipc.approveAudioPath(real);
-        const result = await ipc.transcribeLocalFile(real, { provider, model, language });
+        const event = {};
+        const result = await ipc._audioFeaturePolicy.run(event, "upload", () => {
+          ipc.approveAudioPath(real);
+          return ipc.transcribeLocalFile(real, {
+            provider,
+            model,
+            language,
+            signal: ipc._audioFeaturePolicy.signalFor(event),
+          });
+        });
         if (!result?.success) {
           if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {
             return { data: { text: "", provider, model, warning: "No speech detected" } };
           }
-          throw new Error(result?.error || result?.message || "Local transcription failed");
+          throw Object.assign(
+            new Error(result?.error || result?.message || "Local transcription failed"),
+            { code: result?.code }
+          );
         }
         return { data: { text: result.text, provider, model } };
       }),

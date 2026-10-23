@@ -3204,7 +3204,8 @@
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
       "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
       "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。",
-      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。"
+      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
+      "disabledByOrg": "你的組織已停用音訊上傳。"
     },
     "meeting": {
       "title": "會議筆記",
@@ -3231,7 +3232,8 @@
       "systemAudioQuiet": {
         "title": "會議音訊已靜默",
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
-      }
+      },
+      "recordingDisabledByOrg": "你的組織已停用會議錄音。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",

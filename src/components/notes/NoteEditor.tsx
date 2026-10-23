@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   Loader2,
   FileText,
@@ -274,6 +275,13 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
+  const policyState = usePolicySnapshot();
+  const recordingRestrictionKey =
+    policyState.status !== "managed" || !policyState.policy
+      ? "common.policyUnresolved"
+      : policyState.policy.features.meetingRecordingEnabled === false
+        ? "notes.meeting.recordingDisabledByOrg"
+        : "notes.meeting.restrictedByOrg";
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
@@ -1296,6 +1304,7 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
+                  disabledReason={t(recordingRestrictionKey)}
                   onStart={onStartRecording}
                   onStop={onStopRecording}
                 />
@@ -1359,6 +1368,17 @@ export default function NoteEditor({
                 {t("notes.spaces.conflictKeep")}
               </button>
             </div>
+          </div>
+        )}
+
+        {canEditNote && !recordingAllowed && (
+          <div className="shrink-0 border-b border-border bg-surface-2">
+            <p
+              role="status"
+              className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 py-3 text-sm text-foreground/80")}
+            >
+              {t(recordingRestrictionKey)}
+            </p>
           </div>
         )}
 
