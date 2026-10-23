@@ -9,7 +9,7 @@
       "distribution": "internal",
       "channel": "development",
       "ios": {
-        "image": "macos-tahoe-26.5-xcode-26.6",
+        "image": "macos-tahoe-26.6-xcode-27.1",
         "buildConfiguration": "Debug"
       }
     },
@@ -17,7 +17,7 @@
       "distribution": "internal",
       "channel": "preview",
       "ios": {
-        "image": "macos-tahoe-26.5-xcode-26.6"
+        "image": "macos-tahoe-26.6-xcode-27.1"
       }
     },
     "production": {
@@ -27,7 +27,7 @@
         "BRAND_FONTS_REQUIRED": "1"
       },
       "ios": {
-        "image": "macos-tahoe-26.5-xcode-26.6",
+        "image": "macos-tahoe-26.6-xcode-27.1",
         "resourceClass": "medium"
       }
     }
