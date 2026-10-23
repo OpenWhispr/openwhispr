@@ -268,7 +268,37 @@ test("a window that reloads, crashes or closes while it holds Esc gives it back"
   assert.deepEqual(calls, []);
 });
 
-test("conversation recovery has one owner and releases on renderer loss or navigation", async () => {
+for (const [navigation, id] of [
+  ["blocked", 502],
+  ["failed", 503],
+]) {
+  test(`a ${navigation} main-frame navigation retains conversation ownership`, async () => {
+    target.databaseManager = {
+      activeAccountId: null,
+      getAgentConversation: (id) => ({ id, messages: [] }),
+    };
+    const first = makeContents();
+    const peer = makeContents();
+    const claim = handlers.get("claim-agent-conversation");
+    assert.equal((await claim(frameOf(first), id, "first")).owned, true);
+    first.emit("did-start-navigation", {}, "file:///missing", false, true);
+    if (navigation === "failed") {
+      first.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///missing", true);
+    }
+    assert.equal(
+      (await claim(frameOf(peer), id, "peer")).owned,
+      false,
+      "a navigation that never committed leaves the current owner alive"
+    );
+    assert.equal(
+      (await handlers.get("db-get-agent-conversation")(frameOf(peer), id)).has_active_turn,
+      true
+    );
+    first.emit("destroyed");
+  });
+}
+
+test("conversation recovery has one owner and releases on renderer loss or committed navigation", async () => {
   target.databaseManager = {
     activeAccountId: null,
     getAgentConversation: (id) => ({ id, messages: [] }),
@@ -296,13 +326,27 @@ test("conversation recovery has one owner and releases on renderer loss or navig
     false,
     "subframes cannot release it"
   );
-  first.emit("did-start-navigation", {}, "file:///app", false, true);
+  first.emit("did-frame-navigate", {}, "about:blank", 200, "OK", false, 1, 2);
+  first.emit("did-navigate-in-page", {}, "file:///app#note", true);
+  assert.equal(
+    (await claim(frameOf(peer), 501, "peer")).owned,
+    false,
+    "subframe and same-document commits keep the owner"
+  );
+  first.emit("did-navigate", {}, "file:///app", 200, "OK");
   assert.equal(
     (await claim(frameOf(peer), 501, "peer")).owned,
     true,
     "reload permits interrupted recovery"
   );
-  peer.emit("render-process-gone");
+  await release(frameOf(first), 501, "first");
+  first.emit("did-navigate", {}, "file:///app", 200, "OK");
+  assert.equal(
+    (await claim(frameOf(first), 501, "first")).owned,
+    false,
+    "the previous owner cannot release the peer's claim"
+  );
+  peer.emit("render-process-gone", {}, { reason: "crashed" });
   assert.equal((await claim(frameOf(first), 501, "after-crash")).owned, true);
   first.emit("destroyed");
   assert.equal((await claim(frameOf(peer), 501, "after-close")).owned, true);

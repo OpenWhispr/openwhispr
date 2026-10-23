@@ -3,6 +3,19 @@ const assert = require("node:assert/strict");
 
 const TextEditMonitor = require("../../src/helpers/textEditMonitor");
 
+test.beforeEach((t) => {
+  t.mock.method(TextEditMonitor.prototype, "resolveBinary", () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "NO_ELEMENT"'],
+  }));
+  t.mock.method(
+    TextEditMonitor.prototype,
+    "_getSelectedTextViaAppleScript",
+    (_pid, _timeoutMs, resolve) => resolve({ state: "unavailable" })
+  );
+  t.mock.method(TextEditMonitor.prototype, "_queryMacOSValue", async () => null);
+});
+
 test("activateTargetPid resolves false when no target PID was captured", async () => {
   const m = new TextEditMonitor();
   m.lastTargetPid = null;

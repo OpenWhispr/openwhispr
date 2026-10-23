@@ -2696,17 +2696,14 @@ class IPCHandlers {
         conversationOwners.delete(id);
         sender.removeListener("destroyed", release);
         sender.removeListener("render-process-gone", release);
-        sender.removeListener("did-start-navigation", onNavigate);
+        sender.removeListener("did-navigate", release);
         broadcastToWindows("agent-conversation-released", { conversationId: id });
-      };
-      const onNavigate = (_event, _url, inPlace, mainFrame) => {
-        if (mainFrame && !inPlace) release();
       };
       const entry = { sender, id: ownerId, scope, release };
       conversationOwners.set(id, entry);
       sender.once("destroyed", release);
       sender.once("render-process-gone", release);
-      sender.on("did-start-navigation", onNavigate);
+      sender.on("did-navigate", release);
       return { owned: true, conversation };
     });
     ipcMain.handle("release-agent-conversation", (event, id, ownerId) => {
