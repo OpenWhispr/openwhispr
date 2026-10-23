@@ -246,3 +246,47 @@ test("a cloud conversation tombstone hard-deletes the local row and its messages
   );
   assert.equal(messageCount(db), 0, "the messages go with the conversation");
 });
+
+test("follow-up turns, a rename and an archive on a synced conversation reach the cloud", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("First title");
+  db.addAgentMessage(conversation.id, "user", "first question");
+  db.addAgentMessage(conversation.id, "assistant", "first answer");
+
+  await service.syncAll(true);
+  const synced = db.getAgentConversation(conversation.id);
+  assert.ok(synced.cloud_id);
+  assert.equal(synced.sync_status, "synced");
+  assert.equal(cloud.logFor("/api/conversations/messages").length, 0);
+
+  db.addAgentMessage(conversation.id, "user", "follow-up question");
+  db.addAgentMessage(conversation.id, "assistant", "follow-up answer", { tool: "x" });
+  db.updateAgentConversationTitle(conversation.id, "Renamed");
+  db.archiveAgentConversation(conversation.id);
+  assert.equal(db.getAgentConversation(conversation.id).sync_status, "pending");
+
+  await service.syncAll(true);
+
+  const posted = cloud
+    .logFor("/api/conversations/messages")
+    .filter((entry) => entry.method === "POST")
+    .map((entry) => entry.body.content);
+  assert.deepEqual(posted, ["follow-up question", "follow-up answer"]);
+  const updates = cloud.logFor("/api/conversations/update");
+  const lastUpdate = updates[updates.length - 1].body;
+  assert.equal(lastUpdate.id, synced.cloud_id);
+  assert.equal(lastUpdate.title, "Renamed");
+  assert.ok(lastUpdate.archived_at);
+  const after = db.getAgentConversation(conversation.id);
+  assert.equal(after.sync_status, "synced");
+  assert.equal(after.messages.length, 4);
+
+  // Nothing is pending, so a further pass sends nothing more.
+  await service.syncAll(true);
+  assert.equal(
+    cloud.logFor("/api/conversations/messages").filter((e) => e.method === "POST").length,
+    2
+  );
+});

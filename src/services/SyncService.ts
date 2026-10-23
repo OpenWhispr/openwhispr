@@ -970,12 +970,36 @@ export class SyncService {
     }
   }
 
+  // A conversation that already has a cloud copy keeps changing: follow-up turns,
+  // a rename, an archive. Messages are append-only, so the cloud copy holds a
+  // prefix of the local ones and only the rest is sent.
+  private async pushSyncedConversationChanges(localId: number, cloudId: string): Promise<void> {
+    const full = await window.electronAPI.getAgentConversation?.(localId);
+    if (!full) return;
+
+    const { messages: cloudMessages } = await ConversationsService.listMessages(cloudId);
+    for (const m of full.messages.slice(cloudMessages.length)) {
+      await ConversationsService.addMessage(
+        cloudId,
+        m.role,
+        m.content,
+        m.metadata ? (typeof m.metadata === "string" ? JSON.parse(m.metadata) : m.metadata) : null
+      );
+    }
+
+    await ConversationsService.update(cloudId, {
+      title: full.title,
+      ...(full.archived_at ? { archived_at: full.archived_at } : {}),
+    });
+    await window.electronAPI.markConversationSynced?.(localId, cloudId);
+  }
+
   private async pushConversation(id: number): Promise<void> {
     const full = await window.electronAPI.getAgentConversation?.(id);
     if (!full) return;
 
     if (full.cloud_id) {
-      await ConversationsService.update(full.cloud_id, { title: full.title });
+      await this.pushSyncedConversationChanges(full.id, full.cloud_id);
     } else {
       const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
@@ -2257,8 +2281,7 @@ export class SyncService {
 
     for (const conv of migration) {
       try {
-        await ConversationsService.update(conv.cloud_id!, { title: conv.title });
-        await window.electronAPI.markConversationSynced?.(conv.id, conv.cloud_id!);
+        await this.pushSyncedConversationChanges(conv.id, conv.cloud_id!);
       } catch (err) {
         console.error("Conversation migration sync failed:", err);
       }

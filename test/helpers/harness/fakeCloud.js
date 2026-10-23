@@ -91,6 +91,8 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  // Messages pushed through the write stubs, by cloud conversation id.
+  const conversationMessages = new Map();
   const log = [];
   const failures = [];
   let seq = 0;
@@ -336,10 +338,21 @@ function createFakeCloud(config = {}) {
 
       // Conversation writes stay echo-stubs; only the read side is modelled,
       // because the pull is what has to survive the ISO/SQLite format skew.
-      case "POST /api/conversations/create":
-        return { ...body, id: nextId("conv") };
+      case "POST /api/conversations/create": {
+        const id = nextId("conv");
+        conversationMessages.set(id, [...(body?.messages ?? [])]);
+        return { ...body, id };
+      }
       case "PATCH /api/conversations/update":
         return { ...body };
+      case "POST /api/conversations/messages": {
+        const messages = conversationMessages.get(body?.conversation_id) ?? [];
+        messages.push({ role: body.role, content: body.content, metadata: body.metadata ?? null });
+        conversationMessages.set(body.conversation_id, messages);
+        return { ...body, id: nextId("msg") };
+      }
+      case "GET /api/conversations/messages":
+        return { messages: conversationMessages.get(query.get("conversation_id")) ?? [] };
       case "DELETE /api/conversations/delete":
         return {};
       case "GET /api/conversations/list": {
