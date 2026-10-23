@@ -19,7 +19,10 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
       return {
         systemPreferences: {
-          subscribeWorkspaceNotification: () => 1,
+          subscribeWorkspaceNotification: (name, callback) => {
+            current.notifications.set(name, callback);
+            return name;
+          },
           unsubscribeWorkspaceNotification: () => {},
         },
       };
@@ -46,7 +49,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
 
 function loadDetector(platform) {
   setPlatform(platform);
-  current = { infoLogs: [], pendingScans: [] };
+  current = { infoLogs: [], pendingScans: [], notifications: new Map() };
   delete require.cache[detectorPath];
   const MeetingProcessDetector = require(detectorPath);
   const { infoLogs, pendingScans } = current;
@@ -54,6 +57,8 @@ function loadDetector(platform) {
     detector: new MeetingProcessDetector(),
     infoLogs,
     pendingScans,
+    notify: (name, bundleId) =>
+      current.notifications.get(name)(null, { NSApplicationBundleIdentifier: bundleId }),
     releaseScan: (processes) => pendingScans.shift()(processes),
   };
 }
@@ -139,4 +144,42 @@ test("a polling scan that completes after stop() cannot revive a stopped detecto
 
   assert.deepEqual(detector.getDetectedProcesses(), []);
   assert.deepEqual(detected, []);
+});
+
+// A workspace event is newer evidence than the process snapshot requested at start.
+test("an app terminated during the initial macOS scan stays ended", async (t) => {
+  const { detector, releaseScan, notify } = loadDetector("darwin");
+  t.after(() => detector.stop());
+  const detected = [];
+  detector.on("meeting-process-detected", (event) => detected.push(event.processKey));
+  detector.start();
+  notify("NSWorkspaceDidTerminateApplicationNotification", "us.zoom.xos");
+  releaseScan(["zoom.us", "facetime"]);
+  await settle();
+  assert.deepEqual(
+    detector.getDetectedProcesses().map((event) => event.processKey),
+    ["facetime"]
+  );
+  assert.deepEqual(detected, ["facetime"]);
+});
+
+test("launch and termination events keep their order while the startup scan waits", async (t) => {
+  const { detector, releaseScan, notify } = loadDetector("darwin");
+  t.after(() => detector.stop());
+  const detected = [];
+  const ended = [];
+  detector.on("meeting-process-detected", (event) => detected.push(event.processKey));
+  detector.on("meeting-process-ended", (event) => ended.push(event.processKey));
+  detector.start();
+  notify("NSWorkspaceDidLaunchApplicationNotification", "us.zoom.xos");
+  notify("NSWorkspaceDidTerminateApplicationNotification", "us.zoom.xos");
+  notify("NSWorkspaceDidLaunchApplicationNotification", "com.microsoft.teams2");
+  releaseScan(["zoom.us"]);
+  await settle();
+  assert.deepEqual(
+    detector.getDetectedProcesses().map((event) => event.processKey),
+    ["teams"]
+  );
+  assert.deepEqual(detected, ["zoom", "teams"]);
+  assert.deepEqual(ended, ["zoom"]);
 });

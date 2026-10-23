@@ -85,12 +85,15 @@ class MeetingProcessDetector extends EventEmitter {
       return;
     }
 
+    // The initial process snapshot may finish after a newer workspace event.
+    const changedDuringScan = new Set();
     const launchId = systemPreferences.subscribeWorkspaceNotification(
       "NSWorkspaceDidLaunchApplicationNotification",
       (_event, userInfo) => {
         const bundleId = userInfo?.NSApplicationBundleIdentifier;
         const processKey = bundleId ? BUNDLE_ID_MAP[bundleId] : null;
         if (processKey) {
+          changedDuringScan.add(processKey);
           const appName = BUNDLE_APP_NAMES[processKey] || processKey;
           debugLogger.debug("Workspace app launched", { bundleId, processKey }, "meeting");
           this._updateDetection(processKey, appName, true);
@@ -104,6 +107,7 @@ class MeetingProcessDetector extends EventEmitter {
         const bundleId = userInfo?.NSApplicationBundleIdentifier;
         const processKey = bundleId ? BUNDLE_ID_MAP[bundleId] : null;
         if (processKey) {
+          changedDuringScan.add(processKey);
           const appName = BUNDLE_APP_NAMES[processKey] || processKey;
           debugLogger.debug("Workspace app terminated", { bundleId, processKey }, "meeting");
           this._updateDetection(processKey, appName, false);
@@ -123,7 +127,7 @@ class MeetingProcessDetector extends EventEmitter {
       "meeting"
     );
 
-    this._initialScanDarwin(generation);
+    this._initialScanDarwin(generation, changedDuringScan);
   }
 
   // True once stop() or a newer start() has superseded the run that owns `generation`.
@@ -131,7 +135,7 @@ class MeetingProcessDetector extends EventEmitter {
     return !this._running || generation !== this._startGeneration;
   }
 
-  async _initialScanDarwin(generation) {
+  async _initialScanDarwin(generation, changedDuringScan) {
     try {
       const processList = await processListCache.getProcessList();
       if (this._isStale(generation)) return;
@@ -142,6 +146,7 @@ class MeetingProcessDetector extends EventEmitter {
         { match: "facetime", processKey: "facetime" },
       ];
       for (const { match, processKey } of darwinProcessNames) {
+        if (changedDuringScan.has(processKey)) continue;
         if (processList.some((p) => p.includes(match))) {
           const appName = BUNDLE_APP_NAMES[processKey] || processKey;
           debugLogger.info("Initial scan: already running", { processKey, appName }, "meeting");
