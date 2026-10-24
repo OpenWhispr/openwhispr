@@ -47,6 +47,16 @@ class TrayManager {
     this.windowManager = windowManager;
   }
 
+  setDatabaseManager(databaseManager) {
+    this.databaseManager = databaseManager;
+    this.updateTrayMenu?.();
+  }
+
+  setPasteLastCallback(callback) {
+    this.pasteLastCallback = callback;
+    this.updateTrayMenu?.();
+  }
+
   setCreateControlPanelCallback(callback) {
     this.createControlPanelCallback = callback;
   }
@@ -268,7 +278,7 @@ class TrayManager {
     const dictationVisible = this.windowManager?.isDictationPanelVisible?.() ?? false;
     const dictating = this.windowManager?.isDictating?.() ?? false;
 
-    return [
+    const template = [
       {
         label: dictating
           ? i18nMain.t("app.commandMenu.stopListening")
@@ -303,6 +313,37 @@ class TrayManager {
           this.updateTrayMenu();
         },
       },
+    ];
+
+    if (this.pasteLastCallback) {
+      let hasTranscription = false;
+      try {
+        const list = this.databaseManager?.getTranscriptions?.(1);
+        hasTranscription = Array.isArray(list) && list.length > 0;
+      } catch {
+        hasTranscription = false;
+      }
+
+      template.push({
+        label: hasTranscription
+          ? i18nMain.t("tray.pasteLastTranscription")
+          : i18nMain.t("tray.pasteLastTranscriptionEmpty"),
+        enabled: hasTranscription,
+        click: () => {
+          try {
+            this.pasteLastCallback();
+          } catch (err) {
+            debugLogger.error(
+              "Failed to paste last transcription from tray",
+              { error: err?.message },
+              "tray"
+            );
+          }
+        },
+      });
+    }
+
+    template.push(
       {
         label: this.isControlPanelVisible()
           ? i18nMain.t("tray.hideControlPanel")
@@ -318,8 +359,10 @@ class TrayManager {
           debugLogger.info("Quitting app via tray menu", undefined, "tray");
           app.quit();
         },
-      },
-    ];
+      }
+    );
+
+    return template;
   }
 
   updateTrayMenu() {
