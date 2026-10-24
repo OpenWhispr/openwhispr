@@ -1,5 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import type React from 'react';
-import { Modal, ScrollView, View } from 'react-native';
+import { Modal, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -20,6 +21,7 @@ export function AttendeesSheet({
   onClose,
 }: AttendeesSheetProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const { copy } = useAndroidCopy();
   const people = sortAttendees(participants);
 
   return (
@@ -30,11 +32,21 @@ export function AttendeesSheet({
       onRequestClose={onClose}
     >
       <View className="flex-1 bg-systemBackground">
-        <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
-            Attendees
+        <View
+          className="flex-row items-center justify-between px-6 pb-4 pt-8"
+          style={Platform.OS === 'android' ? { paddingTop: insets.top + 20 } : undefined}
+        >
+          <Text
+            accessibilityRole="header"
+            className={
+              Platform.OS === 'android'
+                ? 'flex-1 pr-4 text-[22px] font-bold text-label'
+                : 'text-[22px] font-bold text-label'
+            }
+          >
+            {copy('noteDetails.attendees', 'Attendees')}
           </Text>
-          <GlassIconButton onPress={onClose} accessibilityLabel="Close">
+          <GlassIconButton onPress={onClose} accessibilityLabel={copy('close', 'Close')}>
             <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
           </GlassIconButton>
         </View>
@@ -44,7 +56,10 @@ export function AttendeesSheet({
         >
           <GroupedList>
             {people.map((participant, index) => {
-              const name = attendeeName(participant);
+              const name = attendeeName(participant, {
+                you: copy('noteDetails.you', 'You'),
+                guest: copy('noteDetails.guest', 'Guest'),
+              });
               const showEmail = !!participant.email && participant.email !== name;
               return (
                 <GroupedList.Row
@@ -52,11 +67,15 @@ export function AttendeesSheet({
                   contentInsetLeft={16}
                 >
                   <View testID={`attendee-row-${index}`} className="flex-1 py-1">
-                    <View className="flex-row items-center gap-2">
+                    <View
+                      className={
+                        Platform.OS === 'android' ? 'gap-1' : 'flex-row items-center gap-2'
+                      }
+                    >
                       <Text className="text-[17px] text-label">{name}</Text>
                       {participant.organizer ? (
                         <Text className="text-[12px] font-medium text-secondaryLabel">
-                          Organizer
+                          {copy('noteDetails.organizer', 'Organizer')}
                         </Text>
                       ) : null}
                     </View>

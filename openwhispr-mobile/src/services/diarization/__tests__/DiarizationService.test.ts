@@ -213,3 +213,33 @@ describe('processMeeting', () => {
     expect(calls.seq).toEqual(['status:transcribing', 'status:failed']);
   });
 });
+
+describe('meeting job ownership', () => {
+  it.each(['transcribe', 'diarize'] as const)(
+    'does not persist after ownership changes during %s',
+    async (stage) => {
+      let current = true;
+      const { deps, calls } = makeDeps();
+      const checkpoint = () => {
+        if (!current) throw new Error('Meeting job cancelled');
+      };
+      if (stage === 'transcribe')
+        deps.transcribe = async () => {
+          current = false;
+          return whisperResponse;
+        };
+      else
+        deps.diarizer.diarize = async () => {
+          current = false;
+          return diarResult;
+        };
+      await expect(
+        processMeeting({ noteId: 1, wavUri: 'file://m.wav' }, { ...deps, checkpoint }),
+      ).rejects.toThrow('Meeting job cancelled');
+      expect(calls.segments).toBeUndefined();
+      expect(calls.speakers).toBeUndefined();
+      expect(calls.status).not.toContain('done');
+      expect(calls.status).not.toContain('failed');
+    },
+  );
+});

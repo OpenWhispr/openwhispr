@@ -1,9 +1,19 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  ScrollView,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  Share,
+  Platform,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 import * as Clipboard from 'expo-clipboard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
+import { GlassBackButton } from '@/components/ui/GlassBackButton';
 import { Button } from '@/components/ui/Button';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -22,6 +32,15 @@ import { router } from 'expo-router';
 
 const LABEL_COLOR = iosColor('label');
 const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
+
+function ReferralHeader() {
+  return (
+    <TabScreenHeader
+      title="Referral"
+      left={Platform.OS === 'android' ? <GlassBackButton fallbackRoute="/(account)" /> : undefined}
+    />
+  );
+}
 
 function InviteStatusBadge({ status }: { status: ReferralInvite['status'] }) {
   const config: Record<ReferralInvite['status'], { bg: string; text: string; label: string }> = {
@@ -86,7 +105,7 @@ function GuestReferralEmptyState() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
+      <ReferralHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View className="items-center px-6 pt-7">
           <View
@@ -204,10 +223,23 @@ export default function ReferralScreen() {
 
   const handleCopyLink = useCallback(async () => {
     if (!stats?.referralLink) return;
-    await Clipboard.setStringAsync(stats.referralLink);
-    safeHaptics('success');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await Clipboard.setStringAsync(stats.referralLink);
+      safeHaptics('success');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      Alert.alert('Could not copy link', 'Please try again.');
+    }
+  }, [stats]);
+
+  const handleShareLink = useCallback(async () => {
+    if (!stats?.referralLink) return;
+    try {
+      await Share.share({ message: stats.referralLink });
+    } catch {
+      Alert.alert('Could not share link', 'Please try again.');
+    }
   }, [stats]);
 
   const handleSendInvite = useCallback(async () => {
@@ -219,14 +251,16 @@ export default function ReferralScreen() {
     }
     safeHaptics('medium');
     setSendingInvite(true);
-    const ok = await sendReferralInvite(trimmed, sessionCookie);
-    setSendingInvite(false);
-    if (ok) {
+    try {
+      const ok = await sendReferralInvite(trimmed, sessionCookie);
+      if (!ok) throw new Error('Invite rejected');
       setEmailInput('');
       safeHaptics('success');
-      loadData();
-    } else {
+      void loadData();
+    } catch {
       Alert.alert('Failed', 'Could not send invite. Please try again.');
+    } finally {
+      setSendingInvite(false);
     }
   }, [emailInput, sendingInvite, sessionCookie, loadData]);
 
@@ -239,7 +273,7 @@ export default function ReferralScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
+        <ReferralHeader />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" />
         </View>
@@ -250,7 +284,7 @@ export default function ReferralScreen() {
   if (error || !stats) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
+        <ReferralHeader />
         <View className="flex-1 items-center justify-center p-8">
           <Text className="mb-4 text-center text-sm text-secondaryLabel">
             {error || 'Unable to load referral data'}
@@ -269,7 +303,7 @@ export default function ReferralScreen() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
+      <ReferralHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View className="mt-2 px-4">
           <View
@@ -328,7 +362,6 @@ export default function ReferralScreen() {
               <View className="flex-1 flex-row items-center gap-2 px-3.5 py-3">
                 <SystemIcon name="link" mdName="Link" size={13} color="secondaryLabel" />
                 <Text
-                  numberOfLines={1}
                   selectable
                   style={{ fontFamily: 'monospace' }}
                   className="flex-1 text-[13px] text-label"
@@ -338,6 +371,8 @@ export default function ReferralScreen() {
               </View>
               <Pressable
                 onPress={handleCopyLink}
+                accessibilityRole="button"
+                accessibilityLabel={copied ? 'Link copied' : 'Copy referral link'}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
                 className="w-[68px] items-center justify-center border-l border-separator"
               >
@@ -349,6 +384,13 @@ export default function ReferralScreen() {
                 />
               </Pressable>
             </View>
+            <Pressable
+              onPress={handleShareLink}
+              accessibilityRole="button"
+              className="min-h-12 items-center justify-center border-t border-separator px-4 py-3"
+            >
+              <Text className="text-[15px] text-link">Share referral link</Text>
+            </Pressable>
             <View className="h-px bg-separator" />
             <View className="flex-row items-stretch">
               <View className="flex-1 flex-row items-center gap-2 px-3.5">

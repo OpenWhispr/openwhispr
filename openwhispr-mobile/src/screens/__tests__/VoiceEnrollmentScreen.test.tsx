@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import VoiceEnrollmentScreen from '../VoiceEnrollmentScreen';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
@@ -58,6 +58,26 @@ beforeEach(() => {
 });
 
 describe('VoiceEnrollmentScreen', () => {
+  it.each<Record<string, string>>([{ owner: '1' }, { owner: '0' }, { profileId: '2' }])(
+    'does not mount a recorder or offer downloads for an Android deep link: %j',
+    (params) => {
+      const previous = Platform.OS;
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+      try {
+        mockParams = params;
+        const { getByTestId, getByText } = render(<VoiceEnrollmentScreen />);
+        expect(getByTestId('voice-enrollment-unavailable')).toBeTruthy();
+        expect(mockRecorderProps).toBeNull();
+        expect(mockState.loadVoiceProfiles).not.toHaveBeenCalled();
+        expect(mockState.downloadDiarizerModel).not.toHaveBeenCalled();
+        expect(mockEnroll).not.toHaveBeenCalled();
+        fireEvent.press(getByText('Back'));
+        expect(mockBack).toHaveBeenCalledTimes(1);
+      } finally {
+        Object.defineProperty(Platform, 'OS', { configurable: true, value: previous });
+      }
+    },
+  );
   it('teaches your own voice by default', () => {
     mockParams = { owner: '1' };
     const { getByText } = render(<VoiceEnrollmentScreen />);

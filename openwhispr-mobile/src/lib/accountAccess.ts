@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
@@ -39,7 +40,7 @@ export function getCloudAccountRequiredMessage(feature: string, anonymous = fals
   // Already in Private Mode, which is what turning it off asks Cloud for, so don't offer it back.
   return useProcessingModeStore.getState().activeMode === 'private'
     ? `${action}.`
-    : `${action}, or set Dictation to On-Device in Account → AI Models.`;
+    : `${action}, or ${Platform.OS === 'android' ? 'turn on Local Mode' : 'set Dictation to On-Device'} in Account → AI Models.`;
 }
 
 // For features with no local model (AI actions, AI chat): Private Mode is not

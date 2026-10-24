@@ -1,8 +1,10 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { act, renderHook } from '@testing-library/react-native';
 import { useAudioRecording } from '../useAudioRecording';
 
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
+  deleteAsync: jest.fn(async () => undefined),
 }));
 
 // permissions.ts re-exports the alert helper, which reaches nativewind through
@@ -71,6 +73,19 @@ jest.mock('@/utils/expoAudio', () => ({
   getDefaultRecorderOptions: () => ({}),
 }));
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockRecorder.isRecording = false;
+  mockAudioModule.getRecordingPermissionsAsync.mockResolvedValue({ granted: true });
+  mockAudioModule.requestRecordingPermissionsAsync.mockResolvedValue({ granted: true });
+  mockRecorder.record.mockImplementation(() => {
+    mockRecorder.isRecording = true;
+  });
+  mockRecorder.stop.mockImplementation(async () => {
+    mockRecorder.isRecording = false;
+  });
+});
+
 it('still delivers the transcript when history cannot be saved', async () => {
   mockAudioModule.getRecordingPermissionsAsync.mockResolvedValue({ granted: true });
   mockAudioModule.requestRecordingPermissionsAsync.mockResolvedValue({ granted: true });
@@ -89,4 +104,98 @@ it('still delivers the transcript when history cannot be saved', async () => {
   expect(onError).toHaveBeenCalledWith(
     expect.objectContaining({ message: expect.stringContaining('could not be saved') }),
   );
+});
+
+it('does not start after unmount while microphone permission is pending', async () => {
+  let grant!: (value: { granted: boolean }) => void;
+  mockAudioModule.requestRecordingPermissionsAsync.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+  );
+  const { result, unmount } = renderHook(() => useAudioRecording());
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = result.current.startRecording().catch((error) => {
+      expect(error.name).toBe('AbortError');
+    });
+  });
+  unmount();
+  await act(async () => {
+    grant({ granted: true });
+    await pending;
+  });
+  expect(mockRecorder.prepareToRecordAsync).not.toHaveBeenCalled();
+  expect(mockRecorder.record).not.toHaveBeenCalled();
+});
+it('ignores a second Start while permission is pending', async () => {
+  let grant!: (value: { granted: boolean }) => void;
+  mockAudioModule.requestRecordingPermissionsAsync.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+  );
+  const { result } = renderHook(() => useAudioRecording());
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = result.current.startRecording().catch((error) => {
+      expect(error.name).toBe('AbortError');
+    });
+    await expect(result.current.startRecording()).rejects.toMatchObject({ name: 'AbortError' });
+  });
+  expect(result.current.isStarting).toBe(true);
+  await act(async () => {
+    grant({ granted: true });
+    await pending;
+  });
+  expect(mockRecorder.record).toHaveBeenCalledTimes(1);
+});
+it('invalidates a pending start when it is cancelled', async () => {
+  let grant!: (value: { granted: boolean }) => void;
+  mockAudioModule.requestRecordingPermissionsAsync.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+  );
+  const { result } = renderHook(() => useAudioRecording());
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = result.current.startRecording().catch((error) => {
+      expect(error.name).toBe('AbortError');
+    });
+  });
+  await act(async () => {
+    await result.current.cancelRecording();
+    grant({ granted: true });
+    await pending;
+  });
+  expect(mockRecorder.record).not.toHaveBeenCalled();
+  expect(result.current.isStarting).toBe(false);
+});
+
+it('removes the owned temporary file when cancelled during preparation', async () => {
+  let finish!: () => void;
+  mockRecorder.prepareToRecordAsync.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve(undefined);
+      }),
+  );
+  const { result } = renderHook(() => useAudioRecording());
+  let pending!: Promise<void>;
+  await act(async () => {
+    pending = result.current.startRecording().catch((error) => {
+      expect(error.name).toBe('AbortError');
+    });
+  });
+  await act(async () => {
+    await result.current.cancelRecording();
+    finish();
+    await pending;
+  });
+  expect(mockRecorder.record).not.toHaveBeenCalled();
+  expect(FileSystem.deleteAsync).toHaveBeenCalledWith(mockRecorder.uri, { idempotent: true });
 });

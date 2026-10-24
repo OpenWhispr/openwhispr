@@ -1,5 +1,5 @@
 import type { DateBucketKey } from './groupNotesByDate';
-import { parseNoteTimestamp } from './parseNoteTimestamp';
+import { parseNoteTimestamp, tryParseNoteTimestamp } from './parseNoteTimestamp';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -15,20 +15,24 @@ export function formatClockTime(d: Date): string {
 export function formatNoteRowTime(
   updatedAt: string | number | Date | null | undefined,
   bucket: DateBucketKey,
+  language?: string,
+  yesterdayLabel = 'Yesterday',
 ): string {
-  const d = parseNoteTimestamp(updatedAt);
-  if (isNaN(d.getTime())) return '';
+  const d = language ? tryParseNoteTimestamp(updatedAt) : parseNoteTimestamp(updatedAt);
+  if (!d || isNaN(d.getTime())) return '';
 
   if (bucket === 'today') {
-    return formatClockTime(d);
+    return language
+      ? d.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })
+      : formatClockTime(d);
   }
   if (bucket === 'yesterday') {
-    return 'Yesterday';
+    return yesterdayLabel;
   }
   if (bucket === 'prev7') {
-    return WEEKDAYS[d.getDay()];
+    return language ? d.toLocaleDateString(language, { weekday: 'long' }) : WEEKDAYS[d.getDay()];
   }
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(language, {
     month: 'numeric',
     day: 'numeric',
     year: 'numeric',

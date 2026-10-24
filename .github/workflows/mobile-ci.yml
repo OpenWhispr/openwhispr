@@ -67,7 +67,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Apply reviewed dependency patches
         run: node_modules/.bin/patch-package --error-on-fail
-      - name: Verify patched signing dependency
+      - name: Verify dependency security regressions
         run: npm run test:security
       - name: Check formatting
         if: matrix.check == 'static'

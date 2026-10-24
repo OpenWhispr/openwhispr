@@ -1,5 +1,16 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { useTranslation } from 'react-i18next';
+import { AccountButton } from '@/android/ui';
 import { useEffect, useCallback, useMemo, useState } from 'react';
-import { View, ScrollView, Pressable, RefreshControl, Alert, ActionSheetIOS } from 'react-native';
+import {
+  View,
+  ScrollView,
+  Pressable,
+  RefreshControl,
+  Alert,
+  ActionSheetIOS,
+  Platform,
+} from 'react-native';
 import { Text } from '@/components/ui/Text';
 
 const SCROLL_PADDING = 16;
@@ -14,14 +25,17 @@ import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
-import { groupNotesByDate } from '@/lib/groupNotesByDate';
+import { useNoteBuckets } from '@/hooks/useNoteBuckets';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { useMoveNote } from '@/hooks/useMoveNote';
+import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
 
 export default function NotesListScreen() {
+  const { t } = useTranslation('android');
+  const { copy } = useAndroidCopy();
   const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
   const folderId = params.folderId ? Number(params.folderId) : null;
   const spaceId = params.spaceId ? Number(params.spaceId) : null;
@@ -50,6 +64,7 @@ export default function NotesListScreen() {
   } = useNotesStore();
 
   const [newFolderVisible, setNewFolderVisible] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     if (!isInitialized) initialize();
@@ -80,7 +95,7 @@ export default function NotesListScreen() {
       ? (folders.find((f) => f.id === folderId) ?? spaceFolders.find((f) => f.id === folderId))
       : null;
   const activeSpace = spaceId != null ? spaces.find((s) => s.id === spaceId) : null;
-  const screenTitle = activeSpace?.name ?? activeFolder?.name ?? 'Notes';
+  const screenTitle = activeSpace?.name ?? activeFolder?.name ?? copy('notes', 'Notes');
 
   // The space this screen's content belongs to — set both when browsing a space
   // and when browsing one of its folders, so move targets never cross scopes.
@@ -95,7 +110,7 @@ export default function NotesListScreen() {
     excludeFolderId: activeFolderId,
   });
 
-  const buckets = useMemo(() => groupNotesByDate(notes), [notes]);
+  const buckets = useNoteBuckets(notes);
   const totalCount = useMemo(() => {
     if (spaceId == null) return notes.length;
     return (
@@ -120,12 +135,17 @@ export default function NotesListScreen() {
 
   const handleDeleteNote = useCallback(
     (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+      confirmDestructive(
+        copy('library.deleteNote', 'Delete Note'),
+        copy('library.deleteNoteBody', 'This note will be deleted permanently.'),
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { cancelLabel: copy('cancel', 'Cancel'), destructiveLabel: copy('deleteAction', 'Delete') },
+      );
     },
-    [deleteNote],
+    [deleteNote, copy],
   );
 
   const handleCompose = useCallback(() => {
@@ -156,6 +176,13 @@ export default function NotesListScreen() {
       { id: 'note', label: 'New note', icon: 'square.and.pencil', mdIcon: 'SquarePen' },
       { id: 'meeting', label: 'Record meeting', icon: 'mic', mdIcon: 'Mic' },
     ];
+    if (Platform.OS === 'android')
+      actions.push({
+        id: 'import',
+        label: t('importAudio'),
+        icon: 'square.and.arrow.down',
+        mdIcon: 'FileAudio',
+      });
     if (spaceId != null) {
       actions.push({
         id: 'folder',
@@ -165,7 +192,7 @@ export default function NotesListScreen() {
       });
     }
     return actions;
-  }, [spaceId]);
+  }, [spaceId, t]);
 
   // Deleting a space folder tombstones its notes for everyone in the space, so
   // the server allows it to admins only (requireSpaceFolderAdmin). Renaming has
@@ -177,6 +204,34 @@ export default function NotesListScreen() {
       safeHaptics('medium');
       // The server refuses to delete a default folder outright, so never offer it.
       const canDelete = canDeleteSpaceFolders && !isDefault;
+      if (Platform.OS === 'android') {
+        Alert.alert(folderName, undefined, [
+          {
+            text: t('renameFolder'),
+            onPress: () => setRenamingFolder({ id: targetFolderId, name: folderName }),
+          },
+          ...(canDelete
+            ? [
+                {
+                  text: t('deleteFolder'),
+                  style: 'destructive' as const,
+                  onPress: () =>
+                    confirmDestructive(
+                      t('deleteFolder'),
+                      t('deleteSpaceFolderBody', {
+                        name: folderName,
+                        count: folderCounts[targetFolderId] ?? 0,
+                      }),
+                      () => deleteFolderSafe(targetFolderId),
+                      { cancelLabel: t('cancel'), destructiveLabel: t('deleteAction') },
+                    ),
+                },
+              ]
+            : []),
+          { text: t('cancel'), style: 'cancel' },
+        ]);
+        return;
+      }
       const options = canDelete ? ['Rename', 'Delete', 'Cancel'] : ['Rename', 'Cancel'];
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -203,19 +258,23 @@ export default function NotesListScreen() {
         },
       );
     },
-    [canDeleteSpaceFolders, renameFolder, deleteFolderSafe, folderCounts],
+    [canDeleteSpaceFolders, renameFolder, deleteFolderSafe, folderCounts, t],
   );
 
   const handleFabAction = useCallback(
     (id: string) => {
       if (id === 'note') {
         handleCompose();
-      } else if (id === 'meeting') {
+      } else if (id === 'meeting' || id === 'import') {
         // The meeting is filed where it was started: this folder, or this space.
         const startedIn: { folderId?: string; spaceId?: string } = {};
         if (params.folderId) startedIn.folderId = params.folderId;
         else if (params.spaceId) startedIn.spaceId = params.spaceId;
-        router.push({ pathname: '/(tabs)/(notes)/meeting-record', params: startedIn });
+        router.push({
+          pathname:
+            id === 'import' ? '/(tabs)/(notes)/import-audio' : '/(tabs)/(notes)/meeting-record',
+          params: startedIn,
+        });
       } else if (id === 'folder') {
         safeHaptics('light');
         setNewFolderVisible(true);
@@ -232,6 +291,7 @@ export default function NotesListScreen() {
   return (
     <View className="flex-1 bg-systemBackground">
       <NotesTopBar
+        rightSlots={Platform.OS === 'android' ? <AccountButton /> : undefined}
         showBack
         title={screenTitle}
         searchValue={searchQuery}
@@ -246,42 +306,54 @@ export default function NotesListScreen() {
         keyboardDismissMode="interactive"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text className="mb-2 text-[15px] text-tertiaryLabel">{`${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`}</Text>
+        <Text className="mb-2 text-[15px] text-tertiaryLabel">
+          {copy('library.noteCount', `${totalCount} ${totalCount === 1 ? 'Note' : 'Notes'}`, {
+            count: totalCount,
+          })}
+        </Text>
         <SyncStatusLabel />
 
-        <View className="mb-2">
-          <GroupedList>
-            <GroupedList.Row
-              leadingIconSlot={
-                <SystemIcon name="waveform" mdName="AudioLines" size={22} color="brand" />
-              }
-              onPress={openVoiceProfiles}
-              accessibilityRole="button"
-              accessibilityLabel="Voice Profiles"
-            >
-              <View className="flex-row items-center justify-between gap-3">
-                <View className="min-w-0 flex-1">
-                  <Text className="text-[16px] font-medium text-label">Voice Profiles</Text>
-                  <Text className="mt-0.5 text-[13px] text-secondaryLabel">
-                    {voiceProfiles.length === 0
-                      ? 'Teach OpenWhispr your voice'
-                      : `${voiceProfiles.length} ${voiceProfiles.length === 1 ? 'voice' : 'voices'}`}
-                  </Text>
+        {supportsVoiceEnrollment() || voiceProfiles.length > 0 ? (
+          <View className="mb-2">
+            <GroupedList>
+              <GroupedList.Row
+                leadingIconSlot={
+                  <SystemIcon name="waveform" mdName="AudioLines" size={22} color="brand" />
+                }
+                onPress={openVoiceProfiles}
+                accessibilityRole="button"
+                accessibilityLabel={copy('library.voiceProfiles', 'Voice Profiles')}
+              >
+                <View className="flex-row items-center justify-between gap-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-[16px] font-medium text-label">
+                      {copy('library.voiceProfiles', 'Voice Profiles')}
+                    </Text>
+                    <Text className="mt-0.5 text-[13px] text-secondaryLabel">
+                      {voiceProfiles.length === 0
+                        ? copy('library.teachVoice', 'Teach OpenWhispr your voice')
+                        : copy(
+                            'library.voiceCount',
+                            `${voiceProfiles.length} ${voiceProfiles.length === 1 ? 'voice' : 'voices'}`,
+                            { count: voiceProfiles.length },
+                          )}
+                    </Text>
+                  </View>
+                  <SystemIcon
+                    name="chevron.right"
+                    mdName="ChevronRight"
+                    size={13}
+                    color="tertiaryLabel"
+                  />
                 </View>
-                <SystemIcon
-                  name="chevron.right"
-                  mdName="ChevronRight"
-                  size={13}
-                  color="tertiaryLabel"
-                />
-              </View>
-            </GroupedList.Row>
-          </GroupedList>
-        </View>
+              </GroupedList.Row>
+            </GroupedList>
+          </View>
+        ) : null}
 
         {showSpaceFolders && (
           <View className="mb-2">
-            <SectionHeader label="Folders" />
+            <SectionHeader label={copy('library.folders', 'Folders')} />
             <GroupedList>
               {spaceFolders.map((folder) => (
                 <FolderRow
@@ -313,7 +385,9 @@ export default function NotesListScreen() {
                       color="quaternaryLabel"
                     />
                     <Text className="text-[15px] text-tertiaryLabel">
-                      {`No results for "${searchQuery}"`}
+                      {copy('library.noResults', `No results for "${searchQuery}"`, {
+                        query: searchQuery,
+                      })}
                     </Text>
                   </View>
                 ) : (
@@ -326,23 +400,29 @@ export default function NotesListScreen() {
                     />
                     <View className="items-center gap-1">
                       <Text className="text-[17px] font-semibold text-label">
-                        No notes here yet
+                        {copy('library.noNotes', 'No notes here yet')}
                       </Text>
                       <Text className="text-[15px] text-tertiaryLabel">
-                        Create your first note to start writing
+                        {copy('library.firstNote', 'Create your first note to start writing')}
                       </Text>
                     </View>
                     <Pressable
                       onPress={handleCompose}
                       accessibilityRole="button"
-                      accessibilityLabel="Create note"
-                      className="mt-2 h-10 items-center justify-center rounded-[10px] bg-brand px-4"
+                      accessibilityLabel={copy('library.createNote', 'Create note')}
+                      className={
+                        Platform.OS === 'android'
+                          ? 'mt-2 min-h-12 items-center justify-center rounded-[10px] bg-brand px-4 py-2'
+                          : 'mt-2 h-10 items-center justify-center rounded-[10px] bg-brand px-4'
+                      }
                       style={({ pressed }) => ({
                         borderCurve: 'continuous',
                         opacity: pressed ? 0.85 : 1,
                       })}
                     >
-                      <Text className="text-[15px] font-semibold text-white">+ Create Note</Text>
+                      <Text className="text-[15px] font-semibold text-white">
+                        {copy('library.createNote', '+ Create Note')}
+                      </Text>
                     </Pressable>
                   </View>
                 )}
@@ -374,11 +454,35 @@ export default function NotesListScreen() {
       <Fab
         icon="plus"
         mdIcon="Plus"
-        accessibilityLabel="Create"
-        actions={fabActions}
+        accessibilityLabel={copy('library.create', 'Create')}
+        actions={
+          Platform.OS === 'android'
+            ? fabActions.map((action) => ({
+                ...action,
+                label:
+                  action.id === 'import'
+                    ? t('importAudio')
+                    : t(
+                        action.id === 'note'
+                          ? 'newNote'
+                          : action.id === 'meeting'
+                            ? 'meetingSetupTitle'
+                            : 'newFolder',
+                      ),
+              }))
+            : fabActions
+        }
         onActionPress={handleFabAction}
       />
 
+      <NewFolderSheet
+        visible={renamingFolder != null}
+        initialName={renamingFolder?.name}
+        onClose={() => setRenamingFolder(null)}
+        onCreate={(name) => {
+          if (renamingFolder) renameFolder(renamingFolder.id, name);
+        }}
+      />
       <NewFolderSheet
         visible={newFolderVisible}
         onClose={() => setNewFolderVisible(false)}

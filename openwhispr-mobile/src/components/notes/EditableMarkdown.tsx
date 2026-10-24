@@ -1,6 +1,7 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useEffect, useRef, useState } from 'react';
 import type React from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -19,6 +20,7 @@ export function EditableMarkdown({
   onChange,
   onEditingChange,
 }: EditableMarkdownProps): React.JSX.Element {
+  const { copy } = useAndroidCopy();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(content);
   const editingRef = useRef(editing);
@@ -62,15 +64,16 @@ export function EditableMarkdown({
           <Pressable
             testID="enhanced-done"
             accessibilityRole="button"
+            className={Platform.OS === 'android' ? 'min-h-12 justify-center px-2' : undefined}
             hitSlop={12}
             onPress={() => setEditingState(false)}
           >
-            <Text className="text-[15px] font-semibold text-link">Done</Text>
+            <Text className="text-[15px] font-semibold text-link">{copy('done', 'Done')}</Text>
           </Pressable>
         </View>
         <TextInput
           testID="enhanced-editor"
-          accessibilityLabel="Enhanced notes"
+          accessibilityLabel={copy('editor.enhanced', 'Enhanced notes')}
           value={draft}
           onChangeText={(text) => {
             draftEditedRef.current = true;
@@ -94,10 +97,11 @@ export function EditableMarkdown({
           <Pressable
             testID="enhanced-edit"
             accessibilityRole="button"
+            className={Platform.OS === 'android' ? 'min-h-12 justify-center px-2' : undefined}
             hitSlop={12}
             onPress={() => setEditingState(true)}
           >
-            <Text className="text-[15px] font-semibold text-link">Edit</Text>
+            <Text className="text-[15px] font-semibold text-link">{copy('edit', 'Edit')}</Text>
           </Pressable>
         </View>
       ) : null}

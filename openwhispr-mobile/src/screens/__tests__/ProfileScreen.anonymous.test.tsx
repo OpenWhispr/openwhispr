@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Platform } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import { confirmDestructive } from '@/lib/alerts';
 
 const mockRouterPush = jest.fn();
 const mockSignOut = jest.fn();
@@ -55,14 +57,79 @@ jest.mock('@/components/ui/SettingsSection', () => {
 
 import ProfileScreen from '../ProfileScreen';
 
+const originalPlatform = Platform.OS;
+
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.defineProperty(Platform, 'OS', { value: originalPlatform, configurable: true });
   mockAuthState.user = {
     id: 'anon-user',
     email: 'temp-1@anon.openwhispr.invalid',
     isAnonymous: true,
   };
   mockAuthState.isGuest = false;
+});
+
+afterAll(() => Object.defineProperty(Platform, 'OS', { value: originalPlatform }));
+
+describe('ProfileScreen sign-in navigation', () => {
+  it.each([false, true])('opens auth on Android when signed out (guest=%s)', (isGuest) => {
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    mockAuthState.user = null;
+    mockAuthState.isGuest = isGuest;
+
+    const { getByText } = render(<ProfileScreen />);
+    fireEvent.press(getByText('Sign In'));
+
+    expect(mockRouterPush).toHaveBeenCalledWith('/auth');
+    expect(confirmDestructive).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it.each(['ios', 'android'] as const)(
+    'still confirms a real account sign-out on %s',
+    async (platform) => {
+      Object.defineProperty(Platform, 'OS', { value: platform, configurable: true });
+      mockAuthState.user = { id: 'real', email: 'real@example.com', isAnonymous: false };
+
+      const { getByText } = render(<ProfileScreen />);
+      fireEvent.press(getByText('Sign Out'));
+
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(confirmDestructive).toHaveBeenCalledWith(
+        'Sign Out',
+        expect.any(String),
+        expect.any(Function),
+        { destructiveLabel: 'Sign Out' },
+      );
+      await act(async () => {
+        await jest.mocked(confirmDestructive).mock.calls[0][2]();
+      });
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+      expect(mockRouterPush).not.toHaveBeenCalled();
+    },
+  );
+
+  it('preserves the iOS guest-exit flow handled by its root auth gate', async () => {
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    mockAuthState.user = null;
+    mockAuthState.isGuest = true;
+
+    const { getByText } = render(<ProfileScreen />);
+    fireEvent.press(getByText('Sign In'));
+
+    expect(confirmDestructive).toHaveBeenCalledWith(
+      'Leave Guest Mode',
+      expect.any(String),
+      expect.any(Function),
+      { destructiveLabel: 'Continue' },
+    );
+    await act(async () => {
+      await jest.mocked(confirmDestructive).mock.calls[0][2]();
+    });
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).not.toHaveBeenCalled();
+  });
 });
 
 describe('ProfileScreen with an anonymous session', () => {

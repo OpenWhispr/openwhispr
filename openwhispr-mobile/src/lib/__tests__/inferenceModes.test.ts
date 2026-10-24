@@ -4,12 +4,35 @@ import { Platform } from 'react-native';
 import {
   dictationModeConfig,
   getInferenceModes,
+  localModeDefault,
   holdOnDeviceConfig,
   localModeUpgradeConfig,
   noteChatSplitConfig,
+  notesLocalModeSplitConfig,
   workflowSaveConfig,
 } from '../inferenceModes';
 import type { UserConfig } from '@/types';
+
+it('leaves Android workflow choices intact during the iOS note-formatting migration', () => {
+  const originalOS = Platform.OS;
+  const saved = {
+    defaultMode: 'private',
+    inference: { notes: { mode: 'openwhispr' } },
+    pinnedInference: ['notes'],
+  } as UserConfig;
+  try {
+    Platform.OS = 'android';
+    expect(notesLocalModeSplitConfig(saved)).toEqual({ notesLocalModeSplit: true });
+    Platform.OS = 'ios';
+    expect(notesLocalModeSplitConfig(saved)).toEqual({
+      notesLocalModeSplit: true,
+      inference: { notes: { mode: 'local' } },
+      pinnedInference: ['notes'],
+    });
+  } finally {
+    Platform.OS = originalOS;
+  }
+});
 
 const groqCleanup = {
   mode: 'providers' as const,
@@ -423,9 +446,13 @@ describe('getInferenceModes', () => {
     expect(getInferenceModes('text').map((mode) => mode.mode)).toContain('providers');
   });
 
-  it('never offers Bring Your Own Key on Android', () => {
+  it('offers Bring Your Own Key on Android with its native transport', () => {
     Platform.OS = 'android';
-    expect(getInferenceModes('speech').map((mode) => mode.mode)).toEqual(['openwhispr', 'local']);
+    expect(getInferenceModes('speech').map((mode) => mode.mode)).toEqual([
+      'openwhispr',
+      'local',
+      'providers',
+    ]);
   });
 });
 
@@ -443,6 +470,30 @@ it('switches dictation back to On-Device with the model the user picked', () => 
   });
 });
 
+describe('Android retains local workflow defaults', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it.each(['none', 'session', 'account'] as const)(
+    'keeps uploads and cleanup on device with %s access',
+    (access) => {
+      expect(localModeDefault('upload', access)).toBe('local');
+      expect(localModeDefault('cleanup', access)).toBe('local');
+    },
+  );
+  it('does not migrate Android settings to the new iOS cleanup defaults', () => {
+    expect(
+      localModeUpgradeConfig({
+        defaultMode: 'private',
+        inference: { cleanup: { mode: 'openwhispr' } },
+      }),
+    ).toEqual({ localModeUpgraded: true });
+  });
+});
 // Note chat once shared the voice assistant's setting, so an existing config gives it the same one.
 describe('noteChatSplitConfig', () => {
   const groqChat = {
@@ -451,6 +502,33 @@ describe('noteChatSplitConfig', () => {
     modelId: 'llama-3.3-70b-versatile',
     credentialRef: 'provider.groq',
   };
+
+  it('preserves the Android provider return choice when splitting note chat', () => {
+    const originalOS = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      const config: UserConfig = {
+        defaultMode: 'private',
+        inference: { dictation: { mode: 'local' } },
+        privateModeReturn: { pinned: { agent: { mode: 'openwhispr' } } },
+      };
+      const migrated = { ...config, ...noteChatSplitConfig(config) };
+      const next = workflowSaveConfig(migrated, 'dictation', groqCleanup, 'private');
+      expect(next.inference?.noteChat).toEqual({ mode: 'openwhispr' });
+      expect(next.pinnedInference).toContain('noteChat');
+    } finally {
+      Platform.OS = originalOS;
+    }
+  });
+
+  it('keeps an explicit note chat return choice when splitting', () => {
+    const privateModeReturn: UserConfig['privateModeReturn'] = {
+      pinned: { agent: groqChat, noteChat: { mode: 'local' } },
+    };
+    expect(noteChatSplitConfig({ defaultMode: 'private', privateModeReturn })).not.toHaveProperty(
+      'privateModeReturn',
+    );
+  });
 
   it('copies a provider selection and its remembered providers', () => {
     expect(

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { TranscriptionRequest, TranscriptionResponse } from '../../types';
 import {
@@ -499,6 +500,7 @@ export class TranscriptionService {
     }
     if (options.requestContext) {
       parameters.requestContext = options.requestContext;
+      if (options.requestContext === 'file') parameters.source = 'file_upload';
     }
     if (options.requestContext === 'keyboard') {
       parameters.normalizeAudio = '1';
@@ -974,7 +976,7 @@ export class TranscriptionService {
           scope,
           request.inferenceRoute,
           false,
-          scope === 'upload',
+          scope === 'upload' && Platform.OS !== 'android',
         );
         const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
         const routeSnapshot = recoveryJobId

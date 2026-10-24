@@ -15,10 +15,33 @@ import {
   type ReenrollVoiceProfileInput,
 } from '@/services/diarization/VoiceprintService';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
+import {
+  supportsVoiceEnrollment,
+  VOICE_ENROLLMENT_UNAVAILABLE,
+} from '@/lib/voiceEnrollmentCapability';
 
 type SubmitInput = EnrollVoiceProfileInput | ReenrollVoiceProfileInput;
 
 export default function VoiceEnrollmentScreen() {
+  const router = useRouter();
+  if (supportsVoiceEnrollment()) return <SupportedVoiceEnrollmentScreen />;
+  return (
+    <View className="flex-1 gap-4 bg-systemBackground p-4" testID="voice-enrollment-unavailable">
+      <Text className="text-[15px] leading-5 text-secondaryLabel">
+        {VOICE_ENROLLMENT_UNAVAILABLE}
+      </Text>
+      <Button
+        onPress={() =>
+          router.canGoBack() ? router.back() : router.replace('/(tabs)/(notes)/voice-profiles')
+        }
+      >
+        Back
+      </Button>
+    </View>
+  );
+}
+
+function SupportedVoiceEnrollmentScreen() {
   const params = useLocalSearchParams<{ owner?: string; profileId?: string; noteId?: string }>();
   const router = useRouter();
   const profiles = useNotesStore((state) => state.voiceProfiles);

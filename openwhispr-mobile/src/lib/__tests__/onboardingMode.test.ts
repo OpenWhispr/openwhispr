@@ -1,3 +1,9 @@
+import { Platform } from 'react-native';
+const mockLocalReadiness = jest.fn();
+jest.mock('../localReasoning', () => ({
+  getLocalReasoningReadiness: () => mockLocalReadiness(),
+  canRunLocalReasoning: (readiness: { status?: string } | null) => readiness?.status === 'ready',
+}));
 import { chooseOnboardingMode } from '../onboardingMode';
 import { OnboardingError } from '../onboardingErrors';
 
@@ -270,5 +276,41 @@ describe('on a device that synced an account, signed out', () => {
     await chooseOnboardingMode('cloud', 'private-download');
     expect(mockEnsureSession).not.toHaveBeenCalled();
     expect(mockChooseMode).toHaveBeenCalledWith('cloud', 'private-download');
+  });
+});
+
+describe('Android onboarding cleanup', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('keeps downloaded Qwen cleanup selected when Local Mode is chosen', async () => {
+    mockLocalReadiness.mockResolvedValue({ status: 'ready' });
+    await chooseOnboardingMode('private', 'privacy-mode');
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inference: { dictation: { mode: 'local' }, cleanup: { mode: 'local' } },
+      }),
+    );
+  });
+  it('does not select a cloud cleanup fallback when the text model is missing', async () => {
+    mockLocalReadiness.mockResolvedValue({ status: 'modelNotDownloaded' });
+    await chooseOnboardingMode('private', 'privacy-mode');
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inference: { dictation: { mode: 'local' } },
+      }),
+    );
+  });
+  it('does not commit after navigation changes while readiness is being checked', async () => {
+    mockLocalReadiness.mockImplementationOnce(async () => {
+      mockCurrentStep = 'language';
+      return { status: 'ready' };
+    });
+    await chooseOnboardingMode('private', 'privacy-mode');
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 });

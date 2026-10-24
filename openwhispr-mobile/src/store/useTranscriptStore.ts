@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { isProviderJobActive } from '@/lib/providerJobActivity';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { create } from 'zustand';
@@ -366,9 +367,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       const inferenceRoute = rerouted ? rerouted.inferenceRoute : current.inferenceRoute;
       const textRoutes =
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
-      if (provider !== 'local' && activeMode === 'private' && scope === 'dictation') {
+      if (
+        provider !== 'local' &&
+        activeMode === 'private' &&
+        (Platform.OS === 'android' || scope === 'dictation')
+      ) {
         throw new Error(
-          'This recording used a remote provider. Change Dictation from On-Device in Account → AI Models to retry its original route.',
+          `This recording used a remote provider. ${Platform.OS === 'android' ? 'Turn off Local Mode' : 'Change Dictation from On-Device'} in Account → AI Models to retry its original route.`,
         );
       }
       const retryCount = (current.retryCount ?? 0) + 1;

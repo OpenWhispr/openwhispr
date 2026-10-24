@@ -1,3 +1,4 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -20,12 +21,15 @@ function SnippetRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { copy } = useAndroidCopy();
   return (
     <SwipeableCard onDelete={onDelete} inset>
       <Pressable
         onPress={onEdit}
         accessibilityRole="button"
-        accessibilityLabel={`Edit snippet ${snippet.trigger}`}
+        accessibilityLabel={copy('library.editSnippetNamed', `Edit snippet ${snippet.trigger}`, {
+          name: snippet.trigger,
+        })}
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
         className="bg-secondarySystemGroupedBackground px-4 py-3.5"
       >
@@ -48,6 +52,7 @@ function RowDivider() {
 }
 
 function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { copy } = useAndroidCopy();
   return (
     <View className="flex-1 items-center px-8 pt-12">
       <View
@@ -56,10 +61,14 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       >
         <SystemIcon name="text.append" mdName="Replace" size={24} color="secondaryLabel" />
       </View>
-      <Text className="mb-2 text-[17px] font-semibold text-label">Snippets</Text>
+      <Text className="mb-2 text-[17px] font-semibold text-label">
+        {copy('dictionarySnippets', 'Snippets')}
+      </Text>
       <Text className="mb-6 text-center text-[14px] leading-5 text-secondaryLabel">
-        Turn a short spoken trigger into longer text. Say “signoff” and it expands to your full
-        sign-off.
+        {copy(
+          'library.snippetsDescription',
+          'Turn a short spoken trigger into longer text. Say “signoff” and it expands to your full sign-off.',
+        )}
       </Text>
       <Pressable
         onPress={onAdd}
@@ -67,13 +76,16 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         className="flex-row items-center gap-2 rounded-xl bg-link px-4 py-2.5"
       >
         <SystemIcon name="plus" mdName="Plus" size={15} color="#fff" />
-        <Text className="text-[15px] font-semibold text-white">Add your first snippet</Text>
+        <Text className="text-[15px] font-semibold text-white">
+          {copy('library.firstSnippet', 'Add your first snippet')}
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 export function SnippetsView() {
+  const { copy } = useAndroidCopy();
   const entries = useSnippetsStore((s) => s.entries);
   const addSnippet = useSnippetsStore((s) => s.addSnippet);
   const updateSnippet = useSnippetsStore((s) => s.updateSnippet);
@@ -139,15 +151,17 @@ export function SnippetsView() {
             <SearchField
               value={query}
               onChangeText={setQuery}
-              placeholder="Search snippets"
-              accessibilityLabel="Search snippets"
+              placeholder={copy('library.searchSnippets', 'Search snippets')}
+              accessibilityLabel={copy('library.searchSnippets', 'Search snippets')}
             />
           </View>
 
           {hasNoResults ? (
             <View className="items-center px-8 pt-12">
               <Text className="text-[14px] text-tertiaryLabel">
-                {`No snippets match "${query.trim()}".`}
+                {copy('library.noSnippets', `No snippets match "${query.trim()}".`, {
+                  query: query.trim(),
+                })}
               </Text>
             </View>
           ) : (
@@ -175,7 +189,12 @@ export function SnippetsView() {
         </ScrollView>
       )}
 
-      <Fab icon="plus" mdIcon="Plus" onPress={openCreate} accessibilityLabel="Add snippet" />
+      <Fab
+        icon="plus"
+        mdIcon="Plus"
+        onPress={openCreate}
+        accessibilityLabel={copy('library.addSnippet', 'Add snippet')}
+      />
 
       <AddSnippetSheet
         visible={sheetOpen}

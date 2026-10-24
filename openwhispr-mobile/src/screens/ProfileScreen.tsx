@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { router } from 'expo-router';
 import { SettingsRow, SettingsSection } from '@/components/ui/SettingsSection';
@@ -25,6 +25,12 @@ export default function ProfileScreen() {
   }, [user, loadUsage]);
 
   const handleSignOut = useCallback(() => {
+    // Android keeps local workflows available without a session, so clearing
+    // auth does not navigate as it does through the iOS root auth gate.
+    if (!user && Platform.OS === 'android') {
+      router.push('/auth');
+      return;
+    }
     confirmDestructive(
       user ? 'Sign Out' : 'Leave Guest Mode',
       user ? 'Are you sure you want to sign out?' : 'Return to sign in?',

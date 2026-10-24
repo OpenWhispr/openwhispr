@@ -8,6 +8,10 @@ import { confirmDestructive } from '@/lib/alerts';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { safeHaptics } from '@/lib/utils';
 import type { SpeakerProfile } from '@/data/types';
+import {
+  supportsVoiceEnrollment,
+  VOICE_ENROLLMENT_UNAVAILABLE,
+} from '@/lib/voiceEnrollmentCapability';
 
 const notesPath = (path: string): string => `/(tabs)/(notes)/${path}`;
 
@@ -23,10 +27,12 @@ export default function VoiceProfilesScreen() {
   }, [loadVoiceProfiles]);
 
   const openOwnerEnrollment = useCallback(() => {
+    if (!supportsVoiceEnrollment()) return;
     router.push(notesPath('voice-enrollment?owner=1'));
   }, []);
 
   const openSpeakerEnrollment = useCallback(() => {
+    if (!supportsVoiceEnrollment()) return;
     registerSuperwallGate({
       placement: SUPERWALL_PLACEMENTS.voiceProfileAdditionalSpeaker,
       params: { existingProfileCount: profiles.length },
@@ -74,8 +80,9 @@ export default function VoiceProfilesScreen() {
       >
         <VoiceProfileList
           profiles={profiles}
-          onEnrollOwner={openOwnerEnrollment}
-          onEnrollSpeaker={openSpeakerEnrollment}
+          onEnrollOwner={supportsVoiceEnrollment() ? openOwnerEnrollment : undefined}
+          onEnrollSpeaker={supportsVoiceEnrollment() ? openSpeakerEnrollment : undefined}
+          unavailableMessage={supportsVoiceEnrollment() ? undefined : VOICE_ENROLLMENT_UNAVAILABLE}
           onOpenProfile={openProfile}
           onDelete={deleteProfile}
           onDeleteAll={profiles.length > 0 ? deleteAll : undefined}

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { ReasoningRequest, ReasoningResponse } from '../../types';
 import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
@@ -142,7 +143,10 @@ export class ReasoningService {
     let privateContent = !chosenProvider && routing?.isPrivateNote === true;
     // Local Mode keeps cleanup and note chat on this iPhone unless the user chose otherwise; note
     // formatting follows its own selection there.
-    if (scope !== 'notes' && ((usesProviders && !chosenProvider) || localSelected)) {
+    if (
+      (Platform.OS === 'android' || scope !== 'notes') &&
+      ((usesProviders && !chosenProvider) || localSelected)
+    ) {
       const { useProcessingModeStore } =
         require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
       privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
@@ -176,13 +180,15 @@ export class ReasoningService {
             // The input fitting the context isn't enough for cleanup: its reply is as long as the
             // transcript, and Apple Intelligence cuts it off at LOCAL_OUTPUT_TOKEN_RESERVE without an
             // error.
-            (scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
+            (Platform.OS !== 'ios' || scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
 
           if (!fits) {
             if (!allowCloudFallback) {
               throw new LocalReasoningError(
                 'LOCAL_CONTEXT_LIMIT',
-                'This request is too large for local Apple Intelligence.',
+                Platform.OS === 'android'
+                  ? 'This request is too large for the selected local model.'
+                  : 'This request is too large for local Apple Intelligence.',
               );
             }
           } else {

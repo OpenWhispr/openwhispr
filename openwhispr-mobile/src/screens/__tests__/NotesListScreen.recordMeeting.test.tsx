@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import NotesListScreen from '../NotesListScreen';
 
 let mockParams: Record<string, string> = {};
+jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 let mockFabActionPress: ((id: string) => void) | null = null;
 const mockState = {
   folders: [],
@@ -84,6 +85,18 @@ beforeEach(() => {
 });
 
 describe('NotesListScreen Record meeting', () => {
+  it.each([{ folderId: '5' }, { spaceId: '3' }, {}])(
+    'pins import context %j in its route',
+    (params) => {
+      mockParams = params as Record<string, string>;
+      render(<NotesListScreen />);
+      mockFabActionPress?.('import');
+      expect(router.push).toHaveBeenCalledWith({
+        pathname: '/(tabs)/(notes)/import-audio',
+        params,
+      });
+    },
+  );
   it('records into the folder being viewed', () => {
     recordMeeting({ folderId: '5' });
     expect(router.push).toHaveBeenCalledWith({

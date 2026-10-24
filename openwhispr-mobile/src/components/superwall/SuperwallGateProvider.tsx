@@ -10,7 +10,7 @@ import type {
 } from '@/hooks/useSuperwallGate';
 import { useAuthStore } from '@/store/useAuthStore';
 import { requiresRealAccount } from '@/lib/accountAccess';
-import { useUsageStore } from '@/store/useUsageStore';
+import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
 import {
   isTransactionalSuperwallPlacement,
   resolveSuperwallPlacementName,
@@ -20,7 +20,7 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { logPaywallViewed, logSubscription } from '@/lib/appsflyer';
-import { identifyRevenueCatUser, recordRevenueCatPurchase } from '@/lib/revenuecat';
+import { recordRevenueCatPurchase } from '@/lib/revenuecat';
 import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
 
 type Props = {
@@ -202,8 +202,15 @@ function reportPurchaseCompletion(
 // id. Never rejects; the lib reports its own failures.
 async function recordPurchaseForBilling(productId: string): Promise<void> {
   const billingUserId = useUsageStore.getState().usage?.billingUserId;
-  if (billingUserId) await identifyRevenueCatUser(billingUserId);
-  await recordRevenueCatPurchase(productId);
+  const owner = getUsageOwnerKey();
+  if (!billingUserId || !owner) return;
+  await recordRevenueCatPurchase(productId, billingUserId, () => {
+    if (
+      getUsageOwnerKey() !== owner ||
+      useUsageStore.getState().usage?.billingUserId !== billingUserId
+    )
+      throw new Error('Billing account changed.');
+  });
 }
 
 // The gate stays open while the purchase is recorded, so a hung native call must

@@ -44,6 +44,7 @@ jest.mock('../../../modules/app-group-storage/src', () => ({
 
 let mockAppStateListener: ((state: string) => void) | undefined;
 jest.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   AppState: {
     addEventListener: (_type: string, listener: (state: string) => void) => {
       mockAppStateListener = listener;

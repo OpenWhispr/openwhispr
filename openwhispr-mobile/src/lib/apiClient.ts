@@ -1,4 +1,4 @@
-import { fetch } from 'expo/fetch';
+import { sessionFetch as fetch } from './sessionFetch';
 import Constants from 'expo-constants';
 import { useAuthStore } from '@/store/useAuthStore';
 import { parseApiErrorBody } from '@/lib/apiErrorBody';

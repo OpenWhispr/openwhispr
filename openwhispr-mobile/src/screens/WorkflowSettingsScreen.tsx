@@ -38,13 +38,15 @@ import {
   removeProviderCredential,
   setProviderCredential,
 } from '@/services/providers/ProviderCredentials';
-import { workflowSaveConfig } from '@/lib/inferenceModes';
+import { MODE_LABELS, workflowSaveConfig } from '@/lib/inferenceModes';
 import { InferenceModePicker } from '@/components/settings/InferenceModePicker';
 import {
+  ANDROID_LOCAL_MODE_LOCKED,
   CLOUD_CLEANUP_NEEDS_ACCOUNT_NOTE,
   LOCAL_MODE_DICTATION_NOTES,
   ON_DEVICE_MODE_NOTES,
   ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE,
+  PRIVATE_MODE_LOCKED_REASON,
   UNSET_PROVIDER_NOTES,
   WORKFLOW_LABELS,
   WORKFLOWS,
@@ -122,6 +124,7 @@ function WorkflowSwitchCard({
   icon,
   mdIcon,
   enabled,
+  disabled = false,
   onToggle,
   offNote,
   children,
@@ -132,6 +135,7 @@ function WorkflowSwitchCard({
   icon: string;
   mdIcon: LucideIconName;
   enabled: boolean;
+  disabled?: boolean;
   onToggle: (value: boolean) => void;
   offNote: string;
   children?: React.ReactNode;
@@ -145,14 +149,20 @@ function WorkflowSwitchCard({
           mdIcon={mdIcon}
           title={title}
           description={description}
+          disabled={disabled}
           rightElement={
-            <SettingsSwitch accessibilityLabel={label} value={enabled} onValueChange={onToggle} />
+            <SettingsSwitch
+              accessibilityLabel={label}
+              value={enabled}
+              disabled={disabled}
+              onValueChange={onToggle}
+            />
           }
           showChevron={false}
         />
         {enabled ? children : null}
       </SettingsSection>
-      {enabled ? null : <SectionFooter>{offNote}</SectionFooter>}
+      {enabled || disabled ? null : <SectionFooter>{offNote}</SectionFooter>}
     </>
   );
 }
@@ -206,14 +216,22 @@ function VoiceAssistantSettings({ enabled }: { enabled: boolean }): React.JSX.El
   const agentName = useConfigStore((state) =>
     state.config ? getDictationAgentName(state.config) : undefined,
   );
+  const privateMode = useProcessingModeStore(
+    (state) => Platform.OS === 'android' && state.activeMode === 'private',
+  );
   return (
     <WorkflowSwitchCard
       title="Enable Voice Assistant"
       label="Voice Assistant"
-      description="Tap the wand on the OpenWhispr keyboard and say what to write."
+      description={
+        privateMode
+          ? PRIVATE_MODE_LOCKED_REASON
+          : 'Tap the wand on the OpenWhispr keyboard and say what to write.'
+      }
       icon="person.wave.2"
       mdIcon="UserRoundCog"
-      enabled={enabled}
+      enabled={enabled && !privateMode}
+      disabled={privateMode}
       onToggle={(value) => {
         safeHaptics('light');
         void updateConfig({ dictationAgentEnabled: value });
@@ -292,7 +310,10 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   // Local Mode runs dictation on this phone whatever is saved, so a saved Cloud dictation (a guest
   // held in Local Mode) shows as On-Device (Automatic), which is what runs.
   const lockedByPrivateMode =
-    activeMode === 'private' && scope === 'dictation' && storedSelection.mode === 'openwhispr';
+    activeMode === 'private' &&
+    (Platform.OS === 'android'
+      ? !!ANDROID_LOCAL_MODE_LOCKED[scope]?.includes(storedSelection.mode)
+      : scope === 'dictation' && storedSelection.mode === 'openwhispr');
   const savedSelection: InferenceSelection = lockedByPrivateMode
     ? { mode: 'local' }
     : storedSelection;
@@ -351,18 +372,25 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     ? getLocalReasoningUnavailableMessage(appleIntelligence ?? undefined)
     : null;
   const onDeviceStatus =
-    appleIntelligence?.status === 'unsupportedLanguage'
-      ? getLocalReasoningLanguageNote(appleIntelligence)
-      : appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
+    Platform.OS === 'android'
+      ? appleIntelligence && appleIntelligence.status !== 'ready'
+        ? getLocalReasoningUnavailableMessage(appleIntelligence)
+        : undefined
+      : appleIntelligence?.status === 'unsupportedLanguage'
+        ? getLocalReasoningLanguageNote(appleIntelligence)
+        : appleIntelligence && APPLE_INTELLIGENCE_STATUSES[appleIntelligence.status];
   // Nothing is shown as picked when the On-Device text workflow can never run on this iPhone.
   const pickedMode =
     !speechScope && onDeviceUnsupported && selection.mode === 'local' ? null : selection.mode;
   const modeNote =
-    (onDeviceWanted && !speechScope
+    (Platform.OS === 'ios' && onDeviceWanted && !speechScope
       ? 'Switches to On-Device once Apple Intelligence is ready, while this page stays open.'
       : undefined) ??
     (scope === 'cleanup' && selection.mode === 'local' && onDeviceUnsupported
       ? ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE
+      : undefined) ??
+    (Platform.OS === 'android' && lockedByPrivateMode && ON_DEVICE_MODE_NOTES[scope]
+      ? `${ON_DEVICE_MODE_NOTES[scope]} Your ${MODE_LABELS[storedSelection.mode]} choice applies again when Local Mode is off.`
       : undefined) ??
     (scope === 'cleanup' &&
     selection.mode === 'openwhispr' &&
@@ -381,9 +409,17 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     (scope === 'dictation'
       ? LOCAL_MODE_DICTATION_NOTES[activeMode === 'private' ? 'on' : 'off']
       : undefined);
-  const modeUnavailable: Partial<Record<InferenceMode, string>> = onDeviceUnsupported
-    ? { local: onDeviceUnsupported }
-    : {};
+  const modeUnavailable: Partial<Record<InferenceMode, string>> = {
+    ...(onDeviceUnsupported ? { local: onDeviceUnsupported } : {}),
+    ...(Platform.OS === 'android' && activeMode === 'private'
+      ? Object.fromEntries(
+          (ANDROID_LOCAL_MODE_LOCKED[scope] ?? []).map((mode) => [
+            mode,
+            PRIVATE_MODE_LOCKED_REASON,
+          ]),
+        )
+      : {}),
+  };
   const modeStatuses: Partial<Record<InferenceMode, string>> = onDeviceStatus
     ? { local: onDeviceStatus }
     : {};
@@ -393,7 +429,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const workflowOff = workflowSwitchedOff(config, scope);
   // A switched-off workflow uses no key.
   const usesKey = (workflow: MobileInferenceScope): boolean =>
-    !workflowSwitchedOff(config, workflow);
+    !workflowSwitchedOff(config, workflow) &&
+    !(Platform.OS === 'android' && activeMode === 'private' && workflow === 'agent');
   const sharedWith = WORKFLOWS.filter((other) => {
     const saved = config?.inference?.[other];
     return (
@@ -405,11 +442,12 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
         normalizeBaseUrl(saved.endpoint) === normalizeBaseUrl(selection.endpoint))
     );
   }).map((other) => WORKFLOW_LABELS[other]);
+  const deviceLabel = Platform.OS === 'android' ? 'phone' : 'iPhone';
   const keyFooter = sharedWith.length
-    ? `Stays on this iPhone. Also used by ${joinNames(sharedWith)}.`
+    ? `Stays on this ${deviceLabel}. Also used by ${joinNames(sharedWith)}.`
     : provider?.id === 'custom'
-      ? 'Stays on this iPhone. Every workflow using this server uses the same key.'
-      : `Stays on this iPhone. Every workflow set to ${keyOwner} uses the same key.`;
+      ? `Stays on this ${deviceLabel}. Every workflow using this server uses the same key.`
+      : `Stays on this ${deviceLabel}. Every workflow set to ${keyOwner} uses the same key.`;
 
   // A passing check looks like finished setup, so leaving must not drop the key silently.
   const hasUnsavedChanges =
@@ -436,7 +474,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   useEffect(() => {
     let cancelled = false;
     setConfigured(false);
-    if (Platform.OS === 'ios' && selection.mode === 'providers' && providerId) {
+    if (
+      (Platform.OS === 'ios' || Platform.OS === 'android') &&
+      selection.mode === 'providers' &&
+      providerId
+    ) {
       getProviderCredentialReference(providerId, selection.endpoint)
         .then((reference) =>
           // An unreadable saved key still exists, so offer to remove it.
@@ -808,7 +850,17 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               statuses={modeStatuses}
             />
             {modeNote ? <SectionFooter>{modeNote}</SectionFooter> : null}
-            {selection.mode === 'local' && speechScope ? (
+            {selection.mode === 'local' && Platform.OS === 'android' ? (
+              <SettingsSection title="On-device models">
+                <SettingsRow
+                  icon="arrow.down.circle"
+                  mdIcon="Download"
+                  title="Choose or download models"
+                  description="Choose speech and text models for this phone."
+                  onPress={() => router.push('/(account)/ai-models')}
+                />
+              </SettingsSection>
+            ) : selection.mode === 'local' && speechScope ? (
               <OnDeviceModelSection
                 scope={speechScope}
                 picked={
@@ -818,7 +870,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
               />
             ) : null}
             {selection.mode === 'local' && !speechScope && !onDeviceUnsupported ? (
-              <SectionFooter>Runs on Apple Intelligence on this iPhone.</SectionFooter>
+              <SectionFooter>
+                {Platform.OS === 'android'
+                  ? 'Runs on your downloaded text model on this phone.'
+                  : 'Runs on Apple Intelligence on this iPhone.'}
+              </SectionFooter>
             ) : null}
             {selection.mode === 'providers' && provider ? (
               <>
@@ -887,7 +943,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 </SettingsSection>
                 {provider.id === 'custom' ? (
                   <SectionFooter>
-                    On iPhone, localhost is this iPhone. Use your server's network address.
+                    On this phone, localhost is this phone. Use your server's network address.
                   </SectionFooter>
                 ) : null}
                 <SettingsSection title="API Key">

@@ -1,9 +1,11 @@
 import { Stack, router } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { safeHaptics } from '@/lib/utils';
 import { customHeaderStackOptions, glassStackOptions } from '@/config/navigation';
 import { WORKFLOW_LABELS, parseWorkflow } from '@/lib/aiWorkflows';
+
+const androidPageHeader = Platform.OS === 'android' ? customHeaderStackOptions : {};
 
 // iOS 26 wraps custom header buttons in their own liquid-glass capsule, so this
 // back button is a bare chevron — the native bar supplies the glass. Adding our
@@ -40,9 +42,14 @@ export default function AccountLayout() {
         headerLeft: renderHeaderLeft,
       }}
     >
+      <Stack.Screen name="device-check" options={customHeaderStackOptions} />
+      <Stack.Screen name="help" options={customHeaderStackOptions} />
       <Stack.Screen name="index" options={customHeaderStackOptions} />
       <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
-      <Stack.Screen name="ai-models" options={{ title: 'AI Models', headerLargeTitle: false }} />
+      <Stack.Screen
+        name="ai-models"
+        options={{ title: 'AI Models', headerLargeTitle: false, ...androidPageHeader }}
+      />
       <Stack.Screen
         name="ai-workflow"
         options={({ route }) => {
@@ -68,7 +75,7 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="preferences"
-        options={{ title: 'Preferences', headerLargeTitle: false }}
+        options={{ title: 'Preferences', headerLargeTitle: false, ...androidPageHeader }}
       />
       <Stack.Screen
         name="google-calendar"
@@ -78,7 +85,10 @@ export default function AccountLayout() {
         name="transcription-language"
         options={{ title: 'Transcription Language', headerLargeTitle: false }}
       />
-      <Stack.Screen name="privacy" options={{ title: 'Privacy & Data', headerLargeTitle: false }} />
+      <Stack.Screen
+        name="privacy"
+        options={{ title: 'Privacy & Data', headerLargeTitle: false, ...androidPageHeader }}
+      />
       <Stack.Screen
         name="model-download"
         options={{ title: 'Transcription Models', headerLargeTitle: false }}
@@ -93,7 +103,7 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="licenses"
-        options={{ title: 'Licenses & Attribution', headerLargeTitle: false }}
+        options={{ title: 'Licenses & Attribution', headerLargeTitle: false, ...androidPageHeader }}
       />
     </Stack>
   );

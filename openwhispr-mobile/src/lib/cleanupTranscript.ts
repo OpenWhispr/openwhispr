@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { resolveMobileInferenceRoute } from '@/lib/mobileProviders';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -28,6 +29,7 @@ interface CleanupOptions
   inferenceRoute?: ReasoningRequest['inferenceRoute'];
   requireProvider?: boolean;
   onSkipped?: (reason: string) => void;
+  signal?: AbortSignal;
   tone?: KeyboardTone;
   includeSnippetTriggers?: boolean;
   context?: CleanupContext;
@@ -37,12 +39,21 @@ export const CLEANUP_TIMEOUT_MS = 12_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
-function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: () => void } {
+function createTimeoutSignal(
+  timeoutMs: number,
+  parent?: AbortSignal,
+): { signal: AbortSignal; cancel: () => void } {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  if (parent?.aborted) abort();
+  else parent?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, timeoutMs);
   return {
     signal: controller.signal,
-    cancel: () => clearTimeout(timeout),
+    cancel: () => {
+      clearTimeout(timeout);
+      parent?.removeEventListener('abort', abort);
+    },
   };
 }
 
@@ -63,7 +74,10 @@ function localCleanupTimeoutMs(transcriptTokens: number): number {
 const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanup.';
 
 // Why an on-device pass can't run, or the transcript's length in tokens.
-async function prepareLocalRun(text: string): Promise<{ skipReason: string } | { tokens: number }> {
+async function prepareLocalRun(
+  text: string,
+): Promise<{ skipReason: string } | { tokens?: number }> {
+  if (Platform.OS === 'android') return {};
   let readiness = await getLocalReasoningReadiness();
   // The cached answer outlives a fix in iOS Settings, so check again before refusing.
   if (readiness.status !== 'ready') readiness = await getLocalReasoningReadiness({ refresh: true });
@@ -79,7 +93,7 @@ async function prepareLocalRun(text: string): Promise<{ skipReason: string } | {
 // Apple Intelligence's common failures say what happened. The only signal a cleanup run gets is
 // its timeout, so a cancelled one took too long.
 function cleanupFailureReason(error: unknown): string {
-  if (error instanceof LocalReasoningError) {
+  if (Platform.OS === 'ios' && error instanceof LocalReasoningError) {
     if (error.code === 'APPLE_LLM_CANCELLED') return 'Apple Intelligence took too long.';
     if (error.code === 'APPLE_LLM_RATE_LIMITED') return 'Apple Intelligence was busy.';
     if (error.code === 'APPLE_LLM_UNSUPPORTED_LANGUAGE') return UNSUPPORTED_LANGUAGE_MESSAGE;
@@ -124,7 +138,6 @@ export async function cleanupTranscript(
     ? getDictationAgentName(cfg ?? { defaultMode: activeMode })
     : undefined;
 
-  let timeoutMs = CLEANUP_TIMEOUT_MS;
   const snapshottedRoute = options.inferenceRoute ?? options.cleanupRoute;
   if (options.cleanupUnavailable) {
     options.onSkipped?.(options.cleanupUnavailable);
@@ -155,6 +168,10 @@ export async function cleanupTranscript(
     return rawText;
   }
   const inferenceRoute = resolved.route;
+  // First-use CPU model loading and prefill are slower than a hosted request.
+  // Keep the existing network timeout; local work remains user-cancellable.
+  let timeoutMs =
+    Platform.OS === 'android' && inferenceRoute.mode === 'local' ? 120_000 : CLEANUP_TIMEOUT_MS;
   // Say why an on-device pass can't run, rather than retrying into a generic failure.
   if (inferenceRoute.mode === 'local') {
     const localRun = await prepareLocalRun(rawText);
@@ -162,7 +179,9 @@ export async function cleanupTranscript(
       options.onSkipped?.(`${localRun.skipReason} Your raw transcript is saved.`);
       return rawText;
     }
-    timeoutMs = localCleanupTimeoutMs(localRun.tokens);
+    if (Platform.OS === 'ios' && localRun.tokens !== undefined) {
+      timeoutMs = localCleanupTimeoutMs(localRun.tokens);
+    }
   }
   // A cleanup provider route only ever comes from the provider the user saved for cleanup, so it is
   // sent there even in On-Device mode. An on-device route takes the privacy hint. A Cloud route is
@@ -181,7 +200,7 @@ export async function cleanupTranscript(
     let retryCount = 0;
     const result = await withRetry(
       async () => {
-        const { signal, cancel } = createTimeoutSignal(timeoutMs);
+        const { signal, cancel } = createTimeoutSignal(timeoutMs, options.signal);
         try {
           return await ReasoningService.processText({
             text: rawText,

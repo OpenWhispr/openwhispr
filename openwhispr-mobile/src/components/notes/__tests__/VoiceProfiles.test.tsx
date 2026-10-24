@@ -31,6 +31,28 @@ const baseListProps = {
 };
 
 describe('VoiceProfileList', () => {
+  it('keeps saved profiles manageable when voice training is unavailable', () => {
+    const onOpenProfile = jest.fn();
+    const onDeleteAll = jest.fn();
+    const { getByTestId, getByText, queryByTestId } = render(
+      <VoiceProfileList
+        {...baseListProps}
+        profiles={[profile()]}
+        onEnrollOwner={undefined}
+        onEnrollSpeaker={undefined}
+        unavailableMessage="Voice training is unavailable on this device."
+        onOpenProfile={onOpenProfile}
+        onDeleteAll={onDeleteAll}
+      />,
+    );
+    expect(getByText('Voice training is unavailable on this device.')).toBeTruthy();
+    expect(queryByTestId('voice-profile-enroll-owner')).toBeNull();
+    expect(queryByTestId('voice-profile-enroll-speaker')).toBeNull();
+    fireEvent.press(getByTestId('voice-profile-row-1'));
+    expect(onOpenProfile).toHaveBeenCalled();
+    fireEvent.press(getByTestId('voice-profile-delete-all'));
+    expect(onDeleteAll).toHaveBeenCalled();
+  });
   beforeEach(() => {
     jest.clearAllMocks();
   });

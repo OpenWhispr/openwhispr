@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { meetingAudioDirectory } from './meetingAudioStorage';
 
 // Retained under the cache dir, not documents: it's transient best-effort retry
 // material, so it must never ride along in the user's iCloud/device backup (the
@@ -33,9 +34,8 @@ export function isManagedTranscriptAudioUri(uri?: string | null): boolean {
 
 /** source_file is synced metadata, not authority to read or delete a local path. */
 export function isManagedMeetingAudioUri(noteId: number, uri?: string | null): boolean {
-  return (
-    !!FileSystem.documentDirectory && uri === `${FileSystem.documentDirectory}meeting-${noteId}.wav`
-  );
+  const directory = meetingAudioDirectory();
+  return !!directory && uri === `${directory}meeting-${noteId}.wav`;
 }
 
 export function isWavAudioFile(input: {

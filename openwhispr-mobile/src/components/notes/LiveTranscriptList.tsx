@@ -8,6 +8,7 @@ import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents'
 interface LiveTranscriptListProps {
   utterances: RealtimeUtterance[];
   partialText: string;
+  active?: boolean;
 }
 
 /**
@@ -19,6 +20,7 @@ interface LiveTranscriptListProps {
 export function LiveTranscriptList({
   utterances,
   partialText,
+  active = true,
 }: LiveTranscriptListProps): React.JSX.Element {
   const scrollRef = useRef<ScrollView>(null);
 
@@ -35,20 +37,20 @@ export function LiveTranscriptList({
       contentContainerStyle={{ gap: 16, paddingBottom: 8 }}
       showsVerticalScrollIndicator={false}
     >
-      {isEmpty ? (
+      {isEmpty && active ? (
         <Text className="text-[15px] text-tertiaryLabel">
           Listening… speak to see the transcript.
         </Text>
       ) : null}
       {utterances.map((utterance) => (
-        <Text key={utterance.itemId} className="text-[16px] leading-6 text-label">
+        <Text key={utterance.itemId} selectable className="text-[16px] leading-6 text-label">
           {utterance.text}
         </Text>
       ))}
       {partialText ? (
         <Text className="text-[16px] leading-6 text-tertiaryLabel">{partialText}</Text>
       ) : null}
-      {!isEmpty ? (
+      {!isEmpty && active ? (
         <View className="flex-row items-center gap-2 pb-2">
           <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: BRAND }} />
           <Text className="text-[13px] font-medium text-secondaryLabel">Transcribing…</Text>

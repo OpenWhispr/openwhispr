@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, AppState, Keyboard, ScrollView } from 'react-native';
+import { Alert, AppState, Keyboard, ScrollView, Platform } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
@@ -313,15 +313,16 @@ it('restores a provider model saved in an earlier settings session', async () =>
   expect(screen.getByText('Whisper')).toBeTruthy();
 });
 
-it('offers Cloud and On-Device on Android, without Bring Your Own Key', () => {
+it('offers Cloud, On-Device and Bring Your Own Key on Android', async () => {
   const platform = require('react-native').Platform;
   const original = platform.OS;
   platform.OS = 'android';
   try {
     render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
     expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
     expect(screen.getByText('On-Device')).toBeTruthy();
-    expect(screen.queryByText('Bring Your Own Key')).toBeNull();
+    expect(screen.getByText('Bring Your Own Key')).toBeTruthy();
   } finally {
     platform.OS = original;
   }
@@ -1528,4 +1529,76 @@ describe('an iPhone that cannot run Apple Intelligence', () => {
     expect(selectedMode()).toBeUndefined();
     expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).not.toBeOnTheScreen();
   });
+});
+
+it('describes Android local cleanup and provider keys without Apple controls or iPhone wording', async () => {
+  const platform = require('react-native').Platform;
+  const original = platform.OS;
+  platform.OS = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' } } };
+  try {
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.getByText('Runs on your downloaded text model on this phone.')).toBeTruthy();
+    expect(screen.queryByText(/Apple Intelligence|iPhone/)).toBeNull();
+    fireEvent.press(screen.getByText('Choose or download models'));
+    expect(mockPush).toHaveBeenCalledWith('/(account)/ai-models');
+    await act(async () => enableProviders());
+    expect(screen.getByText(/Stays on this phone/)).toBeTruthy();
+    expect(screen.queryByText(/Apple Intelligence|iPhone/)).toBeNull();
+  } finally {
+    platform.OS = original;
+  }
+});
+
+describe('Android Local Mode workflow controls', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockActiveMode = 'private';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('keeps the voice assistant disabled while Local Mode is on', async () => {
+    mockScope = 'agent';
+    mockConfig = {
+      defaultMode: 'private',
+      dictationAgentEnabled: true,
+      inference: { agent: { mode: 'openwhispr' } },
+    };
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.getByLabelText('Voice Assistant').props.enabled).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.on).toBe(false);
+    expect(screen.getByText(/Off while Local Mode is on\./)).toBeTruthy();
+  });
+  it.each(['upload', 'cleanup'])('does not offer Cloud for %s while Local Mode is on', (scope) => {
+    mockScope = scope;
+    mockConfig = { defaultMode: 'private', inference: { [scope]: { mode: 'openwhispr' } } };
+    render(<WorkflowSettingsScreen />);
+    expect(selectedMode()).toBe('On-Device');
+    fireEvent.press(screen.getByText('OpenWhispr Cloud'));
+    expect(mockSwitchMode).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+});
+
+it('shows Android model download guidance without an Apple download status', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' } } };
+  mockLocalReadiness.mockResolvedValue({ status: 'modelNotReady', tokenCounting: false });
+  try {
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.queryByText(/Apple Intelligence|iPhone|iOS Settings/)).toBeNull();
+    expect(
+      screen.getByText('Download a local text model in Account → Models to use on-device AI.'),
+    ).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+  }
 });

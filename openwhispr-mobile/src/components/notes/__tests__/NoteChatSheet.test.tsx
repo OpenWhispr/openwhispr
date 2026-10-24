@@ -1,3 +1,4 @@
+import { Platform, TextInput } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NoteChatSheet } from '../NoteChatSheet';
 import { getNoteChatSuggestions } from '@/lib/notes/noteChatSuggestions';
@@ -79,4 +80,58 @@ describe('NoteChatSheet suggestions', () => {
     fireEvent.press(getByLabelText('List action items'));
     expect(props.onSuggestion).not.toHaveBeenCalled();
   });
+});
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const resources =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      const value =
+        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
+        options.defaultValue ??
+        key;
+      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+    },
+  }),
+}));
+
+it('preserves an Android draft through language changes and retains send/shortcut guards', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    const view = renderSheet({ draft: 'Literal draft', error: 'Literal provider error' });
+    mockLanguage = 'ar';
+    view.rerender(<NoteChatSheet {...view.props} />);
+    expect(view.UNSAFE_getByType(TextInput).props.value).toBe('Literal draft');
+    expect(view.getByText('Literal provider error')).toBeTruthy();
+    expect(
+      view.getByText('تستند الإجابات إلى هذه الملاحظة فقط. هذه المحادثة مؤقتة ولن تُحفظ.'),
+    ).toBeTruthy();
+    expect(view.queryByLabelText('سرد المهام')).toBeNull();
+    fireEvent.press(view.getByLabelText('إرسال السؤال'));
+    expect(view.props.onSend).toHaveBeenCalledTimes(1);
+    view.rerender(<NoteChatSheet {...view.props} isProcessing />);
+    fireEvent.press(view.getByLabelText('إرسال السؤال'));
+    fireEvent.press(view.getByLabelText('إعادة محاولة السؤال'));
+    expect(view.props.onSend).toHaveBeenCalledTimes(1);
+    expect(view.props.onRetry).not.toHaveBeenCalled();
+    view.rerender(<NoteChatSheet {...view.props} draft="" error={null} />);
+    fireEvent.press(view.getByLabelText('سرد المهام'));
+    expect(view.props.onSuggestion).toHaveBeenCalledWith(
+      'What are the next steps from the meeting above that I need to do?',
+    );
+    view.rerender(<NoteChatSheet {...view.props} draft="" canSend={false} />);
+    fireEvent.press(view.getByLabelText('سرد المهام'));
+    expect(view.props.onSuggestion).toHaveBeenCalledTimes(1);
+    Platform.OS = 'ios';
+    view.rerender(<NoteChatSheet {...view.props} />);
+    expect(view.getByLabelText('Send question')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
 });

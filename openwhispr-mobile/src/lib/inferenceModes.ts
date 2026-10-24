@@ -4,6 +4,7 @@ import type { InferenceSelection, MobileInferenceScope } from '@/lib/mobileProvi
 import { isDictationAgentEnabled } from '@/lib/dictationAgent';
 import {
   inferenceToProcessingMode,
+  processingToInferenceMode,
   type InferenceMode,
   type ProcessingMode,
   type UserConfig,
@@ -50,7 +51,7 @@ const DESCRIPTIONS: Record<InferenceScope, Record<InferenceMode, string>> = {
 
 export function getInferenceModes(scope: InferenceScope): ModeDescriptor[] {
   return (['openwhispr', 'local', 'providers'] as const)
-    .filter((mode) => mode !== 'providers' || Platform.OS === 'ios')
+    .filter((mode) => mode !== 'providers' || Platform.OS === 'ios' || Platform.OS === 'android')
     .map((mode) => ({ ...BASE[mode], description: DESCRIPTIONS[scope][mode] }));
 }
 
@@ -72,6 +73,8 @@ export function localModeDefault(
   scope: MobileInferenceScope,
   cloudAccess: CloudAccess,
 ): InferenceMode {
+  // Android Local Mode retains its strict audio/text boundary.
+  if (Platform.OS === 'android') return scope === 'agent' ? 'openwhispr' : 'local';
   const onCloud =
     scope === 'notes' ||
     scope === 'agent' ||
@@ -81,7 +84,10 @@ export function localModeDefault(
   return onCloud ? 'openwhispr' : 'local';
 }
 
-type DictationModeConfig = Pick<UserConfig, 'defaultMode' | 'inference' | 'pinnedInference'>;
+type DictationModeConfig = Pick<
+  UserConfig,
+  'defaultMode' | 'inference' | 'pinnedInference' | 'privateModeReturn'
+>;
 
 // The workflows besides dictation, which a dictation change never moves.
 const OTHER_WORKFLOWS = ['upload', 'cleanup', 'notes', 'noteChat', 'agent'] as const;
@@ -119,7 +125,9 @@ export function dictationModeConfig(
   config: UserConfig | null,
   mode: 'cloud' | 'private',
 ): DictationModeConfig {
-  const pinned = config?.pinnedInference ?? [];
+  const modeChanged = config?.defaultMode !== mode;
+  const releasePins = Platform.OS !== 'android' || modeChanged;
+  const pinned = releasePins ? (config?.pinnedInference ?? []) : [];
   const inference = Object.fromEntries(
     Object.entries(config?.inference ?? {}).filter(
       ([scope]) => !pinned.includes(scope as MobileInferenceScope),
@@ -132,7 +140,10 @@ export function dictationModeConfig(
       // On-Device restores the model picked on the Dictation page.
       dictation: mode === 'private' ? localSelection(config, 'dictation') : { mode: 'openwhispr' },
     },
-    ...(config?.pinnedInference ? { pinnedInference: undefined } : {}),
+    ...(releasePins && config?.pinnedInference ? { pinnedInference: undefined } : {}),
+    ...(Platform.OS === 'android' && config?.privateModeReturn
+      ? { privateModeReturn: undefined }
+      : {}),
   };
 }
 
@@ -162,6 +173,64 @@ function dictationSwitchConfig(
   };
 }
 
+// Android's explicit Local Mode switch returns to its previous provider and pinned selections.
+function providerDictationConfig(
+  config: UserConfig | null,
+  dictation: InferenceSelection,
+  leavingMode: ProcessingMode,
+  cloudAccess: CloudAccess,
+): DictationModeConfig {
+  const inference = { ...config?.inference, dictation };
+  const pinnedInference = [...(config?.pinnedInference ?? [])];
+  // Leaving Private mode for the provider it was turned on from holds what that provider held,
+  // so the round trip ends where it started, even over a workflow Local Mode held automatically.
+  const returning = leavingMode === 'private' && !!config?.privateModeReturn;
+  const pins: [MobileInferenceScope, InferenceSelection][] =
+    leavingMode === 'providers'
+      ? []
+      : returning
+        ? (Object.entries(config?.privateModeReturn?.pinned ?? {}) as [
+            MobileInferenceScope,
+            InferenceSelection,
+          ][])
+        : (leavingMode === 'private'
+            ? (['upload', 'notes', 'noteChat', 'agent'] as const)
+            : (['upload', 'notes'] as const)
+          ).map((scope) => [
+            scope,
+            {
+              // Preserve the prior mode; Android uploads stay local in Local Mode.
+              mode:
+                leavingMode === 'private' && scope === 'upload'
+                  ? localModeDefault(scope, cloudAccess)
+                  : processingToInferenceMode(leavingMode),
+            },
+          ]);
+  for (const [scope, selection] of pins) {
+    const heldAutomatically = pinnedInference.includes(scope);
+    if (inference[scope] && !(returning && heldAutomatically)) continue;
+    inference[scope] = selection;
+    if (!heldAutomatically) pinnedInference.push(scope);
+  }
+  return {
+    defaultMode: 'providers',
+    inference,
+    ...(pinnedInference.length ? { pinnedInference } : {}),
+  };
+}
+
+// What Bring Your Own Key holds on the mode dictation came from, kept while Private mode is on.
+function pinnedSelections(
+  config: UserConfig | null,
+): Partial<Record<MobileInferenceScope, InferenceSelection>> {
+  return Object.fromEntries(
+    (config?.pinnedInference ?? []).flatMap((scope) => {
+      const selection = config?.inference?.[scope];
+      return selection ? [[scope, selection]] : [];
+    }),
+  );
+}
+
 // The config a workflow page writes when the user saves `selection` for `scope`. `cloudAccess` is
 // what the user has on OpenWhispr Cloud, which decides what an unsaved workflow ran in Local Mode.
 export function workflowSaveConfig(
@@ -186,6 +255,23 @@ export function workflowSaveConfig(
     : {};
   if (scope === 'dictation') {
     const mode = inferenceToProcessingMode(selection.mode);
+    if (Platform.OS === 'android') {
+      const privateModeReturn =
+        mode !== 'private'
+          ? undefined
+          : activeMode === 'private'
+            ? config?.privateModeReturn
+            : activeMode === 'providers'
+              ? { pinned: pinnedSelections(config) }
+              : undefined;
+      return {
+        ...rememberedInference,
+        ...(mode === 'providers'
+          ? providerDictationConfig(config, selection, activeMode, cloudAccess)
+          : dictationModeConfig(config, mode)),
+        ...(privateModeReturn || config?.privateModeReturn ? { privateModeReturn } : {}),
+      };
+    }
     // On-Device restores the model picked on the Dictation page.
     const dictation =
       mode === 'providers'
@@ -228,7 +314,8 @@ export function holdOnDeviceConfig(
 // on this iPhone and ignored a Cloud choice saved for them, so a config from then that is in Local
 // Mode keeps them there: the upgrade sends nothing to Cloud that was never sent before.
 export function localModeUpgradeConfig(config: UserConfig): Partial<UserConfig> {
-  if (config.defaultMode !== 'private') return { localModeUpgraded: true };
+  if (Platform.OS === 'android' || config.defaultMode !== 'private')
+    return { localModeUpgraded: true };
   return { localModeUpgraded: true, ...holdOnDeviceConfig(config) };
 }
 
@@ -238,6 +325,7 @@ export function noteChatSplitConfig(config: UserConfig): Partial<UserConfig> {
   const agent = config.inference?.agent;
   const copied = !!agent && !config.inference?.noteChat;
   const rememberedAgent = config.rememberedInference?.agent;
+  const returnPins = config.privateModeReturn?.pinned;
   return {
     noteChatSplit: true,
     // Note chat's switch followed the voice assistant's until set; saving it keeps it put.
@@ -251,6 +339,10 @@ export function noteChatSplitConfig(config: UserConfig): Partial<UserConfig> {
     ...(copied && config.pinnedInference?.includes('agent')
       ? { pinnedInference: [...config.pinnedInference, 'noteChat'] }
       : {}),
+    // Android may upgrade while Local Mode is temporarily holding a provider configuration.
+    ...(returnPins?.agent && !returnPins.noteChat
+      ? { privateModeReturn: { pinned: { ...returnPins, noteChat: returnPins.agent } } }
+      : {}),
   };
 }
 
@@ -258,6 +350,7 @@ export function noteChatSplitConfig(config: UserConfig): Partial<UserConfig> {
 // that is in Local Mode, with nothing of the user's own saved for note formatting, holds it
 // On-Device, so the update sends no note to Cloud that wasn't sent before.
 export function notesLocalModeSplitConfig(config: UserConfig): Partial<UserConfig> {
+  if (Platform.OS === 'android') return { notesLocalModeSplit: true };
   const saved = config.inference?.notes;
   const ownChoice = !!saved && !config.pinnedInference?.includes('notes');
   if (config.defaultMode !== 'private' || ownChoice) return { notesLocalModeSplit: true };

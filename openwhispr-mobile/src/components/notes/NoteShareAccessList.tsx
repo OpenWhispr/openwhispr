@@ -1,6 +1,8 @@
+import { noteShareMenuActions } from './noteShareMenuActions';
 import { type ReactNode } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { confirmDestructive } from '@/lib/alerts';
@@ -16,40 +18,50 @@ import {
   isScopeGrant,
 } from '@/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
-import { PRINCIPAL_LABEL, PrincipalAvatar } from './NoteSharePrincipal';
+import { PRINCIPAL_LABEL, PrincipalAvatar, usePrincipalLabels } from './NoteSharePrincipal';
 
 type Permission = NoteAccessGrant['permission'];
 
-const ROLE_LABEL: Record<Permission, string> = { editor: 'Editor', viewer: 'Viewer' };
+type Copy = ReturnType<typeof useAndroidCopy>['copy'];
+type PrincipalLabels = ReturnType<typeof usePrincipalLabels>;
 
-function grantDetail(grant: NoteAccessGrant): string | null {
+function roleLabel(role: Permission, copy: Copy): string {
+  return role === 'editor'
+    ? copy('noteAccess.editor', 'Editor')
+    : copy('noteAccess.viewer', 'Viewer');
+}
+
+function grantDetail(grant: NoteAccessGrant, copy: Copy, labels: PrincipalLabels): string | null {
   if (isScopeGrant(grant) && grant.source !== 'direct')
-    return `Inherited from ${PRINCIPAL_LABEL[grant.source].toLowerCase()}`;
+    return copy(
+      `noteAccess.inherited.${grant.source}`,
+      `Inherited from ${PRINCIPAL_LABEL[grant.source].toLowerCase()}`,
+    );
   // Stored group grants are flagged inherited because their members inherit them.
-  if (isGroupPrincipal(grant.principal.type)) return PRINCIPAL_LABEL[grant.principal.type];
+  if (isGroupPrincipal(grant.principal.type)) return labels[grant.principal.type];
   return grant.principal.name ? grant.principal.email : null;
 }
 
-function confirmEditor(name: string, onConfirm: () => void): void {
+function confirmEditor(name: string, onConfirm: () => void, copy: Copy): void {
   Alert.alert(
-    `Make ${name} an editor?`,
-    'Editors can change this note and manage who it is shared with.',
+    copy('noteAccess.makeEditorTitle', `Make ${name} an editor?`, { name }),
+    copy('noteAccess.editorBody', 'Editors can change this note and manage who it is shared with.'),
     [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Make editor', onPress: onConfirm },
+      { text: copy('cancel', 'Cancel'), style: 'cancel' },
+      { text: copy('noteAccess.makeEditor', 'Make editor'), onPress: onConfirm },
     ],
   );
 }
 
 /** The editor/viewer choice, as its own section of the row's menu. */
-function roleSection(rowId: string, current: Permission, busy: boolean): MenuAction {
+function roleSection(rowId: string, current: Permission, busy: boolean, copy: Copy): MenuAction {
   return {
     id: `${rowId}:roles`,
     title: '',
     displayInline: true,
     subactions: (['editor', 'viewer'] as const).map((permission) => ({
       id: `${rowId}:${permission}`,
-      title: ROLE_LABEL[permission],
+      title: roleLabel(permission, copy),
       state: permission === current ? 'on' : 'off',
       attributes: { disabled: busy },
     })),
@@ -66,24 +78,29 @@ interface RoleMenuProps {
 
 /** The trailing role label, which opens the row's actions when there are any. */
 function RoleMenu({ role, accessibilityLabel, actions, busy, onAction }: RoleMenuProps) {
+  const { copy } = useAndroidCopy();
   if (actions.length === 0) {
-    return <Text className="text-[13px] text-secondaryLabel">{ROLE_LABEL[role]}</Text>;
+    return <Text className="text-[13px] text-secondaryLabel">{roleLabel(role, copy)}</Text>;
   }
   return (
     <MenuView
-      actions={actions}
+      actions={noteShareMenuActions(actions)}
       onPressAction={({ nativeEvent }) => onAction(nativeEvent.event)}
       shouldOpenOnLongPress={false}
     >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        accessibilityValue={{ text: ROLE_LABEL[role] }}
+        accessibilityValue={{ text: roleLabel(role, copy) }}
         accessibilityState={{ disabled: busy }}
-        className="min-h-[44px] flex-row items-center gap-1 pl-2 active:opacity-60"
+        className={
+          Platform.OS === 'android'
+            ? 'min-h-[48px] flex-row items-center gap-1 pl-2 active:opacity-60'
+            : 'min-h-[44px] flex-row items-center gap-1 pl-2 active:opacity-60'
+        }
       >
         <Text className={busy ? 'text-[13px] text-tertiaryLabel' : 'text-[13px] text-link'}>
-          {ROLE_LABEL[role]}
+          {roleLabel(role, copy)}
         </Text>
         <SystemIcon
           name="chevron.down"
@@ -106,18 +123,28 @@ interface PersonRowProps {
 function PersonRow({ avatar, name, detail, trailing }: PersonRowProps) {
   return (
     <GroupedList.Row leadingIconSlot={avatar}>
-      <View className="flex-row items-center gap-3">
-        <View className="min-w-0 flex-1">
-          <Text numberOfLines={1} className="text-[15px] font-medium text-label">
+      <View className={Platform.OS === 'android' ? 'min-w-0 gap-2' : 'flex-row items-center gap-3'}>
+        <View className={Platform.OS === 'android' ? 'min-w-0' : 'min-w-0 flex-1'}>
+          <Text
+            numberOfLines={Platform.OS === 'android' ? undefined : 1}
+            className="text-[15px] font-medium text-label"
+          >
             {name}
           </Text>
           {detail ? (
-            <Text numberOfLines={1} className="text-[12px] text-secondaryLabel">
+            <Text
+              numberOfLines={Platform.OS === 'android' ? undefined : 1}
+              className="text-[12px] text-secondaryLabel"
+            >
               {detail}
             </Text>
           ) : null}
         </View>
-        {trailing}
+        {Platform.OS === 'android' ? (
+          <View className="max-w-full self-start">{trailing}</View>
+        ) : (
+          trailing
+        )}
       </View>
     </GroupedList.Row>
   );
@@ -151,6 +178,8 @@ export function NoteShareAccessList({
   onRevokeInvitation,
   onResendInvitation,
 }: NoteShareAccessListProps) {
+  const { copy } = useAndroidCopy();
+  const labels = usePrincipalLabels();
   const pending = invitations.filter((invite) => !invite.revoked_at && !invite.accepted_at);
   const invitationEmails = new Set(pending.map((invite) => invite.email.toLowerCase()));
   const grants = access.grants.filter(
@@ -170,26 +199,29 @@ export function NoteShareAccessList({
   ): void => {
     const permission: Permission = selectedId.endsWith(':editor') ? 'editor' : 'viewer';
     if (permission === current) return;
-    if (permission === 'editor') confirmEditor(name, () => onUpdateGrant(grant, 'editor'));
+    if (permission === 'editor') confirmEditor(name, () => onUpdateGrant(grant, 'editor'), copy);
     else onUpdateGrant(grant, 'viewer');
   };
 
   const grantRow = (grant: NoteAccessGrant): ReactNode => {
-    const name = grant.principal.name || grant.principal.email || 'Unnamed group';
+    const name =
+      grant.principal.name ||
+      grant.principal.email ||
+      copy('noteAccess.unnamedGroup', 'Unnamed group');
     const actions: MenuAction[] = [];
     if (canChangeGrant(access, grant)) {
       if (canInvite || grant.permission === 'editor')
-        actions.push(roleSection(grant.id, grant.permission, busy));
+        actions.push(roleSection(grant.id, grant.permission, busy, copy));
       actions.push({
         id: `${grant.id}:remove`,
-        title: 'Remove access',
+        title: copy('noteAccess.removeAccess', 'Remove access'),
         attributes: { destructive: true, disabled: busy },
       });
     }
     const detail = [
-      grantDetail(grant),
-      grant.pending ? 'Pending' : null,
-      paused && isPausedBySharingOff(grant) ? 'Paused' : null,
+      grantDetail(grant, copy, labels),
+      grant.pending ? copy('noteAccess.pending', 'Pending') : null,
+      paused && isPausedBySharingOff(grant) ? copy('noteAccess.paused', 'Paused') : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -208,7 +240,9 @@ export function NoteShareAccessList({
         trailing={
           <RoleMenu
             role={grant.permission}
-            accessibilityLabel={`Change access for ${name}`}
+            accessibilityLabel={copy('noteAccess.changeAccess', `Change access for ${name}`, {
+              name,
+            })}
             actions={actions}
             busy={busy}
             onAction={(id) => {
@@ -217,10 +251,17 @@ export function NoteShareAccessList({
                 return;
               }
               confirmDestructive(
-                'Remove access?',
-                `${name} will lose the access granted on this note.`,
+                copy('noteAccess.removeTitle', 'Remove access?'),
+                copy(
+                  'noteAccess.removeBody',
+                  `${name} will lose the access granted on this note.`,
+                  { name },
+                ),
                 () => onRemoveGrant(grant),
-                { destructiveLabel: 'Remove' },
+                {
+                  destructiveLabel: copy('noteAccess.remove', 'Remove'),
+                  cancelLabel: copy('cancel', 'Cancel'),
+                },
               );
             }}
           />
@@ -235,17 +276,17 @@ export function NoteShareAccessList({
     const actions: MenuAction[] = [];
     if (access.can_manage_access) {
       if (invitationGrant && (canInvite || invite.permission === 'editor'))
-        actions.push(roleSection(rowId, invite.permission, busy));
+        actions.push(roleSection(rowId, invite.permission, busy, copy));
       // A paused share's emailed link can't open the note, so resending would only confuse.
       if (canInvite && !paused)
         actions.push({
           id: `${rowId}:resend`,
-          title: 'Resend invitation',
+          title: copy('noteAccess.resend', 'Resend invitation'),
           attributes: { disabled: busy },
         });
       actions.push({
         id: `${rowId}:revoke`,
-        title: 'Revoke invitation',
+        title: copy('noteAccess.revokeInvitation', 'Revoke invitation'),
         attributes: { destructive: true, disabled: busy },
       });
     }
@@ -254,11 +295,20 @@ export function NoteShareAccessList({
         key={invite.id}
         avatar={<PrincipalAvatar type="email" email={invite.email} />}
         name={invite.email}
-        detail={`Pending invitation${paused ? ' · Paused' : ''}`}
+        detail={[
+          copy('noteAccess.pendingInvitation', 'Pending invitation'),
+          paused ? copy('noteAccess.paused', 'Paused') : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
         trailing={
           <RoleMenu
             role={invite.permission}
-            accessibilityLabel={`Change access for ${invite.email}`}
+            accessibilityLabel={copy(
+              'noteAccess.changeAccess',
+              `Change access for ${invite.email}`,
+              { name: invite.email },
+            )}
             actions={actions}
             busy={busy}
             onAction={(id) => {
@@ -266,10 +316,17 @@ export function NoteShareAccessList({
                 onResendInvitation(invite);
               } else if (id.endsWith(':revoke')) {
                 confirmDestructive(
-                  'Revoke invitation?',
-                  `${invite.email} will lose the access this invitation gave them.`,
+                  copy('noteAccess.revokeTitle', 'Revoke invitation?'),
+                  copy(
+                    'noteAccess.revokeBody',
+                    `${invite.email} will lose the access this invitation gave them.`,
+                    { email: invite.email },
+                  ),
                   () => onRevokeInvitation(invite),
-                  { destructiveLabel: 'Revoke' },
+                  {
+                    destructiveLabel: copy('noteAccess.revoke', 'Revoke'),
+                    cancelLabel: copy('cancel', 'Cancel'),
+                  },
                 );
               } else if (invitationGrant) {
                 changeRole(invitationGrant, invite.permission, invite.email, id);
@@ -284,7 +341,7 @@ export function NoteShareAccessList({
   return (
     <View className="gap-2">
       <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
-        People with access
+        {copy('noteAccess.people', 'People with access')}
       </Text>
       <GroupedList>
         {inviteField}
@@ -292,16 +349,23 @@ export function NoteShareAccessList({
           avatar={
             <PrincipalAvatar type="user" name={access.owner.name} email={access.owner.email} />
           }
-          name={access.owner.name || access.owner.email || 'Owner'}
+          name={access.owner.name || access.owner.email || copy('noteAccess.owner', 'Owner')}
           detail={access.owner.name ? access.owner.email : null}
-          trailing={<Text className="text-[13px] text-secondaryLabel">Owner</Text>}
+          trailing={
+            <Text className="text-[13px] text-secondaryLabel">
+              {copy('noteAccess.owner', 'Owner')}
+            </Text>
+          }
         />
         {grants.map(grantRow)}
         {pending.map(invitationRow)}
       </GroupedList>
       {paused && (
         <Text className="px-4 text-[12px] text-secondaryLabel">
-          People you added and invitations are paused until you share this note again.
+          {copy(
+            'noteAccess.pausedBody',
+            'People you added and invitations are paused until you share this note again.',
+          )}
         </Text>
       )}
     </View>

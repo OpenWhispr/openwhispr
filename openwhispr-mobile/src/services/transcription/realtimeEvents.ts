@@ -14,10 +14,14 @@ export interface RealtimeUtterance {
 }
 
 export interface RealtimeCallbacks {
+  /** The user stopped Android capture from its foreground notification. */
+  onStopRequested?: () => void;
   /** Current in-progress caption text for the active utterance (streaming deltas). */
   onPartial?: (text: string, itemId: string) => void;
   /** A finalized utterance (one VAD turn) with its transcript + timing. */
   onUtterance?: (utterance: RealtimeUtterance) => void;
+  /** Complete transcript in recording order, even when server results finish out of order. */
+  onUtterances?: (utterances: RealtimeUtterance[]) => void;
   /** Raw server event stream — used by the spike screen to log every event type. */
   onDebug?: (event: unknown) => void;
   onError?: (error: unknown) => void;
@@ -30,6 +34,8 @@ export interface RealtimeCallbacks {
 
 export interface RealtimeSession {
   stop: () => void;
+  /** Stops capture and waits for final server text before closing. */
+  finish?: () => Promise<void>;
   /** Ordered finalized utterances captured so far. */
   utterances: () => RealtimeUtterance[];
 }

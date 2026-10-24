@@ -1,4 +1,5 @@
 import { create, type StoreApi } from 'zustand';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import {
   getStoredSession,
@@ -68,13 +69,32 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
-      const user = await getSession();
+      if (Platform.OS === 'android') {
+        const { retryAccountDataDeletion } =
+          require('@/android/accountData') as typeof import('@/android/accountData');
+        await retryAccountDataDeletion();
+      }
+      const isGuest = (await SecureStore.getItemAsync(GUEST_SESSION_KEY)) === 'true';
+      if (isGuest && !(await getStoredSession())) {
+        prepareLocalData(null);
+        useUsageStore.getState().reset();
+        set({
+          user: null,
+          sessionCookie: null,
+          isGuest: true,
+          isInitialized: true,
+          isLoading: false,
+        });
+        return;
+      }
+      const user = await getSession({ allowOfflineCache: Platform.OS === 'android' });
       if (user) {
         await claimNoteShares(user);
         const sessionCookie = await getStoredSession();
+        prepareLocalData(user);
         set({ user, sessionCookie, isGuest: false, isInitialized: true, isLoading: false });
       } else {
-        const isGuest = (await SecureStore.getItemAsync(GUEST_SESSION_KEY)) === 'true';
+        prepareLocalData(null);
         useUsageStore.getState().reset();
         set({ user: null, sessionCookie: null, isGuest, isInitialized: true, isLoading: false });
       }
@@ -129,6 +149,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       await anonymousSignInInFlight?.catch(() => undefined);
       await clearSession();
       await SecureStore.setItemAsync(GUEST_SESSION_KEY, 'true');
+      prepareLocalData(null);
       useUsageStore.getState().reset();
       set({ user: null, sessionCookie: null, isGuest: true, error: null });
     } finally {
@@ -168,6 +189,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // Deliberately skips initAuthenticatedUser: the server bootstraps this
       // user on its first authenticated request, and there is no real address
       // to send a welcome or verification email to yet.
+      prepareLocalData(result.user);
       set({ user: result.user, sessionCookie: result.sessionCookie, isGuest: false });
     })().finally(() => {
       anonymousSignInInFlight = null;
@@ -183,15 +205,31 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
     useUsageStore.getState().reset();
     clearAgentSessions();
-    set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
+    try {
+      prepareLocalData(null);
+    } finally {
+      set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
+    }
   },
 
   deleteAccount: async () => {
     set({ isLoading: true, error: null });
     await anonymousSignInInFlight?.catch(() => undefined);
     try {
-      await deleteAccountApi();
       const deletedUserId = useAuthStore.getState().user?.id;
+      await deleteAccountApi();
+      if (deletedUserId && Platform.OS === 'android') {
+        const { eraseAccountData } =
+          require('@/android/accountData') as typeof import('@/android/accountData');
+        await eraseAccountData(deletedUserId);
+        await Promise.resolve()
+          .then(() => {
+            const { eraseAccountInsights } =
+              require('@/android/insights') as typeof import('@/android/insights');
+            return eraseAccountInsights(deletedUserId);
+          })
+          .catch((error) => Sentry.captureException(error));
+      }
       if (deletedUserId) await tolerateCacheFailure('clear', clearNoteShareTokens(deletedUserId));
       // Keys survive sign-out by design, but not account deletion. They are erased only
       // once the account is gone, so a failed delete keeps them. A failed erase leaves
@@ -203,6 +241,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       });
       await clearSession();
       await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
+      prepareLocalData(null);
       useUsageStore.getState().reset();
       clearAgentSessions();
       set({ user: null, sessionCookie: null, isGuest: false, isLoading: false });
@@ -216,6 +255,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
 }));
 
 type SetState = StoreApi<AuthStore>['setState'];
+
+function prepareLocalData(user: AuthUser | null): void {
+  if (Platform.OS !== 'android') return;
+  const { prepareAccountData } =
+    require('@/android/accountData') as typeof import('@/android/accountData');
+  prepareAccountData(user);
+}
 
 // A local cache failure must not block sign-in or undo a completed account deletion.
 async function tolerateCacheFailure(
@@ -248,6 +294,21 @@ async function applyAuthenticatedSession(
   await SecureStore.deleteItemAsync(GUEST_SESSION_KEY);
   await initAuthenticatedUser(result.user, fallbackName);
   await claimNoteShares(result.user);
+  try {
+    prepareLocalData(result.user);
+  } catch (error) {
+    await clearSession();
+    useUsageStore.getState().reset();
+    set({
+      user: null,
+      sessionCookie: null,
+      isGuest: false,
+      isLoading: false,
+      loadingProvider: null,
+      error: error instanceof Error ? error.message : 'Local account data could not be opened.',
+    });
+    return;
+  }
   useUsageStore.getState().reset();
   set({
     user: result.user,

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import {
   cleanupRunsOnDevice,
   cloudCleanupNeedsAccount,
@@ -11,6 +12,22 @@ import type { UserConfig } from '@/types';
 function config(overrides: Partial<UserConfig> = {}): UserConfig {
   return { defaultMode: 'private', ...overrides } as UserConfig;
 }
+
+it('keeps Android Local Mode note formatting local and the voice assistant off', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  const saved = config({
+    inference: { notes: { mode: 'openwhispr' }, agent: { mode: 'openwhispr' } },
+  });
+  try {
+    expect(workflowSummary(saved, 'notes', 'private', { cloudAccess: 'account' })).toBe(
+      'On-Device',
+    );
+    expect(voiceAssistantCanRun(saved, 'private', 'account')).toBe(false);
+  } finally {
+    Platform.OS = original;
+  }
+});
 
 describe('Note Chat with nothing saved', () => {
   it.each(['cloud', 'private', 'providers'] as const)(

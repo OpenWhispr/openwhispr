@@ -102,7 +102,20 @@
           "userTrackingPermission": "Allow tracking to help us measure which ads lead to OpenWhispr installs and subscriptions. Your voice and text are never used for advertising."
         }
       ],
-      "react-native-appsflyer"
+      "react-native-appsflyer",
+      "./plugins/android-backup/withAndroidBackup",
+      "./plugins/android-locales/withAndroidLocales",
+      "./plugins/android-bundle-inputs/withAndroidBundleInputs",
+      "./plugins/android-billing/withAndroidBilling",
+      "./plugins/android-inference/withAndroidInference",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#F8F6F5"
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

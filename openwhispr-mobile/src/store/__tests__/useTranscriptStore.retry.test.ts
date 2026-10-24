@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 const mockListPendingProviderRecoveryJobs = jest.fn((): unknown[] => []);
 const mockClearKeyboardProviderRecovery = jest.fn();
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
@@ -986,5 +987,39 @@ describe('retry destination in Bring Your Own Key mode', () => {
     expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'cloud', inferenceRoute: undefined }),
     );
+  });
+});
+
+describe('Android Local Mode retry privacy', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockProcessingModeState.activeMode = 'private';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('refuses a previously selected remote upload route before reading or uploading audio', async () => {
+    useTranscriptStore.setState({
+      transcripts: [
+        failedTranscript({
+          provider: 'byok',
+          requestContext: 'file',
+          inferenceRoute: {
+            mode: 'providers',
+            scope: 'upload',
+            providerId: 'groq',
+            modelId: 'whisper-large-v3-turbo',
+            endpoint: 'https://api.groq.com/openai/v1',
+            credentialRef: 'provider.groq',
+          },
+        }),
+      ],
+    });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
+      'Turn off Local Mode',
+    );
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+    expect(mockTranscodeToWav).not.toHaveBeenCalled();
   });
 });
