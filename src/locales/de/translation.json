@@ -2329,6 +2329,8 @@
         "title": "Zwischenablage",
         "autoPaste": "Automatisches Einfügen",
         "autoPasteDescription": "Transkribierten Text nach dem Diktieren automatisch in die aktive App einfügen",
+        "pressEnterAfterPaste": "Nach dem Einfügen Enter drücken",
+        "pressEnterAfterPasteDescription": "Nach dem Einfügen der Transkription Enter drücken, um Nachrichten oder Befehle automatisch abzusenden",
         "keepInClipboard": "Transkription in der Zwischenablage behalten",
         "keepInClipboardDescription": "Diktierten Text in der Zwischenablage behalten, damit Sie ihn bei Bedarf manuell einfügen können"
       },
