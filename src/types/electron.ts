@@ -1383,6 +1383,7 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          pressEnter?: boolean;
         }
       ) => Promise<
         | {
