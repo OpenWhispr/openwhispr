@@ -39,6 +39,20 @@ function shouldIgnoreDictationHotkey(state) {
   return normalizeDictationLifecycle(state) === DICTATION_LIFECYCLE.PROCESSING;
 }
 
+// Windows tap-mode KEY_DOWN can bounce immediately after a stop and start a
+// second recording. 300ms covers mechanical bounce without blocking a
+// deliberate start-then-stop a beat later.
+const DICTATION_TOGGLE_DEBOUNCE_MS = 300;
+
+function shouldDebounceDictationToggle(
+  now,
+  lastToggleAt,
+  debounceMs = DICTATION_TOGGLE_DEBOUNCE_MS
+) {
+  if (!lastToggleAt) return false;
+  return now - lastToggleAt < debounceMs;
+}
+
 function isDictationRecording(state) {
   return normalizeDictationLifecycle(state) === DICTATION_LIFECYCLE.RECORDING;
 }
@@ -68,10 +82,12 @@ function shouldBlockDictationWhilePanelOpen({
 module.exports = {
   DICTATION_LIFECYCLE,
   DICTATION_INPUT_KIND,
+  DICTATION_TOGGLE_DEBOUNCE_MS,
   normalizeDictationLifecycle,
   normalizeDictationInputKind,
   resolveAgentDictationPillState,
   shouldIgnoreDictationHotkey,
+  shouldDebounceDictationToggle,
   isDictationRecording,
   shouldBlockDictationWhilePanelOpen,
 };
