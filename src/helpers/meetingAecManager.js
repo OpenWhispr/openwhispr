@@ -142,10 +142,6 @@ class MeetingAecManager {
 
       child.on("exit", (code, signal) => {
         const wasStopping = this.isStopping;
-        if (this.process === child) {
-          this.process = null;
-        }
-        this.isStopping = false;
         if (!wasStopping && (code || signal)) {
           this.onError?.(
             new Error(
@@ -156,6 +152,15 @@ class MeetingAecManager {
           );
         }
         finish(started && (code === 0 || code === null));
+      });
+
+      // The helper flushes cleaned mic audio on stdin EOF. `exit` can precede
+      // that stdout data, so retain ownership until all stdio has drained.
+      child.on("close", () => {
+        if (this.process === child) {
+          this.process = null;
+          this.isStopping = false;
+        }
       });
     });
   }
@@ -193,7 +198,7 @@ class MeetingAecManager {
         finish();
       }, STOP_TIMEOUT_MS);
 
-      child.once("exit", () => {
+      child.once("close", () => {
         clearTimeout(timeout);
         finish();
       });
