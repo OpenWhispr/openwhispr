@@ -717,7 +717,8 @@ export const useAudioRecording = (toast, options = {}) => {
           }
 
           const isStreaming = result.source?.includes("streaming");
-          const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
+          const { autoPasteEnabled, keepTranscriptionInClipboard, pressEnterAfterPaste } =
+            getSettings();
 
           const persistencePromise = audioManagerRef.current
             .saveTranscription(result.text, result.rawText ?? result.text, {
@@ -830,6 +831,9 @@ export const useAudioRecording = (toast, options = {}) => {
               audioManagerRef.current.safePaste(result.text, {
                 ...(isStreaming ? { fromStreaming: true } : {}),
                 ...pasteOptions,
+                // Only a plain transcript paste submits: a selection edit replaces
+                // text in place, where Enter would add a stray line break.
+                ...(pressEnterAfterPaste ? { pressEnter: true } : {}),
               })
             );
             if (pasteOutcome.reason === "modifiers-held") {
