@@ -953,6 +953,10 @@
         "title": "Micrófono restaurado",
         "description": "La captura de audio se ha reanudado."
       },
+      "continuous": {
+        "segmentFailedTitle": "Frase no transcrita",
+        "segmentFailedDescription": "Parte de tu mensaje no se pudo transcribir, así que no se envió. Revísalo antes de pulsar Intro."
+      },
       "partialTranscription": {
         "title": "Transcripción parcial",
         "description": "No se pudo transcribir una parte de la grabación."
@@ -2087,6 +2091,13 @@
         "title": "Portapapeles",
         "autoPaste": "Pegado automático",
         "autoPasteDescription": "Pegar automáticamente el texto transcrito en la aplicación activa al finalizar el dictado",
+        "pressEnterAfterPaste": "Pulsar Intro después de pegar",
+        "pressEnterAfterPasteDescription": "Pulsar Intro tras pegar la transcripción para enviar mensajes o comandos automáticamente",
+        "continuousDictation": "Dictado continuo",
+        "continuousDictationDescription": "Sigue escuchando tras iniciar el dictado: cada frase se pega al hacer una pausa y se pulsa Intro tras un silencio más largo. Pulsa el atajo de nuevo para detenerlo. Las frases se pegan tal como se transcriben, sin limpieza con IA.",
+        "continuousSubmitSilence": "Enviar tras silencio",
+        "continuousSubmitSilenceDescription": "Cuánto silencio debe haber antes de pulsar Intro",
+        "continuousSubmitSilenceSeconds": "{{seconds}} segundos",
         "keepInClipboard": "Mantener transcripción en el portapapeles",
         "keepInClipboardDescription": "Mantener el texto dictado en el portapapeles para poder pegarlo manualmente si es necesario"
       },

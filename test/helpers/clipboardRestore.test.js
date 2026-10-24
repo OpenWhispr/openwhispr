@@ -1809,3 +1809,103 @@ test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection"
   );
   assert.deepEqual(fakeClipboard.writes, [["writeText", "selection text", "selection"]]);
 });
+
+test("pasteText presses Enter after a paste only when asked", async () => {
+  const manager = new ClipboardManager();
+  const enters = [];
+  manager._pasteText = async () => ({ method: "wtype", restoreComplete: Promise.resolve() });
+  manager.pressEnter = async (options) => {
+    enters.push(options);
+    return true;
+  };
+
+  await manager.pasteText("hello");
+  assert.deepEqual(enters, []);
+
+  await manager.pasteText("hello", { pressEnter: true });
+  assert.deepEqual(enters, [{ pasteMethod: "wtype" }]);
+});
+
+test("pasteText never presses Enter after a paste that was held back", async () => {
+  const manager = new ClipboardManager();
+  let enters = 0;
+  manager._pasteText = async () => ({
+    pasted: false,
+    reason: "modifiers-held",
+    restoreComplete: Promise.resolve(),
+  });
+  manager.pressEnter = async () => {
+    enters += 1;
+  };
+
+  const result = await manager.pasteText("hello", { pressEnter: true });
+  assert.equal(result.pasted, false);
+  assert.equal(enters, 0);
+});
+
+test("pressEnter on wlroots sends Return through wtype", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(spawnCalls) });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype" || command === "xdotool";
+
+  const pressed = await withWaylandEnvironment("Sway", () => manager.pressEnter());
+
+  assert.equal(pressed, true);
+  assert.deepEqual(spawnCalls, [{ command: "wtype", args: ["-k", "Return"] }]);
+});
+
+test("pressEnter prefers the tool that just pasted", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(spawnCalls) });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype" || command === "ydotool";
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => false;
+
+  await withWaylandEnvironment("Sway", () => manager.pressEnter({ pasteMethod: "ydotool" }));
+
+  assert.deepEqual(spawnCalls, [{ command: "ydotool", args: ["key", "28:1", "28:0"] }]);
+});
+
+test("pressEnter falls through to the next tool and reports when none works", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({ spawn: createSpawn(spawnCalls, [1, 1]) });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "ydotool" || command === "xdotool";
+  manager._isYdotoolDaemonRunning = () => true;
+  manager._isYdotoolLegacy = () => true;
+
+  const previous = { XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE, DISPLAY: process.env.DISPLAY };
+  process.env.XDG_SESSION_TYPE = "x11";
+  process.env.DISPLAY = ":0";
+  let pressed;
+  try {
+    pressed = await manager.pressEnter();
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  assert.equal(pressed, false);
+  assert.deepEqual(spawnCalls, [
+    { command: "xdotool", args: ["key", "Return"] },
+    { command: "ydotool", args: ["key", "Enter"] },
+  ]);
+});
+
+test("pressEnter on macOS sends the Return key code through System Events", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(spawnCalls) });
+  const manager = new TestClipboardManager();
+
+  assert.equal(await manager.pressEnter(), true);
+  assert.deepEqual(spawnCalls, [
+    { command: "osascript", args: ["-e", 'tell application "System Events" to key code 36'] },
+  ]);
+});

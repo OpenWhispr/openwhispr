@@ -953,6 +953,10 @@
         "title": "Mikrofon wiederhergestellt",
         "description": "Die Audioaufnahme wurde fortgesetzt."
       },
+      "continuous": {
+        "segmentFailedTitle": "Phrase nicht transkribiert",
+        "segmentFailedDescription": "Ein Teil deiner Nachricht konnte nicht transkribiert werden und wurde deshalb nicht gesendet. Prüfe sie, bevor du Enter drückst."
+      },
       "partialTranscription": {
         "title": "Unvollständige Transkription",
         "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
@@ -2329,6 +2333,13 @@
         "title": "Zwischenablage",
         "autoPaste": "Automatisches Einfügen",
         "autoPasteDescription": "Transkribierten Text nach dem Diktieren automatisch in die aktive App einfügen",
+        "pressEnterAfterPaste": "Nach dem Einfügen Enter drücken",
+        "pressEnterAfterPasteDescription": "Nach dem Einfügen der Transkription Enter drücken, um Nachrichten oder Befehle automatisch abzusenden",
+        "continuousDictation": "Fortlaufendes Diktat",
+        "continuousDictationDescription": "Nach dem Start weiter zuhören: Jede Phrase wird bei einer Pause eingefügt, und nach längerer Stille wird Enter gedrückt. Zum Beenden den Hotkey erneut drücken. Phrasen werden ohne KI-Bereinigung eingefügt, wie transkribiert.",
+        "continuousSubmitSilence": "Nach Stille senden",
+        "continuousSubmitSilenceDescription": "Wie lange Stille herrschen muss, bevor Enter gedrückt wird",
+        "continuousSubmitSilenceSeconds": "{{seconds}} Sekunden",
         "keepInClipboard": "Transkription in der Zwischenablage behalten",
         "keepInClipboardDescription": "Diktierten Text in der Zwischenablage behalten, damit Sie ihn bei Bedarf manuell einfügen können"
       },

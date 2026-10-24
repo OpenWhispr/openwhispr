@@ -3334,8 +3334,9 @@ class IPCHandlers {
       // Smart spacing (#856): append a trailing space so the next paste's leading
       // space self-corrects the gap. Reading the char before the cursor to space
       // the front instead would take a macOS Accessibility read costing hundreds
-      // of ms — too slow for the paste hot path.
-      const textToPaste = applySmartSpacing(text);
+      // of ms — too slow for the paste hot path. Skipped when Enter follows the
+      // paste: the field is submitted, so there is no next paste to space for.
+      const textToPaste = options?.pressEnter === true ? text : applySmartSpacing(text);
 
       // Windows: restore the foreground window captured at record start so the
       // paste lands in the field the user was dictating into, not wherever focus
@@ -3407,6 +3408,17 @@ class IPCHandlers {
         pasted,
         ...(pasteResult?.reason ? { reason: pasteResult.reason } : {}),
       };
+    });
+
+    // Continuous dictation submits a message with Enter once the user goes
+    // quiet. Queued behind the clipboard operations, so it lands after the
+    // message's last paste; the onboarding demo's text box is never submitted.
+    ipcMain.handle("press-enter", async () => {
+      if (this.windowManager?.isOnboardingDemoActive()) return { success: true, pressed: false };
+      const pressed = await this.clipboardManager.runClipboardOperation(() =>
+        this.clipboardManager.pressEnter()
+      );
+      return { success: true, pressed: pressed === true };
     });
 
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {

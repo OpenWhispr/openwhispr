@@ -344,3 +344,68 @@ test("completed batch and streaming dictations are saved when automatic paste is
   }
   assert.equal(h.manager.saves, 2);
 });
+
+test("a dictation asks main to press Enter only while Press Enter after pasting is on", async (t) => {
+  const h = await mount(t);
+  const pastes = [];
+  h.manager.safePaste = async (text, pasteOptions) => {
+    pastes.push(pasteOptions);
+    return { pasted: true };
+  };
+  for (const pressEnterAfterPaste of [false, true]) {
+    h.settings.setState({ autoPasteEnabled: true, pressEnterAfterPaste });
+    await React.act(async () =>
+      h.manager.callbacks.onTranscriptionComplete({
+        success: true,
+        text: "final result",
+        rawText: "raw input",
+        source: "local",
+      })
+    );
+  }
+  assert.equal(pastes.length, 2);
+  assert.equal(pastes[0].pressEnter, undefined);
+  assert.equal(pastes[1].pressEnter, true);
+});
+
+test("the dictation hotkey starts continuous dictation only while it is turned on", async (t) => {
+  const h = await mount(t);
+  // Per-test storage from the harness, dropped with the window.
+  localStorage.setItem("onboardingCompleted", "true");
+  const continuousStarts = [];
+  h.manager.prepareMicCapture = async () => null;
+  h.manager.beginToneStyleCapture = () => {};
+  h.manager.beginSelectionCapture = () => {};
+  h.manager.startContinuousRecording = async (options) => {
+    continuousStarts.push(options);
+    return false;
+  };
+  h.manager.startRecording = async () => {
+    h.manager.starts += 1;
+    return false;
+  };
+
+  h.settings.setState({ autoPasteEnabled: true, continuousDictationEnabled: false });
+  await React.act(async () => h.recording().startRecording());
+  assert.equal(continuousStarts.length, 0);
+  assert.equal(h.manager.starts, 1);
+
+  h.settings.setState({ continuousDictationEnabled: true, continuousSubmitSilenceMs: 3000 });
+  await React.act(async () => h.recording().startRecording({ voiceAgentRequested: true }));
+  assert.equal(continuousStarts.length, 0, "the voice assistant keeps its one-shot recording");
+
+  await React.act(async () => h.recording().startRecording());
+  assert.equal(continuousStarts.length, 1);
+  assert.equal(continuousStarts[0].submitSilenceMs, 3000);
+
+  // The delivery pastes through the same safe paste as a dictation.
+  const pastes = [];
+  h.manager.safePaste = async (text, pasteOptions) => {
+    pastes.push({ text, pasteOptions });
+    return { pasted: true };
+  };
+  const outcome = await continuousStarts[0].delivery.deliver("Hello there.");
+  assert.deepEqual(outcome, { pasted: true });
+  assert.equal(pastes[0].text, "Hello there.");
+  assert.equal(pastes[0].pasteOptions.restoreClipboard, true);
+});

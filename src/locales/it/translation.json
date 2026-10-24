@@ -953,6 +953,10 @@
         "title": "Microfono ripristinato",
         "description": "L'acquisizione audio è ripresa."
       },
+      "continuous": {
+        "segmentFailedTitle": "Frase non trascritta",
+        "segmentFailedDescription": "Una parte del messaggio non è stata trascritta, quindi non è stato inviato. Controllalo prima di premere Invio."
+      },
       "partialTranscription": {
         "title": "Trascrizione parziale",
         "description": "Non è stato possibile trascrivere una parte della registrazione."
@@ -2035,6 +2039,13 @@
         "title": "Appunti",
         "autoPaste": "Incollaggio automatico",
         "autoPasteDescription": "Incolla automaticamente il testo trascritto nell'app attiva al termine della dettatura",
+        "pressEnterAfterPaste": "Premi Invio dopo aver incollato",
+        "pressEnterAfterPasteDescription": "Premi Invio dopo aver incollato la trascrizione, per inviare automaticamente messaggi o comandi",
+        "continuousDictation": "Dettatura continua",
+        "continuousDictationDescription": "Continua ad ascoltare dopo l'avvio della dettatura: ogni frase viene incollata quando fai una pausa e Invio viene premuto dopo un silenzio più lungo. Premi di nuovo la scorciatoia per fermarla. Le frasi vengono incollate come trascritte, senza pulizia IA.",
+        "continuousSubmitSilence": "Invia dopo il silenzio",
+        "continuousSubmitSilenceDescription": "Quanto silenzio attendere prima di premere Invio",
+        "continuousSubmitSilenceSeconds": "{{seconds}} secondi",
         "keepInClipboard": "Mantieni la trascrizione negli appunti",
         "keepInClipboardDescription": "Mantieni il testo dettato negli appunti per poterlo incollare manualmente se necessario"
       },

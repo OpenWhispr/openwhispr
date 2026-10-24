@@ -28,6 +28,10 @@ import {
 } from "../helpers/reasoningRouting";
 import { findStaleLocalModelKeys } from "../helpers/localModelSelections";
 import {
+  snapContinuousSubmitSilenceMs,
+  DEFAULT_CONTINUOUS_SUBMIT_SILENCE_MS,
+} from "../helpers/continuousSegmenter";
+import {
   INFERENCE_SCOPES,
   type InferenceScope,
   type InferenceScopeDefinition,
@@ -303,6 +307,8 @@ const BOOLEAN_SETTINGS = new Set([
   "meetingAecEnabled",
   "isSignedIn",
   "autoPasteEnabled",
+  "pressEnterAfterPaste",
+  "continuousDictationEnabled",
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
   "saveDiscardedTranscriptions",
@@ -334,6 +340,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
+  "continuousSubmitSilenceMs",
   "audioRetentionDays",
   "transcriptRetentionDays",
   "whisperVadThreshold",
@@ -938,6 +945,9 @@ export interface SettingsState
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   showTranscriptionPreview: boolean;
   autoPasteEnabled: boolean;
+  pressEnterAfterPaste: boolean;
+  continuousDictationEnabled: boolean;
+  continuousSubmitSilenceMs: number;
   keepTranscriptionInClipboard: boolean;
   noteFilesEnabled: boolean;
   noteFilesPath: string;
@@ -1266,6 +1276,9 @@ export interface SettingsState
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setShowTranscriptionPreview: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
+  setPressEnterAfterPaste: (value: boolean) => void;
+  setContinuousDictationEnabled: (value: boolean) => void;
+  setContinuousSubmitSilenceMs: (value: number) => void;
   setKeepTranscriptionInClipboard: (value: boolean) => void;
   setNoteFilesEnabled: (value: boolean) => void;
   setNoteFilesPath: (value: string) => void;
@@ -1730,6 +1743,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   showTranscriptionPreview: readBoolean("showTranscriptionPreview", false),
   autoPasteEnabled: readBoolean("autoPasteEnabled", true),
+  pressEnterAfterPaste: readBoolean("pressEnterAfterPaste", false),
+  continuousDictationEnabled: readBoolean("continuousDictationEnabled", false),
+  continuousSubmitSilenceMs: snapContinuousSubmitSilenceMs(
+    readNumber("continuousSubmitSilenceMs", DEFAULT_CONTINUOUS_SUBMIT_SILENCE_MS)
+  ),
   keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", false),
   noteFilesEnabled: readBoolean("noteFilesEnabled", false),
   noteFilesPath: readString("noteFilesPath", ""),
@@ -2586,6 +2604,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setShowTranscriptionPreview: createBooleanSetter("showTranscriptionPreview"),
   setAutoPasteEnabled: createBooleanSetter("autoPasteEnabled"),
+  setPressEnterAfterPaste: createBooleanSetter("pressEnterAfterPaste"),
+  setContinuousDictationEnabled: createBooleanSetter("continuousDictationEnabled"),
+  setContinuousSubmitSilenceMs: (value: number) => {
+    const next = snapContinuousSubmitSilenceMs(value);
+    if (isBrowser) localStorage.setItem("continuousSubmitSilenceMs", String(next));
+    useSettingsStore.setState({ continuousSubmitSilenceMs: next });
+  },
   setKeepTranscriptionInClipboard: createBooleanSetter("keepTranscriptionInClipboard"),
   setNoteFilesEnabled: createBooleanSetter("noteFilesEnabled"),
   setNoteFilesPath: createStringSetter("noteFilesPath"),
@@ -3829,6 +3854,8 @@ export async function initializeSettings(): Promise<void> {
         // Same whitelist as the setter — a hand-edited localStorage value
         // synced from another window must not exceed the offered durations.
         value = snapMicWarmHold(parsed);
+      } else if (key === "continuousSubmitSilenceMs") {
+        value = snapContinuousSubmitSilenceMs(parsed);
       } else {
         value = parsed;
       }
