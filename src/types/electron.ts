@@ -1398,6 +1398,8 @@ declare global {
             clipboardCopied: true;
           }
       >;
+      /** Presses Enter in the focused window, after any paste still in flight. */
+      pressEnter?: () => Promise<{ success: true; pressed: boolean }>;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";

@@ -165,6 +165,7 @@ import { formatAmount } from "../utils/formatAmount";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
+import { CONTINUOUS_SUBMIT_SILENCE_CHOICES_MS } from "../helpers/continuousSegmenter";
 
 export type SettingsSectionType =
   | "account"
@@ -1221,6 +1222,10 @@ export default function SettingsPage({
     setAutoPasteEnabled,
     pressEnterAfterPaste,
     setPressEnterAfterPaste,
+    continuousDictationEnabled,
+    setContinuousDictationEnabled,
+    continuousSubmitSilenceMs,
+    setContinuousSubmitSilenceMs,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -3165,6 +3170,46 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.clipboard.continuousDictation")}
+                    description={t("settingsPage.general.clipboard.continuousDictationDescription")}
+                  >
+                    <Toggle
+                      checked={continuousDictationEnabled}
+                      onChange={setContinuousDictationEnabled}
+                      disabled={!autoPasteEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {continuousDictationEnabled && autoPasteEnabled && (
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.clipboard.continuousSubmitSilence")}
+                      description={t(
+                        "settingsPage.general.clipboard.continuousSubmitSilenceDescription"
+                      )}
+                    >
+                      <Select
+                        value={String(continuousSubmitSilenceMs)}
+                        onValueChange={(value) => setContinuousSubmitSilenceMs(Number(value))}
+                      >
+                        <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONTINUOUS_SUBMIT_SILENCE_CHOICES_MS.map((ms) => (
+                            <SelectItem key={ms} value={String(ms)}>
+                              {t("settingsPage.general.clipboard.continuousSubmitSilenceSeconds", {
+                                seconds: ms / 1000,
+                              })}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                )}
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.general.clipboard.keepInClipboard")}

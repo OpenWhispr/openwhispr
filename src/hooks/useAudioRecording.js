@@ -79,6 +79,8 @@ export const useAudioRecording = (toast, options = {}) => {
     voiceAgentRequested: false,
     translationRequested: false,
   });
+  // How a continuous dictation pastes, submits and saves; set at mount.
+  const continuousDeliveryRef = useRef(null);
   const {
     onToggle,
     onAssistantCommand,
@@ -250,9 +252,23 @@ export const useAudioRecording = (toast, options = {}) => {
           }
         }
 
-        const didStart = audioManagerRef.current.shouldUseStreaming()
-          ? await audioManagerRef.current.startStreamingRecording()
-          : await audioManagerRef.current.startRecording();
+        // Continuous dictation takes the plain dictation hotkey only; the
+        // assistant, translation and the onboarding demo keep their one-shot
+        // recordings.
+        const continuous =
+          getSettings().continuousDictationEnabled &&
+          getSettings().autoPasteEnabled &&
+          !voiceAgentRequested &&
+          !translationRequested &&
+          localStorage.getItem("onboardingCompleted") === "true";
+        const didStart = continuous
+          ? await audioManagerRef.current.startContinuousRecording({
+              submitSilenceMs: getSettings().continuousSubmitSilenceMs,
+              delivery: continuousDeliveryRef.current,
+            })
+          : audioManagerRef.current.shouldUseStreaming()
+            ? await audioManagerRef.current.startStreamingRecording()
+            : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
         if (didStart) {
           dictationErrorGenerationRef.current += 1;
@@ -281,7 +297,9 @@ export const useAudioRecording = (toast, options = {}) => {
           if (getSettings().pauseMediaOnDictation) {
             window.electronAPI?.pauseMediaPlayback?.();
           }
-          window.electronAPI?.registerCancelHotkey?.("Escape");
+          // A continuous session can last a whole conversation; a global
+          // Escape would take that key from the app for all of it.
+          if (!continuous) window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();
         }
 
@@ -1005,6 +1023,57 @@ export const useAudioRecording = (toast, options = {}) => {
         });
       },
     });
+
+    let continuousErrorShown = false;
+    continuousDeliveryRef.current = {
+      deliver: async (text) => {
+        const { keepTranscriptionInClipboard, snippets } = getSettings();
+        const outcome = await audioManagerRef.current.safePaste(expandSnippets(text, snippets), {
+          restoreClipboard: !keepTranscriptionInClipboard,
+          allowClipboardFallback: isAccessibilitySkipped(),
+        });
+        if (!outcome.pasted) {
+          logger.warn(
+            "Continuous dictation phrase not pasted",
+            { reason: outcome.reason ?? null },
+            "clipboard"
+          );
+        }
+        return outcome;
+      },
+      pressEnter: async () => {
+        try {
+          const result = await window.electronAPI?.pressEnter?.();
+          return result?.pressed === true;
+        } catch (error) {
+          logger.warn("Continuous dictation Enter failed", { error: error?.message }, "clipboard");
+          return false;
+        }
+      },
+      // One history entry per message, not per phrase.
+      onMessageComplete: ({ text, rawText }) => {
+        continuousErrorShown = false;
+        void audioManagerRef.current
+          ?.saveTranscription(expandSnippets(text, getSettings().snippets), rawText)
+          .catch((error) =>
+            logger.error(
+              "Failed to persist continuous dictation message",
+              { error: error?.message },
+              "audio"
+            )
+          );
+      },
+      // A notice, not the dictation-error pill: the session keeps listening.
+      onSegmentError: () => {
+        if (continuousErrorShown) return;
+        continuousErrorShown = true;
+        toast({
+          title: t("hooks.audioRecording.continuous.segmentFailedTitle"),
+          description: t("hooks.audioRecording.continuous.segmentFailedDescription"),
+          variant: "destructive",
+        });
+      },
+    };
 
     // Keep overlay content protection in sync with the screen-context setting
     // so the dictation pill stays out of captures (survives window recreation).

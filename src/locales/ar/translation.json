@@ -31,6 +31,10 @@
         "title": "تمت استعادة الميكروفون",
         "description": "تم استئناف التقاط الصوت."
       },
+      "continuous": {
+        "segmentFailedTitle": "تعذّر تفريغ العبارة",
+        "segmentFailedDescription": "تعذّر تفريغ جزء من رسالتك، لذلك لم تُرسل. راجعها قبل الضغط على Enter."
+      },
       "partialTranscription": {
         "title": "تفريغ جزئي",
         "description": "تعذر تفريغ جزء من التسجيل."
@@ -3690,6 +3694,11 @@
         "autoPasteDescription": "لصق النص المفرَّغ تلقائيًا في التطبيق النشط عند انتهاء الإملاء",
         "pressEnterAfterPaste": "الضغط على Enter بعد اللصق",
         "pressEnterAfterPasteDescription": "الضغط على Enter بعد لصق النص المفرَّغ لإرسال الرسائل أو الأوامر تلقائيًا",
+        "continuousDictation": "الإملاء المتواصل",
+        "continuousDictationDescription": "يواصل الاستماع بعد بدء الإملاء: تُلصق كل عبارة عند التوقف، ويُضغط Enter بعد صمت أطول. اضغط مفتاح الاختصار مرة أخرى للإيقاف. تُلصق العبارات كما فُرّغت، دون تنقيح بالذكاء الاصطناعي.",
+        "continuousSubmitSilence": "الإرسال بعد الصمت",
+        "continuousSubmitSilenceDescription": "مدة الصمت قبل الضغط على Enter",
+        "continuousSubmitSilenceSeconds": "{{seconds}} ثوانٍ",
         "keepInClipboard": "الاحتفاظ بالنص المفرَّغ في الحافظة",
         "keepInClipboardDescription": "احتفظ بالنص المُملى في الحافظة حتى تتمكن من لصقه يدويًا إذا لزم الأمر"
       },

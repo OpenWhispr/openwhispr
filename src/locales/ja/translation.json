@@ -953,6 +953,10 @@
         "title": "マイクが復旧しました",
         "description": "音声の録音を再開しました。"
       },
+      "continuous": {
+        "segmentFailedTitle": "フレーズを文字起こしできませんでした",
+        "segmentFailedDescription": "メッセージの一部を文字起こしできなかったため、送信されませんでした。確認してから Enter を押してください。"
+      },
       "partialTranscription": {
         "title": "部分的な文字起こし",
         "description": "録音の一部を文字起こしできませんでした。"
@@ -2037,6 +2041,11 @@
         "autoPasteDescription": "ディクテーション完了後、文字起こしテキストをアクティブなアプリに自動的に貼り付けます",
         "pressEnterAfterPaste": "貼り付け後に Enter を押す",
         "pressEnterAfterPasteDescription": "文字起こしを貼り付けた後に Enter を押し、メッセージやコマンドを自動的に送信します",
+        "continuousDictation": "連続ディクテーション",
+        "continuousDictationDescription": "ディクテーション開始後も聞き取りを続けます。間を置くたびにフレーズを貼り付け、長めの沈黙の後に Enter を押します。もう一度ホットキーを押すと停止します。フレーズは AI クリーンアップなしで文字起こしのまま貼り付けられます。",
+        "continuousSubmitSilence": "沈黙後に送信",
+        "continuousSubmitSilenceDescription": "Enter を押すまでに必要な沈黙の長さ",
+        "continuousSubmitSilenceSeconds": "{{seconds}} 秒",
         "keepInClipboard": "文字起こしをクリップボードに保持",
         "keepInClipboardDescription": "必要に応じて手動で貼り付けできるよう、音声入力テキストをクリップボードに保持します"
       },

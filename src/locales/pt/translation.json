@@ -932,6 +932,10 @@
         "title": "Microfone restaurado",
         "description": "A captura de áudio foi retomada."
       },
+      "continuous": {
+        "segmentFailedTitle": "Frase não transcrita",
+        "segmentFailedDescription": "Parte da sua mensagem não pôde ser transcrita, então ela não foi enviada. Revise-a antes de pressionar Enter."
+      },
       "partialTranscription": {
         "title": "Transcrição parcial",
         "description": "Não foi possível transcrever parte da gravação."
@@ -2016,6 +2020,11 @@
         "autoPasteDescription": "Colar automaticamente o texto transcrito no aplicativo ativo ao finalizar o ditado",
         "pressEnterAfterPaste": "Pressionar Enter após colar",
         "pressEnterAfterPasteDescription": "Pressionar Enter após colar a transcrição, para enviar mensagens ou comandos automaticamente",
+        "continuousDictation": "Ditado contínuo",
+        "continuousDictationDescription": "Continua ouvindo após iniciar o ditado: cada frase é colada quando você faz uma pausa, e Enter é pressionado após um silêncio mais longo. Pressione o atalho novamente para parar. As frases são coladas como transcritas, sem limpeza por IA.",
+        "continuousSubmitSilence": "Enviar após silêncio",
+        "continuousSubmitSilenceDescription": "Quanto tempo de silêncio antes de pressionar Enter",
+        "continuousSubmitSilenceSeconds": "{{seconds}} segundos",
         "keepInClipboard": "Manter transcrição na área de transferência",
         "keepInClipboardDescription": "Manter o texto ditado na área de transferência para poder colar manualmente se necessário"
       },

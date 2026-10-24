@@ -953,6 +953,10 @@
         "title": "麥克風已恢復",
         "description": "音訊擷取已恢復。"
       },
+      "continuous": {
+        "segmentFailedTitle": "語句未能轉錄",
+        "segmentFailedDescription": "訊息的一部分未能轉錄，因此未傳送。請檢查後再按 Enter 鍵。"
+      },
       "partialTranscription": {
         "title": "部分轉錄",
         "description": "部分錄音內容無法轉錄。"
@@ -2037,6 +2041,11 @@
         "autoPasteDescription": "聽寫結束後自動將轉錄文字貼上到目前使用中的應用程式",
         "pressEnterAfterPaste": "貼上後按 Enter 鍵",
         "pressEnterAfterPasteDescription": "貼上轉錄文字後自動按 Enter 鍵，以自動傳送訊息或送出指令",
+        "continuousDictation": "連續聽寫",
+        "continuousDictationDescription": "開始聽寫後持續聆聽：每次停頓時貼上該句，較長時間靜默後按 Enter 鍵。再次按下快速鍵即可停止。各句按轉錄原文貼上，不經過 AI 清理。",
+        "continuousSubmitSilence": "靜默後傳送",
+        "continuousSubmitSilenceDescription": "按下 Enter 鍵前需要保持靜默的時間",
+        "continuousSubmitSilenceSeconds": "{{seconds}} 秒",
         "keepInClipboard": "將轉錄內容保留在剪貼簿",
         "keepInClipboardDescription": "將語音輸入的文字保留在剪貼簿中，以便在需要時手動貼上"
       },

@@ -3410,6 +3410,17 @@ class IPCHandlers {
       };
     });
 
+    // Continuous dictation submits a message with Enter once the user goes
+    // quiet. Queued behind the clipboard operations, so it lands after the
+    // message's last paste; the onboarding demo's text box is never submitted.
+    ipcMain.handle("press-enter", async () => {
+      if (this.windowManager?.isOnboardingDemoActive()) return { success: true, pressed: false };
+      const pressed = await this.clipboardManager.runClipboardOperation(() =>
+        this.clipboardManager.pressEnter()
+      );
+      return { success: true, pressed: pressed === true };
+    });
+
     ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
       return this.clipboardManager.checkAccessibilityPermissions(silent);
     });

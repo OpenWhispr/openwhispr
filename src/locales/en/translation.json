@@ -953,6 +953,10 @@
         "title": "Microphone restored",
         "description": "Audio capture has resumed."
       },
+      "continuous": {
+        "segmentFailedTitle": "Phrase not transcribed",
+        "segmentFailedDescription": "Part of your message couldn't be transcribed, so it wasn't sent. Check it before pressing Enter."
+      },
       "partialTranscription": {
         "title": "Partial Transcription",
         "description": "Part of the recording couldn't be transcribed."
@@ -2331,6 +2335,11 @@
         "autoPasteDescription": "Automatically paste transcribed text into the active app when dictation finishes",
         "pressEnterAfterPaste": "Press Enter after pasting",
         "pressEnterAfterPasteDescription": "Press Enter once the transcription is pasted, to send messages or submit commands automatically",
+        "continuousDictation": "Continuous dictation",
+        "continuousDictationDescription": "Keep listening after you start dictation: each phrase is pasted when you pause, and Enter is pressed after a longer silence. Press the hotkey again to stop. Phrases are pasted as transcribed, without AI cleanup.",
+        "continuousSubmitSilence": "Send after silence",
+        "continuousSubmitSilenceDescription": "How long to stay quiet before Enter is pressed",
+        "continuousSubmitSilenceSeconds": "{{seconds}} seconds",
         "keepInClipboard": "Keep transcription in clipboard",
         "keepInClipboardDescription": "Keep dictated text in your clipboard so you can paste it manually if needed"
       },

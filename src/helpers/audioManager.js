@@ -31,6 +31,7 @@ import {
 } from "./preparedMicCapture";
 import { MicStreamHold } from "./micStreamHold";
 import { PcmTap } from "./pcmTap";
+import { ContinuousDictationSession } from "./continuousDictationSession";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
@@ -602,12 +603,48 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
 
+function microphoneStartErrorReport(error) {
+  if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+    return {
+      title: "Microphone Access Denied",
+      description: "Please grant microphone permission in your system settings and try again.",
+    };
+  }
+  if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+    return {
+      title: "No Microphone Found",
+      description: "No microphone was detected. Please connect a microphone and try again.",
+    };
+  }
+  if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+    return {
+      title: "Microphone In Use",
+      description:
+        "The microphone is being used by another application. Please close other apps and try again.",
+    };
+  }
+  if (error.name === "MicUnusableError") {
+    return {
+      title: "Microphone Muted",
+      description:
+        "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again.",
+    };
+  }
+  return {
+    title: "Recording Error",
+    description: `Failed to access microphone: ${error.message}`,
+  };
+}
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
     this.audioChunks = [];
     this.isRecording = false;
     this.isProcessing = false;
+    this._continuousSession = null;
+    this._continuousStream = null;
+    this._rawTranscriptionDepth = 0;
     this.onStateChange = null;
     this.onError = null;
     this.onTranscriptionComplete = null;
@@ -1710,33 +1747,159 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startRecording(true);
       }
 
-      let errorTitle = "Recording Error";
-      let errorDescription = `Failed to access microphone: ${error.message}`;
-
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        errorTitle = "Microphone Access Denied";
-        errorDescription =
-          "Please grant microphone permission in your system settings and try again.";
-      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-        errorTitle = "No Microphone Found";
-        errorDescription = "No microphone was detected. Please connect a microphone and try again.";
-      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-        errorTitle = "Microphone In Use";
-        errorDescription =
-          "The microphone is being used by another application. Please close other apps and try again.";
-      } else if (error.name === "MicUnusableError") {
-        errorTitle = "Microphone Muted";
-        errorDescription =
-          "Your microphones stayed muted and produced no audio. Please check your sound input settings and try again.";
-      }
-
-      this.onError?.({
-        title: errorTitle,
-        description: errorDescription,
-      });
+      this.onError?.(microphoneStartErrorReport(error));
       return false;
     } finally {
       this._startInProgress = false;
+    }
+  }
+
+  // Continuous dictation (Settings → Clipboard): the mic stays open, each
+  // phrase is pasted when the user pauses, and Enter is pressed after
+  // `submitSilenceMs` of silence. `delivery` comes from the hook, which owns
+  // pasting and history: `deliver(text)` → `{ pasted }`, `pressEnter()` →
+  // boolean, `onMessageComplete({ text, rawText, submitted })`, and
+  // `onSegmentError(error)`.
+  async startContinuousRecording({ submitSilenceMs, delivery }, forceDefaultMic = false) {
+    if (!this.isRecordingAllowedByPolicy()) {
+      logger.warn("Recording blocked by workspace policy", {}, "audio");
+      return false;
+    }
+    if (
+      this._startInProgress ||
+      this.isRecording ||
+      this.isProcessing ||
+      this.isStreaming ||
+      this._streamingStopPromise ||
+      this.mediaRecorder?.state === "recording"
+    ) {
+      return false;
+    }
+    this._startInProgress = true;
+    let stream = null;
+    let session = null;
+    try {
+      // A prepared capture carries a pre-roll recorder this mode doesn't use.
+      this.preparedMicCapture.cancel();
+      stream = await this._acquireCaptureStream(await this.getAudioConstraints(forceDefaultMic));
+      session = new ContinuousDictationSession({
+        submitSilenceMs,
+        transcribe: (wav, metadata) =>
+          this.transcribeContinuousSegment(wav, metadata, () => session.cancelled),
+        deliver: delivery.deliver,
+        pressEnter: delivery.pressEnter,
+        onMessageComplete: delivery.onMessageComplete,
+        onSegmentError: delivery.onSegmentError,
+        logger,
+      });
+      await session.attach(stream, this.getWorkletBlobUrl());
+      this._continuousSession = session;
+      this._continuousStream = stream;
+      // An unplugged mic ends the session with what was already said pasted.
+      stream.getAudioTracks()[0]?.addEventListener("ended", () => {
+        if (this._continuousStream !== stream) return;
+        logger.warn("Continuous dictation microphone ended", {}, "audio");
+        void this._stopContinuousRecording();
+      });
+      this.isRecording = true;
+      this.recordingStartTime = Date.now();
+      this.onStateChange?.({
+        isRecording: true,
+        isProcessing: false,
+        micCaptureStatus: "active",
+      });
+      logger.info(
+        "Continuous dictation started",
+        { submitSilenceMs, label: stream.getAudioTracks()[0]?.label },
+        "audio"
+      );
+      return true;
+    } catch (error) {
+      session?.cancel();
+      if (stream) this._releaseContinuousStream(stream);
+      if (isStaleDeviceError(error) && !forceDefaultMic) {
+        logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
+        this.cachedMicDeviceId = null;
+        this._startInProgress = false;
+        return this.startContinuousRecording({ submitSilenceMs, delivery }, true);
+      }
+      this.onError?.(microphoneStartErrorReport(error));
+      return false;
+    } finally {
+      this._startInProgress = false;
+    }
+  }
+
+  _releaseContinuousStream(stream) {
+    stream.getTracks().forEach((track) => track.stop());
+    this._markCaptureStreamReleased();
+  }
+
+  // The mic closes at once; the pill shows processing until every phrase
+  // spoken before the stop has been pasted.
+  async _stopContinuousRecording() {
+    const session = this._continuousSession;
+    if (!session || this._continuousStopPromise) return this._continuousStopPromise;
+    this._continuousStopPromise = (async () => {
+      const stream = this._continuousStream;
+      this._continuousStream = null;
+      const drained = session.stop();
+      if (stream) this._releaseContinuousStream(stream);
+      this.isRecording = false;
+      this.isProcessing = true;
+      this.onStateChange?.({ isRecording: false, isProcessing: true });
+      try {
+        await drained;
+      } finally {
+        if (this._continuousSession === session) this._continuousSession = null;
+        this._continuousStopPromise = null;
+        this.isProcessing = false;
+        this.onStateChange?.({
+          isRecording: false,
+          isProcessing: false,
+          micCaptureStatus: "inactive",
+        });
+        logger.info("Continuous dictation stopped", {}, "audio");
+      }
+    })();
+    return this._continuousStopPromise;
+  }
+
+  _cancelContinuousRecording() {
+    const session = this._continuousSession;
+    if (!session) return;
+    session.cancel();
+    if (this._continuousStream) this._releaseContinuousStream(this._continuousStream);
+    this._continuousStream = null;
+    this._continuousSession = null;
+    // A stop already draining owns the processing state; cancelling makes it
+    // skip what's left, and it reports idle when it settles.
+    if (this._continuousStopPromise) return;
+    this.isRecording = false;
+    this.isProcessing = false;
+    this.onStateChange?.({ isRecording: false, isProcessing: false, micCaptureStatus: "inactive" });
+    logger.info("Continuous dictation cancelled", {}, "audio");
+  }
+
+  // Transcribes one continuous-dictation phrase on the user's engine, without
+  // cleanup or assistant routing. Resolves to `{ text, rawText }`; a phrase the
+  // engine hears as silence resolves to empty text instead of failing.
+  async transcribeContinuousSegment(wav, { durationSeconds }, wasCancelled = neverCancelled) {
+    this._rawTranscriptionDepth += 1;
+    try {
+      const { result } = await this._transcribeWithActiveProvider(
+        wav,
+        { durationSeconds, rawWav: wav },
+        wasCancelled
+      );
+      if (!result?.success) return { text: "" };
+      const text = result.text ?? "";
+      return { text, rawText: result.rawText ?? text };
+    } catch (error) {
+      if (/no audio detected/i.test(error?.message ?? "")) return { text: "" };
+      throw error;
+    } finally {
+      this._rawTranscriptionDepth -= 1;
     }
   }
 
@@ -1954,6 +2117,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   stopRecording() {
+    if (this._continuousSession) {
+      void this._stopContinuousRecording();
+      return true;
+    }
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
       this._stopRequestedDuringMicRecovery = true;
@@ -1988,6 +2155,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // pipeline is recording: the batch speech-gate analyser or the streaming
   // path's analyser. Null (waveform rests) when neither is live.
   getRecordingAudioLevel() {
+    if (this._continuousSession) return this._continuousSession.getLevel();
     const pair = this._silenceAnalyser
       ? { ctx: this._silenceCtx, analyser: this._silenceAnalyser }
       : this.streamingAnalyser
@@ -2015,6 +2183,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cancelRecording() {
+    if (this._continuousSession) {
+      this._cancelContinuousRecording();
+      return true;
+    }
     this._cancelActivationCapture(this._takeActivationCapture());
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
@@ -2157,6 +2329,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cancelProcessing() {
+    if (this._continuousSession) {
+      this._cancelContinuousRecording();
+      return true;
+    }
     this._cancelActivationCapture(this._activeProcessingPipeline?.activationCapture);
     if (this.isProcessing) {
       this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
@@ -2182,6 +2358,67 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     }
     return false;
+  }
+
+  // Routes one recording to the transcription lane the settings select: managed
+  // enterprise STT, then local (whisper.cpp or sherpa-onnx), then OpenWhispr
+  // Cloud, then the BYOK provider.
+  async _transcribeWithActiveProvider(audioBlob, metadata, wasCancelled) {
+    const settings = getSettings();
+    const useLocalWhisper = settings.useLocalWhisper;
+    const localProvider = settings.localTranscriptionProvider;
+    const whisperModel = settings.whisperModel;
+    const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
+
+    const cloudTranscriptionMode = settings.cloudTranscriptionMode;
+    const isSignedIn = settings.isSignedIn;
+
+    const isOpenWhisprCloudMode = !useLocalWhisper && cloudTranscriptionMode === "openwhispr";
+    const useCloud = isOpenWhisprCloudMode && isSignedIn;
+    logger.debug(
+      "Transcription routing",
+      { useLocalWhisper, useCloud, isSignedIn, cloudTranscriptionMode },
+      "transcription"
+    );
+
+    let result;
+    let activeModel;
+    // Managed enterprise STT outranks the local and OpenWhispr Cloud lanes,
+    // matching the LLM scopes; users opt out via "Use personal setup" when
+    // the administrator allows it. Error resolutions fail closed inside
+    // processWithOpenAIAPI with their own code.
+    const managedTranscription = getManagedTranscriptionResolution();
+    if (managedTranscription) {
+      activeModel =
+        managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
+      result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+    } else if (useLocalWhisper) {
+      if (isSherpaLocalProvider(localProvider)) {
+        activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
+        result = await this.processWithLocalParakeet(
+          audioBlob,
+          activeModel,
+          metadata,
+          wasCancelled
+        );
+      } else {
+        activeModel = whisperModel;
+        result = await this.processWithLocalWhisper(
+          audioBlob,
+          whisperModel,
+          metadata,
+          wasCancelled
+        );
+      }
+    } else if (isOpenWhisprCloudMode) {
+      if (!isSignedIn) throw cloudSignInRequiredError();
+      activeModel = "openwhispr-cloud";
+      result = await this.processWithOpenWhisprCloud(audioBlob, metadata, wasCancelled);
+    } else {
+      activeModel = this.getTranscriptionModel();
+      result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
+    }
+    return { result, activeModel };
   }
 
   async processAudio(audioBlob, metadata = {}, processingPipeline = null) {
@@ -2221,57 +2458,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const useLocalWhisper = settings.useLocalWhisper;
       const localProvider = settings.localTranscriptionProvider;
-      const whisperModel = settings.whisperModel;
-      const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
-
-      const cloudTranscriptionMode = settings.cloudTranscriptionMode;
-      const isSignedIn = settings.isSignedIn;
-
-      const isOpenWhisprCloudMode = !useLocalWhisper && cloudTranscriptionMode === "openwhispr";
-      const useCloud = isOpenWhisprCloudMode && isSignedIn;
-      logger.debug(
-        "Transcription routing",
-        { useLocalWhisper, useCloud, isSignedIn, cloudTranscriptionMode },
-        "transcription"
+      const transcription = await this._transcribeWithActiveProvider(
+        audioBlob,
+        metadata,
+        wasCancelled
       );
-
-      let result;
-      let activeModel;
-      // Managed enterprise STT outranks the local and OpenWhispr Cloud lanes,
-      // matching the LLM scopes; users opt out via "Use personal setup" when
-      // the administrator allows it. Error resolutions fail closed inside
-      // processWithOpenAIAPI with their own code.
-      const managedTranscription = getManagedTranscriptionResolution();
-      if (managedTranscription) {
-        activeModel =
-          managedTranscription.kind === "managed" ? managedTranscription.deployment : null;
-        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
-      } else if (useLocalWhisper) {
-        if (isSherpaLocalProvider(localProvider)) {
-          activeModel = localProvider === "cohere" ? settings.cohereModel : parakeetModel;
-          result = await this.processWithLocalParakeet(
-            audioBlob,
-            activeModel,
-            metadata,
-            wasCancelled
-          );
-        } else {
-          activeModel = whisperModel;
-          result = await this.processWithLocalWhisper(
-            audioBlob,
-            whisperModel,
-            metadata,
-            wasCancelled
-          );
-        }
-      } else if (isOpenWhisprCloudMode) {
-        if (!isSignedIn) throw cloudSignInRequiredError();
-        activeModel = "openwhispr-cloud";
-        result = await this.processWithOpenWhisprCloud(audioBlob, metadata, wasCancelled);
-      } else {
-        activeModel = this.getTranscriptionModel();
-        result = await this.processWithOpenAIAPI(audioBlob, metadata, wasCancelled);
-      }
+      const { activeModel } = transcription;
+      let { result } = transcription;
 
       if (wasCancelled() || !this.isProcessing) {
         return;
@@ -3347,6 +3540,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return normalizedText;
     }
     if (wasCancelled()) return normalizedText;
+    // A continuous-dictation phrase is pasted as transcribed: a cleanup model
+    // would rewrite each fragment on its own, and a wake word mid-conversation
+    // must not open the assistant.
+    if (this._rawTranscriptionDepth > 0) return normalizedText;
 
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {
       source,
@@ -3692,7 +3889,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
     // Only cloud cleanup writes a combined STT log; translation alone does not.
     // A voice assistant recording never runs cleanup, so this upload is its log.
-    if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
+    const rawTranscription = this._rawTranscriptionDepth > 0;
+    if (
+      settings.useCleanupModel &&
+      isCloudCleanup &&
+      !this.voiceAgentRequested &&
+      !rawTranscription
+    ) {
       opts.sendLogs = "false";
     }
 
@@ -3722,7 +3925,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
     const rawText = this.stripTrailingDictionaryEcho(result.text, dictionaryPrompt);
     let processedText = rawText;
-    if (processedText) {
+    if (processedText && !rawTranscription) {
       const reasoningStart = performance.now();
       const agentName = getAgentName();
       const screenContext = this.voiceAgentRequested ? await this.consumeScreenContext() : null;
@@ -6531,6 +6734,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cleanup() {
     // Read before cleanupStreaming ends the session below.
     const streamingProviderName = this.getActiveStreamingProviderName();
+    this._cancelContinuousRecording();
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
