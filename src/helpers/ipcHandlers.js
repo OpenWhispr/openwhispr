@@ -5069,13 +5069,14 @@ class IPCHandlers {
     // OpenAI-compatible multipart, so batch transcription is proxied through main.
     ipcMain.handle(
       "proxy-gemini-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms, mode }) => {
         return await transcribeWithGemini({
           audioBuffer: Buffer.from(audioBuffer),
           model,
           contentType: "audio/webm",
           language,
           keyterms,
+          mode,
           apiKey: this.environmentManager.getGeminiKey(),
         });
       })

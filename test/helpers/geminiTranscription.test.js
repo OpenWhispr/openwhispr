@@ -75,6 +75,46 @@ test("language and keyterms land in transcription_config", async () => {
   });
 });
 
+test("smart mode uses the Interactions transcription config and preserves language and vocabulary", async () => {
+  const { fetchImpl, calls } = makeFetch({ status: "completed", output_text: "clean text" });
+  await transcribeWithGemini(
+    {
+      audioBuffer: AUDIO,
+      mode: "smart",
+      language: "de",
+      keyterms: ["OpenWhispr"],
+      apiKey: "k1",
+    },
+    fetchImpl
+  );
+  assert.deepEqual(requestBody(calls).generation_config, {
+    transcription_config: {
+      mode: "smart",
+      language_codes: ["de"],
+      custom_vocabulary: ["OpenWhispr"],
+    },
+  });
+});
+
+test("smart mode is sent even with automatic language and no dictionary", async () => {
+  const { fetchImpl, calls } = makeFetch({ output_text: "clean text" });
+  await transcribeWithGemini(
+    { audioBuffer: AUDIO, mode: "smart", language: "auto", apiKey: "k1" },
+    fetchImpl
+  );
+  assert.deepEqual(requestBody(calls).generation_config, {
+    transcription_config: { mode: "smart" },
+  });
+});
+
+test("verbatim and unknown modes retain the existing API default", async () => {
+  for (const mode of ["verbatim", "SMART", "invalid", null]) {
+    const { fetchImpl, calls } = makeFetch({ output_text: "literal text" });
+    await transcribeWithGemini({ audioBuffer: AUDIO, mode, apiKey: "k1" }, fetchImpl);
+    assert.equal("generation_config" in requestBody(calls), false);
+  }
+});
+
 test("falls back to joining step text when output_text is absent", async () => {
   const { fetchImpl } = makeFetch({
     status: "completed",
