@@ -7,6 +7,8 @@
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
       "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "cohereAutoTitle": "Cohere Transcribe usará {{language}}",
+      "cohereAutoDescription": "Este modelo no detecta el idioma hablado. Con Auto, transcribe en {{language}} hasta que elijas un idioma.",
       "chineseScriptLabel": "Escritura china (dictado)",
       "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
       "chineseScriptAsTranscribed": "Mantener como se transcribió",

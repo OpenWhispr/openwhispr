@@ -1,8 +1,11 @@
 import { create } from "zustand";
-import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
+import { getSettings, selectResolvedMeetingTranscription, useSettingsStore } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
-import { resolveMeetingTranscriptionOptions } from "../helpers/meetingTranscriptionRouting";
+import {
+  liveLocalMeetingLanguage,
+  resolveMeetingTranscriptionOptions,
+} from "../helpers/meetingTranscriptionRouting";
 import { followsSystemDefaultMic } from "../helpers/micSelectionRecovery";
 import { resolvePreferredMicrophone } from "../helpers/microphoneSelection";
 import { ActiveMicRecoveryController } from "../helpers/activeMicRecovery";
@@ -1991,6 +1994,24 @@ if (typeof window !== "undefined") {
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => {
     void persistLiveTranscript();
+  });
+}
+
+// A local meeting otherwise keeps the language it started with, so switching
+// Polish and English mid-recording never reached the next chunk.
+if (typeof window !== "undefined") {
+  useSettingsStore.subscribe((state, previous) => {
+    if (state.preferredLanguage === previous.preferredLanguage) return;
+    if (!useMeetingRecordingStore.getState().isRecording) return;
+    let options;
+    try {
+      options = getMeetingTranscriptionOptions();
+    } catch {
+      return;
+    }
+    const language = liveLocalMeetingLanguage(true, options);
+    if (language === undefined) return;
+    void window.electronAPI?.meetingTranscriptionUpdateLanguage?.(language);
   });
 }
 

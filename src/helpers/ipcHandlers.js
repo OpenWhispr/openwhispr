@@ -9832,6 +9832,15 @@ class IPCHandlers {
       });
     });
 
+    // Local meetings copy the language once at start. The next chunk reads
+    // meetingLocalLanguage, and the sherpa server restarts when it changes.
+    ipcMain.handle("meeting-transcription-update-language", (_event, language) => {
+      if (!meetingLocalMode) return { success: false, reason: "not-local" };
+      meetingLocalLanguage =
+        typeof language === "string" && language.trim() ? language.trim() : null;
+      return { success: true, language: meetingLocalLanguage };
+    });
+
     ipcMain.handle("meeting-transcription-stop", (_event, expectedSessionId) =>
       meetingTranscriptionLifecycle.stopSession(expectedSessionId)
     );

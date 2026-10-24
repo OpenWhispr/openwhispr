@@ -73,6 +73,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
+import { firstImplicitAutoLanguage } from "../helpers/cohereAutoLanguage";
+import { getLanguageLabel } from "../utils/languageSupport";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -135,6 +137,8 @@ import {
   clearMissingLocalModelSelections,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
+  selectResolvedMeetingTranscription,
+  selectResolvedUploadTranscription,
   useSettingsStore,
   type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
@@ -1265,6 +1269,24 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
+  const cohereAutoLanguage = useSettingsStore((state) => {
+    const meeting = selectResolvedMeetingTranscription(state);
+    const upload = selectResolvedUploadTranscription(state);
+    return firstImplicitAutoLanguage([
+      {
+        mode: state.transcriptionMode,
+        provider: state.localTranscriptionProvider,
+      },
+      {
+        mode: meeting.transcriptionMode,
+        provider: meeting.localTranscriptionProvider,
+      },
+      {
+        mode: upload.transcriptionMode,
+        provider: upload.localTranscriptionProvider,
+      },
+    ]);
+  });
   const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
@@ -3301,6 +3323,23 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {preferredLanguage === "auto" && cohereAutoLanguage && (
+                  <SettingsPanelRow>
+                    <Alert variant="warning">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>
+                        {t("settings.language.cohereAutoTitle", {
+                          language: getLanguageLabel(cohereAutoLanguage),
+                        })}
+                      </AlertTitle>
+                      <AlertDescription>
+                        {t("settings.language.cohereAutoDescription", {
+                          language: getLanguageLabel(cohereAutoLanguage),
+                        })}
+                      </AlertDescription>
+                    </Alert>
+                  </SettingsPanelRow>
+                )}
                 {preferredLanguage === "auto" && (
                   <SettingsPanelRow>
                     <SettingsRow

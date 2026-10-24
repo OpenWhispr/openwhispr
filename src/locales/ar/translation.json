@@ -4141,6 +4141,8 @@
       "uiDescription": "اختر اللغة المستخدمة في واجهة OpenWhispr",
       "transcriptionLabel": "لغة التفريغ الصوتي",
       "transcriptionDescription": "اختر اللغة التي تتحدث بها للحصول على تفريغ صوتي أكثر دقة",
+      "cohereAutoTitle": "سيستخدم Cohere Transcribe {{language}}",
+      "cohereAutoDescription": "لا يستطيع هذا النموذج اكتشاف اللغة المنطوقة. مع «تلقائي» ينسخ بـ{{language}} إلى أن تختار لغة.",
       "chineseScriptLabel": "الكتابة الصينية (الإملاء)",
       "chineseScriptDescription": "عند اكتشاف اللغة الصينية، سيتم تحويل النص المُملى إلى أحرف مبسطة أو تقليدية. اللغة الصينية المنطوقة هي نفسها في كلتا الحالتين؛ لا يُرجع Whisper سوى نظام كتابة واحد.",
       "chineseScriptAsTranscribed": "الإبقاء على النص كما تم تفريغه",
