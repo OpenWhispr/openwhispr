@@ -3944,6 +3944,8 @@
       "request_accessStatus": "アクセスを依頼しています...",
       "look_at_screenName": "画面を見る",
       "look_at_screenStatus": "画面を確認しています...",
+      "look_at_screenSuccess": "画面を読み取りました。",
+      "look_at_screenFailed": "画面を読み取れませんでした。",
       "request_api_keyName": "API キー",
       "request_api_keyStatus": "API キーを依頼しています...",
       "open_settingsName": "設定",

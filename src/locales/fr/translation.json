@@ -4116,6 +4116,8 @@
       "request_accessStatus": "Demande d'accès...",
       "look_at_screenName": "Regarder l'écran",
       "look_at_screenStatus": "Lecture de votre écran...",
+      "look_at_screenSuccess": "Écran lu.",
+      "look_at_screenFailed": "L'écran n'a pas pu être lu.",
       "request_api_keyName": "Clé API",
       "request_api_keyStatus": "Demande d'une clé API...",
       "open_settingsName": "Réglages",

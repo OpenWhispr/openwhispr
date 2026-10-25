@@ -8,6 +8,7 @@ const {
   SIGNED_OUT_AUTH_MOCK,
   createRendererServer,
   installBrowserGlobals,
+  installHookDom,
 } = require("../lib/rendererTestHarness");
 
 // The running chat's turn bookkeeping on the real useChatStreaming hook (one
@@ -32,9 +33,14 @@ const SLACK_READY = {
 async function renderChatStreaming(
   t,
   hookOptions = {},
-  { settings = BYOK, electronAPI = {}, statuses } = {}
+  { settings = BYOK, electronAPI = {}, statuses, live = false } = {}
 ) {
+  let root;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
   installBrowserGlobals(t, { initialStorage: { isSubscribed: "true" }, window: { electronAPI } });
+  const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-turns-test-",
     mockModules: SIGNED_OUT_AUTH_MOCK,
@@ -96,9 +102,14 @@ async function renderChatStreaming(
     });
     return null;
   }
-  renderToStaticMarkup(React.createElement(Harness));
+  if (live) {
+    const { createRoot } = require("react-dom/client");
+    root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+  } else renderToStaticMarkup(React.createElement(Harness));
   return {
     captured,
+    current: () => captured,
     vite,
     offered,
     prompts,
@@ -864,6 +875,103 @@ test("a regenerate stopped or failed before its first token shows the reply it r
     // A failure is said (the agent window shows a notice); a stop is the user's own.
     assert.equal(failures, end === "error" ? 1 : 0, label);
   }
+});
+
+test("a superseded regeneration cannot clear the newer regeneration's busy state or activity", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("Unexpected network request");
+  });
+  const h = await renderChatStreaming(
+    t,
+    { allowInteractions: true, productHelpEnabled: false },
+    { live: true, settings: { ...BYOK, isSignedIn: false } }
+  );
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1000 });
+  const request = { id: "u1", role: "user", content: "Explain the plan", isStreaming: false };
+  const reply = { id: "a1", dbId: 9, role: "assistant", content: "Original", isStreaming: false };
+  // Loading saved history keeps the database ID and assigns a new renderer ID.
+  const reopenedReply = { ...reply, id: "reopened-a1" };
+  h.seed([request, reply]);
+  const firstEntered = Promise.withResolvers();
+  const failFirst = Promise.withResolvers();
+  const secondEntered = Promise.withResolvers();
+  const finishSecond = Promise.withResolvers();
+  let calls = 0;
+  h.setStream(() =>
+    ++calls === 1
+      ? (async function* () {
+          yield { type: "reasoning", text: "" };
+          firstEntered.resolve();
+          await failFirst.promise;
+          throw new Error("Old model setup failed after Stop");
+        })()
+      : (async function* () {
+          yield { type: "content", text: "New replacement answer" };
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "c1", name: "search_notes", arguments: "{}" }],
+          };
+          secondEntered.resolve();
+          await finishSecond.promise;
+          yield {
+            type: "tool_result",
+            callId: "c1",
+            toolName: "search_notes",
+            displayText: "Found",
+          };
+          yield { type: "done", finishReason: "stop" };
+        })()
+  );
+  let first;
+  let second;
+  try {
+    await React.act(async () => {
+      first = h.captured.sendToAI(request.content, [request], {
+        conversationId: 7,
+        replaceMessage: reply,
+      });
+      await firstEntered.promise;
+    });
+    await React.act(async () => h.captured.cancelStream());
+    h.seed([request, reopenedReply]);
+    await React.act(async () => {
+      second = h.captured.sendToAI(request.content, [request], {
+        conversationId: 7,
+        replaceMessage: reopenedReply,
+      });
+      await secondEntered.promise;
+    });
+    const status = h.current().toolStatus;
+    assert.equal(h.current().agentState, "tool-executing");
+    assert.ok(status, "the newer turn has visible tool activity");
+    await React.act(async () => {
+      failFirst.resolve();
+      await first;
+      t.mock.timers.tick(3000);
+    });
+    assert.deepEqual(
+      {
+        state: h.current().agentState,
+        tool: h.current().activeToolName,
+        status: h.current().toolStatus,
+        content: h.assistant().content,
+        streaming: h.assistant().isStreaming,
+      },
+      {
+        state: "tool-executing",
+        tool: "search_notes",
+        status,
+        content: "New replacement answer",
+        streaming: true,
+      }
+    );
+  } finally {
+    failFirst.resolve();
+    finishSecond.resolve();
+    await React.act(async () => Promise.allSettled([first, second].filter(Boolean)));
+  }
+  assert.equal(h.current().agentState, "idle", "the newer turn still completes normally");
+  assert.equal(h.completed.length, 1);
 });
 
 test("reasoning after a tool step starts a new paragraph", async (t) => {

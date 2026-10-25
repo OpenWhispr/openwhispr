@@ -142,7 +142,7 @@ test("unavailable capabilities sit after the tools", async () => {
 
 test("the time and library notes ride on the message, so the system prompt stays the same", async (t) => {
   const { buildMessageContext, getAgentSystemPrompt } = await load();
-  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-08-25T12:00:00Z") });
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 7, 25, 12).getTime() });
   const first = getAgentSystemPrompt(["search_notes"]);
   const firstContext = buildMessageContext('<note id="7">Launch is Friday</note>');
   t.mock.timers.tick(60_000);

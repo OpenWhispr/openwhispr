@@ -1277,8 +1277,10 @@ export function useChatStreaming({
           }
         }
 
-        setAgentState("idle");
-        completeToolActivity();
+        if (sendGeneration === sendGenerationRef.current) {
+          setAgentState("idle");
+          completeToolActivity();
+        }
       }
     },
     [

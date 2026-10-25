@@ -490,7 +490,6 @@ test("availability prompt context refreshes local time without rebuilding the re
 
 test("every message carries today's weekday", async (t) => {
   const { buildMessageContext } = await import("../../src/config/prompts.ts");
-  // Noon UTC is the same Tuesday in every time zone from UTC−11 to UTC+11.
-  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-08-25T12:00:00Z") });
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 7, 25, 12).getTime() });
   assert.match(buildMessageContext(), /Current local date and time: Tuesday, 2026-08-25T/);
 });

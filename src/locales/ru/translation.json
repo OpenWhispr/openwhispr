@@ -3988,6 +3988,8 @@
       "request_accessStatus": "Запрашиваю доступ...",
       "look_at_screenName": "Посмотреть на экран",
       "look_at_screenStatus": "Смотрю на ваш экран...",
+      "look_at_screenSuccess": "Экран прочитан.",
+      "look_at_screenFailed": "Не удалось прочитать экран.",
       "request_api_keyName": "Ключ API",
       "request_api_keyStatus": "Запрашиваю ключ API...",
       "open_settingsName": "Настройки",

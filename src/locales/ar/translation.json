@@ -1807,6 +1807,8 @@
       "request_accessStatus": "جارٍ طلب الوصول...",
       "look_at_screenName": "النظر إلى الشاشة",
       "look_at_screenStatus": "جارٍ النظر إلى شاشتك...",
+      "look_at_screenSuccess": "تمت قراءة الشاشة.",
+      "look_at_screenFailed": "تعذرت قراءة الشاشة.",
       "request_api_keyName": "مفتاح API",
       "request_api_keyStatus": "جارٍ طلب مفتاح API...",
       "open_settingsName": "الإعدادات",

@@ -1,3 +1,4 @@
+import i18n from "../../i18n";
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 /** The vision model's instructions when it reads the screenshot for look_at_screen. */
@@ -32,8 +33,16 @@ export function createLookAtScreenTool(
       // As text, not an object: an object result is saved with the tool call
       // (and synced), and what the screen showed belongs to this turn only.
       return answer
-        ? { success: true, data: answer, displayText: "Read the screen." }
-        : { success: false, data: null, displayText: "The screen couldn't be read." };
+        ? {
+            success: true,
+            data: answer,
+            displayText: i18n.t("agentMode.tools.look_at_screenSuccess"),
+          }
+        : {
+            success: false,
+            data: null,
+            displayText: i18n.t("agentMode.tools.look_at_screenFailed"),
+          };
     },
   };
 }

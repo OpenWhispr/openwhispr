@@ -3996,6 +3996,8 @@
       "request_accessStatus": "Pidiendo acceso...",
       "look_at_screenName": "Mirar la pantalla",
       "look_at_screenStatus": "Mirando tu pantalla...",
+      "look_at_screenSuccess": "Se ha leído la pantalla.",
+      "look_at_screenFailed": "No se ha podido leer la pantalla.",
       "request_api_keyName": "Clave de API",
       "request_api_keyStatus": "Pidiendo una clave de API...",
       "open_settingsName": "Ajustes",

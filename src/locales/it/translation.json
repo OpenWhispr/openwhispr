@@ -3944,6 +3944,8 @@
       "request_accessStatus": "Richiesta di accesso...",
       "look_at_screenName": "Guarda lo schermo",
       "look_at_screenStatus": "Lettura dello schermo...",
+      "look_at_screenSuccess": "Schermata letta.",
+      "look_at_screenFailed": "Non è stato possibile leggere la schermata.",
       "request_api_keyName": "Chiave API",
       "request_api_keyStatus": "Richiesta di una chiave API...",
       "open_settingsName": "Impostazioni",

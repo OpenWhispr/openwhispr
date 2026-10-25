@@ -3944,6 +3944,8 @@
       "request_accessStatus": "正在請求存取...",
       "look_at_screenName": "查看螢幕",
       "look_at_screenStatus": "正在查看你的螢幕...",
+      "look_at_screenSuccess": "已讀取螢幕。",
+      "look_at_screenFailed": "無法讀取螢幕。",
       "request_api_keyName": "API 金鑰",
       "request_api_keyStatus": "正在請求 API 金鑰...",
       "open_settingsName": "設定",
