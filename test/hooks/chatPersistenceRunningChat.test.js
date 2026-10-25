@@ -118,7 +118,7 @@ function fakeDb() {
 
 async function mountPersistence(
   t,
-  { instances = 1, restore = false, streaming = false, senderConversationId } = {}
+  { instances = 1, restore = false, streaming = false, senderConversationId, mockStreaming } = {}
 ) {
   const db = fakeDb();
   let root;
@@ -133,6 +133,7 @@ async function mountPersistence(
     cachePrefix: "openwhispr-chat-persistence-test-",
     mockModules: SIGNED_OUT_AUTH_MOCK,
   });
+  if (mockStreaming) await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const { useChatPersistence } = await vite.ssrLoadModule("/components/chat/useChatPersistence.ts");
   const { createRoot } = require("react-dom/client");
   const { useInterruptedInteractions } = await vite.ssrLoadModule(
@@ -145,11 +146,13 @@ async function mountPersistence(
   const streams = [];
   const senders = [];
   let useChatStreaming, useChatMessageSender, service;
-  if (streaming) {
-    ({ useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts"));
+  if (streaming || mockStreaming) {
     ({ useChatMessageSender } = await vite.ssrLoadModule(
       "/components/chat/useChatMessageSender.ts"
     ));
+  }
+  if (streaming) {
+    ({ useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts"));
     service = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
     t.after(() => service.destroy());
     const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
@@ -166,15 +169,17 @@ async function mountPersistence(
   function Harness({ index }) {
     const value = useChatPersistence();
     persistence[index] = value;
-    if (streaming) {
-      const stream = useChatStreaming({
-        setMessages: value.setMessages,
-        allowInteractions: true,
-        allowConnectors: true,
-        onStreamComplete: value.saveAssistantMessage,
-        onTurnCheckpoint: value.saveAssistantMessage,
-        claimConversation: value.claimConversation,
-      });
+    if (streaming || mockStreaming) {
+      const stream =
+        mockStreaming ??
+        useChatStreaming({
+          setMessages: value.setMessages,
+          allowInteractions: true,
+          allowConnectors: true,
+          onStreamComplete: value.saveAssistantMessage,
+          onTurnCheckpoint: value.saveAssistantMessage,
+          claimConversation: value.claimConversation,
+        });
       streams[index] = stream;
       senders[index] = useChatMessageSender({
         conversationId: senderConversationId ?? value.conversationId,
@@ -184,10 +189,15 @@ async function mountPersistence(
       });
     }
     if (restore)
-      useInterruptedInteractions(value, async (text) => {
-        sent.push([index, text]);
-        return true;
-      });
+      useInterruptedInteractions(
+        value,
+        mockStreaming
+          ? senders[index]
+          : async (text) => {
+              sent.push([index, text]);
+              return true;
+            }
+      );
     return null;
   }
   root = createRoot(container);
@@ -227,6 +237,110 @@ const message = (id, role, content, extra = {}) => ({
   isStreaming: false,
   ...extra,
 });
+
+for (const scenario of ["single", "together", "reverse", "obsolete session", "removed parent"]) {
+  test(`restored connections preserve cumulative outcomes: ${scenario}`, async (t) => {
+    const streams = [];
+    const streamEnd = Promise.withResolvers();
+    const targets = scenario === "single" ? ["slack"] : ["slack", "linear"];
+    const connects = Object.fromEntries(targets.map((target) => [target, Promise.withResolvers()]));
+    const saves = targets.map(() => Promise.withResolvers());
+    t.after(() => {
+      streamEnd.resolve();
+      saves.forEach((save) => save.resolve());
+    });
+    const h = await mountPersistence(t, {
+      restore: true,
+      mockStreaming: {
+        sendToAI: async (text, messages) => {
+          streams.push(structuredClone({ text, messages }));
+          await streamEnd.promise;
+        },
+      },
+    });
+    const connected = new Set();
+    h.db.api.connectorConnect = async (target) => {
+      await connects[target].promise;
+      connected.add(target);
+      return { status: "connected" };
+    };
+    h.db.api.connectorStatus = async () =>
+      targets.map((id) => ({
+        id,
+        connected: connected.has(id),
+        needsReconnect: false,
+      }));
+    const statuses = await h.vite.ssrLoadModule("/stores/connectorStatusStore.ts");
+    statuses.useConnectorStatusStore.setState({ statuses: {}, loaded: false });
+    const { id } = await h.db.api.createAgentConversation("Restored connections");
+    const saved = await h.db.api.addAgentMessage(id, "assistant", "", {
+      turn: { startedAt: 1, finishedAt: 2, status: "interrupted" },
+      toolCalls: targets.map((target) => ({
+        id: target,
+        name: "request_connection",
+        arguments: JSON.stringify({ target }),
+        status: "stopped",
+        interaction: { payload: { kind: "connection", target }, state: "interrupted" },
+      })),
+    });
+    await h.act(() => h.current().loadConversation(id));
+    const update = h.db.api.updateAgentMessage;
+    let saving = 0;
+    h.db.api.updateAgentMessage = async (...args) => {
+      await saves[saving++].promise;
+      return update(...args);
+    };
+    const entries = Object.values(h.store.useAgentInteractionStore.getState().entries);
+    assert.equal(entries.length, targets.length, "distinct targets restore as separate cards");
+    const order = scenario === "reverse" ? [...entries].reverse() : entries;
+    const running = order.map((entry) => h.store.connectInteraction(entry.key));
+    await h.act(async () => {
+      order.forEach((entry) => connects[entry.payload.target].resolve());
+      await Promise.all(running);
+    });
+    assert.equal(streams.length, 0, "a continuation waits for its answer save");
+    if (scenario === "obsolete session") await h.act(() => h.current().handleNewChat());
+    if (scenario === "removed parent") await h.act(() => h.current().setMessages([]));
+    const earlySends = [];
+    for (const [index, save] of saves.entries()) {
+      await h.act(() => save.resolve());
+      if (index < saves.length - 1) earlySends.push(streams.length);
+    }
+    await h.act(() => streamEnd.resolve());
+    const answers = (calls) =>
+      calls
+        .filter((call) => call.interaction.result?.status === "connected")
+        .map((call) => call.id)
+        .sort();
+    if (scenario === "obsolete session" || scenario === "removed parent") {
+      assert.deepEqual(earlySends, [0]);
+      assert.deepEqual(streams, []);
+      assert.deepEqual(h.current().messages, []);
+    } else {
+      const shown = h.current().messages.find((message) => message.dbId === saved.id);
+      assert.deepEqual(
+        {
+          saved: answers(JSON.parse(saved.metadata).toolCalls),
+          shown: answers(shown.toolCalls),
+          context: answers(
+            streams[0]?.messages.find((message) => message.dbId === saved.id).toolCalls ?? []
+          ),
+          earlySends,
+          sends: streams.length,
+        },
+        {
+          saved: [...targets].sort(),
+          shown: [...targets].sort(),
+          context: [...targets].sort(),
+          earlySends: targets.slice(1).map(() => 0),
+          sends: 1,
+        },
+        "all saved/UI/model outcomes survive; one continuation follows every answer save"
+      );
+      for (const target of targets) assert.match(streams[0].text.toLowerCase(), new RegExp(target));
+    }
+  });
+}
 
 test("a missing parent preflight preserves the current session, messages and owner", async (t) => {
   const h = await mountPersistence(t);

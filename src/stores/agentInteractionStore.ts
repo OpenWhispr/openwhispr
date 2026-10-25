@@ -432,11 +432,12 @@ async function captureScreen(): Promise<
 
 export async function respondToAccess(key: string, allow: boolean): Promise<void> {
   const entry = entryFor(key);
-  if (entry?.state !== "pending" || entry.payload.kind !== "access") return;
+  if (entry?.payload.kind !== "access" || entry.state === "settled") return;
   if (!allow) {
     settle(key, { status: "declined" });
     return;
   }
+  if (entry.state !== "pending") return;
   patchEntry(key, { state: "working", error: undefined });
   const capture = await captureScreen();
   if (!isOpen(key)) return;

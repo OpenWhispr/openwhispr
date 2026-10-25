@@ -312,6 +312,42 @@ test("allowed access attaches the screenshot for the next step", async () => {
   assert.deepEqual(images, [{ image: "IMG", mediaType: "image/jpeg" }]);
 });
 
+test("Not now during screen capture declines and fences a late screenshot", async () => {
+  const { createInteractionTools } = await load();
+  const store = await loadStore();
+  const capture = Promise.withResolvers();
+  let captures = 0;
+  globalThis.window.electronAPI = {
+    getPlatform: () => "linux",
+    captureScreenContext: () => {
+      captures++;
+      return capture.promise;
+    },
+  };
+  const images = [];
+  const access = createInteractionTools({ ...NOTHING, screenAccess: true }).find(
+    (tool) => tool.name === "request_access"
+  );
+  const key = "m1::refused-screen";
+  const running = access.execute(
+    { resource: "screen", reason: "Read the error" },
+    context("refused-screen", images)
+  );
+  const allowing = store.respondToAccess(key, true);
+  assert.equal(store.useAgentInteractionStore.getState().entries[key].state, "working");
+  await store.respondToAccess(key, true);
+  assert.equal(captures, 1, "a second Allow cannot start another capture");
+  await store.respondToAccess(key, false);
+  capture.resolve({ data: "LATE-MOCK-IMAGE", mediaType: "image/jpeg" });
+  await allowing;
+  assert.equal((await running).data.status, "declined");
+  assert.deepEqual(images, []);
+  assert.equal(store.takeGrantedImage(key), undefined);
+  assert.deepEqual(store.useAgentInteractionStore.getState().entries[key].result, {
+    status: "declined",
+  });
+});
+
 test("a tool whose service isn't connected asks to connect it, then does what it was asked", async () => {
   const { requireConnection } = await load();
   const store = await loadStore();

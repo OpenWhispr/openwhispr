@@ -74,7 +74,9 @@ export function useInterruptedInteractions(
   const restoredRef = useRef(new Set<string>());
   const followUpRef = useRef<{
     text: string;
+    messageId: string;
     version: number | undefined;
+    pending: number;
     options?: SendToAIOptions;
   } | null>(null);
 
@@ -96,26 +98,43 @@ export function useInterruptedInteractions(
           ? { ...call, interaction: { payload, state: "settled" as const, result } }
           : call
       );
+      latestRef.current = {
+        ...latest,
+        messages: latest.messages.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)),
+      };
       setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, toolCalls } : m)));
+      const text = followUpText(payload, result, latest.t);
+      const followUp: NonNullable<typeof followUpRef.current> =
+        followUpRef.current?.messageId === messageId && followUpRef.current.version === version
+          ? followUpRef.current
+          : { text: "", messageId, version, pending: 0 };
+      if (text) followUp.text = [followUp.text, text].filter(Boolean).join("\n\n");
+      if (image) followUp.options = { attachment: image };
+      followUp.pending += 1;
+      followUpRef.current = followUp;
       try {
         await saveAssistantMessage(messageId, message.content, toolCalls, {
           turn: message.turn,
           ...(conversationId != null ? { conversationId } : {}),
         });
       } catch (error) {
+        if (followUpRef.current === followUp) followUpRef.current = null;
         logger.warn("Unable to save restored answer", { error }, "chat");
         if (conversationId != null && version === getSessionVersion?.())
           void releaseConversation?.(conversationId);
         return;
       }
       if (
+        followUpRef.current !== followUp ||
         version !== getSessionVersion?.() ||
         !latestRef.current.messages.some((m) => m.id === messageId)
-      )
+      ) {
+        if (followUpRef.current === followUp) followUpRef.current = null;
         return;
-      const text = followUpText(payload, result, latest.t);
-      if (text) {
-        followUpRef.current = { text, version, options: image ? { attachment: image } : undefined };
+      }
+      followUp.pending -= 1;
+      if (followUp.pending !== 0) return;
+      if (followUp.text) {
         setMessages((prev) => [...prev]);
       } else if (conversationId != null) releaseConversation?.(conversationId);
     };
@@ -162,9 +181,10 @@ export function useInterruptedInteractions(
   // Sent once the answer is in the messages, so the new turn's history has it.
   useEffect(() => {
     const followUp = followUpRef.current;
-    if (!followUp) return;
+    if (!followUp || followUp.pending !== 0) return;
     followUpRef.current = null;
-    if (followUp.version === getSessionVersion?.()) void send(followUp.text, followUp.options);
+    if (followUp.text && followUp.version === getSessionVersion?.())
+      void send(followUp.text, followUp.options);
   }, [messages, send, getSessionVersion]);
 
   useEffect(() => {

@@ -419,12 +419,13 @@ export default function AgentWindow() {
       dispatch({ type: "useKeyboard" });
       return;
     }
+    stopReading();
     takeRef.current += 1;
     dispatch({ type: "useVoice" });
     if ((await voice.start()) === "refused") {
       dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
     }
-  }, [busy, dispatch, refuseIfRestricted, voice]);
+  }, [busy, dispatch, refuseIfRestricted, stopReading, voice]);
 
   const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.

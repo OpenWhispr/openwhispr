@@ -56,6 +56,7 @@ const MOCKS = {
     let status = "idle";
     globalThis.__voice = {
       cancels: 0,
+      events: [],
       set(next) { status = next; listeners.forEach((listener) => listener()); },
     };
     export function useAgentVoice(options) { globalThis.__voice.callbacks = options;
@@ -65,13 +66,19 @@ const MOCKS = {
       );
       return {
         status: current, opening: false, readLevel: () => 0, streamingOnlyProvider: false,
-        start: async () => globalThis.__voice.startResult ?? "started", stop() {}, cancel() { globalThis.__voice.cancels++; },
+        start: async () => {
+          globalThis.__voice.events.push("start");
+          return globalThis.__voice.startResult ?? "started";
+        },
+        stop(intent) { globalThis.__voice.events.push("stop:" + intent); },
+        cancel() { globalThis.__voice.cancels++; },
       };
     }
   `,
   "/useReadAloud": `
     export function useReadAloud() {
-      return { available: false, speakingId: null, toggle() {}, stop() {} };
+      return { available: false, speakingId: null, toggle() {},
+        stop() { globalThis.__voice.events.push("stopReading"); } };
     }
   `,
   "/lib/accountScopeMirror": `export function mirrorActiveAccountScope() { return () => {}; }`,
@@ -262,6 +269,35 @@ async function askWhileCompact(view, payload = QUESTION) {
   const results = await view.ask("c1", payload);
   await view.settle();
   return results;
+}
+
+for (const input of ["mic", "hotkey"]) {
+  test(`${input} stops read-aloud before starting a take, preserving busy and toggle behavior`, async (t) => {
+    const view = await mountWindow(t);
+    await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+    await view.settle();
+    const start = () =>
+      React.act(async () =>
+        input === "mic"
+          ? view.button("Speak").click()
+          : view.main.handlers.hotkey({ external: false })
+      );
+    globalThis.__voice.events.length = 0;
+    await view.chat({ busy: true });
+    await start();
+    assert.deepEqual(globalThis.__voice.events, [], "a busy rejection leaves playback alone");
+    await view.chat({ busy: false });
+    await start();
+    const started = [...globalThis.__voice.events];
+    globalThis.__voice.events.length = 0;
+    await React.act(async () => globalThis.__voice.set("recording"));
+    await React.act(async () => view.main.handlers.hotkey({ external: false }));
+    assert.deepEqual(globalThis.__voice.events, ["stop:submit"], "a second hotkey stops the take");
+    await React.act(async () => globalThis.__voice.set("idle"));
+    await view.settle();
+    await view.waitForLayout("modal");
+    assert.deepEqual(started, ["stopReading", "start"]);
+  });
 }
 
 test("a question that arrives while compact shows above the waiting pill, then the answer opens the modal", async (t) => {
