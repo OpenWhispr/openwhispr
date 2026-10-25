@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **Cantonese (yue) dictation language.** Cantonese joins the language picker. (#2944)
+
 ## [1.10.4] - 2026-10-21
 
 Tone & Style writes your dictation, and the assistant's drafts, in the tone you pick for each kind of app. The AI Summary now writes detailed notes by default, and you can link a calendar event to any note, pick a reasoning effort for each model scope and ask the chat how OpenWhispr works. This release also keeps your transcript when a later step fails, and fixes meeting transcripts, Linux paste and local Whisper on Windows.
