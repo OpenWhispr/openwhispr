@@ -846,8 +846,10 @@ export function LocalModelSetupStep({
     if (assistant) {
       return modelRegistry
         .getAllProviders()
-        .filter((provider) =>
-          provider.models.some((model) => isListedModel(model, model.id === selectedModel))
+        .filter(
+          (provider) =>
+            provider.id === selectedProvider ||
+            provider.models.some((model) => isListedModel(model, model.id === selectedModel))
         )
         .map((provider) => ({
           id: provider.id,
@@ -861,7 +863,7 @@ export function LocalModelSetupStep({
         icon: organization.id === "whisper" ? "openai" : organization.id,
       })
     );
-  }, [assistant, selectedModel]);
+  }, [assistant, selectedModel, selectedProvider]);
 
   const models = useMemo<
     Array<{
@@ -1162,7 +1164,7 @@ export function LocalModelSetupStep({
                 >
                   {t("onboarding.rehaul.local.use")}
                 </Button>
-              ) : (
+              ) : model.legacy ? null : (
                 <Button
                   type="button"
                   onClick={() => downloadModel(model.id)}
