@@ -44,21 +44,6 @@ function writePendingLocalModels(selections: PendingLocalModelSelections) {
   localStorage.setItem(PENDING_LOCAL_MODELS_KEY, JSON.stringify(selections));
 }
 
-export function rememberPendingLocalModel(
-  kind: PendingLocalModelKind,
-  selection: PendingLocalModelSelection
-) {
-  writePendingLocalModels({ ...readPendingLocalModels(), [kind]: selection });
-}
-
-export function isPendingLocalModel(
-  kind: PendingLocalModelKind,
-  selection: PendingLocalModelSelection
-) {
-  const pending = readPendingLocalModels()[kind];
-  return pending?.provider === selection.provider && pending.modelId === selection.modelId;
-}
-
 export function consumePendingLocalModel(
   kind: PendingLocalModelKind,
   modelId: string
@@ -81,6 +66,16 @@ export function forgetPendingLocalModel(kind: PendingLocalModelKind, modelId?: s
 /** Drops every remembered selection, e.g. when onboarding ends on another mode. */
 export function clearPendingLocalModels() {
   localStorage.removeItem(PENDING_LOCAL_MODELS_KEY);
+}
+
+/**
+ * Only an older build's picker remembers a pending model. Onboarding drops it,
+ * and the flag that lets the tray apply it, on every finish: the tray would
+ * otherwise switch cleanup and the assistant back on over the user's choice.
+ */
+export function discardPendingLocalSetup() {
+  clearPendingLocalModels();
+  localStorage.removeItem("localSetupPending");
 }
 
 export function hasPendingLocalModels() {

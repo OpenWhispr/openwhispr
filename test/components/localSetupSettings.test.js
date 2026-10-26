@@ -127,6 +127,29 @@ for (const switches of [
   });
 }
 
+test("Proceed drops an older build's pending pick, so it cannot switch the assistant back on", async (t) => {
+  const { storage, store, applyLocalSetupSettings, plan } = await setup(t);
+  // Left by an older build's picker mid-download, in the format pendingLocalModels reads.
+  storage.setItem(
+    "pendingLocalModelSelectionsV1",
+    JSON.stringify({
+      dictation: { provider: "whisper", modelId: "base" },
+      assistant: { provider: "qwen", modelId: table.models.assistant },
+    })
+  );
+  storage.setItem("localSetupPending", "true");
+
+  applyLocalSetupSettings(plan(mac({})), { cleanup: true, assistant: false });
+
+  assert.equal(storage.getItem("pendingLocalModelSelectionsV1"), null, "no pending entries");
+  assert.equal(storage.getItem("localSetupPending"), null, "no localSetupPending flag");
+  const state = store.useSettingsStore.getState();
+  assert.equal(state.useDictationAgent, false);
+  assert.equal(state.useCleanupModel, true);
+  assertRow(store, ASSISTANT_SCOPES, false, "", "legacy pending");
+  assertNoCloud(store, "legacy pending");
+});
+
 test("an unavailable assistant is written off, even if its switch was on", async (t) => {
   const { store, applyLocalSetupSettings, plan } = await setup(t);
   const small = plan(mac({ memoryGb: 8, appleChip: { generation: 1, tier: "" } }));

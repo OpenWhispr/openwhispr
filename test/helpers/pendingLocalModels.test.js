@@ -11,14 +11,18 @@ function createStorage() {
   };
 }
 
+// Only an older build writes these, so the tests seed the stored entry directly.
+function seedPending(selections) {
+  localStorage.setItem("pendingLocalModelSelectionsV1", JSON.stringify(selections));
+}
+
 test("pending local model selections remain isolated by scope", async () => {
   global.localStorage = createStorage();
   const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
 
-  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "base" });
-  pending.rememberPendingLocalModel("assistant", {
-    provider: "qwen",
-    modelId: "qwen3.5-4b-q4_k_m",
+  seedPending({
+    dictation: { provider: "whisper", modelId: "base" },
+    assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
   });
 
   assert.deepEqual(pending.consumePendingLocalModel("dictation", "base"), {
@@ -36,7 +40,7 @@ test("a completion cannot consume a different pending model", async () => {
   global.localStorage = createStorage();
   const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
 
-  pending.rememberPendingLocalModel("dictation", { provider: "whisper", modelId: "small" });
+  seedPending({ dictation: { provider: "whisper", modelId: "small" } });
 
   assert.equal(pending.consumePendingLocalModel("dictation", "base"), null);
   assert.equal(pending.readPendingLocalModels().dictation.modelId, "small");
@@ -47,18 +51,27 @@ test("a completion cannot consume a different pending model", async () => {
 test("pending selections can be cleared when onboarding finishes on another mode", async () => {
   global.localStorage = createStorage();
   const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
-  const selection = { provider: "whisper", modelId: "base" };
 
-  pending.rememberPendingLocalModel("dictation", selection);
-  pending.rememberPendingLocalModel("assistant", {
-    provider: "qwen",
-    modelId: "qwen3.5-4b-q4_k_m",
+  seedPending({
+    dictation: { provider: "whisper", modelId: "base" },
+    assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
   });
   pending.clearPendingLocalModels();
 
   assert.deepEqual(pending.readPendingLocalModels(), {});
   assert.equal(pending.hasPendingLocalModels(), false);
-  assert.equal(pending.isPendingLocalModel("dictation", selection), false);
+});
+
+test("finishing onboarding drops the pending pick and the tray's flag", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+
+  seedPending({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } });
+  localStorage.setItem("localSetupPending", "true");
+  pending.discardPendingLocalSetup();
+
+  assert.equal(pending.hasPendingLocalModels(), false);
+  assert.equal(localStorage.getItem("localSetupPending"), null);
 });
 
 test("pending local model availability distinguishes active, installed, and orphaned models", async () => {

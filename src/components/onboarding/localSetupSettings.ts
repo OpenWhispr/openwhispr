@@ -7,6 +7,7 @@ import type { InferenceScope } from "../../config/inferenceScopes";
 import type { LocalSetupPlan, LocalSetupRow, LocalSetupSwitches } from "../../config/localSetup";
 import { modelRegistry } from "../../models/ModelRegistry";
 import { setResolvedLLMConfig, useSettingsStore } from "../../stores/settingsStore";
+import { discardPendingLocalSetup } from "./pendingLocalModels";
 
 const CLEANUP_SCOPES: InferenceScope[] = [
   "dictationCleanup",
@@ -54,6 +55,10 @@ function writeDictation(row: LocalSetupRow): void {
 }
 
 export function applyLocalSetupSettings(plan: LocalSetupPlan, switches: LocalSetupSwitches): void {
+  // An older build's pending pick would otherwise be applied later by the tray,
+  // over these switches.
+  discardPendingLocalSetup();
+
   const row = (id: LocalSetupRow["id"]) => plan.rows.find((r) => r.id === id);
 
   const dictation = row("dictation");

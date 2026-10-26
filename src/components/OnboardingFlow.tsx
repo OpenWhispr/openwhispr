@@ -81,7 +81,7 @@ import {
   requestMicrophoneForGuide,
   type GuidePermission,
 } from "./onboarding/permissionGuideController";
-import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
@@ -683,21 +683,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.markBundleMigrated?.();
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
 
-        // hasPendingLocalModels() covers leaving a still-running download, by
-        // Proceed or Skip: the model was remembered when the download started,
-        // and BackgroundModelDownloadTray only applies it (and then clears this
-        // flag) while the flag is set.
-        //
-        // Only preserve a pending download when the completed route still uses
-        // local models. A user who walks Back and finishes on Cloud/BYOK must not
-        // be switched back to a stale local selection when it completes later.
-        const routeKeepsLocalModels = mode === "local";
-        if (routeKeepsLocalModels && hasPendingLocalModels()) {
-          localStorage.setItem("localSetupPending", "true");
-        } else {
-          localStorage.removeItem("localSetupPending");
-          clearPendingLocalModels();
-        }
+        // No route hands a pending local pick to the tray: the local route has
+        // already written the user's switches, and every other route uses none.
+        discardPendingLocalSetup();
 
         const skippedAuth = session.authPath === "guest";
         localStorage.setItem("authenticationSkipped", String(skippedAuth));

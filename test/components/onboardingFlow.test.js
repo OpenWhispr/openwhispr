@@ -56,6 +56,15 @@ test("onboarding permission checks use the resolved macOS feature gate", () => {
   );
 });
 
+test("no onboarding route hands an older build's pending pick to the tray", () => {
+  // The tray applies a pending pick, switching cleanup and the assistant on, only
+  // while this flag is set. The local route has already written the user's own
+  // switches by then, so no finish may set it.
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  assert.doesNotMatch(source, /setItem\(\s*"localSetupPending"/);
+  assert.doesNotMatch(source, /hasPendingLocalModels/);
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests
