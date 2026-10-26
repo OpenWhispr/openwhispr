@@ -81,6 +81,8 @@ export function useLocalSetupDownloads(
   rows: Record<LocalSetupRowId, LocalSetupRowProgress>;
   started: boolean;
   allDone: boolean;
+  /** Keys (localSetupItemKey) of every item the inventory found on disk. */
+  onDisk: string[];
   start: () => void;
   retry: (rowId: LocalSetupRowId) => void;
 } {
@@ -196,5 +198,12 @@ export function useLocalSetupDownloads(
   const start = useCallback(() => dispatch({ type: "start" }), []);
   const retry = useCallback((rowId: LocalSetupRowId) => dispatch({ type: "retry", rowId }), []);
 
-  return { rows, started: state.started, allDone: allEnabledDone(state), start, retry };
+  return {
+    rows,
+    started: state.started,
+    allDone: allEnabledDone(state),
+    onDisk: state.onDisk,
+    start,
+    retry,
+  };
 }

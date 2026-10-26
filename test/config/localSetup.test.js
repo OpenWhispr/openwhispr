@@ -538,3 +538,38 @@ test("switching an auto-off row back on overflows", async () => {
   assert.deepEqual(both.autoOff, []);
   assert.ok(Math.abs(both.requiredBytes - (DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED)) < 1);
 });
+
+test("items already on disk cost nothing and their rows are never trimmed", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(mac({}));
+  const has = (...ids) => (item) => ids.includes(item.id);
+  const dictationAndCleanup = has(row(p, "dictation").modelId, row(p, "cleanup").modelId);
+
+  // Back after two downloads: the assistant alone now fits where all three would not.
+  const room = (ASSISTANT_NEED + 0.1 * GB) / GB;
+  assert.equal(fitLocalSetupToSpace(p, {}, space(room)).state, "trimmed", "without the inventory");
+  const fits = fitLocalSetupToSpace(p, {}, space(room), dictationAndCleanup);
+  assert.equal(fits.state, "fits");
+  assert.deepEqual(fits.switches, { cleanup: true, assistant: true });
+  assert.ok(Math.abs(fits.requiredBytes - ASSISTANT_NEED) < 1);
+
+  // Hardly any space: the downloaded cleanup row stays on, only the assistant goes.
+  const tight = fitLocalSetupToSpace(p, {}, space(0.1), dictationAndCleanup);
+  assert.equal(tight.state, "trimmed");
+  assert.deepEqual(tight.switches, { cleanup: true, assistant: false });
+  assert.deepEqual(tight.autoOff, ["assistant"]);
+  assert.equal(tight.requiredBytes, 0);
+
+  // Dictation on disk is never "noSpace".
+  const noRoom = fitLocalSetupToSpace(p, {}, space(0), has(row(p, "dictation").modelId));
+  assert.notEqual(noRoom.state, "noSpace");
+  assert.deepEqual(noRoom.autoOff, ["assistant", "cleanup"]);
+
+  // On NVIDIA a cleanup model on disk still needs its pack, so it can still be trimmed.
+  const nv = await plan(pc({ nvidia: rtx }));
+  const modelOnly = has(row(nv, "dictation").modelId, row(nv, "cleanup").modelId);
+  const nvTight = fitLocalSetupToSpace(nv, {}, space(0.01), modelOnly);
+  assert.deepEqual(nvTight.autoOff, ["assistant", "cleanup"]);
+  const withPack = has(row(nv, "dictation").modelId, row(nv, "cleanup").modelId, "llama-vulkan");
+  assert.deepEqual(fitLocalSetupToSpace(nv, {}, space(0.01), withPack).autoOff, ["assistant"]);
+});

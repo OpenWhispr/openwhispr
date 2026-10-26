@@ -20,6 +20,7 @@ import {
   fitLocalSetupToSpace,
   isAppleChipMac,
   rowSizeLabel,
+  type LocalSetupDownload,
   type LocalSetupLine,
   type LocalSetupPlan,
   type LocalSetupRow,
@@ -27,6 +28,7 @@ import {
   type LocalSetupSwitches,
 } from "../../config/localSetup";
 import type { ComputerProfile } from "../../types/electron";
+import { localSetupItemKey } from "./localSetupDownloadState";
 import { useLocalSetupDownloads, type LocalSetupRowProgress } from "./useLocalSetupDownloads";
 import { useLocalSetupSpace } from "./useLocalSetupSpace";
 
@@ -289,7 +291,7 @@ function SetupRow({
   return (
     <div
       data-local-setup-row={row.id}
-      className="flex h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 last:border-b-0"
+      className="flex h-24 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 last:border-b-0"
     >
       <span className={`${TILE_CLASS} ${dim ? "opacity-55" : ""}`}>
         {unavailable ? (
@@ -330,8 +332,11 @@ function SetupRow({
           )}
           {badge}
         </span>
+        {/* Two lines, so a reason like "…would take over 3 minutes to start answering"
+            reads in full; the row height is fixed for two. The title catches a
+            translation longer than that. */}
         <span
-          className="mt-0.5 block truncate text-sm leading-5 text-[var(--onboarding-text-secondary)]"
+          className="mt-0.5 line-clamp-2 text-sm leading-5 text-[var(--onboarding-text-secondary)]"
           title={description ?? undefined}
         >
           {description}
@@ -372,9 +377,14 @@ export function LocalSetupStep({
   const [keptOffToFit, setKeptOffToFit] = useState<LocalSetupRowId[]>([]);
   // The fit at the moment Download was pressed: later space reads don't move it.
   const [frozenFit, setFrozenFit] = useState<Fit | null>(null);
+  // What the inventory found on disk. It arrives through the downloads hook, which
+  // itself needs the fitted switches, so it is copied here (see below the hook).
+  const [onDisk, setOnDisk] = useState<string[]>([]);
 
   const liveFit = useMemo<Fit>(() => {
-    if (space) return fitLocalSetupToSpace(plan, requested, space);
+    // Models already downloaded (say, before Back) need no free space.
+    const isOnDisk = (item: LocalSetupDownload) => onDisk.includes(localSetupItemKey(item));
+    if (space) return fitLocalSetupToSpace(plan, requested, space, isOnDisk);
     // Not read yet: everything fits until the read says otherwise.
     return {
       switches: { cleanup: requested.cleanup ?? true, assistant: requested.assistant ?? true },
@@ -382,11 +392,14 @@ export function LocalSetupStep({
       state: "fits",
       requiredBytes: 0,
     };
-  }, [plan, requested, space]);
+  }, [plan, requested, space, onDisk]);
   const fit = frozenFit ?? liveFit;
   const { switches } = fit;
 
   const downloads = useLocalSetupDownloads(plan, switches);
+  // Adjusting state during render: React re-renders straight away with the new
+  // inventory, before anything is committed, so the fit never shows stale rows.
+  if (downloads.onDisk !== onDisk) setOnDisk(downloads.onDisk);
   const queue = useMemo(() => enabledDownloads(plan, switches), [plan, switches]);
   const onMac = plan.profile.platform === "darwin";
 

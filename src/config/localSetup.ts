@@ -367,12 +367,14 @@ const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
  * the assistant first, then cleanup. When the user's own switches don't fit, the
  * state is "overflow" and the download stays locked instead of re-trimming them.
  * `requiredBytes` is what the resulting switches need, or dictation alone for
- * "noSpace".
+ * "noSpace". Items `isOnDisk` reports cost nothing, and a row whose items are all
+ * on disk is never turned off to fit: there is nothing left to download for it.
  */
 export function fitLocalSetupToSpace(
   plan: LocalSetupPlan,
   requested: Partial<LocalSetupSwitches>,
-  space: { availableBytes: number; factors: LocalSetupFactors }
+  space: { availableBytes: number; factors: LocalSetupFactors },
+  isOnDisk: (item: LocalSetupDownload) => boolean = () => false
 ): {
   switches: LocalSetupSwitches;
   autoOff: LocalSetupRowId[];
@@ -381,7 +383,9 @@ export function fitLocalSetupToSpace(
 } {
   const need = (switches: LocalSetupSwitches) =>
     localSetupRequiredBytes(
-      enabledDownloads(plan, switches).flatMap((row) => row.items),
+      enabledDownloads(plan, switches)
+        .flatMap((row) => row.items)
+        .filter((item) => !isOnDisk(item)),
       space.factors
     );
   const fits = (bytes: number) => bytes <= space.availableBytes;
@@ -393,7 +397,12 @@ export function fitLocalSetupToSpace(
   const autoOff: LocalSetupRowId[] = [];
   const trimmable = (id: keyof LocalSetupSwitches) => {
     const row = plan.rows.find((r) => r.id === id);
-    return requested[id] === undefined && switches[id] && !!row && row.label !== "unavailable";
+    if (requested[id] !== undefined || !switches[id] || !row || row.label === "unavailable") {
+      return false;
+    }
+    // Already downloaded, pack included: turning it off frees nothing.
+    const items = enabledDownloads(plan, switches).find((r) => r.rowId === id)?.items ?? [];
+    return !items.every(isOnDisk);
   };
 
   const dictationOnly = need({ cleanup: false, assistant: false });

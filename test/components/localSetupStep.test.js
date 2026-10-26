@@ -307,7 +307,7 @@ test("rows keep one fixed height class from idle to finished", async (t) => {
         .split(/\s+/)
         .filter((c) => /^(min-|max-)?h-/.test(c))
     );
-  const fixed = [["h-20"], ["h-20"], ["h-20"]];
+  const fixed = [["h-24"], ["h-24"], ["h-24"]];
   assert.deepEqual(heights(), fixed, "idle");
   await s.click(s.button());
   assert.deepEqual(heights(), fixed, "downloading");
@@ -330,6 +330,11 @@ test("Windows 16 GB shows the assistant as Too slow with Cloud recommended and n
     assistant
   );
   assert.ok(!assistant.includes("2.7 GB"), "an unavailable row shows no size");
+  const [reason] = elements(s.row("assistant"), (n) =>
+    n.textContent.startsWith(`${K}unavailable.tooSlowMinutes`)
+  );
+  assert.match(cls(reason), /\bline-clamp-2\b/, "the reason may take two lines");
+  assert.doesNotMatch(cls(reason), /\btruncate\b/);
   assert.equal(s.switchOf("assistant"), undefined);
   assert.ok(elements(s.row("assistant"), (n) => n.textContent === "–").length, "a dash tile");
   assert.equal(s.switchOf("cleanup").attributes["aria-checked"], "true");
@@ -476,6 +481,38 @@ test("models already on disk show ticks and Proceed straight away", async (t) =>
   await s.click(s.button());
   assert.deepEqual(s.proceeded, [BOTH_ON]);
   assert.deepEqual([s.calls.parakeet, s.calls.llm], [[], []]);
+});
+
+test("returning with models on disk: the assistant fits in what is left", async (t) => {
+  const probe = await planFor();
+  // Room for the assistant, not for all three: only what is missing counts.
+  const availableBytes = bytesOf(probe, "assistant") * 1.2 + 0.2e9;
+  const s = await mount(t, { availableBytes, onDisk: { parakeet: [DICTATION], llm: [CLEANUP] } });
+
+  assert.equal(s.switchOf("assistant").attributes["aria-checked"], "true");
+  assert.ok(!s.row("assistant").textContent.includes(`${K}line.offToFit`));
+  assert.equal(s.foot(), `${K}foot.default`);
+  assert.match(s.button().textContent, /button\.download$/);
+  assert.equal(ticks(s.row("dictation")).length + ticks(s.row("cleanup")).length, 2);
+
+  await s.click(s.button());
+  assert.deepEqual([s.calls.parakeet, s.calls.llm], [[], [ASSISTANT]]);
+});
+
+test("returning with cleanup on disk and little space keeps cleanup on", async (t) => {
+  const s = await mount(t, {
+    availableBytes: 0.1e9,
+    onDisk: { parakeet: [DICTATION], llm: [CLEANUP] },
+  });
+
+  assert.equal(s.switchOf("cleanup").attributes["aria-checked"], "true", "never trimmed");
+  assert.equal(ticks(s.row("cleanup")).length, 1, "and shows its tick");
+  assert.ok(!s.row("cleanup").textContent.includes(`${K}line.offToFit`));
+  assert.equal(s.switchOf("assistant").attributes["aria-checked"], "false");
+  assert.ok(s.row("assistant").textContent.includes(`${K}line.offToFit`));
+  assert.match(s.button().textContent, /button\.proceed$/);
+  await s.click(s.button());
+  assert.deepEqual(s.proceeded, [{ cleanup: true, assistant: false }]);
 });
 
 test("unmount cancels the active item and starts nothing else", async (t) => {
