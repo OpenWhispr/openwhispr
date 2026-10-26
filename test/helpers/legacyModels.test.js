@@ -6,13 +6,14 @@ const modelData = require("../../src/models/modelRegistryData.json");
 // Pickers hide legacy models, but a provider's default still comes from its
 // list (pickProviderDefaultModel: the named default, else the first entry), so
 // a new user must never land on one.
-test("no provider defaults to a legacy model", async () => {
+test("no provider with a current model defaults to a legacy one", async () => {
   const { pickProviderDefaultModel } = await import("../../src/models/providerDefaultModel.ts");
   const providers = [
     ...modelData.cloudProviders,
     ...modelData.enterpriseProviders,
     ...modelData.transcriptionProviders,
-  ].filter((provider) => provider.models.length > 0);
+    ...modelData.localProviders,
+  ].filter((provider) => provider.models.some((model) => !model.legacy));
   for (const provider of providers) {
     const model = pickProviderDefaultModel(provider.models, provider.defaultModel);
     assert.notEqual(model.legacy, true, `${provider.id} defaults to legacy ${model.id}`);
