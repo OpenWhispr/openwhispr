@@ -4,6 +4,7 @@ import { Button } from "./button";
 import { cn } from "../lib/utils";
 import type { ColorScheme } from "../../utils/modelPickerStyles";
 import { createExternalLinkHandler, withUtm } from "../../utils/externalLinks";
+import { isListedModel } from "../../models/legacyModels";
 
 export interface ModelCardOption {
   value: string;
@@ -20,6 +21,8 @@ export interface ModelCardOption {
   isDownloading?: boolean;
   isCancelling?: boolean;
   recommended?: boolean;
+  // Shown grayed out and can't be picked; a downloaded one can still be deleted.
+  legacy?: boolean;
 }
 
 const COLOR_CONFIG: Record<
@@ -73,16 +76,12 @@ export function ModelCard({
   const isDownloaded = model.isDownloaded;
   const isDownloading = model.isDownloading;
   const modelIsCancelling = model.isCancelling ?? false;
+  const isLegacy = Boolean(model.legacy);
+  const isSelectable = !isLegacy && (!isLocalMode || (isDownloaded && !isSelected));
   const specHref = model.specUrl ? withUtm(model.specUrl, "model_spec") : undefined;
 
   const handleCardClick = () => {
-    if (isLocalMode) {
-      if (isDownloaded && !isSelected) {
-        onSelect(model.value);
-      }
-    } else {
-      onSelect(model.value);
-    }
+    if (isSelectable) onSelect(model.value);
   };
 
   const getStatusDotClass = () => {
@@ -105,9 +104,10 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
+      aria-disabled={isLegacy || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
         isSelected ? styles.selected : styles.default
-      } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
+      } ${isSelectable ? "cursor-pointer" : ""} ${isLegacy ? "opacity-50" : ""}`}
     >
       <div className="flex items-center gap-1.5">
         <div
@@ -203,7 +203,7 @@ export function ModelCard({
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
-              ) : (
+              ) : isLegacy ? null : (
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -250,14 +250,17 @@ export default function ModelCardList({
   onCancelDownload,
 }: ModelCardListProps) {
   const { t } = useTranslation();
+  const listedModels = models.filter((model) =>
+    isListedModel(model, model.value === selectedModel, model.isDownloaded)
+  );
 
-  if (models.length === 0) {
+  if (listedModels.length === 0) {
     return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
   }
 
   return (
     <div className={`space-y-0.5 ${className}`}>
-      {models.map((model) => (
+      {listedModels.map((model) => (
         <ModelCard
           key={model.value}
           model={model}

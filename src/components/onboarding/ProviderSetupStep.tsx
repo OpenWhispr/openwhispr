@@ -43,6 +43,7 @@ import {
   DEFAULT_LOCAL_ASR_SELECTION,
 } from "../../helpers/localASROrganization";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
+import { isListedModel } from "../../models/legacyModels";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,
   type OnboardingByokDraft,
@@ -692,11 +693,18 @@ export function ByokProviderStep({
                   )}
                 </SelectTrigger>
                 <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className={SELECT_ITEM_CLASS}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
+                  {models
+                    .filter((model) => isListedModel(model, model.id === selectedModel))
+                    .map((model) => (
+                      <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        disabled={model.legacy}
+                        className={SELECT_ITEM_CLASS}
+                      >
+                        {model.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </label>
@@ -836,11 +844,16 @@ export function LocalModelSetupStep({
 
   const providerOptions = useMemo(() => {
     if (assistant) {
-      return modelRegistry.getAllProviders().map((provider) => ({
-        id: provider.id,
-        name: provider.name,
-        icon: provider.id,
-      }));
+      return modelRegistry
+        .getAllProviders()
+        .filter((provider) =>
+          provider.models.some((model) => isListedModel(model, model.id === selectedModel))
+        )
+        .map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          icon: provider.id,
+        }));
     }
     return LOCAL_ASR_ORGANIZATIONS.filter((organization) => organization.id !== "cohere").map(
       (organization) => ({
@@ -848,17 +861,29 @@ export function LocalModelSetupStep({
         icon: organization.id === "whisper" ? "openai" : organization.id,
       })
     );
-  }, [assistant]);
+  }, [assistant, selectedModel]);
 
-  const models = useMemo(() => {
+  const models = useMemo<
+    Array<{
+      id: string;
+      name: string;
+      size: string;
+      recommended?: boolean;
+      icon: string;
+      legacy?: boolean;
+    }>
+  >(() => {
     if (assistant) {
-      return (modelRegistry.getProvider(selectedProvider)?.models ?? []).map((model) => ({
-        id: model.id,
-        name: model.name,
-        size: model.size,
-        recommended: model.recommended,
-        icon: selectedProvider,
-      }));
+      return (modelRegistry.getProvider(selectedProvider)?.models ?? [])
+        .filter((model) => isListedModel(model, model.id === selectedModel))
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          size: model.size,
+          recommended: model.recommended,
+          icon: selectedProvider,
+          legacy: model.legacy,
+        }));
     }
     if (usesParakeetManager(selectedProvider)) {
       return Object.entries(getParakeetModels())
@@ -878,7 +903,7 @@ export function LocalModelSetupStep({
       recommended: model.recommended,
       icon: "openai",
     }));
-  }, [assistant, selectedProvider]);
+  }, [assistant, selectedModel, selectedProvider]);
 
   useEffect(() => {
     if (selectedModel && !models.some((model) => model.id === selectedModel)) {
@@ -1074,7 +1099,7 @@ export function LocalModelSetupStep({
           return (
             <div
               key={model.id}
-              className="flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0"
+              className={`flex min-h-20 items-center gap-3 border-b border-[var(--onboarding-control-border)] px-2 py-3 last:border-b-0 ${model.legacy ? "opacity-50" : ""}`}
             >
               <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)]">
                 <ProviderIcon
@@ -1085,7 +1110,7 @@ export function LocalModelSetupStep({
               </span>
               <button
                 type="button"
-                disabled={!isDownloaded}
+                disabled={!isDownloaded || model.legacy}
                 onClick={() => chooseInstalledModel(model.id)}
                 className="min-w-0 flex-1 rounded-lg text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)] disabled:cursor-default"
               >

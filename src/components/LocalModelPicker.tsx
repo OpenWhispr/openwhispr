@@ -8,6 +8,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type ModelType } from "../hooks/useModelDownload";
 import { MODEL_PICKER_COLORS, type ColorScheme } from "../utils/modelPickerStyles";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
+import { isListedModel } from "../models/legacyModels";
 
 export interface LocalModel {
   id: string;
@@ -20,6 +21,7 @@ export interface LocalModel {
   isDownloaded?: boolean;
   downloaded?: boolean;
   recommended?: boolean;
+  legacy?: boolean;
 }
 
 export interface LocalProvider {
@@ -185,11 +187,19 @@ export default function LocalModelPicker({
   const currentProvider = providers.find((p) => p.id === selectedProvider);
   const models = useMemo(() => currentProvider?.models || [], [currentProvider?.models]);
   const activeModels = allModels.filter((model) => downloads[model.id]);
+  const isModelDownloaded = (model: LocalModel) =>
+    downloadedModels.has(model.id) || model.isDownloaded || model.downloaded;
+  // A provider whose models are all legacy and unlisted would open on an empty list.
+  const listedProviders = providers.filter((provider) =>
+    provider.models.some((model) =>
+      isListedModel(model, model.id === selectedModel, isModelDownloaded(model))
+    )
+  );
 
   return (
     <div className={className}>
       <ProviderTabs
-        providers={providers}
+        providers={listedProviders}
         selectedId={selectedProvider}
         onSelect={onProviderSelect}
         colorScheme={colorScheme}
@@ -228,7 +238,8 @@ export default function LocalModelPicker({
             icon: getProviderIcon(selectedProvider),
             invertInDark: isMonochromeProvider(selectedProvider),
             recommended: model.recommended,
-            isDownloaded: downloadedModels.has(model.id) || model.isDownloaded || model.downloaded,
+            legacy: model.legacy,
+            isDownloaded: isModelDownloaded(model),
             isDownloading: isDownloadingModel(model.id),
             isCancelling: isCancellingModel(model.id),
           }))}
