@@ -26,7 +26,7 @@ import { waitForVisualFrames } from "../utils/visualFrame";
 import { resolveLifecycleInputKind } from "../helpers/dictationRouting";
 import { createAssistantResponseDelivery } from "../helpers/assistantResponseDelivery";
 import { recordCleanupFailure } from "../stores/cleanupFailureStore";
-import { isTransformKind, shouldAutoApplyTransform } from "../helpers/transforms";
+import { isTransformKind } from "../helpers/transforms";
 
 // Maps a failed selection-replacement code to its `selectionEditing.*` toast
 // detail key; unlisted codes fall back to the generic "unavailable" message.
@@ -72,6 +72,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const wasRecordingRef = useRef(false);
   const pastesInFlightRef = useRef(0);
   const transformInFlightRef = useRef(false);
+  const transformCancelledRef = useRef(false);
   const cancellingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
@@ -384,6 +385,9 @@ export const useAudioRecording = (toast, options = {}) => {
       code,
       settingsLaunchFailed = false,
       onRetry,
+      // False for a failure that neither recording again nor `onRetry` can
+      // recover, such as a transform hotkey's: rerunning it needs a new press.
+      retryable = true,
       settingsTarget,
       technicalDetails,
     }) => {
@@ -484,14 +488,16 @@ export const useAudioRecording = (toast, options = {}) => {
           retrying = false;
         }
       };
-      const actions = [
-        {
-          label: t("common.retry"),
-          icon: "retry",
-          dismissOnClick: false,
-          onClick: onRetry ? retry : () => performStartRecording(lastStartOptionsRef.current),
-        },
-      ];
+      const actions = retryable
+        ? [
+            {
+              label: t("common.retry"),
+              icon: "retry",
+              dismissOnClick: false,
+              onClick: onRetry ? retry : () => performStartRecording(lastStartOptionsRef.current),
+            },
+          ]
+        : [];
 
       actions.push(...providerErrorActions({ settingsTarget, technicalDetails }, t, isCurrent));
 
@@ -660,47 +666,17 @@ export const useAudioRecording = (toast, options = {}) => {
             result.text = expandSnippets(result.text, getSettings().snippets);
           }
 
-          // Auto-apply rewrites a plain dictation before it is shown, saved and
-          // pasted. If it fails, the dictation goes out as it is.
-          const autoApply = getSettings().transformAutoApply;
-          if (
-            localStorage.getItem("onboardingCompleted") === "true" &&
-            shouldAutoApplyTransform(autoApply, {
-              voiceAgentRequested: audioManagerRef.current?.voiceAgentRequested,
-              translationRequested: audioManagerRef.current?.translationRequested,
-              assistantConversation: result.assistantConversation,
-              selectionEdit: result.selectionEdit,
-            })
-          ) {
-            pastesInFlightRef.current += 1;
-            setIsPasting(true);
-            try {
-              const toneStyle =
-                autoApply === "polish"
-                  ? await audioManagerRef.current.consumeTransformToneStyle()
-                  : null;
-              result.text = await audioManagerRef.current.runTransform(autoApply, result.text, {
-                toneStyle,
-              });
-            } catch (error) {
-              logger.warn(
-                "Auto-apply transform failed; pasting the dictation unchanged",
-                { kind: autoApply, code: error?.code },
-                "transcription"
-              );
-              toast({
-                title: t("transforms.autoApply.failedTitle", {
-                  name: t(`transforms.names.${autoApply}`),
-                }),
-                description: t(error?.messageKey || "transforms.errors.failed", {
-                  ...error?.messageParams,
-                }),
-                variant: "default",
-              });
-            } finally {
-              pastesInFlightRef.current -= 1;
-              if (pastesInFlightRef.current === 0) setIsPasting(false);
-            }
+          // Auto-apply ran in the pipeline; a failure delivers the dictation as
+          // it was transcribed, with a notice.
+          if (result.transformFailure) {
+            const { kind, messageKey, messageParams } = result.transformFailure;
+            toast({
+              title: t("transforms.autoApply.failedTitle", {
+                name: t(`transforms.names.${kind}`),
+              }),
+              description: t(messageKey || "transforms.errors.failed", { ...messageParams }),
+              variant: "default",
+            });
           }
 
           setTranscript(result.text);
@@ -1086,15 +1062,19 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Polish / Prompt Engineer hotkeys rewrite the selected text in place. No
     // recording is involved: the pill shows processing until the replacement
-    // lands, and a rewrite that can't be applied is left on the clipboard.
+    // lands, and a rewrite that can't be applied is left on the clipboard. A
+    // cancel (the pill's cancel button, Escape) drops the rewrite unapplied.
     const handleRunTransform = async (kind) => {
       const manager = audioManagerRef.current;
       if (!manager || !isTransformKind(kind)) return;
       if (startLockRef.current || transformInFlightRef.current) return;
+      // A dictation's paste still landing would race this copy and replace.
+      if (pastesInFlightRef.current > 0) return;
       const state = manager.getState();
       if (state.isRecording || state.isProcessing) return;
 
       transformInFlightRef.current = true;
+      transformCancelledRef.current = false;
       dictationErrorGenerationRef.current += 1;
       dismissDictationError?.();
       setIsProcessing(true);
@@ -1105,24 +1085,28 @@ export const useAudioRecording = (toast, options = {}) => {
         try {
           rewrite = await manager.transformSelection(kind);
         } catch (error) {
+          if (transformCancelledRef.current) return;
           logger.warn("Transform failed", { kind, code: error?.code }, "transcription");
           showDictationError({
             title: t("transforms.errors.title", { name }),
             description: t(error?.messageKey || "transforms.errors.failed", {
               ...error?.messageParams,
             }),
+            retryable: false,
           });
           return;
         }
+        if (transformCancelledRef.current) return;
 
         const { keepTranscriptionInClipboard } = getSettings();
+        const pasteOptions = {
+          restoreClipboard: !keepTranscriptionInClipboard,
+          allowClipboardFallback: isAccessibilitySkipped(),
+        };
         const replacement = await window.electronAPI?.replaceSelectedText?.(
           rewrite.sessionId,
           rewrite.text,
-          {
-            restoreClipboard: !keepTranscriptionInClipboard,
-            allowClipboardFallback: isAccessibilitySkipped(),
-          }
+          pasteOptions
         );
         if (replacement?.success) {
           if (keepTranscriptionInClipboard) {
@@ -1137,24 +1121,42 @@ export const useAudioRecording = (toast, options = {}) => {
         } catch {
           copied = false;
         }
+        if (replacement?.code === "modifiers_held") {
+          // The selection is still there once the keys are up, so Retry pastes
+          // the rewrite over it, as a held-back selection edit does.
+          const pasteRewrite = async () => {
+            pastesInFlightRef.current += 1;
+            setIsPasting(true);
+            try {
+              return (await manager.safePaste(rewrite.text, pasteOptions)).pasted;
+            } finally {
+              pastesInFlightRef.current -= 1;
+              if (pastesInFlightRef.current === 0) setIsPasting(false);
+            }
+          };
+          showDictationError({
+            title: t("transforms.errors.notAppliedTitle", { name }),
+            description: t(
+              copied
+                ? "hooks.audioRecording.selectionEditing.modifiersHeld"
+                : "hooks.audioRecording.selectionEditing.modifiersHeldClipboardFailed"
+            ),
+            transcript: rewrite.text,
+            onRetry: pasteRewrite,
+          });
+          return;
+        }
         const detailKey = SELECTION_EDIT_DETAIL_KEY_BY_CODE[replacement?.code] || "unavailable";
-        const description =
-          replacement?.code === "modifiers_held"
-            ? t(
-                copied
-                  ? "hooks.audioRecording.selectionEditing.modifiersHeld"
-                  : "hooks.audioRecording.selectionEditing.modifiersHeldClipboardFailed"
-              )
-            : [
-                t(`hooks.audioRecording.selectionEditing.${detailKey}`),
-                copied ? t("transforms.errors.onClipboard") : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
         showDictationError({
           title: t("transforms.errors.notAppliedTitle", { name }),
-          description,
+          description: [
+            t(`hooks.audioRecording.selectionEditing.${detailKey}`),
+            copied ? t("transforms.errors.onClipboard") : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
           transcript: rewrite.text,
+          retryable: false,
         });
       } finally {
         transformInFlightRef.current = false;
@@ -1285,6 +1287,13 @@ export const useAudioRecording = (toast, options = {}) => {
   }, []);
 
   const cancelProcessing = useCallback(() => {
+    // A transform hotkey's rewrite runs outside the recording pipeline; the
+    // pill stays busy until its request settles, then nothing is applied.
+    if (transformInFlightRef.current) {
+      transformCancelledRef.current = true;
+      audioManagerRef.current?.cancelTransform();
+      return true;
+    }
     if (audioManagerRef.current) {
       return audioManagerRef.current.cancelProcessing();
     }

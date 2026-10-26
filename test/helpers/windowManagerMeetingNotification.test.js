@@ -376,7 +376,7 @@ test("a transform hotkey starts only once the press-time target is known", async
   assert.deepEqual(rendererMessages, [{ channel: "run-transform", payload: { kind: "polish" } }]);
 });
 
-test("a transform hotkey is dropped while a dictation or the assistant panel is busy", async () => {
+test("a transform hotkey is dropped while a dictation or the assistant is busy", async () => {
   const manager = createNormalWindowManager();
   const rendererMessages = [];
   manager.mainWindow = {
@@ -396,10 +396,14 @@ test("a transform hotkey is dropped while a dictation or the assistant panel is 
   manager._isDictatingToggle = false;
   manager._assistantPanelOpen = true;
   manager.sendRunTransform("promptEngineer");
+  // An assistant turn headed for the caret is busy with the panel closed.
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+  manager.sendRunTransform("promptEngineer");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(rendererMessages, []);
 
-  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = false;
   manager.sendRunTransform("promptEngineer");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(rendererMessages, ["run-transform"]);

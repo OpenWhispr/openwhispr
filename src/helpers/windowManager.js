@@ -1223,11 +1223,12 @@ class WindowManager {
   // Polish and Prompt Engineer rewrite the text selected in the focused app.
   // Like a dictation toggle, the target is captured here, before the pill
   // shows; there is no recording, so the mic is never prepared. A press while
-  // a dictation or the assistant panel is busy is dropped rather than queued.
+  // a dictation or the assistant is busy is dropped rather than queued: an
+  // assistant turn still on its way to the caret would race this replace.
   sendRunTransform(kind) {
     if (!this._isOnboardingInputAllowed("transform")) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    if (this._assistantPanelOpen || this._isDictatingToggle) return;
+    if (this._assistantPanelOpen || this._assistantPanelBusy || this._isDictatingToggle) return;
     if (shouldIgnoreDictationHotkey(this._dictationLifecycleState)) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();

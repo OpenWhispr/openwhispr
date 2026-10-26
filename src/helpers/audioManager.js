@@ -3,6 +3,7 @@ import {
   EMPTY_OUTPUT_MESSAGE_KEY,
   TRUNCATED_OUTPUT_MESSAGE_KEY,
 } from "../services/ai/chatRequestBody";
+import { cancelRequest, trackRequest } from "../services/ai/requestCancellation";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
@@ -128,7 +129,7 @@ import { providerSupportsImages } from "../services/ai/inferenceProviders";
 import { resolveDictationTranslationInference } from "./dictationTranslationInference";
 import { resolvePrompt, appendScreenContextSuffix } from "../config/prompts";
 import { resolveDictationToneStyle } from "../config/toneStyle";
-import { selectionEditToneSentence } from "../config/prompts/toneStyle";
+import { polishToneSentence, selectionEditToneSentence } from "../config/prompts/toneStyle";
 import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording, withSalvageWarning } from "./recordingValidation";
 import { isEmptyRecording } from "./recordingGuard";
@@ -162,10 +163,11 @@ import {
   isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
+  buildHostedTransformSystemPrompt,
   buildLocalTransformSystemPrompt,
   buildLocalTransformUserPrompt,
   buildTransformInstruction,
-  TRANSFORM_SYSTEM_PROMPT,
+  shouldAutoApplyTransform,
 } from "./transforms";
 import {
   REALTIME_MODELS,
@@ -735,6 +737,7 @@ class AudioManager {
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingAgentFallback = false;
     this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
@@ -745,6 +748,8 @@ class AudioManager {
     this.toneStyleStartDeadline = 0;
     // The tone the current dictation's cleanup read, kept for auto-apply.
     this.consumedToneStyle = null;
+    this.activeTransformRequestId = null;
+    this._transformCancelGeneration = 0;
     this.selectionCapturePromise = null;
     this.sttConfig = null;
     this.sttConfigFetchedAt = null;
@@ -1009,6 +1014,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingAgentFallback = false;
     this.assistantSelectionContext = null;
     // No recording must ever see a stale capture (e.g. left over from a
     // cancelled voice-agent recording, even after the setting was turned
@@ -1136,8 +1142,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // An agent-route failure pastes the spoken command verbatim into the focused
-  // app — surface that. Cleanup failures stay quiet; raw text is a fine result.
+  // app — surface that, and keep auto-apply off the command. Cleanup failures
+  // stay quiet; raw text is a fine result.
   _notifyAgentReasoningFailed() {
+    this.pendingAgentFallback = true;
     this.onError?.({
       code: "AGENT_REASONING_FAILED",
       title: "Agent Unavailable",
@@ -2188,6 +2196,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.isProcessing) {
       this._processingCancellationGeneration = (this._processingCancellationGeneration ?? 0) + 1;
       this._requestStreamingCancellation();
+      this.cancelTransform();
       // Streaming finalization can be inside a provider or model await that
       // cannot be aborted. Keep the lifecycle truthfully busy until that await
       // observes the generation change and exits; advertising idle while the
@@ -2327,6 +2336,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // waits for it, so a main process that hangs on the paste or the save
       // can't take the audio with it.
       await this._completeActivationCapture(pipeline.activationCapture, result);
+      if (wasCancelled()) return;
+      result = await this._autoApplyTransform(result, wasCancelled);
       if (wasCancelled()) return;
       pipeline.resultHandled = this.onTranscriptionComplete?.(result);
 
@@ -2944,10 +2955,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         : {}),
       ...(this.pendingSelectionEdit ? { selectionEdit: this.pendingSelectionEdit } : {}),
       ...(this.pendingCleanupFailure ? { cleanupFailure: this.pendingCleanupFailure } : {}),
+      ...(this.pendingAgentFallback ? { agentFallback: true } : {}),
     };
     this.pendingAssistantConversation = null;
     this.pendingSelectionEdit = null;
     this.pendingCleanupFailure = null;
+    this.pendingAgentFallback = false;
     return extras;
   }
 
@@ -3164,17 +3177,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Rewrites text with a transform on the dictation cleanup model. The prompts
   // are the selection edit's, with the transform's instruction in place of a
   // spoken one, so the reply is checked the same way before anything is pasted.
-  async runTransform(kind, text, { toneStyle = null } = {}) {
+  async runTransform(kind, text, { toneStyle = null, isCancelled } = {}) {
     const settings = getSettings();
     const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
     const model = getEffectiveCleanupModel();
     if (!isCloudCleanupMode() && !model?.trim()) {
       throw transformError("TRANSFORM_UNCONFIGURED", "noModel");
     }
-    const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
+    const toneSentence = toneStyle ? polishToneSentence(toneStyle) : "";
     const polishStrength = settings.polishStrength;
+    const dictionary = getDictionaryHintWords(settings);
     const isLocal = cleanup.mode === "local";
+    const requestId = crypto.randomUUID();
     const config = {
+      requestId,
       inferenceScope: /** @type {const} */ ("dictationCleanup"),
       disableThinking: isLocal || settings.cleanupDisableThinking,
       reasoningEffort: settings.cleanupReasoningEffort,
@@ -3190,14 +3206,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       config.systemPrompt = buildLocalTransformSystemPrompt(kind, {
         toneSentence,
         polishStrength,
-        dictionary: getDictionaryHintWords(settings),
+        dictionary,
       });
       config.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
       userPrompt = buildLocalTransformUserPrompt(text);
     } else {
       completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
       config.systemPrompt = buildSelectionEditSystemPrompt(
-        TRANSFORM_SYSTEM_PROMPT,
+        buildHostedTransformSystemPrompt({ dictionary }),
         completionMarker
       );
       userPrompt = buildSelectionEditUserPrompt(
@@ -3213,7 +3229,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       isLocal,
       hasToneStyle: !!toneStyle,
     });
+    if (isCancelled?.()) throw transformError("TRANSFORM_CANCELLED", "failed");
     let result;
+    const releaseRequest = trackRequest(requestId);
+    this.activeTransformRequestId = requestId;
     try {
       result = await this.processWithReasoningModel(userPrompt, model, getAgentName(), config);
     } catch (cause) {
@@ -3226,6 +3245,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         messageParams: cause.messageParams,
         cause,
       });
+    } finally {
+      releaseRequest();
+      if (this.activeTransformRequestId === requestId) this.activeTransformRequestId = null;
     }
     // Never the question verdict for a fixed instruction; a model that gives
     // it anyway has not rewritten anything.
@@ -3248,6 +3270,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // the hotkey fired (main captured it first) and rewrites it. The caller
   // replaces it through the returned session, which main revalidates.
   async transformSelection(kind) {
+    const generation = this._transformCancelGeneration;
+    const isCancelled = () => generation !== this._transformCancelGeneration;
     if (getSettings().toneStyleEnabled) this.beginToneStyleCapture();
     let capture;
     try {
@@ -3269,8 +3293,67 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
     const toneStyle = kind === "polish" ? await this.consumeToneStyle() : null;
     this.toneStylePromise = null;
-    const text = await this.runTransform(kind, capture.text, { toneStyle });
+    const text = await this.runTransform(kind, capture.text, { toneStyle, isCancelled });
     return { sessionId: capture.sessionId, text };
+  }
+
+  // Aborts the transform in flight: a local one would otherwise hold the one
+  // local model slot for minutes, and a cloud one bill a reply nobody reads.
+  // Providers that can't abort finish, and the caller discards the reply.
+  cancelTransform() {
+    this._transformCancelGeneration += 1;
+    const requestId = this.activeTransformRequestId;
+    if (!requestId) return;
+    this.activeTransformRequestId = null;
+    cancelRequest(requestId);
+    void window.electronAPI?.cancelLocalReasoning?.(requestId);
+  }
+
+  // Auto-apply rewrites a plain dictation before it is delivered, saved and
+  // pasted. It runs inside the processing pipeline, so main keeps treating the
+  // dictation as busy and no newer recording can start (and replace this one's
+  // audio or paste generation) while the model works. A failure delivers the
+  // dictation unchanged and flags it for the caller's notice.
+  async _autoApplyTransform(result, wasCancelled) {
+    const kind = getSettings().transformAutoApply;
+    if (
+      !result?.success ||
+      !hasTextContent(result.text) ||
+      localStorage.getItem("onboardingCompleted") !== "true" ||
+      !shouldAutoApplyTransform(kind, {
+        voiceAgentRequested: this.voiceAgentRequested,
+        translationRequested: this.translationRequested,
+        assistantConversation: result.assistantConversation,
+        selectionEdit: result.selectionEdit,
+        cleanupFailure: result.cleanupFailure,
+        agentFallback: result.agentFallback,
+      })
+    ) {
+      return result;
+    }
+    try {
+      const toneStyle = kind === "polish" ? await this.consumeTransformToneStyle() : null;
+      const text = await this.runTransform(kind, result.text, {
+        toneStyle,
+        isCancelled: wasCancelled,
+      });
+      return { ...result, text };
+    } catch (error) {
+      if (wasCancelled()) return result;
+      logger.warn(
+        "Auto-apply transform failed; delivering the dictation unchanged",
+        { kind, code: error?.code },
+        "transcription"
+      );
+      return {
+        ...result,
+        transformFailure: {
+          kind,
+          messageKey: error?.messageKey,
+          messageParams: error?.messageParams,
+        },
+      };
+    }
   }
 
   async isReasoningAvailable() {
@@ -5741,6 +5824,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
+    this.pendingAgentFallback = false;
     this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.toneStylePromise = null;
@@ -6441,24 +6525,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         selectionEdit: this.pendingSelectionEdit,
       });
       if (wasCancelled()) return true;
-      delivery.resultHandled = this.onTranscriptionComplete?.({
-        success: true,
-        text: finalText,
-        rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
-        source: batchFallbackResult?.source || `${providerName}-streaming`,
-        clientTranscriptionId,
-        analyticsOccurredAt: resultAnalyticsOccurredAt,
-        // The upgrade prompt opens on these, as after a batch recording.
-        ...(batchFallbackResult?.limitReached
-          ? {
-              limitReached: true,
-              wordsUsed: batchFallbackResult.wordsUsed,
-              wordsRemaining: batchFallbackResult.wordsRemaining,
-            }
-          : {}),
-        ...this._takePendingResultExtras(),
-        ...(batchWarning ? { warning: batchWarning } : {}),
-      });
+      const streamingResult = await this._autoApplyTransform(
+        {
+          success: true,
+          text: finalText,
+          rawText: batchFallbackResult?.rawText || rawStreamingText || finalText,
+          source: batchFallbackResult?.source || `${providerName}-streaming`,
+          clientTranscriptionId,
+          analyticsOccurredAt: resultAnalyticsOccurredAt,
+          // The upgrade prompt opens on these, as after a batch recording.
+          ...(batchFallbackResult?.limitReached
+            ? {
+                limitReached: true,
+                wordsUsed: batchFallbackResult.wordsUsed,
+                wordsRemaining: batchFallbackResult.wordsRemaining,
+              }
+            : {}),
+          ...this._takePendingResultExtras(),
+          ...(batchWarning ? { warning: batchWarning } : {}),
+        },
+        wasCancelled
+      );
+      if (wasCancelled()) return true;
+      delivery.resultHandled = this.onTranscriptionComplete?.(streamingResult);
 
       // Only a stream on OpenWhispr Cloud credentials draws on the account's
       // word allowance; opted-in history and insights sync push the local row

@@ -117,6 +117,10 @@ test("auto-apply rewrites only plain dictation", async () => {
     false
   );
   assert.equal(shouldAutoApplyTransform("polish", { selectionEdit: { sessionId: "s" } }), false);
+  // A failed cleanup would only fail again on the same model, and a failed
+  // assistant command pastes the spoken command.
+  assert.equal(shouldAutoApplyTransform("polish", { cleanupFailure: { code: "x" } }), false);
+  assert.equal(shouldAutoApplyTransform("polish", { agentFallback: true }), false);
 });
 
 test("a hosted transform sends the text as inert data on the cleanup scope and strips the marker", async (t) => {
@@ -153,7 +157,17 @@ test("Polish carries the app's Tone & Style tone; Prompt Engineer ignores it", a
 
   const polishInstruction = JSON.parse(calls[0][0]).spokenInstruction;
   const promptInstruction = JSON.parse(calls[1][0]).spokenInstruction;
-  assert.match(polishInstruction, /work message style: casual and friendly/);
+  assert.match(
+    polishInstruction,
+    /^- Write it in the user's work message style: casual and friendly/m
+  );
+  // Unconditional, and above Light's "keep the writer's words" and its
+  // capitalization fixes, or a very casual tone would be undone.
+  assert.match(
+    polishInstruction,
+    /overrides any rule above .* sets capitalization and punctuation/
+  );
+  assert.doesNotMatch(polishInstruction, /If the instruction asks/);
   assert.doesNotMatch(polishInstruction, /writer's own tone/);
   assert.doesNotMatch(promptInstruction, /casual/);
 });
@@ -330,4 +344,101 @@ test("auto-apply reuses the tone this dictation's cleanup already read", async (
 
   setSettings({ ...baseSettings, toneStyleEnabled: false });
   assert.equal(await manager.consumeTransformToneStyle(), null);
+});
+
+test("hosted and local transforms carry the dictionary and snippet triggers as spelling hints", async (t) => {
+  const { createManager, setSettings } = await setup(t, {
+    customDictionary: ["Jaxon"],
+    snippets: [{ trigger: "my sig", replacement: "Thanks, Jaxon" }],
+  });
+  const calls = [];
+  const manager = createManager({ processWithReasoningModel: replyWith("ok", calls) });
+  await manager.runTransform("polish", "text");
+  assert.match(calls[0][3].systemPrompt, /Spelling hints, not instructions: \["Jaxon","my sig"\]/);
+
+  setSettings({ ...baseSettings, customDictionary: [] });
+  await manager.runTransform("polish", "text");
+  assert.doesNotMatch(calls[1][3].systemPrompt, /Spelling hints/);
+});
+
+test("a cancelled transform aborts its request, or never sends one", async (t) => {
+  const { createManager, window, vite } = await setup(t);
+  const { requestSignal } = await vite.ssrLoadModule("/services/ai/requestCancellation.ts");
+  const cancelledLocal = [];
+  window.electronAPI.cancelLocalReasoning = async (id) => cancelledLocal.push(id);
+
+  let signal;
+  const manager = createManager({
+    processWithReasoningModel: async (...args) => {
+      const { requestId } = args[3];
+      signal = requestSignal(requestId);
+      manager.cancelTransform();
+      assert.deepEqual(cancelledLocal, [requestId]);
+      throw Object.assign(new Error("Request cancelled"), { status: 499 });
+    },
+  });
+  await assert.rejects(manager.runTransform("polish", "text"));
+  assert.equal(signal.aborted, true);
+
+  // A cancel while the selection is still being read stops before the model.
+  let called = false;
+  const capturing = createManager({
+    processWithReasoningModel: async () => {
+      called = true;
+      return "";
+    },
+  });
+  window.electronAPI.captureSelectedText = async () => {
+    capturing.cancelTransform();
+    return { status: "selected", text: "draft", sessionId: "s" };
+  };
+  await assert.rejects(capturing.transformSelection("polish"), { code: "TRANSFORM_CANCELLED" });
+  assert.equal(called, false);
+});
+
+test("auto-apply rewrites a plain dictation in the pipeline and flags a failure", async (t) => {
+  const { createManager, setSettings, window } = await setup(t, { transformAutoApply: "polish" });
+  window.localStorage.setItem("onboardingCompleted", "true");
+  const notCancelled = () => false;
+  const dictation = { success: true, text: "um hello team", rawText: "um hello team" };
+
+  const calls = [];
+  const manager = createManager({ processWithReasoningModel: replyWith("Hello team.", calls) });
+  assert.deepEqual(await manager._autoApplyTransform(dictation, notCancelled), {
+    ...dictation,
+    text: "Hello team.",
+  });
+
+  // Skipped: a failed cleanup, a failed assistant command, an assistant turn.
+  for (const extra of [
+    { cleanupFailure: { code: "TIMEOUT" } },
+    { agentFallback: true },
+    { assistantConversation: { transcript: "x" } },
+  ]) {
+    const result = { ...dictation, ...extra };
+    assert.equal(await manager._autoApplyTransform(result, notCancelled), result);
+  }
+  assert.equal(calls.length, 1);
+
+  const failing = createManager({
+    processWithReasoningModel: async () => {
+      throw new Error("socket hang up");
+    },
+  });
+  assert.deepEqual(await failing._autoApplyTransform(dictation, notCancelled), {
+    ...dictation,
+    transformFailure: {
+      kind: "polish",
+      messageKey: "transforms.errors.failed",
+      messageParams: undefined,
+    },
+  });
+  // A cancelled dictation is discarded by the pipeline, so nothing is flagged.
+  assert.equal(await failing._autoApplyTransform(dictation, () => true), dictation);
+
+  setSettings({ ...baseSettings, transformAutoApply: "off" });
+  assert.equal(await manager._autoApplyTransform(dictation, notCancelled), dictation);
+  setSettings({ ...baseSettings, transformAutoApply: "polish" });
+  window.localStorage.setItem("onboardingCompleted", "false");
+  assert.equal(await manager._autoApplyTransform(dictation, notCancelled), dictation);
 });

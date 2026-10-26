@@ -124,6 +124,13 @@ export function buildWritingStyleBlock(
   ].join("\n");
 }
 
+// For Polish: a fixed instruction that asks for no tone, with rules that keep
+// the writer's voice and fix capitalization, so the style applies without a
+// condition and takes priority over those rules, as cleanup's tone does.
+export function polishToneSentence(toneStyle: DictationToneStyle): string {
+  return `Write it in the user's ${WRITING_KINDS[toneStyle.appCategory].style} style: ${TONE_RULES[toneStyle.tone]} This style overrides any rule above to keep the writer's tone, voice, wording or formality, and it sets capitalization and punctuation; it never changes meaning or intent. ${KEEP_NAMES} ${KEEP_CODE}`;
+}
+
 // For an in-place edit of selected text: only a rewrite the user asked for
 // without a tone takes the style of the app the selection is in.
 export function selectionEditToneSentence(toneStyle: DictationToneStyle): string {
