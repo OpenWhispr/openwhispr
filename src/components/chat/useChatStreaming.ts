@@ -395,6 +395,22 @@ export function useChatStreaming({
           return;
         }
 
+        // The assistant was switched off at setup: this device has no model to
+        // answer with, and Cloud is not the fallback. Say where to turn it on.
+        if (llmMode === "local" && !llmConfig.model.trim()) {
+          announceResponse();
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: crypto.randomUUID(),
+              role: "assistant",
+              content: t("chat.localModelMissing"),
+              isStreaming: false,
+            },
+          ]);
+          return;
+        }
+
         setAgentState("thinking");
         const isCloudAgent = llmMode === "openwhispr" && settings.isSignedIn;
         const isLanAgent = llmMode === "self-hosted" && !!llmConfig.remoteUrl;

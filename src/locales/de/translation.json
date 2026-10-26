@@ -3125,7 +3125,8 @@
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
-    }
+    },
+    "localModelMissing": "Schalte den Assistenten in den Einstellungen ein, um auf diesem Gerät zu chatten."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",

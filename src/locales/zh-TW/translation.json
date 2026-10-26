@@ -3739,7 +3739,8 @@
       "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",
       "sharedNotes": "突顯我的共享筆記"
-    }
+    },
+    "localModelMissing": "在設定中開啟助理，即可在此裝置上聊天。"
   },
   "support": {
     "documentation": "文件",

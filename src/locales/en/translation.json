@@ -3125,7 +3125,8 @@
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
-    }
+    },
+    "localModelMissing": "Turn on the assistant in Settings to chat on this device."
   },
   "referral": {
     "title": "Refer and earn rewards",

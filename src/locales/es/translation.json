@@ -3791,7 +3791,8 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
-    }
+    },
+    "localModelMissing": "Activa el asistente en Configuración para chatear en este dispositivo."
   },
   "support": {
     "documentation": "Documentación",

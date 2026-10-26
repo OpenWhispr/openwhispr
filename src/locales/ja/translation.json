@@ -3739,7 +3739,8 @@
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
-    }
+    },
+    "localModelMissing": "このデバイスでチャットするには、設定でアシスタントをオンにしてください。"
   },
   "support": {
     "documentation": "ドキュメント",

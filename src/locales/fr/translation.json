@@ -3125,7 +3125,8 @@
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
-    }
+    },
+    "localModelMissing": "Activez l’assistant dans les Paramètres pour discuter sur cet appareil."
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",

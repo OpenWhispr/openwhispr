@@ -3739,7 +3739,8 @@
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
       "sharedNotes": "Evidenzia le mie note condivise"
-    }
+    },
+    "localModelMissing": "Attiva l'assistente nelle Impostazioni per chattare su questo dispositivo."
   },
   "support": {
     "documentation": "Documentazione",
