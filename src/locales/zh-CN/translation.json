@@ -450,6 +450,67 @@
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
         "installing": "安装中"
+      },
+      "localSetup": {
+        "title": "我们推荐以下设置",
+        "subtitle": "根据你的 {{computer}} 和 {{language}} 挑选。一切都在这台设备上运行。",
+        "computer": {
+          "chip": "芯片",
+          "processor": "处理器",
+          "memory": "内存",
+          "graphics": "图形",
+          "builtIn": "芯片内置",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows 笔记本电脑",
+          "windowsDesktop": "Windows 台式电脑",
+          "linuxLaptop": "Linux 笔记本电脑",
+          "linuxDesktop": "Linux 台式电脑"
+        },
+        "rows": {
+          "dictation": "听写",
+          "cleanup": "文本整理",
+          "assistant": "助手"
+        },
+        "badge": {
+          "fast": "快速、准确",
+          "slower": "准确、较慢",
+          "cloud": "推荐使用云端"
+        },
+        "line": {
+          "dictationSeconds": "停止说话后约 {{seconds}} 秒出现文字",
+          "dictationFewSeconds": "停止说话后几秒钟出现文字",
+          "cleanupUnderSecond": "不到一秒即可整理你的文字",
+          "cleanupAddsSeconds": "每次听写增加约 {{seconds}} 秒",
+          "assistantSeconds": "约 {{seconds}} 秒后开始回答",
+          "requiredByOrganization": "你的组织要求使用",
+          "off": "已关闭。之后可以在设置中开启",
+          "offToFit": "已关闭，以适应这台电脑的可用空间"
+        },
+        "unavailable": {
+          "tooSlow": "太慢",
+          "notEnoughMemory": "内存不足",
+          "tooSlowMinutes": "{{model}} 需要超过 {{minutes}} 分钟才能开始回答",
+          "tooSlowAboutMinute": "{{model}} 需要约一分钟才能开始回答",
+          "tooSlowCleanupSeconds": "{{model}} 整理每次听写需要超过 {{seconds}} 秒",
+          "tooSlowAssistantSeconds": "{{model}} 需要约 {{seconds}} 秒才能开始回答",
+          "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB"
+        },
+        "button": {
+          "download": "下载模型",
+          "downloading": "正在下载",
+          "proceed": "继续",
+          "noSpace": "可用空间不足"
+        },
+        "retry": "重试",
+        "foot": {
+          "default": "这些设置之后都可以在设置中更改。",
+          "needsMac": "需要 {{needed}} GB，这台 Mac 有 {{free}} GB 可用空间。",
+          "needsComputer": "需要 {{needed}} GB，这台电脑有 {{free}} GB 可用空间。",
+          "noSpaceMac": "听写需要 {{needed}} GB 可用空间，这台 Mac 只有 {{free}} GB。请释放一些空间后继续。",
+          "noSpaceComputer": "听写需要 {{needed}} GB 可用空间，这台电脑只有 {{free}} GB。请释放一些空间后继续。"
+        }
       }
     },
     "steps": {

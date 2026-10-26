@@ -120,7 +120,7 @@ export function spaceSizeUnit(size: string): string {
   return size.replace(/(?<=\d)(?=[A-Za-z])/, " ");
 }
 
-function isAppleChipMac(profile: ComputerProfile): boolean {
+export function isAppleChipMac(profile: ComputerProfile): boolean {
   return profile.platform === "darwin" && (profile.appleChip != null || profile.arch === "arm64");
 }
 

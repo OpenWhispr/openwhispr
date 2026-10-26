@@ -450,6 +450,67 @@
         "downloads": "Загрузки моделей",
         "downloading": "Загрузка… {{progress}}%",
         "installing": "Установка"
+      },
+      "localSetup": {
+        "title": "Рекомендуем эти настройки",
+        "subtitle": "Подобрано для вашего устройства «{{computer}}» и языка: {{language}}. Всё работает на этом устройстве.",
+        "computer": {
+          "chip": "Чип",
+          "processor": "Процессор",
+          "memory": "Память",
+          "graphics": "Графика",
+          "builtIn": "Встроена в чип",
+          "memoryValue": "{{gb}} ГБ",
+          "mac": "Mac",
+          "windowsLaptop": "Ноутбук с Windows",
+          "windowsDesktop": "Настольный ПК с Windows",
+          "linuxLaptop": "Ноутбук с Linux",
+          "linuxDesktop": "Настольный ПК с Linux"
+        },
+        "rows": {
+          "dictation": "Диктовка",
+          "cleanup": "Очистка",
+          "assistant": "Ассистент"
+        },
+        "badge": {
+          "fast": "Быстро и точно",
+          "slower": "Точно, но медленнее",
+          "cloud": "Рекомендуется облако"
+        },
+        "line": {
+          "dictationSeconds": "Текст появляется примерно через {{seconds}} с после того, как вы замолчите",
+          "dictationFewSeconds": "Текст появляется через несколько секунд после того, как вы замолчите",
+          "cleanupUnderSecond": "Приводит текст в порядок меньше чем за секунду",
+          "cleanupAddsSeconds": "Добавляет примерно {{seconds}} с к каждой диктовке",
+          "assistantSeconds": "Примерно {{seconds}} с до начала ответа",
+          "requiredByOrganization": "Требуется вашей организацией",
+          "off": "Выключено. Вы сможете включить это позже в настройках",
+          "offToFit": "Выключено, чтобы уместиться в свободном месте на этом компьютере"
+        },
+        "unavailable": {
+          "tooSlow": "Слишком медленно",
+          "notEnoughMemory": "Недостаточно памяти",
+          "tooSlowMinutes": "{{model}} начинал бы отвечать больше чем через {{minutes}} мин",
+          "tooSlowAboutMinute": "{{model}} начинал бы отвечать примерно через минуту",
+          "tooSlowCleanupSeconds": "{{model}} обрабатывал бы каждую диктовку больше {{seconds}} с",
+          "tooSlowAssistantSeconds": "{{model}} начинал бы отвечать примерно через {{seconds}} с",
+          "memoryMac": "{{model}} нужно {{needed}} ГБ памяти, а у этого Mac {{have}} ГБ",
+          "memoryComputer": "{{model}} нужно {{needed}} ГБ памяти, а у этого компьютера {{have}} ГБ"
+        },
+        "button": {
+          "download": "Скачать модели",
+          "downloading": "Загрузка",
+          "proceed": "Продолжить",
+          "noSpace": "Недостаточно свободного места"
+        },
+        "retry": "Повторить",
+        "foot": {
+          "default": "Всё это можно изменить позже в настройках.",
+          "needsMac": "Нужно {{needed}} ГБ, а на этом Mac свободно {{free}} ГБ.",
+          "needsComputer": "Нужно {{needed}} ГБ, а на этом компьютере свободно {{free}} ГБ.",
+          "noSpaceMac": "Для диктовки нужно {{needed}} ГБ свободного места, а на этом Mac {{free}} ГБ. Освободите место, чтобы продолжить.",
+          "noSpaceComputer": "Для диктовки нужно {{needed}} ГБ свободного места, а на этом компьютере {{free}} ГБ. Освободите место, чтобы продолжить."
+        }
       }
     },
     "steps": {

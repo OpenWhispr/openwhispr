@@ -2852,6 +2852,67 @@
         "downloads": "تنزيلات النماذج",
         "downloading": "جاري التنزيل... {{progress}}%",
         "installing": "جاري التثبيت"
+      },
+      "localSetup": {
+        "title": "نوصي بهذه الإعدادات",
+        "subtitle": "اخترناها لجهاز {{computer}} وللغة {{language}}. كل شيء يعمل على هذا الجهاز.",
+        "computer": {
+          "chip": "الشريحة",
+          "processor": "المعالج",
+          "memory": "الذاكرة",
+          "graphics": "الرسومات",
+          "builtIn": "مدمجة في الشريحة",
+          "memoryValue": "{{gb}} غيغابايت",
+          "mac": "Mac",
+          "windowsLaptop": "حاسوب Windows محمول",
+          "windowsDesktop": "حاسوب Windows مكتبي",
+          "linuxLaptop": "حاسوب Linux محمول",
+          "linuxDesktop": "حاسوب Linux مكتبي"
+        },
+        "rows": {
+          "dictation": "الإملاء",
+          "cleanup": "التنظيف",
+          "assistant": "المساعد"
+        },
+        "badge": {
+          "fast": "سريع ودقيق",
+          "slower": "دقيق وأبطأ",
+          "cloud": "يُنصح بالسحابة"
+        },
+        "line": {
+          "dictationSeconds": "يظهر النص بعد نحو {{seconds}} ث من توقفك عن الكلام",
+          "dictationFewSeconds": "يظهر النص بعد بضع ثوانٍ من توقفك عن الكلام",
+          "cleanupUnderSecond": "ينظّم نصك في أقل من ثانية",
+          "cleanupAddsSeconds": "يضيف نحو {{seconds}} ث إلى كل عملية إملاء",
+          "assistantSeconds": "نحو {{seconds}} ث قبل أن يبدأ الرد",
+          "requiredByOrganization": "مطلوب من مؤسستك",
+          "off": "متوقف. يمكنك تشغيله لاحقًا من الإعدادات",
+          "offToFit": "متوقف ليتسع في المساحة الحرة على هذا الحاسوب"
+        },
+        "unavailable": {
+          "tooSlow": "بطيء جدًا",
+          "notEnoughMemory": "الذاكرة غير كافية",
+          "tooSlowMinutes": "سيستغرق {{model}} أكثر من {{minutes}} دقيقة قبل أن يبدأ الرد",
+          "tooSlowAboutMinute": "سيستغرق {{model}} نحو دقيقة قبل أن يبدأ الرد",
+          "tooSlowCleanupSeconds": "سيستغرق {{model}} أكثر من {{seconds}} ث لتنظيم كل عملية إملاء",
+          "tooSlowAssistantSeconds": "سيستغرق {{model}} نحو {{seconds}} ث قبل أن يبدأ الرد",
+          "memoryMac": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي جهاز Mac هذا {{have}} غيغابايت",
+          "memoryComputer": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي هذا الحاسوب {{have}} غيغابايت"
+        },
+        "button": {
+          "download": "تنزيل النماذج",
+          "downloading": "جارٍ التنزيل",
+          "proceed": "متابعة",
+          "noSpace": "المساحة الحرة غير كافية"
+        },
+        "retry": "إعادة المحاولة",
+        "foot": {
+          "default": "يمكنك تغيير أي من هذه الإعدادات لاحقًا من الإعدادات.",
+          "needsMac": "يتطلب هذا {{needed}} غيغابايت، وفي جهاز Mac هذا {{free}} غيغابايت حرة.",
+          "needsComputer": "يتطلب هذا {{needed}} غيغابايت، وفي هذا الحاسوب {{free}} غيغابايت حرة.",
+          "noSpaceMac": "يحتاج الإملاء إلى {{needed}} غيغابايت حرة، وفي جهاز Mac هذا {{free}} غيغابايت. حرّر بعض المساحة للمتابعة.",
+          "noSpaceComputer": "يحتاج الإملاء إلى {{needed}} غيغابايت حرة، وفي هذا الحاسوب {{free}} غيغابايت. حرّر بعض المساحة للمتابعة."
+        }
       }
     },
     "steps": {

@@ -450,6 +450,67 @@
         "downloads": "モデルのダウンロード",
         "downloading": "ダウンロード中… {{progress}}%",
         "installing": "インストール中"
+      },
+      "localSetup": {
+        "title": "おすすめの設定",
+        "subtitle": "お使いの {{computer}} と {{language}} に合わせて選びました。すべてこのデバイス上で動作します。",
+        "computer": {
+          "chip": "チップ",
+          "processor": "プロセッサ",
+          "memory": "メモリ",
+          "graphics": "グラフィックス",
+          "builtIn": "チップに内蔵",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows ノート PC",
+          "windowsDesktop": "Windows デスクトップ PC",
+          "linuxLaptop": "Linux ノート PC",
+          "linuxDesktop": "Linux デスクトップ PC"
+        },
+        "rows": {
+          "dictation": "ディクテーション",
+          "cleanup": "クリーンアップ",
+          "assistant": "アシスタント"
+        },
+        "badge": {
+          "fast": "高速・高精度",
+          "slower": "高精度・やや低速",
+          "cloud": "クラウド推奨"
+        },
+        "line": {
+          "dictationSeconds": "話し終えてから約 {{seconds}} 秒で文字が表示されます",
+          "dictationFewSeconds": "話し終えてから数秒で文字が表示されます",
+          "cleanupUnderSecond": "1 秒未満でテキストを整えます",
+          "cleanupAddsSeconds": "ディクテーションごとに約 {{seconds}} 秒余分にかかります",
+          "assistantSeconds": "回答が始まるまで約 {{seconds}} 秒",
+          "requiredByOrganization": "組織によって必須に設定されています",
+          "off": "オフ。あとで設定からオンにできます",
+          "offToFit": "このコンピュータの空き容量に収めるためオフにしています"
+        },
+        "unavailable": {
+          "tooSlow": "遅すぎます",
+          "notEnoughMemory": "メモリが不足しています",
+          "tooSlowMinutes": "{{model}} は回答が始まるまでに {{minutes}} 分以上かかります",
+          "tooSlowAboutMinute": "{{model}} は回答が始まるまでに約 1 分かかります",
+          "tooSlowCleanupSeconds": "{{model}} はディクテーションごとの整形に {{seconds}} 秒以上かかります",
+          "tooSlowAssistantSeconds": "{{model}} は回答が始まるまでに約 {{seconds}} 秒かかります",
+          "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
+          "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です"
+        },
+        "button": {
+          "download": "モデルをダウンロード",
+          "downloading": "ダウンロード中",
+          "proceed": "次へ進む",
+          "noSpace": "空き容量が不足しています"
+        },
+        "retry": "再試行",
+        "foot": {
+          "default": "これらはあとで設定からいつでも変更できます。",
+          "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",
+          "needsComputer": "{{needed}} GB が必要です。このコンピュータの空き容量は {{free}} GB です。",
+          "noSpaceMac": "ディクテーションには {{needed}} GB の空き容量が必要ですが、この Mac は {{free}} GB です。続けるには空き容量を増やしてください。",
+          "noSpaceComputer": "ディクテーションには {{needed}} GB の空き容量が必要ですが、このコンピュータは {{free}} GB です。続けるには空き容量を増やしてください。"
+        }
       }
     },
     "steps": {

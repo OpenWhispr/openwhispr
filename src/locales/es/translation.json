@@ -450,6 +450,67 @@
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
         "installing": "Instalando"
+      },
+      "localSetup": {
+        "title": "Te recomendamos esta configuración",
+        "subtitle": "Elegida para tu {{computer}} y {{language}}. Todo se ejecuta en este dispositivo.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Procesador",
+          "memory": "Memoria",
+          "graphics": "Gráficos",
+          "builtIn": "Integrados en el chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Portátil Windows",
+          "windowsDesktop": "Equipo de escritorio Windows",
+          "linuxLaptop": "Portátil Linux",
+          "linuxDesktop": "Equipo de escritorio Linux"
+        },
+        "rows": {
+          "dictation": "Dictado",
+          "cleanup": "Corrección",
+          "assistant": "Asistente"
+        },
+        "badge": {
+          "fast": "Rápido, preciso",
+          "slower": "Preciso, más lento",
+          "cloud": "Se recomienda la nube"
+        },
+        "line": {
+          "dictationSeconds": "El texto aparece unos {{seconds}} s después de que dejas de hablar",
+          "dictationFewSeconds": "El texto aparece unos segundos después de que dejas de hablar",
+          "cleanupUnderSecond": "Pule tu texto en menos de un segundo",
+          "cleanupAddsSeconds": "Añade unos {{seconds}} s a cada dictado",
+          "assistantSeconds": "Unos {{seconds}} s hasta que empieza a responder",
+          "requiredByOrganization": "Exigido por tu organización",
+          "off": "Desactivado. Puedes activarlo más tarde en Ajustes",
+          "offToFit": "Desactivado para que quepa en el espacio libre de este equipo"
+        },
+        "unavailable": {
+          "tooSlow": "Demasiado lento",
+          "notEnoughMemory": "Memoria insuficiente",
+          "tooSlowMinutes": "{{model}} tardaría más de {{minutes}} minutos en empezar a responder",
+          "tooSlowAboutMinute": "{{model}} tardaría alrededor de un minuto en empezar a responder",
+          "tooSlowCleanupSeconds": "{{model}} tardaría más de {{seconds}} s en pulir cada dictado",
+          "tooSlowAssistantSeconds": "{{model}} tardaría unos {{seconds}} s en empezar a responder",
+          "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
+          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB"
+        },
+        "button": {
+          "download": "Descargar modelos",
+          "downloading": "Descargando",
+          "proceed": "Continuar",
+          "noSpace": "No hay suficiente espacio libre"
+        },
+        "retry": "Reintentar",
+        "foot": {
+          "default": "Puedes cambiar cualquiera de estos ajustes más tarde en Ajustes.",
+          "needsMac": "Se necesitan {{needed}} GB y este Mac tiene {{free}} GB libres.",
+          "needsComputer": "Se necesitan {{needed}} GB y este equipo tiene {{free}} GB libres.",
+          "noSpaceMac": "El dictado necesita {{needed}} GB libres y este Mac tiene {{free}} GB. Libera espacio para continuar.",
+          "noSpaceComputer": "El dictado necesita {{needed}} GB libres y este equipo tiene {{free}} GB. Libera espacio para continuar."
+        }
       }
     },
     "steps": {

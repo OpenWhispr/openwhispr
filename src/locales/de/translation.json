@@ -450,6 +450,67 @@
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
         "installing": "Wird installiert"
+      },
+      "localSetup": {
+        "title": "Wir empfehlen diese Einstellungen",
+        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Alles läuft auf diesem Gerät.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Prozessor",
+          "memory": "Arbeitsspeicher",
+          "graphics": "Grafik",
+          "builtIn": "Im Chip integriert",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows-Laptop",
+          "windowsDesktop": "Windows-Desktop-PC",
+          "linuxLaptop": "Linux-Laptop",
+          "linuxDesktop": "Linux-Desktop-PC"
+        },
+        "rows": {
+          "dictation": "Diktat",
+          "cleanup": "Textbereinigung",
+          "assistant": "Assistent"
+        },
+        "badge": {
+          "fast": "Schnell, präzise",
+          "slower": "Präzise, langsamer",
+          "cloud": "Cloud empfohlen"
+        },
+        "line": {
+          "dictationSeconds": "Text erscheint etwa {{seconds}} s, nachdem Sie aufhören",
+          "dictationFewSeconds": "Text erscheint wenige Sekunden, nachdem Sie aufhören",
+          "cleanupUnderSecond": "Überarbeitet Ihren Text in unter einer Sekunde",
+          "cleanupAddsSeconds": "Verlängert jedes Diktat um etwa {{seconds}} s",
+          "assistantSeconds": "Etwa {{seconds}} s, bis die Antwort beginnt",
+          "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
+          "off": "Aus. Sie können es später in den Einstellungen einschalten",
+          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt"
+        },
+        "unavailable": {
+          "tooSlow": "Zu langsam",
+          "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "tooSlowMinutes": "{{model}} bräuchte über {{minutes}} Minuten, bis die Antwort beginnt",
+          "tooSlowAboutMinute": "{{model}} bräuchte etwa eine Minute, bis die Antwort beginnt",
+          "tooSlowCleanupSeconds": "{{model}} bräuchte über {{seconds}} s, um jedes Diktat zu überarbeiten",
+          "tooSlowAssistantSeconds": "{{model}} bräuchte etwa {{seconds}} s, bis die Antwort beginnt",
+          "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
+          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB"
+        },
+        "button": {
+          "download": "Modelle herunterladen",
+          "downloading": "Wird heruntergeladen",
+          "proceed": "Fortfahren",
+          "noSpace": "Nicht genug freier Speicherplatz"
+        },
+        "retry": "Erneut versuchen",
+        "foot": {
+          "default": "Sie können all das später in den Einstellungen ändern.",
+          "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
+          "needsComputer": "Dafür werden {{needed}} GB benötigt, und auf diesem Computer sind {{free}} GB frei.",
+          "noSpaceMac": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Mac hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren.",
+          "noSpaceComputer": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Computer hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren."
+        }
       }
     },
     "steps": {

@@ -450,6 +450,67 @@
         "downloads": "Téléchargements de modèles",
         "downloading": "Téléchargement… {{progress}}%",
         "installing": "Installation"
+      },
+      "localSetup": {
+        "title": "Nous vous recommandons ces réglages",
+        "subtitle": "Choisis pour votre {{computer}} et {{language}}. Tout s’exécute sur cet appareil.",
+        "computer": {
+          "chip": "Puce",
+          "processor": "Processeur",
+          "memory": "Mémoire",
+          "graphics": "Graphismes",
+          "builtIn": "Intégrés à la puce",
+          "memoryValue": "{{gb}} Go",
+          "mac": "Mac",
+          "windowsLaptop": "PC portable Windows",
+          "windowsDesktop": "PC de bureau Windows",
+          "linuxLaptop": "PC portable Linux",
+          "linuxDesktop": "PC de bureau Linux"
+        },
+        "rows": {
+          "dictation": "Dictée",
+          "cleanup": "Correction",
+          "assistant": "Assistant"
+        },
+        "badge": {
+          "fast": "Rapide, précis",
+          "slower": "Précis, plus lent",
+          "cloud": "Cloud recommandé"
+        },
+        "line": {
+          "dictationSeconds": "Le texte apparaît environ {{seconds}} s après que vous arrêtez de parler",
+          "dictationFewSeconds": "Le texte apparaît quelques secondes après que vous arrêtez de parler",
+          "cleanupUnderSecond": "Peaufine votre texte en moins d’une seconde",
+          "cleanupAddsSeconds": "Ajoute environ {{seconds}} s à chaque dictée",
+          "assistantSeconds": "Environ {{seconds}} s avant qu’il commence à répondre",
+          "requiredByOrganization": "Imposé par votre organisation",
+          "off": "Désactivé. Vous pourrez l’activer plus tard dans les Paramètres",
+          "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur"
+        },
+        "unavailable": {
+          "tooSlow": "Trop lent",
+          "notEnoughMemory": "Mémoire insuffisante",
+          "tooSlowMinutes": "{{model}} mettrait plus de {{minutes}} minutes à commencer à répondre",
+          "tooSlowAboutMinute": "{{model}} mettrait environ une minute à commencer à répondre",
+          "tooSlowCleanupSeconds": "{{model}} mettrait plus de {{seconds}} s à peaufiner chaque dictée",
+          "tooSlowAssistantSeconds": "{{model}} mettrait environ {{seconds}} s à commencer à répondre",
+          "memoryMac": "{{model}} nécessite {{needed}} Go de mémoire, ce Mac en a {{have}} Go",
+          "memoryComputer": "{{model}} nécessite {{needed}} Go de mémoire, cet ordinateur en a {{have}} Go"
+        },
+        "button": {
+          "download": "Télécharger les modèles",
+          "downloading": "Téléchargement",
+          "proceed": "Continuer",
+          "noSpace": "Espace libre insuffisant"
+        },
+        "retry": "Réessayer",
+        "foot": {
+          "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
+          "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",
+          "needsComputer": "Il faut {{needed}} Go, et cet ordinateur a {{free}} Go d’espace libre.",
+          "noSpaceMac": "La dictée nécessite {{needed}} Go d’espace libre et ce Mac en a {{free}} Go. Libérez de l’espace pour continuer.",
+          "noSpaceComputer": "La dictée nécessite {{needed}} Go d’espace libre et cet ordinateur en a {{free}} Go. Libérez de l’espace pour continuer."
+        }
       }
     },
     "steps": {

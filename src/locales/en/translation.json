@@ -450,6 +450,67 @@
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
         "installing": "Installing"
+      },
+      "localSetup": {
+        "title": "We recommend these settings",
+        "subtitle": "Picked for your {{computer}} and {{language}}. Everything runs on this device.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Processor",
+          "memory": "Memory",
+          "graphics": "Graphics",
+          "builtIn": "Built into chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows laptop",
+          "windowsDesktop": "Windows desktop",
+          "linuxLaptop": "Linux laptop",
+          "linuxDesktop": "Linux desktop"
+        },
+        "rows": {
+          "dictation": "Dictation",
+          "cleanup": "Cleanup",
+          "assistant": "Assistant"
+        },
+        "badge": {
+          "fast": "Fast, accurate",
+          "slower": "Accurate, slower",
+          "cloud": "Cloud recommended"
+        },
+        "line": {
+          "dictationSeconds": "Text appears about {{seconds}} s after you stop",
+          "dictationFewSeconds": "Text appears a few seconds after you stop",
+          "cleanupUnderSecond": "Tidies your text in under a second",
+          "cleanupAddsSeconds": "Adds about {{seconds}} s to each dictation",
+          "assistantSeconds": "About {{seconds}} s before it starts answering",
+          "requiredByOrganization": "Required by your organization",
+          "off": "Off. You can turn it on later in Settings",
+          "offToFit": "Off to fit the free space on this computer"
+        },
+        "unavailable": {
+          "tooSlow": "Too slow",
+          "notEnoughMemory": "Not enough memory",
+          "tooSlowMinutes": "{{model}} would take over {{minutes}} minutes to start answering",
+          "tooSlowAboutMinute": "{{model}} would take about a minute to start answering",
+          "tooSlowCleanupSeconds": "{{model}} would take over {{seconds}} s to tidy each dictation",
+          "tooSlowAssistantSeconds": "{{model}} would take about {{seconds}} s to start answering",
+          "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
+          "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB"
+        },
+        "button": {
+          "download": "Download models",
+          "downloading": "Downloading",
+          "proceed": "Proceed",
+          "noSpace": "Not enough free space"
+        },
+        "retry": "Retry",
+        "foot": {
+          "default": "You can change any of these later in Settings.",
+          "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",
+          "needsComputer": "This needs {{needed}} GB, and this computer has {{free}} GB free.",
+          "noSpaceMac": "Dictation needs {{needed}} GB free and this Mac has {{free}} GB. Free up some space to continue.",
+          "noSpaceComputer": "Dictation needs {{needed}} GB free and this computer has {{free}} GB. Free up some space to continue."
+        }
       }
     },
     "steps": {
