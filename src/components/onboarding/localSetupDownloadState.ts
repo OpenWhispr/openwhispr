@@ -1,8 +1,9 @@
 // The download queue behind "We recommend these settings": one item at a time,
 // dictation, then cleanup, then the assistant (a row's graphics pack follows its
 // model). A failed row doesn't stop the rows after it, and Retry puts it back in
-// line after the one downloading. Pure, so useLocalSetupDownloads only runs the
-// item this state names.
+// line after the one downloading. A failed graphics pack doesn't fail its row:
+// the model runs on the processor without it, and Settings can add it later.
+// Pure, so useLocalSetupDownloads only runs the item this state names.
 import type { LocalSetupDownload, LocalSetupRowId } from "../../config/localSetup";
 
 export type RowStatus = "waiting" | "downloading" | "installing" | "done" | "failed";
@@ -41,6 +42,21 @@ export type LocalSetupDownloadEvent =
 
 export function localSetupItemKey(item: Pick<LocalSetupDownload, "kind" | "id">): string {
   return `${item.kind}:${item.id}`;
+}
+
+/** A graphics pack that failed: its row goes on without it. */
+function isDroppedPack(item: LocalSetupItemState): boolean {
+  return item.kind === "llamaVulkan" && item.status === "failed";
+}
+
+/** A failure that fails its row: any but the graphics pack's. */
+function blocksRow(item: LocalSetupItemState): boolean {
+  return item.status === "failed" && !isDroppedPack(item);
+}
+
+/** Nothing left that the row waits on. */
+function isSettled(item: LocalSetupItemState): boolean {
+  return item.status === "done" || isDroppedPack(item);
 }
 
 function markOnDisk(rows: LocalSetupRowState[], onDisk: string[]): LocalSetupRowState[] {
@@ -100,7 +116,7 @@ function activateNext(state: LocalSetupDownloadState): LocalSetupDownloadState {
   while (queue.length) {
     const row = state.rows.find((r) => r.rowId === queue[0]);
     const index = row?.items.findIndex((item) => item.status === "waiting") ?? -1;
-    if (row && index >= 0 && !row.items.some((item) => item.status === "failed")) {
+    if (row && index >= 0 && !row.items.some(blocksRow)) {
       const run = state.run + 1;
       return {
         ...updateItem(state, row.rowId, index, { status: "downloading", percent: 0 }),
@@ -154,7 +170,7 @@ export function reduce(
     }
     case "retry": {
       const row = state.rows.find((r) => r.rowId === event.rowId);
-      if (!state.started || !row?.items.some((item) => item.status === "failed")) return state;
+      if (!state.started || !row?.items.some(blocksRow)) return state;
       const reset: LocalSetupDownloadState = {
         ...state,
         rows: state.rows.map((r) =>
@@ -163,7 +179,7 @@ export function reduce(
             : {
                 ...r,
                 items: r.items.map((item) =>
-                  item.status === "failed" ? { ...item, status: "waiting", percent: 0 } : item
+                  blocksRow(item) ? { ...item, status: "waiting", percent: 0 } : item
                 ),
               }
         ),
@@ -185,24 +201,28 @@ export function activeItem(state: LocalSetupDownloadState): LocalSetupItemState 
 export function rowStatus(state: LocalSetupDownloadState, rowId: LocalSetupRowId): RowStatus {
   const row = state.rows.find((r) => r.rowId === rowId);
   if (!row) return "waiting";
-  if (row.items.some((item) => item.status === "failed")) return "failed";
-  if (row.items.every((item) => item.status === "done")) return "done";
+  if (row.items.some(blocksRow)) return "failed";
+  if (row.items.every(isSettled)) return "done";
   if (state.active?.rowId === rowId) return row.items[state.active.item].status;
   return "waiting";
 }
 
-/** The row's pie, 0–100: its items weighted by size. Full only once every item is. */
+/**
+ * The row's pie, 0–100: its items weighted by size. Full only once every item is.
+ * A graphics pack that failed drops out, so the row's pie fills with its model.
+ */
 export function rowPercent(state: LocalSetupDownloadState, rowId: LocalSetupRowId): number {
   const row = state.rows.find((r) => r.rowId === rowId);
   if (!row) return 0;
-  const total = row.items.reduce((sum, item) => sum + item.bytes, 0);
-  if (total <= 0) return row.items.every((item) => item.status === "done") ? 100 : 0;
-  const done = row.items.reduce((sum, item) => sum + (item.bytes * item.percent) / 100, 0);
+  const counted = row.items.filter((item) => !isDroppedPack(item));
+  const total = counted.reduce((sum, item) => sum + item.bytes, 0);
+  if (total <= 0) return row.items.every(isSettled) ? 100 : 0;
+  const done = counted.reduce((sum, item) => sum + (item.bytes * item.percent) / 100, 0);
   return Math.floor((done / total) * 100);
 }
 
 export function allEnabledDone(state: LocalSetupDownloadState): boolean {
-  return state.rows.every((row) => row.items.every((item) => item.status === "done"));
+  return state.rows.every((row) => row.items.every(isSettled));
 }
 
 // Which transfers this screen started, so the background tray can leave them

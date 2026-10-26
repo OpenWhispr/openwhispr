@@ -126,6 +126,45 @@ test("a failed model skips the rest of its row", async () => {
   assert.equal(key(h.active()), key(assistant), "the pack does not download for a failed row");
 });
 
+test("a failed graphics pack does not fail its row or lock Proceed", async () => {
+  const h = await harness(queue([cleanup, pack]));
+  h.send({ type: "start" });
+  h.complete(); // dictation
+  h.complete(); // cleanup model
+  assert.equal(key(h.active()), key(pack));
+  h.progress(40);
+  h.fail();
+
+  // The model runs on the processor without the pack; Settings can add it later.
+  assert.equal(h.status("cleanup"), "done", "the row counts done once its model is on disk");
+  assert.equal(h.percent("cleanup"), 100, "its pie is full");
+  assert.equal(key(h.active()), key(assistant), "the queue moves on");
+  h.send({ type: "retry", rowId: "cleanup" });
+  assert.equal(key(h.active()), key(assistant), "no Retry for a row that is done");
+
+  h.complete();
+  assert.deepEqual(h.statuses(), ["done", "done", "done"]);
+  assert.equal(h.allEnabledDone(h.state), true, "Proceed unlocks");
+});
+
+test("a failed model with a pack behind it still fails its row, with Retry", async () => {
+  const h = await harness(queue([cleanup, pack]));
+  h.send({ type: "start" });
+  h.complete();
+  h.fail(); // cleanup model
+  h.complete(); // assistant
+  assert.equal(h.status("cleanup"), "failed");
+  assert.equal(h.allEnabledDone(h.state), false, "Proceed stays locked");
+
+  h.send({ type: "retry", rowId: "cleanup" });
+  assert.equal(key(h.active()), key(cleanup), "Retry downloads the model again");
+  h.complete();
+  assert.equal(key(h.active()), key(pack), "then its pack");
+  h.complete();
+  assert.equal(h.status("cleanup"), "done");
+  assert.equal(h.allEnabledDone(h.state), true);
+});
+
 test("retry re-queues a failed row after the current one", async () => {
   const h = await harness();
   h.send({ type: "start" });

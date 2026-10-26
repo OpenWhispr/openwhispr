@@ -1,9 +1,10 @@
 // Runs the "We recommend these settings" downloads one at a time through the
 // app's existing download machinery: useModelDownload for the models (errors
 // shown on the row, not in a dialog) and the llama-vulkan IPC for the graphics
-// pack. localSetupDownloadState decides what runs next; this hook only starts the
-// item it names and reports back. Unmounting (Back) cancels the item in flight
-// and starts nothing else; models that already finished stay on disk.
+// pack (a failure is only logged: nothing on screen names the pack, and its row
+// goes on without it). localSetupDownloadState decides what runs next; this hook
+// only starts the item it names and reports back. Unmounting (Back) cancels the
+// item in flight and starts nothing else; models that already finished stay on disk.
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
   enabledDownloads,
@@ -13,6 +14,7 @@ import {
   type LocalSetupSwitches,
 } from "../../config/localSetup";
 import { useModelDownload } from "../../hooks/useModelDownload";
+import logger from "../../utils/logger";
 import {
   activeItem,
   allEnabledDone,
@@ -69,7 +71,15 @@ export async function readLocalSetupInventory(
 async function downloadItem(item: LocalSetupDownload, downloaders: Downloaders): Promise<boolean> {
   if (item.kind === "llamaVulkan") {
     const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
-    return result?.success === true;
+    if (result?.success === true) return true;
+    if (!result?.cancelled) {
+      logger.warn(
+        "Graphics pack download failed; text models run on the processor",
+        { error: result?.error ?? "no result" },
+        "onboarding"
+      );
+    }
+    return false;
   }
   return downloaders[item.kind].downloadModel(item.id);
 }
@@ -145,7 +155,14 @@ export function useLocalSetupDownloads(
     runningRef.current = { item, run };
     claimLocalSetupDownload(item);
     void downloadItem(item, downloadersRef.current)
-      .catch(() => false)
+      .catch((error) => {
+        logger.warn(
+          "Local setup download failed",
+          { kind: item.kind, id: item.id, error },
+          "onboarding"
+        );
+        return false;
+      })
       .then((ok) => {
         releaseLocalSetupDownload(item);
         if (cancelledRef.current || runningRef.current?.run !== run) return;
