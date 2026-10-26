@@ -121,7 +121,7 @@
       "name": "Orukeet",
       "description": "Multilingual Parakeet fine-tune with frozen Gabor kernels",
       "descriptionKey": "models.descriptions.parakeet.orukeet",
-      "size": "672MB",
+      "size": "464MB",
       "sizeMb": 671.6198,
       "expectedSizeBytes": 486807585,
       "language": "multilingual",

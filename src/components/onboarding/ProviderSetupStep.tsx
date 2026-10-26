@@ -58,6 +58,7 @@ import {
 } from "./pendingLocalModels";
 import { isLocalStageDownloadActive } from "./localDownloadState";
 import { isBlankByokDraft, resolveSavedByokConfig } from "./savedByokConfig";
+import { spaceSizeUnit } from "../../config/localSetup";
 
 export function SetupStageStepper({ stepId }: { stepId: OnboardingStepId }) {
   const { t } = useTranslation();
@@ -866,7 +867,7 @@ export function LocalModelSetupStep({
         .map(([id, model]) => ({
           id,
           name: model.name,
-          size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+          size: spaceSizeUnit(model.size),
           recommended: model.recommended,
           icon: selectedProvider,
         }));
@@ -874,7 +875,7 @@ export function LocalModelSetupStep({
     return Object.entries(getWhisperModels()).map(([id, model]) => ({
       id,
       name: model.name,
-      size: model.size.replace(/(?<=\d)(?=[A-Za-z])/, " "),
+      size: spaceSizeUnit(model.size),
       recommended: model.recommended,
       icon: "openai",
     }));
