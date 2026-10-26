@@ -1,4 +1,7 @@
 import {
+  AUDIO_PURPOSE_REQUIRED_MESSAGE,
+  AUDIO_UPLOAD_DISABLED_MESSAGE,
+  MEETING_RECORDING_DISABLED_MESSAGE,
   POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE,
   UPGRADE_REQUIRED_MESSAGE,
   transcriptionPolicyErrorFromResponse,
@@ -15,6 +18,25 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE).toBe(
       "Your organization's policy doesn't allow OpenWhispr cloud transcription.",
     );
+  });
+
+  it.each([
+    ['POLICY_MEETING_RECORDING_DISABLED', MEETING_RECORDING_DISABLED_MESSAGE],
+    ['POLICY_AUDIO_UPLOAD_DISABLED', AUDIO_UPLOAD_DISABLED_MESSAGE],
+    ['AUDIO_PURPOSE_REQUIRED', AUDIO_PURPOSE_REQUIRED_MESSAGE],
+  ])('maps 403 + %s to its own message, never the raw server text', (code, message) => {
+    const error = transcriptionPolicyErrorFromResponse(
+      403,
+      JSON.stringify({ error: 'raw server text', code }),
+    );
+    expect(error?.message).toBe(message);
+  });
+
+  it('names the disabled control in the audio refusal messages', () => {
+    expect(MEETING_RECORDING_DISABLED_MESSAGE).toBe(
+      'Meeting recording is disabled by your organization.',
+    );
+    expect(AUDIO_UPLOAD_DISABLED_MESSAGE).toBe('Audio upload is disabled by your organization.');
   });
 
   it('leaves an ordinary 403 (no POLICY_MODE_BLOCKED code) unmapped', () => {

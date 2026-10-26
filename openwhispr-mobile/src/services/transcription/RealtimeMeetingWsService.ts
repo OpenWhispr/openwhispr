@@ -76,6 +76,7 @@ export async function startRealtimeMeetingWs(
   const wsFactory = deps.wsFactory ?? defaultWsFactory;
 
   const tokenBody = (): Record<string, unknown> => ({
+    purpose: 'meeting',
     streams: 1,
     ...(opts.model ? { model: opts.model } : {}),
     ...(opts.language ? { language: opts.language } : {}),

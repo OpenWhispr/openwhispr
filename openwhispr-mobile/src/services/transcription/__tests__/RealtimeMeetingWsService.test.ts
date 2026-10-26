@@ -191,6 +191,22 @@ describe('startRealtimeMeetingWs — normal meeting (leg-swap parity)', () => {
   });
 });
 
+describe('startRealtimeMeetingWs — token purpose', () => {
+  it('declares every mint, including a reconnect, as a meeting', async () => {
+    const { leg1 } = await boot({}, { language: 'de' });
+    leg1.serverClose(1006);
+    await flushMicro();
+    lastLeg().open();
+    await flushMicro();
+
+    const bodies = (api.post as jest.Mock).mock.calls.map(([, body]) => body);
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    for (const body of bodies) {
+      expect(body).toEqual({ purpose: 'meeting', streams: 1, language: 'de' });
+    }
+  });
+});
+
 describe('startRealtimeMeetingWs — reconnect', () => {
   it('reconnects a transient drop without stopping the mic, resuming sends on the new leg', async () => {
     const callbacks = { onReconnecting: jest.fn(), onReconnected: jest.fn() };

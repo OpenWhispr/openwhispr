@@ -12,6 +12,20 @@ export { UPGRADE_REQUIRED_MESSAGE };
 export const POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE =
   "Your organization's policy doesn't allow OpenWhispr cloud transcription.";
 
+export const MEETING_RECORDING_DISABLED_MESSAGE =
+  'Meeting recording is disabled by your organization.';
+export const AUDIO_UPLOAD_DISABLED_MESSAGE = 'Audio upload is disabled by your organization.';
+// The org restricts audio and the request didn't declare what it was for.
+export const AUDIO_PURPOSE_REQUIRED_MESSAGE =
+  "Your organization's audio settings need the latest OpenWhispr. Update the app and try again.";
+
+// 403 codes for the org's audio controls.
+const AUDIO_POLICY_MESSAGES = new Map([
+  ['POLICY_MEETING_RECORDING_DISABLED', MEETING_RECORDING_DISABLED_MESSAGE],
+  ['POLICY_AUDIO_UPLOAD_DISABLED', AUDIO_UPLOAD_DISABLED_MESSAGE],
+  ['AUDIO_PURPOSE_REQUIRED', AUDIO_PURPOSE_REQUIRED_MESSAGE],
+]);
+
 function errorCodeFromBody(body: string): string | undefined {
   try {
     const parsed = JSON.parse(body);
@@ -32,8 +46,11 @@ export function transcriptionPolicyErrorFromResponse(
   status: number,
   body: string,
 ): Error | undefined {
-  if (status === 403 && errorCodeFromBody(body) === 'POLICY_MODE_BLOCKED') {
-    return new Error(POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE);
+  if (status === 403) {
+    const code = errorCodeFromBody(body);
+    if (code === 'POLICY_MODE_BLOCKED') return new Error(POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE);
+    const audioPolicyMessage = code && AUDIO_POLICY_MESSAGES.get(code);
+    if (audioPolicyMessage) return new Error(audioPolicyMessage);
   }
   if (status === 426) {
     // Never let "HTTP 426" or a raw server string reach the user.
