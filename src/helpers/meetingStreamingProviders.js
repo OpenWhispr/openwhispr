@@ -2,6 +2,7 @@ const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
+const ElevenLabsStreaming = require("./elevenLabsStreaming");
 const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
@@ -9,6 +10,7 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
   "corti-realtime": CortiStreaming,
+  "elevenlabs-realtime": ElevenLabsStreaming,
   "tinfoil-realtime": TinfoilRealtimeStreaming,
 };
 
@@ -23,7 +25,7 @@ const getMeetingStreamingClient = (provider) => {
 };
 
 // These authenticate with saved credentials whatever the mode says.
-const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime"]);
+const SAVED_KEY_PROVIDERS = new Set(["corti-realtime", "tinfoil-realtime", "elevenlabs-realtime"]);
 
 // A connection that authenticates with a saved key also records the count of key
 // saves it opened under, so a start never reuses one opened before a save.

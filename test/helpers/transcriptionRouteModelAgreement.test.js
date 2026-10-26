@@ -30,7 +30,8 @@ test("every shipping registry model survives resolveByokModel", async () => {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
     assert.ok(provider, `registry is missing provider ${providerId}`);
 
-    for (const model of provider.models) {
+    // A Note Recording-only model never reaches a batch request.
+    for (const model of provider.models.filter((m) => !m.noteRecordingOnly)) {
       assert.equal(
         resolveByokModel(providerId, model.id),
         model.id,
@@ -86,4 +87,9 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
   assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-5-pro");
   assert.equal(resolveByokModel("elevenlabs", "whisper-1"), "scribe_v2");
+  assert.equal(
+    resolveByokModel("elevenlabs", "scribe_v2_realtime"),
+    "scribe_v2",
+    "the realtime model has no batch endpoint"
+  );
 });

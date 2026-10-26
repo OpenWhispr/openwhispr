@@ -190,7 +190,10 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
-      (provider === "elevenlabs" && trimmed.startsWith("scribe_")) ||
+      // The realtime model has no batch endpoint; resolving it falls back to scribe_v2.
+      (provider === "elevenlabs" &&
+        trimmed.startsWith("scribe_") &&
+        !trimmed.endsWith("_realtime")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));

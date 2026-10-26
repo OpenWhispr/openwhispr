@@ -2713,6 +2713,7 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "gemini_3_5_transcribe": "Voz a texto con Gemini de Google",
         "elevenlabs_scribe_v2": "Transcripción multilingüe precisa",
+        "elevenlabs_scribe_v2_realtime": "Transcripción en vivo para grabar notas",
         "gemini_3_5_transcribe_live": "Voz a texto en streaming en tiempo real",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",

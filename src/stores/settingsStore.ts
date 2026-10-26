@@ -125,11 +125,13 @@ const localLlmProviderIds = new Set(
 function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
-): Array<{ id: string; streaming?: boolean }> {
-  const models =
+): Array<{ id: string; streaming?: boolean; noteRecordingOnly?: boolean }> {
+  const models: Array<{ id: string; streaming?: boolean; noteRecordingOnly?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  return context === "meeting" ? models.filter((model) => model.streaming) : models;
+  return context === "meeting"
+    ? models.filter((model) => model.streaming)
+    : models.filter((model) => !model.noteRecordingOnly);
 }
 
 function defaultTranscriptionModel(

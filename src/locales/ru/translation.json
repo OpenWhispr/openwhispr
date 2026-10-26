@@ -2677,6 +2677,7 @@
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
         "gemini_3_5_transcribe": "Распознавание речи Gemini от Google",
         "elevenlabs_scribe_v2": "Точная многоязычная транскрипция",
+        "elevenlabs_scribe_v2_realtime": "Транскрипция в реальном времени для записи заметок",
         "gemini_3_5_transcribe_live": "Распознавание речи в реальном времени",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",
         "xai_grok_stt": "Высокоточное распознавание речи от xAI",

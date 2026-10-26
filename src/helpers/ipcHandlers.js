@@ -7681,12 +7681,16 @@ class IPCHandlers {
       };
       const recoverConnection = async (error, restoreOldOnFailure) => {
         let recovered = false;
-        try {
-          recovered = await reconnectMeetingStreams({ restoreOldOnFailure });
-        } catch (reconnectError) {
-          debugLogger.error("Meeting stream recovery failed unexpectedly", {
-            error: reconnectError.message,
-          });
+        // A fatal provider error (refused key, used-up quota) fails every reconnect
+        // the same way, and each successful handshake would reset the retry count.
+        if (!error?.fatal) {
+          try {
+            recovered = await reconnectMeetingStreams({ restoreOldOnFailure });
+          } catch (reconnectError) {
+            debugLogger.error("Meeting stream recovery failed unexpectedly", {
+              error: reconnectError.message,
+            });
+          }
         }
         if (!recovered && !meetingFatalErrorSent) {
           meetingFatalErrorSent = true;
