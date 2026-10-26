@@ -12,6 +12,10 @@
     "cleanup": "qwen3.5-2b-q4_k_m",
     "assistant": "qwen3.5-4b-q4_k_m"
   },
+  "classification": {
+    "nvidiaMinVramMb": 6000,
+    "memoryBandGb": 16
+  },
   "memoryNeededGb": {
     "cleanup": {
       "mac": 16,

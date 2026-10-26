@@ -79,6 +79,8 @@ interface LocalSetupTable {
     cleanup: string;
     assistant: string;
   };
+  /** Machine-type cut-offs: an NVIDIA card counts from this much video memory; "16" in the type names. */
+  classification: { nvidiaMinVramMb: number; memoryBandGb: number };
   memoryNeededGb: Record<"cleanup" | "assistant", { mac: number; pc: number }>;
   graphicsPackBytes: Record<string, number>;
   olderMacDictation: DictationEntry;
@@ -112,9 +114,6 @@ for (const provider of modelRegistryData.localProviders) {
   }
 }
 
-const MEMORY_BAND_GB = 16; // the "under-16" / "16-plus" split in the machine type names
-const NVIDIA_MIN_VRAM_MB = 6000;
-
 /** "631MB" → "631 MB", the registry size string as Settings shows it. */
 export function spaceSizeUnit(size: string): string {
   return size.replace(/(?<=\d)(?=[A-Za-z])/, " ");
@@ -125,8 +124,9 @@ export function isAppleChipMac(profile: ComputerProfile): boolean {
 }
 
 export function classifyMachine(profile: ComputerProfile): MachineType {
+  const { memoryBandGb, nvidiaMinVramMb } = table.classification;
   if (isAppleChipMac(profile)) {
-    if (!(profile.memoryGb >= MEMORY_BAND_GB)) return "mac-under-16";
+    if (!(profile.memoryGb >= memoryBandGb)) return "mac-under-16";
     const chip = profile.appleChip;
     if (chip) {
       const tier = chip.tier === "Pro" ? "-pro" : chip.tier === "Max" ? "-max" : "";
@@ -136,8 +136,8 @@ export function classifyMachine(profile: ComputerProfile): MachineType {
     return "mac-16-plus";
   }
   const vramMb = profile.nvidia?.vramMb;
-  if (vramMb != null && vramMb >= NVIDIA_MIN_VRAM_MB) return "pc-nvidia";
-  return profile.memoryGb >= MEMORY_BAND_GB ? "pc-16-plus" : "pc-under-16";
+  if (vramMb != null && vramMb >= nvidiaMinVramMb) return "pc-nvidia";
+  return profile.memoryGb >= memoryBandGb ? "pc-16-plus" : "pc-under-16";
 }
 
 // macOS reports Norwegian Bokmål as "nb"; the language list (and Whisper) call it "no".

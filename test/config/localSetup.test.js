@@ -439,6 +439,21 @@ test("the table is complete and reachable", async () => {
     assert.ok(Number.isInteger(bytes) && bytes > 0, key);
   }
   assert.ok(LABELS.includes(table.olderMacDictation.label));
+  // The machine-type cut-offs live here too, never in code.
+  assert.ok(Number.isInteger(table.classification.nvidiaMinVramMb), "nvidiaMinVramMb");
+  assert.ok(table.classification.nvidiaMinVramMb > 0, "nvidiaMinVramMb");
+  assert.ok(Number.isInteger(table.classification.memoryBandGb), "memoryBandGb");
+  assert.ok(table.classification.memoryBandGb > 0, "memoryBandGb");
+});
+
+test("the machine-type cut-offs come from the table", async () => {
+  const { classifyMachine } = await load();
+  const { memoryBandGb, nvidiaMinVramMb } = table.classification;
+  const card = (vramMb) => ({ name: "NVIDIA GeForce RTX", vramMb });
+  assert.equal(classifyMachine(pc({ nvidia: card(nvidiaMinVramMb) })), "pc-nvidia");
+  assert.equal(classifyMachine(pc({ nvidia: card(nvidiaMinVramMb - 1) })), "pc-16-plus");
+  assert.equal(classifyMachine(pc({ memoryGb: memoryBandGb })), "pc-16-plus");
+  assert.equal(classifyMachine(pc({ memoryGb: memoryBandGb - 1 })), "pc-under-16");
 });
 
 const GB = 1e9;
