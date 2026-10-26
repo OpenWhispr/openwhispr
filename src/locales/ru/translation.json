@@ -2707,7 +2707,7 @@
         "anthropic_claude_sonnet_4_6": "Сбалансированная производительность",
         "anthropic_claude_sonnet_4_5": "Предыдущее поколение Sonnet",
         "anthropic_claude_haiku_4_5": "Быстрая с почти передовым интеллектом",
-        "gemini_gemini_3_5_flash": "Новейшая быстрая высокопроизводительная модель Gemini",
+        "gemini_gemini_3_5_flash": "Быстрая высокопроизводительная модель Gemini",
         "gemini_gemini_3_5_flash_lite": "Самая быстрая и недорогая модель 3.5",
         "gemini_gemini_3_1_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
         "gemini_gemini_3_1_flash_lite": "Передовая производительность при низкой стоимости",

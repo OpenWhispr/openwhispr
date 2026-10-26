@@ -779,7 +779,7 @@
         {
           "id": "gemini-3.5-flash",
           "name": "Gemini 3.5 Flash",
-          "description": "Latest fast, high-capability Gemini model",
+          "description": "Fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
           "supportsThinking": true,
           "supportsVision": true,

@@ -3,8 +3,6 @@ const assert = require("node:assert/strict");
 
 const modelData = require("../../src/models/modelRegistryData.json");
 
-const load = () => import("../../src/models/legacyModels.ts");
-
 // Pickers hide legacy models, but a provider's default still comes from its
 // list (pickProviderDefaultModel: the named default, else the first entry), so
 // a new user must never land on one.
@@ -36,7 +34,7 @@ test("no legacy model is recommended", () => {
 });
 
 test("a legacy model is listed only while selected or still downloaded", async () => {
-  const { isListedModel } = await load();
+  const { isListedModel } = await import("../../src/models/legacyModels.ts");
   assert.equal(isListedModel({}, false), true);
   assert.equal(isListedModel({ legacy: true }, false), false);
   assert.equal(isListedModel({ legacy: true }, true), true);

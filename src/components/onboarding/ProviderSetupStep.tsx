@@ -848,8 +848,7 @@ export function LocalModelSetupStep({
         .getAllProviders()
         .filter(
           (provider) =>
-            provider.id === selectedProvider ||
-            provider.models.some((model) => isListedModel(model, model.id === selectedModel))
+            provider.id === selectedProvider || provider.models.some((model) => !model.legacy)
         )
         .map((provider) => ({
           id: provider.id,
@@ -863,7 +862,7 @@ export function LocalModelSetupStep({
         icon: organization.id === "whisper" ? "openai" : organization.id,
       })
     );
-  }, [assistant, selectedModel, selectedProvider]);
+  }, [assistant, selectedProvider]);
 
   const models = useMemo<
     Array<{
