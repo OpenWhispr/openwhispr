@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
-        "START_FAILED": "Could not finish. Please retry."
+        "START_FAILED": "Could not finish. Please retry.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Meeting recording is disabled by your organization.",
+        "POLICY_UNRESOLVABLE": "Your organization's settings haven't loaded yet. Try again in a moment."
       }
     }
   },

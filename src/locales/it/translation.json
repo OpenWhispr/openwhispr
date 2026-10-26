@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "Impossibile completare. Riprova.",
         "LINKED_NOTE_CHANGED": "Controlla la destinazione, poi partecipa di nuovo.",
         "NOTE_UNAVAILABLE": "Questa nota non è disponibile. Riprova senza crearne un’altra.",
-        "START_FAILED": "Impossibile completare. Riprova."
+        "START_FAILED": "Impossibile completare. Riprova.",
+        "POLICY_MEETING_RECORDING_DISABLED": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+        "POLICY_UNRESOLVABLE": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento."
       }
     }
   },

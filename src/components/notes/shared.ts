@@ -63,6 +63,10 @@ const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   CHUNK_LOSS_EXCEEDED: "chunkLossExceeded",
   CUSTOM_ENDPOINT_INVALID: "customEndpointInvalid",
   STREAMING_ONLY_PROVIDER: "streamingOnlyProvider",
+  // Server refusals under org policy. Uploads always send their source, so a
+  // purpose refusal here can only be the upload control's.
+  POLICY_AUDIO_UPLOAD_DISABLED: "disabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "disabledByOrg",
 };
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a

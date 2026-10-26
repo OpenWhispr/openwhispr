@@ -18,7 +18,11 @@ const source = ts.createSourceFile(
 );
 let transcribe;
 let policyChanged;
+let restrictionKey;
 function visit(node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.getText(source) === "uploadRestrictionKey") {
+    restrictionKey = node.getText(source);
+  }
   if (ts.isVariableDeclaration(node) && node.name.getText(source) === "handleTranscribe") {
     transcribe = node.initializer.getText(source);
   }
@@ -30,8 +34,9 @@ function visit(node) {
 visit(source);
 assert.ok(transcribe);
 assert.ok(policyChanged);
+assert.ok(restrictionKey);
 const callbacks = ts.transpileModule(
-  `({ transcribe: ${transcribe}, policyChanged: ${policyChanged} })`,
+  `${restrictionKey}; ({ transcribe: ${transcribe}, policyChanged: ${policyChanged} })`,
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } }
 ).outputText;
 
@@ -99,9 +104,13 @@ for (const phase of ["title", "save"]) {
     const handlers = vm.runInNewContext(callbacks, context);
     const pending = handlers.transcribe();
     await entered.promise;
-    handlers.policyChanged({ allowed: false });
+    handlers.policyChanged({
+      allowed: false,
+      status: "managed",
+      policy: { features: { audioUploadEnabled: false } },
+    });
     assert.equal(states.at(-1), "error");
-    assert.equal(errors.at(-1), "common.managedByOrg");
+    assert.equal(errors.at(-1), "notes.upload.disabledByOrg");
     assert.deepEqual(cancelled, ["upload-request"]);
     finish.resolve();
     await pending;
@@ -119,7 +128,7 @@ test("main policy refusals appear in Spanish upload errors", async (t) => {
   for (const [snapshot, expected] of [
     [
       { success: true, managed: true, policy: { features: { audioUploadEnabled: false } } },
-      esTranslation.common.policyTranscriptionRestricted,
+      esTranslation.notes.upload.disabledByOrg,
     ],
     [null, esTranslation.common.policyUnresolved],
   ]) {
@@ -160,5 +169,29 @@ test("main policy refusals appear in Spanish upload errors", async (t) => {
     assert.equal(states.at(-1), "error");
     assert.equal(errors.at(-1), expected);
     assert.equal(context.activeRequestIdRef.current, null);
+  }
+});
+
+test("an upload refused before it starts names the reason the policy gives", async () => {
+  for (const [policy, expected] of [
+    [
+      { status: "managed", policy: { features: { audioUploadEnabled: false } } },
+      "notes.upload.disabledByOrg",
+    ],
+    [{ status: "loading", policy: null }, "common.policyUnresolved"],
+  ]) {
+    const errors = [];
+    const context = {
+      file: { path: "/tmp/audio.wav" },
+      batch: { isProcessing: false },
+      usePolicyStore: { getState: () => policy },
+      isAudioFeatureAllowed: () => false,
+      setError: (error) => errors.push(error),
+      t: (key) => key,
+    };
+
+    await vm.runInNewContext(callbacks, context).transcribe();
+
+    assert.deepEqual(errors, [expected]);
   }
 });

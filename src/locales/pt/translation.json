@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
-        "START_FAILED": "Não foi possível concluir. Tente novamente."
+        "START_FAILED": "Não foi possível concluir. Tente novamente.",
+        "POLICY_MEETING_RECORDING_DISABLED": "A gravação de reuniões foi desativada pela sua organização.",
+        "POLICY_UNRESOLVABLE": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes."
       }
     }
   },

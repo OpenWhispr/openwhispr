@@ -270,6 +270,48 @@ test("a manual meeting passes its options to whichever note it opens", async () 
   assert.deepEqual(received, [options, options, options, options]);
 });
 
+// With meeting recording off by policy, a manual start or a calendar join used to
+// create an empty "meeting" note before the control panel refused to record.
+test("a meeting start the org refuses creates no note and explains the refusal", async () => {
+  const { engine, windowManager, meetingNavigations, noteNavigations } = createEngine();
+  const refusals = [];
+  windowManager.getMeetingRecordingRefusal = () => ({ code: "POLICY_MEETING_RECORDING_DISABLED" });
+  windowManager.sendMeetingStartRefused = (code) => refusals.push(code);
+  const db = createJoinDatabase(null);
+  engine.databaseManager = { ...db.databaseManager, getActiveEvents: () => [{ id: "event-1" }] };
+
+  await engine.startManualMeeting({ activate: false });
+  engine.databaseManager.getActiveEvents = () => [];
+  await engine.startManualMeeting();
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(db.saved, []);
+  assert.deepEqual(db.lookups, []);
+  assert.deepEqual(meetingNavigations, []);
+  assert.deepEqual(noteNavigations, []);
+  assert.equal(engine._meetingModeActive, false);
+  assert.deepEqual(refusals, Array(3).fill("POLICY_MEETING_RECORDING_DISABLED"));
+});
+
+test("calendar reminders and queued prompts stay silent while meeting recording is off", () => {
+  const { engine, windowManager, shown } = createEngine();
+  let refusal = { code: "POLICY_MEETING_RECORDING_DISABLED" };
+  windowManager.getMeetingRecordingRefusal = () => refusal;
+
+  engine.handleCalendarReminder({ id: "standup" });
+  engine._userRecording = true;
+  engine.handleCalendarReminder({ id: "retro" });
+  engine._userRecording = false;
+  engine._flushNotificationQueue();
+
+  assert.deepEqual(shown, []);
+  assert.equal(engine.activeDetections.size, 0);
+
+  refusal = null;
+  engine.handleCalendarReminder({ id: "standup" });
+  assert.equal(shown.length, 1);
+});
+
 // The IPC adapter derives detector preferences through this policy; the engine
 // only has to honour whatever it is handed (adapter coverage lives in
 // meetingDetectionPreferencesIpc.test.js).

@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
         "LINKED_NOTE_CHANGED": "Prüfe den Speicherort und tritt erneut bei.",
         "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
-        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen."
+        "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
+        "POLICY_UNRESOLVABLE": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal."
       }
     }
   },

@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "Impossible de terminer. Réessayez.",
         "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
         "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
-        "START_FAILED": "Impossible de terminer. Réessayez."
+        "START_FAILED": "Impossible de terminer. Réessayez.",
+        "POLICY_MEETING_RECORDING_DISABLED": "L’enregistrement des réunions est désactivé par votre organisation.",
+        "POLICY_UNRESOLVABLE": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant."
       }
     }
   },

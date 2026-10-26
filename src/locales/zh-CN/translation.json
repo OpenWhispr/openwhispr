@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "无法完成，请重试。",
         "LINKED_NOTE_CHANGED": "请检查保存位置，然后重新加入。",
         "NOTE_UNAVAILABLE": "此笔记不可用。请重试，不要创建替代笔记。",
-        "START_FAILED": "无法完成，请重试。"
+        "START_FAILED": "无法完成，请重试。",
+        "POLICY_MEETING_RECORDING_DISABLED": "你的组织已禁用会议录音。",
+        "POLICY_UNRESOLVABLE": "您所在组织的设置尚未加载完成。请稍后再试。"
       }
     }
   },

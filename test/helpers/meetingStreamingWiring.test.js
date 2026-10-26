@@ -176,3 +176,20 @@ test("a mid-meeting renewal refused for the session reports the sign-in sentinel
     /"meeting-transcription-error",\s*isSignInRefusal\(error\) \? "signInExpired" : error\.message/
   );
 });
+
+test("a reconnect refused under org policy ends the meeting instead of restoring old sockets", () => {
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  // The policy stop clears meetingConnectionOptions, so the stale-options branch
+  // right after it returns before the old sockets can be kept or a fatal error sent.
+  assert.match(
+    reconnectCatch,
+    /if \(isAudioPolicyRefusal\(error\)\) this\._stopMeetingForPolicy\(error\.code\);\s*if \(meetingConnectionOptions !== options\) \{/
+  );
+  assert.match(
+    source,
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+  );
+});

@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "完了できませんでした。再試行してください。",
         "LINKED_NOTE_CHANGED": "保存先を確認し、もう一度参加してください。",
         "NOTE_UNAVAILABLE": "このノートは利用できません。新規作成せずに再試行してください。",
-        "START_FAILED": "完了できませんでした。再試行してください。"
+        "START_FAILED": "完了できませんでした。再試行してください。",
+        "POLICY_MEETING_RECORDING_DISABLED": "組織によって会議の録音が無効にされています。",
+        "POLICY_UNRESOLVABLE": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。"
       }
     }
   },

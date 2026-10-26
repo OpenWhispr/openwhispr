@@ -400,6 +400,17 @@ class MeetingDetectionEngine {
   }
 
   _showPrompt(detectionId, source, key, data) {
+    // Every prompt offers to record the meeting, and there is nothing to offer
+    // while the org has meeting recording off.
+    if (this.windowManager.getMeetingRecordingRefusal?.()) {
+      debugLogger.info(
+        "Suppressing detection — meeting recording is off by policy",
+        { detectionId, source },
+        "meeting"
+      );
+      this.activeDetections.delete(detectionId);
+      return;
+    }
     const calendarEvent = data?.event ?? this._findCalendarEvent();
     const event = calendarEvent ?? placeholderEvent("__detected__");
 
@@ -535,7 +546,18 @@ class MeetingDetectionEngine {
     return { success: true, value: null };
   }
 
+  // Both manual starts record into the note they create, so a start the org
+  // refuses must end before that note exists.
+  _refuseMeetingStart() {
+    const refusal = this.windowManager.getMeetingRecordingRefusal?.();
+    if (!refusal) return false;
+    debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
+    this.windowManager.sendMeetingStartRefused(refusal.code);
+    return true;
+  }
+
   async startManualMeeting(options) {
+    if (this._refuseMeetingStart()) return;
     debugLogger.info("Starting manual meeting", {}, "meeting");
 
     // A live meeting already owns a note: a second start would leave the recording
@@ -604,6 +626,7 @@ class MeetingDetectionEngine {
   }
 
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
+    if (this._refuseMeetingStart()) return;
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 

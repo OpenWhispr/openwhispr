@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
         "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
         "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
-        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Tu organización ha desactivado la grabación de reuniones.",
+        "POLICY_UNRESOLVABLE": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento."
       }
     }
   },

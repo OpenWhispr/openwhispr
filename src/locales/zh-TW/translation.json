@@ -4895,7 +4895,9 @@
         "CREATE_FAILED": "無法完成，請重試。",
         "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
         "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
-        "START_FAILED": "無法完成，請重試。"
+        "START_FAILED": "無法完成，請重試。",
+        "POLICY_MEETING_RECORDING_DISABLED": "你的組織已停用會議錄音。",
+        "POLICY_UNRESOLVABLE": "貴組織的設定尚未載入完成。請稍後再試。"
       }
     }
   },

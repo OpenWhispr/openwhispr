@@ -6601,9 +6601,9 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
-    const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
+    const { createAudioFeaturePolicy, isAudioPolicyRefusal } = require("./audioFeaturePolicy");
     this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: async (event) => {
+      getPolicy: async (event, { refresh = false } = {}) => {
         const generation = tokenStore.getState().generation;
         const authHeaders = event.sender
           ? await getAuthHeader(event)
@@ -6622,12 +6622,15 @@ class IPCHandlers {
           accountId: this.databaseManager.activeAccountId,
           expectedAuthGeneration: generation,
           authHeaders,
+          refresh,
         });
       },
-      onBlocked: (purpose) => {
-        if (purpose === "meeting") this._stopMeetingForPolicy?.();
+      onBlocked: (purpose, code) => {
+        if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
     });
+    this.windowManager.getMeetingRecordingRefusal = () =>
+      this._audioFeaturePolicy.failure("meeting");
 
     if (!tokenStore.get()) this._audioFeaturePolicy.update({ success: true, managed: false });
 
@@ -7915,6 +7918,9 @@ class IPCHandlers {
           });
           newMic?.disconnect().catch(() => {});
           newSystem?.disconnect().catch(() => {});
+          // An org refusal ends the recording instead of keeping the old
+          // sockets; the stop clears the connection options checked next.
+          if (isAudioPolicyRefusal(error)) this._stopMeetingForPolicy(error.code);
           if (meetingConnectionOptions !== options) {
             oldMic?.disconnect().catch(() => {});
             oldSystem?.disconnect().catch(() => {});
@@ -7979,7 +7985,10 @@ class IPCHandlers {
         },
         options,
         { streams }
-      );
+      ).catch((error) => {
+        this._audioFeaturePolicy.refreshOnRefusal(event, error);
+        throw error;
+      });
       if (options.purpose === "meeting") assertMeetingAllowed(event);
       return token;
     };
@@ -9244,6 +9253,7 @@ class IPCHandlers {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
+            purpose: "dictation",
             // Cloud sessions are configured server-side when the secret is minted;
             // the server also owns the managed model, so only the language is sent.
             language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
@@ -9784,7 +9794,7 @@ class IPCHandlers {
       sendMeetingAudio(buffer, source);
     });
 
-    this._stopMeetingForPolicy = () => {
+    this._stopMeetingForPolicy = (reason = "policyRestricted") => {
       const wasActive =
         meetingConnectionOptions ||
         meetingLocalMode ||
@@ -9801,7 +9811,7 @@ class IPCHandlers {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
       }
-      if (wasActive) broadcastToWindows("meeting-transcription-error", "policyRestricted");
+      if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession();
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
@@ -12028,7 +12038,11 @@ class IPCHandlers {
         const streaming = ensureGeminiStreaming(event);
         // byok resolves to the raw API key, managed to a single-use ephemeral
         // token; the client picks its Live method from `mode` accordingly.
-        const tokenOptions = { mode: options.mode, provider: "gemini-realtime" };
+        const tokenOptions = {
+          mode: options.mode,
+          provider: "gemini-realtime",
+          purpose: "dictation",
+        };
         // Buffer before the token fetch (a real network round trip) so
         // gemini-streaming-send has somewhere to put the first frames.
         streaming.beginConnecting();
@@ -12577,6 +12591,8 @@ class IPCHandlers {
           meetingRecordingEnabled: !this._audioFeaturePolicy.failure("meeting"),
         })
       );
+      // The tray's meeting item follows the same policy.
+      this.getTrayManager?.()?.updateTrayMenu?.();
     };
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {

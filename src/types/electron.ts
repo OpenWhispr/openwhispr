@@ -212,7 +212,9 @@ export type MeetingError =
   | "CREATE_FAILED"
   | "LINKED_NOTE_CHANGED"
   | "NOTE_UNAVAILABLE"
-  | "START_FAILED";
+  | "START_FAILED"
+  | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
   | { success: true; value: T }
@@ -1458,6 +1460,7 @@ declare global {
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
       onOpenAssistantPanel?: (callback: () => void) => () => void;
+      onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (

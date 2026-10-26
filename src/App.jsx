@@ -19,6 +19,7 @@ import { isAgentAllowed } from "./stores/policyRules";
 import { usePolicyStore } from "./stores/policyStore";
 import { useTranscriptionContextAllowed } from "./hooks/usePolicy";
 import { useTrayQuickActions } from "./hooks/useTrayQuickActions";
+import { meetingStartRefusalKey } from "./helpers/trayActionPolicy";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
@@ -407,6 +408,13 @@ export default function App() {
     openAssistantPanel,
     refuse,
   });
+
+  // The meeting hotkey and tray item start in main, which refuses under policy.
+  useEffect(
+    () =>
+      window.electronAPI?.onMeetingStartRefused?.((code) => refuse(meetingStartRefusalKey(code))),
+    [refuse]
+  );
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {

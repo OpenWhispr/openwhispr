@@ -74,7 +74,11 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
+import {
+  isAudioFeatureAllowed,
+  isTranscriptionContextAllowed,
+  type PolicyDecisionSnapshot,
+} from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
@@ -94,6 +98,14 @@ const MAX_BATCH_URLS = 50;
 // Every action on this page: the brand pill for the next step, a ghost pill beside it.
 const PRIMARY_ACTION_CLASS = "rounded-full px-5 font-medium";
 const SECONDARY_ACTION_CLASS = "rounded-full px-4";
+
+// Why the org refuses uploads under this policy, as an i18n key.
+function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
+  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
+  return policy.policy.features.audioUploadEnabled === false
+    ? "notes.upload.disabledByOrg"
+    : "common.policyTranscriptionRestricted";
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -284,12 +296,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     customTranscriptionApiKey,
   } = apiKeys;
   const policyState = usePolicySnapshot();
-  const uploadRestrictionKey =
-    policyState.status !== "managed" || !policyState.policy
-      ? "common.policyUnresolved"
-      : policyState.policy.features.audioUploadEnabled === false
-        ? "notes.upload.disabledByOrg"
-        : "common.policyTranscriptionRestricted";
 
   const {
     useLocalWhisper,
@@ -671,7 +677,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         progressCleanupRef.current?.();
         progressCleanupRef.current = null;
         setState("error");
-        setError(t("common.managedByOrg"));
+        setError(t(uploadRestrictionKey(policy)));
       }
       if (activeRequestIdRef.current) {
         window.electronAPI.cancelUploadTranscription?.(activeRequestIdRef.current);
@@ -684,10 +690,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const handleTranscribe = async () => {
     if (!file || batch.isProcessing) return;
+    const policy = usePolicyStore.getState();
+    if (!isAudioFeatureAllowed(policy, "upload")) {
+      setError(t(uploadRestrictionKey(policy)));
+      return;
+    }
     if (
-      !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
-      (!isManagedTranscriptionActive() &&
-        !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
       setError(t("common.managedByOrg"));
       return;
@@ -931,10 +941,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const startBatchProcessing = async () => {
     if (state === "downloading" || state === "transcribing") return;
+    const policy = usePolicyStore.getState();
+    if (!isAudioFeatureAllowed(policy, "upload")) {
+      setSkippedNotice(t(uploadRestrictionKey(policy)));
+      return;
+    }
     if (
-      !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
-      (!isManagedTranscriptionActive() &&
-        !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
+      !isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(policy, getSettings(), "upload")
     ) {
       setSkippedNotice(t("common.managedByOrg"));
       return;
@@ -1006,7 +1020,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             role="status"
             className="mb-5 rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-foreground/80"
           >
-            {t(uploadRestrictionKey)}
+            {t(uploadRestrictionKey(policyState))}
           </p>
         )}
         {state === "idle" && providerReady === false && (
