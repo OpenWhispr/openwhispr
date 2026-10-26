@@ -104,7 +104,6 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
-      aria-disabled={isLegacy || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
         isSelected ? styles.selected : styles.default
       } ${isSelectable ? "cursor-pointer" : ""} ${isLegacy ? "opacity-50" : ""}`}

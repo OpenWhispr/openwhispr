@@ -484,8 +484,8 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
 - `src/models/legacyModels.ts` - `isListedModel()`: an entry marked `"legacy": true` stays in the
   registry so an existing selection keeps working, but pickers list it only while it is selected
   (grayed out and disabled) or, for a local model, while its file is still downloaded so it can be
-  deleted. Never put a legacy entry first or name it as a `defaultModel`
-  (`test/helpers/legacyModels.test.js`)
+  deleted. While a provider still has a current model, never put a legacy entry first or name it
+  as a `defaultModel` (`test/helpers/legacyModels.test.js`)
 - `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 

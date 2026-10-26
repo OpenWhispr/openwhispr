@@ -189,7 +189,7 @@ export default function LocalModelPicker({
   const activeModels = allModels.filter((model) => downloads[model.id]);
   const isModelDownloaded = (model: LocalModel) =>
     downloadedModels.has(model.id) || model.isDownloaded || model.downloaded;
-  // A provider whose models are all legacy and unlisted would open on an empty list.
+  // Hide a provider whose models are all legacy and unlisted, unless it is the open one.
   const listedProviders = providers.filter(
     (provider) =>
       provider.id === selectedProvider ||
