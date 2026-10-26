@@ -395,8 +395,9 @@ export function useChatStreaming({
           return;
         }
 
-        // The assistant was switched off at setup: this device has no model to
-        // answer with, and Cloud is not the fallback. Say where to turn it on.
+        // Local mode with no model picked (e.g. the assistant was switched off
+        // at setup): nothing on this device can answer, and Cloud is not the
+        // fallback. Say where to turn it on.
         if (llmMode === "local" && !llmConfig.model.trim()) {
           announceResponse();
           setMessages((prev) => [
