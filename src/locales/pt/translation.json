@@ -2702,6 +2702,8 @@
         "openai_gpt_6_1_sol": "Capacidade próxima do Astra para chat e tarefas agênticas a menor custo",
         "openai_gpt_6_luna": "O GPT-6 mais rápido e econômico",
         "gemini_gemini_3_6_flash": "Modelo Gemini rápido e de alta capacidade",
+        "gemini_gemini_3_8_flash": "O modelo Flash mais capaz",
+        "gemini_gemini_4_argon": "O modelo de raciocínio de ponta do Google",
         "tinfoil_kimi_k3": "Modelo principal privado da Moonshot com raciocínio nativo e visão, contexto de 256K",
         "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado e rápido com raciocínio opcional, contexto de 1M"
       },

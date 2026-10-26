@@ -2821,6 +2821,8 @@
         "openai_gpt_6_1_sol": "Fast Astra-Niveau für Chat und agentische Aufgaben zu geringeren Kosten",
         "openai_gpt_6_luna": "Schnellstes und günstigstes GPT-6",
         "gemini_gemini_3_6_flash": "Schnelles, leistungsstarkes Gemini-Modell",
+        "gemini_gemini_3_8_flash": "Leistungsstärkstes Flash-Modell",
+        "gemini_gemini_4_argon": "Googles Spitzenmodell für Reasoning",
         "tinfoil_kimi_k3": "Privates Moonshot-Spitzenmodell mit nativem Reasoning und Bildverständnis, 256K Kontext",
         "tinfoil_deepseek_v4_1_flash": "Privates schnelles DeepSeek-Modell mit optionalem Reasoning, 1M Kontext"
       },

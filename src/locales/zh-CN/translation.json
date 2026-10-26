@@ -2723,6 +2723,8 @@
         "openai_gpt_6_1_sol": "以更低成本提供接近 Astra 的能力，适用于聊天与智能体任务",
         "openai_gpt_6_luna": "速度最快、成本最低的 GPT-6",
         "gemini_gemini_3_6_flash": "快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_8_flash": "最强 Flash 模型",
+        "gemini_gemini_4_argon": "Google 前沿推理模型",
         "tinfoil_kimi_k3": "私密的 Moonshot 旗舰模型，原生推理与视觉能力，256K 上下文",
         "tinfoil_deepseek_v4_1_flash": "私密的快速 DeepSeek 模型，可选推理，1M 上下文"
       },

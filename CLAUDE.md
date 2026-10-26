@@ -453,9 +453,12 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Models from Opus 4.7 onward (including the 5.5 generation) reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
   - **Google Gemini** (Direct API integration):
     - Gemini 3.6 Flash (`gemini-3.6-flash`) - Fast, high-capability Gemini model
+    - Gemini 3.8 Flash (`gemini-3.8-flash`) - Most capable Flash model
+    - Gemini 4 Argon (`gemini-4-argon`) - Google's frontier reasoning model
     - Gemini 3.5 Flash (`gemini-3.5-flash`) - legacy; Google now routes it to 3.6 Flash
     - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
-    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Next-gen flagship model for complex reasoning
+    - 3.8 Flash, 4 Argon and 3.1 Pro reject the `minimal` thinking level, so suppressed thinking sends `low` (`gemini-no-minimal` in `modelFamilyConstraints.ts`, plus the native provider's per-model table)
     - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost. It thinks, and requests that aren't streamed pin it to `minimal` unless a reasoning effort is picked; it has no `supportsThinking` flag, so Settings shows the effort picker rather than the thinking toggle
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)

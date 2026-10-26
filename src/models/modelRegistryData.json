@@ -777,6 +777,30 @@
           }
         },
         {
+          "id": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "description": "Most capable Flash model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_8_flash",
+          "supportsThinking": true,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "medium"
+          }
+        },
+        {
+          "id": "gemini-4-argon",
+          "name": "Gemini 4 Argon",
+          "description": "Google's frontier reasoning model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_4_argon",
+          "supportsThinking": true,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "medium"
+          }
+        },
+        {
           "id": "gemini-3.5-flash",
           "name": "Gemini 3.5 Flash",
           "description": "Fast, high-capability Gemini model",

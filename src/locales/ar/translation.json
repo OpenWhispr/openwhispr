@@ -327,6 +327,8 @@
         "openai_gpt_6_1_sol": "قدرة قريبة من Astra للمحادثة والمهام الوكيلة بتكلفة أقل",
         "openai_gpt_6_luna": "GPT-6 الأسرع والأقل تكلفة",
         "gemini_gemini_3_6_flash": "نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
+        "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
         "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
         "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
