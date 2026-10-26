@@ -101,6 +101,7 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -334,6 +335,7 @@ function useSettingsInternal() {
     tinfoilApiKey: store.tinfoilApiKey,
     deepgramApiKey: store.deepgramApiKey,
     assemblyaiApiKey: store.assemblyaiApiKey,
+    elevenlabsApiKey: store.elevenlabsApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,

@@ -111,6 +111,9 @@ const INVALID_KEY_SIGNAL =
 // your plan and billing details" and Groq's links to its /settings/billing page.
 const QUOTA_SIGNAL =
   /insufficient_quota|credit balance|insufficient (credits|balance|funds)|out of credits|payment required/i;
+// ElevenLabs answers an exhausted character quota with a 401, so it is read
+// before the status alone can call it a refused key.
+const ELEVENLABS_QUOTA_SIGNAL = /"status"\s*:\s*"quota_exceeded"/;
 const MODEL_SIGNAL =
   /model_not_found|model[^.\n]{0,80}(not found|does not exist|not available|is not supported)|(unknown|invalid|unsupported) model/i;
 const MISSING_ITEM_SIGNAL = /\bitem with id\b[^.\n]{0,80}\bnot found\b/i;
@@ -180,6 +183,9 @@ function requestIdFrom(headers) {
 }
 
 function codeForStatus(status, text, selfHosted) {
+  if ((status === 400 || status === 401) && ELEVENLABS_QUOTA_SIGNAL.test(text)) {
+    return C.QUOTA_EXHAUSTED;
+  }
   if (status === 401) return C.AUTH_FAILED;
   if ((status === 400 || status === 403) && INVALID_KEY_SIGNAL.test(text)) return C.AUTH_FAILED;
   if (status === 402) return C.QUOTA_EXHAUSTED;
