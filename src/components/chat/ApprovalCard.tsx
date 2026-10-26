@@ -151,7 +151,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const sentRef = verb ? issueSentCopy(verb, destination, entry.resultLabel) : null;
   const sentText = sentRef
     ? t(sentRef.key, sentRef.values)
-    : t("connectors.approval.sent", { destination });
+    : entry.outsideThread
+      ? t("connectors.approval.slack.sentOutsideThread", { destination })
+      : t("connectors.approval.sent", { destination });
   const unknownRef = verb ? issueUnknownCopy(verb, destination) : null;
   const unknownText = emailFields
     ? t("connectors.approval.email.unknown")

@@ -150,6 +150,96 @@ test("a pulled fork links to its parent by client id, whichever arrives first", 
   assert.equal(db.getAgentConversation(later.id).parent_conversation_id, parent.id);
 });
 
+test("a pulled chat isn't its own parent, and its copied count fits its messages", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const self = pullFork(db, "loop-chat", "loop-chat");
+  const own = db.getAgentConversation(self.id);
+  assert.equal(own.parent_client_conversation_id, null);
+  assert.equal(own.fork_message_count, null);
+
+  const tooMany = db.upsertConversationFromCloud(
+    {
+      id: "cloud-big",
+      client_conversation_id: "big-fork",
+      title: "Plan the launch",
+      updated_at: new Date().toISOString(),
+      parent_client_conversation_id: "parent-chat",
+      fork_message_count: 9,
+    },
+    [{ role: "user", content: "Draft the launch email" }]
+  );
+  assert.equal(db.getAgentConversation(tooMany.id).fork_message_count, 1);
+  for (const count of [0, -2, 1.5, "three", null]) {
+    const odd = db.upsertConversationFromCloud(
+      {
+        id: `cloud-odd-${count}`,
+        client_conversation_id: `odd-${count}`,
+        title: "Plan the launch",
+        updated_at: new Date().toISOString(),
+        parent_client_conversation_id: "parent-chat",
+        fork_message_count: count,
+      },
+      [{ role: "user", content: "Draft the launch email" }]
+    );
+    assert.equal(db.getAgentConversation(odd.id).fork_message_count, null, String(count));
+  }
+  // An integer column can arrive as a string.
+  const asText = db.upsertConversationFromCloud(
+    {
+      id: "cloud-text",
+      client_conversation_id: "text-fork",
+      title: "Plan the launch",
+      updated_at: new Date().toISOString(),
+      parent_client_conversation_id: "parent-chat",
+      fork_message_count: "1",
+    },
+    [{ role: "user", content: "Draft the launch email" }]
+  );
+  assert.equal(db.getAgentConversation(asText.id).fork_message_count, 1);
+});
+
+test("two chats that name each other as parent don't both link", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const first = pullFork(db, "chat-a", "chat-b");
+  const second = pullFork(db, "chat-b", "chat-a");
+  const linked = [first, second].map((chat) => db.getAgentConversation(chat.id));
+  assert.equal(linked.filter((chat) => chat.parent_conversation_id != null).length, 1);
+});
+
+// A pulled message's time is ISO ("…T…Z"), a local one SQLite's ("… …"):
+// compared as text, a later local message of the same day would sort first,
+// and the fork view (which hides its copied messages) would hide it instead.
+test("messages added to a pulled chat stay after the pulled ones, by time", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const pulled = db.upsertConversationFromCloud(
+    {
+      id: "cloud-fork-chat",
+      client_conversation_id: "fork-chat",
+      title: "Plan the launch",
+      updated_at: "2026-10-23T09:00:00.000Z",
+      fork_message_count: 2,
+    },
+    [
+      { role: "user", content: "Draft the launch email", created_at: "2026-10-23T09:00:00.000Z" },
+      { role: "assistant", content: "Here is a draft.", created_at: "2026-10-23T09:00:05.000Z" },
+    ]
+  );
+  const mine = db.addAgentMessage(pulled.id, "user", "Make it shorter");
+  db.db
+    .prepare("UPDATE agent_messages SET created_at = ? WHERE id = ?")
+    .run("2026-10-23 10:00:00", mine.id);
+
+  const order = (rows) => rows.map((message) => message.content);
+  const expected = ["Draft the launch email", "Here is a draft.", "Make it shorter"];
+  assert.deepEqual(order(db.getAgentConversation(pulled.id).messages), expected);
+  assert.deepEqual(order(db.getAgentMessages(pulled.id)), expected);
+  const preview = db.getAgentConversationsWithPreview().find((row) => row.id === pulled.id);
+  assert.equal(preview.last_message, "Make it shorter");
+});
+
 test("a pulled fork whose parent was deleted here stays a plain chat", (t) => {
   const db = createDb(t);
   if (!db) return;

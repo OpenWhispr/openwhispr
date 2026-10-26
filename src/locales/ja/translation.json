@@ -4366,7 +4366,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "{{started, datetime(dateStyle: medium; timeStyle: short)}}に始まったスレッドに返信"
-        }
+        },
+        "sentOutsideThread": "スレッドではなく、新しいメッセージとして {{destination}} に送信しました。"
       },
       "sentLabel": "送信済み",
       "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",

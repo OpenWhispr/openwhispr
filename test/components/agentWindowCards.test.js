@@ -1343,7 +1343,7 @@ test("a reply that still claims an action nothing did says it wasn't done", asyn
 
 const finished = { ...reply([], "Here is the plan."), isStreaming: false };
 
-test("Close starts a new chat, and a command that arrives while the window hides goes to it", async (t) => {
+test("Close starts a new chat, and a command that arrives after it goes to that chat", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.open({ layout: "modal" }));
   await view.settle();
@@ -1377,6 +1377,26 @@ test("Esc on an idle window starts a new chat; over a running reply it only stop
   await escape();
   await view.settle();
   assert.equal(globalThis.__chat.newChats, 1);
+});
+
+test("Esc over selected text clears the selection and keeps the chat", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: false, messages: [user, finished] });
+  const { document } = view.happyWindow;
+  const selection = view.happyWindow.getSelection();
+  selection.selectAllChildren(document.body);
+  assert.equal(selection.isCollapsed, false);
+
+  await React.act(async () =>
+    document.dispatchEvent(
+      new view.happyWindow.KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    )
+  );
+  await view.settle();
+  assert.equal(globalThis.__chat.newChats, 0, "the chat stays");
+  assert.equal(selection.isCollapsed, true);
 });
 
 test("main's dismiss starts a new chat; Minimize keeps it", async (t) => {

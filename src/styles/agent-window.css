@@ -52,6 +52,11 @@
   --agent-float-alpha: 0.85;
 }
 
+/* Muted text on a dark panel keeps AA contrast over a bright wallpaper. */
+.dark:has(.agent-window) {
+  --agent-surface-alpha: 0.94;
+}
+
 .agent-panel > * {
   --agent-surface-alpha: 0.78;
 }

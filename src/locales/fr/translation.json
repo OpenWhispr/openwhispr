@@ -4538,7 +4538,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "Réponse dans le fil commencé le {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "Envoyé à {{destination}} comme nouveau message, pas dans le fil."
       },
       "sentLabel": "Envoyé",
       "identityChanged": "Sera envoyé en tant que {{account}}. Appuyez sur Envoyer pour l’envoyer.",

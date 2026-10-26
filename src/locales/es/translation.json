@@ -4418,7 +4418,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "Respuesta en el hilo iniciado el {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "Enviado a {{destination}} como mensaje nuevo, no en el hilo."
       },
       "sentLabel": "Enviado",
       "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",

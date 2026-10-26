@@ -4366,7 +4366,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "Risposta nel thread iniziato il {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "Inviato a {{destination}} come nuovo messaggio, non nel thread."
       },
       "sentLabel": "Inviato",
       "identityChanged": "Ora verrà inviato come {{account}}. Premi Invia per inviarlo.",

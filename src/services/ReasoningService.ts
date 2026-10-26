@@ -1039,11 +1039,17 @@ class ReasoningService extends BaseReasoningService {
 
     // The step that answers at the cap keeps the tools but may not call them:
     // providers that check a conversation's tool use need the tools defined.
+    // Without execute, a server that ignores toolChoice can't run one either.
+    const definitionsOnly = tools
+      ? Object.fromEntries(
+          Object.entries(tools).map(([name, tool]) => [name, { ...tool, execute: undefined }])
+        )
+      : undefined;
     const run = (prompt: import("ai").ModelMessage[], maxSteps: number, answer: boolean) =>
       streamText({
         model: aiModel,
         messages: prompt,
-        tools: tools || undefined,
+        tools: (answer ? definitionsOnly : tools) || undefined,
         ...(answer && tools ? { toolChoice: "none" as const } : {}),
         stopWhen: stepCountIs(maxSteps),
         prepareStep: ({ messages }) => ({
@@ -1102,6 +1108,8 @@ class ReasoningService extends BaseReasoningService {
               yield { type: "content", text: trailing };
             }
           } else if (chunk.type === "tool-call") {
+            // The answer at the cap runs nothing, so a stray call shows nothing.
+            if (answeringAtCap) continue;
             yield {
               type: "tool_calls",
               calls: [
@@ -1136,6 +1144,8 @@ class ReasoningService extends BaseReasoningService {
               ...(isToolFailure ? { isError: true } : {}),
             };
           } else if (chunk.type === "tool-error") {
+            // The answer at the cap shows no call, so no result for one either.
+            if (answeringAtCap) continue;
             // A call the SDK rejected (unknown tool, invalid input) never ran; without
             // a result it would read as cut off mid-send in the chat and its history.
             const cause = chunk.error;

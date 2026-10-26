@@ -800,6 +800,7 @@ test("a reply Slack didn't thread is linked as the message it is", async () => {
   assert.deepEqual(result, {
     state: "sent",
     url: "https://acme-test.slack.com/archives/C0ENG0001/p1727200009000200",
+    outsideThread: true,
   });
 });
 
@@ -843,7 +844,7 @@ test("a thread in another conversation than the destination is refused before Sl
     "users.list": [ok(FIXTURES.people)],
   });
 
-  for (const destination of ["#eng-backend", "Gabe Smith", GABE_DM_MESSAGE]) {
+  for (const destination of ["#eng-backend", "Gabe Smith"]) {
     const refused = await connector.prepare(
       "send_message",
       { destination, text: "hi", thread: ENG_MESSAGE },
@@ -852,6 +853,13 @@ test("a thread in another conversation than the destination is refused before Sl
     assert.equal(refused.status, "failed", destination);
     assert.equal(refused.errorCode, "thread_mismatch", destination);
   }
+  // A DM no Send opened here isn't known by its person: asked about first.
+  const asked = await connector.prepare(
+    "send_message",
+    { destination: GABE_DM_MESSAGE, text: "hi", thread: ENG_MESSAGE },
+    BOUND
+  );
+  assert.equal(asked.status, "needs_clarification");
   assert.equal(
     slack
       .methods()
@@ -978,6 +986,7 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
     ...channelsOnly,
     "users.list": [ok(FIXTURES.people)],
     "users.info": [ok(FIXTURES.lookupGabe)],
+    "conversations.open": [ok(FIXTURES.dmOpen)],
     "chat.postMessage": [ok(FIXTURES.postedDm)],
   });
   const target = async (destination) => {
@@ -1010,20 +1019,94 @@ test("a channel, person or DM named by id, or by a link, resolves exactly", asyn
   });
   assert.equal(slack.methods().includes("users.list"), false, "an id needs no directory");
 
-  // Without im:read Slack won't say whose DM it is, so the card says what it is.
-  const dm = await target("D0GABE001");
-  assert.deepEqual(dm, { kind: "dm", id: "D0GABE001", label: "Direct message (D0GABE001)" });
-  assert.deepEqual(await target(GABE_DM_MESSAGE), dm);
-
-  const prepared = await connector.prepare(
+  // Without im:read Slack won't say whose DM it is, and the card must name who
+  // gets the message: a DM id is known once a Send opened it with that person.
+  const unknownDm = await connector.prepare(
     "send_message",
     { destination: "D0GABE001", text: "hi" },
     BOUND
   );
+  assert.equal(unknownDm.status, "needs_clarification");
+  assert.match(unknownDm.message, /whose direct message D0GABE001 is/);
+
+  const toGabe = await connector.prepare(
+    "send_message",
+    { destination: "U0GABE001", text: "hi" },
+    BOUND
+  );
+  assert.equal((await connector.commit("send_message", toGabe.payload, {}, BOUND)).state, "sent");
+  assert.equal(posts(slack)[0].params.channel, "D0GABE001");
+
+  const dm = await target("D0GABE001");
+  assert.deepEqual(dm, { kind: "dm", id: "D0GABE001", label: "Gabe Smith" });
+  assert.deepEqual(await target(GABE_DM_MESSAGE), dm);
+  const opens = slack.methods().filter((method) => method === "conversations.open").length;
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "D0GABE001", text: "again" },
+    BOUND
+  );
+  assert.equal(prepared.preview.destinationLabel, "Gabe Smith");
   const sent = await connector.commit("send_message", prepared.payload, {}, BOUND);
   assert.equal(sent.state, "sent");
-  assert.equal(posts(slack)[0].params.channel, "D0GABE001");
-  assert.equal(slack.methods().includes("conversations.open"), false);
+  assert.equal(posts(slack).at(-1).params.channel, "D0GABE001");
+  assert.equal(
+    slack.methods().filter((method) => method === "conversations.open").length,
+    opens,
+    "a known DM is posted to as is"
+  );
+});
+
+test("a thread in another person's DM that a Send opened here is refused before any DM opens", async () => {
+  const { connector, slack } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "users.info": [ok(FIXTURES.lookupGabe)],
+    "conversations.open": [ok(FIXTURES.dmOpen)],
+    "chat.postMessage": [ok(FIXTURES.postedDm)],
+  });
+  const toGabe = await connector.prepare(
+    "send_message",
+    { destination: "U0GABE001", text: "hi" },
+    BOUND
+  );
+  await connector.commit("send_message", toGabe.payload, {}, BOUND);
+  const opens = slack.methods().filter((method) => method === "conversations.open").length;
+
+  const refused = await connector.prepare(
+    "send_message",
+    { destination: "@gstone", text: "hi", thread: GABE_DM_MESSAGE },
+    BOUND
+  );
+
+  assert.equal(refused.status, "failed");
+  assert.equal(refused.errorCode, "thread_mismatch");
+  assert.equal(slack.methods().filter((method) => method === "conversations.open").length, opens);
+});
+
+test("a DM is known by its person only while the app that opened it runs", async () => {
+  const script = {
+    ...channelsOnly,
+    "users.list": [ok(FIXTURES.people)],
+    "users.info": [ok(FIXTURES.lookupGabe)],
+    "conversations.open": [ok(FIXTURES.dmOpen)],
+    "chat.postMessage": [ok(FIXTURES.postedDm)],
+  };
+  const first = await setupSlack(script);
+  const toGabe = await first.connector.prepare(
+    "send_message",
+    { destination: "U0GABE001", text: "hi" },
+    BOUND
+  );
+  await first.connector.commit("send_message", toGabe.payload, {}, BOUND);
+
+  const restarted = await setupSlack(script);
+  const asked = await restarted.connector.prepare(
+    "send_message",
+    { destination: "D0GABE001", text: "hi" },
+    BOUND
+  );
+  assert.equal(asked.status, "needs_clarification");
 });
 
 test("an id or link that finds nothing asks", async () => {
@@ -1054,6 +1137,7 @@ test("a channel link missing from a cut-off list is said to be possibly cut off"
         response_metadata: { next_cursor: "more" },
       }),
     ],
+    "users.list": [ok(FIXTURES.people)],
   });
   const found = await connector.prepare(
     "send_message",
@@ -1061,13 +1145,12 @@ test("a channel link missing from a cut-off list is said to be possibly cut off"
     BOUND
   );
   assert.equal(found.status, "ready");
-  const missed = await connector.prepare(
-    "send_message",
-    { destination: "https://acme-test.slack.com/archives/C0NOPE001", text: "hi" },
-    BOUND
-  );
-  assert.equal(missed.status, "needs_clarification");
-  assert.match(missed.message, /more Slack channels than can be listed/);
+  // A link, and a bare id that matches no name either, say the same.
+  for (const destination of ["https://acme-test.slack.com/archives/C0NOPE001", "C0NOPE001"]) {
+    const missed = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(missed.status, "needs_clarification", destination);
+    assert.match(missed.message, /more Slack channels than can be listed/, destination);
+  }
 });
 
 test("a link to a conversation not shaped like a Slack id is no link", async () => {

@@ -4866,9 +4866,12 @@ class DatabaseManager {
         .get(id);
       if (!conversation) return null;
       // Messages saved within the same second keep the order they were added in.
+      // datetime() because a pulled message's time is ISO ("…T…Z") and a local
+      // one SQLite's ("… …"): compared as text, a local message sorts before
+      // every pulled one of its day, and a fork would hide the user's own turns.
       const messages = this.db
         .prepare(
-          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC, id ASC"
+          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY datetime(created_at) ASC, id ASC"
         )
         .all(id);
       return { ...conversation, messages };
@@ -5211,7 +5214,9 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare(
+          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY datetime(created_at) ASC, id ASC"
+        )
         .all(conversationId);
     } catch (error) {
       debugLogger.error("Error getting agent messages", { error: error.message }, "database");
@@ -6242,8 +6247,8 @@ class DatabaseManager {
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           ${archiveFilter}
@@ -6271,8 +6276,8 @@ class DatabaseManager {
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
@@ -8140,6 +8145,20 @@ class DatabaseManager {
             fork_message_count = COALESCE(fork_message_count, excluded.fork_message_count),
             fork_context = COALESCE(fork_context, excluded.fork_context)
         `);
+        // The origin as the cloud has it, made sane: a chat isn't its own
+        // parent, and a fork copied at least one of its messages and no more
+        // than it has (a larger count would hide every message it shows).
+        const parentClientId =
+          cloudConv.parent_client_conversation_id &&
+          cloudConv.parent_client_conversation_id !== cloudConv.client_conversation_id
+            ? cloudConv.parent_client_conversation_id
+            : null;
+        // A database driver may send an integer column as a string.
+        const copied = Number(cloudConv.fork_message_count);
+        const forkMessageCount =
+          parentClientId && Number.isInteger(copied) && copied > 0
+            ? Math.min(copied, messages?.length || copied)
+            : null;
         convStmt.run(
           cloudConv.client_conversation_id ?? null,
           cloudConv.id ?? null,
@@ -8147,23 +8166,24 @@ class DatabaseManager {
           cloudConv.note_id ?? null,
           cloudConv.created_at ?? new Date().toISOString(),
           cloudConv.updated_at ?? new Date().toISOString(),
-          cloudConv.parent_client_conversation_id ?? null,
-          cloudConv.fork_message_count ?? null,
-          cloudConv.fork_context ?? null
+          parentClientId,
+          forkMessageCount,
+          parentClientId ? (cloudConv.fork_context ?? null) : null
         );
         const conv = this.db
           .prepare("SELECT * FROM agent_conversations WHERE client_conversation_id = ?")
           .get(cloudConv.client_conversation_id);
         // Link this fork to its parent, or the forks waiting on this chat to it,
         // whichever arrived first. A parent deleted or never synced here leaves
-        // the fork a plain chat.
+        // the fork a plain chat, and so does a parent that is itself its fork.
         this.db
           .prepare(
             `UPDATE agent_conversations
              SET parent_conversation_id = (
                SELECT parent.id FROM agent_conversations parent
                WHERE parent.client_conversation_id = agent_conversations.parent_client_conversation_id
-                 AND parent.deleted_at IS NULL)
+                 AND parent.deleted_at IS NULL
+                 AND parent.parent_conversation_id IS NOT agent_conversations.id)
              WHERE parent_conversation_id IS NULL
                AND (id = ? OR parent_client_conversation_id = ?)`
           )

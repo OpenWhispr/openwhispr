@@ -86,6 +86,11 @@ async function mountScroller(t) {
   const content = scroller.childNodes[0];
   const cardBody = content.childNodes.find((node) => node.nodeType === 1);
   Object.assign(cardBody, { scrollHeight: 300, clientHeight: 176, scrollTop: 0 });
+  // Only a box that scrolls on its own takes a gesture: the body is one.
+  cardBody.overflowY = "auto";
+  scroller.ownerDocument.defaultView.getComputedStyle = (element) => ({
+    overflowY: element.overflowY ?? "visible",
+  });
   return { scroller, content, cardBody, resizeObservers };
 }
 
@@ -141,6 +146,19 @@ test("a wheel up inside a card body that can still scroll up keeps the conversat
   resizeObservers.resizePadding(content);
 
   assert.equal(scroller.scrollTop, 720);
+});
+
+test("a wheel up over a clipped box scrolled into view still leaves the bottom", async (t) => {
+  const { scroller, content, cardBody, resizeObservers } = await mountScroller(t);
+  // scrollIntoView can move a clipped box's content; it doesn't scroll on its own.
+  cardBody.overflowY = "hidden";
+  cardBody.scrollTop = 80;
+
+  await wheelUp(cardBody.childNodes[0]);
+  scroller.scrollHeight = 1120;
+  resizeObservers.resizePadding(content);
+
+  assert.equal(scroller.scrollTop, 600, "the reader went up the conversation");
 });
 
 test("a wheel up over a card body already at its top leaves the bottom", async (t) => {

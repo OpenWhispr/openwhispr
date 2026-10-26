@@ -502,8 +502,12 @@ test("slack_send_message refuses empty text without preparing", async (t) => {
 test("slack_send_message passes a thread link to main and tells the model the reply went in the thread", async (t) => {
   const prepared = [];
   const reply = "https://acme.slack.com/archives/C0ENG/p1727200009000200";
-  // Main links a threaded reply with its thread; one Slack didn't thread, without.
-  const links = [`${reply}?thread_ts=1727200000.123456&cid=C0ENG`, reply, reply];
+  // Main says when a reply meant for a thread went out as a new message.
+  const results = [
+    { state: "sent", url: `${reply}?thread_ts=1727200000.123456&cid=C0ENG` },
+    { state: "sent", url: reply, outsideThread: true },
+    { state: "sent", url: reply },
+  ];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -521,7 +525,7 @@ test("slack_send_message passes a thread link to main and tells the model the re
             },
           };
         },
-        connectorCommit: async () => ({ state: "sent", url: links.shift() }),
+        connectorCommit: async () => results.shift(),
         connectorCancel: async () => ({ cancelled: true }),
       },
     },
@@ -554,6 +558,15 @@ test("slack_send_message passes a thread link to main and tells the model the re
   assert.equal(threaded.data.repliedInThread, true);
   assert.equal(unthreaded.data.status, "sent");
   assert.equal(unthreaded.data.repliedInThread, false, "never claims a thread Slack didn't use");
+  assert.equal("outsideThread" in unthreaded.data, false);
+  // The card and the step say so too: the card had promised a reply in the thread.
+  assert.equal(
+    approvals.useConnectorApprovalStore.getState().entries[approvals.approvalKey("m40", "call-41")]
+      .outsideThread,
+    true
+  );
+  assert.match(unthreaded.displayText, /new message, not in the thread/);
+  assert.doesNotMatch(threaded.displayText, /not in the thread/);
   assert.equal(plain.data.status, "sent");
   assert.equal("repliedInThread" in plain.data, false);
   const { properties, required } = slackSendMessageTool.parameters;
@@ -2166,6 +2179,9 @@ const MARKDOWN_BODY = [
   "# of attendees: 12",
   "See __init__.py and x**2 + y**2 at https://e.com/a__b__c and https://e.com/**x**",
   "#hashtag stays, and so does 2 * 3.",
+  "# Über uns",
+  "## Agenda ##",
+  "**[Join](https://zoom.us/j/1)** or **https://ex.com**",
 ].join("\n");
 const PLAIN_BODY = [
   "Schedule",
@@ -2176,6 +2192,9 @@ const PLAIN_BODY = [
   "# of attendees: 12",
   "See __init__.py and x**2 + y**2 at https://e.com/a__b__c and https://e.com/**x**",
   "#hashtag stays, and so does 2 * 3.",
+  "Über uns",
+  "Agenda",
+  "Join (https://zoom.us/j/1) or https://ex.com",
 ].join("\n");
 
 test("an email body loses its Markdown before the compose draft is built", async (t) => {
@@ -2218,6 +2237,32 @@ test("an email body loses its Markdown before the Gmail card is prepared", async
     gmailContext("m-md", "call-md")
   );
   assert.equal(prepared[0].body, PLAIN_BODY);
+});
+
+// The body is the model's, up to 512 KB, and is made plain on the main thread.
+test("making a long hostile body plain takes no noticeable time", async (t) => {
+  const calls = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorRunDirect: async (...args) => {
+          calls.push(args);
+          return { state: "sent", destinationLabel: "gabe@example.com", bodyCopied: false };
+        },
+      },
+    },
+  });
+  const { createEmailDraftTool } = await loadEmail();
+  const tool = createEmailDraftTool("gmail");
+  for (const body of [
+    `# Title${" \t".repeat(50_000)}x`,
+    "[".repeat(100_000),
+    "see [a ".repeat(10_000),
+  ]) {
+    const started = performance.now();
+    await tool.execute({ to: ["gabe@example.com"], subject: "Week", body });
+    assert.ok(performance.now() - started < 1_000, body.slice(0, 12));
+  }
 });
 
 test("a duplicate pending approval never claims a send when the original is declined", async (t) => {

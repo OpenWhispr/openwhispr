@@ -4366,7 +4366,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "在 {{started, datetime(dateStyle: medium; timeStyle: short)}} 开始的话题中回复"
-        }
+        },
+        "sentOutsideThread": "已作为新消息发送到 {{destination}}，而不是在话题中。"
       },
       "sentLabel": "已发送",
       "identityChanged": "现在将以 {{account}} 身份发送。按“发送”即可发送。",
