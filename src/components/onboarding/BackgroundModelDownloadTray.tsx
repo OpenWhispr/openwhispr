@@ -25,7 +25,8 @@ import type {
 } from "../../types/electron";
 import { isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { AnimatedEllipsis } from "./AnimatedEllipsis";
-import { ONBOARDING_SESSION_KEY, isRequiredModelsOnboardingStepActive } from "./flow";
+import { ONBOARDING_SESSION_KEY, isDownloadOwningOnboardingStepActive } from "./flow";
+import { isLocalSetupDownload } from "./localSetupDownloadState";
 import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
@@ -237,14 +238,19 @@ export default function BackgroundModelDownloadTray({
       percentage: number | undefined;
       error?: string;
     }) => {
-      // The required-models onboarding step owns its downloads: it renders its
-      // own per-row progress, and cancelling from here cannot stick because the
-      // step auto-restarts org-mandated downloads. Suppress row creation while
-      // that step is active; completions still pass so any pre-existing row
-      // (a resumed local-setup download) can clear and activate normally.
+      // The required-models and local-setup onboarding steps own their
+      // downloads: each renders its own per-row progress, and a cancel from
+      // here would fight the step's own queue. Suppress row creation while
+      // either step is active, and for any transfer local-setup claimed: on
+      // Back the session leaves the step at once, yet the cancelled transfer's
+      // queued chunks still arrive and its cancel sends no final event, so the
+      // step check alone would leave a stuck row. Completions still pass so any
+      // pre-existing row (a resumed older local download) can clear and
+      // activate normally.
       if (
         event.type !== "complete" &&
-        isRequiredModelsOnboardingStepActive(localStorage.getItem(ONBOARDING_SESSION_KEY))
+        (isDownloadOwningOnboardingStepActive(localStorage.getItem(ONBOARDING_SESSION_KEY)) ||
+          isLocalSetupDownload(event.kind, event.id))
       ) {
         return;
       }

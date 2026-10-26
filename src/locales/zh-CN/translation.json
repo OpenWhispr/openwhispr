@@ -354,34 +354,10 @@
           "features": {
             "device": "在你的设备上运行",
             "offline": "设置完成后可离线使用",
-            "models": "为听写和助手选择模型",
+            "setup": "为这台电脑量身设置",
             "free": "永久免费使用"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "你的数据由服务商处理",
-            "description": "你需要分别为听写和 Assistant 服务商添加凭据。将适用服务商的定价和数据保留政策。",
-            "continue": "设置 API 服务商",
-            "steps": {
-              "1": "为听写和 Assistant 选择服务商",
-              "2": "使用安全存储添加凭据",
-              "3": "启用前测试每个连接"
-            }
-          },
-          "local": {
-            "title": "本地设置需要多几个步骤",
-            "description": "本地处理会把你的语音保留在此设备上，但需要一次性设置和至少 {{minimumSpace}} GB 可用空间。",
-            "continue": "本地设置",
-            "steps": {
-              "1": "选择转录引擎",
-              "2": "配置或下载模型，约 {{modelSize}}",
-              "3": "等待安装和启用"
-            }
-          }
-        },
-        "useCloud": "改用云端",
-        "continueSetup": "继续设置",
         "showMore": "显示更多选项",
         "moreOptions": {
           "title": "选择你的 API 设置方式",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "设置本地模型",
-        "description": "选择你想在设备上运行的模型。",
-        "descriptionLineOne": "选择你想在设备上",
-        "descriptionLineTwo": "运行的模型。",
-        "providerLabel": "服务商",
-        "download": "下载",
         "downloadingShort": "下载中",
-        "selected": "已选择",
-        "use": "使用",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",

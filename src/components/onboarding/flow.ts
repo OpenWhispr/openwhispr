@@ -31,14 +31,16 @@ export type OnboardingStepId =
   | "setup-choice"
   | "byok-dictation"
   | "byok-assistant"
+  /** No longer routed — the one local-setup step replaced this two-stage picker.
+      Kept so a session saved on either still parses and reconciles onto it. */
   | "local-dictation"
-  | "local-assistant";
+  | "local-assistant"
+  | "local-setup";
 
 export type OnboardingAuthPath = "account" | "guest" | null;
 export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
 export type OnboardingAuthMode = "sign-in" | "sign-up" | null;
 export type OnboardingByokStepId = "byok-dictation" | "byok-assistant";
-export type OnboardingLocalStepId = "local-dictation" | "local-assistant";
 
 export interface OnboardingSsoDiscoveryDraft {
   required: boolean;
@@ -61,11 +63,6 @@ export interface OnboardingByokDraft {
   customModel: string;
 }
 
-export interface OnboardingLocalModelDraft {
-  provider: string;
-  modelId: string;
-}
-
 export interface OnboardingResumeState {
   dictationHotkeyConfirmed: boolean;
   assistantHotkeyConfirmed: boolean;
@@ -73,7 +70,6 @@ export interface OnboardingResumeState {
   assistantDemoCompleted: boolean;
   auth: OnboardingAuthDraft;
   byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
-  localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
 }
 
 export interface OnboardingSession {
@@ -124,7 +120,7 @@ const ACCOUNT_ROUTE: OnboardingStepId[] = [
 
 const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
   byok: ["byok-dictation", "byok-assistant"],
-  local: ["local-dictation", "local-assistant"],
+  local: ["local-setup"],
 };
 
 // Canonical flow order, independent of any one route. reconcileStepWithRoute uses
@@ -146,6 +142,7 @@ const STEP_ORDER: OnboardingStepId[] = [
   "byok-assistant",
   "local-dictation",
   "local-assistant",
+  "local-setup",
 ];
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
@@ -194,7 +191,6 @@ export function createOnboardingResumeState(): OnboardingResumeState {
       pendingVerificationEmail: null,
     },
     byok: {},
-    localModels: {},
   };
 }
 
@@ -332,14 +328,6 @@ function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
   };
 }
 
-function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undefined {
-  if (!isRecord(value)) return undefined;
-  return {
-    provider: readDraftString(value.provider),
-    modelId: readDraftString(value.modelId),
-  };
-}
-
 /**
  * Sessions written before `resume` existed carry no confirmation flags, and
  * reading them as "never confirmed" is not safe: the hotkey flags decide whether
@@ -373,11 +361,8 @@ function parseOnboardingResumeState(
   const authValue = isRecord(value.auth) ? value.auth : {};
   const authMode = authValue.authMode;
   const byokValue = isRecord(value.byok) ? value.byok : {};
-  const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
   const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
   const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
-  const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
-  const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
 
   return {
     dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
@@ -398,10 +383,8 @@ function parseOnboardingResumeState(
       ...(byokDictation ? { "byok-dictation": byokDictation } : {}),
       ...(byokAssistant ? { "byok-assistant": byokAssistant } : {}),
     },
-    localModels: {
-      ...(localDictation ? { "local-dictation": localDictation } : {}),
-      ...(localAssistant ? { "local-assistant": localAssistant } : {}),
-    },
+    // Older builds also saved the two-stage local picker's model draft here
+    // (resume.localModels). Nothing reads it any more, so it is dropped.
   };
 }
 
@@ -458,15 +441,22 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
   }
 }
 
+// Steps that show their own per-row download progress.
+const DOWNLOAD_OWNING_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingStepId>([
+  "required-models",
+  "local-setup",
+]);
+
 /**
- * True while a persisted onboarding session sits on the blocking
- * required-models step. The background download tray uses this to keep its
- * hands off downloads that step owns: a tray row would duplicate the step's
- * own progress pill, and the tray's cancel cannot stick — the step
- * auto-restarts org-mandated downloads.
+ * True while a persisted onboarding session sits on a step that owns its
+ * downloads. The background download tray uses this to keep its hands off
+ * them: a tray row would duplicate the step's own progress, the tray's cancel
+ * cannot stick on required-models (the step auto-restarts org-mandated
+ * downloads), and local-setup cancels and resumes its queue itself.
  */
-export function isRequiredModelsOnboardingStepActive(sessionValue: string | null): boolean {
-  return parseOnboardingSession(sessionValue)?.currentStepId === "required-models";
+export function isDownloadOwningOnboardingStepActive(sessionValue: string | null): boolean {
+  const stepId = parseOnboardingSession(sessionValue)?.currentStepId;
+  return stepId !== undefined && DOWNLOAD_OWNING_STEPS.has(stepId);
 }
 
 export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {
@@ -523,9 +513,9 @@ export interface OnboardingProgressState {
  *
  * The total comes from the route rather than a constant because the route itself
  * is conditional — the assistant pair drops out when the assistant is disallowed, and
- * the provider pair only exists once a non-cloud setup mode is picked. Choosing
- * BYOK/local on setup-choice therefore appends two steps and the row
- * grows by two dots at that moment, which is the flow honestly getting longer.
+ * the setup steps only exist once a non-cloud setup mode is picked. Choosing BYOK on
+ * setup-choice appends two steps and Local appends one, so the row grows by that
+ * many dots at that moment, which is the flow honestly getting longer.
  *
  * Returns null when there is nothing worth drawing: a compact step, an off-route
  * step, or a route with fewer than two counted steps, where a one-dot row would

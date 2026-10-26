@@ -521,3 +521,12 @@ export function LocalSetupStep({
     </section>
   );
 }
+
+/**
+ * The card's frame, at about the height of three rows, while the plan is still
+ * being worked out (the computer or policy read hasn't landed). Rare: both
+ * finish long before anyone reaches the step.
+ */
+export function LocalSetupStepPlaceholder() {
+  return <section aria-busy="true" className={`${CARD_CLASS} h-[35rem]`} />;
+}

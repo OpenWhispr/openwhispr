@@ -354,34 +354,10 @@
           "features": {
             "device": "Fonctionne sur votre appareil",
             "offline": "Fonctionne hors ligne après la configuration",
-            "models": "Choisissez les modèles pour la dictée et l’assistant",
+            "setup": "Configuré pour cet ordinateur",
             "free": "Gratuit pour toujours"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Votre fournisseur traite vos données",
-            "description": "Vous ajouterez des identifiants pour des fournisseurs distincts de dictée et d’Assistant. Les tarifs et les politiques de conservation du fournisseur s’appliquent.",
-            "continue": "Configurer le fournisseur d’API",
-            "steps": {
-              "1": "Choisir des fournisseurs pour la dictée et l’Assistant",
-              "2": "Ajouter les identifiants via le stockage sécurisé",
-              "3": "Tester chaque connexion avant l’activation"
-            }
-          },
-          "local": {
-            "title": "La configuration locale demande quelques étapes supplémentaires",
-            "description": "Le traitement local garde votre voix sur cet appareil, mais nécessite une configuration initiale et au moins {{minimumSpace}} Go d’espace libre.",
-            "continue": "Configurer en local",
-            "steps": {
-              "1": "Choisir un moteur de transcription",
-              "2": "Configurer ou télécharger un modèle, environ {{modelSize}}",
-              "3": "Attendre l’installation et l’activation"
-            }
-          }
-        },
-        "useCloud": "Utiliser Cloud à la place",
-        "continueSetup": "Poursuivre la configuration",
         "showMore": "Afficher plus d’options",
         "moreOptions": {
           "title": "Choisissez votre configuration d’API",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "Configurer les modèles locaux",
-        "description": "Choisissez les modèles à exécuter sur votre appareil.",
-        "descriptionLineOne": "Choisissez les modèles à exécuter",
-        "descriptionLineTwo": "sur votre appareil.",
-        "providerLabel": "Fournisseur",
-        "download": "Télécharger",
         "downloadingShort": "Téléchargement",
-        "selected": "Sélectionné",
-        "use": "Utiliser",
         "downloadInProgress": "Téléchargement en cours",
         "cancelDownload": "Annuler le téléchargement de {{model}}",
         "downloads": "Téléchargements de modèles",

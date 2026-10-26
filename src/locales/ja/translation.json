@@ -354,34 +354,10 @@
           "features": {
             "device": "デバイス上で動作",
             "offline": "設定後はオフラインで動作",
-            "models": "ディクテーションとアシスタント用のモデルを選択",
+            "setup": "このコンピュータに合わせて設定",
             "free": "ずっと無料で使える"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "データはプロバイダーが取り扱います",
-            "description": "ディクテーションと Assistant のプロバイダーそれぞれに認証情報を追加します。プロバイダーの料金と保持ポリシーが適用されます。",
-            "continue": "API プロバイダーを設定",
-            "steps": {
-              "1": "ディクテーションと Assistant のプロバイダーを選ぶ",
-              "2": "安全なストレージを使って認証情報を追加する",
-              "3": "有効化する前に各接続をテストする"
-            }
-          },
-          "local": {
-            "title": "ローカル設定には追加の手順がいくつか必要です",
-            "description": "ローカル処理では音声がこのデバイスに留まりますが、初回の設定と {{minimumSpace}} GB 以上の空き容量が必要です。",
-            "continue": "ローカルでセットアップ",
-            "steps": {
-              "1": "文字起こしエンジンを選ぶ",
-              "2": "モデルを設定またはダウンロードする（約 {{modelSize}}）",
-              "3": "インストールと有効化を待つ"
-            }
-          }
-        },
-        "useCloud": "代わりにクラウドを使う",
-        "continueSetup": "セットアップを続ける",
         "showMore": "その他のオプションを表示",
         "moreOptions": {
           "title": "API の設定方法を選択",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "ローカルモデルを設定",
-        "description": "デバイス上で実行するモデルを選択してください。",
-        "descriptionLineOne": "デバイス上で実行する",
-        "descriptionLineTwo": "モデルを選択してください。",
-        "providerLabel": "プロバイダー",
-        "download": "ダウンロード",
         "downloadingShort": "ダウンロード中",
-        "selected": "選択済み",
-        "use": "使用",
         "downloadInProgress": "ダウンロード中",
         "cancelDownload": "{{model}} のダウンロードをキャンセル",
         "downloads": "モデルのダウンロード",

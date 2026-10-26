@@ -333,34 +333,10 @@
           "features": {
             "device": "Roda no seu dispositivo",
             "offline": "Funciona offline depois da configuração",
-            "models": "Escolha modelos para ditado e assistente",
+            "setup": "Configurado para este computador",
             "free": "Grátis para sempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Seu provedor cuida dos seus dados",
-            "description": "Você vai adicionar credenciais para provedores separados de ditado e Assistant. Os preços e as políticas de retenção do provedor se aplicam.",
-            "continue": "Configurar provedor de API",
-            "steps": {
-              "1": "Escolha provedores para ditado e Assistant",
-              "2": "Adicione credenciais com armazenamento seguro",
-              "3": "Teste cada conexão antes de ativar"
-            }
-          },
-          "local": {
-            "title": "A configuração local leva alguns passos extras",
-            "description": "O processamento local mantém sua fala neste dispositivo, mas exige uma configuração inicial e pelo menos {{minimumSpace}} GB de espaço livre.",
-            "continue": "Configurar localmente",
-            "steps": {
-              "1": "Escolha um motor de transcrição",
-              "2": "Configure ou baixe um modelo, cerca de {{modelSize}}",
-              "3": "Aguarde a instalação e a ativação"
-            }
-          }
-        },
-        "useCloud": "Usar a Nuvem em vez disso",
-        "continueSetup": "Continuar a configuração",
         "showMore": "Mostrar mais opções",
         "moreOptions": {
           "title": "Escolha sua configuração de API",
@@ -415,15 +391,7 @@
         }
       },
       "local": {
-        "title": "Configurar modelos locais",
-        "description": "Escolha os modelos que você quer executar no seu dispositivo.",
-        "descriptionLineOne": "Escolha os modelos que você quer",
-        "descriptionLineTwo": "executar no seu dispositivo.",
-        "providerLabel": "Provedor",
-        "download": "Baixar",
         "downloadingShort": "Baixando",
-        "selected": "Selecionado",
-        "use": "Usar",
         "downloadInProgress": "Download em andamento",
         "cancelDownload": "Cancelar o download de {{model}}",
         "downloads": "Downloads de modelos",

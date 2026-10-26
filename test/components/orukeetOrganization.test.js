@@ -29,26 +29,6 @@ async function render(vite, element) {
   return renderToStaticMarkup(React.createElement(ToastProvider, null, element));
 }
 
-test("onboarding restores an Oruk draft without mixing NVIDIA models", async (t) => {
-  const vite = await renderer(t);
-  const { LocalModelSetupStep } = await vite.ssrLoadModule(
-    "/components/onboarding/ProviderSetupStep.tsx"
-  );
-  const markup = await render(
-    vite,
-    React.createElement(LocalModelSetupStep, {
-      stepId: "local-dictation",
-      resumeState: { provider: "oruk", modelId: "orukeet-v0.1.0" },
-      onReadinessChange: noop,
-      onProceed: noop,
-      onSkip: noop,
-    })
-  );
-  assert.match(markup, />Oruk</);
-  assert.match(markup, />Orukeet</);
-  assert.doesNotMatch(markup, />Parakeet TDT/);
-});
-
 test("all three model pickers restore the Oruk tab from the persisted Orukeet choice", async (t) => {
   const vite = await renderer(t);
   const { default: Picker } = await vite.ssrLoadModule("/components/TranscriptionModelPicker.tsx");

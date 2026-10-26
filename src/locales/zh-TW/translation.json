@@ -354,34 +354,10 @@
           "features": {
             "device": "在你的裝置上執行",
             "offline": "設定完成後可離線使用",
-            "models": "為語音輸入與助理選擇模型",
+            "setup": "為這台電腦量身設定",
             "free": "永久免費使用"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "你的資料由服務商處理",
-            "description": "你需要分別為語音輸入與 Assistant 服務商新增憑證。將適用服務商的定價與資料保留政策。",
-            "continue": "設定 API 服務商",
-            "steps": {
-              "1": "為語音輸入與 Assistant 選擇服務商",
-              "2": "使用安全儲存新增憑證",
-              "3": "啟用前測試每個連線"
-            }
-          },
-          "local": {
-            "title": "本機設定需要多幾個步驟",
-            "description": "本機處理會把你的語音保留在這台裝置上，但需要一次性設定和至少 {{minimumSpace}} GB 可用空間。",
-            "continue": "本機設定",
-            "steps": {
-              "1": "選擇逐字稿引擎",
-              "2": "設定或下載模型，約 {{modelSize}}",
-              "3": "等待安裝與啟用"
-            }
-          }
-        },
-        "useCloud": "改用雲端",
-        "continueSetup": "繼續設定",
         "showMore": "顯示更多選項",
         "moreOptions": {
           "title": "選擇你的 API 設定方式",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "設定本機模型",
-        "description": "選擇你想在裝置上執行的模型。",
-        "descriptionLineOne": "選擇你想在裝置上",
-        "descriptionLineTwo": "執行的模型。",
-        "providerLabel": "服務商",
-        "download": "下載",
         "downloadingShort": "下載中",
-        "selected": "已選擇",
-        "use": "使用",
         "downloadInProgress": "下載進行中",
         "cancelDownload": "取消下載 {{model}}",
         "downloads": "模型下載",

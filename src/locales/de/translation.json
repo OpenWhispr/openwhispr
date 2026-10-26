@@ -354,34 +354,10 @@
           "features": {
             "device": "Läuft auf Ihrem Gerät",
             "offline": "Funktioniert nach der Einrichtung offline",
-            "models": "Modelle für Diktat und Assistant wählen",
+            "setup": "Für diesen Computer eingerichtet",
             "free": "Für immer kostenlos"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Ihr Anbieter verarbeitet Ihre Daten",
-            "description": "Sie fügen Zugangsdaten für separate Diktat- und Assistant-Anbieter hinzu. Es gelten die Preise und Aufbewahrungsrichtlinien des Anbieters.",
-            "continue": "API-Anbieter einrichten",
-            "steps": {
-              "1": "Anbieter für Diktat und Assistant wählen",
-              "2": "Zugangsdaten über sichere Speicherung hinzufügen",
-              "3": "Jede Verbindung vor der Aktivierung testen"
-            }
-          },
-          "local": {
-            "title": "Die lokale Einrichtung erfordert ein paar zusätzliche Schritte",
-            "description": "Die lokale Verarbeitung behält Ihre Sprache auf diesem Gerät, erfordert aber eine einmalige Einrichtung und mindestens {{minimumSpace}} GB freien Speicher.",
-            "continue": "Lokal einrichten",
-            "steps": {
-              "1": "Transkriptions-Engine wählen",
-              "2": "Modell konfigurieren oder herunterladen, etwa {{modelSize}}",
-              "3": "Auf Installation und Aktivierung warten"
-            }
-          }
-        },
-        "useCloud": "Stattdessen Cloud verwenden",
-        "continueSetup": "Einrichtung fortsetzen",
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "Lokale Modelle einrichten",
-        "description": "Wählen Sie die Modelle, die auf Ihrem Gerät laufen sollen.",
-        "descriptionLineOne": "Wählen Sie die Modelle, die",
-        "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
-        "providerLabel": "Anbieter",
-        "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
-        "selected": "Ausgewählt",
-        "use": "Verwenden",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",

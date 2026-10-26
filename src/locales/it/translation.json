@@ -354,34 +354,10 @@
           "features": {
             "device": "Funziona sul tuo dispositivo",
             "offline": "Funziona offline dopo la configurazione",
-            "models": "Scegli i modelli per dettatura e assistente",
+            "setup": "Configurato per questo computer",
             "free": "Gratis per sempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Il tuo provider gestisce i tuoi dati",
-            "description": "Aggiungerai le credenziali per provider separati di dettatura e Assistant. Si applicano i prezzi e i criteri di conservazione del provider.",
-            "continue": "Configura il provider API",
-            "steps": {
-              "1": "Scegli i provider per dettatura e Assistant",
-              "2": "Aggiungi le credenziali con l’archiviazione sicura",
-              "3": "Prova ogni connessione prima dell’attivazione"
-            }
-          },
-          "local": {
-            "title": "La configurazione locale richiede qualche passaggio in più",
-            "description": "L’elaborazione locale mantiene la tua voce su questo dispositivo, ma richiede una configurazione iniziale e almeno {{minimumSpace}} GB di spazio libero.",
-            "continue": "Configura in locale",
-            "steps": {
-              "1": "Scegli un motore di trascrizione",
-              "2": "Configura o scarica un modello, circa {{modelSize}}",
-              "3": "Attendi installazione e attivazione"
-            }
-          }
-        },
-        "useCloud": "Usa Cloud invece",
-        "continueSetup": "Continua la configurazione",
         "showMore": "Mostra altre opzioni",
         "moreOptions": {
           "title": "Scegli la tua configurazione API",
@@ -436,15 +412,7 @@
         }
       },
       "local": {
-        "title": "Configura i modelli locali",
-        "description": "Scegli i modelli da eseguire sul tuo dispositivo.",
-        "descriptionLineOne": "Scegli i modelli da eseguire",
-        "descriptionLineTwo": "sul tuo dispositivo.",
-        "providerLabel": "Provider",
-        "download": "Scarica",
         "downloadingShort": "Download",
-        "selected": "Selezionato",
-        "use": "Usa",
         "downloadInProgress": "Download in corso",
         "cancelDownload": "Annulla il download di {{model}}",
         "downloads": "Download dei modelli",

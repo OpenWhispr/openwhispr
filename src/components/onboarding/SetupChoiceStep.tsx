@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useRef, useState } from "react";
+import { useState } from "react";
 import {
   AlertCircle,
   BanknoteCheck,
@@ -16,33 +16,28 @@ import {
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
-import {
-  getParakeetModelInfo,
-  getTranscriptionProviders,
-  modelRegistry,
-} from "../../models/ModelRegistry";
+import { getTranscriptionProviders, modelRegistry } from "../../models/ModelRegistry";
 import type { OnboardingSetupMode } from "./flow";
 import { getOnboardingSetupAvailability, hasAvailableOnboardingSetup } from "./setupEligibility";
 import { BrandMark } from "./OnboardingShell";
 import { LOCAL_ASR_ORGANIZATIONS } from "../../helpers/localASROrganization";
 import { getProviderIcon, isMonochromeProvider } from "@/utils/providerIcons";
 import { cn } from "../lib/utils";
-// Only the Local card opens the warning dialog now — BYOK goes
-// straight through from the "Choose your API setup" modal.
-import warningBackdrop from "../../assets/onboarding-setup-warning-hero.webp";
 import apiSetupHero from "../../assets/onboarding-api-setup-hero.webp";
 
 type SetupMode = Exclude<OnboardingSetupMode, null>;
-type AdvancedSetupMode = Exclude<SetupMode, "cloud">;
-// Local opens the warning dialog; BYOK is selected directly from the
-// more-options modal, so a "byok" pending state is unreachable.
-type WarningSetupMode = Exclude<AdvancedSetupMode, "byok">;
 
-const REFERENCE_LOCAL_MODEL_ID = "nemotron-3.5-asr-streaming-0.6b";
+// What the Local card quotes until OnboardingFlow has worked out the local setup.
+const DEFAULT_LOCAL_SPACE_GB = 2;
 
 interface SetupChoiceStepProps {
   isSignedIn: boolean;
   agentAllowed: boolean;
+  /**
+   * Free space the local setup needs, in whole GB: every recommended row on,
+   * with the room each download reserves to unpack.
+   */
+  localSpaceGb?: number;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
   onRequestAuthentication: () => void;
 }
@@ -92,21 +87,20 @@ function SetupCard({ children }: { children: React.ReactNode }) {
 }
 
 // Figma "Frame 25": pad 8 20, radius 38, 14/140% medium. Brand fill or stroke.
-const CardAction = forwardRef<
-  HTMLButtonElement,
-  {
-    brand?: boolean;
-    className?: string;
-    onClick: () => void;
-    children: string;
-  }
->(function CardAction({ brand = false, className = "", onClick, children }, ref) {
+function CardAction({
+  brand = false,
+  onClick,
+  children,
+}: {
+  brand?: boolean;
+  onClick: () => void;
+  children: string;
+}) {
   return (
     <button
-      ref={ref}
       type="button"
       onClick={onClick}
-      className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-4 py-1.5 text-xs font-medium leading-[1.4] ${className} ${
+      className={`onboarding-pressable relative z-10 w-full rounded-[38px] px-4 py-1.5 text-xs font-medium leading-[1.4] ${
         brand
           ? "bg-[var(--onboarding-accent)] text-[var(--onboarding-accent-foreground)] hover:brightness-95"
           : "border border-[var(--onboarding-control-border)] text-[var(--onboarding-text-primary)] hover:bg-[var(--onboarding-surface-hover)]"
@@ -115,31 +109,18 @@ const CardAction = forwardRef<
       {children}
     </button>
   );
-});
+}
 
 export default function SetupChoiceStep({
   isSignedIn,
   agentAllowed,
+  localSpaceGb = DEFAULT_LOCAL_SPACE_GB,
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
-  const [pending, setPending] = useState<WarningSetupMode | null>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
   const [showMore, setShowMore] = useState(false);
-
-  const localReferenceModel = getParakeetModelInfo(REFERENCE_LOCAL_MODEL_ID);
-  // Two deliberately different numbers: the setup steps quote the transfer, so
-  // they get the model's own download size, while the disk figure is rounded up
-  // and floored at 2 GB because the model arrives as an archive and needs room
-  // to unpack — quoting only the compressed size as the space requirement can
-  // send a user into a setup that runs out of disk.
-  const localModelSize = (localReferenceModel?.size ?? t("common.unknown")).replace(
-    /(\d)([A-Za-z])/,
-    "$1 $2"
-  );
-  const minimumLocalSpaceGb = Math.max(2, Math.ceil((localReferenceModel?.sizeMb ?? 0) / 1000));
 
   const availability = getOnboardingSetupAvailability({
     policy,
@@ -160,26 +141,6 @@ export default function SetupChoiceStep({
     else onRequestAuthentication();
   };
 
-  const confirmPending = () => {
-    if (!pending) return;
-    onSelect(pending);
-    setPending(null);
-  };
-
-  // Radix otherwise focuses the first action (the Cloud escape hatch). Keep
-  // Enter aligned with the mode the user just selected by focusing Proceed.
-  const handleWarningAutoFocus = (event: Event) => {
-    event.preventDefault();
-    confirmRef.current?.focus();
-  };
-
-  const warningSteps = pending
-    ? [1, 2, 3].map((step) =>
-        t(`onboarding.rehaul.setupChoice.warnings.${pending}.steps.${step}`, {
-          modelSize: localModelSize,
-        })
-      )
-    : [];
   const moreSetupOptions: MoreSetupOption[] = [];
   if (byokAllowed) {
     moreSetupOptions.push({
@@ -265,7 +226,7 @@ export default function SetupChoiceStep({
                   </h2>
                   <p className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
                     {t("onboarding.rehaul.setupChoice.local.description", {
-                      minimumSpace: minimumLocalSpaceGb,
+                      minimumSpace: localSpaceGb,
                     })}
                   </p>
                 </div>
@@ -279,7 +240,7 @@ export default function SetupChoiceStep({
                     {t("onboarding.rehaul.setupChoice.local.features.offline")}
                   </Feature>
                   <Feature icon={GalleryVerticalEnd}>
-                    {t("onboarding.rehaul.setupChoice.local.features.models")}
+                    {t("onboarding.rehaul.setupChoice.local.features.setup")}
                   </Feature>
                   <Feature icon={BanknoteCheck}>
                     {t("onboarding.rehaul.setupChoice.local.features.free")}
@@ -287,7 +248,9 @@ export default function SetupChoiceStep({
                 </ul>
               </div>
             </div>
-            <CardAction onClick={() => setPending("local")}>
+            {/* Straight to the local setup step: it shows what will download, how
+                big it is and how fast it will feel before anything starts. */}
+            <CardAction onClick={() => onSelect("local")}>
               {t("onboarding.rehaul.setupChoice.local.download")}
             </CardAction>
           </SetupCard>
@@ -365,8 +328,7 @@ export default function SetupChoiceStep({
 
       {/* Figma "Frame 2147258999": 460 wide, radius 28, pad 24/20/32/20, col gap
           32, over a 20% black scrim at backdrop-blur(11). Picking a row goes
-          straight to that setup step — deliberately skipping the warning dialog
-          the cards use, since the user has already made an explicit choice here. */}
+          straight to that setup step. */}
       <Dialog open={showMore} onOpenChange={(open) => !open && setShowMore(false)}>
         <DialogContent
           overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
@@ -438,101 +400,6 @@ export default function SetupChoiceStep({
                 </button>
               ))}
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
-        <DialogContent
-          overlayClassName="bg-[var(--onboarding-scrim)]! backdrop-blur-[11px]"
-          className="w-full max-w-sm gap-6 rounded-3xl border-0 bg-[var(--onboarding-surface)] px-4 pb-6 pt-5 text-start text-[var(--onboarding-text-primary)] [&>button]:hidden"
-          onOpenAutoFocus={handleWarningAutoFocus}
-        >
-          {/* Frame 2147258979: 238 tall, radius 20, image crop. The three marks
-              are 32 / 55 / 32 on a 14 gap, with the outer two at 72% white so the
-              middle one reads as the subject. */}
-          <div
-            className="flex h-[190px] items-center justify-center rounded-2xl bg-cover bg-center"
-            style={{ backgroundImage: `url(${warningBackdrop})` }}
-          >
-            <div className="flex items-center gap-3.5">
-              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_72%,transparent)] text-[var(--onboarding-text-tertiary)]">
-                <KeyRound className="size-4" strokeWidth={1.25} />
-              </span>
-              <span className="flex size-[55px] items-center justify-center rounded-full border-[1.83px] border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] text-[var(--onboarding-accent)]">
-                <Laptop className="size-[22px]" strokeWidth={2.14} />
-              </span>
-              <span className="flex size-8 items-center justify-center rounded-full border border-[var(--onboarding-control-border)] bg-[color-mix(in_srgb,var(--onboarding-surface)_72%,transparent)] text-[var(--onboarding-text-tertiary)]">
-                <Server className="size-4" strokeWidth={1.25} />
-              </span>
-            </div>
-          </div>
-
-          {/* Frame 2147259001: col gap 28. */}
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              {/* Important modifiers again: DialogTitle is an h2, and the global
-                  h1–h6 rule forces line-height 1.15 and -0.025em tracking. */}
-              <DialogTitle className="text-lg! font-semibold! leading-[1.4]! tracking-normal! text-[var(--onboarding-text-primary)]">
-                {pending ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.title`) : ""}
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-[1.4] text-[var(--onboarding-text-secondary)]">
-                {pending
-                  ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.description`, {
-                      minimumSpace: minimumLocalSpaceGb,
-                    })
-                  : ""}
-              </DialogDescription>
-            </div>
-
-            {/* Frame 2147258993: no gap between rows — the dashed connectors are
-                real elements that supply the spacing, so the line runs continuously
-                through the column of numbers. */}
-            <ol className="flex flex-col">
-              {warningSteps.map((step, index) => (
-                <Fragment key={step}>
-                  {index > 0 && (
-                    <li className="h-[26.5px] w-7 shrink-0" aria-hidden="true">
-                      <span className="mx-auto block h-full w-0 border-l border-dashed border-[var(--onboarding-surface-tertiary)]" />
-                    </li>
-                  )}
-                  <li className="flex items-center gap-2">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[var(--onboarding-inverse-surface)] text-sm leading-[1.32] text-[var(--onboarding-inverse-text)]">
-                      {index + 1}
-                    </span>
-                    <span className="flex-1 text-sm font-medium leading-[1.32] text-[var(--onboarding-text-primary)]">
-                      {step}
-                    </span>
-                  </li>
-                </Fragment>
-              ))}
-            </ol>
-          </div>
-
-          {/* The same pill pair the cards use (pad 8 20, radius 38, 14/140%
-              medium) rather than shadcn Buttons, which came in at h-8/text-xs
-              with font-semibold and an outline variant whose border did not
-              render against white. */}
-          {/* Frame 2147259003: row, gap 10, both actions growing equally. */}
-          {/* The escape hatch is secondary on the left; proceeding with the mode
-              the user selected is primary on the right. */}
-          <div className="flex gap-2.5">
-            {cloudAllowed && (
-              <CardAction
-                className="flex-1"
-                onClick={() => {
-                  setPending(null);
-                  chooseCloud();
-                }}
-              >
-                {t("onboarding.rehaul.setupChoice.useCloud")}
-              </CardAction>
-            )}
-            <CardAction ref={confirmRef} brand className="flex-1" onClick={confirmPending}>
-              {pending
-                ? t(`onboarding.rehaul.setupChoice.warnings.${pending}.continue`)
-                : t("onboarding.rehaul.setupChoice.continueSetup")}
-            </CardAction>
           </div>
         </DialogContent>
       </Dialog>
