@@ -5916,6 +5916,10 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("get-computer-profile", () =>
+      require("./computerProfile").readComputerProfile()
+    );
+
     ipcMain.handle("get-llama-vulkan-status", async () => {
       try {
         if (!this._llamaVulkanManager) {

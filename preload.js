@@ -739,6 +739,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Vulkan GPU acceleration
   detectVulkanGpu: () => ipcRenderer.invoke("detect-vulkan-gpu"),
+  getComputerProfile: () => ipcRenderer.invoke("get-computer-profile"),
   getLlamaVulkanStatus: () => ipcRenderer.invoke("get-llama-vulkan-status"),
   downloadLlamaVulkanBinary: () => ipcRenderer.invoke("download-llama-vulkan-binary"),
   cancelLlamaVulkanDownload: () => ipcRenderer.invoke("cancel-llama-vulkan-download"),
