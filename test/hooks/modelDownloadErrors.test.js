@@ -16,7 +16,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function createDownloadRenderer(t, electronAPI) {
+async function createDownloadRenderer(t, electronAPI, extraMocks = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -44,6 +44,7 @@ async function createDownloadRenderer(t, electronAPI) {
       `,
       "/ProviderSetupStep": `export const SETUP_CARD_CLASS = "";`,
       "/ui/ProviderIcon": `export function ProviderIcon() { return null; }`,
+      ...extraMocks,
     },
   });
   return {
@@ -382,3 +383,112 @@ for (const modelType of ["whisper", "parakeet", "llm"]) {
     if (modelType !== "llm") assert.equal(download.downloadProgress.percentage, 42);
   });
 }
+
+// Records every alert the hook raises, so a test can prove none was shown.
+const RECORDING_DIALOGS = {
+  "/useDialogs": `
+    export function useDialogs() {
+      return { showAlertDialog: (options) => globalThis.__modelDownloadAlerts.push(options) };
+    }
+  `,
+};
+
+async function renderParakeetDownload(t, electronAPI, options = {}) {
+  const alerts = [];
+  globalThis.__modelDownloadAlerts = alerts;
+  t.after(() => delete globalThis.__modelDownloadAlerts);
+  const renderer = await createDownloadRenderer(
+    t,
+    {
+      onParakeetDownloadProgress: () => () => {},
+      modelGetActiveDownloads: async () => [],
+      ...electronAPI,
+    },
+    RECORDING_DIALOGS
+  );
+  const { useModelDownload } = await renderer.vite.ssrLoadModule("/hooks/useModelDownload.ts");
+  const hook = {};
+  function Harness() {
+    hook.current = useModelDownload({ modelType: "parakeet", ...options });
+    return null;
+  }
+  await renderer.render(Harness);
+  const download = async (modelId) => {
+    let result;
+    await React.act(async () => {
+      result = await hook.current.downloadModel(modelId);
+    });
+    return result;
+  };
+  return { alerts, hook, download };
+}
+
+test("showErrorDialog false records the error without a dialog and resolves false", async (t) => {
+  const responses = [
+    { success: false, code: "ENOTFOUND", error: "ENOTFOUND" },
+    { success: true },
+  ];
+  let progressListener;
+  const { alerts, hook, download } = await renderParakeetDownload(
+    t,
+    {
+      downloadParakeetModel: async () => responses.shift(),
+      onParakeetDownloadProgress(listener) {
+        progressListener = listener;
+        return () => {};
+      },
+    },
+    { showErrorDialog: false }
+  );
+
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(hook.current.downloadErrors, {
+    "model-a": "hooks.modelDownload.errors.notFound",
+  });
+  assert.equal(alerts.length, 0);
+
+  assert.equal(await download("model-a"), true, "a success resolves true");
+  assert.deepEqual(hook.current.downloadErrors, {});
+
+  // A failure reported for a transfer this hook did not start stays silent too.
+  await React.act(async () => {
+    progressListener(null, {
+      model: "model-b",
+      type: "error",
+      error: "ENOTFOUND",
+      code: "ENOTFOUND",
+      sequence: 3,
+    });
+  });
+  assert.equal(hook.current.downloadErrors["model-b"], "hooks.modelDownload.errors.notFound");
+  assert.equal(alerts.length, 0);
+});
+
+test("downloadModel resolves false when the request throws or is cancelled", async (t) => {
+  const responses = [
+    () => Promise.reject(new Error("socket hang up")),
+    async () => ({ success: false, code: "DOWNLOAD_CANCELLED", error: "Download cancelled" }),
+  ];
+  const { alerts, hook, download } = await renderParakeetDownload(
+    t,
+    { downloadParakeetModel: () => responses.shift()() },
+    { showErrorDialog: false }
+  );
+  assert.equal(await download("model-a"), false);
+  assert.match(hook.current.downloadErrors["model-a"], /hooks\.modelDownload\.errors\./);
+  assert.equal(await download("model-a"), false);
+  assert.equal(alerts.length, 0);
+});
+
+test("the error dialog still shows by default", async (t) => {
+  const { alerts, download } = await renderParakeetDownload(t, {
+    downloadParakeetModel: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(alerts, [
+    {
+      title: "hooks.modelDownload.downloadFailed.title",
+      description: "hooks.modelDownload.errors.notFound",
+    },
+  ]);
+});

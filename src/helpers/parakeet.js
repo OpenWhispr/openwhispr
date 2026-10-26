@@ -23,6 +23,9 @@ const {
   isSherpaLocalProvider,
 } = require("./parakeetModelInfo");
 
+// Room a download reserves: the archive plus its unpacked model while both exist.
+const PARAKEET_DISK_SPACE_FACTOR = 2.5;
+
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
   if (!modelInfo) return null;
@@ -353,10 +356,13 @@ class ParakeetManager {
     try {
       await fsPromises.mkdir(modelsDir, { recursive: true });
 
-      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 2.5);
+      const spaceCheck = await checkDiskSpace(
+        modelsDir,
+        modelConfig.size * PARAKEET_DISK_SPACE_FACTOR
+      );
       if (!spaceCheck.ok) {
         throw new Error(
-          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * 2.5) / 1_000_000)}MB, ` +
+          `Not enough disk space to download and extract model. Need ~${Math.round((modelConfig.size * PARAKEET_DISK_SPACE_FACTOR) / 1_000_000)}MB, ` +
             `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
         );
       }
@@ -737,3 +743,4 @@ class ParakeetManager {
 }
 
 module.exports = ParakeetManager;
+module.exports.PARAKEET_DISK_SPACE_FACTOR = PARAKEET_DISK_SPACE_FACTOR;

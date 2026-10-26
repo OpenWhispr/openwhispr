@@ -22,6 +22,8 @@ const {
 const modelRegistryData = require("../models/modelRegistryData.json");
 
 const CACHE_TTL_MS = 30000;
+// Room a download reserves: the model file plus headroom.
+const WHISPER_DISK_SPACE_FACTOR = 1.2;
 
 function getWhisperModelConfig(modelName) {
   const modelInfo = modelRegistryData.whisperModels[modelName];
@@ -736,10 +738,13 @@ class WhisperManager {
     try {
       await fsPromises.mkdir(modelsDir, { recursive: true });
 
-      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 1.2);
+      const spaceCheck = await checkDiskSpace(
+        modelsDir,
+        modelConfig.size * WHISPER_DISK_SPACE_FACTOR
+      );
       if (!spaceCheck.ok) {
         throw new Error(
-          `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * 1.2) / 1_000_000)}MB, ` +
+          `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * WHISPER_DISK_SPACE_FACTOR) / 1_000_000)}MB, ` +
             `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
         );
       }
@@ -1056,3 +1061,4 @@ class WhisperManager {
 module.exports = WhisperManager;
 module.exports.shouldRewarmOnWake = shouldRewarmOnWake;
 module.exports.resolveFailedGpuBackends = resolveFailedGpuBackends;
+module.exports.WHISPER_DISK_SPACE_FACTOR = WHISPER_DISK_SPACE_FACTOR;

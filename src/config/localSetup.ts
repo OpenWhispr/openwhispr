@@ -346,6 +346,77 @@ export function enabledDownloads(
   return out;
 }
 
+export type SpaceState = "fits" | "trimmed" | "overflow" | "noSpace";
+/** The room each download kind reserves while it downloads and unpacks (main's disk checks). */
+export type LocalSetupFactors = Record<LocalSetupDownload["kind"], number>;
+
+/** Free disk space the downloads need, counting the room each one reserves. */
+export function localSetupRequiredBytes(
+  items: LocalSetupDownload[],
+  factors: LocalSetupFactors
+): number {
+  return items.reduce((sum, item) => sum + item.bytes * (factors[item.kind] ?? 1), 0);
+}
+
+// Turned off in this order until the downloads fit (design §4.5).
+const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
+
+/**
+ * Fits the switched-on rows to the free space. A switch the user set in
+ * `requested` is kept as set; one left out starts on and may be turned off to fit,
+ * the assistant first, then cleanup. When the user's own switches don't fit, the
+ * state is "overflow" and the download stays locked instead of re-trimming them.
+ * `requiredBytes` is what the resulting switches need, or dictation alone for
+ * "noSpace".
+ */
+export function fitLocalSetupToSpace(
+  plan: LocalSetupPlan,
+  requested: Partial<LocalSetupSwitches>,
+  space: { availableBytes: number; factors: LocalSetupFactors }
+): {
+  switches: LocalSetupSwitches;
+  autoOff: LocalSetupRowId[];
+  state: SpaceState;
+  requiredBytes: number;
+} {
+  const need = (switches: LocalSetupSwitches) =>
+    localSetupRequiredBytes(
+      enabledDownloads(plan, switches).flatMap((row) => row.items),
+      space.factors
+    );
+  const fits = (bytes: number) => bytes <= space.availableBytes;
+
+  const switches: LocalSetupSwitches = {
+    cleanup: requested.cleanup ?? true,
+    assistant: requested.assistant ?? true,
+  };
+  const autoOff: LocalSetupRowId[] = [];
+  const trimmable = (id: keyof LocalSetupSwitches) => {
+    const row = plan.rows.find((r) => r.id === id);
+    return requested[id] === undefined && switches[id] && !!row && row.label !== "unavailable";
+  };
+
+  const dictationOnly = need({ cleanup: false, assistant: false });
+  if (!fits(dictationOnly)) {
+    for (const id of TRIM_ORDER) {
+      if (!trimmable(id)) continue;
+      switches[id] = false;
+      autoOff.push(id);
+    }
+    return { switches, autoOff, state: "noSpace", requiredBytes: dictationOnly };
+  }
+
+  for (const id of TRIM_ORDER) {
+    if (fits(need(switches))) break;
+    if (!trimmable(id)) continue;
+    switches[id] = false;
+    autoOff.push(id);
+  }
+  const requiredBytes = need(switches);
+  const state: SpaceState = !fits(requiredBytes) ? "overflow" : autoOff.length ? "trimmed" : "fits";
+  return { switches, autoOff, state, requiredBytes };
+}
+
 function registrySize(download: LocalSetupDownload): string {
   if (download.kind === "llm") return textModels.get(download.id)?.model.size ?? "";
   const info =

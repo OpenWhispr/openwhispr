@@ -440,3 +440,101 @@ test("the table is complete and reachable", async () => {
   }
   assert.ok(LABELS.includes(table.olderMacDictation.label));
 });
+
+const GB = 1e9;
+const factors = { whisper: 1.2, parakeet: 2.5, llm: 1.2, llamaVulkan: 1.5 };
+const space = (gb) => ({ availableBytes: gb * GB, factors });
+const llmBytes = (id) =>
+  registry.localProviders.flatMap((p) => p.models).find((m) => m.id === id).sizeBytes;
+// mac-m5-pro English: Parakeet EN 631 MB ×2.5, Qwen 2B ×1.2, Qwen 4B ×1.2 ≈ 6.62 GB in all.
+const DICTATION_NEED = 631e6 * 2.5;
+const CLEANUP_NEED = llmBytes("qwen3.5-2b-q4_k_m") * 1.2;
+const ASSISTANT_NEED = llmBytes("qwen3.5-4b-q4_k_m") * 1.2;
+
+test("required bytes apply each download's reserve factor", async () => {
+  const { localSetupRequiredBytes, enabledDownloads } = await load();
+  const p = await plan(mac({}));
+  const items = enabledDownloads(p, { cleanup: true, assistant: true }).flatMap((r) => r.items);
+  const total = DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED;
+  assert.ok(Math.abs(localSetupRequiredBytes(items, factors) - total) < 1);
+  assert.ok(Math.abs(total / GB - 6.62) < 0.01);
+
+  const nv = await plan(pc({ nvidia: rtx }));
+  const nvItems = enabledDownloads(nv, { cleanup: true, assistant: false }).flatMap((r) => r.items);
+  const nvNeed = DICTATION_NEED + CLEANUP_NEED + table.graphicsPackBytes["win32-x64"] * 1.5;
+  assert.ok(Math.abs(localSetupRequiredBytes(nvItems, factors) - nvNeed) < 1);
+  assert.equal(localSetupRequiredBytes([], factors), 0);
+});
+
+test("enough space changes nothing", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(mac({}));
+  const fit = fitLocalSetupToSpace(p, {}, space(100));
+  assert.deepEqual(fit.switches, { cleanup: true, assistant: true });
+  assert.deepEqual(fit.autoOff, []);
+  assert.equal(fit.state, "fits");
+  assert.ok(Math.abs(fit.requiredBytes - (DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED)) < 1);
+
+  const infinite = fitLocalSetupToSpace(p, {}, { availableBytes: Infinity, factors });
+  assert.equal(infinite.state, "fits");
+  const userOff = fitLocalSetupToSpace(p, { cleanup: false }, space(100));
+  assert.deepEqual(userOff.switches, { cleanup: false, assistant: true });
+  assert.equal(userOff.state, "fits");
+});
+
+test("short space turns the assistant off first, then cleanup", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(mac({}));
+
+  const four = fitLocalSetupToSpace(p, {}, space(4));
+  assert.deepEqual(four.autoOff, ["assistant"]);
+  assert.deepEqual(four.switches, { cleanup: true, assistant: false });
+  assert.equal(four.state, "trimmed");
+  assert.ok(Math.abs(four.requiredBytes - (DICTATION_NEED + CLEANUP_NEED)) < 1);
+
+  const two = fitLocalSetupToSpace(p, {}, space(2));
+  assert.deepEqual(two.autoOff, ["assistant", "cleanup"]);
+  assert.deepEqual(two.switches, { cleanup: false, assistant: false });
+  assert.equal(two.state, "trimmed");
+  assert.ok(Math.abs(two.requiredBytes - DICTATION_NEED) < 1);
+
+  // A row the computer can't run is never "turned off to fit".
+  const pc16 = await plan(pc({}));
+  assert.equal(row(pc16, "assistant").label, "unavailable");
+  const pcTwo = fitLocalSetupToSpace(pc16, {}, space(2));
+  assert.deepEqual(pcTwo.autoOff, ["cleanup"]);
+  assert.equal(pcTwo.state, "trimmed");
+
+  // A row the user switched off stays off and is not reported as trimmed.
+  const userOff = fitLocalSetupToSpace(p, { cleanup: false }, space(4));
+  assert.deepEqual(userOff.switches, { cleanup: false, assistant: false });
+  assert.deepEqual(userOff.autoOff, ["assistant"]);
+});
+
+test("dictation alone not fitting is noSpace", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(mac({}));
+  const fit = fitLocalSetupToSpace(p, {}, space(1.5));
+  assert.equal(fit.state, "noSpace");
+  assert.ok(Math.abs(fit.requiredBytes - DICTATION_NEED) < 1, "the foot line quotes dictation");
+  assert.deepEqual(fit.switches, { cleanup: false, assistant: false });
+  assert.deepEqual(fit.autoOff, ["assistant", "cleanup"]);
+});
+
+test("switching an auto-off row back on overflows", async () => {
+  const { fitLocalSetupToSpace } = await load();
+  const p = await plan(mac({}));
+  assert.deepEqual(fitLocalSetupToSpace(p, {}, space(4)).autoOff, ["assistant"]);
+
+  // The user's own switch is kept: the button stops working instead of re-trimming.
+  const back = fitLocalSetupToSpace(p, { assistant: true }, space(4));
+  assert.equal(back.state, "overflow");
+  assert.equal(back.switches.assistant, true);
+  assert.ok(back.requiredBytes > 4 * GB);
+
+  const both = fitLocalSetupToSpace(p, { cleanup: true, assistant: true }, space(4));
+  assert.equal(both.state, "overflow");
+  assert.deepEqual(both.switches, { cleanup: true, assistant: true });
+  assert.deepEqual(both.autoOff, []);
+  assert.ok(Math.abs(both.requiredBytes - (DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED)) < 1);
+});

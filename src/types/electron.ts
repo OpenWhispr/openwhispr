@@ -1243,6 +1243,12 @@ export interface ComputerProfile {
   systemLanguage: string; // base code of the first preferred system language, e.g. "pt"
 }
 
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  factors: Record<"whisper" | "parakeet" | "llm" | "llamaVulkan", number>;
+}
+
 export interface LlamaVulkanStatus {
   supported: boolean;
   downloaded: boolean;
@@ -2251,6 +2257,7 @@ declare global {
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
       getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;

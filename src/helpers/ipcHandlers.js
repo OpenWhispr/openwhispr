@@ -135,6 +135,7 @@ const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
+const { readLocalSetupSpace } = require("./localSetupSpace");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -5919,6 +5920,8 @@ class IPCHandlers {
     ipcMain.handle("get-computer-profile", () =>
       require("./computerProfile").readComputerProfile()
     );
+
+    ipcMain.handle("get-local-setup-space", () => readLocalSetupSpace());
 
     ipcMain.handle("get-llama-vulkan-status", async () => {
       try {
