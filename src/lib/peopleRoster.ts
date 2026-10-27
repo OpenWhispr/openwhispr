@@ -5,6 +5,20 @@ export const TEAM_SUMMARY_SHOWN = 2;
 
 const DAY_MS = 86_400_000;
 
+// One shared empty list, so a store selector returning it keeps the same reference across renders.
+const NO_MEMBERS: WorkspaceMember[] = [];
+
+/**
+ * The store's roster as `workspaceId`'s, or nothing when the store holds another workspace's:
+ * a request still in flight from before a workspace switch can answer for the old one.
+ */
+export function rosterFor(
+  state: { members: WorkspaceMember[]; membersWorkspaceId: string | null },
+  workspaceId: string | null | undefined
+): WorkspaceMember[] {
+  return workspaceId && state.membersWorkspaceId === workspaceId ? state.members : NO_MEMBERS;
+}
+
 export function filterMembers<M extends { name?: string | null; email?: string | null }>(
   members: M[],
   query: string

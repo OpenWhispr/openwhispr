@@ -42,6 +42,7 @@ async function loadDialog(t) {
   globalThis.__store = {
     members: MEMBERS,
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: async () => {},
   };
   const vite = await createRendererServer(t, {
@@ -195,6 +196,16 @@ test("a roster already in the store is read again, so a member who left isn't of
   assert.doesNotMatch(text, /Mia Member/);
 });
 
+test("a roster the store holds for another workspace offers nobody", async (t) => {
+  const { mount } = await loadDialog(t);
+  globalThis.__store.membersWorkspaceId = "w-previous";
+
+  const text = await mount({ kind: "choosing", candidateId: null });
+
+  assert.match(text, /workspaces\.transfer\.noCandidates/);
+  assert.doesNotMatch(text, /Adam Admin/);
+});
+
 // Picking enables Transfer ownership, which sits below the picker: a list opened downward put the
 // second click of a double-click on it, transferring before the confirmation was read.
 test("the candidate list opens upward and never flips over the buttons", async (t) => {
@@ -274,6 +285,7 @@ test("member load failure offers retry", async (t) => {
   globalThis.__store = {
     members: [],
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: async () => {
       calls++;
       throw new Error("offline");
@@ -302,6 +314,7 @@ test("an empty roster loads before the picker is offered", async (t) => {
   globalThis.__store = {
     members: [],
     activeWorkspaceId: "w1",
+    membersWorkspaceId: "w1",
     refreshMembers: () =>
       new Promise((resolve) => {
         release = resolve;

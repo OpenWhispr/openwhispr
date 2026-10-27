@@ -13,6 +13,11 @@ interface WorkspaceState {
   error: boolean;
   activeWorkspaceId: string | null;
   members: WorkspaceMember[];
+  /**
+   * The workspace `members` belongs to. A reader that shows one workspace reads the roster through
+   * `rosterFor`, so a list answered for another workspace never shows as this one's.
+   */
+  membersWorkspaceId: string | null;
 
   setActiveWorkspaceId: (id: string | null) => void;
   /**
@@ -166,19 +171,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   error: false,
   activeWorkspaceId: readActiveWorkspaceId(),
   members: [],
+  membersWorkspaceId: null,
 
   setActiveWorkspaceId: (id) => {
     writeActiveWorkspaceId(id);
     // Invalidate in-flight member fetches so the old workspace's roster can't
     // land under the new one.
     membersRequestSeq++;
-    set({ activeWorkspaceId: id, members: [] });
+    set({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
     refreshForWorkspace(id);
   },
 
   forgetWorkspace: (id) => {
     const workspaces = get().workspaces.filter((w) => w.id !== id);
-    set({ workspaces });
+    set(
+      get().membersWorkspaceId === id
+        ? { workspaces, members: [], membersWorkspaceId: null }
+        : { workspaces }
+    );
     pruneWorkspaceListCache(usePolicyStore.getState().accountId, id);
     // Chosen now, not by the refresh that follows: a failed refresh keeps the old active id.
     if (get().activeWorkspaceId === id) {
@@ -202,6 +212,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       error: false,
       activeWorkspaceId: null,
       members: [],
+      membersWorkspaceId: null,
     });
   },
 
@@ -275,7 +286,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const members = await WorkspacesService.listMembers(workspaceId);
       // Discard stale responses when a newer request targets another workspace.
       if (seq !== membersRequestSeq) return;
-      set({ members });
+      set({ members, membersWorkspaceId: workspaceId });
     } catch (error) {
       logger.error(
         "Failed to load workspace members",

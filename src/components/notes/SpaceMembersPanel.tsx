@@ -21,6 +21,7 @@ import { useToast } from "../ui/useToast";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { formatList } from "../../lib/formatList";
 import { orderMemberCandidates } from "../../lib/memberCandidates";
+import { rosterFor } from "../../lib/peopleRoster";
 import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import type { SpaceItem, TeamRole, WorkspaceMember } from "../../types/electron";
 
@@ -43,7 +44,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   } = useWorkspaceStore(
     useShallow((s) => ({
       workspace: s.workspaces.find((w) => w.id === space.workspace_id),
-      members: s.members,
+      members: rosterFor(s, space.workspace_id),
       refreshMembers: s.refreshMembers,
     }))
   );

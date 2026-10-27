@@ -14,7 +14,8 @@ export interface WorkspaceActionsDependencies {
     refreshMembers(workspaceId: string): Promise<void>;
     /** Ids from the last refresh, or null when it failed. */
     listedWorkspaceIds(): string[] | null;
-    memberRole(userId: string): WorkspaceMember["role"] | null;
+    /** The member's role in `workspaceId`'s last refreshed roster, or null when it isn't held. */
+    memberRole(workspaceId: string, userId: string): WorkspaceMember["role"] | null;
   };
   sync: { requestSyncAll(reason: string): void };
   /** Tells the plan badge and word limit to re-read the entitlement. */
@@ -99,7 +100,7 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
       () => deps.api.updateMemberRole(workspaceId, newOwnerId, "owner"),
       async () => {
         await deps.store.refreshMembers(workspaceId);
-        return deps.store.memberRole(newOwnerId) === "owner";
+        return deps.store.memberRole(workspaceId, newOwnerId) === "owner";
       }
     );
     await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));

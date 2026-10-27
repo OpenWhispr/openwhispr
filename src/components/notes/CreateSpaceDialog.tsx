@@ -23,6 +23,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import SpaceNameField from "./SpaceNameField";
 import { workspaceCan } from "../../lib/capabilities";
+import { rosterFor } from "../../lib/peopleRoster";
 import {
   manageableWorkspaces as findManageableWorkspaces,
   selectWorkspaceForSpaceCreation,
@@ -51,12 +52,14 @@ export default function CreateSpaceDialog({
     error: workspacesError,
     loading: workspacesLoading,
     members: roster,
+    membersWorkspaceId,
     refreshMembers,
   } = useWorkspaceStore(
     useShallow((s) => ({
       error: s.error,
       loading: s.loading,
       members: s.members,
+      membersWorkspaceId: s.membersWorkspaceId,
       refreshMembers: s.refreshMembers,
     }))
   );
@@ -134,9 +137,11 @@ export default function CreateSpaceDialog({
   const candidates = useMemo(
     () =>
       rosterWorkspaceId === workspace?.id
-        ? roster.filter((member) => member.user_id !== user?.id)
+        ? rosterFor({ members: roster, membersWorkspaceId }, workspace?.id).filter(
+            (member) => member.user_id !== user?.id
+          )
         : [],
-    [roster, rosterWorkspaceId, user?.id, workspace?.id]
+    [roster, membersWorkspaceId, rosterWorkspaceId, user?.id, workspace?.id]
   );
   const workspaceTeams = teamsWorkspaceId === workspace?.id ? teams : [];
   // Hold the section's place while the roster loads so the footer doesn't jump.

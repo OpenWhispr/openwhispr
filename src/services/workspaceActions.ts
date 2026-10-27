@@ -2,6 +2,7 @@ import { WorkspacesService } from "./WorkspacesService";
 import { syncService } from "./SyncService";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { createWorkspaceActions } from "./workspaceActionsCore";
+import { rosterFor } from "../lib/peopleRoster";
 
 // Single path for leaving, deleting and transferring a workspace, and removing a member: server call
 // → workspace store refresh → sync request. The orchestration lives in an
@@ -17,8 +18,9 @@ const actions = createWorkspaceActions({
       const { loaded, error, workspaces } = useWorkspaceStore.getState();
       return loaded && !error ? workspaces.map((w) => w.id) : null;
     },
-    memberRole: (userId) =>
-      useWorkspaceStore.getState().members.find((m) => m.user_id === userId)?.role ?? null,
+    memberRole: (workspaceId, userId) =>
+      rosterFor(useWorkspaceStore.getState(), workspaceId).find((m) => m.user_id === userId)
+        ?.role ?? null,
   },
   sync: syncService,
   notifyUsageChanged: () => window.dispatchEvent(new Event("usage-changed")),

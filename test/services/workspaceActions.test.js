@@ -51,7 +51,7 @@ function makeHarness({ failures = {}, lost = {}, refreshFails = false } = {}) {
           members = { ...server.roles };
         }),
       listedWorkspaceIds: () => (list.error ? null : list.workspaces),
-      memberRole: (userId) => members[userId] ?? null,
+      memberRole: (workspaceId, userId) => members[userId] ?? null,
     },
     sync: { requestSyncAll: (reason) => calls.push(["requestSyncAll", reason]) },
     notifyUsageChanged: () => calls.push(["usageChanged"]),

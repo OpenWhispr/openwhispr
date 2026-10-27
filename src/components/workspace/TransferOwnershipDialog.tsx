@@ -6,6 +6,7 @@ import {
   type TransferEvent,
   type TransferState,
 } from "../../lib/workspaceTransferFlow";
+import { rosterFor } from "../../lib/peopleRoster";
 import { serverRefusalMessage } from "../../services/cloudApi";
 import { transferOwnership } from "../../services/workspaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -42,7 +43,7 @@ export function TransferOwnershipDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const members = useWorkspaceStore((s) => s.members);
+  const members = useWorkspaceStore((s) => rosterFor(s, workspace.id));
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   const [load, setLoad] = useState<RosterLoad>("idle");
   const [loadAttempt, setLoadAttempt] = useState(0);
