@@ -37,7 +37,7 @@ async function mountUpcomingMeetings(t) {
   const { rustles } = await vite.ssrLoadModule("/utils/grassRustle");
   const { toasts } = await vite.ssrLoadModule("/components/ui/useToast");
   root = createRoot(container);
-  return { root, container, UpcomingMeetings, rustles, toasts };
+  return { root, container, UpcomingMeetings, rustles, toasts, vite };
 }
 
 function eventLaterToday() {
@@ -127,4 +127,54 @@ test("a calendar join the org refuses to record explains why in the panel", asyn
     takeNotes.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
   );
   assert.deepEqual(toasts, [{ title: "notes.meeting.recordingDisabledByOrg", variant: "default" }]);
+});
+
+test("with meeting recording off, a linked event only joins and a link-less one says why", async (t) => {
+  const { root, container, UpcomingMeetings, vite } = await mountUpcomingMeetings(t);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const opened = [];
+  const joins = [];
+  globalThis.window.electronAPI.openExternal = (url) => opened.push(url);
+  globalThis.window.electronAPI.joinCalendarMeeting = async (id) => joins.push(id);
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.0",
+    policy: { minAppVersion: null, features: { meetingRecordingEnabled: false } },
+  });
+  const linked = {
+    ...eventLaterToday(),
+    id: "linked",
+    hangout_link: "https://meet.google.com/abc-defg-hij",
+  };
+  await React.act(async () =>
+    root.render(
+      React.createElement(UpcomingMeetings, {
+        isLoading: false,
+        isConnected: true,
+        onConnectCalendar: () => {},
+        events: [linked, eventLaterToday()],
+      })
+    )
+  );
+  const button = (label) =>
+    findElement(
+      container,
+      (element) => element.tagName === "BUTTON" && element.textContent.trim() === label
+    );
+
+  assert.equal(button("upcoming.joinAndTranscribe"), null, "nothing offers to transcribe");
+  const join = button("meetingNotification.joinOnly");
+  assert.ok(join, "the linked event can still be joined");
+  await React.act(async () =>
+    join.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
+  );
+  assert.deepEqual(opened, [linked.hangout_link]);
+  assert.deepEqual(joins, [], "joining starts no recording");
+
+  const takeNotes = button("upcoming.takeNotes");
+  assert.ok(takeNotes, "the link-less event keeps its button");
+  assert.notEqual(takeNotes.getAttribute("disabled") ?? takeNotes.disabled, undefined);
+  const reasonId = takeNotes.getAttribute("aria-describedby");
+  const reason = findElement(container, (element) => element.getAttribute?.("id") === reasonId);
+  assert.equal(reason?.textContent, "notes.meeting.recordingDisabledByOrg");
 });

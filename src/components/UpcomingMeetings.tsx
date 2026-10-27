@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Calendar, ExternalLink, Loader2, Mic, Monitor, Video } from "./icons";
 import { Button } from "./ui/button";
@@ -16,6 +16,9 @@ import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
 import { meetingStartRefusalKey } from "../helpers/trayActionPolicy";
+import { usePolicyStore } from "../stores/policyStore";
+import { isAudioFeatureAllowed, meetingRecordingRefusal } from "../stores/policyRules";
+import { MEETING_RECORDING_REFUSAL_KEYS } from "./notes/shared";
 import { useToast } from "./ui/useToast";
 import TouchGrass from "./TouchGrass";
 import { createGrassRustle, type GrassRustle } from "../utils/grassRustle";
@@ -170,6 +173,9 @@ function AttendeePopover({
 function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+  const recordingAllowed = usePolicyStore((state) => isAudioFeatureAllowed(state, "meeting"));
+  const recordingRefusal = usePolicyStore(meetingRecordingRefusal);
+  const refusalId = useId();
   const joinUrl = getMeetingJoinUrl(event);
   const attendees = useMemo(() => parseAttendees(event), [event]);
   const timeRange = formatTimeRange(i18n.language, event.start_time, event.end_time);
@@ -183,16 +189,35 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
     }
   };
 
-  const joinButton = (
+  // With recording off, a linked meeting can still be joined; a link-less one
+  // keeps its button, disabled, to say why.
+  const refusal =
+    recordingAllowed || joinUrl ? null : t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]);
+  const joinLabel = recordingAllowed
+    ? t("upcoming.joinAndTranscribe")
+    : t("meetingNotification.joinOnly");
+  const button = (
     <Button
       size="sm"
       variant="ghost"
-      onClick={startNotes}
+      onClick={recordingAllowed ? startNotes : () => joinUrl && openJoinUrl(joinUrl)}
+      disabled={refusal !== null}
+      aria-describedby={refusal ? refusalId : undefined}
       className={cn("pointer-events-auto", DAY_CARD_BUTTON_CLASS)}
     >
       {joinUrl ? <Video size={12} /> : <Mic size={12} />}
-      {joinUrl ? t("upcoming.joinAndTranscribe") : t("upcoming.takeNotes")}
+      {joinUrl ? joinLabel : t("upcoming.takeNotes")}
     </Button>
+  );
+  const joinButton = refusal ? (
+    <span title={refusal} className="pointer-events-auto">
+      {button}
+      <span id={refusalId} className="sr-only">
+        {refusal}
+      </span>
+    </span>
+  ) : (
+    button
   );
 
   return (

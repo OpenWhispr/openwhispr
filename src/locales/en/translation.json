@@ -3586,7 +3586,8 @@
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       },
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
-      "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts."
+      "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
+      "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",

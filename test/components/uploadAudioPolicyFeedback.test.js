@@ -18,13 +18,39 @@ function statusMessages(node) {
   ];
 }
 
+function findProps(node, match) {
+  if (node == null || typeof node !== "object") return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findProps(child, match);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!node.props) return null;
+  return match(node.props) ? node.props : findProps(node.props.children, match);
+}
+
+// The drop zone, and the URL field with its submit, follow the org's upload switch.
+function uploadInputs(tree) {
+  const banner = findProps(tree, (props) => props.role === "status");
+  const dropZone = findProps(tree, (props) => "handleBrowse" in props);
+  const url = findProps(tree, (props) => props.type === "url");
+  return {
+    disabled: [dropZone.disabled, url.disabled],
+    describedBy: [dropZone.describedBy, url["aria-describedby"]],
+    bannerId: banner?.id,
+  };
+}
+
 test("upload policy feedback names the disabled feature independently of recording and updates without a reload", async (t) => {
   installBrowserGlobals(t);
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "ow-upload-policy-feedback-",
     mockModules: {
-      "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: null });`,
+      // Signed in to OpenWhispr Cloud, so the provider is ready and the inputs render.
+      "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: true, user: null });`,
       "/hooks/useUsage": `export const useUsage = () => null;`,
       "/hooks/useSettings": `export const useSettings = () => ({});`,
       "/lib/auth": `export const withSessionRefresh = fn => fn();`,
@@ -76,6 +102,13 @@ test("upload policy feedback names the disabled feature independently of recordi
           statusMessages(tree).includes("Audio upload is disabled by your organization."),
           !audioUploadEnabled
         );
+        const inputs = uploadInputs(tree);
+        assert.deepEqual(inputs.disabled, [!audioUploadEnabled, !audioUploadEnabled]);
+        assert.deepEqual(
+          inputs.describedBy,
+          audioUploadEnabled ? [undefined, undefined] : [inputs.bannerId, inputs.bannerId]
+        );
+        if (!audioUploadEnabled) assert.ok(inputs.bannerId, "the banner is the description");
         assert.ok(
           !statusMessages(tree).includes("Meeting recording is disabled by your organization.")
         );

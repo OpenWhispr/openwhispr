@@ -3586,7 +3586,8 @@
         "description": "Seit einigen Minuten war niemand zu hören. Falls das Gespräch noch läuft, prüfen Sie Ihr Audioausgabegerät."
       },
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
-      "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil du dich abgemeldet oder das Konto gewechselt hast."
+      "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
+      "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
@@ -4905,7 +4906,7 @@
         "NOTE_UNAVAILABLE": "Diese Notiz ist nicht verfügbar. Versuche es erneut, ohne eine neue zu erstellen.",
         "START_FAILED": "Vorgang fehlgeschlagen. Bitte erneut versuchen.",
         "POLICY_MEETING_RECORDING_DISABLED": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
-        "POLICY_UNRESOLVABLE": "Die Einstellungen deiner Organisation wurden noch nicht geladen. Versuche es gleich noch einmal."
+        "POLICY_UNRESOLVABLE": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal."
       }
     }
   },

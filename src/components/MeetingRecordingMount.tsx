@@ -7,6 +7,7 @@ import {
   persistLiveTranscript,
   primeMeetingWorklet,
   stopRecording,
+  stopRecordingForPolicy,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
@@ -27,6 +28,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  // A running recording stopped because the policy couldn't be checked.
+  policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
   accountChanged: "notes.meeting.stoppedAccountChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
@@ -53,7 +56,7 @@ export default function MeetingRecordingMount(): null {
   );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   useEffect(() => {
-    if (isRecording && !meetingAllowed) void stopRecording();
+    if (isRecording && !meetingAllowed) void stopRecordingForPolicy();
   }, [isRecording, meetingAllowed]);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);

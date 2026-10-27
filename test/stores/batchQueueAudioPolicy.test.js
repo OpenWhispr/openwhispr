@@ -75,5 +75,50 @@ test("an upload restriction cancels an active batch and discards late results; m
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(calls.length, 1);
   assert.equal(saved.length, 0);
-  assert.ok(store.useBatchQueueStore.getState().queue.every((item) => item.status === "error"));
+  assert.deepEqual(
+    store.useBatchQueueStore.getState().queue.map(({ status, error }) => ({ status, error })),
+    [
+      { status: "error", error: "disabledByOrg" },
+      { status: "queued", error: undefined },
+    ],
+    "the item in flight names the org; the rest wait to be retried"
+  );
+});
+
+test("a batch stopped by an upload restriction resumes its queued items once uploads are allowed again", async (t) => {
+  const { store, calls, saved, finish, setPolicy } = await setup(t);
+  store.processBatchQueue({ transcription, folderId: null }, diarization);
+  await new Promise((resolve) => setImmediate(resolve));
+  setPolicy(true, false);
+  store.processBatchQueue({ transcription, folderId: null }, diarization);
+  assert.equal(calls.length, 1, "Transcribe stays refused while uploads are off");
+
+  setPolicy(true, true);
+  finish({ success: true, text: "Transcript" });
+  store.processBatchQueue({ transcription, folderId: null }, diarization);
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1][0], "/tmp/two.wav");
+  assert.equal(saved.length, 1);
+  assert.deepEqual(
+    store.useBatchQueueStore.getState().queue.map(({ status }) => status),
+    ["error", "done"]
+  );
+});
+
+test("Cancel all still cancels every unfinished item", async (t) => {
+  const { store, setPolicy } = await setup(t);
+  setPolicy(true, true);
+  store.processBatchQueue({ transcription, folderId: null }, diarization);
+  await new Promise((resolve) => setImmediate(resolve));
+  store.cancelBatch();
+  assert.deepEqual(
+    store.useBatchQueueStore.getState().queue.map(({ status, error }) => ({ status, error })),
+    [
+      { status: "error", error: "batchCancelled" },
+      { status: "error", error: "batchCancelled" },
+    ]
+  );
 });

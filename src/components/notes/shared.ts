@@ -1,5 +1,6 @@
 import { cn } from "../lib/utils";
 import type { FolderItem } from "../../types/electron";
+import type { MeetingRecordingRefusal } from "../../stores/policyRules";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
@@ -67,6 +68,13 @@ const TRANSCRIPTION_ERROR_KEYS: Record<string, string> = {
   // purpose refusal here can only be the upload control's.
   POLICY_AUDIO_UPLOAD_DISABLED: "disabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "disabledByOrg",
+};
+
+// Why policy refuses a meeting recording, as an i18n key.
+export const MEETING_RECORDING_REFUSAL_KEYS: Record<MeetingRecordingRefusal, string> = {
+  unresolved: "common.policyUnresolved",
+  disabled: "notes.meeting.recordingDisabledByOrg",
+  restricted: "notes.meeting.restrictedByOrg",
 };
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps 
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { meetingRecordingRefusal } from "../../stores/policyRules";
 import {
   Loader2,
   FileText,
@@ -102,6 +103,7 @@ import NoteParticipants from "./NoteParticipants";
 import { parseNoteParticipants } from "../../utils/noteAttendees";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
+  MEETING_RECORDING_REFUSAL_KEYS,
   NOTE_META_CHIP_CLASS,
   defaultFolderDisplayName,
   folderMatchesQuery,
@@ -275,13 +277,7 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const policyState = usePolicySnapshot();
-  const recordingRestrictionKey =
-    policyState.status !== "managed" || !policyState.policy
-      ? "common.policyUnresolved"
-      : policyState.policy.features.meetingRecordingEnabled === false
-        ? "notes.meeting.recordingDisabledByOrg"
-        : "notes.meeting.restrictedByOrg";
+  const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
   // An upload's transcription lives in its transcript, so until the user writes
   // notes it opens there rather than on an empty "Your notes".
   const opensOnTranscript =
@@ -1312,7 +1308,7 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
-                  disabledReason={t(recordingRestrictionKey)}
+                  disabledReason={t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal])}
                   onStart={onStartRecording}
                   onStop={onStopRecording}
                 />
@@ -1379,14 +1375,15 @@ export default function NoteEditor({
           </div>
         )}
 
-        {canEditNote && !recordingAllowed && (
-          <div className="shrink-0 border-b border-border bg-surface-2">
-            <p
-              role="status"
-              className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-5 py-3 text-sm text-foreground/80")}
-            >
-              {t(recordingRestrictionKey)}
-            </p>
+        {/* Only the org's meeting switch earns a banner; other restrictions just disable recording. */}
+        {canEditNote && !recordingAllowed && recordingRefusal === "disabled" && (
+          <div className="h-8 mt-2 shrink-0 border-y border-border/60 bg-foreground/[0.02] dark:border-white/10">
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <span className="w-1 h-1 rounded-full bg-foreground/30 shrink-0" />
+              <p role="status" className="text-[11px] text-foreground/50 flex-1 truncate">
+                {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
+              </p>
+            </div>
           </div>
         )}
 

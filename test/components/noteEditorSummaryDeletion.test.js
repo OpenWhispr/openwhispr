@@ -956,7 +956,7 @@ test("the note header hands its event link to the dropdown, changeable only by e
   }
 });
 
-test("disabled meeting recording has a visible feature-specific explanation and re-enabling removes it", async (t) => {
+test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const messages = () => {
@@ -984,9 +984,24 @@ test("disabled meeting recording has a visible feature-specific explanation and 
     await render(undefined, { recordingAllowed: true });
     assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
   }
-  await React.act(async () => usePolicyStore.setState({ status: "loading", policy: null }));
-  await render(undefined, { recordingAllowed: false });
-  assert.ok(messages().includes("common.policyUnresolved"));
-  assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
+  const recordReason = () => {
+    let reason;
+    walk(latest(), (node) => {
+      if ("disabledReason" in node.props) reason = node.props.disabledReason;
+    });
+    return reason;
+  };
+  for (const [policy, expected] of [
+    [{ status: "loading", policy: null }, "common.policyUnresolved"],
+    [
+      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      "notes.meeting.restrictedByOrg",
+    ],
+  ]) {
+    await React.act(async () => usePolicyStore.setState(policy));
+    await render(undefined, { recordingAllowed: false });
+    assert.deepEqual(messages(), [], `${policy.status}: no banner`);
+    assert.equal(recordReason(), expected);
+  }
   await unmount();
 });

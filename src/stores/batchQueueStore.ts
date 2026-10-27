@@ -93,13 +93,17 @@ export function removeQueueItem(id: string) {
   updateQueue((prev) => prev.filter((item) => item.id !== id));
 }
 
-export function cancelBatch() {
+function abortRun() {
   runId++;
   if (activeUploadRequestId) {
     window.electronAPI.cancelUploadTranscription?.(activeUploadRequestId);
     activeUploadRequestId = null;
   }
   window.electronAPI.cancelUrlDownload();
+}
+
+export function cancelBatch() {
+  abortRun();
   useBatchQueueStore.setState((s) => ({
     isProcessing: false,
     queue: s.queue.map((item) =>
@@ -297,9 +301,20 @@ export function processBatchQueue(
   })();
 }
 
+// The org turning uploads off stops the run: the item in flight fails with the
+// org's reason, and the rest stay queued so Transcribe resumes them once allowed.
 usePolicyStore.subscribe((policy) => {
-  if (useBatchQueueStore.getState().isProcessing && !isAudioFeatureAllowed(policy, "upload"))
-    cancelBatch();
+  if (!useBatchQueueStore.getState().isProcessing || isAudioFeatureAllowed(policy, "upload"))
+    return;
+  abortRun();
+  useBatchQueueStore.setState((s) => ({
+    isProcessing: false,
+    queue: s.queue.map((item) =>
+      item.status === "downloading" || item.status === "transcribing"
+        ? { ...item, status: "error" as const, error: "disabledByOrg" }
+        : item
+    ),
+  }));
 });
 
 // Same composed shape the queue UI consumed when this lived in a hook.
