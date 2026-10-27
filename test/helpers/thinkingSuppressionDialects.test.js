@@ -65,6 +65,21 @@ test("gemini gets reasoning_effort minimal and nothing else", async () => {
   assert.deepEqual(body, { reasoning_effort: "minimal" });
 });
 
+test("gemini models that reject minimal get reasoning_effort low", async () => {
+  const { suppressThinking, geminiThinkingSuppressionLevel } = await load();
+
+  for (const model of ["gemini-4-argon", "gemini-3.8-flash", "gemini-3.1-pro-preview"]) {
+    const body = {};
+    suppressThinking(body, "gemini", model);
+    assert.deepEqual(body, { reasoning_effort: "low" }, model);
+    assert.equal(geminiThinkingSuppressionLevel(model), "low", model);
+  }
+
+  for (const model of ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]) {
+    assert.equal(geminiThinkingSuppressionLevel(model), "minimal", model);
+  }
+});
+
 test("openrouter gets its native reasoning toggle and nothing else", async () => {
   const { suppressThinking } = await load();
 

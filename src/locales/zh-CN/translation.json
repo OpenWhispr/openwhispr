@@ -879,6 +879,12 @@
     "groq": {
       "modelRetired": "Groq 已停用 {{from}}，已切换至 {{to}}。"
     },
+    "gemini": {
+      "modelRetired": "Google 已停用 {{from}}，已切换至 {{to}}。"
+    },
+    "vertex": {
+      "modelRetired": "Vertex AI 已停用 {{from}}，已切换至 {{to}}。"
+    },
     "tinfoil": {
       "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
       "refreshingModels": "正在刷新模型…"
@@ -2685,11 +2691,12 @@
         "anthropic_claude_sonnet_4_6": "均衡性能",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
-        "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_8_flash": "最智能的 Flash 模型，适合智能体和企业工作流",
+        "gemini_gemini_4_argon": "最强大的 Gemini 模型，旗舰推理，1M 上下文",
+        "gemini_gemini_3_6_flash": "上一代 Flash，速度与多模态能力均衡",
         "gemini_gemini_3_5_flash_lite": "最快、最经济的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
         "gemini_gemini_3_1_flash_lite": "前沿级性能，成本更低",
-        "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
         "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
         "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
@@ -2723,8 +2730,8 @@
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。助手任务的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
-        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
-        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
+        "vertex_gemini_3_8_flash": "通过 Vertex 提供的最智能 Flash 模型",
+        "vertex_gemini_4_argon": "通过 Vertex 提供的最强大的 Gemini 模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
