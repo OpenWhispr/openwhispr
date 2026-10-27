@@ -4787,27 +4787,41 @@
       "description": "你現在是 {{name}} 的擁有者。"
     },
     "invite": {
-      "title": "邀請加入 {{workspace}}",
-      "description": "透過電子郵件新增團隊成員，他們會收到加入連結。",
-      "emailLabel": "電子郵件",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
+      "title": "邀請他人",
+      "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。",
+      "emailLabel": "電子郵件地址",
+      "emailHint": "以逗號分隔多個電子郵件地址。所有人都會獲得相同的角色。",
+      "emailPlaceholder": "搜尋電子郵件",
+      "removeRecipient": "移除 {{email}}",
+      "suggestions": "建議",
+      "roleLabel": "工作區角色",
       "seatUsage": "已使用 {{used}} / {{seats}} 個席次",
       "seatCost": "接受邀請後將為你的方案新增一個席位 · 預計按比例收取 {{amount}}。",
-      "submit": "傳送邀請",
-      "submitting": "傳送中…",
-      "sentTitle": "邀請已傳送",
-      "sentDescription": "我們已將邀請傳送至 {{email}}。",
-      "sentNoEmailTitle": "邀請已建立，但未傳送電子郵件",
-      "sentNoEmailDescription": "已邀請 {{email}}，但電子郵件無法送達。請稍後重新傳送，或以其他方式分享邀請連結。",
-      "errorTitle": "無法傳送邀請",
+      "submit_other": "傳送 {{count}} 份邀請",
+      "submitting": "正在邀請…",
+      "sentTitle_other": "邀請已傳送",
+      "sentOne": "已邀請 {{email}} 加入 {{workspace}}",
+      "sentMany_other": "已邀請 {{count}} 人加入 {{workspace}}",
+      "noEmail_other": "已建立 {{count}} 份邀請，但電子郵件無法送達。請在「邀請」中重新傳送。",
+      "someFailed_other": "有 {{count}} 個地址無法邀請。請修正或移除後再試。",
+      "tooMany": "一次最多可邀請 20 人。",
+      "done": "完成",
       "role": {
-        "admin": "管理員",
-        "member": "成員"
+        "admin": "工作區管理員",
+        "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員與帳單",
-        "member": "使用工作區"
+        "admin": "管理成員、邀請、群組和設定。",
+        "member": "可以檢視和編輯筆記。"
+      },
+      "errors": {
+        "invalid": "{{email}} 不是有效的電子郵件地址",
+        "alreadyMember": "{{email}} 已是成員",
+        "alreadyInvited": "{{email}} 已有待處理的邀請。請在「邀請」中重新傳送。",
+        "seatLimit": "此工作區已達席次上限。",
+        "directoryRequired": "請先在身分識別提供者中指派 {{email}}。",
+        "notAllowed": "你已無法再邀請他人加入 {{workspace}}。",
+        "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。"
       }
     },
     "join": {

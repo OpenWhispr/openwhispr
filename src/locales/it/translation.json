@@ -4787,27 +4787,46 @@
       "description": "Ora sei il proprietario di {{name}}."
     },
     "invite": {
-      "title": "Invita in {{workspace}}",
-      "description": "Aggiungi colleghi tramite email. Riceveranno un link per unirsi.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "collega@esempio.com",
-      "roleLabel": "Ruolo",
+      "title": "Invita persone",
+      "description": "Riceveranno un link via email per unirsi a {{workspace}}.",
+      "emailLabel": "Indirizzi email",
+      "emailHint": "Separa gli indirizzi con delle virgole. Tutti ricevono lo stesso ruolo.",
+      "emailPlaceholder": "Cerca email",
+      "removeRecipient": "Rimuovi {{email}}",
+      "suggestions": "Suggerimenti",
+      "roleLabel": "Ruolo nell'area di lavoro",
       "seatUsage": "{{used}} di {{seats}} posti in uso",
       "seatCost": "Se accetta, verrà aggiunto un posto al piano · addebito proporzionale stimato di {{amount}}.",
-      "submit": "Invia invito",
-      "submitting": "Invio…",
-      "sentTitle": "Invito inviato",
-      "sentDescription": "Abbiamo inviato un invito a {{email}}.",
-      "sentNoEmailTitle": "Invito creato, ma non inviato via e-mail",
-      "sentNoEmailDescription": "{{email}} è stato invitato, ma non è stato possibile recapitare l'e-mail. Invialo di nuovo più tardi o condividi il link di invito in un altro modo.",
-      "errorTitle": "Impossibile inviare l'invito",
+      "submit_one": "Invia invito",
+      "submit_other": "Invia {{count}} inviti",
+      "submitting": "Invito in corso…",
+      "sentTitle_one": "Invito inviato",
+      "sentTitle_other": "Inviti inviati",
+      "sentOne": "Hai invitato {{email}} in {{workspace}}",
+      "sentMany_one": "Hai invitato {{count}} persona in {{workspace}}",
+      "sentMany_other": "Hai invitato {{count}} persone in {{workspace}}",
+      "noEmail_one": "{{count}} invito è stato creato, ma non è stato possibile recapitare l'email. Invialo di nuovo da Inviti.",
+      "noEmail_other": "{{count}} inviti sono stati creati, ma non è stato possibile recapitare le email. Inviali di nuovo da Inviti.",
+      "someFailed_one": "Impossibile invitare {{count}} indirizzo. Correggilo o rimuovilo per riprovare.",
+      "someFailed_other": "Impossibile invitare {{count}} indirizzi. Correggili o rimuovili per riprovare.",
+      "tooMany": "Puoi invitare fino a 20 persone alla volta.",
+      "done": "Fine",
       "role": {
-        "admin": "Amministratore",
-        "member": "Membro"
+        "admin": "Amministratore dell'area di lavoro",
+        "member": "Membro dell'area di lavoro"
       },
       "roleDescription": {
-        "admin": "Gestisce membri e fatturazione",
-        "member": "Utilizza l'area di lavoro"
+        "admin": "Gestisce membri, inviti, gruppi e impostazioni.",
+        "member": "Può visualizzare e modificare le note."
+      },
+      "errors": {
+        "invalid": "{{email}} non è un indirizzo email valido",
+        "alreadyMember": "{{email}} è già un membro",
+        "alreadyInvited": "{{email}} ha già un invito in sospeso. Invialo di nuovo da Inviti.",
+        "seatLimit": "Quest'area di lavoro ha raggiunto il limite di posti.",
+        "directoryRequired": "Assegna prima {{email}} nel tuo provider di identità.",
+        "notAllowed": "Non puoi più invitare persone in {{workspace}}.",
+        "requestFailed": "Impossibile invitare {{email}}. Controlla la connessione e riprova."
       }
     },
     "join": {

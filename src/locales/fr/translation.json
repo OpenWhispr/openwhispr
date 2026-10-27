@@ -3049,27 +3049,46 @@
       "description": "Vous êtes maintenant propriétaire de {{name}}."
     },
     "invite": {
-      "title": "Inviter dans {{workspace}}",
-      "description": "Ajoutez des coéquipiers par e-mail. Ils recevront un lien pour rejoindre.",
-      "emailLabel": "E-mail",
-      "emailPlaceholder": "collegue@exemple.com",
-      "roleLabel": "Rôle",
+      "title": "Inviter des personnes",
+      "description": "Elles recevront un lien par e-mail pour rejoindre {{workspace}}.",
+      "emailLabel": "Adresses e-mail",
+      "emailHint": "Séparez les adresses par des virgules. Tout le monde reçoit le même rôle.",
+      "emailPlaceholder": "Rechercher un e-mail",
+      "removeRecipient": "Retirer {{email}}",
+      "suggestions": "Suggestions",
+      "roleLabel": "Rôle dans l'espace",
       "seatUsage": "{{used}} sur {{seats}} sièges utilisés",
       "seatCost": "En cas d’acceptation, un siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
-      "submit": "Envoyer l'invitation",
-      "submitting": "Envoi…",
-      "sentTitle": "Invitation envoyée",
-      "sentDescription": "Nous avons envoyé une invitation à {{email}}.",
-      "sentNoEmailTitle": "Invitation créée, mais non envoyée par e-mail",
-      "sentNoEmailDescription": "{{email}} a été invité, mais l'e-mail n'a pas pu être délivré. Renvoyez-le plus tard ou partagez le lien d'invitation autrement.",
-      "errorTitle": "Impossible d'envoyer l'invitation",
+      "submit_one": "Envoyer l'invitation",
+      "submit_other": "Envoyer {{count}} invitations",
+      "submitting": "Invitation en cours…",
+      "sentTitle_one": "Invitation envoyée",
+      "sentTitle_other": "Invitations envoyées",
+      "sentOne": "Vous avez invité {{email}} dans {{workspace}}",
+      "sentMany_one": "Vous avez invité {{count}} personne dans {{workspace}}",
+      "sentMany_other": "Vous avez invité {{count}} personnes dans {{workspace}}",
+      "noEmail_one": "{{count}} invitation a été créée, mais son e-mail n'a pas pu être envoyé. Renvoyez-la depuis Invitations.",
+      "noEmail_other": "{{count}} invitations ont été créées, mais leurs e-mails n'ont pas pu être envoyés. Renvoyez-les depuis Invitations.",
+      "someFailed_one": "{{count}} adresse n'a pas pu être invitée. Corrigez-la ou retirez-la pour réessayer.",
+      "someFailed_other": "{{count}} adresses n'ont pas pu être invitées. Corrigez-les ou retirez-les pour réessayer.",
+      "tooMany": "Vous pouvez inviter jusqu'à 20 personnes à la fois.",
+      "done": "Terminé",
       "role": {
-        "admin": "Administrateur",
-        "member": "Membre"
+        "admin": "Administrateur de l'espace",
+        "member": "Membre de l'espace"
       },
       "roleDescription": {
-        "admin": "Gère les membres et la facturation",
-        "member": "Utilise l'espace de travail"
+        "admin": "Gère les membres, les invitations, les groupes et les paramètres.",
+        "member": "Peut consulter et modifier les notes."
+      },
+      "errors": {
+        "invalid": "{{email}} n'est pas une adresse e-mail valide",
+        "alreadyMember": "{{email}} est déjà membre",
+        "alreadyInvited": "{{email}} a déjà une invitation en attente. Renvoyez-la depuis Invitations.",
+        "seatLimit": "Cet espace a atteint sa limite de sièges.",
+        "directoryRequired": "Attribuez d'abord {{email}} dans votre fournisseur d'identité.",
+        "notAllowed": "Vous ne pouvez plus inviter de personnes dans {{workspace}}.",
+        "requestFailed": "Impossible d'inviter {{email}}. Vérifiez votre connexion et réessayez."
       }
     },
     "join": {

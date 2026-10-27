@@ -3049,27 +3049,46 @@
       "description": "Sie sind nun Inhaber von {{name}}."
     },
     "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "emailPlaceholder": "teammitglied@example.com",
-      "roleLabel": "Rolle",
+      "title": "Personen einladen",
+      "description": "Sie erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
+      "emailLabel": "E-Mail-Adressen",
+      "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
+      "emailPlaceholder": "E-Mail suchen",
+      "removeRecipient": "{{email}} entfernen",
+      "suggestions": "Vorschläge",
+      "roleLabel": "Workspace-Rolle",
       "seatUsage": "{{used}} von {{seats}} Plätzen belegt",
       "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "sentNoEmailTitle": "Einladung erstellt, aber nicht per E-Mail gesendet",
-      "sentNoEmailDescription": "{{email}} wurde eingeladen, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie später erneut oder teilen Sie den Einladungslink anders.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "submit_one": "Einladung senden",
+      "submit_other": "{{count}} Einladungen senden",
+      "submitting": "Wird eingeladen…",
+      "sentTitle_one": "Einladung gesendet",
+      "sentTitle_other": "Einladungen gesendet",
+      "sentOne": "{{email}} wurde zu {{workspace}} eingeladen",
+      "sentMany_one": "{{count}} Person wurde zu {{workspace}} eingeladen",
+      "sentMany_other": "{{count}} Personen wurden zu {{workspace}} eingeladen",
+      "noEmail_one": "{{count}} Einladung wurde erstellt, aber ihre E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "noEmail_other": "{{count}} Einladungen wurden erstellt, aber ihre E-Mails konnten nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "someFailed_one": "{{count}} Adresse konnte nicht eingeladen werden. Korrigieren oder entfernen Sie sie, um es erneut zu versuchen.",
+      "someFailed_other": "{{count}} Adressen konnten nicht eingeladen werden. Korrigieren oder entfernen Sie sie, um es erneut zu versuchen.",
+      "tooMany": "Sie können bis zu 20 Personen auf einmal einladen.",
+      "done": "Fertig",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Workspace-Administrator",
+        "member": "Workspace-Mitglied"
       },
       "roleDescription": {
-        "admin": "Verwaltet Mitglieder und Abrechnung",
-        "member": "Nutzt den Workspace"
+        "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen.",
+        "member": "Kann Notizen ansehen und bearbeiten."
+      },
+      "errors": {
+        "invalid": "{{email}} ist keine gültige E-Mail-Adresse",
+        "alreadyMember": "{{email}} ist bereits Mitglied",
+        "alreadyInvited": "{{email}} hat bereits eine ausstehende Einladung. Senden Sie sie unter Einladungen erneut.",
+        "seatLimit": "Dieser Workspace hat sein Platzlimit erreicht.",
+        "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
+        "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
+        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
       }
     },
     "join": {

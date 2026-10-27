@@ -4787,27 +4787,41 @@
       "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "邀请加入 {{workspace}}",
-      "description": "通过电子邮件添加同事。他们将收到加入链接。",
-      "emailLabel": "电子邮件",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
+      "title": "邀请他人",
+      "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
+      "emailLabel": "电子邮件地址",
+      "emailHint": "用逗号分隔多个邮箱地址。所有人将获得相同的角色。",
+      "emailPlaceholder": "搜索邮箱",
+      "removeRecipient": "移除 {{email}}",
+      "suggestions": "建议",
+      "roleLabel": "工作区角色",
       "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
       "seatCost": "接受邀请后将为你的方案增加一个席位 · 预计按比例收取 {{amount}}。",
-      "submit": "发送邀请",
-      "submitting": "发送中…",
-      "sentTitle": "邀请已发送",
-      "sentDescription": "我们已向 {{email}} 发送邀请。",
-      "sentNoEmailTitle": "邀请已创建，但未发送邮件",
-      "sentNoEmailDescription": "已邀请 {{email}}，但邮件无法送达。请稍后重新发送，或通过其他方式分享邀请链接。",
-      "errorTitle": "无法发送邀请",
+      "submit_other": "发送 {{count}} 份邀请",
+      "submitting": "正在邀请…",
+      "sentTitle_other": "邀请已发送",
+      "sentOne": "已邀请 {{email}} 加入 {{workspace}}",
+      "sentMany_other": "已邀请 {{count}} 人加入 {{workspace}}",
+      "noEmail_other": "已创建 {{count}} 份邀请，但邮件未能送达。请在“邀请”中重新发送。",
+      "someFailed_other": "{{count}} 个地址未能邀请。请修正或移除后重试。",
+      "tooMany": "一次最多可邀请 20 人。",
+      "done": "完成",
       "role": {
-        "admin": "管理员",
-        "member": "成员"
+        "admin": "工作区管理员",
+        "member": "工作区成员"
       },
       "roleDescription": {
-        "admin": "管理成员和账单",
-        "member": "使用工作区"
+        "admin": "管理成员、邀请、群组和设置。",
+        "member": "可以查看和编辑笔记。"
+      },
+      "errors": {
+        "invalid": "{{email}} 不是有效的电子邮件地址",
+        "alreadyMember": "{{email}} 已是成员",
+        "alreadyInvited": "{{email}} 已有待处理的邀请。请在“邀请”中重新发送。",
+        "seatLimit": "此工作区已达到席位上限。",
+        "directoryRequired": "请先在身份提供商中分配 {{email}}。",
+        "notAllowed": "你已无法再邀请他人加入 {{workspace}}。",
+        "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。"
       }
     },
     "join": {

@@ -3049,27 +3049,46 @@
       "description": "You're now the owner of {{name}}."
     },
     "invite": {
-      "title": "Invite to {{workspace}}",
-      "description": "Add teammates by email. They'll get a link to join.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "Role",
+      "title": "Invite people",
+      "description": "They'll get an email link to join {{workspace}}.",
+      "emailLabel": "Email addresses",
+      "emailHint": "Separate emails with commas. Everyone gets the same role.",
+      "emailPlaceholder": "Search email",
+      "removeRecipient": "Remove {{email}}",
+      "suggestions": "Suggestions",
+      "roleLabel": "Workspace role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
       "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
-      "submit": "Send invite",
-      "submitting": "Sending…",
-      "sentTitle": "Invite sent",
-      "sentDescription": "We sent an invitation to {{email}}.",
-      "sentNoEmailTitle": "Invite created, but not emailed",
-      "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
-      "errorTitle": "Couldn't send invitation",
+      "submit_one": "Send invitation",
+      "submit_other": "Send {{count}} invitations",
+      "submitting": "Inviting…",
+      "sentTitle_one": "Invitation sent",
+      "sentTitle_other": "Invitations sent",
+      "sentOne": "Invited {{email}} to {{workspace}}",
+      "sentMany_one": "Invited {{count}} person to {{workspace}}",
+      "sentMany_other": "Invited {{count}} people to {{workspace}}",
+      "noEmail_one": "{{count}} invitation was created, but its email couldn't be delivered. Resend it from Invitations.",
+      "noEmail_other": "{{count}} invitations were created, but their emails couldn't be delivered. Resend them from Invitations.",
+      "someFailed_one": "{{count}} couldn't be invited. Fix or remove it to try again.",
+      "someFailed_other": "{{count}} couldn't be invited. Fix or remove them to try again.",
+      "tooMany": "You can invite up to 20 people at a time.",
+      "done": "Done",
       "role": {
-        "admin": "Admin",
-        "member": "Member"
+        "admin": "Workspace Admin",
+        "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members and billing",
-        "member": "Uses the workspace"
+        "admin": "Manages members, invites, teams, and settings.",
+        "member": "Can view and edit notes."
+      },
+      "errors": {
+        "invalid": "{{email}} isn't a valid email address",
+        "alreadyMember": "{{email}} is already a member",
+        "alreadyInvited": "{{email}} already has a pending invitation. Resend it from Invitations.",
+        "seatLimit": "This workspace has reached its seat limit.",
+        "directoryRequired": "Assign {{email}} in your identity provider first.",
+        "notAllowed": "You can no longer invite people to {{workspace}}.",
+        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again."
       }
     },
     "join": {

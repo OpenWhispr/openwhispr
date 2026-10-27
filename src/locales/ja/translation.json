@@ -4787,27 +4787,41 @@
       "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "{{workspace}} に招待",
-      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "title": "ユーザーを招待",
+      "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
       "emailLabel": "メールアドレス",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "役割",
+      "emailHint": "メールアドレスはカンマで区切ります。全員に同じロールが付与されます。",
+      "emailPlaceholder": "メールを検索",
+      "removeRecipient": "{{email}} を削除",
+      "suggestions": "候補",
+      "roleLabel": "ワークスペースのロール",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
       "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
-      "submit": "招待を送信",
-      "submitting": "送信中…",
-      "sentTitle": "招待を送信しました",
-      "sentDescription": "{{email}} に招待を送信しました。",
-      "sentNoEmailTitle": "招待を作成しましたが、メールは送信されませんでした",
-      "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
-      "errorTitle": "招待を送信できませんでした",
+      "submit_other": "{{count}} 件の招待を送信",
+      "submitting": "招待しています…",
+      "sentTitle_other": "招待を送信しました",
+      "sentOne": "{{email}} を {{workspace}} に招待しました",
+      "sentMany_other": "{{count}} 人を {{workspace}} に招待しました",
+      "noEmail_other": "{{count}} 件の招待を作成しましたが、メールを配信できませんでした。「招待」から再送信してください。",
+      "someFailed_other": "{{count}} 件のアドレスを招待できませんでした。修正または削除してから、もう一度お試しください。",
+      "tooMany": "一度に招待できるのは 20 人までです。",
+      "done": "完了",
       "role": {
-        "admin": "管理者",
-        "member": "メンバー"
+        "admin": "ワークスペースの管理者",
+        "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバーと請求を管理できます",
-        "member": "ワークスペースを利用できます"
+        "admin": "メンバー、招待、グループ、設定を管理します。",
+        "member": "ノートを閲覧・編集できます。"
+      },
+      "errors": {
+        "invalid": "{{email}} は有効なメールアドレスではありません",
+        "alreadyMember": "{{email}} はすでにメンバーです",
+        "alreadyInvited": "{{email}} にはすでに保留中の招待があります。「招待」から再送信してください。",
+        "seatLimit": "このワークスペースはシート数の上限に達しました。",
+        "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
+        "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
+        "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。"
       }
     },
     "join": {

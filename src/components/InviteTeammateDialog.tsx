@@ -1,31 +1,25 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "./icons";
+import { Dialog } from "./ui/dialog";
+import { InvitePeopleView } from "./workspace/InvitePeopleView";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "./ui/dialog";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { cn } from "./lib/utils";
+  createInviteFlow,
+  inviteReducer,
+  inviteSuggestions,
+  type InviteFlowEvent,
+  type InviteFlowState,
+} from "../lib/inviteFlow";
+import { invitePeople } from "../services/invitePeople";
 import { useWorkspaceStore } from "../stores/workspaceStore";
-import { useDelayedFlag } from "../hooks/useDelayedFlag";
-import { InvitationsService } from "../services/InvitationsService";
 import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
 import { formatAmount } from "../utils/formatAmount";
-import { useToast } from "./ui/useToast";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
   workspaceName: string;
-  /** Receives the normalized email the invitation was sent to. */
+  /** Called once per address, with its normalized email, as its invitation succeeds. */
   onInvited?: (email: string) => void;
   cancelLabel?: string;
   /** Teams the invitee joins on accept (threaded into the invitation). */
@@ -33,7 +27,19 @@ interface Props {
   /** Spaces the invitee is added to directly on accept. */
   spaceIds?: string[];
   initialEmail?: string;
+  /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
+  knownEmails?: { members: string[]; invited: string[] };
 }
+
+interface Roster {
+  memberEmails: string[];
+  invitedEmails: string[];
+}
+
+type Contact = { email: string; display_name: string | null };
+
+const SUGGESTION_DEBOUNCE_MS = 150;
+const SUGGESTION_MIN_CHARS = 2;
 
 export default function InviteTeammateDialog({
   open,
@@ -45,22 +51,42 @@ export default function InviteTeammateDialog({
   teamIds,
   spaceIds,
   initialEmail,
-}: Props) {
+  knownEmails,
+}: Props): ReactElement {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "member">("member");
-  const [submitting, setSubmitting] = useState(false);
-  const showSpinner = useDelayedFlag(submitting);
+  const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
+  const [wasOpen, setWasOpen] = useState(open);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
+  const running = useRef(false);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const seats = workspace?.seats ?? null;
-  // A subscribed workspace already at capacity bills a seat if this invite is
-  // accepted. Say so before sending. Both sides of the
-  // comparison come from the same preview so a stale store can't misprice it.
-  const addsBilledSeat =
-    seatPreview !== null && seatPreview.seats_used >= seatPreview.current_quantity;
+
+  // A fresh flow on every open, set during render so the first frame never shows the last run.
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setState(createInviteFlow({ initialEmail }));
+      setContacts([]);
+    }
+  }
+
+  const dispatch = useCallback((event: InviteFlowEvent): void => {
+    setState((current) => inviteReducer(current, event));
+  }, []);
+
+  // Callers may build `knownEmails` on every render; only a change of addresses re-judges chips.
+  const rosterKey = JSON.stringify([knownEmails?.members ?? [], knownEmails?.invited ?? []]);
+  const roster = useMemo((): Roster => {
+    const [memberEmails, invitedEmails] = JSON.parse(rosterKey) as [string[], string[]];
+    return { memberEmails, invitedEmails };
+  }, [rosterKey]);
+  const latestRoster = useRef(roster);
+  useEffect(() => {
+    latestRoster.current = roster;
+    if (open) dispatch({ type: "roster", ...roster });
+  }, [open, roster, dispatch]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,143 +109,112 @@ export default function InviteTeammateDialog({
       });
     return () => {
       cancelled = true;
+      setSeatsUsed(null);
+      setSeatPreview(null);
     };
   }, [open, workspaceId]);
 
+  const query = state.draft.trim();
   useEffect(() => {
-    if (open) {
-      if (initialEmail) setEmail(initialEmail);
-    } else {
-      setEmail("");
-      setRole("member");
-      setSeatsUsed(null);
-      setSeatPreview(null);
+    if (!open || query.length < SUGGESTION_MIN_CHARS) {
+      setContacts([]);
+      return;
     }
-  }, [open, initialEmail]);
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      Promise.resolve()
+        .then(() => window.electronAPI.searchContacts(query))
+        .then((result) => {
+          if (!cancelled) setContacts(result?.success ? result.contacts : []);
+        })
+        .catch(() => {
+          if (!cancelled) setContacts([]);
+        });
+    }, SUGGESTION_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, query]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim()) return;
-    setSubmitting(true);
-    const normalizedEmail = email.trim().toLowerCase();
+  const suggestions = useMemo(
+    () =>
+      inviteSuggestions(contacts, [
+        ...state.recipients.map((recipient) => recipient.email),
+        ...state.sent.map((entry) => entry.email),
+        ...roster.memberEmails,
+        ...roster.invitedEmails,
+      ]),
+    [contacts, state.recipients, state.sent, roster]
+  );
+
+  // A subscribed workspace already at capacity bills a seat if an invite is accepted. Both sides
+  // of the comparison come from the same preview, so a stale store can't misprice it.
+  const addsBilledSeat =
+    seatPreview !== null && seatPreview.seats_used >= seatPreview.current_quantity;
+  const seatLine =
+    seatsUsed !== null && seats !== null
+      ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
+      : null;
+  const seatCostLine = addsBilledSeat
+    ? t("workspaces.invite.seatCost", {
+        amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
+      })
+    : null;
+
+  const handleSend = async (): Promise<void> => {
+    if (running.current) return;
+    // The same transition the reducer makes, run here to learn which chips this send took.
+    const next = inviteReducer(state, { type: "send" });
+    setState(next);
+    if (next.phase !== "sending") return;
+
+    running.current = true;
+    const emails = next.recipients
+      .filter((recipient) => recipient.state.status === "sending")
+      .map((recipient) => recipient.email);
     try {
-      const result = await InvitationsService.send(workspaceId, {
-        email: normalizedEmail,
-        role,
-        ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
-        ...(spaceIds && spaceIds.length > 0 ? { space_ids: spaceIds } : {}),
-      });
-      if (result.email_sent) {
-        toast({
-          title: t("workspaces.invite.sentTitle"),
-          description: t("workspaces.invite.sentDescription", { email }),
-        });
-      } else {
-        toast({
-          title: t("workspaces.invite.sentNoEmailTitle"),
-          description: t("workspaces.invite.sentNoEmailDescription", { email }),
-          variant: "destructive",
-        });
-      }
-      onInvited?.(normalizedEmail);
-      onOpenChange(false);
-    } catch (error) {
-      toast({
-        title: t("workspaces.invite.errorTitle"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
+      await invitePeople.sendInvitations({
+        workspaceId,
+        emails,
+        role: next.role,
+        teamIds,
+        spaceIds,
+        onResult: (email, outcome) => {
+          dispatch({ type: "result", email, outcome });
+          if (outcome.ok === true) onInvited?.(email);
+        },
       });
     } finally {
-      setSubmitting(false);
+      running.current = false;
+      dispatch({ type: "finished" });
+      // The reducer drops a roster that arrives mid-send, so the latest one is applied now.
+      dispatch({ type: "roster", ...latestRoster.current });
     }
-  }
+  };
+
+  const close = (): void => onOpenChange(false);
+
+  // Invitations in flight can't be taken back, so the dialog stays until the run reports.
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen && state.phase === "sending") return;
+    onOpenChange(nextOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.invite.title", { workspace: workspaceName })}</DialogTitle>
-          <DialogDescription>{t("workspaces.invite.description")}</DialogDescription>
-          {seatsUsed !== null && seats !== null && (
-            <p className="text-xs text-muted-foreground">
-              {t("workspaces.invite.seatUsage", { used: seatsUsed, seats })}
-            </p>
-          )}
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="invite-email" className="text-xs font-medium">
-              {t("workspaces.invite.emailLabel")}
-            </Label>
-            <Input
-              dir="ltr"
-              id="invite-email"
-              type="email"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder={t("workspaces.invite.emailPlaceholder")}
-              required
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium">{t("workspaces.invite.roleLabel")}</Label>
-            <div className="flex gap-1.5">
-              {(["member", "admin"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={role === r}
-                  onClick={() => setRole(r)}
-                  className={cn(
-                    "flex-1 px-3 py-2 rounded-md border text-start transition-colors",
-                    "outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
-                    role === r
-                      ? "border-primary/40 bg-primary/8"
-                      : "border-border/70 hover:bg-foreground/4"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "block text-xs font-medium",
-                      role === r ? "text-foreground" : "text-muted-foreground"
-                    )}
-                  >
-                    {t(`workspaces.invite.role.${r}`)}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground mt-0.5">
-                    {t(`workspaces.invite.roleDescription.${r}`)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {addsBilledSeat && (
-            <p className="text-[11px] text-muted-foreground">
-              {t("workspaces.invite.seatCost", {
-                amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
-              })}
-            </p>
-          )}
-
-          <DialogFooter className="pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              disabled={submitting}
-            >
-              {cancelLabel ?? t("common.cancel")}
-            </Button>
-            <Button type="submit" disabled={!email.trim() || submitting}>
-              {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
-              {submitting ? t("workspaces.invite.submitting") : t("workspaces.invite.submit")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <InvitePeopleView
+        workspaceName={workspaceName}
+        state={state}
+        dispatch={dispatch}
+        suggestions={suggestions}
+        seatLine={seatLine}
+        seatCostLine={seatCostLine}
+        cancelLabel={cancelLabel ?? t("common.cancel")}
+        onCancel={close}
+        onSend={() => void handleSend()}
+        onDone={close}
+      />
     </Dialog>
   );
 }

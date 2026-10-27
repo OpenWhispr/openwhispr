@@ -4787,27 +4787,46 @@
       "description": "Agora você é o proprietário de {{name}}."
     },
     "invite": {
-      "title": "Convidar para {{workspace}}",
-      "description": "Adicione colegas por e-mail. Eles receberão um link para entrar.",
-      "emailLabel": "E-mail",
-      "emailPlaceholder": "colega@exemplo.com",
-      "roleLabel": "Função",
+      "title": "Convidar pessoas",
+      "description": "Elas receberão um link por e-mail para entrar em {{workspace}}.",
+      "emailLabel": "Endereços de e-mail",
+      "emailHint": "Separe os e-mails com vírgulas. Todos recebem a mesma função.",
+      "emailPlaceholder": "Pesquisar e-mail",
+      "removeRecipient": "Remover {{email}}",
+      "suggestions": "Sugestões",
+      "roleLabel": "Função no espaço de trabalho",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
       "seatCost": "Se a pessoa aceitar, será adicionado um assento ao plano · cobrança proporcional estimada de {{amount}}.",
-      "submit": "Enviar convite",
-      "submitting": "Enviando…",
-      "sentTitle": "Convite enviado",
-      "sentDescription": "Enviamos um convite para {{email}}.",
-      "sentNoEmailTitle": "Convite criado, mas não enviado por e-mail",
-      "sentNoEmailDescription": "{{email}} foi convidado, mas não foi possível entregar o e-mail. Reenvie-o mais tarde ou compartilhe o link de convite de outra forma.",
-      "errorTitle": "Não foi possível enviar o convite",
+      "submit_one": "Enviar convite",
+      "submit_other": "Enviar {{count}} convites",
+      "submitting": "Convidando…",
+      "sentTitle_one": "Convite enviado",
+      "sentTitle_other": "Convites enviados",
+      "sentOne": "Você convidou {{email}} para {{workspace}}",
+      "sentMany_one": "Você convidou {{count}} pessoa para {{workspace}}",
+      "sentMany_other": "Você convidou {{count}} pessoas para {{workspace}}",
+      "noEmail_one": "{{count}} convite foi criado, mas o e-mail não pôde ser entregue. Reenvie-o em Convites.",
+      "noEmail_other": "{{count}} convites foram criados, mas os e-mails não puderam ser entregues. Reenvie-os em Convites.",
+      "someFailed_one": "Não foi possível convidar {{count}} endereço. Corrija-o ou remova-o para tentar novamente.",
+      "someFailed_other": "Não foi possível convidar {{count}} endereços. Corrija-os ou remova-os para tentar novamente.",
+      "tooMany": "Você pode convidar até 20 pessoas de cada vez.",
+      "done": "Concluído",
       "role": {
-        "admin": "Administrador",
-        "member": "Membro"
+        "admin": "Administrador do espaço de trabalho",
+        "member": "Membro do espaço de trabalho"
       },
       "roleDescription": {
-        "admin": "Gerencia membros e cobrança",
-        "member": "Usa o espaço de trabalho"
+        "admin": "Gerencia membros, convites, grupos e configurações.",
+        "member": "Pode ver e editar notas."
+      },
+      "errors": {
+        "invalid": "{{email}} não é um endereço de e-mail válido",
+        "alreadyMember": "{{email}} já é membro",
+        "alreadyInvited": "{{email}} já tem um convite pendente. Reenvie-o em Convites.",
+        "seatLimit": "Este espaço de trabalho atingiu o limite de assentos.",
+        "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
+        "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
+        "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente."
       }
     },
     "join": {

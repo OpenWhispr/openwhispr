@@ -4787,27 +4787,46 @@
       "description": "Ahora eres el propietario de {{name}}."
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "emailPlaceholder": "colega@ejemplo.com",
-      "roleLabel": "Rol",
+      "title": "Invitar personas",
+      "description": "Recibirán un enlace por correo para unirse a {{workspace}}.",
+      "emailLabel": "Direcciones de correo",
+      "emailHint": "Separa los correos con comas. Todos reciben el mismo rol.",
+      "emailPlaceholder": "Buscar correo",
+      "removeRecipient": "Quitar {{email}}",
+      "suggestions": "Sugerencias",
+      "roleLabel": "Rol en el espacio de trabajo",
       "seatUsage": "Usando {{used}} de {{seats}} asientos",
       "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "sentNoEmailTitle": "Invitación creada, pero no enviada por correo",
-      "sentNoEmailDescription": "Se invitó a {{email}}, pero no se pudo entregar el correo. Reenvíalo más tarde o comparte el enlace de invitación de otra forma.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "submit_one": "Enviar invitación",
+      "submit_other": "Enviar {{count}} invitaciones",
+      "submitting": "Invitando…",
+      "sentTitle_one": "Invitación enviada",
+      "sentTitle_other": "Invitaciones enviadas",
+      "sentOne": "Invitaste a {{email}} a {{workspace}}",
+      "sentMany_one": "Invitaste a {{count}} persona a {{workspace}}",
+      "sentMany_other": "Invitaste a {{count}} personas a {{workspace}}",
+      "noEmail_one": "Se creó {{count}} invitación, pero no se pudo entregar su correo. Reenvíala desde Invitaciones.",
+      "noEmail_other": "Se crearon {{count}} invitaciones, pero no se pudieron entregar sus correos. Reenvíalas desde Invitaciones.",
+      "someFailed_one": "No se pudo invitar a {{count}} dirección. Corrígela o quítala para volver a intentarlo.",
+      "someFailed_other": "No se pudo invitar a {{count}} direcciones. Corrígelas o quítalas para volver a intentarlo.",
+      "tooMany": "Puedes invitar hasta 20 personas a la vez.",
+      "done": "Listo",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "Administrador del espacio de trabajo",
+        "member": "Miembro del espacio de trabajo"
       },
       "roleDescription": {
-        "admin": "Administra miembros y facturación",
-        "member": "Usa el espacio de trabajo"
+        "admin": "Gestiona miembros, invitaciones, grupos y ajustes.",
+        "member": "Puede ver y editar notas."
+      },
+      "errors": {
+        "invalid": "{{email}} no es una dirección de correo válida",
+        "alreadyMember": "{{email}} ya es miembro",
+        "alreadyInvited": "{{email}} ya tiene una invitación pendiente. Reenvíala desde Invitaciones.",
+        "seatLimit": "Este espacio de trabajo alcanzó su límite de puestos.",
+        "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
+        "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
+        "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo."
       }
     },
     "join": {
