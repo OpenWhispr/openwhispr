@@ -26,11 +26,20 @@ test("no legacy model is recommended", () => {
     ...modelData.enterpriseProviders.flatMap((provider) => provider.models),
     ...modelData.transcriptionProviders.flatMap((provider) => provider.models),
     ...modelData.localProviders.flatMap((provider) => provider.models),
-    ...Object.values(modelData.whisperModels),
-    ...Object.values(modelData.parakeetModels),
   ];
   for (const model of models) {
-    if (model.legacy) assert.notEqual(model.recommended, true, model.id ?? model.name);
+    if (model.legacy) assert.notEqual(model.recommended, true, model.id);
+  }
+});
+
+// The Whisper and Parakeet pickers don't read the flag, so marking one legacy
+// would silently keep offering it to everyone.
+test("no local speech-to-text model is legacy until its pickers honor the flag", () => {
+  for (const [id, model] of Object.entries({
+    ...modelData.whisperModels,
+    ...modelData.parakeetModels,
+  })) {
+    assert.notEqual(model.legacy, true, id);
   }
 });
 

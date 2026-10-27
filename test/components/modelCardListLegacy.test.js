@@ -74,7 +74,7 @@ test("a downloaded legacy local model stays listed so it can be deleted", async 
   assert.deepEqual(listedIds(tree), ["current", "retired"]);
 });
 
-test("a legacy card is grayed out, can't be picked, and offers no download", async (t) => {
+test("a legacy card is marked, can't be picked, and offers no download", async (t) => {
   const { ModelCard, render } = await loadModelCardList(t);
   const selected = [];
   const deleted = [];
@@ -88,7 +88,17 @@ test("a legacy card is grayed out, can't be picked, and offers no download", asy
     });
 
   const downloaded = await card({ ...RETIRED, isDownloaded: true }, false);
-  assert.match(downloaded.props.className, /\bopacity-50\b/);
+  assert.equal(downloaded.props["aria-disabled"], true);
+  assert.equal(downloaded.props.title, "models.legacyHint");
+  assert.doesNotMatch(
+    downloaded.props.className,
+    /hover:/,
+    "no hover lift on a card that can't be picked"
+  );
+  assert.ok(
+    findElement(downloaded, (node) => node.props?.children === "models.legacy"),
+    "a Legacy badge says why"
+  );
   downloaded.props.onClick();
   assert.deepEqual(selected, []);
   const remove = findElement(
@@ -106,6 +116,8 @@ test("a legacy card is grayed out, can't be picked, and offers no download", asy
   );
 
   const current = await card({ ...CURRENT, isDownloaded: true }, false);
+  assert.equal(current.props["aria-disabled"], undefined);
+  assert.equal(current.props.title, undefined);
   current.props.onClick();
   assert.deepEqual(selected, ["current"]);
 });

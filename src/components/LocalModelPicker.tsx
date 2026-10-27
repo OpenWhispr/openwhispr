@@ -184,25 +184,28 @@ export default function LocalModelPicker({
     [showConfirmDialog, deleteModel, loadDownloadedModels, t]
   );
 
-  const currentProvider = providers.find((p) => p.id === selectedProvider);
-  const models = useMemo(() => currentProvider?.models || [], [currentProvider?.models]);
   const activeModels = allModels.filter((model) => downloads[model.id]);
   const isModelDownloaded = (model: LocalModel) =>
     downloadedModels.has(model.id) || model.isDownloaded || model.downloaded;
-  // Hide a provider whose models are all legacy and unlisted, unless it is the open one.
-  const listedProviders = providers.filter(
-    (provider) =>
-      provider.id === selectedProvider ||
-      provider.models.some((model) =>
-        isListedModel(model, model.id === selectedModel, isModelDownloaded(model))
-      )
+  const listedProviders = providers.filter((provider) =>
+    provider.models.some((model) =>
+      isListedModel(model, model.id === selectedModel, isModelDownloaded(model))
+    )
   );
+  // A provider left with nothing to list (its selected legacy model was deleted)
+  // opens on the first one that has models instead of an empty tab. A selection
+  // commits its own provider, so browsing another tab never mismatches the pair.
+  const displayedProviderId = listedProviders.some((p) => p.id === selectedProvider)
+    ? selectedProvider
+    : (listedProviders[0]?.id ?? selectedProvider);
+  const currentProvider = providers.find((p) => p.id === displayedProviderId);
+  const models = useMemo(() => currentProvider?.models || [], [currentProvider?.models]);
 
   return (
     <div className={className}>
       <ProviderTabs
         providers={listedProviders}
-        selectedId={selectedProvider}
+        selectedId={displayedProviderId}
         onSelect={onProviderSelect}
         colorScheme={colorScheme}
         wrap
@@ -237,8 +240,8 @@ export default function LocalModelPicker({
             label: model.name,
             description: model.size,
             specUrl: model.specUrl,
-            icon: getProviderIcon(selectedProvider),
-            invertInDark: isMonochromeProvider(selectedProvider),
+            icon: getProviderIcon(displayedProviderId),
+            invertInDark: isMonochromeProvider(displayedProviderId),
             recommended: model.recommended,
             legacy: model.legacy,
             isDownloaded: isModelDownloaded(model),

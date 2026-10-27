@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
       "refreshingModels": "正在刷新模型…"
     },
+    "openai": {
+      "modelRetired": "OpenAI 已停用 {{from}}，已切换至 {{to}}。"
+    },
     "corti": {
       "euOnly": "Corti 模型仅在欧盟地区可用。"
     }
@@ -2632,6 +2635,8 @@
   "models": {
     "learnMore": "了解更多",
     "noneAvailable": "没有可用的模型",
+    "legacy": "旧版",
+    "legacyHint": "已不再提供。切换到其他模型后将不再显示。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最准确的本地语音识别(平均 WER 5.42%,支持 14 种语言)。不支持自动语言检测"
@@ -2681,7 +2686,6 @@
         "openai_gpt_5_nano": "超快速、低延迟",
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
-        "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic 最强大的模型，Mythos 级",
         "anthropic_claude_fable_5": "上一代 Mythos 级旗舰模型",
         "anthropic_claude_opus_5_5": "最新 Opus 模型，适合复杂推理，1M 上下文",
@@ -2730,14 +2734,12 @@
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最强大的 Claude 模型。最适合最具挑战性的助手任务。",
-        "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_5": "均衡性能。推荐用作助手任务的默认模型。",
+        "bedrock_claude_haiku_4_5": "上一代 Haiku。快速且低成本，适合文本清理。",
+        "bedrock_claude_sonnet_5": "上一代 Sonnet。快速强大，适合助手任务。",
         "bedrock_claude_opus_4_8": "最高智能。适用于复杂的助手任务。",
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。助手任务的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
-        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
-        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型",
         "bedrock_claude_sonnet_5_5": "均衡性能。推荐用作助手任务的默认模型。",
         "bedrock_claude_haiku_5_5": "速度最快的 Claude 模型。适合文本清理。",
         "bedrock_claude_opus_5_5": "最高智能。最适合复杂的助手任务。",
@@ -2786,7 +2788,7 @@
         "qwen_qwen3_6_35b_a3b_q4_k_m": "快速的混合专家模型，3B 激活参数",
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral 的 14B 模型，支持工具调用，256K 上下文",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "无思考过程的快速模型，适用于清理与工具调用",
-        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "小巧快速，支持工具调用",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "小巧快速，适合听写文本清理",
         "gemma_gemma_4_12b_it_qat_q4_0": "Google 官方 QAT 构建，最适合 16 GB 设备"
       },
       "diarization": {

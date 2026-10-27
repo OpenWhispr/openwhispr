@@ -628,16 +628,6 @@
           "supportsTemperature": true,
           "supportsVision": true,
           "legacy": true
-        },
-        {
-          "id": "gpt-4.1-nano",
-          "name": "GPT-4.1 Nano",
-          "description": "Lowest latency GPT-4.1",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
-          "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true,
-          "supportsVision": true,
-          "legacy": true
         }
       ]
     },
@@ -1019,13 +1009,13 @@
         {
           "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
           "name": "Claude Haiku 4.5",
-          "description": "Fast and cheap. Great default for text cleanup.",
+          "description": "Previous Haiku. Fast and cheap for text cleanup.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
         },
         {
           "id": "us.anthropic.claude-sonnet-5",
           "name": "Claude Sonnet 5",
-          "description": "Balanced workhorse. Best default for Agent Mode.",
+          "description": "Previous Sonnet. Fast and capable for Agent Mode.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
         },
         {
@@ -1082,20 +1072,6 @@
           "name": "Gemini 4 Argon",
           "description": "Google's frontier reasoning model via Vertex",
           "descriptionKey": "models.descriptions.enterprise.vertex_gemini_4_argon"
-        },
-        {
-          "id": "gemini-2.5-flash",
-          "name": "Gemini 2.5 Flash",
-          "description": "Fast multimodal model via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_flash",
-          "legacy": true
-        },
-        {
-          "id": "gemini-2.5-pro",
-          "name": "Gemini 2.5 Pro",
-          "description": "Advanced reasoning via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_pro",
-          "legacy": true
         }
       ]
     }
@@ -1315,18 +1291,6 @@
       "baseUrl": "https://huggingface.co",
       "models": [
         {
-          "id": "ministral-3-14b-instruct-2512-q4_k_m",
-          "name": "Ministral 3 14B",
-          "size": "8.2GB",
-          "sizeBytes": 8239593024,
-          "description": "Mistral's 14B model with tool use, 256K context",
-          "fileName": "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf",
-          "quantization": "q4_k_m",
-          "contextLength": 262144,
-          "hfRepo": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
-          "descriptionKey": "models.descriptions.local.mistral_ministral_3_14b_instruct_2512_q4_k_m"
-        },
-        {
           "id": "ministral-3-8b-instruct-2512-q4_k_m",
           "name": "Ministral 3 8B",
           "size": "5.2GB",
@@ -1340,11 +1304,23 @@
           "descriptionKey": "models.descriptions.local.mistral_ministral_3_8b_instruct_2512_q4_k_m"
         },
         {
+          "id": "ministral-3-14b-instruct-2512-q4_k_m",
+          "name": "Ministral 3 14B",
+          "size": "8.2GB",
+          "sizeBytes": 8239593024,
+          "description": "Mistral's 14B model with tool use, 256K context",
+          "fileName": "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
+          "descriptionKey": "models.descriptions.local.mistral_ministral_3_14b_instruct_2512_q4_k_m"
+        },
+        {
           "id": "ministral-3-3b-instruct-2512-q4_k_m",
           "name": "Ministral 3 3B",
           "size": "2.1GB",
           "sizeBytes": 2147023008,
-          "description": "Small and fast with tool use",
+          "description": "Small and fast for dictation cleanup",
           "fileName": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
           "quantization": "q4_k_m",
           "contextLength": 262144,

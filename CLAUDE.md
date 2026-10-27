@@ -433,7 +433,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - GPT-5.6 Series (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) - Flagship, balanced, and fastest tiers
     - GPT-5.5 (`gpt-5.5`) - Frontier model for complex reasoning, 1M context
     - GPT-5.2 (`gpt-5.2`) - Strong reasoning model
-    - GPT-5 Mini (`gpt-5-mini`), GPT-5 Nano (`gpt-5-nano`) and the GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - legacy
+    - GPT-5 Mini (`gpt-5-mini`), GPT-5 Nano (`gpt-5-nano`), GPT-4.1 and GPT-4.1 Mini (`gpt-4.1`, `gpt-4.1-mini`) - legacy. GPT-4.1 Nano was shut down on 2026-10-23; `retiredCloudModels.ts` moves it to GPT-6 Luna
     - GPT-5 and newer reject `temperature`, so their registry entries carry `supportsTemperature: false`
   - **Anthropic** (Via IPC bridge to avoid CORS):
     - Claude Fable 5.1 (`claude-fable-5-1`) - Most capable Claude model, Mythos-class, 1M context
@@ -486,10 +486,14 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
   `defaultModel` on the provider, the first model in the array is the default
 - `src/models/legacyModels.ts` - `isListedModel()`: an entry marked `"legacy": true` stays in the
   registry so an existing selection keeps working, but pickers list it only while it is selected
-  (grayed out and disabled) or, for a local model, while its file is still downloaded so it can be
-  deleted. While a provider still has a current model, never put a legacy entry first or name it
-  as a `defaultModel` (`test/helpers/legacyModels.test.js`)
-- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model
+  (muted, marked Legacy and disabled) or, for a local model, while its file is still downloaded so
+  it can be deleted. A local tab left with nothing to list opens on the first provider that has
+  models. While a provider still has a current model, never put a legacy entry first or name it
+  as a `defaultModel`. Speech-to-text pickers don't read the flag yet, so no Whisper or Parakeet
+  entry may carry it (`test/helpers/legacyModels.test.js`). Legacy is only for models that still
+  work: once a provider shuts one down, remove it and add it to `retiredCloudModels.ts`
+- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model. Mobile keeps
+  its own copy of the table (`openwhispr-mobile/src/lib/retiredModels.ts`)
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 
 **Local model features:**

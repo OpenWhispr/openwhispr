@@ -232,6 +232,8 @@
   "models": {
     "learnMore": "اعرف المزيد",
     "noneAvailable": "لا توجد نماذج متاحة",
+    "legacy": "قديم",
+    "legacyHint": "لم يعد متاحًا. بعد التبديل إلى نموذج آخر لن يظهر مرة أخرى.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "أدق نموذج محلي للتعرف على الكلام (متوسط معدل خطأ الكلمة 5.42%، 14 لغة). بدون اكتشاف تلقائي للغة"
@@ -285,7 +287,6 @@
         "openai_gpt_5_nano": "فائق السرعة، زمن انتقال منخفض",
         "openai_gpt_4_1": "أساس قوي، سياق 1 مليون",
         "openai_gpt_4_1_mini": "نموذج GPT-4.1 أصغر",
-        "openai_gpt_4_1_nano": "GPT-4.1 بأقل زمن انتقال",
         "anthropic_claude_fable_5_1": "نموذج Anthropic الأكثر قدرة، فئة Mythos",
         "anthropic_claude_fable_5": "الرائد السابق من فئة Mythos",
         "anthropic_claude_opus_5_5": "أحدث نموذج Opus للاستنتاج المعقد، سياق 1 مليون",
@@ -334,14 +335,12 @@
       },
       "enterprise": {
         "bedrock_claude_fable_5": "نموذج Claude الأكثر قدرة. الأفضل لأصعب مهام المساعد.",
-        "bedrock_claude_haiku_4_5": "سريع ورخيص. خيار افتراضي رائع لتنظيف النص.",
-        "bedrock_claude_sonnet_5": "نموذج موثوق متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_4_5": "إصدار Haiku السابق. سريع ورخيص لتنظيف النص.",
+        "bedrock_claude_sonnet_5": "إصدار Sonnet السابق. سريع وقادر لمهام المساعد.",
         "bedrock_claude_opus_4_8": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لمهام المساعد.",
         "bedrock_qwen3_next_80b": "نموذج متناثر مفتوح الوزن. سريع ومتعدد اللغات.",
-        "vertex_gemini_2_5_flash": "نموذج متعدد الوسائط سريع عبر Vertex",
-        "vertex_gemini_2_5_pro": "استنتاج متقدم عبر Vertex",
         "bedrock_claude_sonnet_5_5": "نموذج متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
         "bedrock_claude_haiku_5_5": "أسرع نموذج Claude. خيار افتراضي رائع لتنظيف النص.",
         "bedrock_claude_opus_5_5": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
@@ -390,7 +389,7 @@
         "qwen_qwen3_6_35b_a3b_q4_k_m": "نموذج مزيج خبراء سريع، 3B معاملات نشطة",
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "نموذج Mistral بحجم 14B مع استخدام الأدوات، سياق 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
-        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع مع استخدام الأدوات",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
         "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
       }
     },
@@ -545,6 +544,9 @@
     "tinfoil": {
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
       "refreshingModels": "جاري تحديث النماذج..."
+    },
+    "openai": {
+      "modelRetired": "قامت OpenAI بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },
     "corti": {
       "euOnly": "نماذج Corti متوفرة فقط في منطقة الاتحاد الأوروبي."

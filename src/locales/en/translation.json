@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
       "refreshingModels": "Refreshing models…"
     },
+    "openai": {
+      "modelRetired": "OpenAI retired {{from}}. Switched to {{to}}."
+    },
     "corti": {
       "euOnly": "Corti's models are only available in the EU region."
     }
@@ -2726,6 +2729,8 @@
   "models": {
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
+    "legacy": "Legacy",
+    "legacyHint": "No longer offered. Once you switch to another model, it won't be listed again.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection"
@@ -2779,7 +2784,6 @@
         "openai_gpt_5_nano": "Ultra-fast, low latency",
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
-        "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic's most capable model, Mythos-class",
         "anthropic_claude_fable_5": "Previous Mythos-class flagship",
         "anthropic_claude_opus_5_5": "Latest Opus model for complex reasoning, 1M context",
@@ -2828,14 +2832,12 @@
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Assistant tasks.",
-        "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Assistant tasks.",
+        "bedrock_claude_haiku_4_5": "Previous Haiku. Fast and cheap for text cleanup.",
+        "bedrock_claude_sonnet_5": "Previous Sonnet. Fast and capable for Assistant tasks.",
         "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Assistant tasks.",
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
         "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Assistant tasks.",
         "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex",
         "bedrock_claude_sonnet_5_5": "Balanced workhorse. Best default for Assistant tasks.",
         "bedrock_claude_haiku_5_5": "Fastest Claude model. Great default for text cleanup.",
         "bedrock_claude_opus_5_5": "Max intelligence. Best for complex Assistant tasks.",
@@ -2884,7 +2886,7 @@
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Fast mixture-of-experts model, 3B active parameters",
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral's 14B model with tool use, 256K context",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Fast non-thinking model for cleanup and tools",
-        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Small and fast with tool use",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Small and fast for dictation cleanup",
         "gemma_gemma_4_12b_it_qat_q4_0": "Google's official QAT build, best fit for 16 GB machines"
       }
     },

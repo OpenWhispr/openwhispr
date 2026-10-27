@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
       "refreshingModels": "モデルを更新しています…"
     },
+    "openai": {
+      "modelRetired": "OpenAI は {{from}} を提供終了しました。{{to}} に切り替えました。"
+    },
     "corti": {
       "euOnly": "Corti のモデルは EU リージョンでのみ利用できます。"
     }
@@ -2632,6 +2635,8 @@
   "models": {
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
+    "legacy": "旧モデル",
+    "legacyHint": "提供は終了しました。別のモデルに切り替えると、今後は表示されません。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
@@ -2681,7 +2686,6 @@
         "openai_gpt_5_nano": "超高速、低レイテンシー",
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
-        "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic の最も高性能なモデル、Mythos クラス",
         "anthropic_claude_fable_5": "前世代の Mythos クラスのフラッグシップ",
         "anthropic_claude_opus_5_5": "複雑な推論向けの最新 Opus モデル、100 万トークンコンテキスト",
@@ -2730,14 +2734,12 @@
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいアシスタントタスクに最適です。",
-        "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_haiku_4_5": "前世代の Haiku。テキスト整形向けの高速で低コストなモデルです。",
+        "bedrock_claude_sonnet_5": "前世代の Sonnet。アシスタントタスク向けの高速で有能なモデルです。",
         "bedrock_claude_opus_4_8": "最高性能。複雑なアシスタントタスクに最適です。",
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。アシスタントタスクに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex",
         "bedrock_claude_sonnet_5_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
         "bedrock_claude_haiku_5_5": "最速の Claude モデル。テキスト整形に最適です。",
         "bedrock_claude_opus_5_5": "最高性能。複雑なアシスタントタスクに最適です。",
@@ -2786,7 +2788,7 @@
         "qwen_qwen3_6_35b_a3b_q4_k_m": "高速な Mixture-of-Experts モデル、アクティブパラメータ 3B",
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "ツール使用に対応した Mistral の 14B モデル、256K コンテキスト",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "整形とツール向けの思考なし高速モデル",
-        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "ツール使用に対応した小型で高速なモデル",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "口述の整形向けの小型で高速なモデル",
         "gemma_gemma_4_12b_it_qat_q4_0": "Google 公式の QAT ビルド、16 GB マシンに最適"
       },
       "diarization": {

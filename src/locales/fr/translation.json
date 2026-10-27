@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil a retiré {{from}}. Basculé vers {{to}}.",
       "refreshingModels": "Actualisation des modèles…"
     },
+    "openai": {
+      "modelRetired": "OpenAI a retiré {{from}}. Basculé vers {{to}}."
+    },
     "corti": {
       "euOnly": "Les modèles Corti ne sont disponibles que dans la région UE."
     }
@@ -2726,6 +2729,8 @@
   "models": {
     "learnMore": "En savoir plus",
     "noneAvailable": "Aucun modèle disponible",
+    "legacy": "Ancien",
+    "legacyHint": "N'est plus proposé. Une fois que vous passez à un autre modèle, il n'apparaîtra plus.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "ASR local le plus précis (5,42 % WER moyen, 14 langues). Pas de détection automatique de la langue"
@@ -2779,7 +2784,6 @@
         "openai_gpt_5_nano": "Ultra-rapide, faible latence",
         "openai_gpt_4_1": "Base solide, contexte 1M",
         "openai_gpt_4_1_mini": "Modèle GPT-4.1 plus petit",
-        "openai_gpt_4_1_nano": "GPT-4.1 à la latence la plus faible",
         "anthropic_claude_fable_5_1": "Le modèle le plus performant d'Anthropic, classe Mythos",
         "anthropic_claude_fable_5": "Ancien modèle phare de classe Mythos",
         "anthropic_claude_opus_5_5": "Dernier modèle Opus pour le raisonnement complexe, contexte 1M",
@@ -2828,14 +2832,12 @@
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Le modèle Claude le plus performant. Idéal pour les tâches d'assistant les plus difficiles.",
-        "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",
-        "bedrock_claude_sonnet_5": "Équilibré. Choix par défaut pour les tâches d'assistant.",
+        "bedrock_claude_haiku_4_5": "Haiku précédent. Rapide et économique pour nettoyer le texte.",
+        "bedrock_claude_sonnet_5": "Sonnet précédent. Rapide et performant pour les tâches d'assistant.",
         "bedrock_claude_opus_4_8": "Intelligence maximale. Pour les tâches d'assistant complexes.",
         "bedrock_gpt_oss_120b": "Modèle ouvert d'OpenAI. Raisonnement solide à faible coût.",
         "bedrock_deepseek_v3_2": "Modèle frontière à poids ouverts. Excellent rapport qualité-prix pour les tâches d'assistant.",
         "bedrock_qwen3_next_80b": "Modèle ouvert épars. Rapide et multilingue.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex",
         "bedrock_claude_sonnet_5_5": "Équilibré. Choix par défaut pour les tâches d'assistant.",
         "bedrock_claude_haiku_5_5": "Le modèle Claude le plus rapide. Parfait pour nettoyer le texte.",
         "bedrock_claude_opus_5_5": "Intelligence maximale. Idéal pour les tâches d'assistant complexes.",
@@ -2884,7 +2886,7 @@
         "qwen_qwen3_6_35b_a3b_q4_k_m": "Modèle à mélange d'experts rapide, 3B de paramètres actifs",
         "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modèle 14B de Mistral avec utilisation d'outils, contexte 256K",
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modèle rapide sans phase de réflexion pour le nettoyage et les outils",
-        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Petit et rapide avec utilisation d'outils",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Petit et rapide pour nettoyer la dictée",
         "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT officiel de Google, idéal pour les machines de 16 Go"
       }
     },

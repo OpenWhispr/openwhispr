@@ -438,9 +438,30 @@ test("a resumed local-model draft overrides the previously saved model", async (
   assert.equal(setup.canProceed(), true);
 });
 
-test("the open provider stays listed when every model it has is legacy", async (t) => {
+test("a provider left with nothing to list opens on Qwen instead", async (t) => {
+  // The store still names llama after its legacy model was deleted.
   const setup = await createSetupHarness(t, { assistant: true, provider: "llama" });
-  assert.equal(setup.providerListed("llama"), true);
+  assert.equal(setup.providerListed("llama"), false);
+  assert.match(textContent(setup.row(FIRST_LLM)), /onboarding\.rehaul\.local\.download/);
+});
+
+test("browsing away from an installed legacy model and back restores it", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "llama",
+    selectedModel: LEGACY_LLM,
+    installed: { llm: [LEGACY_LLM] },
+  });
+  assert.match(textContent(setup.row(LEGACY_LLM)), /onboarding\.rehaul\.local\.selected/);
+
+  await setup.chooseProvider("qwen");
+  assert.equal(setup.providerListed("llama"), true, "the saved model's provider stays reachable");
+  assert.equal(setup.ready(), false);
+
+  await setup.chooseProvider("llama");
+  assert.match(textContent(setup.row(LEGACY_LLM)), /onboarding\.rehaul\.local\.selected/);
+  assert.equal(setup.ready(), true);
+  assert.equal(setup.store.getState().chatAgentModel, LEGACY_LLM);
 });
 
 test("a selected legacy model that isn't downloaded offers no Download", async (t) => {

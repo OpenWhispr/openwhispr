@@ -46,6 +46,9 @@ const COLOR_CONFIG: Record<
   },
 };
 
+// The default card without its hover lift: a legacy card can't be picked.
+const LEGACY_CARD_CLASS = "border-border bg-surface-1 dark:border-white/10 dark:bg-white/3";
+
 interface ModelCardProps {
   model: ModelCardOption;
   isSelected: boolean;
@@ -104,9 +107,11 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
+      title={isLegacy ? t("models.legacyHint") : undefined}
+      aria-disabled={isLegacy || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
-        isSelected ? styles.selected : styles.default
-      } ${isSelectable ? "cursor-pointer" : ""} ${isLegacy ? "opacity-50" : ""}`}
+        isSelected ? styles.selected : isLegacy ? LEGACY_CARD_CLASS : styles.default
+      } ${isSelectable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5">
         <div
@@ -133,7 +138,8 @@ export function ModelCard({
         <span
           dir="ltr"
           className={cn(
-            "text-sm font-semibold text-foreground truncate tracking-tight",
+            "text-sm font-semibold truncate tracking-tight",
+            isLegacy ? "text-muted-foreground" : "text-foreground",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
           )}
         >
@@ -164,6 +170,11 @@ export function ModelCard({
         {model.recommended && (
           <span className="text-xs font-medium text-primary px-1.5 py-0.5 bg-primary/10 rounded-sm shrink-0">
             {t("common.recommended")}
+          </span>
+        )}
+        {isLegacy && (
+          <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
+            {t("models.legacy")}
           </span>
         )}
 
