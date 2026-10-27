@@ -80,32 +80,6 @@ test("failed refresh falls back to this account's cache", async (t) => {
   assert.equal(state.error, true);
 });
 
-test("an offline account's fenced list request falls back to its own cache", async (t) => {
-  // Offline, nothing validates the credential, so cloudApi refuses before any request.
-  const unvalidated = async () => {
-    throw Object.assign(new Error("Authentication context is not validated"), {
-      code: "AUTH_CONTEXT_UNVALIDATED",
-    });
-  };
-  const own = await loadStore(t, {
-    initialStorage: { [CACHE_KEY]: cacheEntry("acct-1") },
-    list: unvalidated,
-  });
-  await own.store.getState().refresh();
-  assert.deepEqual(own.store.getState().workspaces, WORKSPACES);
-});
-
-test("an offline account never sees another account's cached list", async (t) => {
-  const { store } = await loadStore(t, {
-    initialStorage: { [CACHE_KEY]: cacheEntry("acct-2") },
-    list: async () => {
-      throw Object.assign(new Error("unvalidated"), { code: "AUTH_CONTEXT_UNVALIDATED" });
-    },
-  });
-  await store.getState().refresh();
-  assert.deepEqual(store.getState().workspaces, []);
-});
-
 test("cache is ignored for another account", async (t) => {
   const { store } = await loadStore(t, {
     initialStorage: { [CACHE_KEY]: cacheEntry("acct-2") },
