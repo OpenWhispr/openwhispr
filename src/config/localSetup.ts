@@ -5,7 +5,7 @@ import type { ComputerProfile } from "../types/electron";
 import { isAgentAllowed, isModeAllowedByPolicy } from "../stores/policyRules";
 import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
-import { formatBytes } from "../utils/formatBytes";
+import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
 import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 import languageRegistry from "./languageRegistry.json" with { type: "json" };
 import localSetupTableData from "../models/localSetupTable.json" with { type: "json" };
@@ -114,11 +114,6 @@ for (const provider of modelRegistryData.localProviders) {
   }
 }
 
-/** "631MB" → "631 MB", the registry size string as Settings shows it. */
-export function spaceSizeUnit(size: string): string {
-  return size.replace(/(?<=\d)(?=[A-Za-z])/, " ");
-}
-
 export function isAppleChipMac(profile: ComputerProfile): boolean {
   return profile.platform === "darwin" && (profile.appleChip != null || profile.arch === "arm64");
 }
@@ -186,13 +181,16 @@ export function pickDictationModel(
   return { modelId: table.models.dictation[group], group };
 }
 
+function speechInfo(modelId: string): SpeechModelInfo | undefined {
+  return parakeetModels[modelId] ?? whisperModels[modelId];
+}
+
 function speechDownload(modelId: string): { download: LocalSetupDownload; info: SpeechModelInfo } {
-  const parakeet = parakeetModels[modelId];
-  const info = parakeet ?? whisperModels[modelId];
+  const info = speechInfo(modelId);
   return {
     info,
     download: {
-      kind: parakeet ? "parakeet" : "whisper",
+      kind: parakeetModels[modelId] ? "parakeet" : "whisper",
       id: modelId,
       bytes: info.expectedSizeBytes ?? info.sizeMb * 1e6,
     },
@@ -218,10 +216,7 @@ function dictationRow(
 ): LocalSetupRow {
   // requiredLocalModelIds already drops ids this build can't download; the check keeps an
   // unknown id from reaching the registry lookups below.
-  if (
-    requiredSpeechModelId &&
-    (parakeetModels[requiredSpeechModelId] || whisperModels[requiredSpeechModelId])
-  ) {
+  if (requiredSpeechModelId && speechInfo(requiredSpeechModelId)) {
     return {
       ...speechRowBase(requiredSpeechModelId),
       label: null,
@@ -428,9 +423,7 @@ export function fitLocalSetupToSpace(
 
 function registrySize(download: LocalSetupDownload): string {
   if (download.kind === "llm") return textModels.get(download.id)?.model.size ?? "";
-  const info =
-    download.kind === "parakeet" ? parakeetModels[download.id] : whisperModels[download.id];
-  return info?.size ?? "";
+  return speechInfo(download.id)?.size ?? "";
 }
 
 /** The size Settings shows for the row's model, or the combined size with the pack folded in. */
