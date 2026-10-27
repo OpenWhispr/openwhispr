@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -76,13 +76,14 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
-import { HotkeyListInput } from "./ui/HotkeyListInput";
+import { HotkeyListInput, type HotkeyListEdit } from "./ui/HotkeyListInput";
+import { DictationCleanupControl } from "./settings/DictationCleanupControl";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
@@ -136,6 +137,7 @@ import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
+  type DictationRow,
   type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
@@ -1270,6 +1272,8 @@ export default function SettingsPage({
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  const dictationRows = useSettingsStore((s) => s.dictationRows);
+  const applyDictationRows = useSettingsStore((s) => s.applyDictationRows);
 
   const settingsPolicyState = usePolicySnapshot();
   const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
@@ -1431,14 +1435,101 @@ export default function SettingsPage({
 
   const installTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
-    onSuccess: (registeredHotkey) => {
-      setDictationKey(registeredHotkey);
+  // The dictation slot commits its shortcuts and their cleanup modes in ONE
+  // call, so it does not go through useHotkeyRegistration (which registers a
+  // flat key list and persists it by itself).
+  const [isDictationCommitting, setIsDictationCommitting] = useState(false);
+  const [dictationCommitError, setDictationCommitError] = useState<string | null>(null);
+
+  const commitDictationRows = useCallback(
+    async (rows: DictationRow[]) => {
+      setIsDictationCommitting(true);
+      setDictationCommitError(null);
+      try {
+        const result = await applyDictationRows(rows);
+        if (result.success) {
+          // Accepted, but the desktop did not confirm it released the previous
+          // bindings: the new shortcuts work, and an old one may ALSO still be
+          // claimed. Saying nothing here would present that as settled.
+          setDictationCommitError(
+            result.degraded ? t("settingsPage.general.hotkey.commitPartlyUnconfirmed") : null
+          );
+          return true;
+        }
+        // A refusal main rolled back cleanly names what went wrong. One it
+        // could not confirm says so instead: claiming the previous shortcuts
+        // still work would be a guess about the desktop's state.
+        const message = result.degraded
+          ? t("settingsPage.general.hotkey.commitUncertain")
+          : result.reason === "press_in_flight"
+            ? // Not a failure: a shortcut is held or a recording is running,
+              // and changing the binding under it would strand the stop.
+              t("settingsPage.general.hotkey.commitBusy")
+            : result.error || t("hooks.hotkeyRegistration.errors.failedToRegister");
+        setDictationCommitError(message);
+        showAlertDialog({
+          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+          description: message,
+        });
+        return false;
+      } finally {
+        setIsDictationCommitting(false);
+      }
     },
-    showSuccessToast: false,
-    showErrorToast: true,
-    showAlert: showAlertDialog,
-  });
+    [applyDictationRows, showAlertDialog, t]
+  );
+
+  // Capture mode could not release the shortcuts, or could not put them back.
+  // The field that started it is usually unmounted by then, so main broadcasts
+  // this and it is shown here until the user dismisses it.
+  useEffect(() => {
+    return window.electronAPI?.onHotkeyCaptureFailed?.(({ phase }) => {
+      toast({
+        title: t("settingsPage.general.hotkey.captureFailed.title"),
+        description:
+          phase === "release"
+            ? t("settingsPage.general.hotkey.captureFailed.releaseDescription")
+            : t("settingsPage.general.hotkey.captureFailed.restoreDescription"),
+        // No auto-dismiss: the user's shortcuts may not work, and that outlives
+        // a few seconds of toast.
+        duration: 0,
+      });
+    });
+  }, [toast, t]);
+
+  // A profile written before the rows existed still has its flat key list;
+  // those rows follow the app setting until the user pins one.
+  const dictationRowList = useMemo<DictationRow[]>(
+    () =>
+      dictationRows.length > 0
+        ? dictationRows
+        : parseHotkeyList(dictationKey).map((key) => ({ key, mode: null })),
+    [dictationRows, dictationKey]
+  );
+
+  // The edit says WHICH row changed, so a rename carries that row's own mode
+  // and a removal takes its own mode with it.
+  const applyDictationEdit = useCallback(
+    (edit: HotkeyListEdit) => {
+      const current = dictationRowList;
+      const next =
+        edit.kind === "replace"
+          ? current.map((row, index) => (index === edit.index ? { ...row, key: edit.hotkey } : row))
+          : edit.kind === "remove"
+            ? current.filter((_, index) => index !== edit.index)
+            : [...current, { key: edit.hotkey, mode: null as DictationRow["mode"] }];
+      return commitDictationRows(next);
+    },
+    [dictationRowList, commitDictationRows]
+  );
+
+  const setDictationRowMode = useCallback(
+    (index: number, mode: DictationRow["mode"]) =>
+      commitDictationRows(
+        dictationRowList.map((row, rowIndex) => (rowIndex === index ? { ...row, mode } : row))
+      ),
+    [dictationRowList, commitDictationRows]
+  );
 
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
@@ -1542,6 +1633,7 @@ export default function SettingsPage({
     isUsingHyprland,
     hyprlandConfigStatus,
     pushToTalkUnavailableReason,
+    holdBlockingHotkey,
     linuxInputAccessDenied,
   } = useHotkeyModeInfo("settings", dictationKey);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
@@ -3959,18 +4051,36 @@ EOF`,
                 <SettingsPanelRow>
                   <HotkeyListInput
                     value={dictationKey}
-                    onChange={(list) => registerHotkey(list)}
+                    // Unused: the dictation slot commits through onEdit, which
+                    // carries which row changed as well as the resulting list.
+                    onChange={(list) => applyDictationEdit({ kind: "add", hotkey: "", list })}
+                    onEdit={applyDictationEdit}
+                    renderRowExtra={(hotkey, index) => (
+                      <DictationCleanupControl
+                        mode={dictationRowList[index]?.mode ?? null}
+                        hotkeyLabel={formatHotkeyLabel(hotkey)}
+                        onChange={(mode) => void setDictationRowMode(index, mode)}
+                        disabled={isDictationCommitting}
+                      />
+                    )}
                     validate={validateDictationHotkey}
-                    disabled={isHotkeyRegistering}
-                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    disabled={isDictationCommitting}
+                    // No cap: every row registers on every backend, GNOME, KDE
+                    // and Hyprland included.
                     required
                     footerEnd={
                       effectiveDefaultHotkey &&
                       dictationKey &&
-                      dictationKey !== effectiveDefaultHotkey ? (
+                      (dictationKey !== effectiveDefaultHotkey ||
+                        // Reset clears the rows AND their modes, so the one
+                        // default-key row with a pinned cleanup still has
+                        // something to reset.
+                        dictationRowList.some((row) => row.mode !== null)) ? (
                         <button
-                          onClick={() => registerHotkey(effectiveDefaultHotkey)}
-                          disabled={isHotkeyRegistering}
+                          onClick={() =>
+                            void commitDictationRows([{ key: effectiveDefaultHotkey, mode: null }])
+                          }
+                          disabled={isDictationCommitting}
                           className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
                         >
                           <BidiInterpolatedText
@@ -3983,6 +4093,19 @@ EOF`,
                       ) : null
                     }
                   />
+                  {/* One warning for the section, outside every row's
+                      collapsed disclosure: the row that failed may have been
+                      removed by the rollback, and a collapsed disclosure
+                      renders at zero height with inert content, so a message
+                      inside one can be invisible. */}
+                  {dictationCommitError && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-md border border-warning/20 bg-warning/8 px-3 py-1.5 dark:border-warning/25 dark:bg-warning/12">
+                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
+                      <span className="text-xs text-warning dark:text-amber-400">
+                        {dictationCommitError}
+                      </span>
+                    </div>
+                  )}
                 </SettingsPanelRow>
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
@@ -4000,7 +4123,20 @@ EOF`,
                     {/* Denied input access gets the setup box below instead. */}
                     {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        {pushToTalkUnavailableReason}
+                        {/* Hold is one control over every row, so with several
+                            shortcuts the reason alone does not say which one
+                            has to change. */}
+                        {holdBlockingHotkey && dictationRowList.length > 1 ? (
+                          <BidiInterpolatedText
+                            text={t("settingsPage.general.hotkey.holdUnsupportedForRow", {
+                              hotkey: BIDI_VALUE_TOKEN,
+                              reason: pushToTalkUnavailableReason,
+                            })}
+                            value={formatHotkeyLabel(holdBlockingHotkey)}
+                          />
+                        ) : (
+                          pushToTalkUnavailableReason
+                        )}
                       </p>
                     )}
                     {getCachedPlatform() === "linux" &&

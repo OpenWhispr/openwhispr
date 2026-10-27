@@ -37,6 +37,7 @@ const PERSISTED_KEYS = [
   "DICTATION_KEY",
   "VOICE_AGENT_KEY",
   "TRANSLATION_KEY",
+  "DICTATION_HOTKEY_CONFIG",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -220,14 +221,42 @@ class EnvironmentManager {
     );
   }
 
-  _writeEnvFileAtomic(envPath) {
+  _writeEnvFileAtomic(envPath, overrides = null) {
     // Concurrent write+rename pairs share the same .env.tmp path, and the
     // loser's rename throws ENOENT (#903).
-    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._writeEnvFile(envPath));
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(() => this._writeEnvFile(envPath, overrides));
     return envWriteQueue;
   }
 
-  async _writeEnvFile(envPath) {
+  /**
+   * Writes staged values and only then publishes them to process.env, both
+   * inside the same queued task. A transaction that has not committed yet must
+   * not be visible to other readers, and an unrelated queued save must not be
+   * able to land between the write and the publish and persist the old value
+   * back over it. Rejects on a real disk failure, unlike saveAllKeysToEnvFile's
+   * fire-and-forget callers.
+   */
+  saveStagedKeys(overrides) {
+    const envPath = path.join(app.getPath("userData"), ".env");
+    // Write and publish are ONE queued task. Publishing after merely awaiting
+    // the write would let an unrelated save enqueue in between, serialize the
+    // file from the still-old process.env, and undo what was just written.
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        await this._writeEnvFile(envPath, overrides);
+        for (const [key, value] of Object.entries(overrides)) {
+          if (value) process.env[key] = value;
+          else delete process.env[key];
+        }
+        return { success: true, path: envPath };
+      });
+    return envWriteQueue;
+  }
+
+  async _writeEnvFile(envPath, overrides = null) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
@@ -235,8 +264,9 @@ class EnvironmentManager {
     let envContent = "# OpenWhispr Environment Variables\n";
     for (const key of PERSISTED_KEYS) {
       if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
-      if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
+      const value = overrides && Object.hasOwn(overrides, key) ? overrides[key] : process.env[key];
+      if (value) {
+        envContent += `${key}=${value}\n`;
       }
     }
     const tmpPath = `${envPath}.tmp`;
@@ -413,6 +443,33 @@ class EnvironmentManager {
     const result = this._saveKey("TRANSLATION_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
+  }
+
+  // The dictation rows and their per-row cleanup modes, as one value, written
+  // only through saveStagedKeys inside the commit transaction and never
+  // through the fire-and-forget savers above.
+  //
+  // Stored base64. dotenv truncates an unquoted value at an unquoted "#" (a
+  // perfectly legal hotkey, "Control+#"), and dotenv 17 does not unescape \"
+  // inside a double-quoted value, so neither bare nor quoted JSON survives the
+  // writer -> dotenv -> parse round trip. process.env therefore holds the
+  // ENCODED form, so an unrelated full rewrite re-emits something dotenv can
+  // read back; only this accessor decodes.
+  getDictationHotkeyConfig() {
+    const stored = this._getKey("DICTATION_HOTKEY_CONFIG");
+    if (!stored) return "";
+    // A hand-written value is accepted as-is; it just cannot contain a "#".
+    if (stored.trimStart().startsWith("[")) return stored;
+    try {
+      return Buffer.from(stored, "base64").toString("utf8");
+    } catch {
+      return "";
+    }
+  }
+
+  /** Encodes a rows JSON string for storage. Pair with getDictationHotkeyConfig. */
+  static encodeDictationHotkeyConfig(json) {
+    return json ? Buffer.from(json, "utf8").toString("base64") : "";
   }
 
   getMeetingKey() {

@@ -3650,7 +3650,29 @@
         "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
-        "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
+        "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره.",
+        "cleanup": {
+          "customize": "تخصيص التنقيح",
+          "label": "تنقيح النص",
+          "useAppSetting": "استخدام إعداد التطبيق",
+          "alwaysOn": "مُفعّل دائمًا",
+          "alwaysOff": "مُعطّل دائمًا",
+          "alwaysOnHint": "ينفّذ هذا الاختصار تنقيح الذكاء الاصطناعي دائمًا، حتى لو كان مُعطّلًا.",
+          "alwaysOffHint": "يلصق هذا الاختصار النص كما نطقته، حتى لو كان تنقيح الذكاء الاصطناعي مُفعّلًا.",
+          "summaryOn": "التنقيح مُفعّل دائمًا",
+          "summaryOff": "التنقيح مُعطّل دائمًا",
+          "labelForRow": "تنقيح النص لـ {{hotkey}}",
+          "customizeForRow": "تخصيص التنقيح لـ {{hotkey}}"
+        },
+        "holdUnsupportedForRow": "الاستمرار بالضغط غير متاح بسبب {{hotkey}}. {{reason}}",
+        "commitUncertain": "لم يؤكّد نظامك التغيير، لذلك قد لا تكون هذه الاختصارات نشطة. اضبط الاختصار مرة أخرى أو أعد تشغيل OpenWhispr.",
+        "commitPartlyUnconfirmed": "اختصاراتك الجديدة نشطة، لكن نظامك لم يؤكّد تحرير الاختصارات السابقة. أعد تشغيل OpenWhispr إذا كان اختصار قديم لا يزال يستجيب.",
+        "captureFailed": {
+          "title": "قد لا تكون الاختصارات نشطة",
+          "releaseDescription": "لم يتمكّن OpenWhispr من تحرير اختصاراته أثناء ضبط اختصار جديد، لذلك لم يُسجَّل أي مفتاح. أعد تشغيل OpenWhispr وحاول مرة أخرى.",
+          "restoreDescription": "لم يتمكّن OpenWhispr من إعادة اختصاراتك بعد ضبط اختصار. اضبط الاختصار مرة أخرى أو أعد تشغيل OpenWhispr."
+        },
+        "commitBusy": "أنهِ الإملاء الجاري قبل تغيير هذا الاختصار."
       },
       "meetingHotkey": {
         "title": "مفتاح اختصار وضع الاجتماع",
@@ -4475,7 +4497,8 @@
     "remove": "إزالة الاختصار",
     "addAnother": "إضافة اختصار آخر",
     "duplicate": "تمت إضافته بالفعل",
-    "singleModifierNeedsRightSide": "لا يمكن أن يكون {{key}} بمفرده اختصارًا. اضغط على {{alternative}} بدلًا من ذلك، أو أضف مفتاحًا ثانيًا."
+    "singleModifierNeedsRightSide": "لا يمكن أن يكون {{key}} بمفرده اختصارًا. اضغط على {{alternative}} بدلًا من ذلك، أو أضف مفتاحًا ثانيًا.",
+    "captureUnavailable": "لم يحرّر نظامك الاختصار الحالي، لذلك لا يمكن تسجيل المفاتيح. أعد تشغيل OpenWhispr وحاول مرة أخرى."
   },
   "languageSelector": {
     "noLanguagesFound": "لم يتم العثور على لغات",

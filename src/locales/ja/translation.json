@@ -1398,7 +1398,8 @@
     "remove": "ホットキーを削除",
     "addAnother": "ホットキーをもう1つ追加",
     "duplicate": "すでに追加されています",
-    "singleModifierNeedsRightSide": "{{key}} だけではショートカットにできません。{{alternative}} を押すか、2つ目のキーを追加してください。"
+    "singleModifierNeedsRightSide": "{{key}} だけではショートカットにできません。{{alternative}} を押すか、2つ目のキーを追加してください。",
+    "captureUnavailable": "システムが現在のショートカットを解放しなかったため、キーを記録できません。OpenWhispr を再起動してやり直してください。"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -1997,7 +1998,29 @@
         "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
         "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
-        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。",
+        "cleanup": {
+          "customize": "クリーンアップをカスタマイズ",
+          "label": "テキストのクリーンアップ",
+          "useAppSetting": "アプリの設定に従う",
+          "alwaysOn": "常にオン",
+          "alwaysOff": "常にオフ",
+          "alwaysOnHint": "このショートカットは、AI クリーンアップがオフでも必ず実行します。",
+          "alwaysOffHint": "このショートカットは、AI クリーンアップがオンでも話したままの文字起こしを貼り付けます。",
+          "summaryOn": "クリーンアップを常にオン",
+          "summaryOff": "クリーンアップを常にオフ",
+          "labelForRow": "{{hotkey}}のテキストのクリーンアップ",
+          "customizeForRow": "{{hotkey}}のクリーンアップをカスタマイズ"
+        },
+        "holdUnsupportedForRow": "{{hotkey}}のため、押し続けは使用できません。{{reason}}",
+        "commitUncertain": "システムが変更を確認できなかったため、これらのショートカットは有効になっていない可能性があります。ショートカットを再設定するか、OpenWhispr を再起動してください。",
+        "commitPartlyUnconfirmed": "新しいショートカットは有効ですが、以前のショートカットが解放されたことをシステムが確認できませんでした。古いショートカットがまだ反応する場合は OpenWhispr を再起動してください。",
+        "captureFailed": {
+          "title": "ショートカットが有効になっていない可能性があります",
+          "releaseDescription": "設定中に OpenWhispr がショートカットを解放できなかったため、キーは記録されませんでした。OpenWhispr を再起動してやり直してください。",
+          "restoreDescription": "設定後に OpenWhispr がショートカットを元に戻せませんでした。ショートカットを再設定するか、OpenWhispr を再起動してください。"
+        },
+        "commitBusy": "実行中のディクテーションを終えてから、このショートカットを変更してください。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",

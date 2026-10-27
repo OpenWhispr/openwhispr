@@ -1377,7 +1377,8 @@
     "remove": "Remover atalho",
     "addAnother": "Adicionar outro atalho",
     "duplicate": "Já adicionado",
-    "singleModifierNeedsRightSide": "{{key}} sozinha não pode ser um atalho. Pressione {{alternative}} ou adicione uma segunda tecla."
+    "singleModifierNeedsRightSide": "{{key}} sozinha não pode ser um atalho. Pressione {{alternative}} ou adicione uma segunda tecla.",
+    "captureUnavailable": "Seu sistema não liberou o atalho atual, por isso não é possível registrar teclas. Reinicie o OpenWhispr e tente novamente."
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",
@@ -1976,7 +1977,29 @@
         "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão.",
         "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
         "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não serão mantidos após recarregar a configuração do Hyprland. Verifique se o ficheiro existe e permite escrita.",
-        "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho."
+        "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer atalho existente do Hyprland que use a mesma combinação de teclas será desvinculado quando o OpenWhispr registar o atalho.",
+        "cleanup": {
+          "customize": "Personalizar a limpeza",
+          "label": "Limpeza de texto",
+          "useAppSetting": "Usar a configuração do app",
+          "alwaysOn": "Sempre ativada",
+          "alwaysOff": "Sempre desativada",
+          "alwaysOnHint": "Este atalho executa sempre a limpeza por IA, mesmo que ela esteja desativada.",
+          "alwaysOffHint": "Este atalho cola a transcrição como foi ditada, mesmo que a limpeza por IA esteja ativada.",
+          "summaryOn": "Limpeza sempre ativada",
+          "summaryOff": "Limpeza sempre desativada",
+          "labelForRow": "Limpeza de texto para {{hotkey}}",
+          "customizeForRow": "Personalizar a limpeza de {{hotkey}}"
+        },
+        "holdUnsupportedForRow": "Manter pressionado não está disponível por causa de {{hotkey}}. {{reason}}",
+        "commitUncertain": "Seu sistema não confirmou a alteração, por isso estes atalhos podem não estar ativos. Defina o atalho novamente ou reinicie o OpenWhispr.",
+        "commitPartlyUnconfirmed": "Seus novos atalhos estão ativos, mas o sistema não confirmou que liberou os anteriores. Reinicie o OpenWhispr se um atalho antigo ainda responder.",
+        "captureFailed": {
+          "title": "Os atalhos podem não estar ativos",
+          "releaseDescription": "O OpenWhispr não conseguiu liberar os atalhos enquanto você definia um novo, por isso nada foi registrado. Reinicie o OpenWhispr e tente novamente.",
+          "restoreDescription": "O OpenWhispr não conseguiu restaurar seus atalhos depois de definir um. Defina o atalho novamente ou reinicie o OpenWhispr."
+        },
+        "commitBusy": "Conclua o ditado em andamento antes de alterar este atalho."
       },
       "meetingHotkey": {
         "title": "Atalho modo reunião",

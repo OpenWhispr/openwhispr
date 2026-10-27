@@ -4,6 +4,7 @@ import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
+import { parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type {
   ChineseScriptPreference,
@@ -1219,6 +1220,9 @@ export interface SettingsState
   setVoiceAgentKey: (key: string) => Promise<HotkeyRegistrationResult>;
   translationKey: string;
   setTranslationKey: (key: string) => Promise<HotkeyRegistrationResult>;
+  /** Dictation rows with their per-row cleanup mode. Main owns the commit. */
+  dictationRows: DictationRow[];
+  applyDictationRows: (rows: DictationRow[]) => Promise<DictationApplyResult>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -1320,6 +1324,59 @@ function readModelMemory(key: string): Record<string, string> {
 /** Writes a string setting whose key is computed rather than known up front. */
 export function setStringSetting(key: keyof SettingsState, value: string): void {
   createStringSetter(key)(value);
+}
+
+/** One dictation shortcut and the cleanup it forces, if any. */
+export interface DictationRow {
+  key: string;
+  mode: "raw" | "cleaned" | null;
+}
+
+export interface DictationApplyResult {
+  success: boolean;
+  rows?: DictationRow[];
+  reason?: string;
+  error?: string;
+  degraded?: boolean;
+}
+
+const DICTATION_ROWS_KEY = "dictationHotkeyConfig";
+
+// Rows mirror what main committed. Malformed storage reads as no rows rather
+// than throwing, and a legacy flat dictationKey loads as Use app setting —
+// never pinned to whatever the global preference happens to be today.
+function readDictationRows(): DictationRow[] {
+  if (!isBrowser) return [];
+  try {
+    const stored = localStorage.getItem(DICTATION_ROWS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((row) => row && typeof row.key === "string" && row.key.trim())
+          .map((row) => ({
+            key: row.key.trim(),
+            mode: row.mode === "raw" || row.mode === "cleaned" ? row.mode : null,
+          }));
+      }
+    }
+  } catch {
+    // fall through to the legacy list
+  }
+  const legacy = localStorage.getItem("dictationKey") || "";
+  return parseHotkeyList(legacy).map((key) => ({ key, mode: null }));
+}
+
+function writeDictationRows(rows: DictationRow[]): void {
+  if (isBrowser) {
+    localStorage.setItem(DICTATION_ROWS_KEY, JSON.stringify(rows));
+    // The flat list stays in step for everything that still reads it.
+    localStorage.setItem("dictationKey", serializeHotkeyList(rows.map((row) => row.key)));
+  }
+  useSettingsStore.setState({
+    dictationRows: rows,
+    dictationKey: serializeHotkeyList(rows.map((row) => row.key)),
+  });
 }
 
 function createBooleanSetter(key: string) {
@@ -1625,6 +1682,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   translationKey: readString("translationKey", ""),
+  dictationRows: readDictationRows(),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   spokenLanguages: readStringArray("spokenLanguages", []),
@@ -2363,6 +2421,50 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "translation hotkey",
     () => window.electronAPI?.updateTranslationHotkey
   ),
+  /**
+   * One call commits the rows AND their modes. Main validates, registers only
+   * when keys changed, persists with an awaited write and publishes the
+   * authoritative rows back; the UI adopts whatever it returns.
+   */
+  applyDictationRows: async (rows: DictationRow[]): Promise<DictationApplyResult> => {
+    const previous = useSettingsStore.getState().dictationRows;
+    const apply = window.electronAPI?.applyDictationHotkeys;
+    if (!apply) {
+      writeDictationRows(rows);
+      return { success: true, rows };
+    }
+    try {
+      const result = await apply({ rows });
+      if (!result?.success) {
+        // Refused. The rows go back to the last committed set — but `degraded`
+        // means main could NOT confirm the desktop released or restored the old
+        // bindings, so the caller must say the shortcuts may not be active
+        // rather than presenting these rows as known good.
+        writeDictationRows(previous);
+        logger.warn(
+          "Dictation hotkeys refused",
+          { reason: result?.reason, degraded: result?.degraded === true },
+          "settings"
+        );
+        return {
+          success: false,
+          reason: result?.reason,
+          error: result?.error,
+          degraded: result?.degraded === true,
+        };
+      }
+      writeDictationRows(result.rows ?? rows);
+      return { success: true, rows: result.rows ?? rows, degraded: result.degraded };
+    } catch (error) {
+      writeDictationRows(previous);
+      logger.warn(
+        "Failed to apply dictation hotkeys",
+        { error: error instanceof Error ? error.message : String(error) },
+        "settings"
+      );
+      return { success: false, error: String(error) };
+    }
+  },
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
     if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
@@ -3582,6 +3684,18 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync translation hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Dictation rows and their cleanup modes come from main, which owns them.
+    try {
+      const config = await window.electronAPI.getDictationHotkeyConfig?.();
+      if (config?.rows?.length) writeDictationRows(config.rows);
+    } catch (err) {
+      logger.warn(
+        "Failed to sync dictation hotkey rows on startup",
         { error: (err as Error).message },
         "settings"
       );

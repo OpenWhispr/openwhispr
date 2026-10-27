@@ -73,6 +73,7 @@ async function mount(t) {
       setVoiceAgentRequested(value) { this.voiceAgentRequested=value; }
       setAssistantSelectionContext() {}
       setTranslationRequested() {}
+      setCleanupOverride() {}
       async startRecording() { this.starts+=1; return true; }
       async safePaste(text) { this.callbacks.onError({title:"Paste Error",code:"ACCESSIBILITY_PERMISSION_REQUIRED",clipboardCopied:true,transcript:text}); return { pasted:false }; }
       async saveTranscription() { this.saves+=1; return true; }

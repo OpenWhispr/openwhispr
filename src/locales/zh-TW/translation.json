@@ -1398,7 +1398,8 @@
     "remove": "移除快捷鍵",
     "addAnother": "新增其他快捷鍵",
     "duplicate": "已新增",
-    "singleModifierNeedsRightSide": "{{key}} 單獨無法作為快速鍵。請按 {{alternative}}，或再加一個按鍵。"
+    "singleModifierNeedsRightSide": "{{key}} 單獨無法作為快速鍵。請按 {{alternative}}，或再加一個按鍵。",
+    "captureUnavailable": "系統未釋放目前的快速鍵，因此無法記錄按鍵。請重新啟動 OpenWhispr 後再試一次。"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",
@@ -1997,7 +1998,29 @@
         "linuxPttSetupNote": "執行指令後，請登出並重新登入。",
         "hyprlandConfigWriteWarningTitle": "Hyprland 按鍵綁定不會保留",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此重新載入 Hyprland 設定後按鍵綁定不會保留。請確認該檔案存在且可寫入。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。"
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。",
+        "cleanup": {
+          "customize": "自訂清理",
+          "label": "文字清理",
+          "useAppSetting": "使用應用程式設定",
+          "alwaysOn": "一律開啟",
+          "alwaysOff": "一律關閉",
+          "alwaysOnHint": "即使 AI 清理已關閉，此快速鍵也一律執行清理。",
+          "alwaysOffHint": "即使 AI 清理已開啟，此快速鍵也會依原話貼上聽寫內容。",
+          "summaryOn": "清理一律開啟",
+          "summaryOff": "清理一律關閉",
+          "labelForRow": "{{hotkey}} 的文字清理",
+          "customizeForRow": "自訂 {{hotkey}} 的清理"
+        },
+        "holdUnsupportedForRow": "因為 {{hotkey}}，無法使用按住模式。{{reason}}",
+        "commitUncertain": "系統未確認這項變更，這些快速鍵可能尚未生效。請重新設定快速鍵，或重新啟動 OpenWhispr。",
+        "commitPartlyUnconfirmed": "新的快速鍵已生效，但系統未確認已釋放原有的快速鍵。如果舊的快速鍵仍有反應，請重新啟動 OpenWhispr。",
+        "captureFailed": {
+          "title": "快速鍵可能尚未生效",
+          "releaseDescription": "設定新快速鍵時，OpenWhispr 無法釋放原有的快速鍵，因此未記錄任何按鍵。請重新啟動 OpenWhispr 後再試一次。",
+          "restoreDescription": "設定快速鍵後，OpenWhispr 無法還原原有的快速鍵。請重新設定快速鍵，或重新啟動 OpenWhispr。"
+        },
+        "commitBusy": "請先結束進行中的聽寫，再變更此快速鍵。"
       },
       "meetingHotkey": {
         "title": "會議模式快捷鍵",

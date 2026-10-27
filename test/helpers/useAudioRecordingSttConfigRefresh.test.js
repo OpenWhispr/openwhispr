@@ -28,6 +28,7 @@ export default class FakeAudioManager {
   setVoiceAgentRequested() {}
   setAssistantSelectionContext() {}
   setTranslationRequested() {}
+  setCleanupOverride() {}
   async startRecording() { globalThis.__sttRefreshStarts.push(globalThis.__sttRefreshFetches); return true; }
   cleanup() {}
 }

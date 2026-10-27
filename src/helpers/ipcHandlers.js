@@ -5,6 +5,15 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
+const { parseHotkeyList, serializeHotkeyList } = require("./hotkeyList");
+const { canonicalizeHotkey } = require("./hotkeyCanonical");
+const {
+  pruneRows,
+  rowKeys,
+  modeFor,
+  serializeConfig,
+  isModeOnlyChange,
+} = require("./dictationHotkeyConfig");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
@@ -741,6 +750,132 @@ class IPCHandlers {
     }
   }
 
+  /**
+   * The dictation commit. Main is the only owner of the rows and their modes.
+   *
+   *   validate -> refuse while a press owns a binding -> snapshot ->
+   *   register (key changes only) -> awaited staged write -> publish
+   *
+   * Any failure restores registrations, cache and storage together, and an
+   * unresolved OS state is reported as degraded rather than as a clean
+   * rollback. A mode-only edit skips registration entirely, so changing a
+   * selector can never create a second registration of the same combination.
+   */
+  /**
+   * The one owner of the dictation rows. A key edit, a mode edit, an add, a
+   * remove and a reset are all this call with a complete desired state, so one
+   * call has one outcome.
+   *
+   * Ordering is the contract: nothing is published — not to main's dispatch
+   * cache, not to the renderer, not to .env — until the file write has landed.
+   * The registration pass runs with `publish: false` for the same reason:
+   * HotkeyManager.updateHotkey would otherwise persist DICTATION_KEY and send
+   * `setting-updated` by itself, putting the keys on disk ahead of the modes
+   * they belong with and leaving a failed commit announced.
+   */
+  async _applyDictationHotkeys(request) {
+    const windowManager = this.windowManager;
+    const canonical = (key) => canonicalizeHotkey(key);
+    const nextRows = pruneRows(request?.rows, canonical);
+    if (nextRows.length === 0) {
+      return { success: false, reason: "empty", error: "At least one shortcut is required" };
+    }
+
+    // An edit while anything owns a dictation binding is refused, never
+    // queued: replacing the binding under a held key strands the release that
+    // would have stopped the recording, and replacing it under a live
+    // recording changes the modes that recording was started with. This covers
+    // the desktop closures, the Windows and macOS push states, the native
+    // Hold paths in main.js and any prepare/recording the renderer reported.
+    const owner =
+      windowManager.getDictationOwner?.() ?? windowManager.hotkeyManager?.getPressOwner?.();
+    if (owner) {
+      return { success: false, reason: "press_in_flight", owner };
+    }
+
+    const previousRows = windowManager.getDictationRows();
+    const previousKeys = serializeHotkeyList(rowKeys(previousRows));
+    const nextKeys = serializeHotkeyList(rowKeys(nextRows));
+    const keysUnchanged = isModeOnlyChange(previousRows, nextRows, canonical);
+
+    // Closes the window between the owner check above and the keys actually
+    // changing. It drops NEW starts only — a release, a cancel and a stop are
+    // always delivered.
+    windowManager.setHotkeyCommitInFlight?.(true);
+    try {
+      let registration = { success: true };
+      if (!keysUnchanged) {
+        registration = await windowManager.updateHotkey(nextKeys, { publish: false });
+        if (!registration?.success) {
+          return {
+            success: false,
+            reason: registration?.reason,
+            error: registration?.message || registration?.error,
+            degraded: registration?.degraded === true,
+          };
+        }
+      }
+
+      try {
+        await this.environmentManager.saveStagedKeys({
+          DICTATION_KEY: nextKeys,
+          DICTATION_HOTKEY_CONFIG: this.environmentManager.constructor.encodeDictationHotkeyConfig(
+            serializeConfig(nextRows)
+          ),
+        });
+      } catch (error) {
+        // Storage refused, so nothing is committed. The rows were never
+        // published and saveStagedKeys assigns process.env only after the
+        // rename, so the only thing to put back is the registration.
+        let restoreDegraded = false;
+        if (!keysUnchanged && previousKeys) {
+          const restored = await windowManager.updateHotkey(previousKeys, { publish: false });
+          restoreDegraded = !restored?.success || restored?.degraded === true;
+        }
+        return {
+          success: false,
+          reason: "persist_failed",
+          error: error?.message || String(error),
+          degraded: restoreDegraded,
+        };
+      }
+
+      // Committed. Disk, main's dispatch cache, the OS bindings and the
+      // renderer now all describe the same configuration.
+      windowManager.setDictationRows(nextRows);
+      windowManager.hotkeyManager?.notifyDictationKeyCommitted?.(nextKeys);
+      return {
+        success: true,
+        rows: nextRows,
+        ...(registration?.degraded ? { degraded: true } : {}),
+      };
+    } finally {
+      windowManager.setHotkeyCommitInFlight?.(false);
+    }
+  }
+
+  /**
+   * Serializes everything that re-registers the dictation slot: row commits and
+   * the capture-mode teardown/restore. They read the slot, release what it
+   * holds and bind a new set, so running two at once lets one re-register a
+   * snapshot the other has already replaced — the field's blur restoring the
+   * rows a commit just changed, or the commit's rollback landing on bindings
+   * capture had released.
+   */
+  _queueHotkeyWork(work) {
+    this._dictationCommitQueue = (this._dictationCommitQueue || Promise.resolve())
+      .catch(() => {})
+      .then(work);
+    return this._dictationCommitQueue;
+  }
+
+  // Every dictation row commit runs through the shared queue: one at a time,
+  // so two overlapping edits cannot interleave their snapshot, registration
+  // and publication.
+  _queueDictationCommit(request) {
+    return this._queueHotkeyWork(() => this._applyDictationHotkeys(request));
+  }
+
   createFolderWithEffects(name, spaceId) {
     const result = this.databaseManager.createFolder(name, spaceId);
     if (result?.success && result?.folder) {
@@ -979,6 +1114,14 @@ class IPCHandlers {
   // which keys the native Globe listener owns.
   _notifyHotkeyChanged(hotkey) {
     ipcMain.emit("hotkey-changed", null, hotkey);
+  }
+
+  // Capture mode could not release the OS shortcuts, or could not put them
+  // back. The field that started it is usually unmounted by the time this is
+  // known, so the warning goes to whichever window is open rather than back
+  // down the call that asked.
+  _notifyHotkeyCaptureFailed(phase) {
+    broadcastToWindows("hotkey-capture-failed", { phase });
   }
 
   _releaseMicHold(sender) {
@@ -4471,8 +4614,17 @@ class IPCHandlers {
       return { success: errors.length === 0, message: "Cleanup completed", errors };
     });
 
-    ipcMain.handle("update-hotkey", async (event, hotkey) => {
-      return await this.windowManager.updateHotkey(hotkey);
+    // Flat-key callers (onboarding, the reset link) still land here. Keys and
+    // rows must never drift apart, so this goes through the same transaction:
+    // a key that survives the edit keeps its own mode, a new key starts on the
+    // app setting, and a key that is gone takes its mode with it.
+    ipcMain.handle("update-hotkey", async (_event, hotkey) => {
+      const rows = parseHotkeyList(hotkey).map((key) => ({
+        key,
+        mode: modeFor(this.windowManager.getDictationRows(), key, canonicalizeHotkey),
+      }));
+      const result = await this._queueDictationCommit({ rows });
+      return { ...result, message: result?.error || result?.message };
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
@@ -4485,16 +4637,66 @@ class IPCHandlers {
           focusWindowsHotkeyCaptureWindow(captureWindow);
         }
       }
-      if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
+      // A field's focus reaches this through several paths at once (DOM focus,
+      // the Windows autofocus handshake, window focus, visibility), so the
+      // same requested state asked for twice must get the SAME answer: the
+      // first one's. Returning `skipped` off the eagerly-set flag told the
+      // second caller the shortcuts were released while the first teardown was
+      // still running — and a refusal would never have reached it at all.
+      const inFlight = this._hotkeyCaptureRequest;
+      if (inFlight && inFlight.enabled === enabled) return inFlight.promise;
+      if (!inFlight && this._hotkeyCaptureMode === enabled) {
+        return { success: true, skipped: true };
+      }
+
+      // Set before the queued work: while this is true no dictation hotkey
+      // dispatches, which is the conservative state to be in while a commit
+      // ahead of us finishes.
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
+      // Identifies this request, so a failure that lands after a newer focus
+      // state was requested cannot reset the flag the newer one just set.
+      const requestToken = (this._hotkeyCaptureToken = (this._hotkeyCaptureToken || 0) + 1);
+      // Serialized against row commits: both release and re-register the
+      // dictation slot, and interleaving them lets one bind a snapshot the
+      // other has already replaced.
+      const serialize = this._queueHotkeyWork?.bind(this) ?? ((work) => work());
+      const settled = () => {
+        if (this._hotkeyCaptureRequest?.token === requestToken) {
+          this._hotkeyCaptureRequest = null;
+        }
+      };
+      const promise = serialize(() => this._applyHotkeyCaptureMode(enabled, requestToken)).then(
+        (result) => {
+          settled();
+          return result;
+        },
+        (error) => {
+          settled();
+          throw error;
+        }
+      );
+      this._hotkeyCaptureRequest = { enabled, token: requestToken, promise };
+      return promise;
+    });
+
+    // The OS half of capture mode. Runs on the shared hotkey queue, so it never
+    // interleaves with a row commit.
+    this._applyHotkeyCaptureMode = async (enabled, requestToken = null) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
 
       // Restore from slot state only. A freshly captured hotkey is registered by
       // its own update IPC (invoked before this one); re-binding it here would
       // overwrite the primary on DE backends or leak untracked registrations.
-      const effectiveHotkey = hotkeyManager.getCurrentHotkey();
+      // The slot holds EVERY committed row, and all of them have to come back:
+      // restoring getCurrentHotkey() alone left rows 1..N unbound on GNOME, KDE
+      // and Hyprland while the slot — and the UI — still advertised them.
+      const committedDictationRows = hotkeyManager.getSlotHotkeys("dictation");
+      // Anything the desktop would not release on the way in, or would not
+      // restore on the way out. Either one leaves the user's keys in a state
+      // the app cannot describe, so both are aggregated and reported.
+      const captureHeld = [];
 
       const {
         isGlobeLikeHotkey,
@@ -4508,6 +4710,104 @@ class IPCHandlers {
         isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
+
+      // Puts the shortcuts back: every committed dictation row, the native key
+      // listeners, and every other slot. Used when the field closes AND when an
+      // enter failed halfway, where whatever WAS released must not stay gone.
+      const restoreHotkeys = async () => {
+        // globalShortcut first; KDE/GNOME/Hyprland restore through the
+        // native path below.
+        const usesNativePath =
+          hotkeyManager.isUsingKDE() ||
+          hotkeyManager.isUsingGnome() ||
+          hotkeyManager.isUsingHyprland();
+        let restoreFailure = null;
+        if (!usesNativePath) {
+          const { globalShortcut } = require("electron");
+          // Re-register every globalShortcut-backed dictation hotkey (the slot
+          // may hold several).
+          for (const hk of committedDictationRows) {
+            if (!hk || usesNativeListener(hk)) continue;
+            const accelerator = hk;
+            if (!globalShortcut.isRegistered(accelerator)) {
+              debugLogger.log(
+                `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
+              );
+              const callback = this.windowManager.createHotkeyCallback();
+              const registered = globalShortcut.register(accelerator, () => callback(hk));
+              if (!registered) {
+                debugLogger.warn(
+                  `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+                );
+                restoreFailure = { hotkey: accelerator };
+              }
+            }
+          }
+        }
+
+        // Re-sync native key listeners (Windows/Linux) across all hotkey slots now
+        // that capture is done. Idempotent — reads the current slot hotkeys.
+        this.windowManager.reconcileNativeKeyListeners();
+
+        // GNOME, KDE and Hyprland: restore the committed rows through the one
+        // path that binds EVERY row with its own identity and the activation
+        // mode in force. The old per-backend calls each re-bound a single
+        // hotkey, so a second or third dictation shortcut never came back from
+        // capture — and the slot kept claiming it was active.
+        const dictationInfo = hotkeyManager.slots.get("dictation");
+        if (usesNativePath && committedDictationRows.length > 0) {
+          debugLogger.log(
+            `[IPC] Re-registering dictation rows "${committedDictationRows.join(", ")}" after capture mode`
+          );
+          const restored = await hotkeyManager
+            .registerSlot(
+              "dictation",
+              committedDictationRows,
+              dictationInfo?.callback || this.windowManager.createHotkeyCallback()
+            )
+            .catch((err) => {
+              debugLogger.warn(
+                "[IPC] Failed to restore dictation rows after capture:",
+                err.message
+              );
+              return { success: false, error: err.message, degraded: true };
+            });
+          if (!restored?.success) {
+            debugLogger.warn("[IPC] Dictation rows were not restored after capture", { restored });
+            restoreFailure = {
+              error: restored?.error,
+              degraded: restored?.degraded === true,
+            };
+          }
+        }
+
+        // Re-register non-dictation slots (meeting, agent) that were unregistered on capture enter
+        for (const [slot, info] of hotkeyManager.slots) {
+          const hotkeys = info?.hotkeys || [];
+          if (slot === "dictation" || slot === "cancel" || hotkeys.length === 0 || !info?.callback)
+            continue;
+          debugLogger.log(
+            `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
+          );
+          const result = await hotkeyManager
+            .registerSlot(slot, hotkeys, info.callback)
+            .catch((err) => {
+              debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
+              return { success: false };
+            });
+          if (!result.success) {
+            debugLogger.warn(`[IPC] Slot "${slot}" was not restored after capture`);
+            // A slot that did not come back is as unusable as a dictation row
+            // that did not: the user's shortcut is gone while the app still
+            // lists it.
+            if (!restoreFailure) {
+              restoreFailure = { slot, error: result.error, degraded: true };
+            }
+          }
+        }
+
+        return restoreFailure;
+      };
 
       if (enabled) {
         // Entering capture mode — unregister ALL slots so none intercept keypresses.
@@ -4542,14 +4842,42 @@ class IPCHandlers {
 
         // On GNOME, unregister all native keybindings during capture
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager) {
-          await hotkeyManager.gnomeManager.unregisterPushToTalk();
+          const portalReleased = await hotkeyManager.gnomeManager
+            .unregisterPushToTalk()
+            .catch((err) => {
+              debugLogger.warn("[IPC] Failed to release the GNOME portal:", err.message);
+              return false;
+            });
+          if (portalReleased === false) captureHeld.push("gnome-portal");
           for (const slot of [...hotkeyManager.gnomeManager.registeredSlots]) {
             debugLogger.log(
               `[IPC] Unregistering GNOME keybinding (slot "${slot}") for capture mode`
             );
-            await hotkeyManager.gnomeManager.unregisterKeybinding(slot).catch((err) => {
-              debugLogger.warn(`[IPC] Failed to unregister GNOME slot "${slot}":`, err.message);
-            });
+            const released = await hotkeyManager.gnomeManager
+              .unregisterKeybinding(slot)
+              .catch((err) => {
+                debugLogger.warn(`[IPC] Failed to unregister GNOME slot "${slot}":`, err.message);
+                return false;
+              });
+            if (released === false) captureHeld.push(slot);
+          }
+        }
+
+        // On KDE, release every registered KGlobalAccel action. KDE grabs the
+        // key at the compositor, so leaving the shortcut registered does not
+        // merely risk a stray dispatch — the field never sees the chord at
+        // all, because KGlobalAccel swallows it. Suppressing our callback is
+        // not a release.
+        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager) {
+          for (const bindingId of [...hotkeyManager.kdeManager.registeredSlots]) {
+            debugLogger.log(`[IPC] Unregistering KDE keybinding "${bindingId}" for capture mode`);
+            const released = await hotkeyManager.kdeManager
+              .unregisterKeybinding(bindingId)
+              .catch((err) => {
+                debugLogger.warn(`[IPC] Failed to unregister KDE "${bindingId}":`, err.message);
+                return false;
+              });
+            if (released !== true) captureHeld.push(bindingId);
           }
         }
 
@@ -4564,114 +4892,70 @@ class IPCHandlers {
             });
           if (!unregistered) {
             debugLogger.warn("[IPC] Hyprland keybinding remained active during capture");
+            captureHeld.push("hyprland");
           }
+        }
+
+        // A shortcut the desktop would not give up still fires while the field
+        // is open: the next keystroke starts a recording instead of being
+        // recorded. The caller has to refuse the capture, so say so.
+        if (captureHeld.length > 0) {
+          debugLogger.warn("[IPC] Capture mode could not release every shortcut", { captureHeld });
+          // Only if this is still the state the app is asking for: a newer
+          // focus (or blur) has already set what it wants, and this answer is
+          // about a request that has been superseded.
+          if (requestToken === null || this._hotkeyCaptureToken === requestToken) {
+            this._hotkeyCaptureMode = false;
+            this.windowManager.setHotkeyListeningMode(false);
+            ipcMain.emit("hotkey-listening-mode-changed", null, false);
+          }
+          // A teardown is rarely all-or-nothing: the rows that DID come free
+          // are now unbound, and the field is not going to open, so nothing
+          // else would ever put them back. The bindings the desktop kept stay
+          // reported as uncertain either way.
+          const restoreFailure = await restoreHotkeys();
+          if (restoreFailure) {
+            debugLogger.warn("[IPC] Released shortcuts were not restored after a refused capture", {
+              restoreFailure,
+            });
+          }
+          // The field that asked may be gone by the time the user reads this,
+          // so it goes to whichever window is open, not back down the call.
+          this._notifyHotkeyCaptureFailed?.("release");
+          return { success: false, reason: "capture_release_failed", degraded: true };
         }
       } else {
-        // Exiting capture mode - re-register globalShortcut if not already registered
-        // Skip for KDE/GNOME/Hyprland — updateHotkey handles re-registration via native path
-        const usesNativePath =
-          hotkeyManager.isUsingKDE() ||
-          hotkeyManager.isUsingGnome() ||
-          hotkeyManager.isUsingHyprland();
-        if (!usesNativePath) {
-          const { globalShortcut } = require("electron");
-          // Re-register every globalShortcut-backed dictation hotkey (the slot
-          // may hold several).
-          for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
-            if (!hk || usesNativeListener(hk)) continue;
-            const accelerator = hk;
-            if (!globalShortcut.isRegistered(accelerator)) {
-              debugLogger.log(
-                `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
-              );
-              const callback = this.windowManager.createHotkeyCallback();
-              const registered = globalShortcut.register(accelerator, () => callback(hk));
-              if (!registered) {
-                debugLogger.warn(
-                  `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
-                );
-              }
-            }
-          }
-        }
-
-        // Re-sync native key listeners (Windows/Linux) across all hotkey slots now
-        // that capture is done. Idempotent — reads the current slot hotkeys.
-        this.windowManager.reconcileNativeKeyListeners();
-
-        // On GNOME, re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
-          debugLogger.log(
-            `[IPC] Re-registering GNOME keybinding "${effectiveHotkey}" after capture mode`
-          );
-          await hotkeyManager.registerGnomeDictationHotkey(
-            effectiveHotkey,
-            this.windowManager.createHotkeyCallback()
-          );
-        }
-
-        // On Hyprland Wayland, re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager && effectiveHotkey) {
-          debugLogger.log(
-            `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
-          );
-          await hotkeyManager.hyprlandManager.registerKeybinding(
-            effectiveHotkey,
-            this.windowManager.getActivationMode() === "push"
-          );
-        }
-
-        // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
-        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager && effectiveHotkey) {
-          debugLogger.log(
-            `[IPC] Re-registering KDE keybinding "${effectiveHotkey}" after capture mode`
-          );
-          const callback = this.windowManager.createHotkeyCallback();
-          const result = await hotkeyManager.kdeManager.registerKeybinding(
-            effectiveHotkey,
-            "dictation",
-            callback,
-            this.windowManager.getActivationMode() === "push"
-          );
-          if (result !== true) {
-            debugLogger.warn(
-              `[IPC] Failed to re-register KDE keybinding "${effectiveHotkey}" after capture mode`,
-              { result }
-            );
-          }
-        }
-
-        // Re-register non-dictation slots (meeting, agent) that were unregistered on capture enter
-        for (const [slot, info] of hotkeyManager.slots) {
-          const hotkeys = info?.hotkeys || [];
-          if (slot === "dictation" || slot === "cancel" || hotkeys.length === 0 || !info?.callback)
-            continue;
-          debugLogger.log(
-            `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
-          );
-          const result = await hotkeyManager
-            .registerSlot(slot, hotkeys, info.callback)
-            .catch((err) => {
-              debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
-              return { success: false };
-            });
-          if (!result.success) {
-            debugLogger.warn(`[IPC] Slot "${slot}" was not restored after capture`);
-          }
+        const restoreFailure = await restoreHotkeys();
+        // Honest answer: the keys may be unclaimed, and the caller is the only
+        // surface that can tell the user.
+        if (restoreFailure) {
+          this._notifyHotkeyCaptureFailed?.("restore");
+          return {
+            success: false,
+            reason: "capture_restore_failed",
+            error: restoreFailure.error,
+            degraded: restoreFailure.degraded === true,
+          };
         }
       }
 
       return { success: true };
-    });
+    };
 
     ipcMain.handle("get-hotkey-mode-info", async (_event, requestedHotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const hotkey =
+      // Every split goes through parseHotkeyList: a bare split(",") loses
+      // "Control+," , which is a legal hotkey.
+      const requestedRows =
         typeof requestedHotkey === "string" && requestedHotkey.trim()
-          ? requestedHotkey.split(",")[0].trim()
-          : hotkeyManager.getCurrentHotkey();
+          ? parseHotkeyList(requestedHotkey)
+          : hotkeyManager.getSlotHotkeys("dictation");
+      const rows = requestedRows.length ? requestedRows : [hotkeyManager.getCurrentHotkey()];
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
-      const supportsPushToTalk = hotkeyManager.supportsPushToTalk(hotkey);
+      // Hold is one control over every row, so the answer is the whole list's.
+      const blockingHotkey = hotkeyManager.findRowBlockingPushToTalk(rows);
+      const hotkey = blockingHotkey || rows[0];
+      const supportsPushToTalk = !blockingHotkey && hotkeyManager.supportsPushToTalk(rows[0]);
 
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
@@ -4682,6 +4966,9 @@ class IPCHandlers {
         pushToTalkUnavailableReason: supportsPushToTalk
           ? null
           : hotkeyManager.getPushToTalkUnavailableReason(hotkey),
+        // Which row refuses Hold: with several shortcuts in the slot, the
+        // reason alone does not say which one the user has to change.
+        blockingHotkey: blockingHotkey || null,
         // Lets the renderer show the setup box outside push mode, where the
         // disabled-Hold tooltip is the only other place this surfaces. Desktop
         // backends see their own hotkeys, so access matters only without one.
@@ -12134,6 +12421,21 @@ class IPCHandlers {
 
     ipcMain.handle("get-translation-key", async () => {
       return this.environmentManager.getTranslationKey?.() || "";
+    });
+
+    // One transaction owns the dictation rows AND their cleanup modes. A key
+    // edit, a mode edit, an add, a remove and a reset are all this call with a
+    // complete desired state, so there is no window where the two halves
+    // disagree. Commits are serialized: two overlapping edits must not
+    // interleave their snapshot, registration and publication.
+    ipcMain.handle("apply-dictation-hotkeys", async (_event, request) => {
+      return this._queueDictationCommit(request);
+    });
+
+    ipcMain.handle("get-dictation-hotkey-config", async () => {
+      return {
+        rows: this.windowManager.getDictationRows(),
+      };
     });
 
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
