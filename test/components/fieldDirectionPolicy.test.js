@@ -63,7 +63,6 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/DictionaryView.tsx": ["auto", "auto", "auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
-  "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
@@ -76,6 +75,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
+  // Member search: names in any script.
+  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
   "src/components/ui/ApiKeyInput.tsx": ["ltr"],
   "src/components/ui/CustomModelInput.tsx": ["ltr"],
   "src/components/ui/PromptStudio.tsx": ["auto", "auto"],
@@ -113,6 +114,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  // Email addresses are Latin-script identifiers.
+  "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
 };
