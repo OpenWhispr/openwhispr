@@ -167,3 +167,145 @@ test("the IPC job retains its original profile lifetime during preparation and b
     assert.deepEqual(temporaryFiles(), before);
   }
 });
+
+nodeTest("managed uploads under the size cap report start and completion progress", async () => {
+  const directory = fs.mkdtempSync(path.join(getSafeTempDir(), "managed-small-"));
+  const filePath = path.join(directory, "upload.mp3");
+  fs.writeFileSync(filePath, Buffer.from("small"));
+  for (const input of [
+    { audioBuffer: Buffer.from("small"), fileName: "dictation.webm" },
+    { filePath },
+  ]) {
+    const progress = [];
+    try {
+      const result = await transcribeManagedAudioFile({
+        ...input,
+        maxUploadBytes: 20000,
+        onProgress: (event) => progress.push(event),
+        transcribe: async () => {
+          progress.push("request");
+          return "whole file";
+        },
+      });
+      assert.deepEqual(result, { text: "whole file" });
+    } finally {
+      if (input.filePath) fs.rmSync(directory, { recursive: true, force: true });
+    }
+    assert.deepEqual(progress, [
+      { stage: "transcribing", chunksTotal: 1, chunksCompleted: 0 },
+      "request",
+      { stage: "transcribing", chunksTotal: 1, chunksCompleted: 1 },
+    ]);
+  }
+});
+
+const networkFailures = () => [
+  Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
+  Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" }),
+  Object.assign(new Error("Enterprise proxy connection failed"), { code: "PROXY_FAILED" }),
+];
+const deadlineFailures = () => [
+  Object.assign(new Error("connect timed out"), { code: "ETIMEDOUT" }),
+  Object.assign(new Error("Enterprise connection timed out"), { code: "TIMEOUT" }),
+  Object.assign(new Error("headers timed out"), { code: "UND_ERR_HEADERS_TIMEOUT" }),
+  new DOMException("The operation timed out.", "TimeoutError"),
+  Object.assign(new Error("The operation was aborted"), {
+    name: "AbortError",
+    code: "ABORT_ERR",
+    cause: Object.assign(new Error("Enterprise connection timed out"), { code: "TIMEOUT" }),
+  }),
+];
+
+test("a transient network failure on a late chunk is retried instead of discarding the job", async () => {
+  for (const failure of networkFailures()) {
+    const before = temporaryFiles();
+    let index = 0;
+    let failedOnce = false;
+    const result = await transcribeManagedAudioFile({
+      audioBuffer: audio(),
+      fileName: "upload.wav",
+      maxUploadBytes: 20000,
+      onProgress: (progress) => {
+        index = progress.chunksCompleted;
+      },
+      transcribe: async () => {
+        if (index === 2 && !failedOnce) {
+          failedOnce = true;
+          throw failure;
+        }
+        return `part-${index}`;
+      },
+    });
+    assert.equal(failedOnce, true);
+    assert.equal(result.failedChunks, 0, failure.message);
+    assert.match(result.text, /part-0 part-1 part-2/);
+    assert.deepEqual(temporaryFiles(), before);
+  }
+});
+
+test("a chunk that keeps failing on the network keeps the completed chunks", async () => {
+  let index = 0;
+  const result = await transcribeManagedAudioFile({
+    audioBuffer: audio(),
+    fileName: "upload.wav",
+    maxUploadBytes: 20000,
+    onProgress: (progress) => {
+      index = progress.chunksCompleted;
+    },
+    transcribe: async () => {
+      if (index === 1)
+        throw Object.assign(new Error("Enterprise proxy connection failed"), {
+          code: "PROXY_FAILED",
+        });
+      return `part-${index}`;
+    },
+  });
+  assert.equal(result.failedChunks, 1);
+  assert.match(result.text, /part-0/);
+  assert.doesNotMatch(result.text, /part-1/);
+});
+
+test("configuration and identity changes still abort the whole chunked job", async () => {
+  for (const code of ["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED"]) {
+    const before = temporaryFiles();
+    let calls = 0;
+    await assert.rejects(
+      transcribeManagedAudioFile({
+        audioBuffer: audio(),
+        fileName: "upload.wav",
+        maxUploadBytes: 20000,
+        transcribe: async () => {
+          calls++;
+          if (calls === 2) throw Object.assign(new Error("changed"), { code });
+          return "kept";
+        },
+      }),
+      { code }
+    );
+    assert.equal(calls, 2);
+    assert.deepEqual(temporaryFiles(), before);
+  }
+});
+
+test("a chunk that hits its request deadline is counted as failed without a retry", async () => {
+  for (const failure of deadlineFailures()) {
+    let index = 0;
+    let attempts = 0;
+    const result = await transcribeManagedAudioFile({
+      audioBuffer: audio(),
+      fileName: "upload.wav",
+      maxUploadBytes: 20000,
+      onProgress: (progress) => {
+        index = progress.chunksCompleted;
+      },
+      transcribe: async () => {
+        if (index !== 1) return `part-${index}`;
+        attempts++;
+        throw failure;
+      },
+    });
+    assert.equal(attempts, 1, failure.message);
+    assert.equal(result.failedChunks, 1);
+    assert.match(result.text, /part-0 part-2/);
+  }
+});

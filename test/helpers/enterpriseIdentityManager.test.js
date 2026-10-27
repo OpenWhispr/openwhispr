@@ -592,3 +592,112 @@ test("an Azure token body that stalls after headers times out and frees the shar
   assert.equal(await resolved.tokenProvider(), "entra");
   assert.equal(azureCalls, 2);
 });
+
+test("only transcription token exchanges use the audio network profile and requesting identity", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-network-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const config = managedConfig();
+  const network = { proxy: { mode: "fixed", url: "http://proxy.example.com:8080/" } };
+  config.providers[0].config.network = network;
+  config.providers[0].config.transcription = {
+    allowedDeployments: ["gpt-4o-transcribe"],
+    defaultDeployment: "gpt-4o-transcribe",
+  };
+  const routes = [];
+  const respond = (url) => {
+    if (url.includes("/assertion")) return jsonResponse({ data: { assertion: "signed" } });
+    if (url.startsWith("https://login.microsoftonline.com/"))
+      return jsonResponse({ access_token: "entra", expires_in: 3600 });
+    return jsonResponse({ data: config });
+  };
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "cache.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.10.0",
+    proxyFetch: async (url) => {
+      if (url.startsWith("https://login.microsoftonline.com/")) routes.push(["electron"]);
+      return respond(url);
+    },
+    enterpriseFetch: async (url, _init, usedNetwork, _bundles, identity) => {
+      routes.push(["audio", usedNetwork, identity]);
+      return respond(url);
+    },
+    tokenStore: { getState: () => ({ generation: 4, token: "openwhispr-session" }) },
+  });
+  await (await manager.resolveProvider(request())).tokenProvider();
+  assert.deepEqual(routes, [["electron"]]);
+  await (
+    await manager.resolveProvider(request({ inferenceScope: "transcription" }))
+  ).tokenProvider();
+  assert.deepEqual(routes[1], ["audio", network, { accountId, workspaceId }]);
+  assert.equal(routes.length, 2);
+});
+
+function requiredAudioConfig(audio) {
+  const config = managedConfig();
+  const [record] = config.providers;
+  record.mode = "managed_required";
+  record.allowManualSetup = false;
+  delete record.config.allowedDeployments;
+  delete record.config.scopeDefaults;
+  Object.assign(record.config, audio);
+  return config;
+}
+
+const BATCH_ONLY = {
+  transcription: { allowedDeployments: ["stt"], defaultDeployment: "stt" },
+};
+const REALTIME = {
+  realtime: {
+    allowedDeployments: ["rt"],
+    defaultDeployment: "rt",
+    protocol: "openai-transcription-ga",
+    sampleRate: 24000,
+    apiVersion: "v1",
+  },
+};
+
+test("managed resolution errors carry their translation key across the main process", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const manager = createEnterpriseIdentityManager({
+    cachePath: path.join(tempDir, "config.json"),
+    getApiUrl: () => "https://api.example.com",
+    getAppVersion: () => "1.11.0",
+    proxyFetch: async () => jsonResponse({ data: requiredAudioConfig(REALTIME) }),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+  await assert.rejects(
+    manager.resolveProvider(request({ inferenceScope: "transcription", operation: "batch" })),
+    {
+      code: "MANAGED_OPERATION_UNAVAILABLE",
+      messageKey: "enterprise.audio.operationUnavailable",
+    }
+  );
+});
+
+test("eviction reports which audio operations a required record enforced", async (t) => {
+  for (const [audio, operations] of [
+    [BATCH_ONLY, ["batch"]],
+    [{ ...BATCH_ONLY, ...REALTIME }, ["batch", "realtime"]],
+  ]) {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+    t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+    const snapshots = [];
+    let response = jsonResponse({ data: requiredAudioConfig(audio) });
+    const manager = createEnterpriseIdentityManager({
+      cachePath: path.join(tempDir, "config.json"),
+      getApiUrl: () => "https://api.example.com",
+      getAppVersion: () => "1.11.0",
+      proxyFetch: async () => response,
+      tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+      broadcast: (snapshot) => snapshots.push(snapshot),
+    });
+    assert.equal((await manager.getConfig(request())).success, true);
+    response = jsonResponse({ error: "Sign in with company SSO", code: "SSO_REQUIRED" }, 403);
+    const denied = await manager.getConfig({ ...request(), forceRefresh: true });
+    assert.deepEqual(denied.enforcedScopes, ["transcription"]);
+    assert.deepEqual(denied.enforcedAudioOperations, operations);
+    assert.deepEqual(snapshots.at(-1).enforcedAudioOperations, operations);
+  }
+});

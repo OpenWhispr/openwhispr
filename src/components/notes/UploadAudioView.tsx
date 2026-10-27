@@ -713,15 +713,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useChunkProgress) {
       progressCleanupRef.current =
         window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal > 0) {
-            setChunkProgress({
-              chunksTotal: data.chunksTotal,
-              chunksCompleted: data.chunksCompleted,
-            });
-            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
-          }
+          // A managed upload under the endpoint cap is one request with no
+          // intermediate progress, so the simulated bar keeps covering it.
+          if (data.chunksTotal === 0 || (managedActive && data.chunksTotal === 1)) return;
+          if (progressRef.current) clearInterval(progressRef.current);
+          setChunkProgress({
+            chunksTotal: data.chunksTotal,
+            chunksCompleted: data.chunksCompleted,
+          });
+          setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
         }) ?? null;
-    } else {
+    }
+    if (!useChunkProgress || managedActive) {
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {

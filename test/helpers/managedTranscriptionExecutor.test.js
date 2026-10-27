@@ -224,3 +224,32 @@ test("an empty transcript is reported as no speech", async () => {
   });
   await assert.rejects(run({}, route, input), (error) => error.code === "NO_SPEECH_DETECTED");
 });
+
+test("Azure profiles on Electron's network keep the legacy request deadline", async () => {
+  for (const systemNetwork of [true, false]) {
+    const signals = [];
+    const run = createManagedTranscriptionExecutor({
+      resolveEnterpriseRuntime: async () => ({
+        model: "gpt-4o-transcribe",
+        enterprise: {
+          audioProfile: {
+            endpoint: "https://acme.services.ai.azure.com/transcribe",
+            section: {},
+            systemNetwork,
+            request: async ({ signal }) => {
+              signals.push(signal);
+              return new Response(JSON.stringify({ text: "hallo" }));
+            },
+          },
+        },
+      }),
+      buildUrl,
+      timeoutMs: 20,
+    });
+    assert.equal(await run({}, route, input), "hallo");
+    if (systemNetwork) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(signals[0].reason?.name, "TimeoutError");
+    } else assert.equal(signals[0], undefined);
+  }
+});

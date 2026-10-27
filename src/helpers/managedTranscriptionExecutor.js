@@ -73,9 +73,11 @@ function createManagedTranscriptionExecutor({
       method: "POST",
       headers: audioProfile ? {} : { Authorization: `Bearer ${token}` },
       body: formData,
-      signal: audioProfile
-        ? signal
-        : AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
+      // The enterprise transport applies the workspace's own deadline.
+      signal:
+        audioProfile && !audioProfile.systemNetwork
+          ? signal
+          : AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
     };
     const response = audioProfile
       ? await audioProfile.request(request)

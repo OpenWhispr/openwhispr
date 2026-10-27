@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const os = require("node:os");
 const { createEnterpriseAudioRuntime } = require("./enterpriseAudioRuntime");
+const { parseProxyCredential, requiresEnterpriseTransport } = require("./enterpriseAudioTransport");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 
 function configFingerprint(provider, config) {
@@ -67,6 +68,7 @@ function registerEnterpriseAudioSetup({
   getVersion,
   bootstrapDirectory,
   getRetirementSignal,
+  systemFetch,
 }) {
   async function stored(event, provider, expected) {
     if (!["azure", "openai-compatible"].includes(provider))
@@ -108,6 +110,11 @@ function registerEnterpriseAudioSetup({
       ].filter(Boolean)
     ),
   ];
+  // Rejected at provisioning so a malformed proxy secret never reaches a request.
+  const assertProxyCredentials = (config, entries) => {
+    const slot = config.network?.proxy?.credentialSlot;
+    if (slot && Object.hasOwn(entries, slot)) parseProxyCredential(entries[slot]);
+  };
   const handle = (name, fn) =>
     ipcMain.handle(name, async (event, input = {}) => {
       try {
@@ -153,7 +160,12 @@ function registerEnterpriseAudioSetup({
       accountId: request.accountId,
       workspaceId: request.workspaceId,
       allowedSlots: slotsFor(record.config),
-      credentials,
+      credentials: {
+        saveMany: async (accountId, workspaceId, entries) => {
+          assertProxyCredentials(record.config, entries);
+          return credentials.saveMany(accountId, workspaceId, entries);
+        },
+      },
     });
   });
   handle(
@@ -163,7 +175,10 @@ function registerEnterpriseAudioSetup({
       if (!slotsFor(record.config).includes(slot))
         throw new Error("This slot is not configured by the organization");
       if (remove) await credentials.remove(request.accountId, request.workspaceId, slot);
-      else await credentials.save(request.accountId, request.workspaceId, slot, secret);
+      else {
+        assertProxyCredentials(record.config, { [slot]: secret });
+        await credentials.save(request.accountId, request.workspaceId, slot, secret);
+      }
       return { present: !remove };
     }
   );
@@ -183,6 +198,7 @@ function registerEnterpriseAudioSetup({
           const draftRuntime = createEnterpriseAudioRuntime({
             credentials,
             transport,
+            systemFetch,
             getRetirementSignal,
             resolveProvider: async () => {
               const current = await stored(event, provider, expected);
@@ -229,18 +245,23 @@ function registerEnterpriseAudioSetup({
                   const caPem = current.certificateBundles?.find(
                     (bundle) => bundle.id === network.caBundleId
                   )?.pem;
-                  const response = await transport.request(
-                    `https://login.microsoftonline.com/${encodeURIComponent(current.record.config.tenantId)}/oauth2/v2.0/token`,
-                    {
-                      method: "POST",
-                      body,
-                      signal: AbortSignal.timeout(15000),
-                      network,
-                      caPem,
-                      readCredential: (slot) =>
-                        credentials.read(request.accountId, request.workspaceId, slot),
-                    }
-                  );
+                  const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(current.record.config.tenantId)}/oauth2/v2.0/token`;
+                  const tokenRequest = {
+                    method: "POST",
+                    body,
+                    signal: AbortSignal.timeout(15000),
+                  };
+                  // Same stack the managed token exchange picks for this network profile.
+                  const response =
+                    systemFetch && !requiresEnterpriseTransport(network)
+                      ? await systemFetch(tokenUrl, tokenRequest)
+                      : await transport.request(tokenUrl, {
+                          ...tokenRequest,
+                          network,
+                          caPem,
+                          readCredential: (slot) =>
+                            credentials.read(request.accountId, request.workspaceId, slot),
+                        });
                   if (!response.ok)
                     throw new Error(`Enterprise identity exchange failed (${response.status})`);
                   const token = (await response.json()).access_token;

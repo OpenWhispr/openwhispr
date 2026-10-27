@@ -1,4 +1,5 @@
 const { runAbortableOperation } = require("./enterpriseProviderErrors");
+const { requiresEnterpriseTransport } = require("./enterpriseAudioTransport");
 
 const createEnterpriseAudioConfigChangedError = () =>
   Object.assign(new Error("Enterprise audio configuration changed"), {
@@ -6,6 +7,29 @@ const createEnterpriseAudioConfigChangedError = () =>
     messageKey: "common.managedConfigUnavailable",
   });
 
+// Mirrors the server's per-scope enforcement: a text-only or optional audio
+// workspace must never pull a personal meeting onto the enterprise route.
+// Every caller gates meetings, hence the realtime default: a required record
+// enforces realtime only when it configures it (resolveManagedEnterpriseScope).
+function enforcesEnterpriseTranscription(snapshot, operation = "realtime") {
+  const reported = snapshot?.enforcedAudioOperations;
+  return Boolean(
+    (snapshot?.enforcedScopes?.includes("transcription") &&
+      // Reports without operation info predate the split and enforce both.
+      (!Array.isArray(reported) || reported.includes(operation))) ||
+    snapshot?.config?.providers?.some(
+      (record) =>
+        record.mode !== "disabled" &&
+        (record.mode === "managed_required" || !record.allowManualSetup) &&
+        (record.config.transcription || record.config.batch || record.config.realtime) &&
+        (operation === "batch" || record.config.realtime !== undefined)
+    )
+  );
+}
+
+// routing: "bound" needs the current binding, "load" fetches a missing one for an
+// explicit managed request, and "personal" keeps requests without a managed
+// context local unless the binding is known to enforce enterprise transcription.
 function createEnterpriseAudioRequestResolver({
   getIdentity,
   getBinding,
@@ -15,7 +39,9 @@ function createEnterpriseAudioRequestResolver({
   getConfig,
   getScopeRevision = () => 0,
 }) {
-  return async (event, context, resolveMissing = false) => {
+  return async (event, context, routing = "bound") => {
+    if (routing === "personal" && !enforcesEnterpriseTranscription(getBinding())) return null;
+    const resolveMissing = routing === "load";
     const identity = getIdentity();
     const scopeRevision = getScopeRevision();
     const authChanged = () =>
@@ -84,6 +110,7 @@ function createEnterpriseAudioRuntime({
   resolveProvider,
   transport,
   credentials,
+  systemFetch,
   getRetirementSignal = () => null,
 }) {
   async function resolve(request, operation = "batch") {
@@ -139,6 +166,12 @@ function createEnterpriseAudioRuntime({
       }
     }
     if (!endpoint) throw new Error("Enterprise audio endpoint is unavailable");
+    // Existing Azure batch workspaces keep Electron's proxy, PAC and auth negotiation.
+    const systemNetwork =
+      Boolean(systemFetch) &&
+      provider === "azure" &&
+      operation === "batch" &&
+      !requiresEnterpriseTransport(network);
     async function assertCurrent() {
       retirement?.throwIfAborted();
       if (credentials.generation !== credentialGeneration)
@@ -190,19 +223,22 @@ function createEnterpriseAudioRuntime({
       credentialGeneration,
       signal: retirement,
       protocol: section.protocol,
+      systemNetwork,
       async request(init) {
         const signal = AbortSignal.any([retirement, init.signal].filter(Boolean));
         const auth = await runAbortableOperation(headers, signal);
         const response = await runAbortableOperation(
           () =>
-            transport.request(endpoint, {
-              ...init,
-              signal,
-              headers: { ...init.headers, ...auth },
-              network,
-              readCredential,
-              caPem: bundle?.pem,
-            }),
+            systemNetwork
+              ? systemFetch(endpoint, { ...init, signal, headers: { ...init.headers, ...auth } })
+              : transport.request(endpoint, {
+                  ...init,
+                  signal,
+                  headers: { ...init.headers, ...auth },
+                  network,
+                  readCredential,
+                  caPem: bundle?.pem,
+                }),
           signal
         );
         await runAbortableOperation(assertCurrent, signal);
@@ -228,4 +264,5 @@ module.exports = {
   createEnterpriseAudioRuntime,
   createEnterpriseAudioRequestResolver,
   createEnterpriseAudioConfigChangedError,
+  enforcesEnterpriseTranscription,
 };

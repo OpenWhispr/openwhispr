@@ -185,7 +185,12 @@ test("a successful fetch persists the scope summary for the next cold start", as
   await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
   assert.deepEqual(
     JSON.parse(globalThis.localStorage.getItem("managedEnterpriseScopes:account-a:workspace-a")),
-    { managed: ["transcription"], enforced: ["transcription"] }
+    {
+      managed: ["transcription"],
+      enforced: ["transcription"],
+      managedAudioOperations: ["batch"],
+      enforcedAudioOperations: ["batch"],
+    }
   );
   assert.deepEqual(useEnterpriseIdentityStore.getState().enforcedScopes, []);
   assert.deepEqual(useEnterpriseIdentityStore.getState().managedScopes, ["transcription"]);
@@ -334,4 +339,104 @@ test("clear() never strands a signed-out user under a stale persisted hint", asy
   // (or their own former) organization's enforcement.
   assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
   assert.equal(getManagedScopeResolution("dictationCleanup", "auto").kind, "manual");
+});
+
+test("a cold start holds realtime only when the persisted hint enforced it", async (t) => {
+  for (const [summary, realtimeHeld] of [
+    [{ managedAudioOperations: ["batch"], enforcedAudioOperations: ["batch"] }, false],
+    [
+      {
+        managedAudioOperations: ["batch", "realtime"],
+        enforcedAudioOperations: ["batch", "realtime"],
+      },
+      true,
+    ],
+    // Hints persisted by older builds carry no operations and keep holding both.
+    [{}, true],
+  ]) {
+    const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+      initialStorage: {
+        "managedEnterpriseScopes:account-a:workspace-a": JSON.stringify({
+          managed: ["transcription"],
+          enforced: ["transcription"],
+          ...summary,
+        }),
+      },
+    });
+    useEnterpriseIdentityStore.setState({
+      accountId: "account-a",
+      workspaceId: "workspace-a",
+      authGeneration: 1,
+    });
+    assert.equal(getManagedScopeResolution("transcription", "auto").code, "MANAGED_CONFIG_LOADING");
+    assert.deepEqual(
+      getManagedScopeResolution("transcription", "auto", "realtime"),
+      realtimeHeld ? getManagedScopeResolution("transcription", "auto") : { kind: "manual" },
+      JSON.stringify(summary)
+    );
+  }
+});
+
+test("a config outage for a required batch-only workspace leaves meetings on the personal route", async (t) => {
+  for (const report of [
+    { enforcedScopes: ["transcription"], enforcedAudioOperations: ["batch"] },
+    // Without a main-process report the last-known config decides.
+    {},
+  ]) {
+    let call = 0;
+    const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+      electronAPI: {
+        getManagedEnterpriseConfig: async (accountId, workspaceId, authGeneration) => {
+          call += 1;
+          const scope = { accountId, workspaceId, authGeneration };
+          return call === 1
+            ? { success: true, status: "network", ...scope, config: azureSttRequired }
+            : {
+                success: false,
+                status: "error",
+                ...scope,
+                code: "AUTH_EXPIRED",
+                error: "expired",
+                enforcementRequired: true,
+                ...report,
+              };
+        },
+      },
+    });
+    await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+    await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1, true);
+    assert.equal(useEnterpriseIdentityStore.getState().status, "error");
+    for (const setupMode of ["auto", "managed"]) {
+      assert.equal(
+        getManagedScopeResolution("transcription", setupMode).code,
+        "MANAGED_CONFIG_UNAVAILABLE"
+      );
+      assert.deepEqual(getManagedScopeResolution("transcription", setupMode, "realtime"), {
+        kind: "manual",
+      });
+    }
+  }
+});
+
+test("an opted-in setup only holds the audio operations the workspace managed", async (t) => {
+  const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t);
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "error",
+    config: null,
+    error: "offline",
+    managedScopes: ["transcription"],
+    enforcedScopes: [],
+    managedAudioOperations: ["batch"],
+    enforcedAudioOperations: [],
+  });
+  assert.equal(
+    getManagedScopeResolution("transcription", "managed").code,
+    "MANAGED_CONFIG_UNAVAILABLE"
+  );
+  assert.deepEqual(getManagedScopeResolution("transcription", "managed", "realtime"), {
+    kind: "manual",
+  });
 });

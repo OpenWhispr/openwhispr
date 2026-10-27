@@ -102,7 +102,7 @@ async function setup(t, { language = "en" } = {}) {
   const deleteNote = (id) => listeners.noteDeleted?.({ id });
   const tick = (ms) => React.act(async () => t.mock.timers.tick(ms));
   const savedTranscripts = () => writes.filter(([, patch]) => typeof patch.transcript === "string");
-  return { start, say, deleteNote, tick, writes, savedTranscripts, api, toasts };
+  return { start, say, deleteNote, tick, writes, savedTranscripts, api, toasts, vite };
 }
 
 test("the 30-second save writes the live transcript while a recording runs", async (t) => {
@@ -145,4 +145,42 @@ test("a main policy refusal appears in a Spanish meeting-start toast", async (t)
   await start();
 
   assert.equal(toasts.at(-1)?.description, esTranslation.notes.meeting.restrictedByOrg);
+});
+
+test("an unavailable managed meeting route appears translated before capture starts", async (t) => {
+  const previousLanguage = i18nMain.language;
+  changeLanguage("es");
+  t.after(() => changeLanguage(previousLanguage));
+  const { start, api, toasts, vite } = await setup(t, { language: "es" });
+  let starts = 0;
+  api.meetingTranscriptionStart = async () => {
+    starts += 1;
+    return { success: false };
+  };
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "ready",
+    config: {
+      generation: 1,
+      providers: [
+        {
+          provider: "openai-compatible",
+          mode: "managed_required",
+          allowManualSetup: false,
+          version: 1,
+          config: { realtime: { defaultDeployment: " " } },
+        },
+      ],
+    },
+  });
+
+  await start();
+
+  assert.equal(starts, 0);
+  assert.equal(toasts.at(-1)?.description, esTranslation.enterprise.audio.operationUnavailable);
 });

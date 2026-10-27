@@ -2520,6 +2520,7 @@ declare global {
         error?: string;
         enforcementRequired?: boolean;
         enforcedScopes?: string[];
+        enforcedAudioOperations?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -2530,6 +2531,7 @@ declare global {
           code: string | null;
           enforcementRequired?: boolean;
           enforcedScopes?: string[];
+          enforcedAudioOperations?: string[];
         }) => void
       ) => () => void;
       clearManagedEnterpriseIdentity?: () => Promise<void>;

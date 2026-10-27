@@ -89,7 +89,7 @@ test("equal-generation workspace changes clear credentials and consent and ignor
   assert.equal(consent().props.checked, false);
 });
 
-test("meeting and upload selectors route explicit personal choices locally while required enterprise still wins", async (t) => {
+test("meeting and upload mode picks leave the shared enterprise setup mode to its explicit controls", async (t) => {
   let root;
   t.after(() => root && React.act(async () => root.unmount()));
   const meetings = [];
@@ -133,6 +133,9 @@ test("meeting and upload selectors route explicit personal choices locally while
   const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
     "/stores/enterpriseIdentityStore.ts"
   );
+  const { isManagedTranscriptionActive } = await vite.ssrLoadModule(
+    "/services/managedTranscription.ts"
+  );
   const { MeetingTranscriptionPanel } = await vite.ssrLoadModule(
     "/components/settings/MeetingSettings.tsx"
   );
@@ -168,49 +171,80 @@ test("meeting and upload selectors route explicit personal choices locally while
     return null;
   }
   const selector = () => elements(tree).find((node) => node.props.modes && node.props.onSelect);
+  const personalSetup = () =>
+    elements(tree).find(
+      (node) => node.props.children === "settingsPage.aiModels.managedEnterprise.usePersonalSetup"
+    );
+  const setupMode = () => useSettingsStore.getState().enterpriseTranscriptionSetupMode;
   for (Panel of [MeetingTranscriptionPanel, UploadTranscriptionPanel]) {
     const meeting = Panel === MeetingTranscriptionPanel;
-    await React.act(async () => root.render(React.createElement(Harness, { key: Panel.name })));
-    for (const [selected, choice, mode, allowManualSetup, enterprise] of [
-      ["enterprise", "local", "managed_default", true, false],
-      ["local", "local", "managed_default", true, false],
-      ["local", "enterprise", "managed_default", true, true],
-      ["enterprise", "local", "managed_required", true, true],
-      ["enterprise", "local", "managed_default", false, true],
-    ]) {
-      await React.act(async () => {
-        useSettingsStore.setState({
-          isSignedIn: true,
-          meetingFollowsTranscription: false,
-          meetingTranscriptionMode: selected,
-          uploadTranscriptionMode: selected,
-          enterpriseTranscriptionSetupMode: "managed",
-          uploadUseLocalWhisper: true,
-        });
-        useEnterpriseIdentityStore.setState({
-          config: { generation: 1, providers: [{ ...record, mode, allowManualSetup }] },
-        });
-      });
-      await React.act(async () => selector().props.onSelect(choice));
-      assert.equal(selector().props.activeMode, enterprise ? "enterprise" : choice);
-      if (enterprise && (mode === "managed_required" || !allowManualSetup))
-        assert.deepEqual(
-          selector().props.modes.map((option) => option.id),
-          ["enterprise"]
-        );
+    const routedToEnterprise = async () => {
       if (meeting) {
         await prepareTranscription();
-        assert.equal(meetings.at(-1).provider, enterprise ? "enterprise-realtime" : "local");
-      } else {
-        const settings = selectResolvedUploadTranscription(getSettings());
-        await transcribeFile(
-          "/recording.wav",
-          { ...settings, isOpenWhisprCloud: false, getApiKey: () => "", language: "auto" },
-          false
-        );
-        assert.equal(Boolean(uploads.at(-1).managed), enterprise);
-        if (!enterprise) assert.equal(uploads.at(-1).provider, "whisper");
+        return meetings.at(-1).provider === "enterprise-realtime";
       }
+      const settings = selectResolvedUploadTranscription(getSettings());
+      await transcribeFile(
+        "/recording.wav",
+        { ...settings, isOpenWhisprCloud: false, getApiKey: () => "", language: "auto" },
+        false
+      );
+      return Boolean(uploads.at(-1).managed);
+    };
+    await React.act(async () => {
+      useSettingsStore.setState({
+        isSignedIn: true,
+        meetingFollowsTranscription: false,
+        meetingTranscriptionMode: "local",
+        uploadTranscriptionMode: "local",
+        uploadUseLocalWhisper: true,
+        enterpriseTranscriptionSetupMode: "auto",
+      });
+      useEnterpriseIdentityStore.setState({ config: { generation: 1, providers: [record] } });
+      root.render(React.createElement(Harness, { key: Panel.name }));
+    });
+
+    // A managed default rollout offers only the enterprise tile plus the explicit opt-out.
+    assert.equal(selector().props.activeMode, "enterprise");
+    assert.deepEqual(
+      selector().props.modes.map((option) => option.id),
+      ["enterprise"]
+    );
+    assert.ok(personalSetup());
+    // An ordinary mode pick never moves dictation or the other context off the gateway.
+    await React.act(async () => selector().props.onSelect("providers"));
+    assert.equal(setupMode(), "auto");
+    assert.equal(isManagedTranscriptionActive(), true);
+    assert.equal(await routedToEnterprise(), true);
+
+    // The explicit opt-out is the only control that selects the personal setup.
+    await React.act(async () => personalSetup().props.onClick());
+    assert.equal(setupMode(), "manual");
+    await React.act(async () => selector().props.onSelect("local"));
+    assert.equal(setupMode(), "manual");
+    assert.equal(selector().props.activeMode, "local");
+    assert.ok(selector().props.modes.some((option) => option.id === "enterprise"));
+    assert.equal(await routedToEnterprise(), false);
+    if (!meeting) assert.equal(uploads.at(-1).provider, "whisper");
+
+    await React.act(async () => selector().props.onSelect("enterprise"));
+    assert.equal(setupMode(), "managed");
+    assert.equal(await routedToEnterprise(), true);
+
+    // Required profiles win over a stored opt-out and offer no personal setup.
+    for (const overrides of [{ mode: "managed_required" }, { allowManualSetup: false }]) {
+      await React.act(async () => {
+        useSettingsStore.setState({ enterpriseTranscriptionSetupMode: "manual" });
+        useEnterpriseIdentityStore.setState({
+          config: { generation: 1, providers: [{ ...record, ...overrides }] },
+        });
+      });
+      assert.deepEqual(
+        selector().props.modes.map((option) => option.id),
+        ["enterprise"]
+      );
+      assert.equal(personalSetup(), undefined);
+      assert.equal(await routedToEnterprise(), true);
     }
   }
 });

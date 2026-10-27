@@ -150,9 +150,9 @@ export function MeetingTranscriptionPanel() {
       requestSignIn();
       return;
     }
-    useSettingsStore
-      .getState()
-      .setEnterpriseTranscriptionSetupMode(mode === "enterprise" ? "managed" : "manual");
+    // Only the explicit enterprise controls change the setup mode dictation and uploads share.
+    if (mode === "enterprise")
+      useSettingsStore.getState().setEnterpriseTranscriptionSetupMode("managed");
     if (mode === effectiveTranscriptionMode) return;
     setMeetingTranscriptionMode(mode);
     setMeetingUseLocalWhisper(mode === "local");
@@ -223,6 +223,19 @@ export function MeetingTranscriptionPanel() {
           <p className="text-xs text-muted-foreground">
             {enterpriseProviderName(managed.provider)} · {managed.model}
           </p>
+          {!managedRequired && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() =>
+                useSettingsStore.getState().setEnterpriseTranscriptionSetupMode("manual")
+              }
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          )}
         </div>
       )}
       {emptyListIsEnterpriseOnly && (
@@ -237,7 +250,7 @@ export function MeetingTranscriptionPanel() {
       ) : (
         <InferenceModeSelector
           modes={
-            managedRequired
+            managedActive
               ? transcriptionModes.filter((mode) => mode.id === "enterprise")
               : transcriptionModes
           }

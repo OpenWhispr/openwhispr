@@ -160,6 +160,12 @@ const isSegmentWithinIdentificationWindow = (
   );
 };
 
+// MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
+const describeMeetingSetupError = (err: unknown): string => {
+  const { message, messageKey } = (err ?? {}) as { message?: string; messageKey?: unknown };
+  return typeof messageKey === "string" ? `managedConfig:${messageKey}` : String(message);
+};
+
 const getMeetingTranscriptionOptions = () => {
   const { accountId, authGeneration } = usePolicyStore.getState();
   const workspaceId = useWorkspaceStore.getState().activeWorkspaceId;
@@ -840,6 +846,18 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
     reportMeetingError("policyRestricted");
     return false;
+  }
+
+  // Resolve the managed route before any capture so a failure never lights the mic indicator.
+  const managed = getManagedTranscriptionResolution("realtime");
+  if (managed?.kind === "error") {
+    logger.warn(
+      "Meeting recording blocked by managed audio setup",
+      { code: managed.code },
+      "meeting"
+    );
+    reportMeetingError(describeMeetingSetupError(managed));
+    return true;
   }
 
   const sessionId = createMeetingRecordingSessionId();
@@ -1629,7 +1647,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         { error: (err as Error).message },
         "meeting"
       );
-      reportMeetingError((err as Error).message, { isRecording: false, isTranscribing: false });
+      reportMeetingError(describeMeetingSetupError(err), {
+        isRecording: false,
+        isTranscribing: false,
+      });
       isRecordingFlag = false;
       isStartingFlag = false;
       await teardownStart();

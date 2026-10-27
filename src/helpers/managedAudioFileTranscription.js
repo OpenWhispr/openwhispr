@@ -4,6 +4,52 @@ const { getSafeTempDir } = require("./safeTempDir");
 const { splitAudioFile, convertToMp3 } = require("./ffmpegUtils");
 const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
 
+// Provider overload and fast network failures from the enterprise transport
+// are retried; a chunk that still fails is skipped and the job keeps the rest.
+const RETRYABLE_CHUNK_CODES = new Set([
+  "PROVIDER_RATE_LIMITED",
+  "SERVER_ERROR",
+  "PROXY_FAILED",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ECONNABORTED",
+  "EPIPE",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+  "UND_ERR_SOCKET",
+]);
+// A deadline already cost a full request timeout, so the chunk is skipped at once.
+const DEADLINE_CHUNK_CODES = new Set([
+  "TIMEOUT",
+  "ETIMEDOUT",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+]);
+const JOB_RETIRING_CODES = new Set(["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED"]);
+
+/** "retry", "skip" (count the chunk as failed now), or "abort" (fail the job). */
+function chunkFailureAction(error) {
+  const codes = [error?.code, error?.cause?.code];
+  if (codes.some((code) => JOB_RETIRING_CODES.has(code))) return "abort";
+  // Callers check the job signal first, so a remaining abort is a request deadline.
+  if (
+    codes.some((code) => DEADLINE_CHUNK_CODES.has(code)) ||
+    error?.name === "TimeoutError" ||
+    error?.name === "AbortError"
+  )
+    return "skip";
+  return codes.some((code) => RETRYABLE_CHUNK_CODES.has(code)) ? "retry" : "abort";
+}
+
+async function transcribeSingleRequest(transcribe, onProgress, audioBuffer, fileName, contentType) {
+  onProgress?.({ stage: "transcribing", chunksTotal: 1, chunksCompleted: 0 });
+  const text = await transcribe(audioBuffer, fileName, contentType);
+  onProgress?.({ stage: "transcribing", chunksTotal: 1, chunksCompleted: 1 });
+  return { text };
+}
+
 async function transcribeManagedAudioFile({
   filePath,
   audioBuffer,
@@ -17,7 +63,7 @@ async function transcribeManagedAudioFile({
   signal?.throwIfAborted();
   if (audioBuffer) {
     if (audioBuffer.length <= maxUploadBytes)
-      return { text: await transcribe(audioBuffer, fileName, contentType) };
+      return transcribeSingleRequest(transcribe, onProgress, audioBuffer, fileName, contentType);
     const temporary = fs.mkdtempSync(path.join(getSafeTempDir(), "enterprise-buffer-"));
     try {
       const source = path.join(temporary, path.basename(fileName));
@@ -48,13 +94,13 @@ async function transcribeManagedAudioFile({
     }
   }
   if (fs.statSync(filePath).size <= maxUploadBytes)
-    return {
-      text: await transcribe(
-        fs.readFileSync(filePath),
-        path.basename(filePath),
-        providerContentType(filePath)
-      ),
-    };
+    return transcribeSingleRequest(
+      transcribe,
+      onProgress,
+      fs.readFileSync(filePath),
+      path.basename(filePath),
+      providerContentType(filePath)
+    );
   const directory = fs.mkdtempSync(path.join(getSafeTempDir(), "enterprise-chunks-"));
   const texts = [];
   const failed = [];
@@ -105,8 +151,9 @@ async function transcribeManagedAudioFile({
             texts[index] = "";
             break;
           }
-          if (!["PROVIDER_RATE_LIMITED", "SERVER_ERROR"].includes(error.code)) throw error;
-          if (attempt === 2) {
+          const action = chunkFailureAction(error);
+          if (action === "abort") throw error;
+          if (action === "skip" || attempt === 2) {
             failed.push(index);
             break;
           }

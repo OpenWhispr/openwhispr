@@ -6749,11 +6749,15 @@ class IPCHandlers {
       });
     }
     const { createEnterpriseAudioCredentials } = require("./enterpriseAudioCredentials");
-    const { createEnterpriseAudioTransport } = require("./enterpriseAudioTransport");
+    const {
+      createEnterpriseAudioTransport,
+      requiresEnterpriseTransport,
+    } = require("./enterpriseAudioTransport");
     const {
       createEnterpriseAudioRuntime,
       createEnterpriseAudioRequestResolver,
       createEnterpriseAudioConfigChangedError,
+      enforcesEnterpriseTranscription,
     } = require("./enterpriseAudioRuntime");
     let audioRetirement = new AbortController();
     this._retireEnterpriseAudio = (required = false) => {
@@ -6821,7 +6825,8 @@ class IPCHandlers {
       getAppVersion: () => app.getVersion(),
       proxyFetch,
       tokenStore,
-      enterpriseFetch: (url, init, network, bundles) => {
+      enterpriseFetch: (url, init, network, bundles, identity) => {
+        if (!requiresEnterpriseTransport(network)) return proxyFetch(url, init);
         const caPem = network.caBundleId
           ? bundles?.find((bundle) => bundle.id === network.caBundleId)?.pem
           : undefined;
@@ -6829,26 +6834,18 @@ class IPCHandlers {
           throw Object.assign(new Error("Certificate bundle is unavailable"), {
             code: "MANAGED_CA_UNAVAILABLE",
           });
-        const binding = this._enterpriseAudioBinding;
         return enterpriseAudioTransport.request(url, {
           ...init,
           network,
           caPem,
           readCredential: (slot) =>
-            this.enterpriseAudioCredentials.read(binding.accountId, binding.workspaceId, slot),
+            this.enterpriseAudioCredentials.read(identity.accountId, identity.workspaceId, slot),
         });
       },
       broadcast: (snapshot) => {
         if (!matchesEnterpriseAudioScope(snapshot)) return;
         const old = this._enterpriseAudioBinding;
-        const required =
-          snapshot.enforcedScopes?.includes("transcription") ||
-          snapshot.config?.providers.some(
-            (record) =>
-              record.mode !== "disabled" &&
-              (record.mode === "managed_required" || !record.allowManualSetup) &&
-              (record.config.transcription || record.config.batch || record.config.realtime)
-          );
+        const required = enforcesEnterpriseTranscription(snapshot);
         if (
           old &&
           (old.workspaceId !== snapshot.workspaceId ||
@@ -6860,7 +6857,8 @@ class IPCHandlers {
         if (snapshot.config)
           this._enterpriseAudioBinding = { ...snapshot, generation: snapshot.config.generation };
         else {
-          this._enterpriseAudioBinding = null;
+          // A known enforced workspace whose config was evicted keeps failing closed.
+          this._enterpriseAudioBinding = required ? snapshot : null;
           this._retireEnterpriseAudio(required);
         }
         broadcastToWindows("managed-enterprise-config-changed", snapshot);
@@ -6900,6 +6898,7 @@ class IPCHandlers {
       },
       transport: enterpriseAudioTransport,
       credentials: this.enterpriseAudioCredentials,
+      systemFetch: proxyFetch,
       getRetirementSignal: () => audioRetirement.signal,
     });
     require("./enterpriseAudioSetup").registerEnterpriseAudioSetup({
@@ -6911,6 +6910,7 @@ class IPCHandlers {
       getVersion: () => app.getVersion(),
       bootstrapDirectory: app.getPath("userData"),
       getRetirementSignal: () => audioRetirement.signal,
+      systemFetch: proxyFetch,
       fetchApi: async (request, endpoint, { method = "GET", body } = {}) => {
         const response = await proxyFetch(`${getApiUrl()}${endpoint}`, {
           method,
@@ -8267,7 +8267,7 @@ class IPCHandlers {
       const request = await getEnterpriseAudioRequest(
         event,
         options.managedContext ?? options.enterpriseIdentity,
-        true
+        options.provider === "enterprise-realtime" || options.managedContext ? "load" : "personal"
       );
       if (!request) {
         if (options.provider === "enterprise-realtime" || options.managedContext)
@@ -11150,11 +11150,13 @@ class IPCHandlers {
             code: "AUTH_CONTEXT_CHANGED",
           });
         const scope = { accountId, workspaceId, authGeneration: expectedAuthGeneration };
-        if (!matchesEnterpriseAudioScope(scope)) {
+        const scopeChanged = !matchesEnterpriseAudioScope(scope);
+        if (scopeChanged) {
           this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
           this._enterpriseAudioScope = scope;
           this._enterpriseAudioBinding = null;
-          this._retireEnterpriseAudio(true);
+          // Only an enterprise meeting belongs to the old scope; a personal one continues.
+          this._retireEnterpriseAudio();
         }
         const authHeaders = await getAuthHeader(event);
         const snapshot = await this.enterpriseIdentityManager.getConfig({
@@ -11172,6 +11174,13 @@ class IPCHandlers {
               this._enterpriseAudioBinding.generation !== snapshot.config.generation)
           )
             this._retireEnterpriseAudio();
+          // A cached envelope skips the broadcast, which would otherwise enforce the new scope.
+          else if (
+            scopeChanged &&
+            !this._enterpriseAudioBinding &&
+            enforcesEnterpriseTranscription(snapshot)
+          )
+            this._retireEnterpriseAudio(true);
           this._enterpriseAudioBinding = { ...snapshot, generation: snapshot.config.generation };
         }
         return snapshot;

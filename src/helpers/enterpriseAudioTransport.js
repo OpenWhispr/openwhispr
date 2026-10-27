@@ -1,4 +1,5 @@
 const https = require("node:https");
+const net = require("node:net");
 const tls = require("node:tls");
 const { Agent } = require("agent-base");
 const { HttpsProxyAgent } = require("https-proxy-agent");
@@ -16,26 +17,62 @@ function trustedRoots(extraPem) {
   return extraPem ? [...systemRoots, extraPem] : systemRoots;
 }
 
+const unsupportedProxy = () =>
+  Object.assign(new Error("Unsupported enterprise proxy type"), { code: "PROXY_UNSUPPORTED" });
+
 function proxyCandidates(value, mandatory = false) {
-  const candidates = value
+  const entries = value
     .split(";")
     .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      if (entry === "DIRECT") return null;
-      const match = /^(PROXY|HTTPS)\s+([^\s/]+)$/i.exec(entry);
-      if (!match)
-        throw Object.assign(new Error("Unsupported enterprise proxy type"), {
-          code: "PROXY_UNSUPPORTED",
-        });
-      return `${match[1].toUpperCase() === "HTTPS" ? "https" : "http"}://${match[2]}`;
-    });
+    .filter(Boolean);
+  const candidates = [];
+  for (const entry of entries) {
+    if (entry === "DIRECT") {
+      candidates.push(null);
+      continue;
+    }
+    const match = /^(PROXY|HTTPS)\s+([^\s/]+)$/i.exec(entry);
+    if (match)
+      candidates.push(`${match[1].toUpperCase() === "HTTPS" ? "https" : "http"}://${match[2]}`);
+    // A PAC fallback list may lead with SOCKS; only a mandatory proxy must refuse it.
+    else if (mandatory) throw unsupportedProxy();
+  }
+  if (entries.length && !candidates.length) throw unsupportedProxy();
   const permitted = mandatory ? candidates.filter(Boolean) : candidates;
   if (!permitted.length)
     throw Object.assign(new Error("The required enterprise proxy is unavailable"), {
       code: "PROXY_FAILED",
     });
   return permitted;
+}
+
+function parseProxyCredential(value) {
+  let secret;
+  try {
+    secret = JSON.parse(value);
+  } catch {}
+  if (
+    typeof secret?.username !== "string" ||
+    typeof secret.password !== "string" ||
+    /[:\r\n]/.test(secret.username)
+  )
+    throw Object.assign(new Error("Enterprise proxy credentials are invalid"), {
+      code: "PROXY_CREDENTIAL_INVALID",
+    });
+  return secret;
+}
+
+// Electron's network stack already speaks the system proxy (PAC with SOCKS,
+// NTLM/Kerberos) and trust store; only settings it cannot express need this transport.
+function requiresEnterpriseTransport(network) {
+  const proxy = network?.proxy;
+  return Boolean(
+    network?.caBundleId ||
+    network?.connectTimeoutMs !== undefined ||
+    network?.httpTimeoutMs !== undefined ||
+    (proxy &&
+      (proxy.mode !== "system" || proxy.mandatory || proxy.credentialSlot || proxy.bypass?.length))
+  );
 }
 
 function bypassesProxy(url, rules = []) {
@@ -84,19 +121,20 @@ function createEnterpriseAudioTransport({
     }
     const proxyHeaders = {};
     if (proxy.credentialSlot) {
-      const secret = JSON.parse(
+      const secret = parseProxyCredential(
         await runAbortableOperation(() => credentialReader(proxy.credentialSlot), signal)
       );
-      if (
-        typeof secret.username !== "string" ||
-        typeof secret.password !== "string" ||
-        /[:\r\n]/.test(secret.username)
-      )
-        throw new Error("Invalid proxy credentials");
       proxyHeaders["Proxy-Authorization"] =
         `Basic ${Buffer.from(`${secret.username}:${secret.password}`).toString("base64")}`;
     }
     signal?.throwIfAborted();
+    const targetHost = url.hostname.replace(/^\[|\]$/g, "");
+    // https-proxy-agent drops the target host before the TLS upgrade, so without
+    // these an IP-literal target is verified against the proxy's hostname.
+    const targetIdentity = {
+      ...(net.isIP(targetHost) ? {} : { servername: targetHost }),
+      checkServerIdentity: (_host, cert) => tls.checkServerIdentity(targetHost, cert),
+    };
     const agent = new Agent();
     agent.connect = async (req, options) => {
       let lastError;
@@ -128,6 +166,7 @@ function createEnterpriseAudioTransport({
           });
           return await proxyAgent.connect(req, {
             ...options,
+            ...targetIdentity,
             ca,
             signal: candidateSignal,
             rejectUnauthorized: true,
@@ -278,4 +317,11 @@ function createEnterpriseAudioTransport({
   return { request, createSocket };
 }
 
-module.exports = { createEnterpriseAudioTransport, proxyCandidates, bypassesProxy, trustedRoots };
+module.exports = {
+  createEnterpriseAudioTransport,
+  proxyCandidates,
+  parseProxyCredential,
+  requiresEnterpriseTransport,
+  bypassesProxy,
+  trustedRoots,
+};

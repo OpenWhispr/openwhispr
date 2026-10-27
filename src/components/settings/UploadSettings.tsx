@@ -11,6 +11,7 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
 import { isEnterpriseTranscriptionOfferable } from "../../stores/policyRules";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { InferenceModeSelector } from "../ui/SettingsSection";
+import { Button } from "../ui/button";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
@@ -51,6 +52,7 @@ export function UploadTranscriptionPanel() {
   } = useSettingsStore();
   const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
   const managedActive = managed.kind === "managed";
+  const managedAvailable = useManagedScopeResolution("transcription", "managed").kind === "managed";
   const managedRequired =
     managedActive && (managed.mode === "managed_required" || !managed.allowManualSetup);
   const {
@@ -85,7 +87,7 @@ export function UploadTranscriptionPanel() {
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
       },
-      ...(managedActive || isEnterpriseTranscriptionOfferable(policySnapshot)
+      ...(managedAvailable || isEnterpriseTranscriptionOfferable(policySnapshot)
         ? [
             {
               id: "enterprise" as const,
@@ -109,7 +111,8 @@ export function UploadTranscriptionPanel() {
       requestSignIn();
       return;
     }
-    setEnterpriseTranscriptionSetupMode(mode === "enterprise" ? "managed" : "manual");
+    // Only the explicit enterprise controls change the setup mode dictation and meetings share.
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
     if (mode === effectiveTranscriptionMode) return;
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");
@@ -172,6 +175,17 @@ export function UploadTranscriptionPanel() {
           <p className="text-xs text-muted-foreground">
             {enterpriseProviderName(managed.provider)} · {managed.model}
           </p>
+          {!managedRequired && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setEnterpriseTranscriptionSetupMode("manual")}
+            >
+              {t("settingsPage.aiModels.managedEnterprise.usePersonalSetup")}
+            </Button>
+          )}
         </div>
       )}
       {managed.kind === "error" ? (
@@ -181,7 +195,7 @@ export function UploadTranscriptionPanel() {
       ) : (
         <InferenceModeSelector
           modes={
-            managedRequired
+            managedActive
               ? transcriptionModes.filter((mode) => mode.id === "enterprise")
               : transcriptionModes
           }

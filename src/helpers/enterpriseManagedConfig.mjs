@@ -177,8 +177,10 @@ function validateManagedEnterpriseEnvelope(value, expectedWorkspaceId) {
   return { ...value, generation };
 }
 
-function resolutionError(code, message) {
-  return { kind: "error", code, message };
+function resolutionError(code, message, messageKey) {
+  return messageKey
+    ? { kind: "error", code, message, messageKey }
+    : { kind: "error", code, message };
 }
 
 function managedModelFor(record, scope, operation = "batch") {
@@ -210,12 +212,16 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto", oper
     audioOwners.some(
       (record) =>
         (record.mode === "managed_required" || !record.allowManualSetup) &&
-        !managedModelFor(record, scope, operation)
+        // Batch-only records predate managed meetings, which kept the user's
+        // own route; only a record that configures realtime claims it.
+        (operation === "batch" || record.config.realtime !== undefined) &&
+        !isNonEmptyString(managedModelFor(record, scope, operation))
     )
   )
     return resolutionError(
       "MANAGED_OPERATION_UNAVAILABLE",
-      "Your organization has not configured this enterprise audio operation."
+      "Your organization has not configured this enterprise audio operation.",
+      "enterprise.audio.operationUnavailable"
     );
   const configured = envelope.providers.filter(
     (record) =>
@@ -250,10 +256,15 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto", oper
  * Scopes any active record resolves a managed model for, and the subset that
  * is enforced (managed_required or manual setup disallowed). Enforcement is
  * per scope: a text-only workspace must never fail transcription closed.
+ * The audio operation lists split transcription the same way, mirroring
+ * resolveManagedEnterpriseScope: a required audio record enforces batch, and
+ * realtime only when it configures a realtime section.
  */
 function managedScopesForConfig(config) {
   const managed = [];
   const enforced = [];
+  const managedOperations = new Set();
+  const enforcedOperations = new Set();
   for (const record of config?.providers ?? []) {
     if (record.mode === "disabled") continue;
     const isEnforced = record.mode === "managed_required" || !record.allowManualSetup;
@@ -266,8 +277,25 @@ function managedScopesForConfig(config) {
       if (!managed.includes(scope)) managed.push(scope);
       if (isEnforced && !enforced.includes(scope)) enforced.push(scope);
     }
+    for (const operation of ["batch", "realtime"]) {
+      if (isNonEmptyString(managedModelFor(record, ENTERPRISE_TRANSCRIPTION_SCOPE, operation)))
+        managedOperations.add(operation);
+    }
+    if (
+      isEnforced &&
+      (record.config.transcription || record.config.batch || record.config.realtime)
+    ) {
+      enforcedOperations.add("batch");
+      if (record.config.realtime !== undefined) enforcedOperations.add("realtime");
+    }
   }
-  return { managed, enforced };
+  const ordered = (operations) => ["batch", "realtime"].filter((op) => operations.has(op));
+  return {
+    managed,
+    enforced,
+    managedAudioOperations: ordered(managedOperations),
+    enforcedAudioOperations: ordered(enforcedOperations),
+  };
 }
 
 function isValidAudioNetwork(network) {

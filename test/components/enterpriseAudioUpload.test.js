@@ -238,3 +238,40 @@ test("personal upload limits and feature restrictions remain while managed queue
   await f.finish();
   assert.equal(f.queue.useBatchQueueStore.getState().queue[1].status, "error");
 });
+
+test("managed uploads under the endpoint cap keep the progress bar moving until chunk progress arrives", async (t) => {
+  t.mock.method(Math, "random", () => 0.5);
+  const f = await setup(t);
+  f.fixture.size = 1024 * 1024;
+  await f.render("enterprise");
+  await React.act(async () => f.click("notes.upload.browseFiles"));
+  let pending;
+  await React.act(async () => {
+    pending = f.click("notes.upload.transcribe");
+  });
+  const width = () => {
+    const nodes = [f.container];
+    while (nodes.length) {
+      const node = nodes.pop();
+      if (String(node.className ?? node.attributes?.class ?? "").includes("transition-[width]"))
+        return Number.parseFloat(node.style.width);
+      nodes.push(...(node.childNodes ?? []));
+    }
+    assert.fail("Missing progress bar");
+  };
+  // A single-request upload reports only its start.
+  await f.emitProgress(0, 1);
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 1100)));
+  assert.ok(width() > 0, `progress stayed at ${width()}%`);
+  assert.doesNotMatch(f.container.textContent, /chunkProgress/);
+  // A chunked upload hands over to real progress without moving the bar backwards.
+  const simulated = width();
+  await f.emitProgress(0, 4);
+  assert.match(f.container.textContent, /chunkProgress.*"completed":0,"total":4/);
+  assert.equal(width(), simulated);
+  await f.emitProgress(3, 4);
+  assert.equal(width(), 67.5);
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+  assert.equal(width(), 67.5);
+  await f.finish(pending);
+});

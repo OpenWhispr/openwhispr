@@ -27,6 +27,9 @@ interface EnterpriseIdentityState {
   error: string | null;
   managedScopes: ManagedEnterpriseScope[];
   enforcedScopes: ManagedEnterpriseScope[];
+  // Which audio operations the transcription entries above cover.
+  managedAudioOperations: AudioOperations;
+  enforcedAudioOperations: AudioOperations;
   refresh: (
     accountId: string,
     workspaceId: string,
@@ -36,8 +39,21 @@ interface EnterpriseIdentityState {
   clear: () => void;
 }
 
-type ScopeSummary = { managed: ManagedEnterpriseScope[]; enforced: ManagedEnterpriseScope[] };
+type AudioOperation = "batch" | "realtime";
+// null is unknown (state with no scopes, or a summary or report from a build
+// that predates the split) and covers both operations.
+type AudioOperations = AudioOperation[] | null;
+type ScopeSummary = {
+  managed: ManagedEnterpriseScope[];
+  enforced: ManagedEnterpriseScope[];
+  managedAudioOperations?: AudioOperation[];
+  enforcedAudioOperations?: AudioOperation[];
+};
 const EMPTY_SCOPES: ScopeSummary = { managed: [], enforced: [] };
+
+function audioOperationsOf(value: unknown): AudioOperations {
+  return Array.isArray(value) ? (value as AudioOperation[]) : null;
+}
 
 function scopeStorageKey(accountId: string | null, workspaceId: string | null): string | null {
   return accountId && workspaceId ? `managedEnterpriseScopes:${accountId}:${workspaceId}` : null;
@@ -81,6 +97,18 @@ function enforcedScopesOnError(
   return lastKnown.enforced;
 }
 
+/** The audio operations behind enforcedScopesOnError's transcription entry, from the same source. */
+function enforcedAudioOperationsOnError(
+  reportedScopes: unknown,
+  reportedOperations: unknown,
+  enforcementRequired: boolean | undefined,
+  lastKnown: ScopeSummary
+): AudioOperations {
+  if (Array.isArray(reportedScopes)) return audioOperationsOf(reportedOperations);
+  if (enforcementRequired === false) return [];
+  return audioOperationsOf(lastKnown.enforcedAudioOperations);
+}
+
 let requestSequence = 0;
 let inFlightKey: string | null = null;
 let inFlightPromise: Promise<void> | null = null;
@@ -95,6 +123,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
   error: null,
   managedScopes: [],
   enforcedScopes: [],
+  managedAudioOperations: null,
+  enforcedAudioOperations: null,
 
   refresh: (accountId, workspaceId, authGeneration, forceRefresh = false) => {
     ensureLifecycleListeners();
@@ -115,6 +145,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       error: null,
       managedScopes: sameIdentity ? current.managedScopes : [],
       enforcedScopes: sameIdentity ? current.enforcedScopes : [],
+      managedAudioOperations: sameIdentity ? current.managedAudioOperations : null,
+      enforcedAudioOperations: sameIdentity ? current.enforcedAudioOperations : null,
     });
 
     const promise = (async () => {
@@ -137,6 +169,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
             {
               enforcementRequired: result.enforcementRequired,
               enforcedScopes: result.enforcedScopes,
+              enforcedAudioOperations: (result as { enforcedAudioOperations?: unknown })
+                .enforcedAudioOperations,
             }
           );
         }
@@ -148,6 +182,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
           error: null,
           managedScopes: summary.managed,
           enforcedScopes: [],
+          managedAudioOperations: audioOperationsOf(summary.managedAudioOperations),
+          enforcedAudioOperations: null,
         });
       } catch (error) {
         if (sequence !== requestSequence) return;
@@ -165,6 +201,13 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
           managedScopes: lastKnown.managed,
           enforcedScopes: enforcedScopesOnError(
             (error as { enforcedScopes?: unknown }).enforcedScopes,
+            enforcementRequired,
+            lastKnown
+          ),
+          managedAudioOperations: audioOperationsOf(lastKnown.managedAudioOperations),
+          enforcedAudioOperations: enforcedAudioOperationsOnError(
+            (error as { enforcedScopes?: unknown }).enforcedScopes,
+            (error as { enforcedAudioOperations?: unknown }).enforcedAudioOperations,
             enforcementRequired,
             lastKnown
           ),
@@ -195,6 +238,8 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
       error: null,
       managedScopes: [],
       enforcedScopes: [],
+      managedAudioOperations: null,
+      enforcedAudioOperations: null,
     });
   },
 }));
@@ -236,6 +281,8 @@ function ensureLifecycleListeners(): void {
         error: null,
         managedScopes: summary.managed,
         enforcedScopes: [],
+        managedAudioOperations: audioOperationsOf(summary.managedAudioOperations),
+        enforcedAudioOperations: null,
       });
       return;
     }
@@ -249,6 +296,13 @@ function ensureLifecycleListeners(): void {
       managedScopes: lastKnown.managed,
       enforcedScopes: enforcedScopesOnError(
         snapshot.enforcedScopes,
+        snapshot.enforcementRequired,
+        lastKnown
+      ),
+      managedAudioOperations: audioOperationsOf(lastKnown.managedAudioOperations),
+      enforcedAudioOperations: enforcedAudioOperationsOnError(
+        snapshot.enforcedScopes,
+        snapshot.enforcedAudioOperations,
         snapshot.enforcementRequired,
         lastKnown
       ),
@@ -339,12 +393,23 @@ function resolveScope(
 function scopeFailsClosed(
   state: Pick<
     EnterpriseIdentityState,
-    "status" | "config" | "accountId" | "workspaceId" | "managedScopes" | "enforcedScopes"
+    | "status"
+    | "config"
+    | "accountId"
+    | "workspaceId"
+    | "managedScopes"
+    | "enforcedScopes"
+    | "managedAudioOperations"
+    | "enforcedAudioOperations"
   >,
   requestedScope: ManagedEnterpriseScope,
-  setupMode: EnterpriseSetupMode
+  setupMode: EnterpriseSetupMode,
+  operation: AudioOperation = "batch"
 ): false | "unavailable" | "loading" {
   const scope = MANAGED_SCOPE_ALIASES[requestedScope] ?? requestedScope;
+  // A required batch-only workspace never claimed meetings, so its hold leaves realtime alone.
+  const covers = (operations: AudioOperations | undefined): boolean =>
+    scope !== "transcription" || !Array.isArray(operations) || operations.includes(operation);
   if ((state.status === "idle" || state.status === "loading") && !state.config) {
     // Covers both the very first fetch for an identity ("idle", right after
     // app start or a workspace switch, before refresh() has even been
@@ -353,13 +418,21 @@ function scopeFailsClosed(
     // back to the persisted cold-start hint only when nothing was carried
     // forward yet. After clear() there is no accountId/workspaceId, so the
     // hint lookup finds nothing and a signed-out user is never held.
-    const enforced = state.enforcedScopes.length
-      ? state.enforcedScopes
-      : readPersistedScopes(state.accountId, state.workspaceId).enforced;
-    return enforced.includes(scope) ? "loading" : false;
+    const hint = state.enforcedScopes.length
+      ? { enforced: state.enforcedScopes, enforcedAudioOperations: state.enforcedAudioOperations }
+      : readPersistedScopes(state.accountId, state.workspaceId);
+    return hint.enforced.includes(scope) && covers(hint.enforcedAudioOperations)
+      ? "loading"
+      : false;
   }
-  if (state.enforcedScopes.includes(scope)) return "unavailable";
-  if (setupMode === "managed" && state.status === "error" && state.managedScopes.includes(scope)) {
+  if (state.enforcedScopes.includes(scope) && covers(state.enforcedAudioOperations))
+    return "unavailable";
+  if (
+    setupMode === "managed" &&
+    state.status === "error" &&
+    state.managedScopes.includes(scope) &&
+    covers(state.managedAudioOperations)
+  ) {
     return "unavailable";
   }
   return false;
@@ -391,7 +464,7 @@ export function getManagedScopeResolution(
     state.config,
     scope,
     setupMode,
-    scopeFailsClosed(state, scope, setupMode),
+    scopeFailsClosed(state, scope, setupMode, operation),
     operation
   );
 }
@@ -413,7 +486,7 @@ export function useManagedScopeResolution(
 ): ManagedEnterpriseScopeResolution {
   const config = useEnterpriseIdentityStore((state) => state.config);
   const scopeHold = useEnterpriseIdentityStore((state) =>
-    scopeFailsClosed(state, scope, setupMode)
+    scopeFailsClosed(state, scope, setupMode, operation)
   );
   return resolveScope(config, scope, setupMode, scopeHold, operation);
 }

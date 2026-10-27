@@ -15,7 +15,7 @@ const {
 } = require("../../src/helpers/enterpriseAudioTransport");
 
 const hasOpenSsl = spawnSync("openssl", ["version"], { stdio: "ignore" }).status === 0;
-let directory, certificate, ca, server, sockets, port;
+let directory, certificate, ca, server, sockets, port, dnsOnlyServer, dnsOnlyPort;
 const requests = [];
 before(async () => {
   if (!hasOpenSsl) return;
@@ -69,7 +69,55 @@ before(async () => {
     "-extfile",
     "ext.cnf"
   );
+  // A leaf valid only for DNS:localhost, so an IP-literal target must never accept it.
+  openssl(
+    "req",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-keyout",
+    "dnsonly.key",
+    "-out",
+    "dnsonly.csr",
+    "-subj",
+    "/CN=localhost"
+  );
+  fs.writeFileSync(
+    path.join(directory, "dnsonly.cnf"),
+    "subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n"
+  );
+  openssl(
+    "x509",
+    "-req",
+    "-in",
+    "dnsonly.csr",
+    "-CA",
+    "ca.pem",
+    "-CAkey",
+    "ca.key",
+    "-CAcreateserial",
+    "-out",
+    "dnsonly.pem",
+    "-days",
+    "2",
+    "-extfile",
+    "dnsonly.cnf"
+  );
   ca = fs.readFileSync(path.join(directory, "ca.pem"), "utf8");
+  dnsOnlyServer = https.createServer(
+    {
+      key: fs.readFileSync(path.join(directory, "dnsonly.key")),
+      cert: fs.readFileSync(path.join(directory, "dnsonly.pem")),
+    },
+    (req, res) => {
+      req.resume();
+      req.on("end", () => res.end("dns-only"));
+    }
+  );
+  new WebSocketServer({ server: dnsOnlyServer });
+  dnsOnlyServer.listen(0, "127.0.0.1");
+  await once(dnsOnlyServer, "listening");
+  dnsOnlyPort = dnsOnlyServer.address().port;
   certificate = {
     key: fs.readFileSync(path.join(directory, "server.key")),
     cert: fs.readFileSync(path.join(directory, "server.pem")),
@@ -106,6 +154,8 @@ after(async () => {
   for (const client of sockets.clients) client.terminate();
   sockets.close();
   server.closeAllConnections();
+  dnsOnlyServer.closeAllConnections();
+  await new Promise((resolve) => dnsOnlyServer.close(resolve));
   await new Promise((resolve) => server.close(resolve));
   fs.rmSync(directory, { recursive: true, force: true });
 });
@@ -120,6 +170,91 @@ test("mandatory PAC does not permit a direct fallback", () => {
   ]);
   assert.throws(() => proxyCandidates("SOCKS proxy.test:8080"), { code: "PROXY_UNSUPPORTED" });
 });
+
+test("system PAC skips proxy types it cannot speak unless the proxy is mandatory", () => {
+  assert.deepEqual(proxyCandidates("SOCKS5 socks.test:1080; DIRECT"), [null]);
+  assert.deepEqual(proxyCandidates("SOCKS socks.test:1080; PROXY proxy.test:8080"), [
+    "http://proxy.test:8080",
+  ]);
+  assert.throws(() => proxyCandidates("SOCKS5 socks.test:1080; SOCKS socks.test:1081"), {
+    code: "PROXY_UNSUPPORTED",
+  });
+  assert.throws(() => proxyCandidates("SOCKS5 socks.test:1080; PROXY proxy.test:8080", true), {
+    code: "PROXY_UNSUPPORTED",
+  });
+});
+
+test("malformed proxy credentials fail with a fixed code and never echo the secret", async () => {
+  for (const secret of [
+    "not-json proxy-secret-value",
+    JSON.stringify({ username: "user", password: 7 }),
+    JSON.stringify(null),
+  ]) {
+    await assert.rejects(
+      transport(undefined, async () => secret).request("https://127.0.0.1:1/audio", {
+        network: { proxy: { mode: "direct", credentialSlot: "proxy" } },
+      }),
+      (error) => {
+        assert.equal(error.code, "PROXY_CREDENTIAL_INVALID");
+        assert.equal(error.cause, undefined);
+        assert.doesNotMatch(error.message, /proxy-secret-value|password|user/);
+        return true;
+      }
+    );
+  }
+});
+
+// Proxy is named "localhost" so a check against the proxy host would match the DNS-only leaf.
+test(
+  "proxied targets verify the certificate against the target host, not the proxy",
+  local,
+  async () => {
+    const proxy = http.createServer();
+    const tunnels = new Set();
+    proxy.on("connect", (_req, socket, head) => {
+      const upstream = net.connect(dnsOnlyPort, "127.0.0.1", () => {
+        socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+        if (head.length) upstream.write(head);
+        socket.pipe(upstream);
+        upstream.pipe(socket);
+      });
+      tunnels.add(socket).add(upstream);
+      socket.on("error", () => upstream.destroy());
+      upstream.on("error", () => socket.destroy());
+    });
+    proxy.listen(0, "127.0.0.1");
+    await once(proxy, "listening");
+    const client = transport(async () => `PROXY localhost:${proxy.address().port}`);
+    const network = { proxy: { mode: "system", mandatory: true } };
+    try {
+      await assert.rejects(
+        client.request(`https://127.0.0.1:${dnsOnlyPort}/ip-target`, { caPem: ca, network }),
+        { code: "ERR_TLS_CERT_ALTNAME_INVALID" }
+      );
+      const ws = await client.createSocket(`wss://127.0.0.1:${dnsOnlyPort}/ip-target`, {
+        caPem: ca,
+        network,
+      });
+      const outcome = await Promise.race([
+        once(ws, "open").then(
+          () => "open",
+          (error) => error.code
+        ),
+        once(ws, "close").then(() => "closed"),
+      ]);
+      ws.terminate();
+      assert.equal(outcome, "ERR_TLS_CERT_ALTNAME_INVALID");
+      const response = await client.request(`https://localhost:${dnsOnlyPort}/dns-target`, {
+        caPem: ca,
+        network,
+      });
+      assert.equal(await response.text(), "dns-only");
+    } finally {
+      for (const tunnel of tunnels) tunnel.destroy();
+      await new Promise((resolve) => proxy.close(resolve));
+    }
+  }
+);
 
 test("scoped CA trusts HTTPS and WSS, preserving exact paths and auth headers", local, async () => {
   const client = transport();

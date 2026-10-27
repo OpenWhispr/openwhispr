@@ -598,7 +598,8 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
-    setEnterpriseTranscriptionSetupMode(mode === "enterprise" ? "managed" : "manual");
+    // Only the explicit enterprise controls change the shared setup mode.
+    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
     if (mode === effectiveTranscriptionMode) return;
     setTranscriptionMode(mode);
     setUseLocalWhisper(mode === "local");
