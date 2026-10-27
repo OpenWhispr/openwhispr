@@ -77,6 +77,15 @@ const LINUX_TERMINAL_CLASSES = [
 // is harmless — no such window class exists there.
 const TERMINAL_SIGNATURES = [...LINUX_TERMINAL_CLASSES, "iterm"];
 
+// Omarchy gives terminal-launched apps their own IDs instead of the emulator's
+// class. Keep these prefixes in sync with resources/linux-fast-paste.c.
+const OMARCHY_TERMINAL_PREFIXES = ["org.omarchy.", "tui."];
+
+function isOmarchyTerminalSignature(signature) {
+  const normalized = String(signature || "").toLowerCase();
+  return OMARCHY_TERMINAL_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -270,6 +279,7 @@ class ClipboardManager {
   // match inside unrelated names ("com.system76.CosmicEdit"), so it must be a whole word.
   isTerminalSignature(signature) {
     if (!signature) return false;
+    if (isOmarchyTerminalSignature(signature)) return true;
     const normalized = String(signature).toLowerCase();
     const words = normalized.split(/[^a-z0-9]+/);
     return TERMINAL_SIGNATURES.some((term) =>
@@ -1718,6 +1728,8 @@ class ClipboardManager {
     // COSMIC names the focused app but not its process, so Electron apps look like any
     // other window there: only a known terminal leaves Shift+Insert.
     const useShiftInsert =
+      // Match Omarchy's universal terminal paste, including Codex and Claude.
+      windowSignals.some(isOmarchyTerminalSignature) ||
       detectedIsKonsole ||
       detectedIsElectron ||
       (isWayland && (windowSignals.length === 0 || (isCosmic && !isTerminalTarget)));

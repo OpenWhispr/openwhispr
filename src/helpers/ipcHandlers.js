@@ -2284,7 +2284,17 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-save-note",
-      async (event, title, content, noteType, sourceFile, audioDuration, folderId, spaceId) => {
+      async (
+        event,
+        title,
+        content,
+        noteType,
+        sourceFile,
+        audioDuration,
+        folderId,
+        spaceId,
+        transcript
+      ) => {
         const result = this.databaseManager.saveNote(
           title,
           content,
@@ -2292,7 +2302,8 @@ class IPCHandlers {
           sourceFile,
           audioDuration,
           folderId,
-          spaceId
+          spaceId,
+          transcript
         );
         if (result?.success && result?.note) {
           setImmediate(() => broadcastToWindows("note-added", result.note));
@@ -4208,7 +4219,7 @@ class IPCHandlers {
           end: typeof s.end === "number" && isFinite(s.end) ? s.end : 0,
         }));
         const merged = mergeSpeakersWithText(sanitizedSegments, text, duration);
-        return { success: true, text: formatSpeakerTranscript(merged) };
+        return { success: true, text: formatSpeakerTranscript(merged), segments: merged };
       } catch (error) {
         debugLogger.error("Speaker merge error", { error: error.message });
         return { success: false, error: error.message };
@@ -4585,7 +4596,7 @@ class IPCHandlers {
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
               const callback = this.windowManager.createHotkeyCallback();
-              const registered = globalShortcut.register(accelerator, () => callback(hk));
+              const registered = hotkeyManager.registerGlobalShortcut(accelerator, hk, callback);
               if (!registered) {
                 debugLogger.warn(
                   `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
@@ -10995,6 +11006,12 @@ class IPCHandlers {
             debugLogger.warn("BYOK diarization requested but provider returned no speaker data");
           }
           const segments = timestamps ? mapVerboseSegments(data.data) : null;
+          if (timestamps && !segments) {
+            debugLogger.debug("BYOK transcription returned no usable segment timing", {
+              provider: route.provider,
+              hasSegments: Array.isArray(data.data?.segments),
+            });
+          }
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (rawError) {
           const error = providerErrorContext
