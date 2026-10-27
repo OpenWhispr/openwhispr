@@ -3233,7 +3233,8 @@
         "title": "会议音频已静默",
         "description": "已有几分钟未检测到任何人声。如果通话仍在进行，请检查您的声音输出设备。"
       },
-      "recordingDisabledByOrg": "你的组织已禁用会议录音。"
+      "recordingDisabledByOrg": "你的组织已禁用会议录音。",
+      "stoppedAccountChanged": "由于你已退出登录或切换了账号，录音已停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -4869,6 +4870,7 @@
     },
     "start": "开始记录",
     "join": "加入并转录",
+    "joinOnly": "加入会议",
     "folders": {
       "choose": "选择会议文件夹",
       "search": "搜索文件夹",

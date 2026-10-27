@@ -495,6 +495,9 @@ const MEETING_POLICY_REFUSALS = new Set([
   "POLICY_UNRESOLVABLE",
 ]);
 
+// Main-process stops that end the recording without being a policy refusal.
+const MEETING_MAIN_STOPS = new Set([...MEETING_POLICY_REFUSALS, "accountChanged"]);
+
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
   useMeetingRecordingStore.setState((state) => ({
     ...extra,
@@ -1274,7 +1277,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         if (activeRecordingSessionId !== sessionId) return;
         reportMeetingError(err);
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
-        if (MEETING_POLICY_REFUSALS.has(err) && isRecordingFlag) void stopRecording(sessionId);
+        if (MEETING_MAIN_STOPS.has(err) && isRecordingFlag) void stopRecording(sessionId);
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 

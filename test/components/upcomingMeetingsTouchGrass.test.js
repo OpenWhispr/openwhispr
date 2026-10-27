@@ -17,6 +17,10 @@ async function mountUpcomingMeetings(t) {
     mockModules: {
       "/hooks/useSystemAudioPermission": `export const useSystemAudioPermission = () => ({ granted: true });`,
       "/TouchGrass": `export default function TouchGrass() { return null; }`,
+      "/ui/useToast": `
+        export const toasts = [];
+        export const useToast = () => ({ toast: (props) => toasts.push(props) });
+      `,
       "/utils/grassRustle": `
         export const rustles = [];
         export const createGrassRustle = () => {
@@ -31,8 +35,9 @@ async function mountUpcomingMeetings(t) {
     "/components/UpcomingMeetings.tsx"
   );
   const { rustles } = await vite.ssrLoadModule("/utils/grassRustle");
+  const { toasts } = await vite.ssrLoadModule("/components/ui/useToast");
   root = createRoot(container);
-  return { root, container, UpcomingMeetings, rustles };
+  return { root, container, UpcomingMeetings, rustles, toasts };
 }
 
 function eventLaterToday() {
@@ -93,4 +98,33 @@ test("a meeting synced into today leaves the grass and releases its rustle", asy
   );
   assert.equal(rustles.length, 1);
   assert.equal(rustles[0].disposed, true, "the rustle audio is released");
+});
+
+test("a calendar join the org refuses to record explains why in the panel", async (t) => {
+  const { root, container, UpcomingMeetings, toasts } = await mountUpcomingMeetings(t);
+  globalThis.window.electronAPI.joinCalendarMeeting = async () => ({
+    success: false,
+    code: "POLICY_MEETING_RECORDING_DISABLED",
+    error: "Meeting recording is disabled by your organization.",
+  });
+  await React.act(async () =>
+    root.render(
+      React.createElement(UpcomingMeetings, {
+        isLoading: false,
+        isConnected: true,
+        onConnectCalendar: () => {},
+        events: [eventLaterToday()],
+      })
+    )
+  );
+  // The button's icon leaves whitespace around its label.
+  const takeNotes = findElement(
+    container,
+    (element) => element.tagName === "BUTTON" && element.textContent.trim() === "upcoming.takeNotes"
+  );
+  assert.ok(takeNotes, "the event offers to take notes");
+  await React.act(async () =>
+    takeNotes.dispatchEvent({ type: "click", bubbles: true, button: 0, preventDefault() {} })
+  );
+  assert.deepEqual(toasts, [{ title: "notes.meeting.recordingDisabledByOrg", variant: "default" }]);
 });

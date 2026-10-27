@@ -181,7 +181,7 @@ test("CLI files remain uploads even when callers request dictation; policy refus
     };
     bridge._sendError(response, failure);
     assert.equal(response.status, 403);
-    assert.equal(response.body.error.code, code.toLowerCase());
+    assert.equal(response.body.error.code, "forbidden");
     assert.equal(response.body.error.message, failure.message);
   }
 });

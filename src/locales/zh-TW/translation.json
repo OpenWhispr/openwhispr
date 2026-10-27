@@ -3233,7 +3233,8 @@
         "title": "會議音訊已靜默",
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
       },
-      "recordingDisabledByOrg": "你的組織已停用會議錄音。"
+      "recordingDisabledByOrg": "你的組織已停用會議錄音。",
+      "stoppedAccountChanged": "由於你已登出或切換了帳號，錄音已停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -4869,6 +4870,7 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄",
+    "joinOnly": "加入會議",
     "folders": {
       "choose": "選擇會議資料夾",
       "search": "搜尋資料夾",

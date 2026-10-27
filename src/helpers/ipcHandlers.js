@@ -860,7 +860,7 @@ class IPCHandlers {
 
   _handleAuthTokenChange({ generation, token }) {
     this._audioFeaturePolicy?.cancelAll();
-    if (!token) this._stopMeetingForPolicy?.();
+    if (!token) this._stopMeetingForPolicy?.("accountChanged");
     this.windowManager.retireMeetingNotificationScope();
     this.enterpriseIdentityManager?.clear();
     if (!token) {
@@ -2529,7 +2529,7 @@ class IPCHandlers {
         (accountId !== null && previousScope?.accountId !== accountId)
       ) {
         this._audioFeaturePolicy?.cancelAll();
-        this._stopMeetingForPolicy?.();
+        this._stopMeetingForPolicy?.("accountChanged");
         this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
@@ -6664,8 +6664,14 @@ class IPCHandlers {
     });
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
+    this.windowManager.resolveMeetingRecordingRefusal = () =>
+      this._audioFeaturePolicy.resolve("meeting");
 
+    // Signed in, load the policy now (from cache when offline): an app started
+    // to the tray has no control panel to fetch it, and the tray item, the
+    // meeting hotkey, and calendar reminders all read this snapshot.
     if (!tokenStore.get()) this._audioFeaturePolicy.update({ success: true, managed: false });
+    else void this._audioFeaturePolicy.resolve("meeting");
 
     registerProductHelpIpc({
       ipcMain,
@@ -12730,9 +12736,11 @@ class IPCHandlers {
         return { success: false, code: "STALE_NOTIFICATION" };
       const respond = () =>
         this.meetingDetectionEngine.handleNotificationResponse(detectionId, action, options, owner);
-      return action === "dismiss"
-        ? respond()
-        : this._audioFeaturePolicy.run(event, "meeting", respond);
+      if (action === "dismiss" || action === "open") return respond();
+      // Join opens the meeting even when the org refuses to let it be recorded;
+      // only the recording is subject to the policy.
+      if (action === "join") this.meetingDetectionEngine.openNotificationJoinUrl(owner);
+      return this._audioFeaturePolicy.run(event, "meeting", respond);
     });
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
@@ -12742,10 +12750,12 @@ class IPCHandlers {
       try {
         // Sent from the open panel, which may have just opened the meeting
         // link: leave the meeting in front rather than pulling the panel back.
-        await this.meetingDetectionEngine.joinCalendarMeeting(eventId, "calendar-join", {
-          activate: false,
-        });
-        return { success: true };
+        const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
+          eventId,
+          "calendar-join",
+          { activate: false }
+        );
+        return refusal ?? { success: true };
       } catch (error) {
         return { success: false, error: error.message };
       }

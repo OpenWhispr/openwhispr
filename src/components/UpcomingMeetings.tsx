@@ -15,6 +15,8 @@ import { parseAttendees } from "../utils/calendarAttendees";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import { getMeetingJoinUrl } from "../helpers/meetingJoinUrl";
+import { meetingStartRefusalKey } from "../helpers/trayActionPolicy";
+import { useToast } from "./ui/useToast";
 import TouchGrass from "./TouchGrass";
 import { createGrassRustle, type GrassRustle } from "../utils/grassRustle";
 import { formatTimeRange, parseEventDate } from "../utils/dateFormatting";
@@ -167,13 +169,18 @@ function AttendeePopover({
 
 function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   const { t, i18n } = useTranslation();
+  const { toast } = useToast();
   const joinUrl = getMeetingJoinUrl(event);
   const attendees = useMemo(() => parseAttendees(event), [event]);
   const timeRange = formatTimeRange(i18n.language, event.start_time, event.end_time);
 
-  const startNotes = () => {
+  const startNotes = async () => {
     if (joinUrl) openJoinUrl(joinUrl);
-    window.electronAPI?.joinCalendarMeeting?.(event.id);
+    const result = await window.electronAPI?.joinCalendarMeeting?.(event.id);
+    // Only an org-policy refusal carries a code; the meeting link still opened.
+    if (result?.success === false && result.code) {
+      toast({ title: t(meetingStartRefusalKey(result.code)), variant: "default" });
+    }
   };
 
   const joinButton = (

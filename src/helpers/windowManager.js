@@ -83,6 +83,8 @@ class WindowManager {
     this.onDictationStateChanged = null;
     // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
     this.getMeetingRecordingRefusal = () => null;
+    // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
+    this.resolveMeetingRecordingRefusal = async () => null;
     // Set by main.js: an app started to the tray creates no control panel.
     this.startedMinimized = false;
     this.notificationWindow = null;

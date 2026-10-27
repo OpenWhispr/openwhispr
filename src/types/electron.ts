@@ -170,6 +170,11 @@ export interface MeetingNotificationData {
   event: { summary?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
+  /** Set while the org refuses meeting recording: the card can only join. */
+  recordingRefusal?: Extract<
+    MeetingError,
+    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+  >;
 }
 
 export interface MeetingFolderRef {
@@ -3589,8 +3594,11 @@ declare global {
         navigationId: string,
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
-      joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      startManualMeeting?: () => Promise<void>;
+      joinCalendarMeeting?: (
+        eventId: string
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Resolves with nothing once started, or with why it could not start.
+      startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
         spaceId?: number;

@@ -27,6 +27,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  // The main process ended the recording because it belonged to the previous account.
+  accountChanged: "notes.meeting.stoppedAccountChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",

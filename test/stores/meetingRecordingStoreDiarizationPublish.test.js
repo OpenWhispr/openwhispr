@@ -290,6 +290,18 @@ test("a policy stop's early diarization waits for the resumed session's stop res
   ]);
 });
 
+test("main ending the recording for an account change stops it with its own reason", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+
+  state.errorCallback("accountChanged");
+  await settle();
+  const { isRecording, error } = store.useMeetingRecordingStore.getState();
+  assert.equal(isRecording, false);
+  assert.equal(error, "accountChanged");
+});
+
 const diarized = (text, timestamp, speakerName) => ({
   text,
   source: "system",

@@ -327,7 +327,15 @@ class MeetingDetectionEngine {
   // Calendar reminders enter the same pipeline as mic detections, so they share
   // the recording gates, queueing, cooldowns, and the overlay window.
   handleCalendarReminder(event) {
-    this._handleDetection("calendar", event.id, { event, detectedAt: Date.now() });
+    const detect = () =>
+      this._handleDetection("calendar", event.id, { event, detectedAt: Date.now() });
+    // A reminder can fire before the policy's first load at launch; fetch it
+    // rather than judge the meeting on a policy that hasn't arrived.
+    if (this.windowManager.getMeetingRecordingRefusal?.()?.code === "POLICY_UNRESOLVABLE") {
+      void this.windowManager.resolveMeetingRecordingRefusal().then(detect);
+      return;
+    }
+    detect();
   }
 
   _handleDetection(source, key, data) {
@@ -400,9 +408,13 @@ class MeetingDetectionEngine {
   }
 
   _showPrompt(detectionId, source, key, data) {
-    // Every prompt offers to record the meeting, and there is nothing to offer
-    // while the org has meeting recording off.
-    if (this.windowManager.getMeetingRecordingRefusal?.()) {
+    const calendarEvent = data?.event ?? this._findCalendarEvent();
+    const event = calendarEvent ?? placeholderEvent("__detected__");
+    const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
+    // While the org has meeting recording off, a reminder with a link can still
+    // join the meeting; every other prompt only offers to record it.
+    const recordingRefusal = this.windowManager.getMeetingRecordingRefusal?.()?.code ?? null;
+    if (recordingRefusal && !joinUrl) {
       debugLogger.info(
         "Suppressing detection — meeting recording is off by policy",
         { detectionId, source },
@@ -411,15 +423,12 @@ class MeetingDetectionEngine {
       this.activeDetections.delete(detectionId);
       return;
     }
-    const calendarEvent = data?.event ?? this._findCalendarEvent();
-    const event = calendarEvent ?? placeholderEvent("__detected__");
 
     let variant = "detected";
     if (calendarEvent) {
       const started = new Date(calendarEvent.start_time).getTime() <= Date.now();
       variant = started ? "underway" : "starting";
     }
-    const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
 
     debugLogger.info(
       "Showing notification",
@@ -429,6 +438,7 @@ class MeetingDetectionEngine {
         variant,
         title: calendarEvent?.summary ?? null,
         hasJoinUrl: !!joinUrl,
+        recordingRefusal,
       },
       "meeting"
     );
@@ -445,15 +455,19 @@ class MeetingDetectionEngine {
       event,
       variant,
       joinUrl,
+      ...(recordingRefusal ? { recordingRefusal } : {}),
     });
   }
 
   handleNotificationResponse(detectionId, action, options = {}, owner) {
-    if (!["start", "join", "dismiss"].includes(action))
+    if (!["start", "join", "open", "dismiss"].includes(action))
       return Promise.resolve({ success: false, code: "INVALID_REQUEST" });
     if (owner.responsePromise) return owner.responsePromise;
-    if (action === "dismiss") {
-      this._dismiss();
+    if (action === "dismiss" || action === "open") {
+      // Opening the meeting without recording it is not a decline, so it starts
+      // no mic cooldown.
+      if (action === "open") this.openNotificationJoinUrl(owner);
+      else this._dismiss();
       this.activeDetections.delete(detectionId);
       this.windowManager.dismissMeetingNotification({ notifyEngine: false });
       return Promise.resolve({ success: true, value: null });
@@ -477,15 +491,19 @@ class MeetingDetectionEngine {
     return owner.responsePromise;
   }
 
+  // Once per card: a Join retried after a failed start must not reopen the call.
+  openNotificationJoinUrl(owner) {
+    if (owner.joinDispatched) return;
+    owner.joinDispatched = true;
+    const joinUrl = getMeetingJoinUrl(owner.detection.event);
+    if (joinUrl)
+      void openExternalUrl(joinUrl).catch((error) =>
+        debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
+      );
+  }
+
   async _startNotification(owner, action, options) {
-    if (action === "join" && !owner.joinDispatched) {
-      owner.joinDispatched = true;
-      const joinUrl = getMeetingJoinUrl(owner.detection.event);
-      if (joinUrl)
-        void openExternalUrl(joinUrl).catch((error) =>
-          debugLogger.error("Failed to open meeting link", { error: error.message }, "meeting")
-        );
-    }
+    if (action === "join") this.openNotificationJoinUrl(owner);
     const db = this.databaseManager;
     const context = () =>
       meetingDestinationContext(db, owner, this.windowManager.meetingRecentDestinations);
@@ -548,16 +566,19 @@ class MeetingDetectionEngine {
 
   // Both manual starts record into the note they create, so a start the org
   // refuses must end before that note exists.
-  _refuseMeetingStart() {
-    const refusal = this.windowManager.getMeetingRecordingRefusal?.();
-    if (!refusal) return false;
-    debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
-    this.windowManager.sendMeetingStartRefused(refusal.code);
-    return true;
+  async _meetingStartRefusal() {
+    const refusal = await this.windowManager.resolveMeetingRecordingRefusal?.();
+    if (refusal)
+      debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
+    return refusal;
   }
 
   async startManualMeeting(options) {
-    if (this._refuseMeetingStart()) return;
+    const refusal = await this._meetingStartRefusal();
+    if (refusal) {
+      this.windowManager.sendMeetingStartRefused(refusal.code);
+      return;
+    }
     debugLogger.info("Starting manual meeting", {}, "meeting");
 
     // A live meeting already owns a note: a second start would leave the recording
@@ -625,8 +646,10 @@ class MeetingDetectionEngine {
     return true;
   }
 
+  // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
-    if (this._refuseMeetingStart()) return;
+    const refusal = await this._meetingStartRefusal();
+    if (refusal) return refusal;
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 

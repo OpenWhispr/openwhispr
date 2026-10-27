@@ -3309,7 +3309,8 @@
         "title": "会議の音声が無音になりました",
         "description": "数分間、誰の声も検出されていません。通話が続いている場合は、音声出力デバイスを確認してください。"
       },
-      "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。"
+      "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
+      "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -4869,6 +4870,7 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし",
+    "joinOnly": "会議に参加",
     "folders": {
       "choose": "会議フォルダーを選択",
       "search": "フォルダーを検索",

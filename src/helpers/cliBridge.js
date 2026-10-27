@@ -7,6 +7,7 @@ const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
+const { isAudioPolicyRefusal } = require("./audioFeaturePolicy");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -254,8 +255,9 @@ class CliBridge {
       sendV1Error(res, 400, "validation_error", err.message);
       return;
     }
-    if (err.code === "POLICY_AUDIO_UPLOAD_DISABLED" || err.code === "POLICY_UNRESOLVABLE") {
-      sendV1Error(res, 403, err.code.toLowerCase(), err.message);
+    // The cloud /v1 API answers every organization policy denial this way.
+    if (isAudioPolicyRefusal(err)) {
+      sendV1Error(res, 403, "forbidden", err.message);
       return;
     }
     debugLogger.error("CLI bridge route error", { error: err.message }, "cli-bridge");

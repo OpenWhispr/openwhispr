@@ -3233,7 +3233,8 @@
         "title": "L'audio della riunione è diventato silenzioso",
         "description": "Non si sente nessuno da qualche minuto. Se la chiamata è ancora in corso, controlla il dispositivo di uscita audio."
       },
-      "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione."
+      "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+      "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -4869,6 +4870,7 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi",
+    "joinOnly": "Partecipa alla riunione",
     "folders": {
       "choose": "Scegli cartella della riunione",
       "search": "Cerca cartelle",

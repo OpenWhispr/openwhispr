@@ -789,7 +789,16 @@ export default function App() {
               }}
               onStartMeeting={() => {
                 setIsCommandMenuOpen(false);
-                void window.electronAPI?.startManualMeeting?.();
+                // Main refuses under policy before the start reaches the
+                // engine, so it never sends meeting-start-refused for this.
+                void window.electronAPI?.startManualMeeting?.().then((result) => {
+                  if (
+                    result?.code === "POLICY_MEETING_RECORDING_DISABLED" ||
+                    result?.code === "POLICY_UNRESOLVABLE"
+                  ) {
+                    refuse(meetingStartRefusalKey(result.code));
+                  }
+                });
               }}
               onHide={() => {
                 setIsCommandMenuOpen(false);

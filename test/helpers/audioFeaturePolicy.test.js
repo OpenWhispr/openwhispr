@@ -114,6 +114,49 @@ test("dictation is never refused, even before the policy loads", async () => {
   assert.deepEqual(await guard.run({}, "dictation", () => ({ success: true })), { success: true });
 });
 
+test("dictation never waits on a policy lookup or lets a failed one stop a meeting", async () => {
+  let lookups = 0;
+  const blocked = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => {
+      lookups++;
+      return { success: false };
+    },
+    onBlocked: (purpose) => blocked.push(purpose),
+  });
+  guard.update(policy());
+  assert.deepEqual(await guard.run({}, "dictation", () => ({ success: true })), { success: true });
+  assert.equal(lookups, 0);
+  assert.deepEqual(blocked, []);
+  assert.equal(guard.failure("meeting"), null);
+});
+
+test("a main-process start fetches a policy that has not loaded instead of refusing on it", async () => {
+  let lookups = 0;
+  let next = policy(true);
+  const blocked = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => {
+      lookups++;
+      return next;
+    },
+    onBlocked: (purpose) => blocked.push(purpose),
+  });
+  assert.equal(await guard.resolve("meeting"), null);
+  assert.equal(lookups, 1);
+
+  // A loaded snapshot is answered without another lookup.
+  next = policy(false);
+  assert.equal(await guard.resolve("meeting"), null);
+  assert.equal(lookups, 1);
+
+  // Offline with nothing cached still fails closed, without reporting a block.
+  guard.cancelAll();
+  next = { success: false };
+  assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
+  assert.deepEqual(blocked, []);
+});
+
 test("a refusal names the control that is switched off", () => {
   assert.equal(
     audioFeatureFailure(policy(false, true), "meeting").error,

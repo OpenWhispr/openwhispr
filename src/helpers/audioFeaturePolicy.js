@@ -76,6 +76,17 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
     failure,
     refreshOnRefusal,
     signalFor: (event) => jobs.get(event)?.controller.signal,
+    // Starts made in main (hotkey, tray, calendar) can arrive before the first
+    // policy broadcast; fetch it then rather than refuse on a policy that never
+    // loaded. Only a usable answer replaces the snapshot, so a failed fetch
+    // still fails closed without reporting a block.
+    async resolve(purpose) {
+      if (!snapshot) {
+        const next = await getPolicy({}).catch(() => null);
+        if (next?.success) update(next);
+      }
+      return failure(purpose);
+    },
     cancelAll() {
       snapshot = null;
       for (const job of jobs.values()) job.controller.abort();
@@ -86,11 +97,15 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
       const onDestroyed = () => job.controller.abort();
       event.sender?.once?.("destroyed", onDestroyed);
       try {
-        const next = await getPolicy(event);
-        job.controller.signal.throwIfAborted();
-        update(next);
-        const denied = failure(purpose);
-        if (denied) return denied;
+        // An unrestricted purpose must not wait on the network, nor feed a
+        // failed lookup into update(), which can stop a live meeting.
+        if (FEATURE_BY_PURPOSE[purpose]) {
+          const next = await getPolicy(event);
+          job.controller.signal.throwIfAborted();
+          update(next);
+          const denied = failure(purpose);
+          if (denied) return denied;
+        }
         job.controller.signal.throwIfAborted();
         const result = await handler();
         refreshOnRefusal(event, result);
@@ -121,4 +136,9 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
   };
 }
 
-module.exports = { audioFeatureFailure, createAudioFeaturePolicy, isAudioPolicyRefusal };
+module.exports = {
+  AUDIO_POLICY_REFUSAL_CODES,
+  audioFeatureFailure,
+  createAudioFeaturePolicy,
+  isAudioPolicyRefusal,
+};
