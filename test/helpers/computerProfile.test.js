@@ -393,7 +393,8 @@ test("a Linux desktop has no battery and placeholder DMI gives the generic name"
 
 test("a Linux Mesa renderer drops Mesa and the codename bracket", async () => {
   const renderer =
-    "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6 (Core Profile) Mesa 23.2.1)";
+    "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), " +
+    "OpenGL 4.6 (Core Profile) Mesa 23.2.1)";
   const deps = baseDeps({
     getGPUInfo: async () => ({
       auxAttributes: { glRenderer: renderer },
