@@ -364,7 +364,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // The space the Local card quotes: every row on, with the room each download
   // reserves to unpack. Undefined until both reads land; the card has a default.
-  // Read only around the choice, not for every onboarding user on every focus.
+  // Read once as onboarding opens, so the card's figure is ready when it shows; it
+  // is read again on focus only around the choice, not on every onboarding step.
   const localSetupSpace = useLocalSetupSpace(
     currentStepId === "setup-choice" || currentStepId === "local-setup"
   );

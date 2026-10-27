@@ -49,17 +49,23 @@ async function setup(t) {
   return { render, reads: () => reads, focusListeners, value: () => value };
 }
 
-test("a disabled space read reads nothing and listens to no focus", async (t) => {
+test("free space is read once on mount; only an enabled step re-reads on focus", async (t) => {
   const s = await setup(t);
+  // Onboarding mounts on an earlier step: one read, so the figure is ready later.
   await s.render(false);
-  assert.equal(s.reads(), 0);
-  assert.equal(s.focusListeners.size, 0);
-  assert.equal(s.value(), null);
+  assert.equal(s.reads(), 1);
+  assert.equal(s.value().availableBytes, SPACE.availableBytes);
+  assert.equal(s.focusListeners.size, 0, "focus outside the two steps does not re-read");
 
+  // Entering setup-choice: the first render already has the value, with no new read.
   await s.render(true);
+  assert.equal(s.value().availableBytes, SPACE.availableBytes);
   assert.equal(s.reads(), 1);
   assert.equal(s.focusListeners.size, 1);
-  assert.equal(s.value().availableBytes, SPACE.availableBytes);
+  await React.act(async () => {
+    for (const listener of s.focusListeners) listener();
+  });
+  assert.equal(s.reads(), 2, "focus on the step reads again");
 
   // Leaving the steps that need it stops the focus reads and keeps the last reading.
   await s.render(false);
