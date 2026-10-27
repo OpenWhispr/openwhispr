@@ -165,3 +165,30 @@ test("a failed reload keeps the list it had and stays ready", async (t) => {
     ["i1"]
   );
 });
+
+test("a reload from a previous workspace leaves the current list alone", async (t) => {
+  const { mount, state } = await loadHook(t);
+  globalThis.__invitationListImpl = async (workspaceId) => [
+    invitation(`i-${workspaceId}`, `${workspaceId}@example.com`),
+  ];
+  await mount("w1", true);
+  // A caller (a resend, a cancel) keeps the reload it got while w1 was showing.
+  const staleReload = state().reload;
+
+  const second = deferred();
+  globalThis.__invitationListImpl = (workspaceId) =>
+    workspaceId === "w2"
+      ? second.promise
+      : Promise.resolve([invitation("i-late", "late@example.com")]);
+  await mount("w2", true);
+  await React.act(async () => staleReload());
+  await React.act(async () => second.resolve([invitation("i2", "two@example.com")]));
+
+  // The stale reload never asked for w1 again, and w2's answer was not dropped.
+  assert.deepEqual(globalThis.__invitationListCalls, ["w1", "w2"]);
+  assert.equal(state().status, "ready");
+  assert.deepEqual(
+    state().invitations.map((inv) => inv.id),
+    ["i2"]
+  );
+});

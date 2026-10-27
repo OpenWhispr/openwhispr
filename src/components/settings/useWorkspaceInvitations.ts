@@ -41,6 +41,9 @@ export function useWorkspaceInvitations(
   }, [workspaceId]);
 
   const load = useCallback(async (targetWorkspaceId: string): Promise<void> => {
+    // A caller can hold a reload from before a workspace switch; it must not touch the slot or
+    // supersede the current workspace's request.
+    if (currentWorkspaceRef.current !== targetWorkspaceId) return;
     const requestId = ++latestRequestRef.current;
     setSlot((current) =>
       current.workspaceId === targetWorkspaceId
