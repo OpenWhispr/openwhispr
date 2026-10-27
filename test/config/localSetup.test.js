@@ -353,6 +353,9 @@ test("sizes match what Settings shows", async () => {
   assert.equal(rowSizeLabel(row(p, "cleanup"), null), "1.3 GB");
   assert.equal(rowSizeLabel(row(p, "assistant"), null), "2.7 GB");
   assert.equal(rowSizeLabel(row(p, "cleanup"), p.graphicsPack), "1.3 GB");
+  // The real pack hides in the rounding; a larger one shows it is folded in.
+  const bigPack = { ...p.graphicsPack, bytes: 0.5 * 2 ** 30 };
+  assert.equal(rowSizeLabel(row(p, "cleanup"), bigPack), "1.7 GB");
 });
 
 test("speech picks quote their downloaded file", () => {
@@ -405,6 +408,8 @@ test("the table is complete and reachable", async () => {
     Array.isArray(r) && r.length === 2 && typeof r[0] === "number" && r[0] >= 0;
   const checkEntry = (where, entry, rangeKey) => {
     assert.ok(LABELS.includes(entry.label), `${where} label`);
+    // Dictation is the one row with no switch: it can never be unavailable.
+    if (rangeKey === "seconds") assert.notEqual(entry.label, "unavailable", `${where} dictation`);
     if (entry.label === "unavailable") {
       assert.ok(["tooSlow", "memory"].includes(entry.reason), `${where} reason`);
       if (entry.reason === "memory") return;
@@ -427,6 +432,14 @@ test("the table is complete and reachable", async () => {
     for (const group of GROUPS) checkEntry(`${key} ${group}`, machine.dictation[group], "seconds");
     checkEntry(`${key} cleanup`, machine.cleanup, "addedSeconds");
     checkEntry(`${key} assistant`, machine.assistant, "firstWordsSeconds");
+    // A "memory" row must hold for every computer of the type: only an under-16 type,
+    // whose memory stays below the band, and only where the band is at most the need.
+    for (const rowId of ["cleanup", "assistant"]) {
+      if (machine[rowId].reason !== "memory") continue;
+      const neededGb = table.memoryNeededGb[rowId][key.startsWith("mac") ? "mac" : "pc"];
+      assert.ok(key.endsWith("-under-16"), `${key} ${rowId} memory reason needs a memory ceiling`);
+      assert.ok(table.classification.memoryBandGb <= neededGb, `${key} ${rowId} memory need`);
+    }
   }
   for (const key of ["pc-under-16", "pc-16-plus", "pc-nvidia", "mac-under-16", "mac-16-plus"]) {
     assert.ok(table.machines[key], key);
@@ -439,6 +452,8 @@ test("the table is complete and reachable", async () => {
     assert.ok(Number.isInteger(bytes) && bytes > 0, key);
   }
   assert.ok(LABELS.includes(table.olderMacDictation.label));
+  assert.notEqual(table.olderMacDictation.label, "unavailable", "older Mac dictation");
+  assert.deepEqual(Object.keys(table.graphicsPackBytes).sort(), ["linux-x64", "win32-x64"]);
   // The machine-type cut-offs live here too, never in code.
   assert.ok(Number.isInteger(table.classification.nvidiaMinVramMb), "nvidiaMinVramMb");
   assert.ok(table.classification.nvidiaMinVramMb > 0, "nvidiaMinVramMb");
