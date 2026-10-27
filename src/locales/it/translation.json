@@ -2433,7 +2433,10 @@
         "columns": {
           "name": "Nome",
           "team": "Gruppo",
-          "role": "Ruolo nell'area di lavoro"
+          "role": "Ruolo nell'area di lavoro",
+          "email": "E-mail",
+          "status": "Stato",
+          "actions": "Azioni"
         },
         "you": "Tu",
         "teamsNone": "Nessuno",
@@ -2457,7 +2460,19 @@
           "member": "Può visualizzare e modificare le note.",
           "admin": "Gestisce membri, inviti, gruppi e impostazioni."
         },
-        "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Controlla la connessione e riprova."
+        "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Controlla la connessione e riprova.",
+        "invitations": {
+          "loading": "Caricamento degli inviti…",
+          "failedTitle": "Impossibile caricare gli inviti",
+          "emptyTitle": "Nessun invito",
+          "emptyBody": "I nuovi inviti compaiono qui finché non vengono accettati.",
+          "pending_one": "In sospeso · Scade tra {{count}} giorno",
+          "pending_other": "In sospeso · Scade tra {{count}} giorni",
+          "expired": "Scaduto",
+          "resend": "Reinvia invito",
+          "cancel": "Annulla invito",
+          "resendFailed": "Impossibile reinviare l'invito a {{email}}. Annullalo e invita di nuovo la persona."
+        }
       },
       "role": {
         "owner": "Proprietario",
@@ -2532,22 +2547,9 @@
         }
       },
       "invites": {
-        "title": "Inviti in sospeso",
-        "expiresIn_one": "Scade tra {{count}} giorno",
-        "expiresIn_other": "Scade tra {{count}} giorni",
-        "expired": "Scaduto",
-        "loadError": "Impossibile caricare gli inviti.",
-        "resend": "Reinvia",
         "resending": "Reinvio…",
-        "revoke": "Revoca",
         "resent": "Invito reinviato",
-        "resentNoEmail": "Invito aggiornato, ma non è stato possibile recapitare l'e-mail.",
-        "revoked": "Invito revocato",
-        "revokeFailed": "Impossibile revocare l'invito",
-        "revokeConfirm": {
-          "title": "Revocare questo invito?",
-          "description": "Il link di invito per {{email}} smetterà di funzionare."
-        }
+        "resentNoEmail": "Invito aggiornato, ma non è stato possibile recapitare l'e-mail."
       },
       "billing": {
         "plan": "Piano",
@@ -4916,6 +4918,14 @@
       "removing": "Rimozione…",
       "failed": "Impossibile rimuovere {{name}}. Controlla la connessione e riprova.",
       "alreadyRemoved": "{{name}} è già stato rimosso"
+    },
+    "cancelInvitation": {
+      "title": "Annullare l'invito per {{email}}?",
+      "body": "La persona non potrà unirsi con questo invito. I membri attuali mantengono l'accesso.",
+      "keep": "Mantieni invito",
+      "canceling": "Annullamento…",
+      "done": "Invito annullato",
+      "failed": "Impossibile annullare l'invito. Controlla la connessione e riprova."
     },
     "transfer": {
       "title": "Scegli un nuovo proprietario",

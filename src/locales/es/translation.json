@@ -2485,7 +2485,10 @@
         "columns": {
           "name": "Nombre",
           "team": "Grupo",
-          "role": "Rol en el espacio de trabajo"
+          "role": "Rol en el espacio de trabajo",
+          "email": "Correo electrónico",
+          "status": "Estado",
+          "actions": "Acciones"
         },
         "you": "Tú",
         "teamsNone": "Ninguno",
@@ -2509,7 +2512,19 @@
           "member": "Puede ver y editar notas.",
           "admin": "Gestiona miembros, invitaciones, grupos y ajustes."
         },
-        "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
+        "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "invitations": {
+          "loading": "Cargando invitaciones…",
+          "failedTitle": "No se pudieron cargar las invitaciones",
+          "emptyTitle": "No hay invitaciones",
+          "emptyBody": "Las nuevas invitaciones aparecen aquí hasta que se aceptan.",
+          "pending_one": "Pendiente · Expira en {{count}} día",
+          "pending_other": "Pendiente · Expira en {{count}} días",
+          "expired": "Expirada",
+          "resend": "Reenviar invitación",
+          "cancel": "Cancelar invitación",
+          "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo."
+        }
       },
       "role": {
         "owner": "Propietario",
@@ -2584,22 +2599,9 @@
         }
       },
       "invites": {
-        "title": "Invitaciones pendientes",
-        "expiresIn_one": "Expira en {{count}} día",
-        "expiresIn_other": "Expira en {{count}} días",
-        "expired": "Expirada",
-        "loadError": "No se pudieron cargar las invitaciones.",
-        "resend": "Reenviar",
         "resending": "Reenviando…",
-        "revoke": "Revocar",
         "resent": "Invitación reenviada",
-        "resentNoEmail": "Invitación actualizada, pero no se pudo entregar el correo.",
-        "revoked": "Invitación revocada",
-        "revokeFailed": "No se pudo revocar la invitación",
-        "revokeConfirm": {
-          "title": "¿Revocar esta invitación?",
-          "description": "El enlace de invitación para {{email}} dejará de funcionar."
-        }
+        "resentNoEmail": "Invitación actualizada, pero no se pudo entregar el correo."
       },
       "billing": {
         "plan": "Plan",
@@ -4916,6 +4918,14 @@
       "removing": "Quitando…",
       "failed": "No se pudo quitar a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
       "alreadyRemoved": "{{name}} ya había sido quitado"
+    },
+    "cancelInvitation": {
+      "title": "¿Cancelar la invitación para {{email}}?",
+      "body": "No podrá unirse con esta invitación. Los miembros actuales conservan su acceso.",
+      "keep": "Conservar invitación",
+      "canceling": "Cancelando…",
+      "done": "Invitación cancelada",
+      "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo."
     },
     "transfer": {
       "title": "Elige un nuevo propietario",

@@ -2433,7 +2433,10 @@
         "columns": {
           "name": "名前",
           "team": "グループ",
-          "role": "ワークスペースのロール"
+          "role": "ワークスペースのロール",
+          "email": "メール",
+          "status": "ステータス",
+          "actions": "操作"
         },
         "you": "あなた",
         "teamsNone": "なし",
@@ -2457,7 +2460,18 @@
           "member": "ノートを閲覧・編集できます。",
           "admin": "メンバー、招待、グループ、設定を管理します。"
         },
-        "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。"
+        "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
+        "invitations": {
+          "loading": "招待を読み込んでいます…",
+          "failedTitle": "招待を読み込めませんでした",
+          "emptyTitle": "招待はありません",
+          "emptyBody": "新しい招待は、承諾されるまでここに表示されます。",
+          "pending_other": "保留中 · 有効期限まであと{{count}}日",
+          "expired": "期限切れ",
+          "resend": "招待を再送信",
+          "cancel": "招待を取り消す",
+          "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。"
+        }
       },
       "role": {
         "owner": "オーナー",
@@ -2532,22 +2546,9 @@
         }
       },
       "invites": {
-        "title": "保留中の招待",
-        "expiresIn_one": "有効期限まであと{{count}}日",
-        "expiresIn_other": "有効期限まであと{{count}}日",
-        "expired": "期限切れ",
-        "loadError": "招待を読み込めませんでした。",
-        "resend": "再送信",
         "resending": "再送信中…",
-        "revoke": "取り消す",
         "resent": "招待を再送信しました",
-        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。",
-        "revoked": "招待を取り消しました",
-        "revokeFailed": "招待を取り消せませんでした",
-        "revokeConfirm": {
-          "title": "この招待を取り消しますか？",
-          "description": "{{email}} への招待リンクが無効になります。"
-        }
+        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。"
       },
       "billing": {
         "plan": "プラン",
@@ -4911,6 +4912,14 @@
       "removing": "削除中…",
       "failed": "{{name}} を削除できませんでした。接続を確認して、もう一度お試しください。",
       "alreadyRemoved": "{{name}} はすでに削除されています"
+    },
+    "cancelInvitation": {
+      "title": "{{email}} への招待を取り消しますか？",
+      "body": "この招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
+      "keep": "招待を残す",
+      "canceling": "取り消しています…",
+      "done": "招待を取り消しました",
+      "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。"
     },
     "transfer": {
       "title": "新しいオーナーを選択",

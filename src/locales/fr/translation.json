@@ -1708,7 +1708,10 @@
         "columns": {
           "name": "Nom",
           "team": "Groupe",
-          "role": "Rôle dans l'espace"
+          "role": "Rôle dans l'espace",
+          "email": "E-mail",
+          "status": "Statut",
+          "actions": "Actions"
         },
         "you": "Vous",
         "teamsNone": "Aucun",
@@ -1732,7 +1735,19 @@
           "member": "Peut consulter et modifier les notes.",
           "admin": "Gère les membres, les invitations, les groupes et les paramètres."
         },
-        "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez."
+        "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez.",
+        "invitations": {
+          "loading": "Chargement des invitations…",
+          "failedTitle": "Impossible de charger les invitations",
+          "emptyTitle": "Aucune invitation",
+          "emptyBody": "Les nouvelles invitations apparaissent ici jusqu'à ce qu'elles soient acceptées.",
+          "pending_one": "En attente · Expire dans {{count}} jour",
+          "pending_other": "En attente · Expire dans {{count}} jours",
+          "expired": "Expirée",
+          "resend": "Renvoyer l'invitation",
+          "cancel": "Annuler l'invitation",
+          "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne."
+        }
       },
       "role": {
         "owner": "Propriétaire",
@@ -1807,22 +1822,9 @@
         }
       },
       "invites": {
-        "title": "Invitations en attente",
-        "expiresIn_one": "Expire dans {{count}} jour",
-        "expiresIn_other": "Expire dans {{count}} jours",
-        "expired": "Expirée",
-        "loadError": "Impossible de charger les invitations.",
-        "resend": "Renvoyer",
         "resending": "Renvoi…",
-        "revoke": "Révoquer",
         "resent": "Invitation renvoyée",
-        "resentNoEmail": "Invitation mise à jour, mais l'e-mail n'a pas pu être délivré.",
-        "revoked": "Invitation révoquée",
-        "revokeFailed": "Impossible de révoquer l'invitation",
-        "revokeConfirm": {
-          "title": "Révoquer cette invitation ?",
-          "description": "Le lien d'invitation pour {{email}} cessera de fonctionner."
-        }
+        "resentNoEmail": "Invitation mise à jour, mais l'e-mail n'a pas pu être délivré."
       },
       "billing": {
         "plan": "Plan",
@@ -3178,6 +3180,14 @@
       "removing": "Retrait…",
       "failed": "Impossible de retirer {{name}}. Vérifiez votre connexion et réessayez.",
       "alreadyRemoved": "{{name}} a déjà été retiré"
+    },
+    "cancelInvitation": {
+      "title": "Annuler l'invitation de {{email}} ?",
+      "body": "Cette personne ne pourra pas rejoindre l'espace avec cette invitation. Les membres actuels conservent leur accès.",
+      "keep": "Conserver l'invitation",
+      "canceling": "Annulation…",
+      "done": "Invitation annulée",
+      "failed": "Impossible d'annuler l'invitation. Vérifiez votre connexion et réessayez."
     },
     "transfer": {
       "title": "Choisir un nouveau propriétaire",

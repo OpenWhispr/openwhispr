@@ -2433,7 +2433,10 @@
         "columns": {
           "name": "名称",
           "team": "群组",
-          "role": "工作区角色"
+          "role": "工作区角色",
+          "email": "电子邮件",
+          "status": "状态",
+          "actions": "操作"
         },
         "you": "你",
         "teamsNone": "无",
@@ -2457,7 +2460,18 @@
           "member": "可以查看和编辑笔记。",
           "admin": "管理成员、邀请、群组和设置。"
         },
-        "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。"
+        "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。",
+        "invitations": {
+          "loading": "正在加载邀请…",
+          "failedTitle": "无法加载邀请",
+          "emptyTitle": "没有邀请",
+          "emptyBody": "新邀请会显示在这里，直到被接受。",
+          "pending_other": "待处理 · {{count}} 天后过期",
+          "expired": "已过期",
+          "resend": "重新发送邀请",
+          "cancel": "取消邀请",
+          "resendFailed": "无法向 {{email}} 重新发送邀请。请取消该邀请，然后重新邀请。"
+        }
       },
       "role": {
         "owner": "所有者",
@@ -2532,22 +2546,9 @@
         }
       },
       "invites": {
-        "title": "待处理的邀请",
-        "expiresIn_one": "{{count}} 天后过期",
-        "expiresIn_other": "{{count}} 天后过期",
-        "expired": "已过期",
-        "loadError": "无法加载邀请。",
-        "resend": "重新发送",
         "resending": "重新发送中…",
-        "revoke": "撤销",
         "resent": "邀请已重新发送",
-        "resentNoEmail": "邀请已更新，但邮件无法送达。",
-        "revoked": "邀请已撤销",
-        "revokeFailed": "无法撤销邀请",
-        "revokeConfirm": {
-          "title": "撤销此邀请？",
-          "description": "发送给 {{email}} 的邀请链接将失效。"
-        }
+        "resentNoEmail": "邀请已更新，但邮件无法送达。"
       },
       "billing": {
         "plan": "套餐",
@@ -4911,6 +4912,14 @@
       "removing": "正在移除…",
       "failed": "无法移除 {{name}}。请检查网络连接后重试。",
       "alreadyRemoved": "{{name}} 已被移除"
+    },
+    "cancelInvitation": {
+      "title": "取消发给 {{email}} 的邀请？",
+      "body": "对方将无法通过此邀请加入。现有成员仍保留访问权限。",
+      "keep": "保留邀请",
+      "canceling": "正在取消…",
+      "done": "邀请已取消",
+      "failed": "无法取消邀请。请检查网络连接后重试。"
     },
     "transfer": {
       "title": "选择新的所有者",

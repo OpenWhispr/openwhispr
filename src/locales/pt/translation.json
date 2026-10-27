@@ -2412,7 +2412,10 @@
         "columns": {
           "name": "Nome",
           "team": "Grupo",
-          "role": "Função no espaço de trabalho"
+          "role": "Função no espaço de trabalho",
+          "email": "E-mail",
+          "status": "Status",
+          "actions": "Ações"
         },
         "you": "Você",
         "teamsNone": "Nenhum",
@@ -2436,7 +2439,19 @@
           "member": "Pode ver e editar notas.",
           "admin": "Gerencia membros, convites, grupos e configurações."
         },
-        "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente."
+        "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
+        "invitations": {
+          "loading": "Carregando convites…",
+          "failedTitle": "Não foi possível carregar os convites",
+          "emptyTitle": "Nenhum convite",
+          "emptyBody": "Os novos convites aparecem aqui até serem aceitos.",
+          "pending_one": "Pendente · Expira em {{count}} dia",
+          "pending_other": "Pendente · Expira em {{count}} dias",
+          "expired": "Expirado",
+          "resend": "Reenviar convite",
+          "cancel": "Cancelar convite",
+          "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente."
+        }
       },
       "role": {
         "owner": "Proprietário",
@@ -2511,22 +2526,9 @@
         }
       },
       "invites": {
-        "title": "Convites pendentes",
-        "expiresIn_one": "Expira em {{count}} dia",
-        "expiresIn_other": "Expira em {{count}} dias",
-        "expired": "Expirado",
-        "loadError": "Não foi possível carregar os convites.",
-        "resend": "Reenviar",
         "resending": "Reenviando…",
-        "revoke": "Revogar",
         "resent": "Convite reenviado",
-        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail.",
-        "revoked": "Convite revogado",
-        "revokeFailed": "Não foi possível revogar o convite",
-        "revokeConfirm": {
-          "title": "Revogar este convite?",
-          "description": "O link de convite de {{email}} deixará de funcionar."
-        }
+        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail."
       },
       "billing": {
         "plan": "Plano",
@@ -4916,6 +4918,14 @@
       "removing": "Removendo…",
       "failed": "Não foi possível remover {{name}}. Verifique sua conexão e tente novamente.",
       "alreadyRemoved": "{{name}} já foi removido"
+    },
+    "cancelInvitation": {
+      "title": "Cancelar o convite para {{email}}?",
+      "body": "A pessoa não poderá entrar com este convite. Os membros atuais mantêm o acesso.",
+      "keep": "Manter convite",
+      "canceling": "Cancelando…",
+      "done": "Convite cancelado",
+      "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente."
     },
     "transfer": {
       "title": "Escolha um novo proprietário",

@@ -1708,7 +1708,10 @@
         "columns": {
           "name": "Name",
           "team": "Gruppe",
-          "role": "Workspace-Rolle"
+          "role": "Workspace-Rolle",
+          "email": "E-Mail",
+          "status": "Status",
+          "actions": "Aktionen"
         },
         "you": "Sie",
         "teamsNone": "Keine",
@@ -1732,7 +1735,19 @@
           "member": "Kann Notizen ansehen und bearbeiten.",
           "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
         },
-        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "invitations": {
+          "loading": "Einladungen werden geladen…",
+          "failedTitle": "Einladungen konnten nicht geladen werden",
+          "emptyTitle": "Keine Einladungen",
+          "emptyBody": "Neue Einladungen erscheinen hier, bis sie angenommen werden.",
+          "pending_one": "Ausstehend · Läuft in {{count}} Tag ab",
+          "pending_other": "Ausstehend · Läuft in {{count}} Tagen ab",
+          "expired": "Abgelaufen",
+          "resend": "Einladung erneut senden",
+          "cancel": "Einladung zurückziehen",
+          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein."
+        }
       },
       "role": {
         "owner": "Inhaber",
@@ -1807,22 +1822,9 @@
         }
       },
       "invites": {
-        "title": "Ausstehende Einladungen",
-        "expiresIn_one": "Läuft in {{count}} Tag ab",
-        "expiresIn_other": "Läuft in {{count}} Tagen ab",
-        "expired": "Abgelaufen",
-        "loadError": "Einladungen konnten nicht geladen werden.",
-        "resend": "Erneut senden",
         "resending": "Sende erneut…",
-        "revoke": "Widerrufen",
         "resent": "Einladung erneut gesendet",
-        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden.",
-        "revoked": "Einladung widerrufen",
-        "revokeFailed": "Einladung konnte nicht widerrufen werden",
-        "revokeConfirm": {
-          "title": "Diese Einladung widerrufen?",
-          "description": "Der Einladungslink für {{email}} funktioniert dann nicht mehr."
-        }
+        "resentNoEmail": "Einladung aktualisiert, aber die E-Mail konnte nicht zugestellt werden."
       },
       "billing": {
         "plan": "Plan",
@@ -3178,6 +3180,14 @@
       "removing": "Wird entfernt…",
       "failed": "{{name}} konnte nicht entfernt werden. Prüfe deine Verbindung und versuche es erneut.",
       "alreadyRemoved": "{{name}} wurde bereits entfernt"
+    },
+    "cancelInvitation": {
+      "title": "Einladung für {{email}} zurückziehen?",
+      "body": "Die Person kann mit dieser Einladung nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladung behalten",
+      "canceling": "Wird zurückgezogen…",
+      "done": "Einladung zurückgezogen",
+      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
     },
     "transfer": {
       "title": "Neuen Inhaber wählen",

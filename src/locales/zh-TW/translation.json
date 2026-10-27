@@ -2433,7 +2433,10 @@
         "columns": {
           "name": "名稱",
           "team": "群組",
-          "role": "工作區角色"
+          "role": "工作區角色",
+          "email": "電子郵件",
+          "status": "狀態",
+          "actions": "操作"
         },
         "you": "你",
         "teamsNone": "無",
@@ -2457,7 +2460,18 @@
           "member": "可以檢視和編輯筆記。",
           "admin": "管理成員、邀請、群組和設定。"
         },
-        "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。"
+        "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
+        "invitations": {
+          "loading": "正在載入邀請…",
+          "failedTitle": "無法載入邀請",
+          "emptyTitle": "沒有邀請",
+          "emptyBody": "新邀請會顯示在這裡，直到被接受。",
+          "pending_other": "待處理 · {{count}} 天後到期",
+          "expired": "已到期",
+          "resend": "重新傳送邀請",
+          "cancel": "取消邀請",
+          "resendFailed": "無法向 {{email}} 重新傳送邀請。請取消該邀請，然後重新邀請。"
+        }
       },
       "role": {
         "owner": "擁有者",
@@ -2532,22 +2546,9 @@
         }
       },
       "invites": {
-        "title": "待處理的邀請",
-        "expiresIn_one": "{{count}} 天後到期",
-        "expiresIn_other": "{{count}} 天後到期",
-        "expired": "已到期",
-        "loadError": "無法載入邀請。",
-        "resend": "重新傳送",
         "resending": "重新傳送中…",
-        "revoke": "撤銷",
         "resent": "邀請已重新傳送",
-        "resentNoEmail": "邀請已更新，但電子郵件無法送達。",
-        "revoked": "邀請已撤銷",
-        "revokeFailed": "無法撤銷邀請",
-        "revokeConfirm": {
-          "title": "要撤銷此邀請嗎？",
-          "description": "{{email}} 的邀請連結將會失效。"
-        }
+        "resentNoEmail": "邀請已更新，但電子郵件無法送達。"
       },
       "billing": {
         "plan": "方案",
@@ -4911,6 +4912,14 @@
       "removing": "正在移除…",
       "failed": "無法移除 {{name}}。請檢查網路連線後再試一次。",
       "alreadyRemoved": "{{name}} 已被移除"
+    },
+    "cancelInvitation": {
+      "title": "取消寄給 {{email}} 的邀請？",
+      "body": "對方將無法透過此邀請加入。現有成員仍保有存取權。",
+      "keep": "保留邀請",
+      "canceling": "正在取消…",
+      "done": "邀請已取消",
+      "failed": "無法取消邀請。請檢查網路連線後再試一次。"
     },
     "transfer": {
       "title": "選擇新的擁有者",

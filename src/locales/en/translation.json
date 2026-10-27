@@ -1708,7 +1708,10 @@
         "columns": {
           "name": "Name",
           "team": "Team",
-          "role": "Workspace role"
+          "role": "Workspace role",
+          "email": "Email",
+          "status": "Status",
+          "actions": "Actions"
         },
         "you": "You",
         "teamsNone": "None",
@@ -1732,7 +1735,19 @@
           "member": "Can view and edit notes.",
           "admin": "Manages members, invites, teams, and settings."
         },
-        "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again."
+        "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
+        "invitations": {
+          "loading": "Loading invitations…",
+          "failedTitle": "Couldn't load invitations",
+          "emptyTitle": "No invitations",
+          "emptyBody": "New invitations appear here until they're accepted.",
+          "pending_one": "Pending · Expires in {{count}} day",
+          "pending_other": "Pending · Expires in {{count}} days",
+          "expired": "Expired",
+          "resend": "Resend invite",
+          "cancel": "Cancel invite",
+          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again."
+        }
       },
       "role": {
         "owner": "Owner",
@@ -1807,22 +1822,9 @@
         }
       },
       "invites": {
-        "title": "Pending invitations",
-        "expiresIn_one": "Expires in {{count}} day",
-        "expiresIn_other": "Expires in {{count}} days",
-        "expired": "Expired",
-        "loadError": "Couldn't load invitations.",
-        "resend": "Resend",
         "resending": "Resending…",
-        "revoke": "Revoke",
         "resent": "Invitation resent",
-        "resentNoEmail": "Invitation updated, but the email couldn't be delivered.",
-        "revoked": "Invitation revoked",
-        "revokeFailed": "Could not revoke invitation",
-        "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
+        "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
         "plan": "Plan",
@@ -3178,6 +3180,14 @@
       "removing": "Removing…",
       "failed": "Couldn't remove {{name}}. Check your connection and try again.",
       "alreadyRemoved": "{{name}} was already removed"
+    },
+    "cancelInvitation": {
+      "title": "Cancel the invitation for {{email}}?",
+      "body": "They won't be able to join with this invitation. Current members keep their access.",
+      "keep": "Keep invitation",
+      "canceling": "Canceling…",
+      "done": "Invitation canceled",
+      "failed": "Couldn't cancel the invitation. Check your connection and try again."
     },
     "transfer": {
       "title": "Choose a new Owner",

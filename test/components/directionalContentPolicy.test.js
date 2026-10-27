@@ -82,6 +82,10 @@ test("technical output values remain LTR inside an Arabic document", () => {
     ],
     ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
     [
+      "src/components/settings/WorkspaceInvitationsTab.tsx",
+      /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
+    ],
+    [
       "src/components/dictation/AssistantPanel.tsx",
       /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,
     ],
