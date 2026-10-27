@@ -181,6 +181,28 @@ test("a rotated credential's cache drops the old credential's entries", async (t
   assert.deepEqual(cachedWorkspaces(), [workspaceId, otherWorkspaceId]);
 });
 
+test("another API origin's cache entries survive a rotated credential", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+  const cachePath = path.join(tempDir, "config.json");
+  let apiUrl = "https://api.example.com";
+  const manager = createEnterpriseIdentityManager({
+    cachePath,
+    getApiUrl: () => apiUrl,
+    getAppVersion: () => "1.8.1",
+    proxyFetch: async () => jsonResponse({ data: managedConfig() }),
+    tokenStore: { getState: () => ({ token: "session", generation: 4 }) },
+  });
+  const cachedOrigins = () =>
+    JSON.parse(fs.readFileSync(cachePath, "utf8")).entries.map((entry) => entry.key.split("\n")[0]);
+
+  await manager.getConfig(request());
+  apiUrl = "https://staging.example.com";
+  await manager.getConfig(request({ authHeaders: { Authorization: "Bearer rotated-session" } }));
+
+  assert.deepEqual(cachedOrigins(), ["https://api.example.com", "https://staging.example.com"]);
+});
+
 test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
