@@ -5,7 +5,7 @@
 // goes on without it). localSetupDownloadState decides what runs next; this hook
 // only starts the item it names and reports back. Unmounting (Back) cancels the
 // item in flight and starts nothing else; models that already finished stay on disk.
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   enabledDownloads,
   type LocalSetupDownload,
@@ -127,6 +127,12 @@ export function useLocalSetupDownloads(
   // The item in flight. Cleared on unmount, so a result that lands after Back is dropped.
   const runningRef = useRef<{ item: LocalSetupDownload; run: number } | null>(null);
   const cancelledRef = useRef(false);
+  // A model request that came back false: the run whose outcome waits on the next
+  // render (state, and a ref for unmount), and the run found joined to a transfer
+  // of the same model already under way.
+  const [unsettledRun, setUnsettledRun] = useState<number | null>(null);
+  const unsettledRunRef = useRef<number | null>(null);
+  const joinedRunRef = useRef<number | null>(null);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -138,6 +144,8 @@ export function useLocalSetupDownloads(
       const running = runningRef.current;
       runningRef.current = null;
       if (!running) return;
+      // A request that already came back has nothing left to settle and release it.
+      if (unsettledRunRef.current === running.run) releaseLocalSetupDownload(running.item);
       if (running.item.kind === "llamaVulkan") {
         void window.electronAPI?.cancelLlamaVulkanDownload?.();
       } else {
@@ -164,10 +172,20 @@ export function useLocalSetupDownloads(
         return false;
       })
       .then((ok) => {
-        releaseLocalSetupDownload(item);
-        if (cancelledRef.current || runningRef.current?.run !== run) return;
-        runningRef.current = null;
-        dispatch({ type: ok ? "complete" : "fail", run });
+        if (cancelledRef.current || runningRef.current?.run !== run) {
+          releaseLocalSetupDownload(item);
+          return;
+        }
+        if (ok || item.kind === "llamaVulkan") {
+          releaseLocalSetupDownload(item);
+          runningRef.current = null;
+          dispatch({ type: ok ? "complete" : "fail", run });
+          return;
+        }
+        // Failed, or refused because this model is already downloading: the next
+        // render shows which (see the effect below).
+        unsettledRunRef.current = run;
+        setUnsettledRun(run);
       });
   }, [current, run]);
 
@@ -186,6 +204,36 @@ export function useLocalSetupDownloads(
         : { type: "progress", run, percent: progress }
     );
   }, [phase, progress, run]);
+
+  // A model request that came back false. If the model is still listed as
+  // downloading, the request joined a transfer already under way (an older build's,
+  // or one still winding down): its progress shows on the row, and once it ends the
+  // row is done only if the model is now on disk. Otherwise the request failed.
+  const downloading = !!modelStatus;
+  useEffect(() => {
+    if (unsettledRun === null || unsettledRun !== run || !current) return;
+    if (downloading) {
+      joinedRunRef.current = run;
+      return;
+    }
+    const item = runningRef.current?.item;
+    const finish = (ok: boolean) => {
+      if (cancelledRef.current || runningRef.current?.run !== run) return;
+      if (item) releaseLocalSetupDownload(item);
+      runningRef.current = null;
+      unsettledRunRef.current = null;
+      setUnsettledRun(null);
+      dispatch({ type: ok ? "complete" : "fail", run });
+    };
+    if (joinedRunRef.current !== run) {
+      finish(false);
+      return;
+    }
+    const key = localSetupItemKey(current);
+    void readLocalSetupInventory(window.electronAPI, undefined).then((onDisk) =>
+      finish(onDisk.includes(key))
+    );
+  }, [current, downloading, run, unsettledRun]);
 
   // The graphics pack reports through its own channel.
   useEffect(() => {

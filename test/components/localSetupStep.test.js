@@ -68,7 +68,12 @@ function reactProps(node) {
   return node[key];
 }
 
-function makeApi({ onDisk = {}, availableBytes = PLENTY } = {}) {
+function makeApi({ onDisk = {}, availableBytes = PLENTY, active = [] } = {}) {
+  const listeners = { whisper: new Set(), parakeet: new Set(), llm: new Set() };
+  const listen = (family) => (listener) => {
+    listeners[family].add(listener);
+    return () => listeners[family].delete(listener);
+  };
   const calls = {
     parakeet: [],
     whisper: [],
@@ -89,11 +94,11 @@ function makeApi({ onDisk = {}, availableBytes = PLENTY } = {}) {
     models: ids.map((model) => ({ model, downloaded: true })),
   });
   const api = {
-    onWhisperDownloadProgress: () => () => {},
-    onParakeetDownloadProgress: () => () => {},
-    onModelDownloadProgress: () => () => {},
+    onWhisperDownloadProgress: listen("whisper"),
+    onParakeetDownloadProgress: listen("parakeet"),
+    onModelDownloadProgress: listen("llm"),
     onLlamaVulkanDownloadProgress: () => () => {},
-    modelGetActiveDownloads: async () => [],
+    modelGetActiveDownloads: async () => active,
     listWhisperModels: async () => listed(onDisk.whisper),
     listParakeetModels: async () => listed(onDisk.parakeet),
     modelGetAll: async () => (onDisk.llm ?? []).map((id) => ({ id, isDownloaded: true })),
@@ -123,7 +128,7 @@ function makeApi({ onDisk = {}, availableBytes = PLENTY } = {}) {
       return { success: true };
     },
   };
-  return { api, calls, pending };
+  return { api, calls, pending, listeners, onDisk };
 }
 
 // The plan as the screen gets it, for sizing tests without mounting twice.
@@ -140,7 +145,7 @@ async function mount(
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const { api, calls, pending } = makeApi(apiOptions);
+  const { api, calls, pending, listeners, onDisk } = makeApi(apiOptions);
   const events = new EventTarget();
   installBrowserGlobals(t, {
     window: {
@@ -218,6 +223,13 @@ async function mount(
     await React.act(async () => pending[id].resolve(result));
     await flush();
   };
+  // A progress event from main, as the download IPC channels send it.
+  const emit = async (family, data) => {
+    await React.act(async () => {
+      for (const listener of listeners[family]) listener({}, data);
+    });
+    await flush();
+  };
   const unmount = async () => {
     await React.act(async () => root.unmount());
     root = null;
@@ -233,6 +245,8 @@ async function mount(
     plan,
     setup,
     claims,
+    emit,
+    onDisk,
     calls,
     proceeded,
     row,
@@ -434,6 +448,28 @@ test("a failed row shows Retry and Proceed stays locked", async (t) => {
   await s.finish(CLEANUP);
   assert.match(s.button().textContent, /button\.proceed$/);
   assert.equal(isDisabled(s.button()), false);
+});
+
+test("joining a transfer already under way ends as done when it completes", async (t) => {
+  // An older build's download of the same model is still running when the screen opens.
+  const resumed = {
+    modelType: "parakeet",
+    modelId: DICTATION,
+    phase: "downloading",
+    progress: 40,
+    downloadedBytes: 0,
+    totalBytes: 0,
+    sequence: 5,
+  };
+  const s = await mount(t, { active: [resumed] });
+  await s.click(s.button());
+  assert.deepEqual(s.calls.parakeet, [], "the running transfer is joined, not restarted");
+  assert.equal(elements(s.row("dictation"), (n) => n.textContent === `${K}retry`).length, 0);
+
+  s.onDisk.parakeet = [DICTATION];
+  await s.emit("parakeet", { model: DICTATION, type: "complete", sequence: 6 });
+  assert.equal(ticks(s.row("dictation")).length, 1, "the joined transfer finished the row");
+  assert.deepEqual(s.calls.llm, [CLEANUP], "the queue moves on");
 });
 
 test("low space trims the assistant and shows the needs line", async (t) => {
