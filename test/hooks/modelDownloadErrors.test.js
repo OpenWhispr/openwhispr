@@ -384,19 +384,28 @@ for (const modelType of ["whisper", "parakeet", "llm"]) {
   });
 }
 
-// Records every alert the hook raises, so a test can prove none was shown.
+// Records every alert and toast the hook raises, so a test can prove none was shown.
 const RECORDING_DIALOGS = {
   "/useDialogs": `
     export function useDialogs() {
       return { showAlertDialog: (options) => globalThis.__modelDownloadAlerts.push(options) };
     }
   `,
+  "/components/ui/useToast": `
+    const context = { toast: (options) => globalThis.__modelDownloadToasts.push(options) };
+    export function useToast() { return context; }
+  `,
 };
 
 async function renderParakeetDownload(t, electronAPI, options = {}) {
   const alerts = [];
+  const toasts = [];
   globalThis.__modelDownloadAlerts = alerts;
-  t.after(() => delete globalThis.__modelDownloadAlerts);
+  globalThis.__modelDownloadToasts = toasts;
+  t.after(() => {
+    delete globalThis.__modelDownloadAlerts;
+    delete globalThis.__modelDownloadToasts;
+  });
   const renderer = await createDownloadRenderer(
     t,
     {
@@ -420,7 +429,7 @@ async function renderParakeetDownload(t, electronAPI, options = {}) {
     });
     return result;
   };
-  return { alerts, hook, download };
+  return { alerts, toasts, hook, download };
 }
 
 test("showErrorDialog false records the error without a dialog and resolves false", async (t) => {
@@ -491,4 +500,46 @@ test("the error dialog still shows by default", async (t) => {
       description: "hooks.modelDownload.errors.notFound",
     },
   ]);
+});
+
+const ACTIVE_OTHER = {
+  modelType: "parakeet",
+  modelId: "model-b",
+  phase: "downloading",
+  progress: 30,
+  downloadedBytes: 0,
+  totalBytes: 0,
+  sequence: 1,
+};
+
+test("showErrorDialog false: refused for another transfer, no toast", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(
+    t,
+    { modelGetActiveDownloads: async () => [ACTIVE_OTHER] },
+    { showErrorDialog: false }
+  );
+  // Another parakeet transfer is running, so this hook refuses before asking main.
+  assert.equal(await download("model-a"), false);
+  assert.equal(toasts.length, 0);
+});
+
+test("showErrorDialog false: main reports a transfer in progress, no toast", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(
+    t,
+    { downloadParakeetModel: async () => ({ success: false, code: "DOWNLOAD_IN_PROGRESS" }) },
+    { showErrorDialog: false }
+  );
+  assert.equal(await download("model-a"), false);
+  assert.equal(toasts.length, 0);
+});
+
+test("the in-progress toast still shows by default", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(t, {
+    modelGetActiveDownloads: async () => [ACTIVE_OTHER],
+  });
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(
+    toasts.map((toast) => toast.title),
+    ["hooks.modelDownload.downloadInProgress.title"]
+  );
 });

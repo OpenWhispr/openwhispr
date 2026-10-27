@@ -38,7 +38,10 @@ interface UseModelDownloadOptions {
   modelType: ModelType;
   onDownloadComplete?: () => void;
   onModelsCleared?: () => void;
-  /** false: a failure is only recorded in downloadErrors, for screens that show it inline. */
+  /**
+   * false: a failure is only recorded in downloadErrors, and a refused request
+   * raises no "download in progress" toast, for screens that show both inline.
+   */
   showErrorDialog?: boolean;
 }
 
@@ -173,6 +176,15 @@ export function useModelDownload({
     },
     [clearCancelling, removeDownload]
   );
+
+  // Screens that show progress inline (showErrorDialog false) say nothing extra here.
+  const reportInProgress = useCallback(() => {
+    if (!showErrorDialog) return;
+    toast({
+      title: t("hooks.modelDownload.downloadInProgress.title"),
+      description: t("hooks.modelDownload.downloadInProgress.description"),
+    });
+  }, [showErrorDialog, t, toast]);
 
   const reportError = useCallback(
     (modelId: string, message: string, code?: string) => {
@@ -311,10 +323,7 @@ export function useModelDownload({
         downloads[modelId] ||
         (modelType !== "llm" && Object.keys(downloads).length > 0)
       ) {
-        toast({
-          title: t("hooks.modelDownload.downloadInProgress.title"),
-          description: t("hooks.modelDownload.downloadInProgress.description"),
-        });
+        reportInProgress();
         return false;
       }
 
@@ -363,10 +372,7 @@ export function useModelDownload({
             updateDownload(activeDownload);
             keepActiveDownloadState = activeDownload.modelId === modelId;
           }
-          toast({
-            title: t("hooks.modelDownload.downloadInProgress.title"),
-            description: t("hooks.modelDownload.downloadInProgress.description"),
-          });
+          reportInProgress();
         } else if (!isCancellation(result?.error, result?.code)) {
           const message = getDownloadErrorMessage(
             t,
@@ -403,9 +409,9 @@ export function useModelDownload({
       handleTerminalDownload,
       modelType,
       reportError,
+      reportInProgress,
       settleDownload,
       t,
-      toast,
       updateDownload,
     ]
   );
