@@ -1243,10 +1243,10 @@ export interface ComputerProfile {
   systemLanguage: string; // base code of the first preferred system language, e.g. "pt"
 }
 
-/** Free space where local models download, and the room each download kind reserves. */
 /** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
 export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
 
+/** Free space where local models download, and the room each download kind reserves. */
 export interface LocalSetupSpace {
   availableBytes: number;
   /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
