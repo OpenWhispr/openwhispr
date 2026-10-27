@@ -33,7 +33,8 @@ export type LocalSetupLine =
   | { key: "cleanupAddsSeconds"; range: [number, number] }
   | { key: "assistantSeconds"; range: [number, number] }
   | { key: "requiredByOrganization" }
-  | { key: "tooSlowMinutes" | "tooSlowAboutMinute"; model: string; minutes?: number }
+  | { key: "tooSlowMinutes"; model: string; minutes: number }
+  | { key: "tooSlowAboutMinute"; model: string }
   | { key: "tooSlowCleanupSeconds"; model: string; seconds: number }
   | { key: "tooSlowAssistantSeconds"; model: string; range: [number, number] }
   | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number };
