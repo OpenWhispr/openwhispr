@@ -210,6 +210,11 @@ const MAIN_WINDOW_CONFIG = {
 const ONBOARDING_WINDOW_SIZES = {
   COMPACT: { width: 480, height: 624 },
   EXPANDED: { width: 1000, height: 740 },
+  // The local setup step is the one expanded step taller than 740: its heading,
+  // three 96px rows, button, foot line and the footer navigation come to about
+  // 834px in English. 880 fits that with room to spare, and fits the
+  // translations whose title wraps to a second line.
+  LOCAL_SETUP: { width: 1000, height: 880 },
 };
 
 // Control panel window configuration

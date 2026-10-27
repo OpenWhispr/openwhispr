@@ -252,11 +252,11 @@ export default function OnboardingShell({
         // Normally nothing scrolls here: each step sizes itself to the window and
         // anything long (e.g. the language list) scrolls inside its own container.
         // auto rather than hidden is the short-display fallback — the expanded
-        // window wants 910px of work area and centeredBounds clamps below that on
-        // a 1366x768-class screen, where a step built from fixed heights would
-        // otherwise clip with its controls unreachable. The bar itself is hidden
-        // (.onboarding-shell-scroll), so on a tall display this is invisible and
-        // cannot double up with an inner scroller.
+        // window wants 740px of work area (local setup's 880px) and centeredBounds
+        // clamps below that on a short screen, where a step built from fixed
+        // heights would otherwise clip with its controls unreachable. The bar
+        // itself is hidden (.onboarding-shell-scroll), so on a tall display this is
+        // invisible and cannot double up with an inner scroller.
         className={`onboarding-shell-scroll min-h-0 flex-1 overflow-y-auto ${compact ? "px-0 pb-0" : "px-5 pb-5 pt-8 md:px-8"}`}
       >
         <div

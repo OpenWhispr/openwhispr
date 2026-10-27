@@ -79,6 +79,35 @@ test("the local setup step is wired through its helpers", () => {
   assert.match(source, new RegExp(String.raw`${placeholder} \? t\("common\.policyUnresolved"\)`));
 });
 
+test("each step asks for its window size, local setup a taller one", async () => {
+  const { getOnboardingWindowMode } = await load();
+  assert.equal(getOnboardingWindowMode("auth"), "compact");
+  assert.equal(getOnboardingWindowMode("permissions"), "compact");
+  assert.equal(getOnboardingWindowMode("local-setup"), "local-setup");
+  for (const id of [
+    "required-models",
+    "languages",
+    "use-cases",
+    "dictation-hotkey",
+    "dictation-demo",
+    "notes",
+    "assistant-hotkey",
+    "assistant-demo",
+    "setup-choice",
+    "byok-dictation",
+    "byok-assistant",
+  ]) {
+    assert.equal(getOnboardingWindowMode(id), "expanded", id);
+  }
+});
+
+test("onboarding sizes the window from the current step", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  // The plan placeholder renders on local-setup too, so it gets the same size.
+  assert.match(source, /const windowMode = getOnboardingWindowMode\(currentStepId\);/);
+  assert.match(source, /setOnboardingWindowMode\?\.\(windowMode\);\s*\}, \[windowMode\]\);/);
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests

@@ -1366,7 +1366,9 @@ declare global {
   interface Window {
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;

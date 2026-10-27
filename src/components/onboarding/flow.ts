@@ -163,6 +163,19 @@ export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingSt
   "permissions",
 ]);
 
+export type OnboardingWindowMode = "compact" | "expanded" | "local-setup";
+
+/**
+ * The window size a step asks main for. Local setup gets a taller window than the
+ * other expanded steps: its card, with three 96px rows, would otherwise scroll its
+ * heading and button out of view. The card's placeholder renders on the same step,
+ * so the window doesn't move when the plan lands.
+ */
+export function getOnboardingWindowMode(stepId: OnboardingStepId): OnboardingWindowMode {
+  if (COMPACT_STEPS.has(stepId)) return "compact";
+  return stepId === "local-setup" ? "local-setup" : "expanded";
+}
+
 const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "auth",
   // The old flow put permissions after these two indexes, so a save at 1-2

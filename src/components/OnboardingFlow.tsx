@@ -65,6 +65,7 @@ import {
   getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
+  getOnboardingWindowMode,
   isSetupDecisionStep,
   reconcileStepWithRoute,
   resetOnboardingProgress,
@@ -377,6 +378,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     return Math.ceil(localSetupRequiredBytes(items, localSetupSpace.factors) / 1e9);
   }, [localSetupPlan, localSetupSpace]);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const windowMode = getOnboardingWindowMode(currentStepId);
   const setupDecisionPending =
     workspaceResolutionPending && isSetupDecisionStep(currentStepId, route);
   const notesFooterAction = getNotesFooterAction({ setupDecisionPending, hasConnectedCalendar });
@@ -532,8 +534,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, []);
 
   useEffect(() => {
-    void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
-  }, [compact]);
+    void window.electronAPI?.setOnboardingWindowMode?.(windowMode);
+  }, [windowMode]);
 
   useEffect(() => {
     if (platform === "darwin" && shouldInitializeMacAccessibilityFeatures(currentStepId)) {
