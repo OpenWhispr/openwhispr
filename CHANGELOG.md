@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dictation
+
+- **Modifier-only shortcuts on macOS.** Option+Command, Control+Option and the other two- and three-modifier chords can now be the dictation, voice assistant or translation shortcut on a Mac, as they already could on Windows and Linux, so anyone used to that shortcut in another dictation app can keep it. The native listener that already watches the Globe key reports the chord. Hold records while the chord is held. Tap starts on release, and a chord that another key joined (Option+Command+Esc, Option+Command+D) is left to that shortcut instead of starting dictation under it. Settings used to suggest Control+Option and Option+Command on macOS and then refuse them as "not supported on macOS".
+
 ## [1.10.4] - 2026-10-21
 
 Tone & Style writes your dictation, and the assistant's drafts, in the tone you pick for each kind of app. The AI Summary now writes detailed notes by default, and you can link a calendar event to any note, pick a reasoning effort for each model scope and ask the chat how OpenWhispr works. This release also keeps your transcript when a later step fails, and fixes meeting transcripts, Linux paste and local Whisper on Windows.

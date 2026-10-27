@@ -87,14 +87,28 @@ test("two-modifier combos without a base key are valid", async () => {
   assert.equal(validateHotkey("Control+Super", "linux").valid, true);
 });
 
-test("modifier-only chords are Windows/Linux only — macOS cannot register them", async () => {
+test("modifier-only chords are valid on macOS, where the Globe listener watches them", async () => {
   const { validateHotkey } = await load();
 
-  const mac = validateHotkey("Control+Alt", "darwin");
-  assert.equal(mac.valid, false);
-  assert.equal(mac.errorCode, "MODIFIER_ONLY_UNSUPPORTED");
-  // Adding a real key is what makes it registrable on macOS.
+  // Spelled the way the capture UI and the suggestions produce them.
+  for (const hotkey of ["Command+Alt", "Alt+Command", "Control+Alt", "Control+Command+Shift"]) {
+    assert.equal(validateHotkey(hotkey, "darwin").valid, true, hotkey);
+  }
   assert.equal(validateHotkey("Control+Alt+Space", "darwin").valid, true);
+});
+
+test("two spellings of the same modifier are not a chord", async () => {
+  const { validateHotkey } = await load();
+
+  // Super and Command are both ⌘ on macOS; Control and Ctrl are one key anywhere.
+  for (const [hotkey, platform] of [
+    ["Command+Super", "darwin"],
+    ["Control+Ctrl", "win32"],
+  ]) {
+    const result = validateHotkey(hotkey, platform);
+    assert.equal(result.valid, false, hotkey);
+    assert.equal(result.errorCode, "LEFT_MODIFIER_ONLY", hotkey);
+  }
 });
 
 test("Fn combinations are rejected because only standalone Globe has a native path", async () => {
