@@ -3771,7 +3771,7 @@
       "meeting": "帮我准备下一场会议",
       "sharedNotes": "突出显示我的共享笔记"
     },
-    "localModelMissing": "在设置中开启助手，即可在此设备上聊天。"
+    "localModelMissing": "在设置中为“聊天”选择一个模型，即可在此设备上聊天。"
   },
   "support": {
     "documentation": "文档",

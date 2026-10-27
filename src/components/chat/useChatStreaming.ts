@@ -396,7 +396,7 @@ export function useChatStreaming({
 
         // Local mode with no model picked (e.g. the assistant was switched off
         // at setup): nothing on this device can answer, and Cloud is not the
-        // fallback. Say where to turn it on.
+        // fallback. Say where to pick one.
         if (llmMode === "local" && !llmConfig.model.trim()) {
           answerWithLine(t("chat.localModelMissing"));
           return;

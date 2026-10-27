@@ -3157,7 +3157,7 @@
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
     },
-    "localModelMissing": "Schalte den Assistenten in den Einstellungen ein, um auf diesem Gerät zu chatten."
+    "localModelMissing": "Wähle in den Einstellungen ein Modell für Chat, um auf diesem Gerät zu chatten."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",

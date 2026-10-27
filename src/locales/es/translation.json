@@ -3823,7 +3823,7 @@
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
     },
-    "localModelMissing": "Activa el asistente en Configuración para chatear en este dispositivo."
+    "localModelMissing": "Elige un modelo para Chat en Configuración para chatear en este dispositivo."
   },
   "support": {
     "documentation": "Documentación",

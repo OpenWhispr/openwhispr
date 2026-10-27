@@ -3157,7 +3157,7 @@
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
     },
-    "localModelMissing": "Turn on the assistant in Settings to chat on this device."
+    "localModelMissing": "Choose a model for Chat in Settings to chat on this device."
   },
   "referral": {
     "title": "Refer and earn rewards",

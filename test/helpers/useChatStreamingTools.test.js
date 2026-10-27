@@ -1340,7 +1340,7 @@ for (const [surface, hookOptions] of [
 
     const reply = getMessages().at(-1);
     assert.equal(reply.role, "assistant");
-    assert.equal(reply.content, "Turn on the assistant in Settings to chat on this device.");
+    assert.equal(reply.content, "Choose a model for Chat in Settings to chat on this device.");
     assert.equal(llamaServerStart.mock.callCount(), 0);
     assert.equal(reasoningService.processTextStreamingAI.mock.callCount(), 0);
     assert.equal(reasoningService.processTextStreamingCloud.mock.callCount(), 0);

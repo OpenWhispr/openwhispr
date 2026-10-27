@@ -3771,7 +3771,7 @@
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
     },
-    "localModelMissing": "このデバイスでチャットするには、設定でアシスタントをオンにしてください。"
+    "localModelMissing": "このデバイスでチャットするには、設定で「チャット」のモデルを選択してください。"
   },
   "support": {
     "documentation": "ドキュメント",

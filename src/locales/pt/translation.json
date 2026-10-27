@@ -3771,7 +3771,7 @@
       "meeting": "Prepare-me para minha próxima reunião",
       "sharedNotes": "Destaque minhas notas compartilhadas"
     },
-    "localModelMissing": "Ative o assistente em Configurações para conversar neste dispositivo."
+    "localModelMissing": "Escolha um modelo para Chat em Configurações para conversar neste dispositivo."
   },
   "support": {
     "documentation": "Documentação",
