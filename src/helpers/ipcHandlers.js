@@ -5850,7 +5850,16 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    // Resolved at dictation start; the capture itself is taken in windowManager on the hotkey press.
+    ipcMain.handle("get-dictation-layout-language", async () => {
+      const probe = this.windowManager?.getLayoutProbe?.();
+      return probe ? probe.getLastCapture() : { ok: false, reason: "unsupported-platform" };
+    });
+
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
+      // Whether hotkey presses should capture the foreground window's keyboard layout.
+      this.windowManager?.setLayoutCaptureEnabled?.(prefs.keyboardLayoutLanguage === true);
+
       const setVars = {};
       const clearVars = [];
 

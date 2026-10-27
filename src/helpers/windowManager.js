@@ -990,6 +990,7 @@ class WindowManager {
     const MAX_PUSH_DURATION_MS = 300000;
     const downTime = Date.now();
 
+    this._captureKeyboardLayout();
     this.showDictationPanel({ reposition: true });
     this.sendPrepareDictation();
 
@@ -1130,6 +1131,10 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      // Before the overlay can take focus. Taken on every press, stop included:
+      // _isDictatingToggle can desync from the renderer, and a skipped capture
+      // would leave the previous dictation's layout behind.
+      this._captureKeyboardLayout();
       const isStarting = !this._isDictatingToggle;
       // Capture the paste target and any selection on every toggle press,
       // before the overlay steals focus — the paste can't refocus the target
@@ -1222,6 +1227,25 @@ class WindowManager {
 
   isDictationProcessing() {
     return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
+  }
+
+  setLayoutProbe(probe) {
+    this.layoutProbe = probe;
+  }
+
+  // Mirrors the renderer's "By keyboard layout" setting (see sync-startup-preferences).
+  setLayoutCaptureEnabled(enabled) {
+    this.layoutCaptureEnabled = enabled === true;
+  }
+
+  getLayoutProbe() {
+    return this.layoutProbe || null;
+  }
+
+  // The foreground window is the paste target, so this has to run synchronously
+  // on the hotkey press, before showDictationPanel can move focus to OpenWhispr.
+  _captureKeyboardLayout() {
+    if (this.layoutCaptureEnabled) this.layoutProbe?.capture();
   }
 
   sendToggleDictation() {

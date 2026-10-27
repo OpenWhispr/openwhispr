@@ -302,6 +302,7 @@ const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
+const { WindowsLayoutProbe } = require("./src/helpers/windowsLayoutProbe");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
@@ -351,6 +352,7 @@ let trayManager = null;
 let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
+let windowsLayoutProbe = null;
 let linuxKeyManager = null;
 let textEditMonitor = null;
 let selectionManager = null;
@@ -671,6 +673,10 @@ function initializeCoreManagers() {
   updateManager = new UpdateManager();
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
+  if (process.platform === "win32") {
+    windowsLayoutProbe = new WindowsLayoutProbe();
+    windowManager.setLayoutProbe(windowsLayoutProbe);
+  }
   linuxKeyManager = new LinuxKeyManager();
   textEditMonitor = new TextEditMonitor();
   selectionManager = new SelectionManager({ clipboardManager, textEditMonitor });
@@ -2199,6 +2205,7 @@ function performSyncTeardown() {
   }
   if (globeKeyManager) globeKeyManager.stop();
   if (windowsKeyManager) windowsKeyManager.stop();
+  if (windowsLayoutProbe) windowsLayoutProbe.stop();
   if (linuxKeyManager) linuxKeyManager.stop();
   if (meetingDetectionEngine) meetingDetectionEngine.stop();
   if (googleCalendarManager) googleCalendarManager.stop();
