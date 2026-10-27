@@ -40,6 +40,32 @@ The complete error and Arabic Close action remain readable at 200% text size. Cl
 
 ![Arabic model download error at 200 percent text size with the translated Close action](model-error-arabic.png)
 
+## Native Superwall preview repair
+
+The installed code29 app reached the SDK's native picker for the inactive Android
+paywall draft. Presenting it returned error 103, including after a clean restart.
+The screenshot below is the installed failure, not a repaired-app preview.
+
+The Android-only Expo bridge patch now follows Superwall's native foreground
+activity tracker, retaining Expo's activity as an initial-startup fallback. This
+addresses the stopped React activity being selected while the SDK preview is in
+front. No purchase-controller, product, identity or SDK/Billing version change is
+included.
+
+A focused JVM regression fails against the original bridge and passes with the
+patch. It covers startup, native preview, older-activity destruction,
+backgrounding, resume, preview destruction and returning to React. The actual
+provider is compiled with checksum-pinned SDK 2.8.3 tracker source and lightweight
+Android/Expo lifecycle stubs. The patch also compiles against the released SDK
+2.8.3 AAR and reapplies through patch-package to the integrity-verified npm package.
+Six adjacent billing/Superwall suites pass 98 tests. These checks do **not** prove
+native presentation, font scaling, locale propagation, TalkBack or purchases in
+the installed app; the repair is not in code29.
+
+Reproduction and limits: [native presenter probe](../../../openwhispr-mobile/scripts/android-superwall-activity/README.md).
+
+![Installed code29 Superwall native preview reports presentation error 103](superwall-native-preview-error.png)
+
 ## Remaining acceptance
 
 The full gate still includes installed acceptance of the newest source, billing failure/delay/retry and entitlement ownership, actual signed Superwall delivery with isolated sandbox routing, native statistics consent/queue ordering, real spoken dictation and Cloud/Local meetings with interruptions, remaining accessibility and storage/corruption cases, native analytics opt-out, and accepted local cleanup quality. Physical phones in the required 3–4 GB, 6 GB and 8+ GB classes are tested last and remain mandatory before launch.
