@@ -392,7 +392,7 @@ test("a save whose Undo note can't be written still saves, without Undo", (t) =>
   const { library, skillsDir, versionsDir } = playbook(t);
   const writeFileSync = fs.writeFileSync;
   t.mock.method(fs, "writeFileSync", (file, ...rest) => {
-    if (String(file).endsWith(".json")) {
+    if (path.dirname(file) === versionsDir && String(file).endsWith(".json")) {
       throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
     }
     return writeFileSync(file, ...rest);
@@ -531,4 +531,150 @@ test("Undo whose database write fails keeps the saved version available for retr
   assert.equal(library.undo(NAME, versionId), true);
   assert.deepEqual(snapshot(path.join(skillsDir, NAME)), original);
   assert.deepEqual(listDir(versionsDir), []);
+});
+
+for (const operation of ["save", "undo"]) {
+  test(`a failed ${operation} commit marker restores the complete database state`, (t) => {
+    const { library, database, skillsDir, versionsDir, userDataDir } = playbook(t);
+    database.setSkillEnabled(NAME, false);
+    database.markSkillUsed(NAME);
+    const proposal = {
+      title: "Enterprise call playbook",
+      description: "New playbook.",
+      instructions: "New instructions.",
+      files: [],
+    };
+    const { hash } = library.checkProposal({ kind: "create", proposal });
+    const draft = { ...proposal, baseHash: hash };
+    const saved = operation === "undo" ? library.saveProposal(draft) : null;
+    const before = snapshot(path.join(skillsDir, NAME));
+    const state = database.getSkillStates();
+    const versions = listDir(versionsDir);
+    const rename = fs.renameSync;
+    t.mock.method(fs, "renameSync", (from, to) => {
+      if (
+        path.basename(from).startsWith(".replacing-") &&
+        path.basename(to).startsWith(".replaced-")
+      ) {
+        throw Object.assign(new Error("commit marker locked"), { code: "EACCES" });
+      }
+      return rename(from, to);
+    });
+    assert.throws(
+      () =>
+        operation === "undo" ? library.undo(NAME, saved.versionId) : library.saveProposal(draft),
+      /commit marker locked/
+    );
+    t.mock.restoreAll();
+    assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+    assert.deepEqual(database.getSkillStates(), state);
+    assert.deepEqual(listDir(versionsDir), versions);
+    const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+    assert.equal(restarted.get(NAME).enabled, operation === "undo");
+    assert.deepEqual(database.getSkillStates(), state);
+    if (saved) assert.equal(restarted.undo(NAME, saved.versionId), true);
+  });
+}
+
+test("restart recovers a saved row and files when final journal commit and rollback are locked", (t) => {
+  const { library, database, userDataDir, skillsDir } = playbook(t);
+  database.setSkillEnabled(NAME, false);
+  const before = snapshot(path.join(skillsDir, NAME));
+  const state = database.getSkillStates();
+  const proposal = {
+    title: "Enterprise call playbook",
+    description: "Changed.",
+    instructions: "Changed.",
+    files: [],
+  };
+  const { hash } = library.checkProposal({ kind: "create", proposal });
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (
+      (path.basename(from).startsWith(".writing-") && path.basename(to).startsWith(".written-")) ||
+      (from === path.join(skillsDir, NAME) && path.basename(to).startsWith(".staging-"))
+    ) {
+      throw Object.assign(new Error("locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  assert.throws(() => library.saveProposal({ ...proposal, baseHash: hash }), /locked/);
+  assert.deepEqual(library.scan(), []);
+  t.mock.restoreAll();
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+  assert.equal(restarted.get(NAME).enabled, false);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(skillsDir), [NAME]);
+});
+
+test("a blocked database restoration keeps the failed save hidden until recovery succeeds", (t) => {
+  const { library, database, userDataDir, skillsDir } = playbook(t);
+  database.setSkillEnabled(NAME, false);
+  const before = snapshot(path.join(skillsDir, NAME));
+  const state = database.getSkillStates();
+  const proposal = {
+    title: "Enterprise call playbook",
+    description: "Changed.",
+    instructions: "Changed.",
+    files: [],
+  };
+  const { hash } = library.checkProposal({ kind: "create", proposal });
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (
+      path.basename(from).startsWith(".replacing-") &&
+      path.basename(to).startsWith(".replaced-")
+    ) {
+      throw new Error("marker locked");
+    }
+    return rename(from, to);
+  });
+  t.mock.method(database, "restoreSkillState", () => {
+    throw new Error("database locked");
+  });
+  assert.throws(() => library.saveProposal({ ...proposal, baseHash: hash }), /marker locked/);
+  const blocked = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.deepEqual(blocked.scan(), []);
+  t.mock.restoreAll();
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+  assert.equal(restarted.get(NAME).enabled, false);
+  assert.deepEqual(database.getSkillStates(), state);
+});
+
+test("Undo waits for an older rollback even when the content is unchanged", (t) => {
+  const { library, database, userDataDir } = setup(t);
+  const proposal = {
+    title: "Demo",
+    description: "Description",
+    instructions: "Original instructions",
+    files: [],
+  };
+  library.create(proposal);
+  library.setEnabled("demo", false);
+  const { hash } = library.checkProposal({ kind: "create", proposal });
+  const { versionId } = library.saveProposal({ ...proposal, baseHash: hash });
+  const rename = fs.renameSync;
+  let blockMarker = true;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (
+      blockMarker &&
+      path.basename(from).startsWith(".replacing-") &&
+      path.basename(to).startsWith(".replaced-")
+    ) {
+      throw new Error("marker failed");
+    }
+    return rename(from, to);
+  });
+  t.mock.method(database, "restoreSkillState", () => {
+    throw new Error("restoration blocked");
+  });
+  assert.throws(() => library.undo("demo", versionId), /marker failed/);
+  blockMarker = false;
+  assert.throws(() => library.undo("demo", versionId), /recovery/);
+  t.mock.restoreAll();
+  assert.equal(library.undo("demo", versionId), true);
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.equal(restarted.get("demo").enabled, false);
 });

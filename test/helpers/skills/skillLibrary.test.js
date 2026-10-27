@@ -442,7 +442,7 @@ test("a failed swap puts the old skill back", async (t) => {
   const [preview] = await library.previewUploads([newer]);
   const realRename = fs.renameSync;
   t.mock.method(fs, "renameSync", (from, to) => {
-    if (path.basename(from).startsWith(".staging-")) {
+    if (path.basename(from).startsWith(".staging-") && !String(from).endsWith(".json")) {
       throw Object.assign(new Error("denied"), { code: "EACCES" });
     }
     return realRename(from, to);
@@ -510,11 +510,12 @@ test("a replace cut short puts the old skill back when the library next opens", 
   const newer = markdownUpload("b.md", skillText("keep", "New."));
   const [preview] = await library.previewUploads([newer]);
   const realRename = fs.renameSync;
-  let renames = 0;
+  let movedOriginal = false;
   t.mock.method(fs, "renameSync", (from, to) => {
-    renames += 1;
-    if (renames > 1) throw Object.assign(new Error("stopped"), { code: "EIO" });
-    return realRename(from, to);
+    if (movedOriginal) throw Object.assign(new Error("stopped"), { code: "EIO" });
+    const result = realRename(from, to);
+    if (path.basename(to).startsWith(".replacing-")) movedOriginal = true;
+    return result;
   });
   library.commitUploads({ tokens: [preview.token], replace: ["keep"] });
   t.mock.restoreAll();
@@ -539,7 +540,7 @@ test("a replace that finished leaves no old copy once the library next opens", a
   });
   library.commitUploads({ tokens: [preview.token], replace: ["keep"] });
   t.mock.restoreAll();
-  assert.equal(listDir(skillsDir).length, 2);
+  assert.equal(listDir(skillsDir).length, 3);
 
   const reopened = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
 
@@ -1325,4 +1326,87 @@ test("recovery cannot overwrite a restored skill without a new replace decision"
 
   assert.equal(result.failed.length, 1);
   assert.equal(readSkill(skillsDir, "retry"), original);
+});
+
+test("a failed new install with locked rollback stays hidden and is removed on restart", async (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  const [{ token }] = await library.previewUploads([markdownUpload("new.md", skillText("new"))]);
+  const rename = fs.renameSync;
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database full"), { code: "SQLITE_FULL" });
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === path.join(skillsDir, "new") && path.basename(to).startsWith(".staging-")) {
+      throw Object.assign(new Error("rollback locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  assert.equal(library.commitUploads({ tokens: [token], replace: [] }).failed.length, 1);
+  t.mock.restoreAll();
+  assert.deepEqual(library.scan(), []);
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.deepEqual(restarted.scan(), []);
+  assert.deepEqual(database.getSkillStates(), []);
+  assert.deepEqual(listDir(skillsDir), []);
+});
+
+test("retrying a failed new install recovers it without asking to replace it", async (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  const [{ token }] = await library.previewUploads([markdownUpload("new.md", skillText("new"))]);
+  const rename = fs.renameSync;
+  t.mock.method(database, "upsertSkillState", () => {
+    throw new Error("database full");
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === path.join(skillsDir, "new") && path.basename(to).startsWith(".staging-")) {
+      throw Object.assign(new Error("rollback locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  assert.equal(library.commitUploads({ tokens: [token], replace: [] }).failed.length, 1);
+  t.mock.restoreAll();
+  assert.deepEqual(library.commitUploads({ tokens: [token], replace: [] }), {
+    installed: ["new"],
+    failed: [],
+  });
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.equal(restarted.get("new").enabled, true);
+  assert.deepEqual(listDir(skillsDir), ["new"]);
+});
+
+test("a journal that cannot be prepared leaves the original skill untouched", async (t) => {
+  const { library, database, skillsDir } = setup(t);
+  const original = skillText("keep", "Original.");
+  await upload(library, [markdownUpload("keep.md", original)]);
+  const state = database.getSkillStates();
+  const [preview] = await library.previewUploads([
+    markdownUpload("keep.md", skillText("keep", "New.")),
+  ]);
+  const write = fs.writeFileSync;
+  t.mock.method(fs, "writeFileSync", (file, ...args) => {
+    if (path.basename(file).startsWith(".staging-") && String(file).endsWith(".json")) {
+      throw Object.assign(new Error("full"), { code: "ENOSPC" });
+    }
+    return write(file, ...args);
+  });
+  assert.equal(
+    library.commitUploads({ tokens: [preview.token], replace: ["keep"] }).failed.length,
+    1
+  );
+  assert.equal(readSkill(skillsDir, "keep"), original);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(skillsDir), ["keep"]);
+});
+
+test("a completed new installation survives failed journal cleanup", (t) => {
+  const { library, database, userDataDir, skillsDir } = setup(t);
+  t.mock.method(fs, "rmSync", () => {
+    throw new Error("cleanup locked");
+  });
+  library.create({ title: "New", description: "Saved.", instructions: "Keep.", files: [] });
+  t.mock.restoreAll();
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.equal(restarted.get("new").enabled, true);
+  assert.match(readSkill(skillsDir, "new"), /Keep\./);
+  assert.deepEqual(listDir(skillsDir), ["new"]);
 });

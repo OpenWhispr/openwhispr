@@ -17,6 +17,7 @@ import {
   isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
+import { readSkillCardRecord } from "./skillCardRecord";
 import { useAuth } from "../../hooks/useAuth";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
@@ -58,6 +59,7 @@ import {
   executeTool,
   type HoldDeliveryOptions,
   type ToolRegistry,
+  type ToolResult,
 } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
 import { isQueryResultData } from "../../services/tools/connectors/runQueryAction";
@@ -178,6 +180,8 @@ interface UseChatStreamingOptions {
 }
 
 export interface SendToAIOptions {
+  /** Bound to this send's conversation before it can change or unmount. */
+  persistAssistantMessage?: (content: string, toolCalls?: ToolCallInfo[]) => void | Promise<void>;
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
   /** Agent-response selection attached to this request without changing chat history. */
@@ -238,7 +242,6 @@ function transformLastUserMessage(
 }
 
 export function useChatStreaming({
-  messages,
   setMessages,
   inferenceScope = "chatIntelligence",
   noteContext: externalNoteContext,
@@ -257,7 +260,6 @@ export function useChatStreaming({
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
   const mountedRef = useRef(true);
-  const messagesRef = useRef<Message[]>([]);
   const noteContextRef = useRef(externalNoteContext);
   noteContextRef.current = externalNoteContext;
   const openNoteRef = useRef(openNote);
@@ -318,10 +320,6 @@ export function useChatStreaming({
 
     toolActivityTimerRef.current = setTimeout(clearToolActivity, remainingMs);
   }, [clearToolActivity, clearToolActivityTimer]);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
 
   const sendGenerationRef = useRef(0);
   // Generation stamped by the most recent cancel issued while still mounted
@@ -742,6 +740,36 @@ export function useChatStreaming({
         const llmMessages = [{ role: "system", content: systemPrompt }, ...history];
 
         const assistantId = crypto.randomUUID();
+        let persisted = false;
+        const persist = (content: string, toolCalls?: ToolCallInfo[]): void => {
+          if (persisted) return;
+          persisted = true;
+          if (options?.persistAssistantMessage) {
+            void options.persistAssistantMessage(content, toolCalls);
+          } else {
+            onStreamComplete?.(assistantId, content, toolCalls);
+          }
+        };
+        // Keep this send's outcomes independently of React's next render or conversation.
+        const turnToolCalls: ToolCallInfo[] = [];
+        const toolResults = new Map<string, Partial<ToolCallInfo>>();
+        const snapshotToolCalls = (): ToolCallInfo[] =>
+          turnToolCalls.map((call) => ({
+            ...call,
+            ...toolResults.get(call.id),
+          }));
+        const recordExecutedResult = (id: string, result: ToolResult): void => {
+          const metadata =
+            result.success && result.data && typeof result.data === "object"
+              ? (result.data as ToolCallInfo["metadata"])
+              : undefined;
+          toolResults.set(id, {
+            status: "completed",
+            result: result.displayText,
+            ...(metadata && !isQueryResultData(metadata) ? { metadata } : {}),
+            ...(result.success ? {} : { failed: true }),
+          });
+        };
         setMessages((prev) => [
           ...prev,
           { id: assistantId, role: "assistant", content: "", isStreaming: true },
@@ -768,6 +796,26 @@ export function useChatStreaming({
         const scheduleContentFlush = () => {
           if (contentFlushTimer !== null) return;
           contentFlushTimer = setTimeout(flushContentNow, STREAM_FLUSH_INTERVAL_MS);
+        };
+
+        const finishInterrupted = (): void => {
+          flushContentNow();
+          const toolCalls = snapshotToolCalls();
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId ? { ...message, toolCalls, isStreaming: false } : message
+            )
+          );
+          const savedSkills = toolCalls.filter(
+            (call) => call.status === "completed" && readSkillCardRecord(call)?.status === "saved"
+          );
+          const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
+          if (!explicitlyCancelled && fullContent.trim().length > 0) {
+            persist(fullContent, toolCalls.length ? toolCalls : undefined);
+          } else if (savedSkills.length > 0) {
+            // Stop can discard a partial answer, but cannot undo a skill already saved.
+            persist("", savedSkills);
+          }
         };
 
         try {
@@ -801,6 +849,7 @@ export function useChatStreaming({
                     args,
                     toolScope.createContext({ messageId: assistantId, toolCallId })
                   );
+                  recordExecutedResult(toolCallId, result);
                   const data = result.success
                     ? typeof result.data === "string"
                       ? result.data
@@ -837,7 +886,10 @@ export function useChatStreaming({
                   toolCallId,
                   signal: abortSignal,
                 }),
-              (id, text) => toolDisplayTexts.set(id, text)
+              (id, text, result) => {
+                toolDisplayTexts.set(id, text);
+                recordExecutedResult(id, result);
+              }
             );
             stream = ReasoningService.processTextStreamingAI(
               llmMessages,
@@ -877,6 +929,7 @@ export function useChatStreaming({
               flushContentNow();
               if (chunk.calls.length > 0) announceResponse();
               for (const call of chunk.calls) {
+                turnToolCalls.push({ ...call, status: "executing" });
                 setAgentState("tool-executing");
                 beginToolActivity(
                   call.name,
@@ -902,30 +955,23 @@ export function useChatStreaming({
                 );
               }
             } else if (chunk.type === "tool_result") {
+              const call = turnToolCalls.find((entry) => entry.id === chunk.callId);
+              toolResults.set(chunk.callId, {
+                ...toolResults.get(chunk.callId),
+                status: "completed",
+                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
+                ...(chunk.failed ? { failed: true } : {}),
+                ...(chunk.metadata && !isQueryResultData(chunk.metadata)
+                  ? {
+                      metadata:
+                        productHelpMetadata(call?.name ?? "", chunk.metadata) ?? chunk.metadata,
+                    }
+                  : {}),
+              });
+              const toolCalls = snapshotToolCalls();
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId && m.toolCalls
-                    ? {
-                        ...m,
-                        toolCalls: m.toolCalls.map((tc) =>
-                          tc.id === chunk.callId
-                            ? {
-                                ...tc,
-                                status: "completed" as const,
-                                result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
-                                ...(chunk.failed ? { failed: true } : {}),
-                                ...(chunk.metadata && !isQueryResultData(chunk.metadata)
-                                  ? {
-                                      metadata:
-                                        productHelpMetadata(tc.name, chunk.metadata) ??
-                                        chunk.metadata,
-                                    }
-                                  : {}),
-                              }
-                            : tc
-                        ),
-                      }
-                    : m
+                prev.map((message) =>
+                  message.id === assistantId ? { ...message, toolCalls } : message
                 )
               );
               setAgentState("streaming");
@@ -934,22 +980,7 @@ export function useChatStreaming({
           }
 
           if (cancelled() || !mountedRef.current) {
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
-            // An unmount mid-stream (page navigation) keeps the partial reply in
-            // history so the saved conversation matches what the user last saw;
-            // an explicit cancel drops it. The unmount cleanup cancels too, so
-            // cancelled() alone cannot tell the two apart. Neither path may run
-            // the per-request delivery hook.
-            const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
-            if (!explicitlyCancelled && fullContent.trim().length > 0) {
-              const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-              onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
-            }
+            finishInterrupted();
             return;
           }
 
@@ -971,23 +1002,18 @@ export function useChatStreaming({
             prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
           );
 
-          const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
-          onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
+          const toolCalls = snapshotToolCalls();
+          persist(fullContent, toolCalls.length ? toolCalls : undefined);
           if (hasDeliverableContent) {
             await options?.onComplete?.({
               assistantId,
               content: fullContent,
-              toolCalls: finalMsg?.toolCalls,
+              toolCalls: toolCalls.length ? toolCalls : undefined,
             });
           }
         } catch (error) {
           if (cancelled()) {
-            flushContentNow();
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId ? { ...message, isStreaming: false } : message
-              )
-            );
+            finishInterrupted();
           } else {
             cancelContentFlush();
             logger.error(

@@ -41,6 +41,10 @@ function fakeDatabase() {
         row.updatedAt = now();
       }
     },
+    restoreSkillState(name, state) {
+      if (state === null) rows.delete(name);
+      else rows.set(name, { ...state, name });
+    },
     setSkillEnabled(name, enabled) {
       const row = rows.get(name);
       if (!row) return false;

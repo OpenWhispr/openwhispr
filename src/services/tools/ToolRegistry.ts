@@ -100,7 +100,7 @@ export class ToolRegistry {
    */
   toAISDKFormat(
     createContext?: (toolCallId: string, abortSignal?: AbortSignal) => ToolExecutionContext,
-    onDisplayText?: (toolCallId: string, displayText: string) => void
+    onDisplayText?: (toolCallId: string, displayText: string, result: ToolResult) => void
   ): Record<string, Tool> {
     const result: Record<string, Tool> = {};
     for (const def of this.getAll()) {
@@ -114,7 +114,7 @@ export class ToolRegistry {
               args as Record<string, unknown>,
               createContext?.(options.toolCallId, options.abortSignal)
             );
-            onDisplayText?.(options.toolCallId, toolResult.displayText);
+            onDisplayText?.(options.toolCallId, toolResult.displayText, toolResult);
             return toolResult.success ? toolResult.data : { error: toolResult.displayText };
           } catch (error) {
             return { error: (error as Error).message || "Tool execution failed" };

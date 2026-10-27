@@ -9,6 +9,7 @@ const {
   addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  installHookDom,
 } = require("../lib/rendererTestHarness");
 
 const summary = (name, displayName, description, extra = {}) => ({
@@ -61,11 +62,18 @@ function skillsApi({ skills = SKILLS, readable = READABLE } = {}) {
 // Drives the real useChatStreaming hook (one synchronous render, then its sendToAI
 // closure), with the stream stubbed so the test can read what each send hands the model.
 // With `sender`, useChatMessageSender sits in front of it, as in the chat view.
-async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {} } = {}) {
+async function renderChat(
+  t,
+  hookOptions = {},
+  { settings = {}, electronAPI = {}, live = false, persist = false, conversationId = 1 } = {}
+) {
+  let unmount;
+  if (live) addTeardown(t, async () => unmount?.());
   installBrowserGlobals(t, {
     initialStorage: { isSubscribed: "true" },
     window: { electronAPI },
   });
+  const container = live ? installHookDom(t) : null;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-chat-streaming-skills-test-",
     mockModules: SIGNED_OUT_AUTH_MOCK,
@@ -90,6 +98,7 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
   usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
   useSettingsStore.setState({ chatAgentMode: "openwhispr", isSignedIn: true, ...settings });
 
+  const { useChatPersistence } = await vite.ssrLoadModule("/components/chat/useChatPersistence.ts");
   const { useChatStreaming } = await vite.ssrLoadModule("/components/chat/useChatStreaming.ts");
   const { useChatMessageSender } = await vite.ssrLoadModule(
     "/components/chat/useChatMessageSender.ts"
@@ -125,27 +134,46 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
     messages = typeof updater === "function" ? updater(messages) : updater;
   };
   const saved = [];
-  const persistence = {
+  const stubPersistence = {
     get messages() {
       return messages;
     },
     setMessages,
     saveUserMessage: async (text) => saved.push(text),
+    saveAssistantMessage: async () => {},
     getSessionVersion: () => 1,
   };
+  let persistence;
   let captured = null;
   let send = null;
   function Harness() {
-    captured = useChatStreaming({ messages, setMessages, ...hookOptions });
+    persistence = persist ? useChatPersistence({ conversationId }) : stubPersistence;
+    captured = useChatStreaming({
+      messages: persistence.messages,
+      setMessages: persistence.setMessages,
+      ...hookOptions,
+    });
     send = useChatMessageSender({
-      conversationId: 1,
+      conversationId,
       persistence,
       streaming: captured,
-      createConversation: async () => 1,
+      createConversation: persist ? persistence.createConversation : async () => 1,
     });
     return null;
   }
-  renderToStaticMarkup(React.createElement(Harness));
+  if (live) {
+    const { createRoot } = require("react-dom/client");
+    const root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness)));
+    let unmounted = false;
+    unmount = async () => {
+      if (unmounted) return;
+      unmounted = true;
+      await React.act(async () => root.unmount());
+    };
+  } else {
+    renderToStaticMarkup(React.createElement(Harness));
+  }
   return {
     captured,
     send,
@@ -154,7 +182,9 @@ async function renderChat(t, hookOptions = {}, { settings = {}, electronAPI = {}
     toolDefinitions,
     sentMessages,
     reasoningService,
-    getMessages: () => messages,
+    getMessages: () => (persist ? persistence.messages : messages),
+    getPersistence: () => persistence,
+    unmount,
     vite,
   };
 }
@@ -798,3 +828,126 @@ test("an unparsed model id counts as no tools and picks", async (t) => {
   assert.equal(latestUserText(sentMessages[0]), withRequest(MEETING_PREP_BLOCK, PREP_REQUEST));
   assert.deepEqual(picked, [{ name: "meeting-prep", displayName: "Meeting prep" }]);
 });
+
+for (const [ending, mode] of [
+  ["complete", "cloud"],
+  ["completion abort", "cloud"],
+  ["stop", "cloud"],
+  ["abort before result", "cloud"],
+  ["unmount", "cloud"],
+  ["navigate", "cloud"],
+  ["new conversation", "cloud"],
+  ["abort before result", "byok"],
+]) {
+  test(`a saved skill keeps its Undo in the originating chat after ${ending} (${mode})`, async (t) => {
+    const { setup } = require("./skills/libraryFixture");
+    const { library } = setup(t);
+    const proposal = {
+      title: "Weekly recap",
+      description: "Recaps my week.",
+      instructions: "Original steps",
+      files: [],
+    };
+    library.saveProposal(proposal);
+    const stored = [];
+    const api = {
+      skillsList: async () => ({ skills: library.scan() }),
+      skillsCheckProposal: async (input) => library.checkProposal(input),
+      skillsSaveProposal: async (input) => ({ ok: true, ...library.saveProposal(input) }),
+      addAgentMessage: async (id, role, content, metadata) => {
+        stored.push({ id, role, content, metadata });
+      },
+      createAgentConversation: async () => ({ id: 17 }),
+      getAgentConversation: async (id) => ({
+        id,
+        messages: stored
+          .filter((row) => row.id === id)
+          .map((row) => ({
+            ...row,
+            metadata: row.metadata ? JSON.stringify(row.metadata) : undefined,
+          })),
+      }),
+    };
+    let deliveries = 0;
+    let chat;
+    chat = await renderChat(
+      t,
+      {
+        skillsEnabled: true,
+        onStreamComplete: (_id, content, toolCalls) => {
+          void chat.getPersistence().saveAssistantMessage(content, toolCalls);
+        },
+      },
+      {
+        electronAPI: api,
+        live: true,
+        persist: true,
+        conversationId: ending === "new conversation" ? null : 1,
+        settings: mode === "byok" ? BYOK : {},
+      }
+    );
+    const approvals = await chat.vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+    const replacement = { ...proposal, instructions: "New steps" };
+    const call = { id: "save-1", name: "propose_skill", arguments: JSON.stringify(replacement) };
+    const stream = async function* (execute) {
+      if (ending === "stop") yield { type: "content", text: "A partial explanation." };
+      yield { type: "tool_calls", calls: [call] };
+      const saving = execute();
+      await new Promise((resolve) => setImmediate(resolve));
+      const entry = Object.values(approvals.useSkillApprovalStore.getState().entries)[0];
+      assert.ok(entry, "the actual proposal tool opens its approval card");
+      await approvals.saveSkillApproval(entry.key);
+      const result = await saving;
+      assert.equal(result.metadata.status, "saved");
+      assert.ok(result.metadata.versionId);
+      if (ending === "unmount") await chat.unmount();
+      if (["abort before result", "navigate", "new conversation"].includes(ending)) {
+        chat.captured.cancelStream();
+      }
+      if (ending === "navigate") await chat.getPersistence().loadConversation(2);
+      if (ending === "abort before result") {
+        throw new DOMException("Stopped", "AbortError");
+      }
+      yield { type: "tool_result", callId: call.id, toolName: call.name, ...result };
+      if (ending === "stop") chat.captured.cancelStream();
+      if (ending === "completion abort") yield { type: "content", text: "Saved." };
+      yield { type: "done", finishReason: "stop" };
+    };
+    if (mode === "cloud") {
+      chat.reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+        stream(() => config.executeToolCall(call.name, call.arguments, call.id))
+      );
+    } else {
+      chat.reasoningService.processTextStreamingAI.mock.mockImplementation(
+        (_m, _model, _p, _c, tools) =>
+          stream(async () => ({
+            metadata: await tools.propose_skill.execute(replacement, { toolCallId: call.id }),
+            displayText: "",
+          }))
+      );
+    }
+    await React.act(async () => {
+      await chat.send("Replace my weekly recap", {
+        onComplete: () => {
+          deliveries += 1;
+          if (ending === "completion abort") {
+            chat.captured.cancelStream();
+            throw new DOMException("Closed", "AbortError");
+          }
+        },
+      });
+    });
+    assert.match(library.get("weekly-recap").markdown, /New steps/);
+    const assistant = stored.filter((row) => row.role === "assistant");
+    assert.equal(assistant.length, 1, "the committed result is saved exactly once");
+    assert.equal(assistant[0].id, ending === "new conversation" ? 17 : 1);
+    assert.equal(assistant[0].content, ending === "completion abort" ? "Saved." : "");
+    assert.equal(deliveries, ending === "completion abort" ? 1 : 0);
+    const [savedCall] = assistant[0].metadata.toolCalls;
+    assert.equal(savedCall.arguments, "{}", "skill drafts stay out of saved chat history");
+    assert.equal(savedCall.metadata.status, "saved");
+    assert.equal(library.undo(savedCall.metadata.name, savedCall.metadata.versionId), true);
+    assert.match(library.get("weekly-recap").markdown, /Original steps/);
+    if (ending === "navigate") assert.deepEqual(chat.getMessages(), []);
+  });
+}
