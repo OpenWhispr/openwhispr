@@ -17,7 +17,7 @@ import { FoldersService } from "./FoldersService.js";
 import { SpacesService, type MySpace } from "./SpacesService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
 import { syncPendingAnalytics } from "./AnalyticsService.js";
-import { DictionaryService } from "./DictionaryService.js";
+import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
@@ -2567,11 +2567,18 @@ export class SyncService {
 
     for (const entry of updates) {
       try {
-        await DictionaryService.update(entry.cloud_id!, {
+        const server = await DictionaryService.update(entry.cloud_id!, {
           word: entry.word,
           source: entry.source,
         });
-        await window.electronAPI.markDictionarySynced?.(entry.id, entry.cloud_id!);
+        await window.electronAPI.markDictionarySynced?.(
+          entry.id,
+          server.id,
+          server.updated_at,
+          entry.word,
+          entry.source,
+          server.source
+        );
       } catch (err) {
         // 404: another device purged the cloud row. Clear the stale cloud_id so
         // the next push re-creates it via batchCreate instead of retrying PATCH.
@@ -2605,7 +2612,14 @@ export class SyncService {
           }
           // 0 changes means the local row was deleted between snapshot and ack —
           // delete the freshly-created server row so we don't orphan it.
-          const result = await window.electronAPI.markDictionarySynced?.(local.id, server.id);
+          const result = await window.electronAPI.markDictionarySynced?.(
+            local.id,
+            server.id,
+            server.updated_at,
+            local.word,
+            local.source,
+            server.source
+          );
           if (result && result.changes === 0) {
             try {
               await DictionaryService.delete(server.id);
@@ -2653,13 +2667,17 @@ export class SyncService {
       let cursorId: string | undefined = sinceId;
       let maxUpdatedAt = normalizeTimestamp(since);
       let maxId = sinceId ?? "";
+      // With no saved cursor, walk the (created_at, id) snapshot to the end. The
+      // first page arrives in created_at order, so continuing it on the
+      // (updated_at, id) delta keyset skips later-created words edited earlier.
+      const cursorField: keyof Pick<CloudDictionaryEntry, "created_at" | "updated_at"> = since
+        ? "updated_at"
+        : "created_at";
 
       while (true) {
-        const { entries, hasMore } = await DictionaryService.list(
-          cursor,
-          DICTIONARY_BATCH_SIZE,
-          cursorId
-        );
+        const { entries, hasMore } = since
+          ? await DictionaryService.listDelta(cursor, DICTIONARY_BATCH_SIZE, cursorId)
+          : await DictionaryService.listSnapshot(cursor, DICTIONARY_BATCH_SIZE, cursorId);
         if (entries.length === 0) break;
 
         for (const cloudEntry of entries) {
@@ -2695,10 +2713,11 @@ export class SyncService {
 
         if (!hasMore) break;
         const last = entries[entries.length - 1];
-        // Stall guard: if the (updated_at, id) cursor didn't advance after a
-        // full page, bail rather than loop forever.
-        if (last.updated_at === cursor && last.id === cursorId) break;
-        cursor = last.updated_at;
+        const nextCursor = last[cursorField];
+        // Stall guard: if the (cursor, id) keyset didn't advance after a full
+        // page, bail rather than loop forever.
+        if (nextCursor === cursor && last.id === cursorId) break;
+        cursor = nextCursor;
         cursorId = last.id;
       }
 

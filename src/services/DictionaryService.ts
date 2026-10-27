@@ -39,7 +39,22 @@ async function deleteEntry(id: string): Promise<void> {
   await cloudDelete("/api/dictionary/delete", { id });
 }
 
-async function list(
+async function listSnapshot(
+  cursor?: string,
+  limit?: number,
+  cursorId?: string
+): Promise<{ entries: CloudDictionaryEntry[]; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  if (cursorId) params.set("cursor_id", cursorId);
+  if (limit) params.set("limit", String(limit));
+  const query = params.toString() ? `?${params}` : "";
+  return cloudGet<{ entries: CloudDictionaryEntry[]; hasMore: boolean }>(
+    `/api/dictionary/list${query}`
+  );
+}
+
+async function listDelta(
   since?: string,
   limit?: number,
   sinceId?: string
@@ -58,5 +73,6 @@ export const DictionaryService = {
   batchCreate,
   update,
   delete: deleteEntry,
-  list,
+  listSnapshot,
+  listDelta,
 };

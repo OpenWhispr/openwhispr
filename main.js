@@ -573,10 +573,40 @@ function initializeCoreManagers() {
     // with no pack on disk only happens via such data loss. recordOnce gates
     // each pack to one notice so a dismissed toast doesn't return every launch.
     const gpuPacks = [
-      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED", group: "whisper" },
-      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED", group: "whisper" },
+      {
+        manager: whisperCudaManager,
+        enabledEnvVar: "WHISPER_CUDA_ENABLED",
+        group: "whisper",
+        backend: "cuda",
+      },
+      {
+        manager: whisperVulkanManager,
+        enabledEnvVar: "WHISPER_VULKAN_ENABLED",
+        group: "whisper",
+        backend: "vulkan",
+      },
       { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
     ];
+    // A pack whose backend failed here and then vanished (a distro launcher
+    // deletes it, #2168) was no loss: drop its flag as a delete would, so no
+    // notice names it, even after an upgrade clears the remembered failure.
+    const failedBackends = WhisperManager.resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    for (const { manager, enabledEnvVar, backend } of gpuPacks) {
+      if (
+        failedBackends.includes(backend) &&
+        process.env[enabledEnvVar] === "true" &&
+        !manager.isDownloaded() &&
+        !manager.needsUpdate()
+      ) {
+        delete process.env[enabledEnvVar];
+        environmentManager.removeKeyFromEnvFile(enabledEnvVar).catch((err) => {
+          debugLogger.error("Failed to clear a vanished GPU pack's flag from .env", {
+            key: enabledEnvVar,
+            error: err.message,
+          });
+        });
+      }
+    }
     const orphanedPacks = detectOrphanedGpuPacks(gpuPacks);
     if (orphanedPacks.length > 0) {
       require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);

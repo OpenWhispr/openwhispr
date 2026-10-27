@@ -15,3 +15,8 @@ export function isDictationAgentEnabled(config: UserConfig): boolean {
 export function isNoteChatEnabled(config: UserConfig): boolean {
   return config.noteChatEnabled ?? true;
 }
+
+/** The chat switch as the chat screens read it: on until a config has loaded. */
+export function isChatEnabled(config: UserConfig | null): boolean {
+  return config ? isNoteChatEnabled(config) : true;
+}

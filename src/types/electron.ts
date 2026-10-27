@@ -905,6 +905,8 @@ export interface CudaWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -921,6 +923,8 @@ export interface VulkanWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -3740,7 +3744,11 @@ declare global {
       ) => Promise<DictionaryEntryItem | null>;
       markDictionarySynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        serverUpdatedAt?: string,
+        expectedWord?: string,
+        expectedSource?: DictionaryEntryItem["source"],
+        serverSource?: DictionaryEntryItem["source"]
       ) => Promise<{ success: boolean; changes: number }>;
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
