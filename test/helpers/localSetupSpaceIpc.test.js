@@ -89,6 +89,30 @@ test("a fresh install reads the real disk, not the missing-folder fallback", asy
   assert.ok(Number.isFinite(space.availableBytes) && space.availableBytes > 0);
 });
 
+test("a folder that can't be created reads its nearest existing parent", async (t) => {
+  const root = freshRoot(t);
+  const base = path.dirname(path.dirname(root));
+  const { readLocalSetupSpace } = require(path.join(helpers, "localSetupSpace"));
+  const dirs = [];
+  const warnings = [];
+  const space = await readLocalSetupSpace({
+    getCacheRoot: () => root,
+    mkdir: async () => {
+      throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+    },
+    warn: (message, meta) => warnings.push({ message, meta }),
+    async checkDiskSpace(dir, required) {
+      dirs.push(dir);
+      return downloadUtils.checkDiskSpace(dir, required);
+    },
+  });
+
+  assert.deepEqual(dirs, [base], "not the missing folder, which would read as Infinity");
+  assert.ok(Number.isFinite(space.availableBytes) && space.availableBytes > 0);
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0].meta.error), /EACCES/);
+});
+
 test("get-local-setup-space is registered and exposed to the renderer", () => {
   const ipc = fs.readFileSync(path.join(helpers, "ipcHandlers.js"), "utf8");
   assert.match(ipc, /ipcMain\.handle\("get-local-setup-space", \(\) => readLocalSetupSpace\(\)\)/);
