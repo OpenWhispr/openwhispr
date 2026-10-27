@@ -30,7 +30,6 @@ test("the profile reads back only for the account that wrote it", async (t) => {
     emailVerified: true,
   });
   assert.equal(profiles.readOfflineAccountProfile("user-b", 1_000), null);
-  assert.equal(profiles.readOfflineAccountProfile(null, 1_000), null);
 });
 
 test("a profile older than 30 days, from the future or malformed is not read", async (t) => {
@@ -44,6 +43,8 @@ test("a profile older than 30 days, from the future or malformed is not read", a
 
   storage.setItem(KEY, "{not json");
   assert.equal(profiles.readOfflineAccountProfile("user-a", 0), null);
+  storage.setItem(KEY, "null");
+  assert.equal(profiles.readOfflineAccountProfile("user-a", 0), null);
   storage.setItem(KEY, JSON.stringify({ id: "user-a" }));
   assert.equal(profiles.readOfflineAccountProfile("user-a", 0), null);
 });
@@ -54,32 +55,4 @@ test("clearing removes the profile", async (t) => {
   profiles.writeOfflineAccountProfile(USER);
   profiles.clearOfflineAccountProfile();
   assert.equal(storage.getItem(KEY), null);
-});
-
-const OFFLINE = { userId: "user-a", generation: 4 };
-const PROFILE = { id: "user-a", name: "Ada", email: "", image: null, emailVerified: false };
-const presentable = {
-  sessionBound: false,
-  offlineAccount: OFFLINE,
-  scopeAction: "none",
-  profile: PROFILE,
-};
-
-test("the offline account is presented when the local scope is already this account", async () => {
-  const { resolveOfflineAccount } = await load();
-  assert.deepEqual(resolveOfflineAccount(presentable), { ...OFFLINE, profile: PROFILE });
-});
-
-test("any pending reconciliation, a live session or a mismatched profile stays a guest", async () => {
-  const { resolveOfflineAccount } = await load();
-  for (const scopeAction of ["purge", "verify", "remember-user"]) {
-    assert.equal(resolveOfflineAccount({ ...presentable, scopeAction }), null, scopeAction);
-  }
-  assert.equal(resolveOfflineAccount({ ...presentable, sessionBound: true }), null);
-  assert.equal(resolveOfflineAccount({ ...presentable, offlineAccount: null }), null);
-  assert.equal(resolveOfflineAccount({ ...presentable, profile: null }), null);
-  assert.equal(
-    resolveOfflineAccount({ ...presentable, profile: { ...PROFILE, id: "user-b" } }),
-    null
-  );
 });

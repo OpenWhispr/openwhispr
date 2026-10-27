@@ -1,4 +1,4 @@
-import { clearOfflineAccountProfile } from "./offlineAccountProfile";
+import { clearOfflineAccountProfile, writeOfflineAccountProfile } from "./offlineAccountProfile";
 import { isControlPanelWindow } from "../utils/windowContext";
 
 const AUTH_REQUEST_GENERATION = "openWhisprAuthGeneration";
@@ -34,6 +34,12 @@ export interface RendererAuthContextSnapshot {
   offlineAccount: OfflineAccount | null;
   /** A generation get-session rejected (401) or resolved to no user: never presented offline. */
   sessionRejectedGeneration: number | null;
+  /**
+   * The bound generation whose session refetch then failed. The binding keeps
+   * presenting the account, but only a new answer from the server may
+   * validate it again.
+   */
+  refetchFailedGeneration: number | null;
 }
 
 type AuthRequest = {
@@ -63,9 +69,13 @@ const EMPTY_SNAPSHOT: Omit<RendererAuthContextSnapshot, "revision"> = {
   validatedGeneration: null,
   offlineAccount: null,
   sessionRejectedGeneration: null,
+  refetchFailedGeneration: null,
 };
 
 let snapshot: RendererAuthContextSnapshot = { ...EMPTY_SNAPSHOT, revision: 0 };
+// When the server last answered get-session. Kept out of the snapshot: every
+// answer changes it, and subscribers only care about the session it resolved.
+let sessionAnsweredAt: number | null = null;
 const subscribers = new Set<() => void>();
 
 function publish(next: Omit<RendererAuthContextSnapshot, "revision">): void {
@@ -106,6 +116,7 @@ function observeState(generation: number, hasToken: boolean): void {
           ? current.offlineAccount
           : null,
       sessionRejectedGeneration: generationChanged ? null : current.sessionRejectedGeneration,
+      refetchFailedGeneration: generationChanged ? null : current.refetchFailedGeneration,
     };
   });
 }
@@ -204,10 +215,12 @@ export async function authContextFetch(
     // A credential boundary is more actionable than a simultaneous network
     // failure and must prevent stale session data from being trusted.
     await assertAuthRequestCurrent(init);
-    if (isGetSessionRequest((init ?? {}) as AuthRequest)) {
-      // Fence sync, but keep the session binding so a transient refetch failure
-      // keeps presenting the account. A real 401 clears it via handleAuthRequestError.
-      invalidateValidatedAuthContext();
+    // Better Auth cancels a session request whenever it starts another one: a
+    // cancelled request says nothing about the server.
+    if (isGetSessionRequest((init ?? {}) as AuthRequest) && !init?.signal?.aborted) {
+      // Keep the session binding so a transient refetch failure keeps
+      // presenting the account. A real 401 clears it via handleAuthRequestError.
+      markRefetchFailed(requestGeneration(init));
       await noteSessionUnreachable(requestGeneration(init));
     }
     throw error;
@@ -231,7 +244,12 @@ function resolvedUserId(data: unknown): string | null {
   return typeof id === "string" ? id : null;
 }
 
+function sessionUser(data: unknown): unknown {
+  return data && typeof data === "object" ? (data as { user?: unknown }).user : null;
+}
+
 function recordSessionResolution(generation: number, userId: string | null): void {
+  sessionAnsweredAt = Date.now();
   update((current) => ({
     ...current,
     sessionResolved: true,
@@ -247,24 +265,40 @@ function recordSessionResolution(generation: number, userId: string | null): voi
       current.sessionGeneration === generation
         ? current.validatedGeneration
         : null,
-    offlineAccount: null,
+    // The same account keeps being presented until reconciliation validates
+    // it, so coming back online never passes through a signed-out state.
+    offlineAccount: current.offlineAccount?.userId === userId ? current.offlineAccount : null,
     // A resolution with no user is the server's verdict too: a later transport
     // failure clears the resolution and must not bring the account back.
     sessionRejectedGeneration: userId ? null : generation,
+    refetchFailedGeneration: null,
   }));
 }
 
-function clearSessionResolutionFor(generation: number): void {
-  update((current) => {
-    if (current.sessionGeneration !== generation) return current;
-    return {
-      ...current,
-      sessionResolved: false,
-      sessionGeneration: null,
-      sessionUserId: null,
-      validatedGeneration: null,
-    };
-  });
+function withoutSessionResolution(
+  current: RendererAuthContextSnapshot,
+  generation: number
+): RendererAuthContextSnapshot {
+  if (current.sessionGeneration !== generation) return current;
+  return {
+    ...current,
+    sessionResolved: false,
+    sessionGeneration: null,
+    sessionUserId: null,
+    validatedGeneration: null,
+    refetchFailedGeneration: null,
+  };
+}
+
+function markRefetchFailed(generation: number): void {
+  update((current) => ({
+    ...current,
+    validatedGeneration: null,
+    refetchFailedGeneration:
+      current.sessionResolved && current.sessionGeneration === generation
+        ? generation
+        : current.refetchFailedGeneration,
+  }));
 }
 
 export async function handleAuthRequestResponse(context: { request: AuthRequest }): Promise<void> {
@@ -295,7 +329,14 @@ export async function handleAuthRequestSuccess(context: AuthSuccessContext): Pro
     });
   }
   if (isGetSessionRequest(context.request)) {
-    recordSessionResolution(current.generation, resolvedUserId(context.data));
+    const userId = resolvedUserId(context.data);
+    recordSessionResolution(current.generation, userId);
+    // A server answer for a session that is already validated refreshes the
+    // profile an offline launch may present; the first validation is saved by
+    // useAuth once reconciliation commits it.
+    if (userId && getValidatedAuthGeneration() === current.generation) {
+      writeOfflineAccountProfile(sessionUser(context.data));
+    }
   }
 }
 
@@ -303,19 +344,19 @@ export async function handleAuthRequestError(context: AuthErrorContext): Promise
   const generation = requestGeneration(context.request);
   await assertAuthRequestCurrent(context.request);
   if (!isGetSessionRequest(context.request)) return;
-  clearSessionResolutionFor(generation);
   // Better Auth answers a dead credential with 401 (or 200 and no user). Any
   // other status, a 403 or 404 from a proxy or firewall included, says nothing
   // about the credential.
   if (context.response?.status !== 401) {
-    await noteSessionUnreachable(generation);
+    markRefetchFailed(generation);
+    await noteSessionUnreachable(generation, { clearSession: true });
     return;
   }
   // The rejection outlives this run's generation counter only through the
   // saved profile, so drop it: a later offline launch stays a guest.
   clearOfflineAccountProfile();
   update((current) => ({
-    ...current,
+    ...withoutSessionResolution(current, generation),
     offlineAccount: null,
     sessionRejectedGeneration: generation,
   }));
@@ -340,30 +381,57 @@ function offlineEligible(current: RendererAuthContextSnapshot, generation: numbe
  * get-session for `generation` got no answer. Main's account binding is keyed
  * by a hash of the exact bearer it validated, so when it still names an
  * account for this generation that account can be presented read-only.
+ * `clearSession` drops the session resolution in the same update, after the
+ * binding was read, so the account is never shown signed out in between.
  */
-async function noteSessionUnreachable(generation: number): Promise<void> {
+async function noteSessionUnreachable(
+  generation: number,
+  { clearSession = false }: { clearSession?: boolean } = {}
+): Promise<void> {
+  const settle = (current: RendererAuthContextSnapshot): RendererAuthContextSnapshot =>
+    clearSession ? withoutSessionResolution(current, generation) : current;
   // Only the control panel resolves its own session. Every other window
   // fails get-session by design and follows main's scope (accountScopeMirror).
-  if (!isControlPanelWindow() || !offlineEligible(snapshot, generation)) return;
-  let scope: { accountId: string; authGeneration: number } | null | undefined;
-  try {
-    scope = await window.electronAPI?.getActiveAccountScope?.();
-  } catch {
-    return;
+  let scope: { accountId: string; authGeneration: number } | null | undefined = null;
+  if (isControlPanelWindow() && offlineEligible(settle(snapshot), generation)) {
+    try {
+      scope = await window.electronAPI?.getActiveAccountScope?.();
+    } catch {
+      scope = null;
+    }
   }
   const userId = typeof scope?.accountId === "string" ? scope.accountId : null;
   update((current) => {
-    if (!userId || scope?.authGeneration !== generation || !offlineEligible(current, generation)) {
-      return current;
+    const next = settle(current);
+    if (!userId || scope?.authGeneration !== generation || !offlineEligible(next, generation)) {
+      return next;
     }
-    return { ...current, offlineAccount: { userId, generation } };
+    return { ...next, offlineAccount: { userId, generation } };
   });
 }
 
+/**
+ * The account to present read-only: while get-session has no answer, and
+ * after the server confirmed that same account until reconciliation
+ * validates it.
+ */
 export function getOfflineAccount(): OfflineAccount | null {
   const account = snapshot.offlineAccount;
-  if (!account || !offlineEligible(snapshot, account.generation)) return null;
-  return account;
+  if (
+    !account ||
+    snapshot.observedGeneration !== account.generation ||
+    !snapshot.hasToken ||
+    snapshot.sessionRejectedGeneration === account.generation
+  ) {
+    return null;
+  }
+  if (!snapshot.sessionResolved || snapshot.sessionGeneration !== account.generation) {
+    return account;
+  }
+  return snapshot.sessionUserId === account.userId &&
+    snapshot.validatedGeneration !== account.generation
+    ? account
+    : null;
 }
 
 /**
@@ -374,6 +442,10 @@ export function sessionAwaitsVerdict(): boolean {
   if (getOfflineAccount()) return true;
   const userId = snapshot.sessionUserId;
   return userId != null && getBoundSessionGeneration(userId) != null && !hasValidatedAuthContext();
+}
+
+export function getSessionAnsweredAt(): number | null {
+  return sessionAnsweredAt;
 }
 
 export function getBoundSessionGeneration(userId: string | null): number | null {
@@ -398,7 +470,8 @@ export function commitValidatedAuthContext(generation: number, userId: string): 
   ) {
     return false;
   }
-  update((current) => ({ ...current, validatedGeneration: generation }));
+  if (snapshot.refetchFailedGeneration === generation) return false;
+  update((current) => ({ ...current, validatedGeneration: generation, offlineAccount: null }));
   return true;
 }
 
@@ -427,4 +500,5 @@ export async function assertAuthGenerationCurrent(generation: number): Promise<v
 
 export function resetAuthRequestContextForTests(): void {
   snapshot = { ...EMPTY_SNAPSHOT, revision: snapshot.revision + 1 };
+  sessionAnsweredAt = null;
 }

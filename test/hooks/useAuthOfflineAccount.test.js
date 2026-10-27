@@ -124,8 +124,10 @@ async function mountUseAuth(t, { initialStorage }) {
   authContext.resetAuthRequestContextForTests();
 
   let result = null;
+  const history = [];
   function Harness() {
     result = useAuth();
+    history.push({ isSignedIn: result.isSignedIn, isLoaded: result.isLoaded });
     return null;
   }
   root = createRoot(container);
@@ -184,8 +186,29 @@ async function mountUseAuth(t, { initialStorage }) {
     await setSession({ data: null, isPending: false, error: { status: 401 } });
   };
 
+  // A refetch of the validated session throws: the network went away.
+  const loseNetwork = async () => {
+    const data = globalThis.__authTest.session.data;
+    const request = await authContext.prepareAuthRequest({
+      url: SESSION_URL,
+      headers: new Headers(),
+    });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw new TypeError("network down");
+    };
+    try {
+      await React.act(() => authContext.authContextFetch(request.url, request).catch(() => {}));
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+    await setSession({ data, isPending: false, error: new TypeError("network down") });
+  };
+
   return {
     calls,
+    history,
+    loseNetwork,
     storage,
     authContext,
     goOffline,
@@ -207,7 +230,7 @@ test("an offline launch presents the last validated account read-only", async (t
   assert.equal(result.session, null);
   assert.equal(result.user.id, "user-a");
   assert.equal(result.user.email, "ada@example.com");
-  // Policy, managed config and the workspace list load from caches for user-a…
+  // Policy, managed config and the workspace list are requested for user-a…
   assert.deepEqual(auth.calls.fetchPolicy, [["user-a", 5]]);
   assert.equal(auth.calls.workspaceRefresh, 1);
   // …while reconciliation and sync stay fenced until a real get-session.
@@ -296,4 +319,54 @@ test("back online, a 401 drops to guest and the credential stays unpresented", a
   assert.equal(auth.authContext.getOfflineAccount(), null);
   assert.deepEqual(auth.calls.setActiveAccountScope, []);
   assert.equal(auth.storage.getItem(PROFILE_KEY), null);
+});
+
+test("back online, the account never passes through a signed-out state", async (t) => {
+  for (const sessionFirst of [false, true]) {
+    await t.test(sessionFirst ? "session atom first" : "auth hooks first", async (t) => {
+      const auth = await mountUseAuth(t, { initialStorage: reconciledFor("user-a") });
+      await auth.goOffline();
+      auth.history.length = 0;
+
+      if (sessionFirst) {
+        await auth.setSession({ data: { user: USER_A, session: { id: "s" } }, isPending: false });
+      }
+      await auth.answer(USER_A);
+
+      assert.ok(auth.history.length > 0);
+      assert.deepEqual(
+        auth.history.filter((state) => !state.isSignedIn || !state.isLoaded),
+        []
+      );
+      assert.equal(auth.result().isOfflineAccount, false);
+      assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
+    });
+  }
+});
+
+test("losing the network mid-session shows the account read-only until the server answers", async (t) => {
+  const stale = Date.now() - 29 * 24 * 60 * 60 * 1000;
+  const auth = await mountUseAuth(t, { initialStorage: reconciledFor("user-a") });
+  await auth.answer(USER_A);
+  const scopeCalls = auth.calls.setActiveAccountScope.length;
+  auth.storage.setItem(PROFILE_KEY, JSON.stringify({ ...USER_A, validatedAt: stale }));
+
+  await auth.loseNetwork();
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.result().isOfflineAccount, true);
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), null);
+
+  // Better Auth clears the error when the next refetch starts. That is no answer:
+  // nothing re-validates the session or refreshes the profile's age.
+  const data = globalThis.__authTest.session.data;
+  await auth.setSession({ data, isPending: false, error: null });
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), null);
+  assert.equal(auth.calls.setActiveAccountScope.length, scopeCalls);
+  assert.equal(JSON.parse(auth.storage.getItem(PROFILE_KEY)).validatedAt, stale);
+  assert.equal(auth.result().isSignedIn, true);
+
+  await auth.answer(USER_A);
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
+  assert.equal(auth.result().isOfflineAccount, false);
+  assert.ok(JSON.parse(auth.storage.getItem(PROFILE_KEY)).validatedAt > stale);
 });

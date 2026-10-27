@@ -218,10 +218,11 @@ test("a get-session 401 clears the binding so the app drops to guest", async (t)
   assert.equal(auth.getBoundSessionGeneration("user-a"), null);
 });
 
-async function failSessionFetch(t, auth) {
+async function failSessionFetch(t, auth, { signal } = {}) {
   const request = await auth.prepareAuthRequest({
     url: "https://auth.openwhispr.test/api/auth/get-session",
     headers: new Headers(),
+    signal,
   });
   const previousFetch = global.fetch;
   global.fetch = async () => {
@@ -321,8 +322,11 @@ test("a confirmed session or a new credential ends the offline account", async (
     response: new Response("{}", { status: 200 }),
     request: sessionRequest(8, "token-a"),
   });
-  assert.equal(auth.getOfflineAccount(), null);
   assert.equal(auth.getBoundSessionGeneration("user-a"), 8);
+  // Still presented while reconciliation validates the answer, never signed out between.
+  assert.deepEqual(auth.getOfflineAccount(), { userId: "user-a", generation: 8 });
+  assert.equal(auth.commitValidatedAuthContext(8, "user-a"), true);
+  assert.equal(auth.getOfflineAccount(), null);
 
   // A refetch failure after a real answer is the transient case, not offline.
   await failSessionFetch(t, auth);
@@ -423,4 +427,108 @@ test("a session that resolved to no user stays a verdict through a later outage"
   });
 
   assert.equal(auth.getOfflineAccount(), null);
+});
+
+function answerSession(auth, generation, user) {
+  return auth.handleAuthRequestSuccess({
+    data: user ? { user } : null,
+    response: new Response("{}", { status: 200 }),
+    request: sessionRequest(generation, "token-a"),
+  });
+}
+
+test("a session request Better Auth cancelled says nothing about the server", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const state = {
+    current: { token: "token-a", generation: 14 },
+    binding: { accountId: "user-a", token: "token-a" },
+  };
+  t.after(installWindow(state));
+  const controller = new AbortController();
+  controller.abort();
+
+  await failSessionFetch(t, auth, { signal: controller.signal });
+
+  assert.equal(auth.getOfflineAccount(), null);
+});
+
+test("after a failed refetch only a new answer validates the session again", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const state = {
+    current: { token: "token-a", generation: 15 },
+    binding: { accountId: "user-a", token: "token-a" },
+  };
+  t.after(installWindow(state));
+  await answerSession(auth, 15, { id: "user-a" });
+  assert.equal(auth.commitValidatedAuthContext(15, "user-a"), true);
+
+  await failSessionFetch(t, auth);
+  // The binding keeps presenting the account, but nothing re-validates it…
+  assert.equal(auth.getBoundSessionGeneration("user-a"), 15);
+  assert.equal(auth.commitValidatedAuthContext(15, "user-a"), false);
+  assert.equal(auth.sessionAwaitsVerdict(), true);
+
+  // …until the server answers again.
+  await answerSession(auth, 15, { id: "user-a" });
+  assert.equal(auth.commitValidatedAuthContext(15, "user-a"), true);
+  assert.equal(auth.sessionAwaitsVerdict(), false);
+});
+
+test("a server error mid-session hands the account to the offline account in one step", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const state = {
+    current: { token: "token-a", generation: 16 },
+    binding: { accountId: "user-a", token: "token-a" },
+  };
+  t.after(installWindow(state));
+  await answerSession(auth, 16, { id: "user-a" });
+  auth.commitValidatedAuthContext(16, "user-a");
+  const presented = [];
+  t.after(
+    auth.subscribeAuthRequestContext(() => {
+      presented.push(
+        auth.getBoundSessionGeneration("user-a") != null || auth.getOfflineAccount() != null
+      );
+    })
+  );
+
+  await auth.handleAuthRequestError({
+    request: sessionRequest(16, "token-a"),
+    response: new Response("", { status: 502 }),
+  });
+
+  assert.ok(presented.length > 0);
+  assert.deepEqual(
+    presented.filter((shown) => !shown),
+    []
+  );
+  assert.deepEqual(auth.getOfflineAccount(), { userId: "user-a", generation: 16 });
+});
+
+test("each answer for a validated session refreshes the saved profile", async (t) => {
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  const values = new Map();
+  const state = {
+    current: { token: "token-a", generation: 17 },
+    storage: {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    },
+  };
+  t.after(installWindow(state));
+  const user = { id: "user-a", name: "Ada", email: "ada@example.com" };
+
+  // Not yet validated: reconciliation saves the first profile.
+  await answerSession(auth, 17, user);
+  assert.equal(values.has("openwhispr:accountProfile"), false);
+  assert.equal(typeof auth.getSessionAnsweredAt(), "number");
+
+  auth.commitValidatedAuthContext(17, "user-a");
+  await answerSession(auth, 17, user);
+  assert.equal(JSON.parse(values.get("openwhispr:accountProfile")).id, "user-a");
 });

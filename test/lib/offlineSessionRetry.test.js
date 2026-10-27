@@ -60,14 +60,24 @@ test("an offline account asks for the session again until the server answers", a
   t.mock.timers.tick(60_000);
   assert.deepEqual(signals, ["$sessionSignal", "$sessionSignal"]);
 
-  // The answer ends the offline account; reconciliation validating it ends the retries.
+  // A request still in flight is left to finish.
+  const session = authClient.$store.atoms.session;
+  const idle = session.value;
+  session.set({ ...idle, isRefetching: true });
+  browser.focus();
+  t.mock.timers.tick(60_000);
+  assert.equal(signals.length, 2);
+  session.set(idle);
+
+  // The account stays presented until reconciliation validates the answer,
+  // which ends the retries.
   await authContext.handleAuthRequestSuccess({
     data: { user: { id: "user-a" } },
     response: new Response("{}", { status: 200 }),
     request: sessionRequest(3),
   });
-  assert.equal(authContext.getOfflineAccount(), null);
   assert.equal(authContext.commitValidatedAuthContext(3, "user-a"), true);
+  assert.equal(authContext.getOfflineAccount(), null);
   assert.equal(browser.focusListenerCount(), 0);
   browser.focus();
   t.mock.timers.tick(60_000);
