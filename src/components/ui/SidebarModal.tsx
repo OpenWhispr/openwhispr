@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { blurBehindOverlays } from "./overlayBlur";
 import { InfoBox } from "./InfoBox";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
+import { escapeClearsTarget } from "./escapeClears";
 import { useDismissGuard } from "./useDismissGuard";
 
 export interface SidebarItem<T extends string> {
@@ -138,7 +139,9 @@ export default function SidebarModal<T extends string>({
             (e.currentTarget as HTMLElement).focus();
           }}
           onEscapeKeyDown={(e) => {
-            if (document.querySelector("[data-capturing]")) e.preventDefault();
+            if (document.querySelector("[data-capturing]") || escapeClearsTarget(e)) {
+              e.preventDefault();
+            }
           }}
           onInteractOutside={(e) => {
             // A dropdown open over this panel makes the panel inert, so the

@@ -6,6 +6,8 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../ui/button";
+import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
+import { ESCAPE_CLEARS_ATTRIBUTE } from "../ui/escapeClears";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import type { Workspace, WorkspaceJoinRequest, WorkspaceMember } from "../../types/electron";
@@ -33,8 +35,6 @@ const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
 const HEADER_CELL =
   "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const SKELETON_ROWS = 3;
-// Stands in for the query while the title is split around it, so the query can sit in its own <bdi>.
-const QUERY_SLOT = "\uE000";
 
 export default function WorkspaceMembersTab({
   workspace,
@@ -249,6 +249,8 @@ export default function WorkspaceMembersTab({
             aria-label={t("settingsPage.workspace.people.search.placeholder")}
             onChange={(event) => onSearchQueryChange(event.target.value)}
             onKeyDown={handleSearchKeyDown}
+            // Lets the Settings dialog hold its own Escape while there is a query to clear.
+            {...{ [ESCAPE_CLEARS_ATTRIBUTE]: searchQuery ? "" : undefined }}
             className="h-[38px] rounded-xl ps-9 pe-9 text-xs [&::-webkit-search-cancel-button]:appearance-none"
           />
           {searchQuery && (
@@ -315,14 +317,13 @@ export default function WorkspaceMembersTab({
       {view.kind === "noResults" && (
         <div className={cn(TABLE_FRAME, "px-4 py-8 text-center")}>
           <p className="text-xs font-medium text-foreground">
-            {t("settingsPage.workspace.people.search.noResultsTitle", { query: QUERY_SLOT })
-              .split(QUERY_SLOT)
-              .map((part, index, parts) => (
-                <React.Fragment key={index}>
-                  {part}
-                  {index < parts.length - 1 && <bdi>{view.query}</bdi>}
-                </React.Fragment>
-              ))}
+            <BidiInterpolatedText
+              text={t("settingsPage.workspace.people.search.noResultsTitle", {
+                query: BIDI_VALUE_TOKEN,
+              })}
+              value={view.query}
+              dir="auto"
+            />
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {t("settingsPage.workspace.people.search.noResultsBody")}

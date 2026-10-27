@@ -301,6 +301,8 @@ test("search filters rows by name or email", async (t) => {
   // Members can search too, so the field does not depend on manage_members.
   assert.match(markup, /type="search"/);
   assert.match(markup, /value="rowan"/);
+  // A query to clear keeps Escape from closing the Settings dialog.
+  assert.match(markup, /data-escape-clears/);
 });
 
 test("no results shows the query and Clear search", async (t) => {
@@ -353,6 +355,8 @@ test("an empty query shows a placeholder and no clear button", async (t) => {
 
   assert.match(markup, /placeholder="settingsPage\.workspace\.people\.search\.placeholder"/);
   assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.search\.clear"/);
+  // An empty field lets Escape close the Settings dialog.
+  assert.doesNotMatch(markup, /data-escape-clears/);
 });
 
 test("Escape clears a non-empty field and is left alone on an empty one", async (t) => {
