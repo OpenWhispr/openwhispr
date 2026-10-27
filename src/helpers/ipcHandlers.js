@@ -1415,13 +1415,23 @@ class IPCHandlers {
   }
 
   _attachWhisperServerListeners(serverManager) {
-    serverManager.on("cuda-fallback", ({ reason }) => {
+    // Landing on the Vulkan pack or a bundled GPU build (#2168) keeps the GPU:
+    // no "switched to CPU" pop-up, but every GPU card re-reads to follow the server
+    serverManager.on("cuda-fallback", ({ reason, fallbackBackend }) => {
       this._recordWhisperGpuFailure("cuda", reason);
-      broadcastToWindows("cuda-fallback-notification", {});
+      if (fallbackBackend !== "cpu") {
+        broadcastToWindows("whisper-gpu-status-changed");
+      } else {
+        broadcastToWindows("cuda-fallback-notification", {});
+      }
     });
-    serverManager.on("gpu-fallback", ({ reason }) => {
+    serverManager.on("gpu-fallback", ({ reason, fallbackBackend }) => {
       this._recordWhisperGpuFailure("vulkan", reason);
-      broadcastToWindows("gpu-fallback-notification", {});
+      if (fallbackBackend !== "cpu") {
+        broadcastToWindows("whisper-gpu-status-changed");
+      } else {
+        broadcastToWindows("gpu-fallback-notification", {});
+      }
     });
     // Persist the discrete-GPU pin so later launches spawn pinned directly
     // instead of paying a second Vulkan cold start. See #1606.
@@ -1431,6 +1441,17 @@ class IPCHandlers {
     serverManager.on("vulkan-device-pin-cleared", () => {
       this._syncStartupEnv({}, ["WHISPER_VULKAN_DEVICE"]);
     });
+    // The GPU card and banner stop offering a pack (see _whisperBundledGpu)
+    serverManager.on("bundled-gpu", () => broadcastToWindows("whisper-gpu-status-changed"));
+  }
+
+  // A bundled whisper-server built for the GPU runs on it with no pack (#2168),
+  // so no pack is offered.
+  _whisperBundledGpu() {
+    const { serverManager } = this.whisperManager;
+    return (
+      !serverManager.useCuda && !serverManager.useVulkan && serverManager.getStatus().gpuAccelerated
+    );
   }
 
   // Remember the failed backend, and the error line that explains it, so the
@@ -1493,7 +1514,7 @@ class IPCHandlers {
     // Every pack download or delete and every Retry ends here, already saved.
     // Tell every window, not just the caller's: Retry on the fallback pop-up
     // runs in the dictation window, and Settings keeps up to three GPU cards
-    // mounted (#1736). A fallback is announced by its own notification.
+    // mounted (#1736). A fallback is announced where it is recorded.
     broadcastToWindows("whisper-gpu-status-changed");
     return !!modelName;
   }
@@ -2152,9 +2173,19 @@ class IPCHandlers {
       return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
     });
 
-    ipcMain.handle("db-mark-dictionary-synced", async (_event, id, cloudId) => {
-      return this.databaseManager.markDictionaryEntrySynced(id, cloudId);
-    });
+    ipcMain.handle(
+      "db-mark-dictionary-synced",
+      async (_event, id, cloudId, serverUpdatedAt, expectedWord, expectedSource, serverSource) => {
+        return this.databaseManager.markDictionaryEntrySynced(
+          id,
+          cloudId,
+          serverUpdatedAt,
+          expectedWord,
+          expectedSource,
+          serverSource
+        );
+      }
+    );
 
     ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
       return this.databaseManager.hardDeleteDictionaryEntry(id);
@@ -3719,6 +3750,7 @@ class IPCHandlers {
         gpuInfo,
         ...this._whisperGpuFailureStatus("cuda"),
         inUse: this.whisperManager.resolveGpuPackInUse() === "cuda",
+        bundledGpu: this._whisperBundledGpu(),
       };
     });
 
@@ -3783,6 +3815,7 @@ class IPCHandlers {
         hasNvidiaGpu: gpuInfo.hasNvidiaGpu,
         ...this._whisperGpuFailureStatus("vulkan"),
         inUse: this.whisperManager.resolveGpuPackInUse() === "vulkan",
+        bundledGpu: this._whisperBundledGpu(),
       };
     });
 

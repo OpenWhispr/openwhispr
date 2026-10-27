@@ -175,7 +175,7 @@ function createHandlers({ downloadError = null } = {}) {
 test("a Vulkan fallback saves its reason with the flag", () => {
   const { serverManager, envWrites } = createHandlers();
 
-  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST });
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST, fallbackBackend: "cpu" });
 
   assert.equal(process.env.WHISPER_GPU_FAILED, "vulkan");
   assert.equal(process.env.WHISPER_GPU_FAILED_REASON_VULKAN, DEVICE_LOST);
@@ -333,4 +333,57 @@ test("a pack download that fails changes nothing and announces nothing", async (
 
   assert.equal((await invoke("download-vulkan-whisper-binary")).success, false);
   assert.deepEqual(toldToReread(), []);
+});
+
+test("a bundled whisper-server running on the GPU is reported and tells every window (#2168)", async () => {
+  const { serverManager, invoke } = createHandlers();
+  const bundled = async () => [
+    (await invoke("get-cuda-whisper-status")).bundledGpu,
+    (await invoke("get-vulkan-whisper-status")).bundledGpu,
+  ];
+  assert.deepEqual(await bundled(), [false, false], "no server running");
+
+  // A start with no pack flags whose log says it initialized CUDA
+  Object.assign(serverManager, { ready: true, process: {}, activeGpuBackend: "cuda" });
+  serverManager.emit("bundled-gpu");
+
+  assert.deepEqual(await bundled(), [true, true]);
+  assert.deepEqual(toldToReread(), [
+    ["dictation", undefined],
+    ["control-panel", undefined],
+  ]);
+
+  serverManager.useCuda = true;
+  assert.deepEqual(await bundled(), [false, false], "a pack's GPU is not the bundled server's");
+});
+
+test("a CUDA failure that lands on Vulkan is saved, with no CPU pop-up, and every window re-reads", () => {
+  const { serverManager, envWrites } = createHandlers();
+
+  serverManager.emit("cuda-fallback", { reason: KERNEL_IMAGE, fallbackBackend: "vulkan" });
+
+  assert.equal(process.env.WHISPER_GPU_FAILED, "cuda");
+  assert.equal(envWrites.at(-1).WHISPER_GPU_FAILED_REASON_CUDA, KERNEL_IMAGE);
+  assert.deepEqual(
+    broadcasts.map(({ window, channel, failed }) => [window, channel, failed]),
+    [
+      ["dictation", STATUS_CHANGED, "cuda"],
+      ["control-panel", STATUS_CHANGED, "cuda"],
+    ]
+  );
+});
+
+test("a Vulkan failure that lands on a bundled GPU build is saved, with no CPU pop-up (#2168)", () => {
+  const { serverManager } = createHandlers();
+
+  serverManager.emit("gpu-fallback", { reason: DEVICE_LOST, fallbackBackend: "cuda" });
+
+  assert.equal(process.env.WHISPER_GPU_FAILED, "vulkan");
+  assert.deepEqual(
+    broadcasts.map(({ window, channel }) => [window, channel]),
+    [
+      ["dictation", STATUS_CHANGED],
+      ["control-panel", STATUS_CHANGED],
+    ]
+  );
 });

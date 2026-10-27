@@ -104,6 +104,12 @@ In the generated Xcode workspace, select your Apple development team for the mai
 
 Maintainers shipping a separate fork must also replace the organization-specific Expo owner, Apple team, EAS project, update URL, and App Store submission values in `app.base.json` and `eas.json`. Those release settings are separate from the local identity overrides above.
 
+## Dependency Overrides
+
+`package.json` can't carry comments, so the reason for each entry under `overrides` is kept here. Remove an override once the package it patches no longer needs it.
+
+- `@expo/cli` → `zod` 4.6.7: `@expo/cli` 55 declares `zod ^3.25`, and no zod 3 release fixes GHSA-mrhx-c7xc-m3w5, which fails the Mobile CI audit. The CLI uses zod only to validate dev tools plugins, which works on zod 4. Drop this once `@expo/cli` depends on zod 4.
+
 ## Pull Request Checklist
 
 Before submitting:

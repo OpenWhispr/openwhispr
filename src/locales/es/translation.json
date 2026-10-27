@@ -1807,6 +1807,8 @@
       },
       "rollingWeeklyLimit": "Límite semanal móvil",
       "signOut": {
+        "endMeetingDescription": "Al cerrar sesión se detiene la grabación de la reunión en curso. Lo capturado hasta ahora se queda en su nota.",
+        "endMeetingTitle": "¿Detener la grabación de la reunión?",
         "failedDescription": "Algo salió mal al cerrar sesión. Inténtalo de nuevo.",
         "failedTitle": "No se pudo cerrar sesión",
         "signOut": "Cerrar sesión",
@@ -3744,7 +3746,6 @@
     "upload": "Subir",
     "dictionary": "Diccionario",
     "referral": "Obtener un mes gratis",
-    "inviteTeam": "Invita a tu equipo",
     "settings": "Configuración",
     "support": "Soporte",
     "limitReached": "Límite semanal de la nube alcanzado",
@@ -3758,7 +3759,7 @@
     "learnMore": "Más información",
     "integrations": "Integraciones",
     "defaultUser": "Usuario",
-    "notSignedIn": "Sin sesión iniciada",
+    "accountMenu": "Cuenta: {{name}}",
     "chat": "Chat",
     "collapse": "Contraer barra lateral",
     "expand": "Expandir barra lateral"
@@ -3821,6 +3822,12 @@
     "active": "Aceleración GPU activa",
     "ready": "Aceleración GPU lista",
     "activating": "Activando GPU...",
+    "activeBackend": "Aceleración {{backend}} activa",
+    "readyBackend": "Aceleración {{backend}} lista",
+    "activatingBackend": "Activando {{backend}}...",
+    "enableBackend": "Activar {{backend}}",
+    "cudaDescription": "Aceleración CUDA para GPU NVIDIA compatibles. Requiere un controlador NVIDIA actual y compatible.",
+    "vulkanDescription": "Aceleración Vulkan para GPU AMD, Intel y NVIDIA compatibles.",
     "activationFailed": "Aceleración GPU no disponible",
     "activationFailedDescription": "OpenWhispr cambió a la transcripción por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr cambió al procesamiento por CPU.",
@@ -4754,7 +4761,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "create": "Crear espacio de trabajo…",
+      "add": "Añadir espacio de trabajo",
+      "invitePeople": "Invitar personas"
     },
     "create": {
       "title": "Crear espacio de trabajo",

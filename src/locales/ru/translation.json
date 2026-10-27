@@ -1663,6 +1663,8 @@
       },
       "rollingWeeklyLimit": "Скользящий недельный лимит",
       "signOut": {
+        "endMeetingDescription": "При выходе из аккаунта запись текущей встречи остановится. Всё записанное до этого момента останется в её заметке.",
+        "endMeetingTitle": "Остановить запись встречи?",
         "failedDescription": "Произошла ошибка при выходе. Попробуйте ещё раз.",
         "failedTitle": "Не удалось выйти",
         "signOut": "Выйти",
@@ -3736,7 +3738,6 @@
     "upload": "Загрузить",
     "dictionary": "Словарь",
     "referral": "Получить бесплатный месяц",
-    "inviteTeam": "Пригласите команду",
     "settings": "Настройки",
     "support": "Поддержка",
     "limitReached": "Недельный облачный лимит достигнут",
@@ -3750,7 +3751,7 @@
     "learnMore": "Узнать больше",
     "integrations": "Интеграции",
     "defaultUser": "Пользователь",
-    "notSignedIn": "Не авторизован",
+    "accountMenu": "Аккаунт: {{name}}",
     "chat": "Чат",
     "collapse": "Свернуть боковую панель",
     "expand": "Развернуть боковую панель"
@@ -3813,6 +3814,12 @@
     "active": "Ускорение GPU активно",
     "ready": "Ускорение GPU готово",
     "activating": "Активация GPU...",
+    "activeBackend": "Ускорение {{backend}} активно",
+    "readyBackend": "Ускорение {{backend}} готово",
+    "activatingBackend": "Активация {{backend}}...",
+    "enableBackend": "Включить {{backend}}",
+    "cudaDescription": "Ускорение CUDA для поддерживаемых GPU NVIDIA. Требуется актуальный совместимый драйвер NVIDIA.",
+    "vulkanDescription": "Ускорение Vulkan для совместимых GPU AMD, Intel и NVIDIA.",
     "activationFailed": "Ускорение GPU недоступно",
     "activationFailedDescription": "OpenWhispr переключился на транскрипцию на CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr переключился на обработку на CPU.",
@@ -4798,7 +4805,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Рабочие пространства",
-      "create": "Создать рабочее пространство…"
+      "create": "Создать рабочее пространство…",
+      "add": "Добавить рабочее пространство",
+      "invitePeople": "Пригласить людей"
     },
     "create": {
       "title": "Создать рабочее пространство",

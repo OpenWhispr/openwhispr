@@ -5,6 +5,8 @@ import { Button } from "../ui/button";
 
 interface IntegrationsPaneProps {
   title: string;
+  /** Shown beside the title, e.g. a beta pill. */
+  titleBadge?: ReactNode;
   description: ReactNode;
   docsUrl?: string;
   actions?: ReactNode;
@@ -14,6 +16,7 @@ interface IntegrationsPaneProps {
 /** One Integrations section: a header with its actions, then the section's content. */
 export function IntegrationsPane({
   title,
+  titleBadge,
   description,
   actions,
   docsUrl,
@@ -26,9 +29,12 @@ export function IntegrationsPane({
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="flex-1 basis-60 min-w-0">
           {/* Focusable so a link that opens another section can move focus here. */}
-          <h2 tabIndex={-1} className="text-base text-foreground outline-none">
-            {title}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 tabIndex={-1} className="text-base text-foreground outline-none">
+              {title}
+            </h2>
+            {titleBadge}
+          </div>
           <p className="text-xs text-muted-foreground/80 mt-1 leading-relaxed">{description}</p>
         </div>
         {(docsUrl || actions) && (

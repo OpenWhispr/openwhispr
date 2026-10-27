@@ -189,14 +189,14 @@ function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element 
   const toggleNoteChat = useConfigToggle('noteChatEnabled');
   return (
     <WorkflowSwitchCard
-      title="Enable Note Chat"
-      label="Note Chat"
+      title="Enable Chat"
+      label="Chat"
       description="Ask questions about your notes and get answers from them."
       icon="bubble.left.and.bubble.right"
       mdIcon="MessagesSquare"
       enabled={enabled}
       onToggle={toggleNoteChat}
-      offNote="Notes don’t offer Ask about this note while note chat is off."
+      offNote="The Chat tab and Ask about this note are off while chat is off."
     />
   );
 }

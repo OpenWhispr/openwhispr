@@ -4,6 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
+import { defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -114,11 +115,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         if (generation !== accountGeneration) return;
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
-        const resolvedActiveId = stillValid
-          ? activeId
-          : workspaces.length === 1
-            ? workspaces[0].id
-            : null;
+        const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
         set({
           workspaces,
           loaded: true,

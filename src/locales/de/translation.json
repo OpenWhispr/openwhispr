@@ -2049,6 +2049,8 @@
       },
       "rollingWeeklyLimit": "Rollierendes Wochenlimit",
       "signOut": {
+        "endMeetingDescription": "Beim Abmelden wird die laufende Meeting-Aufnahme beendet. Was bisher aufgenommen wurde, bleibt in der Notiz.",
+        "endMeetingTitle": "Meeting-Aufnahme beenden?",
         "failedDescription": "Beim Abmelden ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
         "failedTitle": "Abmeldung fehlgeschlagen",
         "signOut": "Abmelden",
@@ -3000,7 +3002,6 @@
     "upload": "Hochladen",
     "dictionary": "Wörterbuch",
     "referral": "Gratis-Monat erhalten",
-    "inviteTeam": "Team einladen",
     "settings": "Einstellungen",
     "support": "Support",
     "limitReached": "Wöchentliches Cloud-Limit erreicht",
@@ -3014,7 +3015,7 @@
     "learnMore": "Mehr erfahren",
     "integrations": "Integrationen",
     "defaultUser": "Benutzer",
-    "notSignedIn": "Nicht angemeldet",
+    "accountMenu": "Konto: {{name}}",
     "chat": "Chat",
     "collapse": "Seitenleiste einklappen",
     "expand": "Seitenleiste ausklappen"
@@ -3022,7 +3023,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Workspaces",
-      "create": "Workspace erstellen…"
+      "create": "Workspace erstellen…",
+      "add": "Workspace hinzufügen",
+      "invitePeople": "Personen einladen"
     },
     "create": {
       "title": "Workspace erstellen",
@@ -3939,6 +3942,12 @@
     "active": "GPU-Beschleunigung aktiv",
     "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
+    "activeBackend": "{{backend}}-Beschleunigung aktiv",
+    "readyBackend": "{{backend}}-Beschleunigung bereit",
+    "activatingBackend": "{{backend}} wird aktiviert...",
+    "enableBackend": "{{backend}} aktivieren",
+    "cudaDescription": "CUDA-Beschleunigung für unterstützte NVIDIA-GPUs. Erfordert einen aktuellen kompatiblen NVIDIA-Treiber.",
+    "vulkanDescription": "Vulkan-Beschleunigung für kompatible AMD-, Intel- und NVIDIA-GPUs.",
     "activationFailed": "GPU-Beschleunigung nicht verfügbar",
     "activationFailedDescription": "OpenWhispr verwendet die CPU-Transkription.",
     "reasoningActivationFailedDescription": "OpenWhispr verwendet die CPU-Verarbeitung.",

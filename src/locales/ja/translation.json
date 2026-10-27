@@ -1755,6 +1755,8 @@
       },
       "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
+        "endMeetingDescription": "サインアウトすると、録音中の会議が終了します。それまでに記録された内容はノートに残ります。",
+        "endMeetingTitle": "会議の録音を終了しますか？",
         "failedDescription": "サインアウト中に問題が発生しました。もう一度お試しください。",
         "failedTitle": "サインアウトできませんでした",
         "signOut": "サインアウト",
@@ -3692,7 +3694,6 @@
     "upload": "アップロード",
     "dictionary": "辞書",
     "referral": "1か月無料を取得",
-    "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
     "limitReached": "週間のクラウド上限に達しました",
@@ -3706,7 +3707,7 @@
     "learnMore": "詳しく見る",
     "integrations": "連携",
     "defaultUser": "ユーザー",
-    "notSignedIn": "未サインイン",
+    "accountMenu": "アカウント：{{name}}",
     "chat": "チャット",
     "collapse": "サイドバーを折りたたむ",
     "expand": "サイドバーを展開"
@@ -3769,6 +3770,12 @@
     "active": "GPU アクセラレーション有効",
     "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
+    "activeBackend": "{{backend}} アクセラレーション有効",
+    "readyBackend": "{{backend}} アクセラレーション準備完了",
+    "activatingBackend": "{{backend}} を有効化中...",
+    "enableBackend": "{{backend}} を有効化",
+    "cudaDescription": "対応する NVIDIA GPU 向けの CUDA アクセラレーションです。現在の互換性のある NVIDIA ドライバーが必要です。",
+    "vulkanDescription": "対応する AMD、Intel、NVIDIA GPU 向けの Vulkan アクセラレーションです。",
     "activationFailed": "GPU アクセラレーションを利用できません",
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
@@ -4754,7 +4761,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "ワークスペース",
-      "create": "ワークスペースを作成…"
+      "create": "ワークスペースを作成…",
+      "add": "ワークスペースを追加",
+      "invitePeople": "メンバーを招待"
     },
     "create": {
       "title": "ワークスペースを作成",

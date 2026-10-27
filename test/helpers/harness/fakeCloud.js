@@ -1,7 +1,8 @@
 // In-memory stand-in for the cloud API behind window.electronAPI.cloudApiRequest.
 // Notes and folders are modelled with the hardened server's real write rules,
-// conversations only on the read side; the other entity types exist only so a
-// full syncAll() pass can complete.
+// conversations only on the read side, dictionary words on the read side plus
+// delete; the other entity types exist only so a full syncAll() pass can
+// complete.
 //
 // Each hardening rule sits behind its own flag so a test can flip the server
 // back to the legacy behaviour and prove the client still does not lose data:
@@ -58,6 +59,8 @@ const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 // rides along as a plain stored field.
 const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
 
+const DICTIONARY_FIELDS = ["word", "source"];
+
 const NOTE_DEFAULTS = {
   title: null,
   content: "",
@@ -79,6 +82,8 @@ const FOLDER_DEFAULTS = { name: "", is_default: false, sort_order: 0 };
 
 const CONVERSATION_DEFAULTS = { title: "Untitled", archived_at: null, messages: [] };
 
+const DICTIONARY_DEFAULTS = { word: "", source: "manual" };
+
 function createFakeCloud(config = {}) {
   const cfg = {
     materialPatchGate: true,
@@ -91,6 +96,7 @@ function createFakeCloud(config = {}) {
   const notes = new Map();
   const folders = new Map();
   const conversations = new Map();
+  const dictionary = new Map();
   const log = [];
   const failures = [];
   let seq = 0;
@@ -219,6 +225,13 @@ function createFakeCloud(config = {}) {
     clientKey: "client_conversation_id",
     prefix: "conv",
   };
+  const dictionaryCollection = {
+    store: dictionary,
+    fields: DICTIONARY_FIELDS,
+    defaults: DICTIONARY_DEFAULTS,
+    clientKey: "client_dict_id",
+    prefix: "dict",
+  };
 
   // Snapshot paging walks created_at backwards from `before` and hides
   // tombstones; delta paging walks updated_at forwards from `since` and must
@@ -260,6 +273,47 @@ function createFakeCloud(config = {}) {
     }
 
     return rows.slice(0, limit).map((row) => structuredClone(row));
+  }
+
+  // The dictionary list pages forwards, unlike notes: the default list and its
+  // `cursor` continuation walk live rows by (created_at, id); `since` streams
+  // every row, tombstones included, by (updated_at, id). Either timestamp
+  // without its id half is an inclusive bound, as on the server.
+  function dictionaryPage(query) {
+    const limitRaw = Number(query.get("limit"));
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 200;
+    const since = query.get("since");
+    const cursor = query.get("cursor");
+    const sinceId = query.get("since_id");
+    const cursorId = query.get("cursor_id");
+    if ((sinceId && !since) || (cursorId && !cursor) || (since && cursor)) {
+      throw new HttpError(400, "malformed dictionary keyset", "bad_request");
+    }
+
+    const orderKey = since ? "updated_at" : "created_at";
+    const bound = since ?? cursor;
+    const boundId = since ? sinceId : cursorId;
+    let rows = [...dictionary.values()];
+    if (!since) rows = rows.filter((r) => !r.deleted_at);
+    if (bound) {
+      const at = normalizeTimestamp(bound);
+      rows = rows.filter((r) => {
+        const timestampOrder = compare(normalizeTimestamp(r[orderKey]), at);
+        return boundId
+          ? timestampOrder > 0 || (timestampOrder === 0 && r.id > boundId)
+          : timestampOrder >= 0;
+      });
+    }
+    rows.sort(
+      (a, b) =>
+        compare(normalizeTimestamp(a[orderKey]), normalizeTimestamp(b[orderKey])) ||
+        compare(a.id, b.id)
+    );
+
+    return {
+      entries: rows.slice(0, limit).map((row) => structuredClone(row)),
+      hasMore: rows.length > limit,
+    };
   }
 
   function handle(method, pathname, query, body) {
@@ -368,7 +422,10 @@ function createFakeCloud(config = {}) {
       case "GET /api/transcriptions/list":
         return { transcriptions: [] };
       case "GET /api/dictionary/list":
-        return { entries: [], hasMore: false };
+        return dictionaryPage(query);
+      case "DELETE /api/dictionary/delete":
+        tombstone(dictionaryCollection, body?.id);
+        return {};
       case "POST /api/dictionary/batch-create":
         return { created: [] };
       case "GET /api/snippets/list":
@@ -448,6 +505,7 @@ function createFakeCloud(config = {}) {
       if (input.deleted_at) row.deleted_at = toIso(input.deleted_at);
       return structuredClone(row);
     },
+    seedDictionaryEntry: (input) => structuredClone(insertRow(dictionaryCollection, input)),
     notes: () => [...notes.values()].map((row) => structuredClone(row)),
     folders: () => [...folders.values()].map((row) => structuredClone(row)),
     conversations: () => [...conversations.values()].map((row) => structuredClone(row)),
