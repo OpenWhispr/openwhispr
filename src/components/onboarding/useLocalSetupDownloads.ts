@@ -18,15 +18,14 @@ import logger from "../../utils/logger";
 import {
   activeItem,
   allEnabledDone,
-  claimLocalSetupDownload,
   createLocalSetupDownloadState,
   localSetupItemKey,
   reduce,
-  releaseLocalSetupDownload,
   rowPercent,
   rowStatus,
   type RowStatus,
 } from "./localSetupDownloadState";
+import { claimLocalSetupDownload, releaseLocalSetupDownload } from "./localSetupDownloadClaims";
 
 export interface LocalSetupRowProgress {
   status: RowStatus;

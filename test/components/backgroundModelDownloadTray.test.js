@@ -79,7 +79,7 @@ async function createTrayHarness(t) {
     "/components/onboarding/BackgroundModelDownloadTray.tsx"
   );
   const registry = await vite.ssrLoadModule(
-    "/components/onboarding/localSetupDownloadState.ts"
+    "/components/onboarding/localSetupDownloadClaims.ts"
   );
   let tree;
   function Harness() {

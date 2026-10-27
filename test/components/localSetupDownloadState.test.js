@@ -259,7 +259,7 @@ test("percent is weighted by bytes across a row's items", async () => {
 });
 
 test("local-setup downloads stay identifiable a short while after they end", async () => {
-  const m = await load();
+  const m = await import("../../src/components/onboarding/localSetupDownloadClaims.ts");
   const item = { kind: "parakeet", id: "test-model" };
   assert.equal(m.isLocalSetupDownload("parakeet", "test-model"), false);
 

@@ -26,7 +26,7 @@ import type {
 import { isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { AnimatedEllipsis } from "./AnimatedEllipsis";
 import { ONBOARDING_SESSION_KEY, isDownloadOwningOnboardingStepActive } from "./flow";
-import { isLocalSetupDownload } from "./localSetupDownloadState";
+import { isLocalSetupDownload } from "./localSetupDownloadClaims";
 import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
