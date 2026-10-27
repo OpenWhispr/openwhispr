@@ -359,6 +359,14 @@ export function useChatStreaming({
           responseAnnounced = true;
           if (!options?.suppressResponseContent) onResponseContent?.();
         };
+        // Answers the already-appended user message with one line instead of a dead end.
+        const answerWithLine = (content: string) => {
+          announceResponse();
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: "assistant", content, isStreaming: false },
+          ]);
+        };
         const settings = getSettings();
         const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
           inferenceScope,
@@ -378,20 +386,11 @@ export function useChatStreaming({
           !isAgentAllowed(policyState) ||
           !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
         ) {
-          // The user message is already appended; answer it instead of dead-ending silently.
-          const restriction = !isAgentAllowed(policyState)
-            ? t("common.policyAgentRestricted")
-            : t("common.policyAiProcessingRestricted");
-          announceResponse();
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: restriction,
-              isStreaming: false,
-            },
-          ]);
+          answerWithLine(
+            !isAgentAllowed(policyState)
+              ? t("common.policyAgentRestricted")
+              : t("common.policyAiProcessingRestricted")
+          );
           return;
         }
 
@@ -399,16 +398,7 @@ export function useChatStreaming({
         // at setup): nothing on this device can answer, and Cloud is not the
         // fallback. Say where to turn it on.
         if (llmMode === "local" && !llmConfig.model.trim()) {
-          announceResponse();
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: t("chat.localModelMissing"),
-              isStreaming: false,
-            },
-          ]);
+          answerWithLine(t("chat.localModelMissing"));
           return;
         }
 
