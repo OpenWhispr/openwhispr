@@ -1712,7 +1712,8 @@ class HotkeyManager extends EventEmitter {
 
   getHyprlandConfigStatus() {
     if (!this.hyprlandManager) return null;
-    return HyprlandShortcutManager.getHyprlandConfigStatus();
+    const status = HyprlandShortcutManager.getHyprlandConfigStatus();
+    return { ...status, canWrite: status.canWrite && !this.hyprlandManager.persistencePending };
   }
 
   isUsingKDE() {

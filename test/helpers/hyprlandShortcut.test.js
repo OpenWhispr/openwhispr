@@ -588,6 +588,41 @@ test(
   })
 );
 
+for (const filename of ["hyprland.lua", "openwhispr-binds.lua"]) {
+  test(
+    `reports and recovers from a non-writable symlink target directory for ${filename}`,
+    { skip: process.platform === "win32" || process.getuid?.() === 0 },
+    withTempHyprConfig(async (configDir) => {
+      const targetDir = path.join(configDir, "dotfiles");
+      fs.mkdirSync(targetDir, { recursive: true });
+      const configPath = path.join(configDir, "hyprland.lua");
+      const targetPath = path.join(targetDir, filename);
+      fs.writeFileSync(targetPath, "-- original\n", { mode: 0o644 });
+      if (filename !== "hyprland.lua") fs.writeFileSync(configPath, "-- main config\n");
+      fs.symlinkSync(targetPath, path.join(configDir, filename));
+      const HyprlandShortcutManager = loadManager(successfulHyprctl("lua").execFileSync);
+      const manager = new HyprlandShortcutManager();
+
+      fs.chmodSync(targetDir, 0o555);
+      try {
+        assert.equal(await manager.registerKeybinding("F8"), true);
+        assert.equal(manager.persistencePending, true);
+        assert.equal(fs.readFileSync(targetPath, "utf8"), "-- original\n");
+        assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, false);
+      } finally {
+        fs.chmodSync(targetDir, 0o755);
+      }
+
+      assert.equal(await manager.registerKeybinding("F8"), true);
+      assert.equal(manager.persistencePending, false);
+      assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, true);
+      assert.equal(fs.lstatSync(path.join(configDir, filename)).isSymbolicLink(), true);
+      assert.match(fs.readFileSync(configPath, "utf8"), /pcall\(require,/);
+      assert.match(fs.readFileSync(path.join(configDir, "openwhispr-binds.lua"), "utf8"), /F8/);
+    })
+  );
+}
+
 test(
   "removes the previous header wording when rewriting managed binds",
   withTempHyprConfig(async (configDir) => {

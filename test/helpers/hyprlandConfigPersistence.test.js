@@ -104,6 +104,25 @@ for (const [name, content] of [
     }));
 }
 
+for (const [name, expression] of [
+  ["table", (loader) => `false and {\n  ${loader}\n}`],
+  ["parenthesized expression", (loader) => `false and (\n  ${loader}\n)`],
+  ["call argument", (loader) => `false and tostring(\n  ${loader}\n)`],
+]) {
+  test(`adds an unconditional loader without damaging a skipped ${name}`, () =>
+    fixture((manager, config) => {
+      const loader = `pcall(require, ${JSON.stringify(config.bindsPath)})`;
+      const prefix = `local optional = ${expression(loader)}\n`;
+      fs.writeFileSync(config.path, `${prefix}return {}\n`);
+
+      assert.equal(manager._ensureSourceInMainConfig(config), true);
+      assert.equal(fs.readFileSync(config.path, "utf8"), `${prefix}${loader}\nreturn {}\n`);
+      const before = fs.statSync(config.path);
+      assert.equal(manager._ensureSourceInMainConfig(config), true);
+      assert.equal(fs.statSync(config.path).ino, before.ino);
+    }));
+}
+
 test("failed atomic replacement leaves the original target and symlink intact", () =>
   fixture((manager, config, dir) => {
     const target = path.join(dir, "source.lua");
