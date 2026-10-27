@@ -10,11 +10,12 @@ const { readActiveGpu } = require("../utils/vulkanDetection");
 const SYSTEM_PROFILER_TIMEOUT_MS = 10000;
 const POWERSHELL_TIMEOUT_MS = 15000;
 
+// Text firmware leaves in when the maker never filled the field in
 const PLACEHOLDER =
-  /to be filled|system (product name|manufacturer)|default string|not applicable|^none$|^$/i;
+  /to be filled|system (product name|manufacturer|version|name)|default string|not (applicable|specified)|^o\.e\.m\.?$|^none$|^$/i;
 
 const MAKER_NAMES = [
-  [/ASUSTeK/i, "ASUS"],
+  [/^ASUS/i, "ASUS"], // "ASUSTeK COMPUTER INC." and a plain "ASUS"
   [/Hewlett[- ]Packard/i, "HP"],
   [/Micro-Star/i, "MSI"],
 ];
@@ -44,7 +45,7 @@ function cleanProcessorName(raw) {
     .replace(/\((R|TM)\)/gi, "")
     .replace(/\s+@\s*[\d.]+\s*GHz.*$/i, "")
     .replace(/\s+CPU\b.*$/i, "")
-    .replace(/\s+with\s+Radeon.*$/i, "")
+    .replace(/\s+(with|w\/)\s*Radeon.*$/i, "")
     .replace(/\s+\d+-Core Processor$/i, "")
     .replace(/\s+Processor$/i, "")
     .replace(/\s+/g, " ")
@@ -104,7 +105,9 @@ function cleanGraphicsName(raw) {
     .replace(/\s+Direct3D\d*.*$/i, "")
     .replace(/\s+/g, " ")
     .trim();
-  return text || null;
+  // Linux: "Mesa Intel UHD Graphics 620 (KBL GT2)"; the bracket is the driver's codename
+  const mesa = text.match(/^Mesa\s+(.+?)(\s*\([^()]*\))?$/i);
+  return (mesa ? mesa[1] : text) || null;
 }
 
 function run(execFileImpl, file, args, options) {
@@ -268,28 +271,32 @@ async function buildProfile(d) {
   };
 }
 
-// Read once per process; the answer does not change while the app runs.
+function fallbackProfile(deps) {
+  return {
+    platform: deps.platform ?? process.platform,
+    arch: deps.arch ?? process.arch,
+    name: null,
+    formFactor: "desktop",
+    processorName: "",
+    appleChip: null,
+    memoryGb: 0,
+    graphicsName: null,
+    nvidia: null,
+    parakeetSupported: false,
+    systemLanguage: "en",
+  };
+}
+
+// Read once per process; the answer does not change while the app runs. A build
+// that failed outright is not that answer, so the next read tries again.
 function readComputerProfile(deps = {}) {
   if (!profilePromise) {
-    profilePromise = (async () => {
-      try {
-        return await buildProfile(resolveDeps(deps));
-      } catch {
-        return {
-          platform: deps.platform ?? process.platform,
-          arch: deps.arch ?? process.arch,
-          name: null,
-          formFactor: "desktop",
-          processorName: "",
-          appleChip: null,
-          memoryGb: 0,
-          graphicsName: null,
-          nvidia: null,
-          parakeetSupported: false,
-          systemLanguage: "en",
-        };
-      }
-    })();
+    profilePromise = Promise.resolve()
+      .then(() => buildProfile(resolveDeps(deps)))
+      .catch(() => {
+        profilePromise = null;
+        return fallbackProfile(deps);
+      });
   }
   return profilePromise;
 }

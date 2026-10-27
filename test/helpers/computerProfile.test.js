@@ -103,6 +103,17 @@ test("cleans processor names", () => {
   assert.equal(cleanProcessorName(undefined), "");
 });
 
+test("drops the built-in Radeon from an AMD processor name", () => {
+  assert.equal(
+    cleanProcessorName("AMD Ryzen 7 7840HS w/ Radeon 780M Graphics"),
+    "AMD Ryzen 7 7840HS"
+  );
+  assert.equal(
+    cleanProcessorName("AMD Ryzen 5 5500U with Radeon Graphics"),
+    "AMD Ryzen 5 5500U"
+  );
+});
+
 test("parses Apple chip generation and tier", () => {
   assert.deepEqual(parseAppleChip("Apple M5 Pro"), { generation: 5, tier: "Pro" });
   assert.deepEqual(parseAppleChip("Apple M1"), { generation: 1, tier: "" });
@@ -155,6 +166,18 @@ test("builds a maker model name", () => {
 test("a Lenovo with no readable version has no usable name", () => {
   assert.equal(makerModelName({ maker: "LENOVO", model: "21AH00FKUS", version: "None" }), null);
   assert.equal(makerModelName({ maker: "LENOVO", model: "21AH00FKUS" }), null);
+});
+
+test("firmware placeholders such as System Version never become a name", () => {
+  const lenovo = { maker: "LENOVO", model: "21AH00FKUS" };
+  assert.equal(makerModelName({ ...lenovo, version: "System Version" }), null);
+  assert.equal(makerModelName({ maker: "Acer", model: "System Name" }), null);
+  assert.equal(makerModelName({ maker: "Acer", model: "Not Specified" }), null);
+  assert.equal(makerModelName({ maker: "O.E.M.", model: "Aspire 5" }), "Aspire 5");
+});
+
+test("a plain ASUS maker keeps its capitals", () => {
+  assert.equal(makerModelName({ maker: "ASUS", model: "Vivobook 15" }), "ASUS Vivobook 15");
 });
 
 test("reads a Mac", async () => {
@@ -368,6 +391,18 @@ test("a Linux desktop has no battery and placeholder DMI gives the generic name"
   assert.equal(profile.formFactor, "desktop");
 });
 
+test("a Linux Mesa renderer drops Mesa and the codename bracket", async () => {
+  const renderer =
+    "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6 (Core Profile) Mesa 23.2.1)";
+  const deps = baseDeps({
+    getGPUInfo: async () => ({
+      auxAttributes: { glRenderer: renderer },
+      gpuDevice: [{ vendorId: 0x8086, active: true }],
+    }),
+  });
+  assert.equal((await readComputerProfile(deps)).graphicsName, "Intel UHD Graphics 620");
+});
+
 test("rounds 15.7 GiB to 16 GB", async () => {
   const profile = await readComputerProfile(baseDeps({ os: fakeOs({ totalmem: 15.7 * GIB }) }));
   assert.equal(profile.memoryGb, 16);
@@ -479,6 +514,23 @@ test("reads once per process", async () => {
   clearCache();
   await readComputerProfile(deps);
   assert.equal(calls.length, 2);
+});
+
+test("a whole-read failure is not kept for the process", async () => {
+  let reads = 0;
+  const deps = baseDeps();
+  // A getter that throws breaks the whole build, not one field
+  Object.defineProperty(deps, "os", {
+    get() {
+      reads++;
+      if (reads === 1) throw new Error("boom");
+      return fakeOs();
+    },
+  });
+  const failed = await readComputerProfile(deps);
+  assert.equal(failed.memoryGb, 0);
+  const retried = await readComputerProfile(deps);
+  assert.equal(retried.memoryGb, 16);
 });
 
 test("two reads started together share one read", async () => {
