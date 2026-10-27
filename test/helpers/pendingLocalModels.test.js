@@ -48,7 +48,7 @@ test("a completion cannot consume a different pending model", async () => {
   assert.equal(pending.hasPendingLocalModels(), false);
 });
 
-test("pending selections can be cleared when onboarding finishes on another mode", async () => {
+test("finishing onboarding drops every pending pick and the tray's flag", async () => {
   global.localStorage = createStorage();
   const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
 
@@ -56,20 +56,10 @@ test("pending selections can be cleared when onboarding finishes on another mode
     dictation: { provider: "whisper", modelId: "base" },
     assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" },
   });
-  pending.clearPendingLocalModels();
-
-  assert.deepEqual(pending.readPendingLocalModels(), {});
-  assert.equal(pending.hasPendingLocalModels(), false);
-});
-
-test("finishing onboarding drops the pending pick and the tray's flag", async () => {
-  global.localStorage = createStorage();
-  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
-
-  seedPending({ assistant: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } });
   localStorage.setItem("localSetupPending", "true");
   pending.discardPendingLocalSetup();
 
+  assert.deepEqual(pending.readPendingLocalModels(), {});
   assert.equal(pending.hasPendingLocalModels(), false);
   assert.equal(localStorage.getItem("localSetupPending"), null);
 });
