@@ -39,7 +39,7 @@ export function RemoveMemberDialog({
             ? t("settingsPage.workspace.members.removed", { name })
             : t("workspaces.removeMember.alreadyRemoved", { name }),
       });
-      dispatch({ type: "dismiss" });
+      dispatch({ type: "succeeded" });
     } catch (error) {
       dispatch({ type: "failed", error: classifyRowActionError(error) });
     }

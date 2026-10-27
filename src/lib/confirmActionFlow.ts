@@ -1,8 +1,9 @@
 import type { RowActionError } from "./workspaceErrors";
 
 // Pure state machine for a confirm → running → failed dialog over one subject (a member, an
-// invitation). A success is not an event: the caller dispatches `dismiss` once the action
-// resolves, so the dialog has nothing to show for it.
+// invitation). A success has no screen of its own: the caller dispatches `succeeded` once the
+// action resolves and the dialog closes. `dismiss` is the user's way out and is ignored while
+// the request runs, so it can't report a success.
 export type ConfirmActionState<S> =
   | { kind: "closed" }
   | { kind: "confirm" | "running"; subject: S }
@@ -12,6 +13,7 @@ export type ConfirmActionEvent<S> =
   | { type: "open"; subject: S }
   | { type: "confirm" }
   | { type: "failed"; error: RowActionError }
+  | { type: "succeeded" }
   | { type: "dismiss" };
 
 export function confirmActionReducer<S>(
@@ -31,6 +33,8 @@ export function confirmActionReducer<S>(
       return state.kind === "running"
         ? { kind: "failed", subject: state.subject, error: event.error }
         : state;
+    case "succeeded":
+      return state.kind === "running" ? { kind: "closed" } : state;
     case "dismiss":
       return state.kind === "running" || state.kind === "closed" ? state : { kind: "closed" };
   }

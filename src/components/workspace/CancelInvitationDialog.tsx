@@ -42,7 +42,7 @@ export function CancelInvitationDialog({
       }
     }
     toast({ title: t("workspaces.cancelInvitation.done") });
-    dispatch({ type: "dismiss" });
+    dispatch({ type: "succeeded" });
     onCanceled();
   };
 

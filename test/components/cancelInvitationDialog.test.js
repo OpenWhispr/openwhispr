@@ -73,6 +73,7 @@ async function loadDialog(t) {
     "/components/workspace/CancelInvitationDialog.tsx"
   );
   const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
+  const { confirmActionReducer } = await vite.ssrLoadModule("/lib/confirmActionFlow.ts");
   const events = [];
   const canceled = [];
   const render = (state) =>
@@ -84,7 +85,7 @@ async function loadDialog(t) {
         onCanceled: () => canceled.push(true),
       })
     );
-  return { render, events, canceled, CloudApiError };
+  return { render, events, canceled, CloudApiError, confirmActionReducer };
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -146,7 +147,7 @@ test("a refusal shows the server's message", async (t) => {
   assert.doesNotMatch(markup, /workspaces\.cancelInvitation\.failed/);
 });
 
-test("confirming revokes, toasts, dismisses and reports", async (t) => {
+test("confirming revokes, toasts, closes and reports", async (t) => {
   const { render, events, canceled } = await loadDialog(t);
 
   render(confirmState);
@@ -156,7 +157,7 @@ test("confirming revokes, toasts, dismisses and reports", async (t) => {
   assert.deepEqual(globalThis.__revokeCalls, [["w1", "inv-1"]]);
   assert.deepEqual(
     events.map((event) => event.type),
-    ["confirm", "dismiss"]
+    ["confirm", "succeeded"]
   );
   assert.equal(globalThis.__toasts.length, 1);
   assert.equal(globalThis.__toasts[0].title, "workspaces.cancelInvitation.done");
@@ -175,7 +176,7 @@ test("an invitation that is already gone counts as canceled", async (t) => {
 
   assert.deepEqual(
     events.map((event) => event.type),
-    ["confirm", "dismiss"]
+    ["confirm", "succeeded"]
   );
   assert.equal(globalThis.__toasts[0].title, "workspaces.cancelInvitation.done");
   assert.equal(canceled.length, 1);
@@ -197,4 +198,15 @@ test("any other rejection dispatches failed and leaves the list alone", async (t
   });
   assert.equal(globalThis.__toasts.length, 0);
   assert.equal(canceled.length, 0);
+});
+
+test("a successful cancel closes the dialog", async (t) => {
+  const { render, events, confirmActionReducer } = await loadDialog(t);
+
+  render(confirmState);
+  globalThis.__actionDialogProps.primary.onClick();
+  await tick();
+
+  // The events the dialog dispatched, folded through the real reducer.
+  assert.deepEqual(events.reduce(confirmActionReducer, confirmState), { kind: "closed" });
 });

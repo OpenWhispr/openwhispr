@@ -61,6 +61,7 @@ async function loadDialog(t) {
     "/components/workspace/RemoveMemberDialog.tsx"
   );
   const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
+  const { confirmActionReducer } = await vite.ssrLoadModule("/lib/confirmActionFlow.ts");
   const events = [];
   const render = (state, overrides = {}) =>
     renderToStaticMarkup(
@@ -72,7 +73,7 @@ async function loadDialog(t) {
         ...overrides,
       })
     );
-  return { render, events, CloudApiError };
+  return { render, events, CloudApiError, confirmActionReducer };
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -118,7 +119,7 @@ test("running is busy", async (t) => {
   assert.equal(globalThis.__actionDialogProps.busy, true);
 });
 
-test("confirming runs the action, toasts and dismisses", async (t) => {
+test("confirming runs the action, toasts and closes", async (t) => {
   const { render, events } = await loadDialog(t);
 
   render({ kind: "confirm", subject: subject() });
@@ -128,7 +129,7 @@ test("confirming runs the action, toasts and dismisses", async (t) => {
   assert.deepEqual(globalThis.__removeCalls, [["w1", "u-mia"]]);
   assert.deepEqual(
     events.map((event) => event.type),
-    ["confirm", "dismiss"]
+    ["confirm", "succeeded"]
   );
   assert.equal(globalThis.__toasts.length, 1);
   assert.match(globalThis.__toasts[0].title, /settingsPage\.workspace\.members\.removed\|/);
@@ -145,7 +146,7 @@ test("a member already removed toasts the already-removed copy", async (t) => {
   assert.match(globalThis.__toasts[0].title, /workspaces\.removeMember\.alreadyRemoved\|/);
   assert.deepEqual(
     events.map((event) => event.type),
-    ["confirm", "dismiss"]
+    ["confirm", "succeeded"]
   );
 });
 
@@ -202,4 +203,16 @@ test("a network failure shows the failed copy with Try again", async (t) => {
   assert.match(markup, /workspaces\.exit\.tryAgain/);
   assert.match(markup, /common\.cancel/);
   assert.equal(globalThis.__actionDialogProps.primary.tone, "destructive");
+});
+
+test("a successful removal closes the dialog", async (t) => {
+  const { render, events, confirmActionReducer } = await loadDialog(t);
+  const open = { kind: "confirm", subject: subject() };
+
+  render(open);
+  globalThis.__actionDialogProps.primary.onClick();
+  await tick();
+
+  // The events the dialog dispatched, folded through the real reducer.
+  assert.deepEqual(events.reduce(confirmActionReducer, open), { kind: "closed" });
 });
