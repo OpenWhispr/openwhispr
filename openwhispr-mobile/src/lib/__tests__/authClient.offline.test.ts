@@ -1,7 +1,7 @@
 const mockGetSession = jest.fn();
 const mockGetCookie = jest.fn();
 const mockReadCache = jest.fn();
-const mockDeleteCache = jest.fn();
+const mockClearCache = jest.fn();
 
 jest.mock('better-auth/client', () => ({
   createAuthClient: () => ({
@@ -12,19 +12,28 @@ jest.mock('better-auth/client', () => ({
 jest.mock('better-auth/client/plugins', () => ({ anonymousClient: () => ({}) }));
 jest.mock('@better-auth/expo/client', () => ({
   expoClient: () => ({}),
-  storageAdapter: () => ({ getItem: (...args: unknown[]) => mockReadCache(...args) }),
+  storageAdapter: () => ({
+    getItem: (...args: unknown[]) => mockReadCache(...args),
+    getItemAsync: (...args: unknown[]) => mockReadCache(...args),
+    setItemAsync: (...args: unknown[]) => mockClearCache(...args),
+  }),
 }));
 jest.mock('expo-application', () => ({ applicationId: 'com.gizmolabs.openwhispr.dev' }));
 jest.mock('expo-constants', () => ({ expoConfig: { scheme: 'openwhispr-dev' } }));
 jest.mock('expo-secure-store', () => ({
   getItemAsync: (...args: unknown[]) => mockReadCache(...args),
-  deleteItemAsync: (...args: unknown[]) => mockDeleteCache(...args),
 }));
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 jest.mock('../apiClient', () => ({ getClientVersionHeader: () => 'test' }));
 
 import { Platform } from 'react-native';
-import { getSession, deleteAccount, initAuthenticatedUser, checkUserExists } from '../authClient';
+import {
+  getSession,
+  getStoredSession,
+  deleteAccount,
+  initAuthenticatedUser,
+  checkUserExists,
+} from '../authClient';
 import { fetch } from 'expo/fetch';
 
 const originalPlatform = Platform.OS;
@@ -47,9 +56,9 @@ const cachedSession = () => ({
 beforeEach(() => {
   jest.resetAllMocks();
   Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
-  mockGetCookie.mockReturnValue('__Secure-better-auth.session_token=dummy-test-token.signature');
-  mockReadCache.mockReturnValue(JSON.stringify(cachedSession()));
-  mockDeleteCache.mockResolvedValue(undefined);
+  mockGetCookie.mockResolvedValue('__Secure-better-auth.session_token=dummy-test-token.signature');
+  mockReadCache.mockResolvedValue(JSON.stringify(cachedSession()));
+  mockClearCache.mockResolvedValue(undefined);
   mockGetSession.mockRejectedValue(new TypeError('Network request failed'));
 });
 afterAll(() => Object.defineProperty(Platform, 'OS', { value: originalPlatform }));
@@ -67,7 +76,7 @@ it.each(['android', 'ios'] as const)(
     for (const [, init] of mockFetch.mock.calls) {
       expect(init.credentials).toBe(platform === 'android' ? 'omit' : undefined);
     }
-    expect(mockFetch.mock.calls[0][1].headers.Cookie).toBe(mockGetCookie());
+    expect(mockFetch.mock.calls[0][1].headers.Cookie).toBe(await mockGetCookie());
     expect(mockFetch.mock.calls[2][1].headers.Cookie).toBeUndefined();
   },
 );
@@ -75,7 +84,7 @@ it.each(['android', 'ios'] as const)(
 it.each(['better-auth', 'openwhispr'])(
   'restores a matching unexpired %s session during an outage',
   async (prefix) => {
-    mockGetCookie.mockReturnValue(`__Secure-${prefix}.session_token=dummy-test-token.signature`);
+    mockGetCookie.mockResolvedValue(`__Secure-${prefix}.session_token=dummy-test-token.signature`);
     expect(await getSession({ allowOfflineCache: true })).toEqual(user);
     expect(mockReadCache).toHaveBeenCalledWith('openwhispr_session_data');
   },
@@ -86,13 +95,13 @@ it('allows transient server failure but never substitutes cache for a rejected s
   expect(await getSession({ allowOfflineCache: true })).toEqual(user);
   mockGetSession.mockResolvedValueOnce({ data: null, error: { status: 401 } });
   expect(await getSession({ allowOfflineCache: true })).toBeNull();
-  expect(mockDeleteCache).toHaveBeenCalledWith('openwhispr_session_data');
+  expect(mockClearCache).toHaveBeenCalledWith('openwhispr_session_data', '{}');
 });
 
 it('clears stale cached identity after an authoritative signed-out response', async () => {
   mockGetSession.mockResolvedValue({ data: null, error: null });
   expect(await getSession({ allowOfflineCache: true })).toBeNull();
-  expect(mockDeleteCache).toHaveBeenCalledWith('openwhispr_session_data');
+  expect(mockClearCache).toHaveBeenCalledWith('openwhispr_session_data', '{}');
 });
 
 it.each([
@@ -108,18 +117,18 @@ it.each([
   const cache = cachedSession();
   if (scenario === 'expired') cache.session.expiresAt = new Date(Date.now() - 1).toISOString();
   if (scenario === 'different-cookie')
-    mockGetCookie.mockReturnValue('better-auth.session_token=other.signature');
-  if (scenario === 'missing-cookie') mockGetCookie.mockReturnValue(null);
+    mockGetCookie.mockResolvedValue('better-auth.session_token=other.signature');
+  if (scenario === 'missing-cookie') mockGetCookie.mockResolvedValue(null);
   if (scenario === 'unrecognized-cookie')
-    mockGetCookie.mockReturnValue('unknown.session_token=dummy-test-token.signature');
+    mockGetCookie.mockResolvedValue('unknown.session_token=dummy-test-token.signature');
   if (scenario === 'ambiguous-cookie')
-    mockGetCookie.mockReturnValue(
+    mockGetCookie.mockResolvedValue(
       'openwhispr.session_token=dummy-test-token.signature; better-auth.session_token=other.signature',
     );
   if (scenario === 'malformed-cookie')
-    mockGetCookie.mockReturnValue('openwhispr.session_token=%invalid');
+    mockGetCookie.mockResolvedValue('openwhispr.session_token=%invalid');
   if (scenario === 'different-user') cache.session.userId = 'another-user';
-  mockReadCache.mockReturnValue(scenario === 'malformed' ? '{' : JSON.stringify(cache));
+  mockReadCache.mockResolvedValue(scenario === 'malformed' ? '{' : JSON.stringify(cache));
   expect(await getSession({ allowOfflineCache: true })).toBeNull();
 });
 
@@ -138,15 +147,34 @@ it('uses the current server identity when online', async () => {
 });
 
 it('rejects cached identity if the cookie changes while storage is read', async () => {
-  mockReadCache.mockImplementation(() => {
-    mockGetCookie.mockReturnValue('better-auth.session_token=another-login.signature');
+  mockReadCache.mockImplementation(async () => {
+    mockGetCookie.mockResolvedValue('better-auth.session_token=another-login.signature');
     return JSON.stringify(cachedSession());
   });
   expect(await getSession({ allowOfflineCache: true })).toBeNull();
 });
 
+it('normalizes an asynchronously empty cookie to signed out', async () => {
+  mockGetCookie.mockResolvedValue('');
+  await expect(getStoredSession()).resolves.toBeNull();
+});
+
+it('waits for a stored cookie before sending an account deletion request', async () => {
+  let resolveCookie!: (cookie: string) => void;
+  mockGetCookie.mockReturnValue(new Promise<string>((resolve) => (resolveCookie = resolve)));
+  const mockFetch = fetch as jest.Mock;
+  mockFetch.mockResolvedValue({ ok: true });
+  const deletion = deleteAccount();
+  expect(mockFetch).not.toHaveBeenCalled();
+  resolveCookie('openwhispr.session_token=resolved.signature');
+  await deletion;
+  expect(mockFetch.mock.calls[0][1].headers.Cookie).toBe(
+    'openwhispr.session_token=resolved.signature',
+  );
+});
+
 it('forgets cached identity when the session request throws an authoritative rejection', async () => {
   mockGetSession.mockRejectedValue({ status: 403 });
   await expect(getSession({ allowOfflineCache: true })).rejects.toEqual({ status: 403 });
-  expect(mockDeleteCache).toHaveBeenCalledWith('openwhispr_session_data');
+  expect(mockClearCache).toHaveBeenCalledWith('openwhispr_session_data', '{}');
 });

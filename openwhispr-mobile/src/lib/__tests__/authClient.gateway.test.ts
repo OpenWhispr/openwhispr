@@ -9,5 +9,5 @@ it('preserves Android identity through gateway HTML using the actual auth SDK an
     [path.resolve(__dirname, '../../../scripts/auth-session-test/run.js')],
     { encoding: 'utf8', timeout: 20_000 },
   );
-  expect(JSON.parse(output).passed).toBe(23);
+  expect(JSON.parse(output).passed).toBe(31);
 }, 25_000);

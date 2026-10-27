@@ -64,6 +64,7 @@ const client = createAuthClient({
     expoClient({
       scheme: resolveAuthScheme(),
       storagePrefix: 'openwhispr',
+      cookiePrefix: ['openwhispr', 'better-auth'],
       storage: SecureStore,
     }),
   ],
@@ -128,18 +129,25 @@ function mapUser(raw: RawUser | null | undefined): AuthUser | null {
   };
 }
 
-function currentCookie(): string | null {
-  return client.getCookie() || null;
+async function currentCookie(): Promise<string | null> {
+  return (await client.getCookie()) || null;
 }
 
 export async function getStoredSession(): Promise<string | null> {
   return currentCookie();
 }
 
+function clearStoredAuthValue(key: string): Promise<void> {
+  // The adapter waits for pending SDK writes and clears the stored chunks.
+  return storageAdapter(SecureStore)
+    .setItemAsync(key, '{}')
+    .catch(() => undefined);
+}
+
 export async function clearSession(): Promise<void> {
   await Promise.all([
-    SecureStore.deleteItemAsync(COOKIE_STORAGE_KEY).catch(() => undefined),
-    SecureStore.deleteItemAsync(SESSION_DATA_STORAGE_KEY).catch(() => undefined),
+    clearStoredAuthValue(COOKIE_STORAGE_KEY),
+    clearStoredAuthValue(SESSION_DATA_STORAGE_KEY),
   ]);
 }
 
@@ -157,10 +165,10 @@ async function getCachedAndroidUser(): Promise<AuthUser | null> {
   // Expo already stores this server-issued session in SecureStore. Use it only
   // for startup identity during a transport outage, never as paid-access proof.
   try {
-    const cookie = currentCookie();
+    const cookie = await currentCookie();
     if (!cookie) return null;
     // Use Expo's adapter because larger sessions are split across secure-store keys.
-    const raw = storageAdapter(SecureStore).getItem(SESSION_DATA_STORAGE_KEY);
+    const raw = await storageAdapter(SecureStore).getItemAsync(SESSION_DATA_STORAGE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw);
     if (typeof cached?.user?.id !== 'string' || typeof cached.user.email !== 'string') return null;
@@ -185,7 +193,7 @@ async function getCachedAndroidUser(): Promise<AuthUser | null> {
       .filter((part) => /^(?:__Secure-)?(?:openwhispr|better-auth)\.session_token=/.test(part))
       .map((part) => decodeURIComponent(part.slice(part.indexOf('=') + 1)).split('.')[0]);
     // A stale cache from another login must never select the wrong local workspace.
-    return cookie === currentCookie() && tokens.length === 1 && tokens[0] === session.token
+    return cookie === (await currentCookie()) && tokens.length === 1 && tokens[0] === session.token
       ? user
       : null;
   } catch {
@@ -202,7 +210,7 @@ export async function getSession(
     if (allowCache && error && isTransientSessionFailure(error)) return getCachedAndroidUser();
     const user = mapUser(data?.user);
     if (allowCache && !user && (!error || error.status === 401 || error.status === 403)) {
-      await SecureStore.deleteItemAsync(SESSION_DATA_STORAGE_KEY).catch(() => undefined);
+      await clearStoredAuthValue(SESSION_DATA_STORAGE_KEY);
     }
     return user;
   } catch (error) {
@@ -214,7 +222,7 @@ export async function getSession(
       'status' in error &&
       (error.status === 401 || error.status === 403)
     ) {
-      await SecureStore.deleteItemAsync(SESSION_DATA_STORAGE_KEY).catch(() => undefined);
+      await clearStoredAuthValue(SESSION_DATA_STORAGE_KEY);
     }
     throw error;
   }
@@ -239,7 +247,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
     return { user: null, sessionCookie: null, error: error.message ?? 'Sign in failed' };
   }
   await cacheAndroidSessionAfterSignIn(data);
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null };
+  return { user: mapUser(data?.user), sessionCookie: await currentCookie(), error: null };
 }
 
 export async function signUpWithEmail(
@@ -256,7 +264,7 @@ export async function signUpWithEmail(
     return { user: null, sessionCookie: null, error: error.message ?? 'Sign up failed' };
   }
   await cacheAndroidSessionAfterSignIn(data);
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null };
+  return { user: mapUser(data?.user), sessionCookie: await currentCookie(), error: null };
 }
 
 /**
@@ -276,7 +284,12 @@ export async function signInAnonymously(): Promise<AnonymousAuthResult> {
     };
   }
   await cacheAndroidSessionAfterSignIn(data);
-  return { user: mapUser(data?.user), sessionCookie: currentCookie(), error: null, status: null };
+  return {
+    user: mapUser(data?.user),
+    sessionCookie: await currentCookie(),
+    error: null,
+    status: null,
+  };
 }
 
 export async function signOut(): Promise<void> {
@@ -304,11 +317,11 @@ async function socialSignIn(provider: 'google' | 'apple' | 'microsoft'): Promise
   if (error) {
     return { success: false, sessionCookie: null, error: error.message ?? 'OAuth failed' };
   }
-  return { success: true, sessionCookie: currentCookie(), error: null };
+  return { success: true, sessionCookie: await currentCookie(), error: null };
 }
 
 export async function deleteAccount(): Promise<void> {
-  const cookie = currentCookie();
+  const cookie = await currentCookie();
   if (!cookie) {
     throw new Error('Not authenticated');
   }

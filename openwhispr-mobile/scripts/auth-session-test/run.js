@@ -49,23 +49,30 @@ const cookie = JSON.stringify({
 });
 const originalFetch = global.fetch;
 const outcomes = [];
+function storageFor(values) {
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    getItemAsync: async (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    setItemAsync: async (key, value) => values.set(key, value),
+    deleteItemAsync: async (key) => values.delete(key),
+  };
+}
 async function checkFreshLogin({
   flow = 'email',
   platform = 'android',
   sessionAvailable = true,
   autoSignIn = true,
   rejected = false,
+  cookiePrefix = 'better-auth',
 } = {}) {
   Platform.OS = platform;
   const values = new Map();
-  const storage = {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-    deleteItemAsync: async (key) => values.delete(key),
-  };
+  const storage = storageFor(values);
   let restarted = false;
   let sessionRequests = 0;
   const flowUser = { ...user, isAnonymous: flow === 'anonymous' };
+  const sessionCookie = `${cookiePrefix}.session_token=fixture-token.signature`;
   const endpoint = {
     email: '/sign-in/email',
     signup: '/sign-up/email',
@@ -94,8 +101,7 @@ async function checkFreshLogin({
             'content-type': 'application/json',
             ...(autoSignIn
               ? {
-                  'set-cookie':
-                    'better-auth.session_token=fixture-token.signature; Path=/; HttpOnly',
+                  'set-cookie': `${sessionCookie}; Path=/; HttpOnly`,
                 }
               : {}),
           },
@@ -135,6 +141,11 @@ async function checkFreshLogin({
     `${flow}: authentication result preserved`,
   );
   assert.equal(result.error, rejected ? 'Fixture rejection' : null);
+  assert.equal(
+    result.sessionCookie,
+    autoSignIn && !rejected ? sessionCookie : null,
+    `${flow}: callers receive the resolved session cookie`,
+  );
   const warmRequests = sessionRequests;
   restarted = true;
   const restartedAuth = loadAuth();
@@ -151,7 +162,7 @@ async function checkFreshLogin({
     `${flow}: only successful Android sessions are warmed`,
   );
   outcomes.push(
-    `${platform} ${flow}, session available: ${sessionAvailable}, auto sign in: ${autoSignIn}, rejected: ${rejected}`,
+    `${platform} ${flow}, cookie prefix: ${cookiePrefix}, session available: ${sessionAvailable}, auto sign in: ${autoSignIn}, rejected: ${rejected}`,
   );
 }
 async function check(
@@ -172,11 +183,7 @@ async function check(
     ['openwhispr_cookie', cookie],
     ['openwhispr_session_data', JSON.stringify(cache)],
   ]);
-  const storage = {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-    deleteItemAsync: async (key) => values.delete(key),
-  };
+  const storage = storageFor(values);
   global.fetch = async () =>
     new global.Response(body, { status, headers: { 'content-type': contentType } });
   const auth = load(
@@ -203,20 +210,80 @@ async function check(
   }
   if (platform === 'android' && (status === 401 || status === 403 || body === 'null')) {
     assert.equal(
-      values.has('openwhispr_session_data'),
+      Boolean(JSON.parse(values.get('openwhispr_session_data') || '{}')?.user),
       false,
       `${name}: authoritative sign-out clears identity`,
     );
   }
   outcomes.push(name);
 }
+async function checkChunkedClear({ rejected = false } = {}) {
+  Platform.OS = 'android';
+  const values = new Map();
+  const storage = storageFor(values);
+  const adapter = expo.storageAdapter(storage);
+  await adapter.setItemAsync('openwhispr_cookie', cookie);
+  await adapter.setItemAsync(
+    'openwhispr_session_data',
+    JSON.stringify({ ...initial, user: { ...user, name: 'مرحبا'.repeat(1000) } }),
+  );
+  assert.ok(values.size > 2, 'fixture must exercise real SDK chunking');
+  global.fetch = async () =>
+    new global.Response('{}', {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    });
+  const auth = load(
+    path.join(root, 'src/lib/authClient.ts'),
+    {
+      ...native,
+      '@better-auth/expo/client': expo,
+      'expo-application': { applicationId: 'com.gizmolabs.openwhispr' },
+      'expo-secure-store': storage,
+      './sessionFetch': { sessionFetch: global.fetch },
+      './apiClient': { getClientVersionHeader: () => 'test' },
+    },
+    process.argv[2],
+  );
+  if (rejected) {
+    assert.equal(await auth.getSession({ allowOfflineCache: true }), null);
+    assert.equal(
+      await auth.getStoredSession(),
+      'better-auth.session_token=fixture-token.signature',
+    );
+  } else {
+    // A queued SDK write must complete before clearing this session's storage.
+    const pendingWrite = adapter.setItemAsync(
+      'openwhispr_cookie',
+      JSON.stringify({
+        'better-auth.session_token': {
+          value: 'fixture-token.signature'.repeat(200),
+          expires: null,
+        },
+      }),
+    );
+    await Promise.all([pendingWrite, auth.clearSession()]);
+    assert.equal(await auth.getStoredSession(), null);
+  }
+  for (const [key, value] of values) {
+    if (rejected && key.startsWith('openwhispr_cookie')) continue;
+    assert.ok(value === '{}' || value === '', `${key}: all stored session chunks must be cleared`);
+  }
+  outcomes.push(
+    rejected ? 'Rejected session clears chunks' : 'Explicit clear waits for SDK writes',
+  );
+}
 (async () => {
   try {
+    await checkChunkedClear();
+    await checkChunkedClear({ rejected: true });
     for (const flow of ['email', 'signup', 'anonymous']) {
       await checkFreshLogin({ flow });
       await checkFreshLogin({ flow, sessionAvailable: false });
       await checkFreshLogin({ flow, platform: 'ios' });
       await checkFreshLogin({ flow, rejected: true });
+      await checkFreshLogin({ flow, cookiePrefix: 'openwhispr' });
+      await checkFreshLogin({ flow, platform: 'ios', cookiePrefix: 'openwhispr' });
     }
     await checkFreshLogin({ flow: 'signup', autoSignIn: false });
     await check('Android gateway preserves matching cache');

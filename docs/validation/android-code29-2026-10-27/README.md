@@ -66,6 +66,32 @@ Reproduction and limits: [native presenter probe](../../../openwhispr-mobile/scr
 
 ![Installed code29 Superwall native preview reports presentation error 103](superwall-native-preview-error.png)
 
+## Authentication dependency readiness
+
+The next hosted run failed its mobile dependency audit on newly reported Better
+Auth advisories, before installation or bundling. The mobile client now pins
+`better-auth`, `@better-auth/expo` and the core override to `1.7.14`. The audit
+configuration and its existing exceptions are unchanged. This changes the app's
+client dependencies; it does not deploy or migrate an authentication server.
+
+The Expo client now reads cookies asynchronously. The app awaits those reads,
+accepts both OpenWhispr and preview cookie prefixes, and clears sessions through
+the SDK's storage adapter so pending writes and chunked values are handled
+together. Regression controls reproduced unresolved cookie values, ignored
+OpenWhispr cookies and a pending write restoring a cleared cookie before the
+repairs.
+
+All 358 mobile suites / 4,616 tests pass, including 31 actual-SDK host scenarios
+for sign-in, signup, anonymous sessions, cached identity, rejection, cookie
+prefixes and storage cleanup. Native storage and HTTP are substituted in that
+harness. TypeScript, scoped lint/formatting, 11 dependency-security tests, the
+lockfile checks, the configured security audit and Android/iOS JavaScript exports
+pass. This evidence does not replace installed upgrade, sign-in or account
+acceptance; code29 still contains the earlier dependencies.
+
+Upstream references: [security advisory](https://github.com/advisories/GHSA-965c-763c-88jm)
+and [Expo client migration notes](https://github.com/better-auth/better-auth/blob/v1.7.14/packages/expo/CHANGELOG.md).
+
 ## Remaining acceptance
 
 The full gate still includes installed acceptance of the newest source, billing failure/delay/retry and entitlement ownership, actual signed Superwall delivery with isolated sandbox routing, native statistics consent/queue ordering, real spoken dictation and Cloud/Local meetings with interruptions, remaining accessibility and storage/corruption cases, native analytics opt-out, and accepted local cleanup quality. Physical phones in the required 3–4 GB, 6 GB and 8+ GB classes are tested last and remain mandatory before launch.
