@@ -267,10 +267,18 @@ export function ReferralDashboard() {
       return;
     }
 
+    // Main sends the stored bearer as is; only a validated session may invite.
+    if (!hasValidatedAuthContext()) {
+      toast({
+        title: t("referral.toasts.sendFailedTitle"),
+        description: t("auth.unconfirmedSession"),
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setSendingInvite(true);
-      // Main sends the stored bearer as is; only a validated session may act on it.
-      if (!hasValidatedAuthContext()) throw new Error("No validated session");
       const result = await window.electronAPI?.sendReferralInvite?.(emailInput.trim());
 
       if (result?.success) {

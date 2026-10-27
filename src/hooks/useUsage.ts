@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
+import { UNCONFIRMED_SESSION_CODE } from "../lib/billingPortalError";
 import {
   getUsageState,
   isPastDueUsage,
@@ -54,12 +55,12 @@ export interface UseUsageResult {
   openCheckout: (opts?: {
     plan?: "monthly" | "annual";
     tier?: "pro" | "business";
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; error?: string; code?: string }>;
   openBillingPortal: () => Promise<{ success: boolean; error?: string; code?: string }>;
   switchPlan: (opts: {
     plan: "monthly" | "annual";
     tier: "pro" | "business";
-  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string; code?: string }>;
   previewSwitchPlan: (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => Promise<{
     success: boolean;
     immediateAmount?: number;
@@ -71,8 +72,13 @@ export interface UseUsageResult {
     nextBillingDate?: string;
     alreadyOnPlan?: boolean;
     error?: string;
+    code?: string;
   }>;
 }
+
+// Main sends billing requests with the stored bearer as is, so only a
+// validated session may make them (not one shown offline).
+const UNCONFIRMED_SESSION = { success: false, code: UNCONFIRMED_SESSION_CODE } as const;
 
 async function fetchUsageResponse(): Promise<UsageResponse> {
   const cloudUsage = window.electronAPI?.cloudUsage;
@@ -138,8 +144,7 @@ export function useUsage(): UseUsageResult | null {
     }): Promise<{ success: boolean; error?: string }> => {
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
-      // Main sends the stored bearer as is; only a validated session may act on it.
-      if (!hasValidatedAuthContext()) return { success: false };
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
         return { success: false, error: "App not ready" };
       }
@@ -167,7 +172,7 @@ export function useUsage(): UseUsageResult | null {
     code?: string;
   }> => {
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
-    if (!hasValidatedAuthContext()) return { success: false };
+    if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
       return { success: false, error: "App not ready" };
     }
@@ -197,7 +202,7 @@ export function useUsage(): UseUsageResult | null {
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
-      if (!hasValidatedAuthContext()) return { success: false };
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!window.electronAPI?.cloudSwitchPlan) {
         return { success: false, error: "App not ready" };
       }
@@ -217,7 +222,7 @@ export function useUsage(): UseUsageResult | null {
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
-      if (!hasValidatedAuthContext()) return { success: false as const };
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!window.electronAPI?.cloudPreviewSwitch) {
         return { success: false as const, error: "App not ready" };
       }

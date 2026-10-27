@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "你的聲音，由你掌控。",
     "welcomeTitle": "歡迎使用 OpenWhispr",
-    "sessionExpired": "工作階段已過期，請重新登入。"
+    "sessionExpired": "工作階段已過期，請重新登入。",
+    "unconfirmedSession": "無法確認你的登入狀態，因此未做任何變更。請在 OpenWhispr 能連線到伺服器後重試。"
   },
   "cleanupPrompt": "文字整理",
   "developerSection": {
@@ -1645,8 +1646,8 @@
       "notSignedInDescription": "建立帳號以解鎖進階功能。",
       "offline": "離線",
       "offlineAccount": {
-        "title": "你已離線",
-        "description": "顯示的是你上次登入時的帳戶資訊。OpenWhispr 能連線到伺服器後，將恢復同步和帳戶變更。"
+        "title": "顯示上次登入時的資訊",
+        "description": "在 OpenWhispr 能連線到伺服器之前，同步和帳戶變更將暫停。"
       },
       "pastDue": {
         "description": "你目前使用的是免費方案。更新付款方式即可恢復 Pro。",
@@ -5246,7 +5247,6 @@
       "successTitle": "你已加入",
       "successDescription": "你已成為 {{name}} 的成員。可前往「設定 → 工作區」進行管理。",
       "errorTitle": "無法接受邀請",
-      "offlineDescription": "加入工作區需要連線到 OpenWhispr。請在恢復連線後重試。",
       "sentTo": "邀請已傳送至 {{email}}",
       "wrongAccount": "此邀請是傳送給 {{email}} 的。你目前以 {{current}} 的身分登入。"
     }

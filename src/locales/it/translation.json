@@ -1160,6 +1160,7 @@
   },
   "auth": {
     "sessionExpired": "Sessione scaduta",
+    "unconfirmedSession": "Non è stato possibile confermare il tuo accesso, quindi non è stato modificato nulla. Riprova quando OpenWhispr potrà raggiungere i suoi server.",
     "cloudNotConfigured": "Cloud non configurato",
     "common": {
       "back": "Indietro",
@@ -1645,8 +1646,8 @@
       "notSignedInDescription": "Crea un account per sbloccare le funzionalità premium.",
       "offline": "Offline",
       "offlineAccount": {
-        "title": "Sei offline",
-        "description": "Il tuo account è mostrato come al tuo ultimo accesso. La sincronizzazione e le modifiche all'account riprenderanno quando OpenWhispr potrà raggiungere i suoi server."
+        "title": "Dati dell'ultimo accesso",
+        "description": "La sincronizzazione e le modifiche all'account sono in pausa finché OpenWhispr non potrà raggiungere i suoi server."
       },
       "pastDue": {
         "description": "Sei nel piano gratuito per ora. Aggiorna il metodo di pagamento per tornare a Pro.",
@@ -5264,7 +5265,6 @@
       "successTitle": "Sei dentro",
       "successDescription": "Sei membro di {{name}}. Gestiscila in Impostazioni → Area di lavoro.",
       "errorTitle": "Impossibile accettare l'invito",
-      "offlineDescription": "Per unirti a uno spazio di lavoro serve una connessione a OpenWhispr. Riprova quando sarai di nuovo online.",
       "sentTo": "Invito inviato a {{email}}",
       "wrongAccount": "Questo invito è stato inviato a {{email}}. Hai effettuato l'accesso come {{current}}."
     }

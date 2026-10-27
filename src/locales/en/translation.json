@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "The power of your voice. On your terms.",
     "welcomeTitle": "Welcome to OpenWhispr",
-    "sessionExpired": "Session expired. Please restart the sign-up process."
+    "sessionExpired": "Session expired. Please restart the sign-up process.",
+    "unconfirmedSession": "We couldn't confirm your sign-in, so nothing was changed. Try again once OpenWhispr can reach its servers."
   },
   "calendar": {
     "title": "Google Calendar",
@@ -1940,8 +1941,8 @@
       "notSignedInDescription": "Create an account to unlock premium features.",
       "offline": "Offline",
       "offlineAccount": {
-        "title": "You're offline",
-        "description": "Showing your account from your last sign-in. Sync and account changes resume when OpenWhispr can reach its servers."
+        "title": "Showing your last sign-in",
+        "description": "Sync and account changes are paused until OpenWhispr can reach its servers."
       },
       "pastDue": {
         "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
@@ -3131,7 +3132,6 @@
       "successTitle": "You're in",
       "successDescription": "You're a member of {{name}}. Manage it in Settings → Workspace.",
       "errorTitle": "Couldn't accept invitation",
-      "offlineDescription": "Joining a workspace needs a connection to OpenWhispr. Try again once you're back online.",
       "sentTo": "Invitation sent to {{email}}",
       "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
     }

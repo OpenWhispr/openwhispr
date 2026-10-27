@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a OpenWhispr",
-    "sessionExpired": "Sesión expirada"
+    "sessionExpired": "Sesión expirada",
+    "unconfirmedSession": "No pudimos confirmar tu inicio de sesión, así que no se cambió nada. Inténtalo de nuevo cuando OpenWhispr pueda conectarse a sus servidores."
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {
@@ -1697,8 +1698,8 @@
       "notSignedInDescription": "Crea una cuenta para desbloquear funciones premium.",
       "offline": "Sin conexión",
       "offlineAccount": {
-        "title": "Sin conexión",
-        "description": "Se muestra tu cuenta según tu último inicio de sesión. La sincronización y los cambios de cuenta se reanudarán cuando OpenWhispr pueda conectarse a sus servidores."
+        "title": "Se muestra tu último inicio de sesión",
+        "description": "La sincronización y los cambios de cuenta están en pausa hasta que OpenWhispr pueda conectarse a sus servidores."
       },
       "pastDue": {
         "description": "Estás en el plan gratuito por ahora. Actualiza tu método de pago para volver a Pro.",
@@ -5264,7 +5265,6 @@
       "successTitle": "Te uniste",
       "successDescription": "Eres miembro de {{name}}. Adminístralo en Configuración → Espacio de trabajo.",
       "errorTitle": "No se pudo aceptar la invitación",
-      "offlineDescription": "Para unirte a un espacio de trabajo necesitas conexión con OpenWhispr. Inténtalo de nuevo cuando vuelvas a estar en línea.",
       "sentTo": "Invitación enviada a {{email}}",
       "wrongAccount": "Esta invitación se envió a {{email}}. Has iniciado sesión como {{current}}."
     }
