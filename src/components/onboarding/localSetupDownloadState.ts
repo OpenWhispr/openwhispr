@@ -40,6 +40,11 @@ export type LocalSetupDownloadEvent =
   | { type: "fail"; run: number }
   | { type: "retry"; rowId: LocalSetupRowId };
 
+/** Still on its way: waiting its turn, downloading or unpacking. */
+export function isQueued(status: RowStatus): boolean {
+  return status === "waiting" || status === "downloading" || status === "installing";
+}
+
 export function localSetupItemKey(item: Pick<LocalSetupDownload, "kind" | "id">): string {
   return `${item.kind}:${item.id}`;
 }

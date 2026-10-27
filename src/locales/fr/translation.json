@@ -472,6 +472,8 @@
           "noSpace": "Espace libre insuffisant"
         },
         "retry": "Réessayer",
+        "retryRow": "Réessayer {{row}}",
+        "downloaded": "Téléchargé",
         "foot": {
           "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
           "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",

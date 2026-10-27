@@ -472,6 +472,8 @@
           "noSpace": "可用空間不足"
         },
         "retry": "重試",
+        "retryRow": "重試{{row}}",
+        "downloaded": "已下載",
         "foot": {
           "default": "這些設定之後都可以在設定中變更。",
           "needsMac": "需要 {{needed}} GB，這台 Mac 有 {{free}} GB 可用空間。",

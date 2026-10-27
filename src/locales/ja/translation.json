@@ -472,6 +472,8 @@
           "noSpace": "空き容量が不足しています"
         },
         "retry": "再試行",
+        "retryRow": "{{row}}を再試行",
+        "downloaded": "ダウンロード済み",
         "foot": {
           "default": "これらはあとで設定からいつでも変更できます。",
           "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",

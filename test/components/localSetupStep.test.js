@@ -68,7 +68,14 @@ function reactProps(node) {
   return node[key];
 }
 
-function makeApi({ onDisk = {}, availableBytes = PLENTY, active = [] } = {}) {
+function makeApi({
+  onDisk = {},
+  availableBytes = PLENTY,
+  active = [],
+  holdInventory = false,
+} = {}) {
+  // Held, the on-disk lists answer only once the test releases them.
+  const inventory = holdInventory ? deferred() : { promise: Promise.resolve() };
   const listeners = { whisper: new Set(), parakeet: new Set(), llm: new Set() };
   const listen = (family) => (listener) => {
     listeners[family].add(listener);
@@ -99,9 +106,12 @@ function makeApi({ onDisk = {}, availableBytes = PLENTY, active = [] } = {}) {
     onModelDownloadProgress: listen("llm"),
     onLlamaVulkanDownloadProgress: () => () => {},
     modelGetActiveDownloads: async () => active,
-    listWhisperModels: async () => listed(onDisk.whisper),
-    listParakeetModels: async () => listed(onDisk.parakeet),
-    modelGetAll: async () => (onDisk.llm ?? []).map((id) => ({ id, isDownloaded: true })),
+    listWhisperModels: () => inventory.promise.then(() => listed(onDisk.whisper)),
+    listParakeetModels: () => inventory.promise.then(() => listed(onDisk.parakeet)),
+    modelGetAll: () =>
+      inventory.promise.then(() =>
+        (onDisk.llm ?? []).map((id) => ({ id, isDownloaded: true }))
+      ),
     getLlamaVulkanStatus: async () => ({ supported: true, downloaded: !!onDisk.pack }),
     getLocalSetupSpace: async () => ({ availableBytes, factors: FACTORS }),
     downloadWhisperModel: start("whisper"),
@@ -128,7 +138,7 @@ function makeApi({ onDisk = {}, availableBytes = PLENTY, active = [] } = {}) {
       return { success: true };
     },
   };
-  return { api, calls, pending, listeners, onDisk };
+  return { api, calls, pending, listeners, onDisk, inventory };
 }
 
 // The plan as the screen gets it, for sizing tests without mounting twice.
@@ -139,13 +149,19 @@ async function planFor(profile = mac(), spokenLanguages = ["en-US"]) {
 
 async function mount(
   t,
-  { profile = mac(), spokenLanguages = ["en-US"], mapPlan = (p) => p, ...apiOptions } = {}
+  {
+    profile = mac(),
+    spokenLanguages = ["en-US"],
+    requiredSpeechModelId,
+    mapPlan = (p) => p,
+    ...apiOptions
+  } = {}
 ) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const { api, calls, pending, listeners, onDisk } = makeApi(apiOptions);
+  const { api, calls, pending, listeners, onDisk, inventory } = makeApi(apiOptions);
   const events = new EventTarget();
   installBrowserGlobals(t, {
     window: {
@@ -182,7 +198,14 @@ async function mount(
   const { LocalSetupStep } = await vite.ssrLoadModule("/components/onboarding/LocalSetupStep.tsx");
   const setup = await vite.ssrLoadModule("/config/localSetup.ts");
   const claims = await vite.ssrLoadModule("/components/onboarding/localSetupDownloadClaims.ts");
-  const plan = mapPlan(setup.buildLocalSetupPlan({ profile, spokenLanguages, policy: UNMANAGED }));
+  const plan = mapPlan(
+    setup.buildLocalSetupPlan({
+      profile,
+      spokenLanguages,
+      policy: UNMANAGED,
+      requiredSpeechModelId,
+    })
+  );
   const proceeded = [];
 
   root = createRoot(container);
@@ -230,6 +253,10 @@ async function mount(
     });
     await flush();
   };
+  const releaseInventory = async () => {
+    await React.act(async () => inventory.resolve());
+    await flush();
+  };
   const unmount = async () => {
     await React.act(async () => root.unmount());
     root = null;
@@ -247,6 +274,7 @@ async function mount(
     claims,
     emit,
     onDisk,
+    releaseInventory,
     calls,
     proceeded,
     row,
@@ -439,6 +467,8 @@ test("a failed row shows Retry and Proceed stays locked", async (t) => {
   );
   assert.ok(retry, "the failed row offers Retry");
   assert.ok(!s.row("cleanup").textContent.includes(`${K}badge.fast`), "Retry takes the badge slot");
+  assert.match(s.button().textContent, /button\.proceed$/, "the button still reads Proceed");
+  assert.ok(cls(s.button()).includes("--onboarding-surface-secondary"), "greyed");
   assert.ok(isDisabled(s.button()), "Proceed stays locked");
   await s.click(s.button());
   assert.deepEqual(s.proceeded, []);
@@ -574,6 +604,93 @@ test("Back keeps the tray claim until the transfer settles, so late errors stay 
   await s.finish(DICTATION, { success: false, code: "EXTRACTION_FAILED", error: "bad archive" });
   assert.equal(claimed(Date.now()), true, "its last chunks still arrive");
   assert.equal(claimed(Date.now() + 60_000), false, "released once it settled");
+});
+
+test("Retry, the pie and the tick name what they show", async (t) => {
+  const s = await mount(t);
+  await s.click(s.button());
+  const [pie] = elements(s.row("dictation"), (n) => n.attributes.role === "progressbar");
+  assert.ok(pie, "the pie is a progress bar");
+  assert.equal(pie.attributes["aria-label"], `${K}rows.dictation`);
+  assert.equal(pie.attributes["aria-valuemin"], "0");
+  assert.equal(pie.attributes["aria-valuemax"], "100");
+
+  await s.finish(DICTATION);
+  const [tick] = ticks(s.row("dictation"));
+  assert.equal(tick.attributes.role, "img");
+  assert.equal(tick.attributes["aria-label"], `${K}downloaded`);
+
+  await s.finish(CLEANUP, { success: false, error: "network down", code: "NETWORK" });
+  const [retry] = elements(
+    s.row("cleanup"),
+    (n) => n.localName === "button" && n.textContent === `${K}retry`
+  );
+  assert.equal(retry.attributes["aria-label"], `${K}retryRow {"row":"${K}rows.cleanup"}`);
+});
+
+test("an organisation-required speech model shows its line and no speed badge", async (t) => {
+  const s = await mount(t, { requiredSpeechModelId: "parakeet-tdt-0.6b-v3" });
+  const row = s.row("dictation");
+  assert.ok(row.textContent.includes(`${K}line.requiredByOrganization`));
+  assert.ok(!row.textContent.includes(`${K}badge.`), row.textContent);
+});
+
+test("memory that couldn't be read leaves only the Not enough memory heading", async (t) => {
+  const s = await mount(t, { profile: mac({ memoryGb: 0, appleChip: null }) });
+  for (const id of ["cleanup", "assistant"]) {
+    const text = s.row(id).textContent;
+    assert.ok(text.includes(`${K}unavailable.notEnoughMemory`), id);
+    assert.ok(!text.includes(`${K}unavailable.memoryMac`), `${id} never says it has 0 GB`);
+  }
+});
+
+test("a cleanup too slow for this computer quotes its whole seconds", async (t) => {
+  const tooSlow = (row) =>
+    row.id !== "cleanup"
+      ? row
+      : {
+          ...row,
+          label: "unavailable",
+          reason: "tooSlow",
+          line: { key: "tooSlowCleanupSeconds", model: row.modelName, seconds: 12.4 },
+        };
+  const s = await mount(t, { mapPlan: (p) => ({ ...p, rows: p.rows.map(tooSlow) }) });
+  const text = s.row("cleanup").textContent;
+  assert.ok(text.includes(`${K}unavailable.tooSlow`));
+  assert.ok(
+    text.includes(`${K}unavailable.tooSlowCleanupSeconds {"model":"Qwen3.5 2B","seconds":12}`),
+    text
+  );
+  assert.equal(s.switchOf("cleanup"), undefined);
+});
+
+test("a row turned off to fit keeps its line when the other switch is flipped", async (t) => {
+  const probe = await planFor();
+  const need = bytesOf(probe, "dictation") * 2.5 + bytesOf(probe, "cleanup") * 1.2;
+  const s = await mount(t, { availableBytes: need + 0.2e9 });
+  assert.ok(s.row("assistant").textContent.includes(`${K}line.offToFit`));
+
+  await s.click(s.switchOf("cleanup"));
+  assert.equal(s.switchOf("assistant").attributes["aria-checked"], "false");
+  assert.ok(s.row("assistant").textContent.includes(`${K}line.offToFit`), "still off to fit");
+  assert.ok(s.row("cleanup").textContent.includes(`${K}line.off`));
+  assert.ok(!s.row("cleanup").textContent.includes(`${K}line.offToFit`), "the user's own off");
+});
+
+test("nothing is turned off to fit before the inventory has loaded", async (t) => {
+  const probe = await planFor();
+  // Room for the assistant only once dictation and cleanup are known to be on disk.
+  const s = await mount(t, {
+    availableBytes: bytesOf(probe, "assistant") * 1.2 + 0.2e9,
+    onDisk: { parakeet: [DICTATION], llm: [CLEANUP] },
+    holdInventory: true,
+  });
+  assert.equal(s.switchOf("assistant").attributes["aria-checked"], "true", "no frame of auto-off");
+  assert.ok(!s.row("assistant").textContent.includes(`${K}line.offToFit`));
+
+  await s.releaseInventory();
+  assert.equal(s.switchOf("assistant").attributes["aria-checked"], "true");
+  assert.equal(ticks(s.row("dictation")).length + ticks(s.row("cleanup")).length, 2);
 });
 
 test("NVIDIA cleanup row size includes the graphics pack, which is never named", async (t) => {

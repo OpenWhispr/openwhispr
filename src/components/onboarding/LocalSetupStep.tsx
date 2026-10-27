@@ -28,7 +28,7 @@ import {
   type LocalSetupSwitches,
 } from "../../config/localSetup";
 import type { ComputerProfile } from "../../types/electron";
-import { localSetupItemKey } from "./localSetupDownloadState";
+import { isQueued, localSetupItemKey } from "./localSetupDownloadState";
 import { useLocalSetupDownloads, type LocalSetupRowProgress } from "./useLocalSetupDownloads";
 import { useLocalSetupSpace } from "./useLocalSetupSpace";
 
@@ -172,7 +172,7 @@ function ComputerCard({ profile, languages }: { profile: ComputerProfile; langua
 }
 
 /** Download progress drawn over the row's icon; no wedge while the row waits its turn. */
-function DownloadPie({ percent }: { percent: number | null }) {
+function DownloadPie({ percent, label }: { percent: number | null; label: string }) {
   const center = 13;
   const radius = 7.5;
   let wedge = null;
@@ -192,7 +192,11 @@ function DownloadPie({ percent }: { percent: number | null }) {
   }
   return (
     <svg
-      aria-hidden="true"
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent ?? undefined}
       className="absolute inset-0 m-auto"
       width="26"
       height="26"
@@ -267,11 +271,8 @@ function SetupRow({
   const { t } = useTranslation();
   const unavailable = row.label === "unavailable";
   const active = on && !unavailable;
-  const queued =
-    progress.status === "waiting" ||
-    progress.status === "downloading" ||
-    progress.status === "installing";
-  const showPie = started && active && queued;
+  const kind = t(ROW_KIND_KEYS[row.id]);
+  const showPie = started && active && isQueued(progress.status);
   const done = active && progress.status === "done";
   const failed = active && progress.status === "failed";
   const dim = !unavailable && !on;
@@ -280,6 +281,7 @@ function SetupRow({
     <button
       type="button"
       onClick={onRetry}
+      aria-label={t("onboarding.rehaul.localSetup.retryRow", { row: kind })}
       className="ms-1.5 shrink-0 cursor-pointer rounded-full px-1.5 text-xs font-medium text-[var(--onboarding-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
     >
       {t("onboarding.rehaul.localSetup.retry")}
@@ -303,18 +305,25 @@ function SetupRow({
           />
         )}
         {showPie && (
-          <DownloadPie percent={progress.status === "waiting" ? null : progress.percent} />
+          <DownloadPie
+            percent={progress.status === "waiting" ? null : progress.percent}
+            label={kind}
+          />
         )}
         {done && (
-          <span className="absolute -bottom-[5px] -end-[5px] flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--onboarding-surface-secondary)] bg-[var(--onboarding-success)] text-[#0b0b0b]">
-            <Check className="size-3" />
+          <span
+            role="img"
+            aria-label={t("onboarding.rehaul.localSetup.downloaded")}
+            className="absolute -bottom-[5px] -end-[5px] flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--onboarding-surface-secondary)] bg-[var(--onboarding-success)] text-[var(--onboarding-success-foreground)]"
+          >
+            <Check className="size-3" aria-hidden="true" />
           </span>
         )}
       </span>
 
       <div className={`min-w-0 flex-1 ${dim ? "opacity-55" : ""}`}>
         <span className="block text-xs leading-4 text-[var(--onboarding-text-tertiary)]">
-          {t(ROW_KIND_KEYS[row.id])}
+          {kind}
         </span>
         <span className="mt-0.5 flex min-w-0 items-center whitespace-nowrap text-base font-medium leading-6 text-[var(--onboarding-text-primary)]">
           {/* Only the name gives way to a long translation; size and badge stay whole. */}
@@ -348,12 +357,7 @@ function SetupRow({
       {switchable && (
         <span className="flex w-12 shrink-0 justify-end">
           {!unavailable && (
-            <SetupSwitch
-              checked={on}
-              disabled={started}
-              label={t(ROW_KIND_KEYS[row.id])}
-              onToggle={onToggle}
-            />
+            <SetupSwitch checked={on} disabled={started} label={kind} onToggle={onToggle} />
           )}
         </span>
       )}
@@ -380,19 +384,22 @@ export function LocalSetupStep({
   // What the inventory found on disk. It arrives through the downloads hook, which
   // itself needs the fitted switches, so it is copied here (see below the hook).
   const [onDisk, setOnDisk] = useState<string[]>([]);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
 
   const liveFit = useMemo<Fit>(() => {
-    // Models already downloaded (say, before Back) need no free space.
+    // Models already downloaded (say, before Back) need no free space, so the fit
+    // waits for the inventory too: a returning user never sees a row trimmed for a
+    // frame because what is on disk wasn't known yet.
     const isOnDisk = (item: LocalSetupDownload) => onDisk.includes(localSetupItemKey(item));
-    if (space) return fitLocalSetupToSpace(plan, requested, space, isOnDisk);
-    // Not read yet: everything fits until the read says otherwise.
+    if (space && inventoryLoaded) return fitLocalSetupToSpace(plan, requested, space, isOnDisk);
+    // Not read yet: everything fits until the reads say otherwise.
     return {
       switches: { cleanup: requested.cleanup ?? true, assistant: requested.assistant ?? true },
       autoOff: [],
       state: "fits",
       requiredBytes: 0,
     };
-  }, [plan, requested, space, onDisk]);
+  }, [plan, requested, space, onDisk, inventoryLoaded]);
   const fit = frozenFit ?? liveFit;
   const { switches } = fit;
 
@@ -400,16 +407,14 @@ export function LocalSetupStep({
   // Adjusting state during render: React re-renders straight away with the new
   // inventory, before anything is committed, so the fit never shows stale rows.
   if (downloads.onDisk !== onDisk) setOnDisk(downloads.onDisk);
+  if (downloads.inventoryLoaded !== inventoryLoaded) setInventoryLoaded(downloads.inventoryLoaded);
   const queue = useMemo(() => enabledDownloads(plan, switches), [plan, switches]);
   const onMac = plan.profile.platform === "darwin";
 
   const offToFit = [...fit.autoOff, ...keptOffToFit].filter(
     (id) => id !== "dictation" && !switches[id]
   );
-  const busy = queue.some(({ rowId }) => {
-    const status = downloads.rows[rowId].status;
-    return status === "waiting" || status === "downloading" || status === "installing";
-  });
+  const busy = queue.some(({ rowId }) => isQueued(downloads.rows[rowId].status));
   const phase: "proceed" | "download" | "downloading" | "failed" | "noSpace" = downloads.allDone
     ? "proceed"
     : downloads.started

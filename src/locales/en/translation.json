@@ -472,6 +472,8 @@
           "noSpace": "Not enough free space"
         },
         "retry": "Retry",
+        "retryRow": "Retry {{row}}",
+        "downloaded": "Downloaded",
         "foot": {
           "default": "You can change any of these later in Settings.",
           "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",

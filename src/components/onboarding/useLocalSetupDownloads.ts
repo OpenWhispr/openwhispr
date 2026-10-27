@@ -92,6 +92,8 @@ export function useLocalSetupDownloads(
   allDone: boolean;
   /** Keys (localSetupItemKey) of every item the inventory found on disk. */
   onDisk: string[];
+  /** False until the first inventory read has answered. */
+  inventoryLoaded: boolean;
   start: () => void;
   retry: (rowId: LocalSetupRowId) => void;
 } {
@@ -114,10 +116,13 @@ export function useLocalSetupDownloads(
   }, [queueRows]);
 
   const packId = plan.graphicsPack?.id;
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
   useEffect(() => {
     let disposed = false;
     void readLocalSetupInventory(window.electronAPI, packId).then((onDisk) => {
-      if (!disposed) dispatch({ type: "inventory", onDisk });
+      if (disposed) return;
+      dispatch({ type: "inventory", onDisk });
+      setInventoryLoaded(true);
     });
     return () => {
       disposed = true;
@@ -268,6 +273,7 @@ export function useLocalSetupDownloads(
     started: state.started,
     allDone: allEnabledDone(state),
     onDisk: state.onDisk,
+    inventoryLoaded,
     start,
     retry,
   };
