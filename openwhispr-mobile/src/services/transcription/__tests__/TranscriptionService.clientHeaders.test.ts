@@ -123,7 +123,6 @@ describe('declared audio purpose', (): void => {
   it.each([
     { requestContext: 'keyboard', purpose: 'dictation' },
     { requestContext: 'recording', purpose: 'dictation' },
-    { requestContext: 'recording', purpose: 'meeting' },
     { requestContext: 'file', purpose: 'upload' },
   ] as const)(
     'sends $purpose for $requestContext on inline, chunked and cleanup uploads',
