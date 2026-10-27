@@ -1,8 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { once } = require("node:events");
 const { WebSocketServer } = require("ws");
 
 const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
+const { audioRecorder } = require("./harness/audioRecorder");
 const { deferred } = require("./harness/deferred");
 
 async function withPrematureCloseServer(run) {
@@ -21,8 +23,9 @@ async function withPrematureCloseServer(run) {
 
 // `connections` collects each accepted request URL so a test can count sockets
 // and read the query the client actually sent. `onAudioFrame` reports each
-// binary frame the server receives.
-async function withBeginServer(run, { onAudioFrame } = {}) {
+// binary frame the server receives. `beginDelayMs` holds Begin back, leaving
+// the socket open before the session has begun.
+async function withBeginServer(run, { onAudioFrame, beginDelayMs = 0 } = {}) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await new Promise((resolve) => server.once("listening", resolve));
   const connections = [];
@@ -31,7 +34,9 @@ async function withBeginServer(run, { onAudioFrame } = {}) {
     socket.on("message", (data, isBinary) => {
       if (isBinary) onAudioFrame?.(data);
     });
-    socket.send(JSON.stringify({ type: "Begin", id: "test-session" }));
+    const begin = () => socket.send(JSON.stringify({ type: "Begin", id: "test-session" }));
+    if (beginDelayMs) setTimeout(begin, beginDelayMs);
+    else begin();
   });
 
   try {
@@ -188,9 +193,11 @@ const MEETING_SAMPLE_RATE = 24000;
 const frameDurationMs = (bytes) => (bytes / 2 / MEETING_SAMPLE_RATE) * 1000;
 
 // node:test has no default timeout, so the wait is bounded here: withheld audio
-// must fail the run rather than hang it.
-async function collectFrames(chunks, assertFrames) {
+// must fail the run rather than hang it. Each chunk is filled with its 1-based
+// index, so `audio` (every byte received, in order) shows loss and reordering.
+async function collectFrames(chunks, assertFrames, { whileConnecting = false } = {}) {
   const frames = [];
+  const received = [];
   let receivedBytes = 0;
   const allReceived = deferred();
   const expectedBytes = chunks.reduce((total, bytes) => total + bytes, 0);
@@ -200,14 +207,19 @@ async function collectFrames(chunks, assertFrames) {
       const streaming = new AssemblyAiStreaming();
       // The real builder is what pins the session's sample rate: do not stub it.
       dialLoopback(streaming, url);
+      const sendChunks = () =>
+        chunks.forEach((bytes, index) => streaming.sendAudio(Buffer.alloc(bytes, index + 1)));
 
       try {
-        await streaming.connect({
+        const connected = streaming.connect({
           token: "byok-key",
           mode: "byok",
           sampleRate: MEETING_SAMPLE_RATE,
         });
-        for (const bytes of chunks) streaming.sendAudio(Buffer.alloc(bytes));
+        // The socket cannot open within this tick, so these arrive while it connects.
+        if (whileConnecting) sendChunks();
+        await connected;
+        if (!whileConnecting) sendChunks();
         await Promise.race([
           allReceived.promise,
           new Promise((_, reject) =>
@@ -226,7 +238,7 @@ async function collectFrames(chunks, assertFrames) {
           /sample_rate=24000/,
           "the session must open at the meeting rate for the frame maths to mean anything"
         );
-        assertFrames(frames);
+        assertFrames(frames, Buffer.concat(received));
       } finally {
         streaming.cleanupAll();
       }
@@ -234,6 +246,7 @@ async function collectFrames(chunks, assertFrames) {
     {
       onAudioFrame: (data) => {
         frames.push(data.length);
+        received.push(data);
         receivedBytes += data.length;
         if (receivedBytes >= expectedBytes) allReceived.resolve();
       },
@@ -278,6 +291,92 @@ test("a sub-floor remainder is carried into the next frame, not dropped", async 
   await collectFrames([50000, 2400], (frames) => {
     assert.equal(frames.at(-1), 4400, "the 2000 B tail must ride out on the next frame");
   });
+});
+
+test("audio sent while the socket connects arrives in order, in 50-250 ms frames", async () => {
+  // 300 ms of 10 ms chunks, all offered while the socket is still connecting —
+  // the opening words of a cold start. Sent one by one they would be 10 ms
+  // frames; sent as one they would be a 300 ms frame. AssemblyAI rejects both.
+  const chunks = Array(30).fill(480);
+  await collectFrames(
+    chunks,
+    (frames, audio) => {
+      assert.deepEqual(
+        audio,
+        Buffer.concat(chunks.map((bytes, index) => Buffer.alloc(bytes, index + 1)))
+      );
+      for (const bytes of frames) {
+        assert.ok(
+          frameDurationMs(bytes) >= 50 && frameDurationMs(bytes) <= 250,
+          `sent a ${frameDurationMs(bytes).toFixed(1)} ms frame; AssemblyAI documents 50-250 ms`
+        );
+      }
+    },
+    { whileConnecting: true }
+  );
+});
+
+test("audio held while connecting goes out ahead of audio sent once the socket opens", async () => {
+  // Begin is held back, so the socket opens before the session begins. What
+  // arrives in that gap must not overtake the opening words held before it.
+  const frames = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((value) => Buffer.alloc(1600, value));
+  const audio = audioRecorder();
+
+  await withBeginServer(
+    async (url) => {
+      const streaming = new AssemblyAiStreaming();
+      streaming.buildWebSocketUrl = () => url;
+
+      try {
+        const connected = streaming.connect({ token: "test-token" });
+        for (const frame of frames.slice(0, 3)) streaming.sendAudio(frame);
+        await once(streaming.ws, "open");
+        for (const frame of frames.slice(3, 6)) streaming.sendAudio(frame);
+        await connected;
+        for (const frame of frames.slice(6)) streaming.sendAudio(frame);
+
+        assert.deepEqual(await audio.received(9 * 1600), Buffer.concat(frames));
+      } finally {
+        streaming.cleanupAll();
+      }
+    },
+    { onAudioFrame: (data) => audio.record(data), beginDelayMs: 100 }
+  );
+});
+
+test("a client with no start in flight takes no audio", () => {
+  const streaming = new AssemblyAiStreaming();
+  assert.equal(streaming.sendAudio(Buffer.alloc(1600)), false, "an idle client held audio");
+
+  streaming.beginConnecting();
+  streaming.cleanup(); // what a closed or failed socket runs
+  assert.equal(streaming.sendAudio(Buffer.alloc(1600)), false, "an ended start held audio");
+});
+
+test("a session that has begun drops audio while its socket closes", async () => {
+  await withBeginServer(async (url) => {
+    const streaming = new AssemblyAiStreaming();
+    streaming.buildWebSocketUrl = () => url;
+
+    try {
+      await streaming.connect({ token: "test-token" });
+      streaming.ws.close(); // CLOSING until the close handshake ends the session
+
+      assert.equal(streaming.sendAudio(Buffer.alloc(1600)), false);
+    } finally {
+      streaming.cleanupAll();
+    }
+  });
+});
+
+test("audio held during a start is capped at three seconds", () => {
+  const streaming = new AssemblyAiStreaming();
+  streaming.beginConnecting();
+
+  // Five seconds of 50 ms frames at 16 kHz: the first three seconds are 60 frames.
+  const held = Array.from({ length: 100 }, () => streaming.sendAudio(Buffer.alloc(1600)));
+
+  assert.deepEqual(held, [...Array(60).fill(true), ...Array(40).fill(false)]);
 });
 
 test("a warm connection opened at another sample rate is not reused", async () => {

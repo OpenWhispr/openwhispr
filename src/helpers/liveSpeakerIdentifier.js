@@ -4,6 +4,7 @@ const speakerEmbeddings = require("./speakerEmbeddings");
 const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
 const { downsample24kTo16k, pcm16ToFloat32 } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
+const { normalizeSpeakerIndexBase } = require("./speakerIndexBase");
 
 function clampMaxSpeakers(value) {
   const n = Number(value);
@@ -48,6 +49,12 @@ const SILENCE_WINDOWS_TO_END = 24;
 const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
+// The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
+// evenly on whole groups of 3 input samples (6 bytes). Capture buffers come in
+// arbitrary sizes (PipeWire quantum, coalesced pipe reads, renderer loopback
+// frames, recovery silence), so a partial group is carried into the next
+// buffer; dropping it pulls the identifier clock behind real time.
+const RESAMPLE_GROUP_BYTES = 6;
 const DEFAULT_VAD_STATE_SHAPE = [2, 1, 64];
 // The VAD graph is tiny (~64 ops per 512-sample window at ~31 Hz); ORT's
 // default thread pool spins one worker per core for no throughput gain.
@@ -145,6 +152,7 @@ class LiveSpeakerIdentifier {
     this.queue = Promise.resolve();
     this.onSpeakerIdentified = null;
     this.getSpeakerProfiles = null;
+    this.pcmRemainder = Buffer.alloc(0);
     this.audioRemainder = new Float32Array(0);
     this.vadStateInputs = [];
     this.vadStateOutputs = [];
@@ -209,6 +217,7 @@ class LiveSpeakerIdentifier {
       getSpeakerProfiles = null,
       maxSpeakers = MAX_SPEAKER_COUNT,
       enabled = true,
+      speakerIndexBase = 0,
     } = resolvedOptions;
 
     this.onSpeakerIdentified =
@@ -217,6 +226,8 @@ class LiveSpeakerIdentifier {
     this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
     this.enabled = enabled !== false;
     this._resetMeetingState();
+    // A resumed note already holds earlier sessions' ids; see speakerIndexBase.js.
+    this.nextLiveIndex = normalizeSpeakerIndexBase(speakerIndexBase);
 
     if (!this.isAvailable()) {
       debugLogger.warn("Live speaker identifier unavailable", {
@@ -420,6 +431,7 @@ class LiveSpeakerIdentifier {
 
   _resetMeetingState() {
     this.queue = Promise.resolve();
+    this.pcmRemainder = Buffer.alloc(0);
     this.audioRemainder = new Float32Array(0);
     this.speechChunks = [];
     this.speechActive = false;
@@ -458,9 +470,16 @@ class LiveSpeakerIdentifier {
     await this._ensureLoaded();
     if (!this.session) return;
 
-    const downsampled = downsample24kTo16k(
-      Buffer.isBuffer(pcmBuffer) ? pcmBuffer : Buffer.from(pcmBuffer)
-    );
+    // Carry the bytes past the last whole resample group into the next buffer.
+    // The concat copies into a new buffer, so the Int16 view never inherits the
+    // caller's byteOffset.
+    const incoming = Buffer.isBuffer(pcmBuffer) ? pcmBuffer : Buffer.from(pcmBuffer);
+    const pending = Buffer.concat([this.pcmRemainder, incoming]);
+    const usableBytes = pending.length - (pending.length % RESAMPLE_GROUP_BYTES);
+    this.pcmRemainder = Buffer.from(pending.subarray(usableBytes));
+    if (!usableBytes) return;
+
+    const downsampled = downsample24kTo16k(pending.subarray(0, usableBytes));
     if (!downsampled.length) return;
 
     this.audioRemainder = appendFloat32(this.audioRemainder, pcm16ToFloat32(downsampled));

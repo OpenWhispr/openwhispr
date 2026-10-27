@@ -1,4 +1,4 @@
-const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.10";
+const WHISPER_CPP_TAG = process.env.WHISPER_CPP_VERSION || "0.0.11";
 
 const WINDOWS_MSVC_RUNTIME_LIBRARIES = Object.freeze([
   "msvcp140.dll",

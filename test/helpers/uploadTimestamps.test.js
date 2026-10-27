@@ -81,6 +81,34 @@ test("verbose segments clamp negative start timestamps and inverted end timestam
   ]);
 });
 
+// The segments become the upload note's only copy of the text, so they must
+// hold every word of it; a CJK response's text has no spaces between them.
+test("segments must cover the response text, whitespace aside", () => {
+  assert.deepEqual(
+    mapVerboseSegments({
+      text: "你好。今天开会。",
+      segments: [
+        { start: 0, end: 1, text: "你好。" },
+        { start: 1, end: 2, text: "今天开会。" },
+      ],
+    }),
+    [
+      { text: "你好。", start: 0, end: 1 },
+      { text: "今天开会。", start: 1, end: 2 },
+    ]
+  );
+  assert.equal(
+    mapVerboseSegments({
+      text: "First sentence. Second sentence.",
+      segments: [
+        { start: 0, end: 1, text: " First sentence." },
+        { start: NaN, end: 2, text: " Second sentence." },
+      ],
+    }),
+    null
+  );
+});
+
 test("responses without usable segments map to null", () => {
   assert.equal(mapVerboseSegments({ text: "plain json response" }), null);
   assert.equal(mapVerboseSegments({ segments: "not-an-array" }), null);

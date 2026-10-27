@@ -6,7 +6,8 @@
  * calendars+events snapshot whenever the store changes, "sync" arrives on
  * stdin, or a 5-minute timer rolls the availability cache window forward.
  *
- * Pass --request to prompt for calendar access when it is not determined.
+ * Pass --request to prompt for calendar access when it is not determined, and
+ * --lookback-seconds <n> to keep that much history in each snapshot.
  * macOS reads the usage strings from the TCC "responsible process": the
  * OpenWhispr app bundle in packaged builds, or this binary's embedded
  * __info_plist in dev, where the manager spawns it via macos-disclaim-exec
@@ -29,6 +30,15 @@ let REFRESH_INTERVAL_SECONDS = 300.0
 // Keep events that may still block availability after the maximum two-hour
 // buffer, plus one snapshot interval of safety.
 let AVAILABILITY_LOOKBACK_SECONDS = (120.0 * 60) + REFRESH_INTERVAL_SECONDS
+// The app passes --lookback-seconds <n> (calendarCacheWindow.js) so recent past
+// events stay linkable to notes; never look back less than availability needs.
+let CACHE_LOOKBACK_SECONDS: Double = {
+    let args = CommandLine.arguments
+    guard let flag = args.firstIndex(of: "--lookback-seconds"), flag + 1 < args.count,
+          let seconds = Double(args[flag + 1]), seconds.isFinite
+    else { return AVAILABILITY_LOOKBACK_SECONDS }
+    return max(seconds, AVAILABILITY_LOOKBACK_SECONDS)
+}()
 
 let isoFormatter: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
@@ -78,10 +88,12 @@ struct AttendeeOut: Encodable {
     let name: String?
     let status: String
     let isSelf: Bool
+    let isResource: Bool
 
     enum CodingKeys: String, CodingKey {
         case email, name, status
         case isSelf = "self"
+        case isResource = "resource"
     }
 }
 
@@ -95,6 +107,7 @@ struct EventOut: Encodable {
     let status: String
     let availability: String
     let organizer_email: String?
+    let organizer_self: Bool
     let url: String?
     let location: String?
     let notes_urls: [String]
@@ -208,7 +221,8 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
             email: mailtoEmail(participant.url),
             name: participant.name,
             status: participantStatus(participant.participantStatus),
-            isSelf: participant.isCurrentUser
+            isSelf: participant.isCurrentUser,
+            isResource: participant.participantType == .room || participant.participantType == .resource
         )
     }
 
@@ -222,6 +236,7 @@ func mapEvent(_ event: EKEvent) -> EventOut? {
         status: eventStatus(event.status),
         availability: eventAvailability(event.availability),
         organizer_email: mailtoEmail(event.organizer?.url),
+        organizer_self: event.organizer?.isCurrentUser ?? false,
         url: event.url?.absoluteString,
         location: event.location,
         notes_urls: extractURLs(from: event.notes),
@@ -244,7 +259,7 @@ func emitSnapshot() {
     }
 
     let now = Date()
-    let start = now.addingTimeInterval(-AVAILABILITY_LOOKBACK_SECONDS)
+    let start = now.addingTimeInterval(-CACHE_LOOKBACK_SECONDS)
     let end = now.addingTimeInterval(CACHE_LOOKAHEAD_DAYS * 24 * 60 * 60)
     let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: calendars)
     let eventsOut = eventStore.events(matching: predicate).compactMap(mapEvent)

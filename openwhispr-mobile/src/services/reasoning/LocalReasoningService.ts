@@ -1,45 +1,16 @@
 import { AppleLLM } from '@/lib/appleLLM';
-import { LOCAL_OUTPUT_TOKEN_RESERVE, toLocalReasoningError } from '@/lib/localReasoning';
-import type { KeyboardTone, ReasoningRequest, ReasoningResponse } from '@/types';
+import {
+  LOCAL_OUTPUT_TOKEN_RESERVE,
+  countLocalReasoningTokens,
+  estimateLocalTokens,
+  toLocalReasoningError,
+} from '@/lib/localReasoning';
+import type { ReasoningRequest, ReasoningResponse } from '@/types';
 
-const TONE_INSTRUCTIONS: Partial<Record<KeyboardTone, string>> = {
-  formal: 'Use a formal, polished tone.',
-  casual: 'Use a casual, conversational tone.',
-  very_casual: 'Use a very casual, relaxed tone.',
-  excited: 'Use an upbeat, enthusiastic tone.',
-};
-
-function appendInstruction(parts: string[], value: string | undefined | null): void {
-  const trimmed = value?.trim();
-  if (trimmed) parts.push(trimmed);
-}
-
+// Callers fold language, tone and dictionary into the system prompt first
+// (buildProviderPrompt), so the instructions are that prompt alone.
 export function buildLocalReasoningInstructions(request: ReasoningRequest): string {
-  const parts: string[] = [];
-  appendInstruction(parts, request.systemPrompt);
-
-  if (request.language || request.locale) {
-    appendInstruction(
-      parts,
-      `Prefer ${request.language ?? request.locale} language conventions when editing or generating text.`,
-    );
-  }
-
-  if (request.tone && request.tone !== 'default') {
-    appendInstruction(parts, TONE_INSTRUCTIONS[request.tone]);
-  }
-
-  if (request.customDictionary && request.customDictionary.length > 0) {
-    const words = request.customDictionary.map((word) => word.trim()).filter(Boolean);
-    if (words.length > 0) {
-      appendInstruction(
-        parts,
-        `Custom Dictionary: preserve these spellings exactly when they appear: ${words.join(', ')}.`,
-      );
-    }
-  }
-
-  return parts.join('\n\n');
+  return request.systemPrompt?.trim() ?? '';
 }
 
 export class LocalReasoningService {
@@ -51,16 +22,26 @@ export class LocalReasoningService {
 
     try {
       const startedAt = Date.now();
-      const result = await AppleLLM.generateText({
-        instructions,
-        prompt: request.text,
-        temperature: request.temperature,
-        maxTokens: request.maxTokens ?? LOCAL_OUTPUT_TOKEN_RESERVE,
-      });
+      const result = await AppleLLM.generateText(
+        {
+          instructions,
+          prompt: request.text,
+          temperature: request.temperature,
+          maxTokens: request.maxTokens ?? LOCAL_OUTPUT_TOKEN_RESERVE,
+        },
+        { signal: request.signal },
+      );
 
       if (__DEV__) {
+        // The rate the On-Device cleanup timeout assumes (cleanupTranscript); it includes reading
+        // the prompt, and is estimated from length where iOS can't count tokens (before 26.4).
+        const elapsedMs = Date.now() - startedAt;
+        const counted = await countLocalReasoningTokens({ prompt: result.text });
+        const outputTokens = counted ?? estimateLocalTokens(result.text);
         console.log(
-          `[reasoning] provider=local model=apple-fm elapsedMs=${Date.now() - startedAt}`,
+          `[reasoning] provider=local model=apple-fm elapsedMs=${elapsedMs} outputTokens=${outputTokens}${
+            counted === null ? ' (estimated)' : ''
+          } tokensPerSecond=${(outputTokens / Math.max(elapsedMs / 1000, 0.001)).toFixed(1)}`,
         );
       }
 

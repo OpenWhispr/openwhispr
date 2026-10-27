@@ -130,8 +130,8 @@ export default function PrivacyDataScreen() {
           iconStyle="line"
           icon="text.cursor"
           mdIcon="TextCursor"
-          title="Dictation Agent Context"
-          description="Selected text is always sent to the cloud service when you use the Dictation Agent. If Share Cursor Context is on, the surrounding text near your cursor is also sent. This setting is off by default and can be changed in Dictation Agent settings."
+          title="Voice Assistant Context"
+          description="Selected text is always sent to the cloud service when you use the Voice Assistant. If Share Cursor Context is on, the surrounding text near your cursor is also sent. This setting is off by default and can be changed in Voice Assistant settings."
           showChevron={false}
         />
         <SettingsRow

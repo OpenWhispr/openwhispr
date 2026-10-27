@@ -79,8 +79,36 @@ test("a verified caret banks targeted response delivery when auto-paste is enabl
     transcript: "draft a reply",
     screenContext: null,
     deliverySessionId: "caret-session",
+    deliveryAcceptsMarkdown: false,
   });
   assert.equal(modelCalls.length, 0, "caret delivery must retain the chat Agent route");
+});
+
+test("a caret in a markdown-friendly app carries that verdict with the session id", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-caret-markdown-",
+    settingsKey: "__assistantCaretMarkdownSettings",
+    settings: { autoPasteEnabled: true },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, {
+    status: "editable",
+    sessionId: "caret-session",
+    acceptsMarkdown: true,
+  });
+
+  await manager.processAgentCommand("draft a reply", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.deepEqual(manager.pendingAssistantConversation, {
+    transcript: "draft a reply",
+    screenContext: null,
+    deliverySessionId: "caret-session",
+    deliveryAcceptsMarkdown: true,
+  });
 });
 
 test("a verified caret stays panel-first when auto-paste is disabled", async (t) => {
@@ -262,6 +290,28 @@ test("an ambiguous capture with no dictation editor goes to the panel as a plain
   assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
 });
 
+// Focus moved while the voice assistant hotkey's keys were still held (#2113),
+// so the window the command is about was never checked. That is no selection to
+// edit, not a failed edit: the command still runs in the panel.
+test("a capture whose focus moved during the modifier wait runs as a panel command", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-focus-moved-",
+    settingsKey: "__assistantFocusMovedSettings",
+  });
+  const { manager, modelCalls } = managerWithCapture(createManager, {
+    status: "target_changed",
+    code: "focus_moved",
+  });
+
+  const result = await manager.processAgentCommand("summarize this", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(result, "summarize this");
+  assert.equal(manager.pendingAssistantConversation.transcript, "summarize this");
+  assert.equal(modelCalls.length, 0, "the dictation-agent model must not run");
+});
+
 test("a selection with the dictation agent reachable keeps the in-place edit path", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-assistant-sel-reachable-",
@@ -287,4 +337,166 @@ test("a selection with the dictation agent reachable keeps the in-place edit pat
   const selectionConfig = modelCalls[0][3];
   assert.ok(!("selectionEditReachable" in selectionConfig));
   assert.ok(!("rawScreenContext" in selectionConfig));
+});
+
+// "Explain this" over highlighted text asks for an answer, not an edit: the
+// editor's question verdict must open the panel with the selection quoted and
+// never arm the replacement that would paste the answer over the selection.
+test("a question about a selection goes to the panel instead of replacing it", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-sel-question-",
+    settingsKey: "__assistantSelQuestionSettings",
+    // The local edit prompt reads these.
+    settings: { customPrompts: {}, snippets: [] },
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { SELECTION_QUESTION_MARKER } = await import("../../src/helpers/selectionEditing.js");
+  const capture = { status: "selected", text: "the selected paragraph", sessionId: "s1" };
+  const screenshot = { mediaType: "image/jpeg", data: "raw" };
+  for (const [provider, reply] of [
+    ["openai", (marker) => `${SELECTION_QUESTION_MARKER}${marker}`],
+    ["local", () => JSON.stringify({ replacement: SELECTION_QUESTION_MARKER })],
+  ]) {
+    const modelCalls = [];
+    const manager = createManager({
+      isProcessing: true,
+      pendingAssistantConversation: null,
+      voiceAgentRequested: false,
+      consumeSelectionCapture: async () => capture,
+      processWithReasoningModel: async (...args) => {
+        modelCalls.push(args);
+        const marker = args[3].systemPrompt?.match(/__OPENWHISPR_SELECTION_COMPLETE_[^\s]+__/);
+        return reply(marker?.[0] ?? "");
+      },
+    });
+
+    const result = await manager.processAgentCommand("Hey Aria, explain this", "gpt", "Aria", {
+      provider,
+      selectionEditReachable: true,
+      rawScreenContext: screenshot,
+      systemPrompt: "base prompt",
+    });
+
+    assert.equal(result, "Hey Aria, explain this", provider);
+    assert.equal(modelCalls.length, 1, provider);
+    assert.ok(!manager.pendingSelectionEdit, `${provider}: no replacement may be armed`);
+    assert.deepEqual(manager.pendingAssistantConversation, {
+      transcript: 'explain this\n\n"the selected paragraph"',
+      screenContext: screenshot,
+    });
+  }
+});
+
+test("a question verdict arriving after cancellation banks nothing", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-assistant-sel-question-cancel-",
+    settingsKey: "__assistantSelQuestionCancelSettings",
+  });
+  const { SELECTION_QUESTION_MARKER } = await import("../../src/helpers/selectionEditing.js");
+  let cancelled = false;
+  const manager = createManager({
+    isProcessing: true,
+    pendingAssistantConversation: null,
+    consumeSelectionCapture: async () => ({ status: "selected", text: "x", sessionId: "s1" }),
+    processWithReasoningModel: async () => {
+      cancelled = true;
+      return SELECTION_QUESTION_MARKER;
+    },
+  });
+  await manager.processAgentCommand(
+    "explain this",
+    "gpt",
+    "Aria",
+    { provider: "openai", selectionEditReachable: true, systemPrompt: "base" },
+    () => cancelled
+  );
+  assert.equal(manager.pendingAssistantConversation, null);
+  assert.ok(!manager.pendingSelectionEdit);
+});
+
+// Tone & Style: the app captured at recording start rides with a caret
+// delivery, so the panel writes the answer in that app's style.
+const TONE_SETTINGS = {
+  autoPasteEnabled: true,
+  toneStyleEnabled: true,
+  toneStyles: { personal: "very_casual", work: "casual", email: "formal", other: "formal" },
+};
+
+test("a caret delivery carries the kind of app the answer lands in", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-caret-tone-",
+    settingsKey: "__assistantCaretToneSettings",
+    settings: TONE_SETTINGS,
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, {
+    status: "editable",
+    sessionId: "caret-session",
+  });
+  manager.toneStylePromise = Promise.resolve("work");
+
+  await manager.processAgentCommand("tell them the deploy is done", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal(manager.pendingAssistantConversation.deliveryAppCategory, "work");
+  assert.equal(manager.toneStylePromise, null, "the capture is consumed once");
+});
+
+test("a panel-only answer carries no app to write for", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-panel-tone-",
+    settingsKey: "__assistantPanelToneSettings",
+    settings: TONE_SETTINGS,
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const { manager } = managerWithCapture(createManager, null);
+  manager.toneStylePromise = Promise.resolve("work");
+
+  await manager.processAgentCommand("what's on my calendar", "gpt", "Aria", {
+    selectionEditReachable: true,
+  });
+
+  assert.equal("deliveryAppCategory" in manager.pendingAssistantConversation, false);
+});
+
+test("a selection edit asks for the selection's app style only on a rewrite", async (t) => {
+  const { createManager } = await loadAudioManagerHarness(t, {
+    cachePrefix: "openwhispr-assistant-sel-tone-",
+    settingsKey: "__assistantSelToneSettings",
+    settings: TONE_SETTINGS,
+    mockModules: {
+      "/services/ReasoningService": 'export default { processText: async () => "" };',
+    },
+  });
+  const capture = { status: "selected", text: "the selected paragraph", sessionId: "s1" };
+  const { manager, modelCalls } = managerWithCapture(createManager, capture);
+  manager.toneStylePromise = Promise.resolve("email");
+
+  try {
+    await manager.processAgentCommand("rewrite this", "gpt", "Aria", {
+      selectionEditReachable: true,
+      systemPrompt: "base prompt",
+      textOnlySystemPrompt: "base prompt",
+    });
+  } catch {
+    // The mocked result has no completion marker; only the request matters here.
+  }
+
+  const { systemPrompt, textOnlySystemPrompt } = modelCalls[0][3];
+  for (const prompt of [systemPrompt, textOnlySystemPrompt]) {
+    assert.match(
+      prompt,
+      /^base prompt\n\nIf the instruction asks you to rewrite, reword or draft the text and names no tone, write it in the user's email style: formal and polished\./
+    );
+    // IDEs count as "other", so a rewrite there may be code the tone must not touch.
+    assert.match(prompt, /code and commands, with their strings and comments, are never restyled/);
+    assert.ok(prompt.indexOf("If the instruction asks") < prompt.indexOf("SELECTION EDITING MODE"));
+  }
 });

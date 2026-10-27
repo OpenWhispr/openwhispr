@@ -1,6 +1,6 @@
 type Translate = (key: string) => string;
 
-export type LinuxPasteTool = "wtype" | "ydotool" | "xdotool";
+export type LinuxPasteTool = "wtype" | "ydotool" | "xdotool" | "wl-clipboard";
 
 export interface LinuxPasteInstallCommand {
   label: string;
@@ -35,10 +35,19 @@ export function getLinuxPasteInstallCommands(
       ];
 }
 
+// wtype is the paste tool on wlroots. On COSMIC other apps paste without it, but
+// terminals only receive Ctrl+Shift+V through wtype.
+export function needsWtype(pasteTools: PasteToolsResult) {
+  return (
+    !pasteTools.hasWtype &&
+    (!!pasteTools.isWlroots || (!!pasteTools.isCosmic && pasteTools.available))
+  );
+}
+
 export function needsLinuxPasteToolGuidance(pasteTools: PasteToolsResult) {
   return (
     pasteTools.platform === "linux" &&
-    (!pasteTools.available || (pasteTools.isWlroots && !pasteTools.hasWtype))
+    (!pasteTools.available || needsWtype(pasteTools) || !!pasteTools.wlCopyMissing)
   );
 }
 import type { PasteToolsResult } from "../types/electron";

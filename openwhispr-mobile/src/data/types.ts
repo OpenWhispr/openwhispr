@@ -99,6 +99,8 @@ export interface RemoteNote {
   /** Desktop-shape transcript JSON; decomposed into segments/speakers on apply. */
   transcript: string | null;
   deleted_at: string | null;
+  /** Optional: not every server payload that reaches an apply path carries it. */
+  created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
   space_id?: string | null;
@@ -145,6 +147,27 @@ export interface ConflictedNote {
   title: string | null;
   /** null when the stashed JSON fails to parse (defensive — should not happen in practice); keep-mine still resolves such a row with no dependency on this. */
   conflictServerNote: RemoteNote | null;
+}
+
+/** The notes picked to answer a chat question, and how many matched before the cap. */
+export interface ChatCandidateNotes {
+  notes: Note[];
+  total: number;
+  /** The returned notes whose transcript matches a term, so their matching lines can be sent. */
+  transcriptMatchIds?: number[];
+}
+
+/** A period a chat question names: the notes created from `start` up to (not including) `end`. */
+export interface ChatNoteWindow {
+  start: Date;
+  end: Date;
+  meetingsOnly: boolean;
+}
+
+export interface ChatCandidateOptions {
+  includePrivate: boolean;
+  limit: number;
+  window?: ChatNoteWindow;
 }
 
 export interface NotesRepository {
@@ -213,6 +236,14 @@ export interface NotesRepository {
    */
   moveNoteToSpace(noteId: number, spaceId: number): void;
   searchNotes(query: string, folderId?: number): Note[];
+  /**
+   * Notes for answering a chat question: a term matches title, content, AI summary or transcript,
+   * and a term held by fewer of the notes searched weighs more. Only notes scoring at least half
+   * as well as the best one count, the best first, then the newest. With a window, only notes
+   * created in it are searched. With no terms, the most recent notes. Capped at `limit`; `total`
+   * counts them all before the cap.
+   */
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes;
   getActions(): Action[];
   getActionById(id: number): Action | null;
   createAction(name: string, description: string, prompt: string): Action;
@@ -292,12 +323,16 @@ export interface NotesRepository {
    * as `null` when serverUpdatedAt is itself a local-clock fallback (the server
    * response omitted its own updated_at) — cloudUpdatedAt must only ever hold a
    * genuine server ack, never a value guaranteed to mismatch on the next push.
+   *
+   * serverCreatedAt, when the response carries it, repairs a createdAt stamped
+   * with the pull time by builds that didn't sync created_at.
    */
   markNotePushed(
     pushed: Note,
     remoteId: string,
     serverUpdatedAt: string,
     cloudUpdatedAt?: string | null,
+    serverCreatedAt?: string,
   ): void;
   /** Clears pendingSync with no other changes — used when a push was permanently rejected (e.g. HTTP 400) and retrying would never succeed. */
   markNoteTerminal(localId: number): void;
@@ -309,6 +344,8 @@ export interface NotesRepository {
    * that pull could otherwise be followed by a stale-base 409.
    */
   dropNotePushAttempt(localId: number): void;
+  /** True while the note's latest push was refused (terminal or dropped) and no later push, pull or delete has settled it. */
+  isNotePushRejected(localId: number): boolean;
   /**
    * Records a push-time 409 note_version_conflict: stores the server's current
    * copy in conflict_server_note and leaves pendingSync untouched (local edits
@@ -399,6 +436,17 @@ export interface NotesRepository {
   getSpeakerProfiles(): SpeakerProfile[];
   getSpeakerProfileById(id: number): SpeakerProfile | null;
   createSpeakerProfile(input: NewSpeakerProfile): SpeakerProfile;
+  /**
+   * Atomically creates the owner speaker profile and applies `speakerPatch` (plus the new
+   * profile's id) to the speaker row in one transaction, so a failure partway through never
+   * leaves an owner profile with no speaker linked to it, which would block every later
+   * claim until the profile was deleted. Used by the "claim this speaker as me" flow.
+   */
+  createOwnerProfileForSpeaker(
+    speakerId: number,
+    profileInput: Omit<NewSpeakerProfile, 'isOwner'>,
+    speakerPatch: Partial<Speaker>,
+  ): SpeakerProfile;
   updateSpeakerProfile(id: number, updates: Partial<SpeakerProfile>): void;
   deleteSpeakerProfile(id: number): void;
   deleteAllSpeakerProfiles(): void;
@@ -410,6 +458,8 @@ export interface NotesRepository {
   setTranscriptionStatus(noteId: number, status: TranscriptionStatus): void;
   /** Update local-only meeting/diarization columns NoteUpdate cannot reach. */
   updateNoteMeta(noteId: number, updates: MeetingNoteUpdate): void;
+  /** Points a meeting with no recording path back at its recording, keeping its place in lists. */
+  restoreMeetingRecordingPath(noteId: number, sourceFile: string): void;
   /** Update selected calendar context; public notes mark pending sync, private notes stay local-only. */
   updateNoteCalendarContext(noteId: number, updates: MeetingCalendarContextUpdate): void;
 }

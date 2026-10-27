@@ -1,3 +1,5 @@
+jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn(() => undefined) }));
+
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { api } from '@/lib/apiClient';
 
@@ -23,7 +25,6 @@ describe('ReasoningService agentName on the wire', () => {
   });
 
   it('sends agentName even when a systemPrompt override is provided', async () => {
-    // Action Mode takes precedence over system-prompt override; the server handles routing.
     await ReasoningService.processText({
       text: 'hi',
       systemPrompt: 'custom',

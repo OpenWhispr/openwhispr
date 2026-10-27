@@ -19,7 +19,12 @@ import {
   Trash2,
   Users,
 } from "../icons";
+import { FolderNotesPopover } from "./FolderNotesPopover";
+import { sidebarFolderNotes } from "./sidebarFolderNotes";
 import { Button } from "../ui/button";
+import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
+import sharedSpaceEmptyLight from "../../assets/empty-states/notes-shared-space-light.svg";
+import sharedSpaceEmptyDark from "../../assets/empty-states/notes-shared-space-dark.svg";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -73,6 +78,7 @@ import {
   useExpandedContainers,
   useActiveContext,
   useActiveNoteId,
+  useActiveNote,
   useIsTreeLoading,
   setActiveContext,
   setActiveNoteId,
@@ -123,6 +129,7 @@ const SUB_TRIGGER_CLASS = cn(
 type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 type TreeRow =
+  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: 2 | 3 }
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
   | {
       type: "folder";
@@ -146,7 +153,7 @@ interface DropHandlers {
   onDrop: (e: React.DragEvent) => void;
 }
 
-interface RowA11yProps {
+export interface RowA11yProps {
   tabIndex: number;
   rowRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -1118,9 +1125,12 @@ export default function SpacesTree({
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
   const notesByContainer = useNotesByContainer();
+  const [openFolderId, setOpenFolderId] = useState<number | null>(null);
   const expanded = useExpandedContainers();
   const activeContext = useActiveContext();
   const activeNoteId = useActiveNoteId();
+  const activeNote = useActiveNote();
+
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
@@ -1453,7 +1463,14 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, level: 1 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
+            );
+            shownNotes.forEach((note) => {
               rows.push({
                 type: "note",
                 key: `n:${note.id}`,
@@ -1462,6 +1479,15 @@ export default function SpacesTree({
                 level: 2,
               });
             });
+            if (hiddenCount > 0) {
+              rows.push({
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
+                parentKey: folderKey,
+                level: 2,
+              });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1478,7 +1504,14 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
+            );
+            shownNotes.forEach((note) => {
               rows.push({
                 type: "note",
                 key: `n:${note.id}`,
@@ -1487,6 +1520,15 @@ export default function SpacesTree({
                 level: 3,
               });
             });
+            if (hiddenCount > 0) {
+              rows.push({
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
+                parentKey: folderKey,
+                level: 3,
+              });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
@@ -1496,7 +1538,16 @@ export default function SpacesTree({
     privateSpaces.forEach(pushPrivateSpace);
     if (teamCapability) orderedTeamSpaces.forEach(pushSpace);
     return rows;
-  }, [privateSpaces, orderedTeamSpaces, folders, notesByContainer, expanded, teamCapability]);
+  }, [
+    privateSpaces,
+    orderedTeamSpaces,
+    folders,
+    notesByContainer,
+    expanded,
+    teamCapability,
+    activeNote,
+    folderCounts,
+  ]);
 
   const effectiveFocusKey =
     focusedKey && visibleRows.some((r) => r.key === focusedKey)
@@ -1516,7 +1567,9 @@ export default function SpacesTree({
   };
 
   const activateRow = (row: TreeRow) => {
-    if (row.type === "space") {
+    if (row.type === "more") {
+      setOpenFolderId(row.folder.id);
+    } else if (row.type === "space") {
       // Deselect the note so the main pane shows the container overview.
       setActiveNoteId(null);
       setActiveContext(row.space.id, null);
@@ -1579,7 +1632,7 @@ export default function SpacesTree({
     const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
     if (horizontalIntent === "inward") {
       e.preventDefault();
-      if (row.type === "note") return;
+      if (row.type === "note" || row.type === "more") return;
       if (!expanded.has(row.key)) {
         setContainerExpanded(row.key, true);
       } else if (visibleRows[idx + 1]?.parentKey === row.key) {
@@ -1589,7 +1642,7 @@ export default function SpacesTree({
     }
     if (horizontalIntent === "outward") {
       e.preventDefault();
-      if (row.type !== "note" && expanded.has(row.key)) {
+      if (row.type !== "note" && row.type !== "more" && expanded.has(row.key)) {
         setContainerExpanded(row.key, false);
       } else if (row.parentKey) {
         focusRow(row.parentKey);
@@ -1738,6 +1791,14 @@ export default function SpacesTree({
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
+    const folderNotes = notesByContainer[folderKey] ?? [];
+    const total = folderCounts[folder.id] ?? folderNotes.length;
+    const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+      folderNotes,
+      activeNote,
+      folder.id,
+      total
+    );
 
     if (isRenaming) {
       return (
@@ -1799,8 +1860,29 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
-            {(notesByContainer[folderKey] ?? []).map((note) =>
+            {shownNotes.map((note) =>
               level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
+            )}
+            {hiddenCount > 0 && (
+              <FolderNotesPopover
+                folder={folder}
+                total={total}
+                hiddenCount={hiddenCount}
+                activeNoteId={activeNoteId}
+                level={level === 1 ? 2 : 3}
+                open={openFolderId === folder.id}
+                onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
+                a11y={a11yFor(`more:${folder.id}`)}
+                onPick={(note, keyboard) => {
+                  setActiveNoteId(note.id);
+                  if (keyboard) focusRowSoon(`n:${note.id}`);
+                  else setFocusedKey(`n:${note.id}`);
+                }}
+                onOpenFolder={() => {
+                  setActiveNoteId(null);
+                  setActiveContext(folder.space_id, folder.id);
+                }}
+              />
             )}
           </div>
         </TreeChildren>
@@ -2052,27 +2134,33 @@ export default function SpacesTree({
                     ))
                   : teamSpaces.map(renderSpace)}
                 {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
-                {teamSpaces.length === 0 &&
-                  (canCreateTeamSpace ? (
-                    // Grouped view already offers a + on each manageable workspace row.
-                    !showWorkspaceGroups && (
-                      <div className="ps-[18px] pe-2 py-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openCreateSpace()}
-                          className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                        >
-                          <Plus size={11} />
-                          {t("notes.spaces.newSpace")}
-                        </Button>
-                      </div>
-                    )
-                  ) : (
-                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/60 leading-relaxed">
+                {teamSpaces.length === 0 && (
+                  <div role="none" className="flex flex-col items-center px-3 py-6 text-center">
+                    <ThemedEmptyIllustration
+                      light={sharedSpaceEmptyLight}
+                      dark={sharedSpaceEmptyDark}
+                      width={134}
+                      height={139}
+                    />
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {t("notes.spaces.emptyTeamTitle")}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
-                  ))}
+                    {canCreateTeamSpace && !showWorkspaceGroups && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openCreateSpace()}
+                        className="mt-3 h-7 gap-1 text-xs text-primary"
+                      >
+                        <Plus size={11} />
+                        {t("notes.spaces.newSpace")}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

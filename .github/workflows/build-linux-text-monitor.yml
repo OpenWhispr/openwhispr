@@ -7,12 +7,18 @@ on:
       - '.github/workflows/build-linux-text-monitor.yml'
     branches:
       - main
+  # Compile-only on PRs, so a source that doesn't build fails before merge
+  # instead of leaving the last release in place.
+  pull_request:
+    paths:
+      - 'resources/linux-text-monitor.c'
+      - '.github/workflows/build-linux-text-monitor.yml'
   workflow_dispatch:
     inputs:
       version:
         description: 'Version tag (e.g., 1.0.0)'
         required: false
-        default: '1.0.0'
+        default: '1.1.0'
         type: string
 
 permissions:
@@ -22,7 +28,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -39,6 +45,7 @@ jobs:
           ldd linux-text-monitor
           ldd linux-text-monitor | grep -q "not found" && { echo "Unresolved shared library dependency"; exit 1; }
           ldd linux-text-monitor | grep -q libgobject-2.0.so || { echo "libgobject-2.0 not linked - explicit -lgobject-2.0 flag may have regressed"; exit 1; }
+          grep -q -- --probe-editable linux-text-monitor || { echo "--probe-editable missing - textEditMonitor.js would get monitor output instead of a verdict"; exit 1; }
           exit 0
 
       - name: Create tar.gz archive
@@ -46,16 +53,19 @@ jobs:
           tar -czf linux-text-monitor-linux-x64.tar.gz linux-text-monitor
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-text-monitor
           path: linux-text-monitor-linux-x64.tar.gz
 
+      # 1.1.0 is the first release with --probe-editable; bump this default
+      # whenever the binary's command-line protocol changes.
       - name: Create or update release
-        uses: softprops/action-gh-release@v2
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: linux-text-monitor-v${{ inputs.version || '1.0.0' }}
-          name: Linux Text Monitor v${{ inputs.version || '1.0.0' }}
+          tag_name: linux-text-monitor-v${{ inputs.version || '1.1.0' }}
+          name: Linux Text Monitor v${{ inputs.version || '1.1.0' }}
           body: |
             Prebuilt Linux text monitor binary for auto-learn correction monitoring.
 

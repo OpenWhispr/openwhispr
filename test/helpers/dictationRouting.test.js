@@ -48,6 +48,22 @@ test("voice agent hotkey ignores the wake word state", async () => {
   );
 });
 
+test("voice agent hotkey wins over translation when both flags are present", async () => {
+  const { resolveDictationRouteKind } = await load();
+
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: false,
+      agentInvoked: false,
+      voiceAgentRequested: true,
+      translationRequested: true,
+      translationReachable: false,
+    }),
+    "agent"
+  );
+});
+
 test("normal dictation with wake word routes to the agent", async () => {
   const { resolveDictationRouteKind } = await load();
 
@@ -773,4 +789,67 @@ test("lifecycle input kind prefers assistant, then translation, then dictation",
     "translation"
   );
   assert.equal(resolveLifecycleInputKind({}), "dictation");
+});
+
+test("an unconfigured cleanup warns once per broken setup, and again once it was fixed", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const settings = {
+    useCleanupModel: true,
+    cleanupMode: "providers",
+    cleanupProvider: "openai",
+    isSignedIn: false,
+  };
+  const skipped = { skipped: true, cleanupReachable: false, settings };
+
+  const first = cleanupUnconfiguredNotice(null, skipped);
+  assert.equal(first.forget, false);
+  assert.equal(first.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
+  assert.equal(first.notice.settingsTarget, "llms");
+  assert.equal(first.notice.surface, "llm", "it gets the friendly cleanup toast");
+
+  const shownKey = first.notice.setupKey;
+  assert.equal(cleanupUnconfiguredNotice(shownKey, skipped).notice, null);
+  const otherProvider = cleanupUnconfiguredNotice(shownKey, {
+    ...skipped,
+    settings: { ...settings, cleanupProvider: "anthropic" },
+  });
+  assert.notEqual(otherProvider.notice, null, "a different broken setup warns again");
+
+  // Only a skipped dictation warns; a wake-word command was handled by the agent.
+  assert.deepEqual(cleanupUnconfiguredNotice(null, { ...skipped, skipped: false }), {
+    forget: false,
+    notice: null,
+  });
+
+  for (const fixed of [
+    { ...skipped, cleanupReachable: true },
+    { ...skipped, settings: { ...settings, useCleanupModel: false } },
+  ]) {
+    assert.deepEqual(cleanupUnconfiguredNotice(shownKey, fixed), { forget: true, notice: null });
+  }
+});
+
+test("signed out of OpenWhispr Cloud, the cleanup notice says so", async () => {
+  const { cleanupUnconfiguredNotice } = await load();
+  const cloud = {
+    useCleanupModel: true,
+    cleanupMode: "openwhispr",
+    cleanupCloudMode: "openwhispr",
+    isSignedIn: false,
+  };
+  const { notice } = cleanupUnconfiguredNotice(null, {
+    skipped: true,
+    cleanupReachable: false,
+    settings: cloud,
+  });
+  assert.equal(notice.messageKey, "hooks.audioRecording.cleanupSignedOut");
+  assert.equal(notice.settingsTarget, "llms");
+  assert.equal(notice.surface, "llm");
+
+  const byok = cleanupUnconfiguredNotice(null, {
+    skipped: true,
+    cleanupReachable: false,
+    settings: { ...cloud, cleanupCloudMode: "byok" },
+  });
+  assert.equal(byok.notice.messageKey, "hooks.audioRecording.cleanupUnconfigured");
 });

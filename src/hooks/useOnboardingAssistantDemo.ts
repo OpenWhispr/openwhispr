@@ -26,6 +26,8 @@ export function useOnboardingAssistantDemo(publish: (event: DemoEventInput) => v
     messages,
     setMessages,
     inferenceScope: "dictationAgent",
+    nameUnavailableCapabilities: false,
+    productHelpEnabled: false,
   });
 
   const reply = messages.find((message) => message.role === "assistant");

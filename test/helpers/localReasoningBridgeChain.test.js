@@ -72,12 +72,18 @@ async function setupChain(t, respond) {
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
       requests.push(JSON.parse(raw));
+      const reply = respond();
+      // null leaves the request hanging, like a model still generating.
+      if (reply === null) return;
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(respond()));
+      res.end(JSON.stringify(reply));
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => {
+    server.closeAllConnections();
+    return new Promise((resolve) => server.close(resolve));
+  });
 
   const { bridge, modelManager } = loadChain();
   const model = modelRegistryData.localProviders[0].models[0];
@@ -94,7 +100,7 @@ async function setupChain(t, respond) {
   modelManager.currentServerModelId = model.id;
   t.after(() => serverManager.clearIdleTimer());
 
-  return { bridge, modelId: model.id, requests, serverManager };
+  return { bridge, modelManager, modelId: model.id, requests, serverManager };
 }
 
 const completion = (finishReason, content) => ({
@@ -106,7 +112,11 @@ test("requireCompleteOutput rejects a truncated reply through the whole local ch
 
   await assert.rejects(
     () => bridge.processText("edit this", modelId, { requireCompleteOutput: true }),
-    /truncated/
+    (error) => {
+      assert.equal(error.code, "OUTPUT_TRUNCATED");
+      assert.match(error.message, /truncated/);
+      return true;
+    }
   );
 });
 
@@ -123,6 +133,68 @@ test("an explicit temperature of 0 reaches llama-server instead of the 0.7 defau
 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].temperature, 0);
+  assert.equal(requests[0].response_format, undefined);
+});
+
+test("structured selection output reaches the wire and preserves literal thinking tags", async (t) => {
+  const { SELECTION_EDIT_RESPONSE_FORMAT, extractLocalSelectionEditReplacement } =
+    await import("../../src/helpers/selectionEditing.js");
+  const replacement = '  <think>keep me</think> "quoted" \\path\n';
+  const { bridge, modelId, requests } = await setupChain(t, () =>
+    completion("stop", JSON.stringify({ replacement }))
+  );
+  const response = await bridge.processText("edit request", modelId, {
+    systemPrompt: "Dedicated editor",
+    requireCompleteOutput: true,
+    responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+    disableThinking: true,
+  });
+  assert.deepEqual(requests[0].response_format, SELECTION_EDIT_RESPONSE_FORMAT);
+  assert.deepEqual(requests[0].messages, [
+    { role: "system", content: "Dedicated editor" },
+    { role: "user", content: "edit request" },
+  ]);
+  assert.equal(extractLocalSelectionEditReplacement(response), replacement);
+});
+
+test("structured selection output requires confirmed completion and real answer content", async (t) => {
+  const { SELECTION_EDIT_RESPONSE_FORMAT, extractLocalSelectionEditReplacement } =
+    await import("../../src/helpers/selectionEditing.js");
+  let reply;
+  const { bridge, modelId } = await setupChain(t, () => reply);
+  for (const finishReason of ["length", "max_tokens", undefined, null, "tool_calls", "unknown"]) {
+    reply = completion(finishReason, '{"replacement":"looks complete"}');
+    await assert.rejects(
+      bridge.processText("edit", modelId, {
+        requireCompleteOutput: true,
+        responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+      }),
+      {
+        code: ["length", "max_tokens"].includes(finishReason)
+          ? "OUTPUT_TRUNCATED"
+          : "OUTPUT_COMPLETION_UNVERIFIED",
+      }
+    );
+  }
+  for (const content of ["", " \n", undefined, null, [], 123]) {
+    reply = {
+      choices: [
+        {
+          finish_reason: "stop",
+          message: {
+            content,
+            reasoning_content: '{"replacement":"not an answer"}',
+          },
+        },
+      ],
+    };
+    const response = await bridge.processText("edit", modelId, {
+      responseFormat: SELECTION_EDIT_RESPONSE_FORMAT,
+    });
+    assert.throws(() => extractLocalSelectionEditReplacement(response), {
+      code: "SELECTION_EDIT_EMPTY_RESPONSE",
+    });
+  }
 });
 
 test("a caller's contextSize reaches the server start (regression: it was dropped)", async (t) => {
@@ -150,4 +222,70 @@ test("a caller's contextSize reaches the server start (regression: it was droppe
   await bridge.processText("short text", modelId, { contextSize: 32768 });
 
   assert.deepEqual(started, [32768]);
+});
+
+test("refuseClippedByWindow reaches runInference (the bridge rebuilds the config)", async (t) => {
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  const forwarded = [];
+  const runInference = modelManager.runInference.bind(modelManager);
+  modelManager.runInference = (id, text, options) => {
+    forwarded.push(options);
+    return runInference(id, text, options);
+  };
+
+  await bridge.processText("summarise this", modelId, { refuseClippedByWindow: true });
+
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].refuseClippedByWindow, true);
+});
+
+test("a second request while one is in flight is refused with a typed code", async (t) => {
+  // A note summarised in parts holds the bridge for minutes; whatever arrives
+  // meanwhile (another note's action, dictation cleanup) must fail with a code
+  // the renderer can translate rather than the raw guard text.
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  let release;
+  modelManager.runInference = () =>
+    new Promise((resolve) => {
+      release = () => resolve("first reply");
+    });
+
+  const first = bridge.processText("first", modelId, {});
+  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(bridge.processText("second", modelId, {}), (error) => {
+    assert.equal(error.code, "LOCAL_MODEL_BUSY");
+    return true;
+  });
+
+  release();
+  assert.equal(await first, "first reply");
+});
+
+test("cancel aborts only the in-flight request carrying that id, and frees the slot", async (t) => {
+  // A note cancelled mid-part used to hold the one local slot until the model
+  // finished, so an immediate rerun (or dictation cleanup) was refused as busy.
+  let hang = true;
+  const { bridge, modelId, requests } = await setupChain(t, () =>
+    hang ? null : completion("stop", "ok")
+  );
+
+  const pending = bridge.processText("long part", modelId, { requestId: "run-1" });
+  const settled = pending.then(
+    () => "resolved",
+    (error) => error
+  );
+  while (requests.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+
+  bridge.cancel("run-2");
+  const stillPending = await Promise.race([
+    settled,
+    new Promise((resolve) => setTimeout(() => resolve("pending"), 50)),
+  ]);
+  assert.equal(stillPending, "pending", "another caller's id must not abort this request");
+
+  bridge.cancel("run-1");
+  assert.ok((await settled) instanceof Error, "the tagged request is aborted");
+
+  hang = false;
+  assert.equal(await bridge.processText("next", modelId, {}), "ok");
 });

@@ -17,29 +17,13 @@ export default function DiarizationModelScreen() {
   const isDiarizerAvailable = useNotesStore((state) => state.isDiarizerAvailable);
   const isDiarizerModelReady = useNotesStore((state) => state.isDiarizerModelReady);
   const downloadDiarizerModel = useNotesStore((state) => state.downloadDiarizerModel);
+  const isDiarizerModelDownloading = useNotesStore((state) => state.isDiarizerModelDownloading);
   const deleteDiarizerModel = useNotesStore((state) => state.deleteDiarizerModel);
   const [status, setStatus] = useState<ModelStatus>('checking');
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      if (!(await isDiarizerAvailable())) {
-        setStatus('unavailable');
-        return;
-      }
-      setStatus((await isDiarizerModelReady()) ? 'ready' : 'idle');
-    } catch (caught) {
-      setStatus('unavailable');
-      Sentry.captureException(caught, { tags: { feature: 'diarization-model-settings' } });
-    }
-  }, [isDiarizerAvailable, isDiarizerModelReady]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const handleDownload = useCallback(async () => {
-    safeHaptics('light');
+  // Starts the download, or follows one another screen already started.
+  const download = useCallback(async () => {
     setError(null);
     setStatus('downloading');
     try {
@@ -52,6 +36,32 @@ export default function DiarizationModelScreen() {
       Sentry.captureException(caught, { tags: { feature: 'diarization-model-settings' } });
     }
   }, [downloadDiarizerModel]);
+
+  const refresh = useCallback(async () => {
+    try {
+      if (!(await isDiarizerAvailable())) {
+        setStatus('unavailable');
+        return;
+      }
+      if (isDiarizerModelDownloading()) {
+        await download();
+        return;
+      }
+      setStatus((await isDiarizerModelReady()) ? 'ready' : 'idle');
+    } catch (caught) {
+      setStatus('unavailable');
+      Sentry.captureException(caught, { tags: { feature: 'diarization-model-settings' } });
+    }
+  }, [download, isDiarizerAvailable, isDiarizerModelDownloading, isDiarizerModelReady]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleDownload = useCallback(async () => {
+    safeHaptics('light');
+    await download();
+  }, [download]);
 
   const handleDelete = useCallback(() => {
     confirmDestructive(

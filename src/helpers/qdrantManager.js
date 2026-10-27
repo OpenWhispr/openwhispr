@@ -49,6 +49,7 @@ class QdrantManager extends EventEmitter {
     this.cachedBinaryPath = null;
     this.consecutiveHealthFailures = 0;
     this.restartCount = 0;
+    this.restartBlocked = false;
     this.restarting = false;
     this.stopRequested = false;
   }
@@ -237,12 +238,15 @@ class QdrantManager extends EventEmitter {
     this._stopHealthCheck();
     this.consecutiveHealthFailures = 0;
     this.healthCheckInterval = setInterval(async () => {
-      if (!this.process) {
+      const child = this.process;
+      if (!child) {
         this._stopHealthCheck();
         return;
       }
       if (await this._checkHealth()) {
         this.consecutiveHealthFailures = 0;
+        // A check that resolves after a stop or restart must not revive the old process.
+        if (this.process === child) this.ready = true;
         return;
       }
       this.consecutiveHealthFailures++;
@@ -269,6 +273,7 @@ class QdrantManager extends EventEmitter {
     this.restarting = true;
     try {
       if (this.restartCount >= MAX_RESTARTS_PER_SESSION) {
+        this.restartBlocked = true;
         await this._stopProcess();
         debugLogger.warn(
           "qdrant still unhealthy after max restarts, leaving it stopped (note search falls back to FTS5 keywords)",
@@ -285,6 +290,7 @@ class QdrantManager extends EventEmitter {
       await this._stopProcess();
       if (pid && !(await waitForExit(pid, RESTART_EXIT_WAIT_MS))) {
         // Mirror the reaper's policy: keep the pid entry so the next launch retries.
+        this.restartBlocked = true;
         sidecarPidFile.write("qdrant", pid);
         debugLogger.error("qdrant survived SIGKILL, not restarting", { pid });
         return;
@@ -296,6 +302,7 @@ class QdrantManager extends EventEmitter {
       // _doStart can reject after spawning (e.g. startup timeout); make sure
       // the replacement really is stopped, not left running unsupervised.
       await this._stopProcess();
+      this.restartBlocked = this.restartCount >= MAX_RESTARTS_PER_SESSION;
       debugLogger.warn("qdrant restart failed, leaving it stopped", { error: error.message });
     } finally {
       this.restarting = false;

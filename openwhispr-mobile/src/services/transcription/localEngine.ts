@@ -1,4 +1,5 @@
 import type { ParakeetVersion } from '../../../modules/parakeet-asr/src';
+import type { LocalModelKey } from '@/lib/localModelCatalog';
 
 /**
  * Pure routing policy for on-device transcription: which local engine handles the user's
@@ -84,36 +85,66 @@ export function preferredEngineForLanguages(
   return { engine: 'whisper' };
 }
 
+/** Whether a model can transcribe every selected language. Auto-detect needs Whisper. */
+export function localModelCoversLanguages(
+  model: LocalModelKey,
+  languages: readonly string[],
+): boolean {
+  if (model === 'whisper-base') return true;
+  const normalized = normalizeLanguages(languages);
+  if (normalized.length === 0) return false;
+  if (model === 'parakeet-v2') return normalized.every((code) => code === 'en');
+  return normalized.every((code) => PARAKEET_V3_LANGUAGES.has(code));
+}
+
+function isInstalled(model: LocalModelKey, availability: LocalEngineAvailability): boolean {
+  if (model === 'whisper-base') return availability.whisperDownloaded;
+  if (!availability.parakeetSupported) return false;
+  return model === 'parakeet-v2'
+    ? availability.parakeetV2Downloaded
+    : availability.parakeetV3Downloaded;
+}
+
+// Automatic takes the first downloaded model here that covers every selected language. Each
+// Parakeet is the most accurate for what it covers (v2 for English, v3 for its 25 languages), and
+// Whisper base covers the rest.
+const AUTOMATIC_ORDER: readonly LocalModelKey[] = ['parakeet-v2', 'parakeet-v3', 'whisper-base'];
+// With nothing downloaded that covers the languages, a model that misses some still beats no
+// transcription; v3 covers more of them than v2. Whisper base never gets here, it covers all.
+const UNCOVERED_FALLBACK_ORDER: readonly LocalModelKey[] = ['parakeet-v3', 'parakeet-v2'];
+
+function choiceFor(model: LocalModelKey): Exclude<LocalEngineChoice, { engine: 'none' }> {
+  return model === 'whisper-base'
+    ? { engine: 'whisper' }
+    : { engine: 'parakeet', version: model === 'parakeet-v2' ? 'v2' : 'v3' };
+}
+
 /**
- * Resolve the preferred engine against what's actually installed. Fallback order: preferred
- * Parakeet → Whisper if downloaded → 'none' (caller surfaces a download prompt). Whisper-bound
- * selections never fall "up" to Parakeet — it can't cover them.
+ * Resolve the engine against what's actually installed: the picked model, else the first entry
+ * of AUTOMATIC_ORDER that is downloaded and covers the languages, else any downloaded model.
+ * 'none' (caller surfaces a download prompt) only when nothing is downloaded.
  */
 export function selectLocalEngine(
   languages: readonly string[],
   availability: LocalEngineAvailability,
+  // The model the user picked for this workflow. A missing or unsuitable pick falls back to the
+  // automatic choice, so a deleted model or a language change never breaks transcription.
+  picked?: LocalModelKey,
 ): LocalEngineChoice {
+  const installed = (model: LocalModelKey): boolean => isInstalled(model, availability);
+  const usable = (model: LocalModelKey): boolean =>
+    installed(model) && localModelCoversLanguages(model, languages);
+
+  if (picked && usable(picked)) return choiceFor(picked);
+  const model = AUTOMATIC_ORDER.find(usable) ?? UNCOVERED_FALLBACK_ORDER.find(installed);
+  if (model) return choiceFor(model);
+
   const preferred = preferredEngineForLanguages(languages);
-
-  if (preferred.engine === 'parakeet' && availability.parakeetSupported) {
-    const downloaded =
-      preferred.version === 'v2'
-        ? availability.parakeetV2Downloaded
-        : availability.parakeetV3Downloaded;
-    if (downloaded) {
-      return preferred;
-    }
-    if (availability.whisperDownloaded) {
-      return { engine: 'whisper' };
-    }
-    return {
-      engine: 'none',
-      preferred: preferred.version === 'v2' ? 'parakeet-v2' : 'parakeet-v3',
-    };
-  }
-
-  if (availability.whisperDownloaded) {
-    return { engine: 'whisper' };
-  }
-  return { engine: 'none', preferred: 'whisper' };
+  return {
+    engine: 'none',
+    preferred:
+      preferred.engine === 'parakeet' && availability.parakeetSupported
+        ? `parakeet-${preferred.version}`
+        : 'whisper',
+  };
 }

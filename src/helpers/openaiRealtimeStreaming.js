@@ -52,12 +52,23 @@ async function createSocketWithTimeout(createSocket, timeoutMs) {
   }
 }
 
+// Realtime transcription takes ISO-639-1 like the batch endpoint, so a
+// registry code such as "zh-TW" is reduced to its base; "auto" means no pin.
+function normalizeLanguage(language) {
+  if (typeof language !== "string") return null;
+  const trimmed = language.trim().toLowerCase();
+  if (!trimmed || trimmed === "auto") return null;
+  return trimmed.split("-")[0];
+}
+
 class OpenAIRealtimeStreaming {
   constructor() {
     this.ws = null;
     this.isConnected = false;
     this.isConnecting = false;
     this.completedSegments = [];
+    this.pendingTranscriptions = new Set();
+    this.serverAcksCommits = false;
     this.currentPartial = "";
     this.onPartialTranscript = null;
     this.onFinalTranscript = null;
@@ -83,6 +94,7 @@ class OpenAIRealtimeStreaming {
     this.speechStartedCount = 0;
     this._vadEventCount = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.language = null;
     this.inputRate = SAMPLE_RATE;
     this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
@@ -110,6 +122,7 @@ class OpenAIRealtimeStreaming {
     const {
       apiKey,
       model,
+      language,
       preconfigured,
       inputRate,
       captureRate,
@@ -130,12 +143,15 @@ class OpenAIRealtimeStreaming {
 
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
+    this.language = normalizeLanguage(language);
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
     this.captureRate = captureRate || this.inputRate;
     this.streamLabel = streamLabel || null;
     this.vadThreshold = vadThreshold ?? DEFAULT_VAD_THRESHOLD;
     this.completedSegments = [];
+    this.pendingTranscriptions = new Set();
+    this.serverAcksCommits = false;
     this.currentPartial = "";
     this.audioBytesSent = 0;
     this.speechStartedAt = null;
@@ -254,6 +270,7 @@ class OpenAIRealtimeStreaming {
               `${this.providerLabel} session created, sending configuration`,
               this._logContext({
                 model: this.model,
+                language: this.language,
                 vadThreshold: this.vadThreshold,
               })
             );
@@ -266,7 +283,9 @@ class OpenAIRealtimeStreaming {
                   audio: {
                     input: {
                       format: { type: "audio/pcm", rate: this.inputRate },
-                      transcription: { model: this.model },
+                      transcription: this.language
+                        ? { model: this.model, language: this.language }
+                        : { model: this.model },
                       turn_detection: turnDetectionFor(this.model, this.vadThreshold),
                     },
                   },
@@ -327,6 +346,7 @@ class OpenAIRealtimeStreaming {
               })
             );
           }
+          this.pendingTranscriptions.delete(event.item_id);
           this._onTurnSettled?.();
           break;
         }
@@ -342,6 +362,7 @@ class OpenAIRealtimeStreaming {
               error: event.error?.message || event.error?.code || null,
             })
           );
+          this.pendingTranscriptions.delete(event.item_id);
           this._onTurnSettled?.();
           break;
         }
@@ -351,8 +372,13 @@ class OpenAIRealtimeStreaming {
           this.speechStartedCount++;
           this._logVadEvent(event.type);
           break;
-        case "input_audio_buffer.speech_stopped":
         case "input_audio_buffer.committed":
+          this.serverAcksCommits = true;
+          if (event.item_id) this.pendingTranscriptions.add(event.item_id);
+          this._onTurnSettled?.("committed");
+          this._logVadEvent(event.type);
+          break;
+        case "input_audio_buffer.speech_stopped":
           this._logVadEvent(event.type);
           break;
 
@@ -611,16 +637,26 @@ class OpenAIRealtimeStreaming {
             done();
           }, timeoutMs);
 
-          // Any terminal event for the committed turn ends the wait; an empty
-          // or failed turn must not stall for the whole budget.
-          this._onTurnSettled = done;
+          // VAD can have several committed turns still transcribing. A terminal
+          // event ends the wait only after all known items have settled and,
+          // since an earlier turn can finish before our commit lands, after
+          // the server acks that commit. Servers that never send `committed`
+          // (Tinfoil) settle on the terminal event alone.
+          let commitAcknowledged = false;
+          this._onTurnSettled = (reason) => {
+            if (reason === "committed") commitAcknowledged = true;
+            const acknowledged = commitAcknowledged || !this.serverAcksCommits;
+            if (reason === "closed" || (acknowledged && !this.pendingTranscriptions.size)) {
+              done();
+            }
+          };
 
           this.onError = (err) => {
             if (
               err?.message?.includes("buffer too small") ||
               err?.message?.includes("commit_empty")
             ) {
-              done();
+              this._onTurnSettled?.("committed");
             } else {
               prevOnError?.(err);
             }
@@ -650,7 +686,7 @@ class OpenAIRealtimeStreaming {
     this._sessionTimer = null;
     this.stopKeepAlive();
     // A socket that dies mid-commit can never deliver the turn.
-    this._onTurnSettled?.();
+    this._onTurnSettled?.("closed");
 
     if (this.ws) {
       try {
@@ -666,3 +702,4 @@ class OpenAIRealtimeStreaming {
 }
 
 module.exports = OpenAIRealtimeStreaming;
+module.exports.normalizeLanguage = normalizeLanguage;

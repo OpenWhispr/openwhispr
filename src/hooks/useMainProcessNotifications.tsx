@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { TFunction } from "i18next";
+import { ToastActionButton } from "../components/ui/Toast";
 import type { ToastContextType } from "../components/ui/useToast";
 
 /**
@@ -27,10 +28,12 @@ export function useMainProcessNotifications({
       });
     });
 
-    const unsubscribeFailed = window.electronAPI?.onHotkeyRegistrationFailed?.((_data) => {
+    // Main's translated reason names the hotkey, which matters when several slots
+    // restore at startup.
+    const unsubscribeFailed = window.electronAPI?.onHotkeyRegistrationFailed?.((data) => {
       toast({
         title: t("app.toasts.hotkeyUnavailable.title"),
-        description: t("app.toasts.hotkeyUnavailable.description"),
+        description: data?.error || t("app.toasts.hotkeyUnavailable.description"),
         duration: 10000,
       });
     });
@@ -42,7 +45,7 @@ export function useMainProcessNotifications({
         description: t("app.toasts.gpuFallback.description"),
         duration: 10000,
         action: (
-          <button
+          <ToastActionButton
             onClick={async () => {
               try {
                 const result = await window.electronAPI?.whisperGpuRetry?.();
@@ -51,10 +54,9 @@ export function useMainProcessNotifications({
                 // silently fail — toast stays up for another attempt
               }
             }}
-            className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-medium whitespace-nowrap text-white/90 transition-colors hover:border-white/35 hover:bg-white/20 hover:text-white"
           >
             {t("app.toasts.gpuFallback.retry")}
-          </button>
+          </ToastActionButton>
         ),
       });
     };

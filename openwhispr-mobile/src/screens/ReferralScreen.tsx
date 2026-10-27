@@ -3,7 +3,6 @@ import { View, ScrollView, TextInput, Pressable, ActivityIndicator, Alert } from
 import { Text } from '@/components/ui/Text';
 import * as Clipboard from 'expo-clipboard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { Button } from '@/components/ui/Button';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -16,7 +15,7 @@ import {
 } from '@/lib/referralApi';
 import { safeHaptics, isValidEmail } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { handleAccountRequiredError, requiresRealAccount } from '@/lib/accountAccess';
 import { router } from 'expo-router';
 
@@ -86,8 +85,10 @@ function GuestReferralEmptyState() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         <View className="items-center px-6 pt-7">
           <View
             style={{ borderCurve: 'continuous' }}
@@ -96,7 +97,10 @@ function GuestReferralEmptyState() {
             <GradientGlassSurface radius={18} />
             <SystemIcon name="gift.fill" mdName="Gift" size={30} color="#FFFFFF" />
           </View>
-          <Text className="mt-[18px] text-center text-[22px] font-bold tracking-tight text-label">
+          <Text
+            accessibilityRole="header"
+            className="mt-[18px] text-center text-[22px] font-bold tracking-tight text-label"
+          >
             Give a month, get a month
           </Text>
           <Text className="mt-2 text-center text-[14px] leading-snug text-secondaryLabel">
@@ -236,7 +240,6 @@ export default function ReferralScreen() {
   if (loading) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" />
         </View>
@@ -247,7 +250,6 @@ export default function ReferralScreen() {
   if (error || !stats) {
     return (
       <View className="flex-1 bg-systemBackground">
-        <TabScreenHeader title="Referral" />
         <View className="flex-1 items-center justify-center p-8">
           <Text className="mb-4 text-center text-sm text-secondaryLabel">
             {error || 'Unable to load referral data'}
@@ -266,8 +268,10 @@ export default function ReferralScreen() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Referral" />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         <View className="mt-2 px-4">
           <View
             style={{ borderCurve: 'continuous' }}
@@ -360,7 +364,7 @@ export default function ReferralScreen() {
                   returnKeyType="send"
                   onSubmitEditing={handleSendInvite}
                   editable={!sendingInvite}
-                  style={{ color: LABEL_COLOR, fontFamily: SpaceGrotesk.regular }}
+                  style={{ color: LABEL_COLOR, fontFamily: AppFont.regular }}
                   className="flex-1 py-3 text-[14px]"
                 />
               </View>

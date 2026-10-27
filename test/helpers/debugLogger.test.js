@@ -43,6 +43,10 @@ test("debug log System Info header includes the app version", async () => {
     assert.match(contents, /System Info/);
     assert.match(contents, /appVersion/);
     assert.match(contents, /9\.9\.9-test/);
+    // Which system-audio capture a meeting gets depends on the OS build.
+    assert.match(contents, /osRelease/);
+    assert.match(contents, /osVersion/);
+    assert.match(contents, /"arch"/);
   } finally {
     delete require.cache[debugLoggerPath];
     if (originalLoggerCache) require.cache[debugLoggerPath] = originalLoggerCache;

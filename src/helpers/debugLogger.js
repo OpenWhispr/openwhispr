@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { app } = require("electron");
 
@@ -76,6 +77,11 @@ class DebugLogger {
       this.info("System Info", {
         appVersion: app.getVersion(),
         platform: process.platform,
+        // The OS build decides which system-audio capture a meeting can use
+        // (Windows process loopback needs 10 2004+, the macOS tap 14.2+).
+        osRelease: os.release(),
+        osVersion: os.version(),
+        arch: process.arch,
         nodeVersion: process.version,
         electronVersion: process.versions.electron,
         appPath: app.getAppPath(),
@@ -116,7 +122,7 @@ class DebugLogger {
 
   resolveConsoleLogging() {
     // Packaged Windows apps can inherit the launching shell's standard handles.
-    return process.platform !== "win32" || !app.isPackaged || hasConsoleLogOptIn();
+    return process.platform !== "win32" || !app?.isPackaged || hasConsoleLogOptIn();
   }
 
   refreshLogLevel() {

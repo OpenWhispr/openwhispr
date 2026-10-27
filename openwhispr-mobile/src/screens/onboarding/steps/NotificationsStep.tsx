@@ -1,14 +1,14 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { getNotificationStatus, requestNotifications } from '@/lib/notifications';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
 
-const STEP_ID = 'notifications';
-
-type PermissionState = 'checking' | 'undetermined' | 'granted' | 'denied' | 'unavailable';
+type PermissionState = 'checking' | 'undetermined' | 'unavailable';
 
 interface Benefit {
   icon: string;
@@ -22,11 +22,27 @@ const BENEFITS: Benefit[] = [
 ];
 
 export function NotificationsStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext, progress } = useOnboardingStep('notifications');
   const setPermissionGranted = useOnboardingStore((s) => s.setPermissionGranted);
   const [state, setState] = useState<PermissionState>('checking');
   const [requesting, setRequesting] = useState(false);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const grantedRef = useRef(false);
   const checkedRef = useRef(false);
+
+  const advance = useCallback(
+    async (granted: boolean): Promise<void> => {
+      grantedRef.current = granted;
+      setAdvanceError(null);
+      try {
+        await setPermissionGranted('notifications', granted);
+        await goNext();
+      } catch (error) {
+        setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
+      }
+    },
+    [goNext, setPermissionGranted],
+  );
 
   useEffect(() => {
     if (checkedRef.current) return;
@@ -34,45 +50,48 @@ export function NotificationsStep() {
 
     getNotificationStatus()
       .then((status) => {
-        if (status === 'granted') {
-          return setPermissionGranted('notifications', true).then(() => goNext());
+        if (status === 'granted' || status === 'denied') {
+          return advance(status === 'granted');
         }
         if (status === 'unavailable') {
           setState('unavailable');
           return;
         }
-        setState(status === 'denied' ? 'denied' : 'undetermined');
+        setState('undetermined');
       })
       .catch(() => setState('undetermined'));
-  }, [goNext, setPermissionGranted]);
+  }, [advance]);
 
   const handleAllow = useCallback(async () => {
     setRequesting(true);
     try {
       const result = await requestNotifications();
-      await setPermissionGranted('notifications', result === 'granted');
-      if (result === 'denied') {
-        setState('denied');
-        return;
-      }
-      await goNext();
+      await advance(result === 'granted');
     } finally {
       setRequesting(false);
     }
-  }, [goNext, setPermissionGranted]);
-
-  const handleOpenSettings = useCallback(() => {
-    Linking.openSettings();
-  }, []);
+  }, [advance]);
 
   const handleSkip = useCallback(async () => {
     await goNext();
   }, [goNext]);
 
+  if (advanceError) {
+    return (
+      <OnboardingShell
+        progress={progress}
+        title="Continue setup"
+        subtitle={advanceError}
+        ctaLabel="Retry"
+        onCta={() => advance(grantedRef.current)}
+      />
+    );
+  }
+
   if (state === 'checking') {
     return (
       <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
+        progress={progress}
         title="Checking permissions…"
         ctaLabel="Continue"
         ctaDisabled
@@ -85,30 +104,10 @@ export function NotificationsStep() {
     );
   }
 
-  if (state === 'denied') {
-    return (
-      <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
-        title="Notifications are off"
-        subtitle="Open Settings to allow OpenWhispr notifications."
-        ctaLabel="Open Settings"
-        onCta={handleOpenSettings}
-        secondaryCtaLabel="Continue anyway"
-        onSecondaryCta={handleSkip}
-      >
-        <View className="flex-1 items-center justify-center">
-          <View className="h-28 w-28 items-center justify-center rounded-2xl bg-secondarySystemGroupedBackground">
-            <SystemIcon name="bell.slash.fill" mdName="BellOff" size={48} color="secondaryLabel" />
-          </View>
-        </View>
-      </OnboardingShell>
-    );
-  }
-
   if (state === 'unavailable') {
     return (
       <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
+        progress={progress}
         title="Notifications unavailable"
         subtitle="Notification support isn't enabled in this build. You can continue setup."
         ctaLabel="Continue"
@@ -121,7 +120,7 @@ export function NotificationsStep() {
 
   return (
     <OnboardingShell
-      progress={getStepProgress(STEP_ID)}
+      progress={progress}
       title="Stay in the loop"
       titleAccent="loop"
       subtitle="You can opt out anytime."
