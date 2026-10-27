@@ -117,6 +117,7 @@ export interface PrivacySettings {
 
 export interface ThemeSettings {
   theme: "light" | "dark" | "auto";
+  trayIconStyle: "default" | "monochrome";
 }
 
 export interface ChatAgentSettings {
@@ -340,6 +341,7 @@ function useSettingsInternal() {
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
+    trayIconStyle: store.trayIconStyle,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,
     setUiLanguage: store.setUiLanguage,
@@ -388,6 +390,7 @@ function useSettingsInternal() {
     spokenLanguages: store.spokenLanguages,
     setSpokenLanguages: store.setSpokenLanguages,
     setTheme: store.setTheme,
+    setTrayIconStyle: store.setTrayIconStyle,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
     notificationsEnabled: store.notificationsEnabled,
