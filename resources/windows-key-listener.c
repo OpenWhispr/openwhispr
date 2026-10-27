@@ -5,8 +5,11 @@
  * Accepts a virtual key code as command line argument.
  * Outputs "KEY_DOWN" and "KEY_UP" to stdout.
  *
- * Compile with: cl /O2 windows-key-listener.c /Fe:windows-key-listener.exe user32.lib
- * Or with MinGW: gcc -O2 windows-key-listener.c -o windows-key-listener.exe -luser32
+ * With --layout-server it instead runs without a hook and answers each "QUERY"
+ * line on stdin with the foreground window's keyboard layout.
+ *
+ * Compile with: cl /O2 windows-key-listener.c /Fe:windows-key-listener.exe user32.lib advapi32.lib
+ * Or with MinGW: gcc -O2 windows-key-listener.c -o windows-key-listener.exe -luser32 -ladvapi32
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -338,7 +341,167 @@ DWORD ParseCompoundHotkey(const char* hotkey) {
     return mainKeyVk;
 }
 
+// --- Layout server mode (--layout-server) ---
+// Answers each "QUERY" line on stdin with the keyboard layout of the foreground
+// window's thread. The layout language comes from the layout's KLID, not from
+// the low word of the HKL (the input language): Ukrainian (Enhanced) added to
+// a Russian input language is HKL 0xF0A80419 -> KLID 00020422 -> "uk".
+
+#define KEYBOARD_LAYOUTS_KEY "SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts"
+#define LAYOUT_CACHE_SIZE 16
+
+typedef struct {
+    HKL hkl;
+    char reply[256];
+} LayoutCacheEntry;
+
+static LayoutCacheEntry g_layoutCache[LAYOUT_CACHE_SIZE];
+static int g_layoutCacheCount = 0;
+static int g_layoutCacheNext = 0;
+
+// Finds the KLID whose "Layout Id" value matches (HKLs with a 0xFxxx high word).
+static BOOL FindKlidByLayoutId(DWORD layoutId, char* klid, DWORD klidSize) {
+    HKEY root;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, KEYBOARD_LAYOUTS_KEY, 0, KEY_READ, &root) != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    BOOL found = FALSE;
+    for (DWORD i = 0; !found; i++) {
+        char name[256];
+        DWORD nameLen = sizeof(name);
+        LONG rc = RegEnumKeyExA(root, i, name, &nameLen, NULL, NULL, NULL, NULL);
+        if (rc == ERROR_NO_MORE_ITEMS) break;
+        if (rc != ERROR_SUCCESS || nameLen >= klidSize) continue;
+
+        HKEY sub;
+        if (RegOpenKeyExA(root, name, 0, KEY_READ, &sub) != ERROR_SUCCESS) continue;
+
+        char id[16];
+        DWORD size = sizeof(id) - 1;
+        DWORD type = 0;
+        LONG vrc = RegQueryValueExA(sub, "Layout Id", NULL, &type, (LPBYTE)id, &size);
+        RegCloseKey(sub);
+        if (vrc != ERROR_SUCCESS || type != REG_SZ) continue;
+        id[size < sizeof(id) ? size : sizeof(id) - 1] = '\0';
+
+        if (strtoul(id, NULL, 16) == layoutId) {
+            strcpy(klid, name);
+            found = TRUE;
+        }
+    }
+
+    RegCloseKey(root);
+    return found;
+}
+
+// Reads "Layout Text" (UTF-8) for a KLID. Returns FALSE when the KLID has no registry key.
+static BOOL ReadLayoutText(const char* klid, char* out, int outSize) {
+    char path[320];
+    snprintf(path, sizeof(path), "%s\\%s", KEYBOARD_LAYOUTS_KEY, klid);
+
+    HKEY sub;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, path, 0, KEY_READ, &sub) != ERROR_SUCCESS) {
+        return FALSE;
+    }
+
+    WCHAR text[128];
+    DWORD size = sizeof(text) - sizeof(WCHAR);
+    DWORD type = 0;
+    LONG rc = RegQueryValueExW(sub, L"Layout Text", NULL, &type, (LPBYTE)text, &size);
+    RegCloseKey(sub);
+
+    if (rc != ERROR_SUCCESS || type != REG_SZ) {
+        snprintf(out, outSize, "%s", klid);
+        return TRUE;
+    }
+    text[size / sizeof(WCHAR)] = L'\0';
+
+    if (WideCharToMultiByte(CP_UTF8, 0, text, -1, out, outSize, NULL, NULL) == 0) {
+        snprintf(out, outSize, "%s", klid);
+    }
+    return TRUE;
+}
+
+// Builds the "LAYOUT ..." reply. Returns NULL on success, else a LAYOUT_ERROR reason.
+static const char* BuildLayoutReply(HKL hkl, char* reply, size_t replySize) {
+    DWORD high = (DWORD)(((UINT_PTR)hkl >> 16) & 0xFFFF);
+    char klid[16];
+
+    if ((high & 0xF000) == 0xF000) {
+        if (!FindKlidByLayoutId(high & 0x0FFF, klid, sizeof(klid))) return "unknown-klid";
+    } else {
+        snprintf(klid, sizeof(klid), "%08lX", (unsigned long)high);
+    }
+
+    char name[256];
+    if (!ReadLayoutText(klid, name, sizeof(name))) return "unknown-klid";
+
+    LANGID langid = (LANGID)(strtoul(klid, NULL, 16) & 0xFFFF);
+    char iso[16];
+    if (GetLocaleInfoA(MAKELCID(langid, SORT_DEFAULT), LOCALE_SISO639LANGNAME, iso, sizeof(iso)) == 0) {
+        return "no-locale";
+    }
+
+    snprintf(reply, replySize, "LAYOUT %s %s %s", klid, iso, name);
+    return NULL;
+}
+
+static void AnswerLayoutQuery(void) {
+    HWND fg = GetForegroundWindow();
+    if (!fg) {
+        printf("LAYOUT_ERROR no-foreground-window\n");
+        fflush(stdout);
+        return;
+    }
+
+    DWORD tid = GetWindowThreadProcessId(fg, NULL);
+    HKL hkl = GetKeyboardLayout(tid);
+    if (!hkl) {
+        printf("LAYOUT_ERROR no-layout\n");
+        fflush(stdout);
+        return;
+    }
+
+    for (int i = 0; i < g_layoutCacheCount; i++) {
+        if (g_layoutCache[i].hkl == hkl) {
+            printf("%s\n", g_layoutCache[i].reply);
+            fflush(stdout);
+            return;
+        }
+    }
+
+    char reply[256];
+    const char* error = BuildLayoutReply(hkl, reply, sizeof(reply));
+    if (error) {
+        printf("LAYOUT_ERROR %s\n", error);
+    } else {
+        LayoutCacheEntry* slot = &g_layoutCache[g_layoutCacheNext];
+        slot->hkl = hkl;
+        strcpy(slot->reply, reply);
+        g_layoutCacheNext = (g_layoutCacheNext + 1) % LAYOUT_CACHE_SIZE;
+        if (g_layoutCacheCount < LAYOUT_CACHE_SIZE) g_layoutCacheCount++;
+        printf("%s\n", reply);
+    }
+    fflush(stdout);
+}
+
+static int RunLayoutServer(void) {
+    printf("READY\n");
+    fflush(stdout);
+
+    char line[64];
+    while (fgets(line, sizeof(line), stdin)) {
+        if (strncmp(line, "QUERY", 5) == 0) AnswerLayoutQuery();
+    }
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
+    if (argc >= 2 && strcmp(argv[1], "--layout-server") == 0) {
+        return RunLayoutServer();
+    }
+
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <key>\n", argv[0]);
         fprintf(stderr, "Examples:\n");
