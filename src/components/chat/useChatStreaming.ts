@@ -410,6 +410,7 @@ export function useChatStreaming({
             "tinfoil",
             "openrouter",
             "corti",
+            "minimax",
           ].includes(llmConfig.provider);
         const localModelCanUseTool =
           isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;

@@ -2715,6 +2715,7 @@
         "gemini_3_5_transcribe_live": "Voz a texto en streaming en tiempo real",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
+        "minimax_asr_1": "Reconocimiento de voz de MiniMax, con identificación de hablantes",
         "tinfoil_voxtral": "Transcripción verificablemente privada",
         "deepgram_nova_3": "El modelo en tiempo real más preciso de Deepgram",
         "assemblyai_universal_streaming_english": "Transcripciones en tiempo real inmutables, en inglés",
@@ -2763,6 +2764,8 @@
         "tinfoil_gpt_oss_120b": "Modelo privado de razonamiento de pesos abiertos con uso de herramientas, contexto de 131K",
         "tinfoil_llama3_3_70b": "Modelo privado conversacional con llamada a herramientas, contexto de 128K",
         "corti_corti_s1_instant": "Modelo sanitario rápido, sin traza de razonamiento",
+        "minimax_m3_1_flash": "Modelo rápido con contexto de 1M de tokens, siempre razona",
+        "minimax_m3": "El modelo más capaz de MiniMax, contexto de 1M de tokens",
         "corti_corti_s1": "Modelo clínico más capaz con razonamiento",
         "corti_corti_s1_mini_instant": "Modelo sanitario compacto, el más rápido y económico",
         "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio"

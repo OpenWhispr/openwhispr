@@ -40,6 +40,7 @@ test("the realtime STT providers use their own auth schemes, not Bearer", () => 
 test("a 200 is the whole signal for providers with no OpenAI-shaped model list", async () => {
   for (const [provider, model, payload] of [
     ["assemblyai", "universal-streaming-english", { transcripts: [], page_details: {} }],
+    ["minimax", "asr-1.0", { data: [{ id: "MiniMax-M3" }, { id: "MiniMax-M3.1-Flash" }] }],
   ]) {
     assert.deepEqual(
       await testProviderConnection({ provider, apiKey: "k", model }, async () => ({

@@ -316,6 +316,19 @@
       ]
     },
     {
+      "id": "minimax",
+      "name": "MiniMax",
+      "baseUrl": "https://api.minimax.io/v1",
+      "models": [
+        {
+          "id": "asr-1.0",
+          "name": "MiniMax ASR",
+          "description": "Speech recognition by MiniMax, with speaker labels",
+          "descriptionKey": "models.descriptions.transcription.minimax_asr_1"
+        }
+      ]
+    },
+    {
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://api.mistral.ai/v1",
@@ -861,6 +874,30 @@
           "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini",
           "tokenParam": "max_tokens",
           "supportsTemperature": true
+        }
+      ]
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "models": [
+        {
+          "id": "MiniMax-M3.1-Flash",
+          "name": "MiniMax M3.1 Flash",
+          "description": "Fast model with 1M-token context, always reasons",
+          "descriptionKey": "models.descriptions.cloud.minimax_m3_1_flash",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
+        },
+        {
+          "id": "MiniMax-M3",
+          "name": "MiniMax M3",
+          "description": "Most capable MiniMax model, 1M-token context",
+          "descriptionKey": "models.descriptions.cloud.minimax_m3",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "supportsThinking": true
         }
       ]
     }

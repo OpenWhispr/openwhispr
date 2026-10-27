@@ -9,7 +9,7 @@
  * like thinkingSuppressionDialects.
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3";
+  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "minimax-m3.1-flash";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -61,6 +61,13 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     // spent the whole 4,096-token notes budget thinking (#2008); at high it fit,
     // so max isn't offered either.
     reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
+  },
+  {
+    family: "minimax-m3.1-flash",
+    match: /minimax-m3\.1-flash/,
+    // MiniMax-M3.1-Flash always reasons: "none" and thinking: disabled are a 400
+    // ("requires adaptive thinking", code 2013). Confirmed live 2026-10-22.
+    reasoningEffort: { suppressValue: "low", options: ["low", "medium", "high"] },
   },
   {
     family: "magistral",

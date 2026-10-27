@@ -132,6 +132,7 @@ const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
+const { transcribeWithMinimax } = require("./minimaxTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
@@ -4952,6 +4953,21 @@ class IPCHandlers {
     );
 
     ipcMain.handle(
+      "proxy-minimax-transcription",
+      serializeIpcError(async (event, { audioBuffer, language }) => {
+        const { MINIMAX_STT_LANGUAGES } = await import("./transcriptionRoute.ts");
+        return await transcribeWithMinimax({
+          audioBuffer: Buffer.from(audioBuffer),
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language: MINIMAX_STT_LANGUAGES.has(language) ? language : undefined,
+          apiKey: this.environmentManager.getMinimaxKey(),
+          fetchImpl: proxyFetch,
+        });
+      })
+    );
+
+    ipcMain.handle(
       "proxy-mistral-transcription",
       serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
@@ -7064,6 +7080,16 @@ class IPCHandlers {
               }
             }
           }
+        } else if (route.transport === "proxied" && route.provider === "minimax") {
+          const { text, model } = await transcribeWithMinimax({
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getMinimaxKey(),
+            fetchImpl: proxyFetch,
+          });
+          result = { text, source: "minimax", model };
         } else if (route.transport === "proxied" && route.provider === "tinfoil") {
           // Attested transport, so this can't reuse the generic fetch below.
           const { text, model } = await transcribeWithTinfoil({
@@ -10844,6 +10870,28 @@ class IPCHandlers {
               audioBuffer: fs.readFileSync(realByok),
               language: route.language,
             });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "minimax") {
+            // No language hint, same rationale as the multipart branch below.
+            const { text, segments } = await transcribeWithMinimax({
+              audioBuffer: fs.readFileSync(realByok),
+              fileName: path.basename(realByok),
+              contentType: providerContentType(realByok),
+              diarize,
+              apiKey: this.environmentManager.getMinimaxKey(),
+              fetchImpl: proxyFetch,
+            });
+            if (diarize && segments) {
+              const formatted = segments
+                .map(
+                  (s) =>
+                    `[${s.speaker}] ${formatDiarTime(s.start)} - ${formatDiarTime(s.end)}\n${s.text}`
+                )
+                .join("\n\n");
+              return { success: true, text: formatted, diarized: true, segments };
+            }
             return { success: true, text };
           }
 

@@ -9,7 +9,7 @@ import { matchesHost } from "../../utils/urlUtils";
  * table stays unit-testable on its own.
  */
 export interface EndpointDialect {
-  key: "mistral" | "deepseek" | "cerebras";
+  key: "mistral" | "deepseek" | "cerebras" | "minimax";
   tokenParam: "max_tokens" | "max_completion_tokens";
   supportsTemperature: boolean;
 }
@@ -24,6 +24,9 @@ export function detectEndpointDialect(baseUrl: string | null | undefined): Endpo
   }
   if (matchesHost(baseUrl, "cerebras.ai")) {
     return { key: "cerebras", tokenParam: "max_tokens", supportsTemperature: true };
+  }
+  if (matchesHost(baseUrl, "minimax.io")) {
+    return { key: "minimax", tokenParam: "max_tokens", supportsTemperature: true };
   }
 
   return null;
@@ -63,6 +66,18 @@ export function suppressThinking(
   // deepseek models on other hosts (e.g. Tinfoil) accept the generic shape.
   if (providerKey === "deepseek") {
     requestBody.thinking = { type: "disabled" };
+    return;
+  }
+
+  // MiniMax ignores reasoning_effort "none" (MiniMax-M3 keeps thinking in
+  // <think> tags); thinking: {type} is its switch. Families without an off
+  // switch (M3.1-Flash 400s on disabled) get their lowest effort instead.
+  if (providerKey === "minimax") {
+    if (family?.reasoningEffort) {
+      requestBody.reasoning_effort = family.reasoningEffort.suppressValue;
+    } else {
+      requestBody.thinking = { type: "disabled" };
+    }
     return;
   }
 

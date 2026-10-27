@@ -40,3 +40,12 @@ test("glm-5.3 always reasons: suppress floors at low, high stands in for the ser
   assert.equal(getModelFamilyConstraints("GLM-5.3-Flash:cloud")?.family, "glm-5.3");
   assert.equal(getModelFamilyConstraints("glm-5-2")?.family, undefined);
 });
+
+test("minimax-m3.1-flash always reasons: suppress floors at low, M3 itself has no family", async () => {
+  const { getModelFamilyConstraints } = await load();
+  assert.deepEqual(getModelFamilyConstraints("MiniMax-M3.1-Flash")?.reasoningEffort, {
+    suppressValue: "low",
+    options: ["low", "medium", "high"],
+  });
+  assert.equal(getModelFamilyConstraints("MiniMax-M3"), null);
+});

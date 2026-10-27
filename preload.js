@@ -10,6 +10,7 @@ const BYOK_KEY_BRIDGES = [
   { base: "gemini", get: "getGeminiKey", save: "saveGeminiKey" },
   { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
   { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
+  { base: "minimax", get: "getMinimaxKey", save: "saveMinimaxKey" },
   { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
   { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
   { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
@@ -630,6 +631,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxyMinimaxTranscription: (data) => ipcRenderer.invoke("proxy-minimax-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
 

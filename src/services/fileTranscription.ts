@@ -62,6 +62,7 @@ export interface TranscriptionApiKeys {
   openaiApiKey: string;
   groqApiKey: string;
   xaiApiKey: string;
+  minimaxApiKey: string;
   mistralApiKey: string;
   geminiApiKey: string;
   tinfoilApiKey: string;
@@ -78,6 +79,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.groqApiKey;
     case "xai":
       return keys.xaiApiKey;
+    case "minimax":
+      return keys.minimaxApiKey;
     case "mistral":
       return keys.mistralApiKey;
     case "gemini":

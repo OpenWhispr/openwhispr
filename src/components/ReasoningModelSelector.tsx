@@ -61,6 +61,7 @@ const CLOUD_PROVIDER_IDS = [
   OPENROUTER_TAB,
   "tinfoil",
   "corti",
+  "minimax",
   "custom",
 ];
 
@@ -359,6 +360,8 @@ export default function ReasoningModelSelector({
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const minimaxApiKey = useSettingsStore((s) => s.minimaxApiKey);
+  const setMinimaxApiKey = useSettingsStore((s) => s.setMinimaxApiKey);
   const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
   const setOpenrouterApiKey = useSettingsStore((s) => s.setOpenrouterApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
@@ -434,6 +437,7 @@ export default function ReasoningModelSelector({
       url: "https://aistudio.google.com/app/api-keys",
     },
     groq: { value: groqApiKey, set: setGroqApiKey, url: "https://console.groq.com/keys" },
+    minimax: { value: minimaxApiKey, set: setMinimaxApiKey, url: "https://platform.minimax.io" },
     tinfoil: {
       value: tinfoilApiKey,
       set: setTinfoilApiKey,

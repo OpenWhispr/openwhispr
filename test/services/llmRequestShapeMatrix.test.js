@@ -115,6 +115,16 @@ const MATRIX = [
   ["self-hosted never sends a level saved for a cloud provider", "lan", "openai/gpt-oss-120b", null, { disableThinking: false, reasoningEffort: "high" },
     { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low" }],
 
+  // --- MiniMax (ignores reasoning_effort none; thinking: {type} is its switch) ---
+  ["minimax M3 cleanup keeps thinking out of content", "MiniMax", "MiniMax-M3", "https://api.minimax.io/v1/chat/completions", CLEANUP,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_split: true }],
+  ["minimax M3 suppression uses the native thinking switch", "MiniMax", "MiniMax-M3", "https://api.minimax.io/v1/chat/completions", CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, thinking: { type: "disabled" }, reasoning_split: true }],
+  ["minimax M3.1-Flash has no off switch: suppression floors at low", "MiniMax", "MiniMax-M3.1-Flash", "https://api.minimax.io/v1/chat/completions", CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, reasoning_effort: "low", reasoning_split: true }],
+  ["custom endpoint on minimax.io gets the same shape", "custom", "MiniMax-M3", "https://api.minimax.io/v1", CLEANUP_NO_THINK,
+    { max_tokens: MAX_TOKENS, temperature: 0, thinking: { type: "disabled" }, reasoning_split: true }],
+
   // --- Gemini through its OpenAI-compat endpoint (agent streaming route) ---
   ["gemini openai-compat: fallback config, no temperature param", "gemini", "gemini-3-flash-preview", null, AGENT,
     { max_completion_tokens: MAX_TOKENS }],

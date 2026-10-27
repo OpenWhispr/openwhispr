@@ -394,6 +394,7 @@ export function getModelProvider(modelId: string): string {
     // sync — don't let the id heuristics misroute it.
     if (storedProvider === "tinfoil") return "tinfoil";
     if (modelId.includes("claude")) return "anthropic";
+    if (modelId.toLowerCase().startsWith("minimax-")) return "minimax";
     if (modelId.includes("gemini") && !modelId.includes("gemma")) return "gemini";
     if ((modelId.includes("gpt-4") || modelId.includes("gpt-5")) && !modelId.includes("gpt-oss"))
       return "openai";

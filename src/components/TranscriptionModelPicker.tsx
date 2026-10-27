@@ -254,6 +254,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
+  { id: "minimax", name: "MiniMax" },
   { id: "mistral", name: "Mistral" },
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
@@ -268,6 +269,7 @@ interface ProviderCredentialField {
     | "openaiApiKey"
     | "groqApiKey"
     | "xaiApiKey"
+    | "minimaxApiKey"
     | "mistralApiKey"
     | "geminiApiKey"
     | "cortiClientId"
@@ -298,6 +300,10 @@ const PROVIDER_CREDENTIALS: Record<
   xai: {
     consoleUrl: "https://console.x.ai",
     fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  minimax: {
+    consoleUrl: "https://platform.minimax.io",
+    fields: [{ key: "minimaxApiKey", input: "secret" }],
   },
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
@@ -458,6 +464,8 @@ export default function TranscriptionModelPicker({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
+  const minimaxApiKey = useSettingsStore((s) => s.minimaxApiKey);
+  const setMinimaxApiKey = useSettingsStore((s) => s.setMinimaxApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
@@ -1080,6 +1088,7 @@ export default function TranscriptionModelPicker({
     openaiApiKey: keyDraft.value("openaiApiKey", openaiApiKey),
     groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
     xaiApiKey: keyDraft.value("xaiApiKey", xaiApiKey),
+    minimaxApiKey: keyDraft.value("minimaxApiKey", minimaxApiKey),
     mistralApiKey: keyDraft.value("mistralApiKey", mistralApiKey),
     geminiApiKey: keyDraft.value("geminiApiKey", geminiApiKey),
     cortiClientId: keyDraft.value("cortiClientId", cortiClientId),
@@ -1095,6 +1104,7 @@ export default function TranscriptionModelPicker({
     openaiApiKey: setOpenaiApiKey,
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
+    minimaxApiKey: setMinimaxApiKey,
     mistralApiKey: setMistralApiKey,
     geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
