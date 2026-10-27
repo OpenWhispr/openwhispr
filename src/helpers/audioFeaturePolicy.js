@@ -142,6 +142,9 @@ function createAudioFeaturePolicy({
       retained = snapshot ?? retained;
       snapshot = null;
       epoch += 1;
+      // Others may sync to the unresolved verdict meanwhile, so the next one
+      // is always reported, even if it matches the last.
+      reportedMeetingVerdict = undefined;
       if (known) update(known);
       else void lookup({});
     },

@@ -418,3 +418,32 @@ test("a lookup that throws is logged, not raised", async () => {
   assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
   assert.deepEqual(warnings, [["Audio policy lookup failed", { error: "offline" }]]);
 });
+
+test("a credential change always reports the re-resolved meeting verdict", async () => {
+  let answer;
+  let detectorsOn = null;
+  let guard;
+  // Like _syncMeetingDetectorPolicy, which sync-notification-preferences also
+  // calls directly: it follows whatever failure("meeting") says right now.
+  const sync = () => {
+    detectorsOn = !guard.failure("meeting");
+  };
+  guard = createAudioFeaturePolicy({
+    getPolicy: () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    onChange: sync,
+    lookupDeadlineMs: 5,
+  });
+  guard.update({ success: true, managed: false, authGeneration: 1 });
+  assert.equal(detectorsOn, true);
+
+  guard.invalidate();
+  sync();
+  assert.equal(detectorsOn, false);
+
+  answer({ success: true, managed: false, authGeneration: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(detectorsOn, true);
+});
