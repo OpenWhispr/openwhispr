@@ -2446,6 +2446,12 @@
           "title": "Impossibile caricare i membri",
           "body": "Controlla la connessione e riprova."
         },
+        "search": {
+          "placeholder": "Cerca membri",
+          "clear": "Cancella ricerca",
+          "noResultsTitle": "Nessun membro corrisponde a “{{query}}”",
+          "noResultsBody": "Controlla l’ortografia o cerca per e-mail."
+        },
         "roleMenuLabel": "Cambia il ruolo di {{name}}",
         "roleDescription": {
           "member": "Può visualizzare e modificare le note.",

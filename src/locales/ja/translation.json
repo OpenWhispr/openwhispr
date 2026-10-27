@@ -2446,6 +2446,12 @@
           "title": "メンバーを読み込めませんでした",
           "body": "接続を確認して、もう一度お試しください。"
         },
+        "search": {
+          "placeholder": "メンバーを検索",
+          "clear": "検索をクリア",
+          "noResultsTitle": "「{{query}}」に一致するメンバーはいません",
+          "noResultsBody": "スペルを確認するか、メールアドレスで検索してください。"
+        },
         "roleMenuLabel": "{{name}} のロールを変更",
         "roleDescription": {
           "member": "ノートを閲覧・編集できます。",

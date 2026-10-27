@@ -1721,6 +1721,12 @@
           "title": "Mitglieder konnten nicht geladen werden",
           "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
         },
+        "search": {
+          "placeholder": "Mitglieder suchen",
+          "clear": "Suche löschen",
+          "noResultsTitle": "Kein Mitglied entspricht „{{query}}“",
+          "noResultsBody": "Prüfen Sie die Schreibweise oder suchen Sie nach der E-Mail-Adresse."
+        },
         "roleMenuLabel": "Rolle von {{name}} ändern",
         "roleDescription": {
           "member": "Kann Notizen ansehen und bearbeiten.",

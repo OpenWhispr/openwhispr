@@ -1721,6 +1721,12 @@
           "title": "Couldn't load members",
           "body": "Check your connection and try again."
         },
+        "search": {
+          "placeholder": "Search members",
+          "clear": "Clear search",
+          "noResultsTitle": "No members match “{{query}}”",
+          "noResultsBody": "Check the spelling or search by email."
+        },
         "roleMenuLabel": "Change {{name}}'s role",
         "roleDescription": {
           "member": "Can view and edit notes.",

@@ -2425,6 +2425,12 @@
           "title": "Não foi possível carregar os membros",
           "body": "Verifique sua conexão e tente novamente."
         },
+        "search": {
+          "placeholder": "Pesquisar membros",
+          "clear": "Limpar pesquisa",
+          "noResultsTitle": "Nenhum membro corresponde a “{{query}}”",
+          "noResultsBody": "Verifique a ortografia ou pesquise por e-mail."
+        },
         "roleMenuLabel": "Alterar a função de {{name}}",
         "roleDescription": {
           "member": "Pode ver e editar notas.",

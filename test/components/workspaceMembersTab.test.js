@@ -40,7 +40,12 @@ async function loadMembersTab(t, { members = MEMBERS, refreshMembers } = {}) {
     mockModules: {
       "react-i18next": `
         export const useTranslation = () => ({
-          t: (key, options) => (options && "count" in options ? key + "#" + options.count : key),
+          t: (key, options) =>
+            options && "count" in options
+              ? key + "#" + options.count
+              : options && "query" in options
+                ? key + "#" + options.query
+                : key,
         });
       `,
       "/stores/workspaceStore": `
@@ -101,16 +106,35 @@ function rowsByName(markup, members = MEMBERS) {
   );
 }
 
-function tabElement(WorkspaceMembersTab, workspace) {
+function tabElement(
+  WorkspaceMembersTab,
+  workspace,
+  { searchQuery = "", onSearchQueryChange } = {}
+) {
   return React.createElement(WorkspaceMembersTab, {
     workspace,
-    searchQuery: "",
-    onSearchQueryChange: () => {},
+    searchQuery,
+    onSearchQueryChange: onSearchQueryChange ?? (() => {}),
   });
 }
 
-function render(WorkspaceMembersTab, workspace) {
-  return renderToStaticMarkup(tabElement(WorkspaceMembersTab, workspace));
+function render(WorkspaceMembersTab, workspace, search) {
+  return renderToStaticMarkup(tabElement(WorkspaceMembersTab, workspace, search));
+}
+
+// The host DOM has no event dispatch, so a handler is read from the props React stores on a node.
+function findNode(node, predicate) {
+  if (node.nodeType === 1 && predicate(node)) return node;
+  for (const child of node.childNodes ?? []) {
+    const found = findNode(child, predicate);
+    if (found) return found;
+  }
+  return null;
+}
+
+function propsOf(node) {
+  const key = Object.keys(node).find((name) => name.startsWith("__reactProps$"));
+  return key ? node[key] : {};
 }
 
 function textOf(node) {
@@ -119,12 +143,12 @@ function textOf(node) {
 }
 
 // Mounts the tab so its load effect runs, which the static render skips.
-async function mount(t, WorkspaceMembersTab, workspace) {
+async function mount(t, WorkspaceMembersTab, workspace, search) {
   const container = installHostDom(t);
   const root = createRoot(container);
   mountedRoots.set(t, root);
   await React.act(async () => {
-    root.render(tabElement(WorkspaceMembersTab, workspace));
+    root.render(tabElement(WorkspaceMembersTab, workspace, search));
   });
   return container;
 }
@@ -255,4 +279,116 @@ test("failed shows Try again", async (t) => {
   assert.match(text, /settingsPage\.workspace\.people\.failed\.body/);
   assert.match(text, /workspaces\.exit\.tryAgain/);
   assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+});
+
+const SEARCH_MEMBERS = [
+  ...MEMBERS,
+  { user_id: "u-oliver", name: "Oliver Quinn", email: "rowan@example.com", role: "member" },
+];
+
+test("search filters rows by name or email", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: SEARCH_MEMBERS });
+  const markup = render(
+    WorkspaceMembersTab,
+    { ...WORKSPACE, role: "member" },
+    { searchQuery: "rowan" }
+  );
+
+  assert.match(markup, /Oliver Quinn/);
+  assert.doesNotMatch(markup, /Olivia Owner/);
+  assert.doesNotMatch(markup, /Adam Admin/);
+  assert.doesNotMatch(markup, /Mia Member/);
+  // Members can search too, so the field does not depend on manage_members.
+  assert.match(markup, /type="search"/);
+  assert.match(markup, /value="rowan"/);
+});
+
+test("no results shows the query and Clear search", async (t) => {
+  const changes = [];
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const container = await mount(
+    t,
+    WorkspaceMembersTab,
+    { ...WORKSPACE, role: "admin" },
+    { searchQuery: "  zed  ", onSearchQueryChange: (query) => changes.push(query) }
+  );
+  const text = textOf(container);
+
+  // The trimmed query reaches the title.
+  assert.match(text, /settingsPage\.workspace\.people\.search\.noResultsTitle#zed(?!\s)/);
+  assert.match(text, /settingsPage\.workspace\.people\.search\.noResultsBody/);
+  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
+
+  const clearButton = findNode(
+    container,
+    (node) =>
+      node.localName === "button" &&
+      textOf(node).includes("settingsPage.workspace.people.search.clear")
+  );
+  assert.ok(clearButton, "Clear search button");
+  await React.act(async () => propsOf(clearButton).onClick());
+  assert.deepEqual(changes, [""]);
+});
+
+test("no results waits for the roster", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, {
+    members: [],
+    refreshMembers: () => new Promise(() => {}),
+  });
+  const container = await mount(
+    t,
+    WorkspaceMembersTab,
+    { ...WORKSPACE, role: "admin" },
+    { searchQuery: "zed" }
+  );
+  const text = textOf(container);
+
+  assert.match(text, /settingsPage\.workspace\.people\.loading\.title/);
+  assert.doesNotMatch(text, /noResultsTitle/);
+});
+
+test("an empty query shows a placeholder and no clear button", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+
+  assert.match(markup, /placeholder="settingsPage\.workspace\.people\.search\.placeholder"/);
+  assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.search\.clear"/);
+});
+
+test("Escape clears a non-empty field and is left alone on an empty one", async (t) => {
+  const changes = [];
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const search = { onSearchQueryChange: (query) => changes.push(query) };
+  const keydown = (events) => ({
+    key: "Escape",
+    preventDefault: () => events.push("preventDefault"),
+    stopPropagation: () => events.push("stopPropagation"),
+  });
+
+  const filled = await mount(
+    t,
+    WorkspaceMembersTab,
+    { ...WORKSPACE, role: "admin" },
+    {
+      ...search,
+      searchQuery: "zed",
+    }
+  );
+  const filledEvents = [];
+  const filledInput = findNode(filled, (node) => node.localName === "input");
+  propsOf(filledInput).onKeyDown(keydown(filledEvents));
+  assert.deepEqual(changes, [""]);
+  assert.deepEqual(filledEvents.sort(), ["preventDefault", "stopPropagation"]);
+
+  changes.length = 0;
+  const emptyEvents = [];
+  await React.act(async () =>
+    mountedRoots
+      .get(t)
+      .render(tabElement(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" }, search))
+  );
+  const emptyInput = findNode(filled, (node) => node.localName === "input");
+  propsOf(emptyInput).onKeyDown(keydown(emptyEvents));
+  assert.deepEqual(changes, []);
+  assert.deepEqual(emptyEvents, []);
 });

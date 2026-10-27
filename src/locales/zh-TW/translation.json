@@ -2446,6 +2446,12 @@
           "title": "無法載入成員",
           "body": "請檢查網路連線後再試一次。"
         },
+        "search": {
+          "placeholder": "搜尋成員",
+          "clear": "清除搜尋",
+          "noResultsTitle": "沒有符合「{{query}}」的成員",
+          "noResultsBody": "請檢查拼字，或依電子郵件地址搜尋。"
+        },
         "roleMenuLabel": "變更 {{name}} 的角色",
         "roleDescription": {
           "member": "可以檢視和編輯筆記。",

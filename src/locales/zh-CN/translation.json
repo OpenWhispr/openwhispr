@@ -2446,6 +2446,12 @@
           "title": "无法加载成员",
           "body": "请检查网络连接后重试。"
         },
+        "search": {
+          "placeholder": "搜索成员",
+          "clear": "清除搜索",
+          "noResultsTitle": "没有与“{{query}}”匹配的成员",
+          "noResultsBody": "请检查拼写，或按电子邮件地址搜索。"
+        },
         "roleMenuLabel": "更改 {{name}} 的角色",
         "roleDescription": {
           "member": "可以查看和编辑笔记。",

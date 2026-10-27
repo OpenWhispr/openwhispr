@@ -1,11 +1,12 @@
-import React, { useEffect, useReducer, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Loader2 } from "../icons";
+import { Loader2, Search, X } from "../icons";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useAuth } from "../../hooks/useAuth";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import type { Workspace, WorkspaceJoinRequest, WorkspaceMember } from "../../types/electron";
 import MemberAvatar from "../MemberAvatar";
@@ -32,10 +33,13 @@ const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
 const HEADER_CELL =
   "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const SKELETON_ROWS = 3;
+// Stands in for the query while the title is split around it, so the query can sit in its own <bdi>.
+const QUERY_SLOT = "\uE000";
 
 export default function WorkspaceMembersTab({
   workspace,
   searchQuery,
+  onSearchQueryChange,
 }: WorkspaceMembersTabProps): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -56,6 +60,7 @@ export default function WorkspaceMembersTab({
   const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState(false);
   const [pendingRoleIds, setPendingRoleIds] = useState<ReadonlySet<string>>(() => new Set());
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const canManage = workspaceCan(workspace, "manage_members");
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
@@ -154,6 +159,19 @@ export default function WorkspaceMembersTab({
     toast({ title: t("settingsPage.workspace.members.roleUpdated") });
   }
 
+  function clearSearch(): void {
+    onSearchQueryChange("");
+    searchInputRef.current?.focus();
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+    // An empty field leaves Escape alone so it can still close the Settings dialog.
+    if (event.key !== "Escape" || !searchQuery) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearSearch();
+  }
+
   const view = membersView({
     loading: membersLoading,
     error: membersError,
@@ -214,16 +232,45 @@ export default function WorkspaceMembersTab({
         </div>
       )}
 
-      {canManage && (
-        <div className="flex items-center justify-end gap-3">
-          <p className="text-xs text-muted-foreground/80">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full sm:w-[280px]">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70"
+          />
+          <Input
+            ref={searchInputRef}
+            type="search"
+            dir="auto"
+            autoComplete="off"
+            spellCheck={false}
+            value={searchQuery}
+            placeholder={t("settingsPage.workspace.people.search.placeholder")}
+            aria-label={t("settingsPage.workspace.people.search.placeholder")}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className="h-[38px] rounded-xl ps-9 pe-9 text-xs [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              aria-label={t("settingsPage.workspace.people.search.clear")}
+              onClick={clearSearch}
+              className="absolute end-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+            >
+              <X aria-hidden="true" className="size-3.5" />
+            </button>
+          )}
+        </div>
+        {canManage && (
+          <p className="ms-auto text-xs text-muted-foreground/80">
             {t("settingsPage.workspace.members.description", {
               count: members.length,
               seats: workspace.seats,
             })}
           </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {view.kind === "loading" && (
         <div className={TABLE_FRAME}>
@@ -261,6 +308,27 @@ export default function WorkspaceMembersTab({
           </p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => void loadMembers()}>
             {t("workspaces.exit.tryAgain")}
+          </Button>
+        </div>
+      )}
+
+      {view.kind === "noResults" && (
+        <div className={cn(TABLE_FRAME, "px-4 py-8 text-center")}>
+          <p className="text-xs font-medium text-foreground">
+            {t("settingsPage.workspace.people.search.noResultsTitle", { query: QUERY_SLOT })
+              .split(QUERY_SLOT)
+              .map((part, index, parts) => (
+                <React.Fragment key={index}>
+                  {part}
+                  {index < parts.length - 1 && <bdi>{view.query}</bdi>}
+                </React.Fragment>
+              ))}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t("settingsPage.workspace.people.search.noResultsBody")}
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={clearSearch}>
+            {t("settingsPage.workspace.people.search.clear")}
           </Button>
         </div>
       )}

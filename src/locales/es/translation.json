@@ -2498,6 +2498,12 @@
           "title": "No se pudieron cargar los miembros",
           "body": "Comprueba tu conexión e inténtalo de nuevo."
         },
+        "search": {
+          "placeholder": "Buscar miembros",
+          "clear": "Borrar búsqueda",
+          "noResultsTitle": "Ningún miembro coincide con «{{query}}»",
+          "noResultsBody": "Revisa la ortografía o busca por correo electrónico."
+        },
         "roleMenuLabel": "Cambiar el rol de {{name}}",
         "roleDescription": {
           "member": "Puede ver y editar notas.",

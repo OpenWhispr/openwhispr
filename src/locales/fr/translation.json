@@ -1721,6 +1721,12 @@
           "title": "Impossible de charger les membres",
           "body": "Vérifiez votre connexion et réessayez."
         },
+        "search": {
+          "placeholder": "Rechercher des membres",
+          "clear": "Effacer la recherche",
+          "noResultsTitle": "Aucun membre ne correspond à « {{query}} »",
+          "noResultsBody": "Vérifiez l’orthographe ou recherchez par adresse e-mail."
+        },
         "roleMenuLabel": "Modifier le rôle de {{name}}",
         "roleDescription": {
           "member": "Peut consulter et modifier les notes.",
