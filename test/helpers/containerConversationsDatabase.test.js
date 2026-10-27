@@ -237,6 +237,29 @@ test("private-space root chats are owned by the account that created them", (t) 
   );
 });
 
+test("team-space root chats stay unowned and outlive a member's account deletion", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { space } = createTestTeamSpace(db, { name: "Shared" });
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(space.id, "account-a");
+
+  db.setActiveAccountId("account-a");
+  const chat = db.createAgentConversation("Team root chat", null, space.id);
+  db.addAgentMessage(chat.id, "user", "for the whole team");
+  assert.equal(chat.account_id, null, "team root chats are owned by the team, not the creator");
+
+  db.deleteAccountData("account-a");
+  db.setActiveAccountId("test-account");
+  assert.deepEqual(
+    db.getConversationsForContainer(space.id, null).map((conversation) => conversation.id),
+    [chat.id],
+    "another member still lists the team's root chat"
+  );
+  assert.equal(db.getAgentMessages(chat.id).length, 1);
+});
+
 test("global conversation lists and search exclude space and folder chats", (t) => {
   const db = createDb(t);
   if (!db) return;

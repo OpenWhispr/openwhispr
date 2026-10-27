@@ -3784,24 +3784,20 @@ class DatabaseManager {
         conversationConditions.push(`folder_id IN (${folderPlaceholders})`);
         conversationParams.push(...deletedFolderIds);
       }
-      if (conversationConditions.length > 0) {
-        const conversationIds = this.db
+      const conversationIds = this.db
+        .prepare(`SELECT id FROM agent_conversations WHERE ${conversationConditions.join(" OR ")}`)
+        .all(...conversationParams)
+        .map((row) => row.id);
+      if (conversationIds.length > 0) {
+        const conversationPlaceholders = conversationIds.map(() => "?").join(", ");
+        this.db
           .prepare(
-            `SELECT id FROM agent_conversations WHERE ${conversationConditions.join(" OR ")}`
+            `DELETE FROM agent_messages WHERE conversation_id IN (${conversationPlaceholders})`
           )
-          .all(...conversationParams)
-          .map((row) => row.id);
-        if (conversationIds.length > 0) {
-          const conversationPlaceholders = conversationIds.map(() => "?").join(", ");
-          this.db
-            .prepare(
-              `DELETE FROM agent_messages WHERE conversation_id IN (${conversationPlaceholders})`
-            )
-            .run(...conversationIds);
-          this.db
-            .prepare(`DELETE FROM agent_conversations WHERE id IN (${conversationPlaceholders})`)
-            .run(...conversationIds);
-        }
+          .run(...conversationIds);
+        this.db
+          .prepare(`DELETE FROM agent_conversations WHERE id IN (${conversationPlaceholders})`)
+          .run(...conversationIds);
       }
 
       if (deletedNoteIds.length > 0) {
