@@ -3921,6 +3921,8 @@
       "alreadyPresent": "Déjà dans votre dictionnaire, donc ignorés : {{count}}.",
       "nothingNew": "Tous les mots de ce fichier sont déjà dans votre dictionnaire.",
       "unreadable": "Lignes illisibles, donc ignorées : {{count}}.",
+      "tooLong": "Mots de plus de {{max}} caractères, donc ignorés : {{count}}.",
+      "overLimit": "Votre dictionnaire contient au plus {{max}} mots, donc non importés : {{count}}.",
       "propertiesIgnored": "Les propriétés de mise en forme de Dragon ne sont pas importées.",
       "confirm_one": "Importer {{count}} mot",
       "confirm_other": "Importer {{count}} mots",

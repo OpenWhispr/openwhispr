@@ -12,10 +12,17 @@
  *        and have no public schema, so they are ignored.
  */
 
+// The API's limits (openwhispr-api lib/schemas.ts, lib/dictionary-service.ts):
+// a longer word fails its whole sync batch, and words past the cap never sync.
+export const DICTIONARY_WORD_MAX_LENGTH = 100;
+export const DICTIONARY_MAX_WORDS = 5000;
+
 const HEADER_LINE = /^@version\s*=\s*plato(-utf8)?$/i;
 
-const XML_WORD_NAME = /<Word\b[^>]*?\bname="([^"]*)"/g;
-const XML_WORD_WITH_CHILDREN = /<Word\b[^>]*[^/>]>\s*<[A-Za-z]/;
+const XML_NAME_ATTRIBUTE = /\sname="([^"]*)"/;
+// Only a file decoded with the wrong encoding puts control characters in a
+// word, and Postgres can't store the NUL that a wrong UTF-16 guess produces.
+const CONTROL_CHARACTER = /\p{Cc}/u;
 const XML_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
 function decodeEntities(value) {
@@ -28,15 +35,29 @@ function decodeEntities(value) {
   });
 }
 
+// Text in an 8-bit encoding has no NUL bytes, so a file with them is UTF-16
+// without a BOM; ASCII characters put the NUL second in little-endian.
+function bomlessUtf16(b) {
+  const end = Math.min(b.length, 4096) - 1;
+  let evenNuls = 0;
+  let oddNuls = 0;
+  for (let i = 0; i < end; i += 2) {
+    if (b[i] === 0) evenNuls += 1;
+    if (b[i + 1] === 0) oddNuls += 1;
+  }
+  if (evenNuls === 0 && oddNuls === 0) return null;
+  return oddNuls >= evenNuls ? "utf-16le" : "utf-16be";
+}
+
 export function decodeDragonExport(bytes) {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  // UTF-16 by BOM, or by a BOM-less "<" (Dragon's XML declares utf-16).
-  if ((b[0] === 0xff && b[1] === 0xfe) || (b[0] === 0x3c && b[1] === 0x00)) {
-    return { text: new TextDecoder("utf-16le").decode(b), encoding: "utf-16le" };
-  }
-  if ((b[0] === 0xfe && b[1] === 0xff) || (b[0] === 0x00 && b[1] === 0x3c)) {
-    return { text: new TextDecoder("utf-16be").decode(b), encoding: "utf-16be" };
-  }
+  const utf16 =
+    b[0] === 0xff && b[1] === 0xfe
+      ? "utf-16le"
+      : b[0] === 0xfe && b[1] === 0xff
+        ? "utf-16be"
+        : bomlessUtf16(b);
+  if (utf16) return { text: new TextDecoder(utf16).decode(b), encoding: utf16 };
   // TextDecoder drops a UTF-8 BOM on its own; hand-made lists are often cp1252.
   try {
     return { text: new TextDecoder("utf-8", { fatal: true }).decode(b), encoding: "utf-8" };
@@ -62,6 +83,14 @@ function collect(entries) {
     const written = writtenForm(value);
     if (!written) {
       warnings.push({ code: "AMBIGUOUS_BACKSLASH", line });
+      continue;
+    }
+    if (CONTROL_CHARACTER.test(written) || !written.isWellFormed()) {
+      warnings.push({ code: "UNREADABLE_CHARACTERS", line });
+      continue;
+    }
+    if (written.length > DICTIONARY_WORD_MAX_LENGTH) {
+      warnings.push({ code: "TOO_LONG", line });
       continue;
     }
     const lower = written.toLowerCase();
@@ -91,28 +120,73 @@ function parseTxt(src) {
   return { ok: true, format: "txt", header, ...result };
 }
 
-// Regex, not an XML parser: the schema is one root and one attribute, the
-// DOCTYPE points at a dead host, and nothing may ever try to fetch it.
+// Index of the ">" closing a start tag, skipping any inside quoted values.
+function tagEnd(src, from) {
+  let quoted = false;
+  for (let i = from; i < src.length; i += 1) {
+    if (src[i] === '"') quoted = !quoted;
+    else if (src[i] === ">" && !quoted) return i;
+  }
+  return -1;
+}
+
+// Whether the next markup after a start tag is a child element (a property).
+function opensChild(src, from) {
+  let i = from;
+  while (i < src.length && /\s/.test(src[i])) i += 1;
+  return src[i] === "<" && /[A-Za-z]/.test(src[i + 1] ?? "");
+}
+
+// One forward scan, not a regex per tag: a pattern that looks for a tag's
+// end from every "<Word" rereads the rest of the file whenever a tag never
+// closes, which turns a few hundred KB into minutes. No XML parser either: the
+// schema is one root and one attribute, the DOCTYPE points at a dead host, and
+// nothing may ever try to fetch it.
 function parseXml(src) {
   if (!/<WordExport\b/.test(src)) return { ok: false, error: { code: "UNSUPPORTED_XML" } };
   const entries = [];
-  for (const match of src.matchAll(XML_WORD_NAME)) {
-    const value = decodeEntities(match[1]).trim();
+  let propertiesIgnored = false;
+  let from = 0;
+  for (;;) {
+    const start = src.indexOf("<Word", from);
+    if (start === -1) break;
+    from = start + "<Word".length;
+    if (/\w/.test(src[from] ?? "")) continue; // <WordExport>, <Words>
+    const end = tagEnd(src, from);
+    if (end === -1) break;
+    const tag = src.slice(start, end + 1);
+    const name = XML_NAME_ATTRIBUTE.exec(tag);
+    const value = name ? decodeEntities(name[1]).trim() : "";
     if (value) entries.push({ value, line: entries.length + 1 });
+    if (!propertiesIgnored && !tag.endsWith("/>")) propertiesIgnored = opensChild(src, end + 1);
+    from = end + 1;
   }
   const result = collect(entries);
   if (result.words.length === 0) return { ok: false, error: { code: "EMPTY_FILE" } };
-  if (XML_WORD_WITH_CHILDREN.test(src)) result.warnings.push({ code: "XML_PROPERTIES_IGNORED" });
+  if (propertiesIgnored) result.warnings.push({ code: "XML_PROPERTIES_IGNORED" });
   return { ok: true, format: "xml", header: null, ...result };
 }
 
+/**
+ * @param {string} text
+ * @returns {{ ok: false, error: { code: "EMPTY_FILE" | "UNSUPPORTED_XML" } }
+ *   | { ok: true, format: "txt" | "xml", header: string | null, words: string[],
+ *       totalEntries: number, duplicatesInFile: number,
+ *       warnings: Array<{ code: string, line?: number }> }}
+ */
 export function parseDragonWordList(text) {
   const src = String(text ?? "");
   return src.trimStart().startsWith("<") ? parseXml(src) : parseTxt(src);
 }
 
+// New words in file order, stopping at the dictionary cap.
 export function planDragonImport(words, existingWords) {
   const existing = new Set(existingWords.map((w) => w.trim().toLowerCase()));
-  const add = words.filter((w) => !existing.has(w.toLowerCase()));
-  return { add, skippedExisting: words.length - add.length };
+  const fresh = words.filter((w) => !existing.has(w.toLowerCase()));
+  const add = fresh.slice(0, Math.max(0, DICTIONARY_MAX_WORDS - existing.size));
+  return {
+    add,
+    skippedExisting: words.length - fresh.length,
+    overLimit: fresh.length - add.length,
+  };
 }

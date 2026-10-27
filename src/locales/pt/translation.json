@@ -3569,6 +3569,8 @@
       "alreadyPresent": "Já estavam no seu dicionário, por isso foram ignoradas: {{count}}.",
       "nothingNew": "Todas as palavras deste arquivo já estão no seu dicionário.",
       "unreadable": "Linhas que não puderam ser lidas, por isso foram ignoradas: {{count}}.",
+      "tooLong": "Palavras com mais de {{max}} caracteres, por isso foram ignoradas: {{count}}.",
+      "overLimit": "Seu dicionário comporta até {{max}} palavras, por isso não foram importadas: {{count}}.",
       "propertiesIgnored": "As propriedades de formatação do Dragon não são importadas.",
       "confirm_one": "Importar {{count}} palavra",
       "confirm_other": "Importar {{count}} palavras",

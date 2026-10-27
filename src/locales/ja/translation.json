@@ -3497,6 +3497,8 @@
       "alreadyPresent": "すでに辞書にあるためスキップ: {{count}} 個。",
       "nothingNew": "このファイルの単語はすべてすでに辞書にあります。",
       "unreadable": "読み取れなかったためスキップした行: {{count}} 行。",
+      "tooLong": "{{max}} 文字を超えるためスキップした単語: {{count}} 個。",
+      "overLimit": "辞書に登録できるのは {{max}} 語までのため、インポートしなかった単語: {{count}} 個。",
       "propertiesIgnored": "Dragon の書式プロパティはインポートされません。",
       "confirm_one": "{{count}} 個の単語をインポート",
       "confirm_other": "{{count}} 個の単語をインポート",

@@ -12765,7 +12765,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("dragon-import-pick-and-parse", async (event) => {
+    ipcMain.handle("dragon-import-pick-file", async (event) => {
       try {
         const { dialog } = require("electron");
         // Parent the dialog so it opens as a sheet on the panel window —
@@ -12788,22 +12788,13 @@ class IPCHandlers {
         if (fs.statSync(filePath).size > MAX_IMPORT_BYTES) {
           return { canceled: false, success: false, error: "FILE_TOO_LARGE" };
         }
-        const { decodeDragonExport, parseDragonWordList } = await import("./dragonImport.js");
-        const parsed = parseDragonWordList(decodeDragonExport(fs.readFileSync(filePath)).text);
-        if (!parsed.ok) {
-          return { canceled: false, success: false, error: parsed.error.code };
-        }
-        // The renderer applies the words through the store's existing
-        // dictionary path; nothing is written here and no state is kept.
+        // The renderer parses the bytes and applies the words, so a large or
+        // malformed file never holds up hotkeys and dictation here.
         return {
           canceled: false,
           success: true,
           fileName: path.basename(filePath),
-          format: parsed.format,
-          words: parsed.words,
-          totalEntries: parsed.totalEntries,
-          unreadableLines: parsed.warnings.filter((w) => w.code === "AMBIGUOUS_BACKSLASH").length,
-          propertiesIgnored: parsed.warnings.some((w) => w.code === "XML_PROPERTIES_IGNORED"),
+          bytes: fs.readFileSync(filePath),
         };
       } catch (error) {
         debugLogger.error("Dragon import failed", { error: error.message }, "dragon-import");

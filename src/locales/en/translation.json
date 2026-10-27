@@ -3921,6 +3921,8 @@
       "alreadyPresent": "Already in your dictionary, so skipped: {{count}}.",
       "nothingNew": "Every word in this file is already in your dictionary.",
       "unreadable": "Lines that could not be read, so skipped: {{count}}.",
+      "tooLong": "Words over {{max}} characters, so skipped: {{count}}.",
+      "overLimit": "Your dictionary holds up to {{max}} words, so these were not imported: {{count}}.",
       "propertiesIgnored": "Dragon's formatting properties are not imported.",
       "confirm_one": "Import {{count}} word",
       "confirm_other": "Import {{count}} words",

@@ -92,7 +92,7 @@ test.before(() => {
   Ctor.prototype.setupHandlers.call(
     new Proxy({}, { get: (value, property) => (property in value ? value[property] : anything()) })
   );
-  assert.ok(handlers.get("dragon-import-pick-and-parse"), "dragon handler must be registered");
+  assert.ok(handlers.get("dragon-import-pick-file"), "dragon handler must be registered");
 });
 
 test.after(() => {
@@ -100,35 +100,30 @@ test.after(() => {
   fs.rmSync(importDir, { recursive: true, force: true });
 });
 
-const run = () => handlers.get("dragon-import-pick-and-parse")({ sender: {} });
+const run = () => handlers.get("dragon-import-pick-file")({ sender: {} });
 
 test("dragon import returns canceled when the picker is dismissed", async () => {
   dialogResult = { canceled: true, filePaths: [] };
   assert.deepEqual(await run(), { canceled: true });
 });
 
-test("dragon import parses a TXT export and reports unreadable lines", async () => {
+test("dragon import returns a TXT export's bytes for the renderer to parse", async () => {
   dialogResult = { canceled: false, filePaths: [txtPath] };
   const result = await run();
   assert.deepEqual(result, {
     canceled: false,
     success: true,
     fileName: "dragon-words.txt",
-    format: "txt",
-    words: ["Applas", "Robert F. Kennedy"],
-    totalEntries: 3,
-    unreadableLines: 1,
-    propertiesIgnored: false,
+    bytes: fs.readFileSync(txtPath),
   });
 });
 
-test("dragon import parses a UTF-16 XML export and flags ignored properties", async () => {
+test("dragon import returns a UTF-16 XML export's bytes undecoded", async () => {
   dialogResult = { canceled: false, filePaths: [xmlPath] };
   const result = await run();
   assert.equal(result.success, true);
-  assert.equal(result.format, "xml");
-  assert.deepEqual(result.words, ["Oertli"]);
-  assert.equal(result.propertiesIgnored, true);
+  assert.equal(result.fileName, "dragon-words.xml");
+  assert.deepEqual(result.bytes, fs.readFileSync(xmlPath));
 });
 
 test("dragon import refuses an oversized file before reading it", async () => {

@@ -99,7 +99,69 @@ test("parseDragonWordList treats a header-only or blank file as empty", async ()
 test("planDragonImport drops words already present, case-insensitively, keeping file order", async () => {
   const { planDragonImport } = await load();
   const plan = planDragonImport(["Applas", "ADO", "Zoë"], ["ado", " Zoë "]);
-  assert.deepEqual(plan, { add: ["Applas"], skippedExisting: 2 });
+  assert.deepEqual(plan, { add: ["Applas"], skippedExisting: 2, overLimit: 0 });
+});
+
+test("planDragonImport stops at the dictionary cap and counts what did not fit", async () => {
+  const { planDragonImport, DICTIONARY_MAX_WORDS } = await load();
+  const existing = Array.from({ length: DICTIONARY_MAX_WORDS - 2 }, (_, i) => `old${i}`);
+  const plan = planDragonImport(["old0", "new1", "new2", "new3"], existing);
+  assert.deepEqual(plan, { add: ["new1", "new2"], skippedExisting: 1, overLimit: 1 });
+
+  const full = planDragonImport(["new1"], [...existing, "a", "b"]);
+  assert.deepEqual(full, { add: [], skippedExisting: 0, overLimit: 1 });
+});
+
+test("decodeDragonExport reads BOM-less UTF-16 TXT in either byte order", async () => {
+  const { decodeDragonExport, parseDragonWordList } = await load();
+  const text = "@Version=Plato-UTF8\r\nZoë\r\nMB\\\\megabyte\r\n";
+  const le = decodeDragonExport(Buffer.from(text, "utf16le"));
+  assert.deepEqual(le, { text, encoding: "utf-16le" });
+  const be = decodeDragonExport(Buffer.from(text, "utf16le").swap16());
+  assert.deepEqual(be, { text, encoding: "utf-16be" });
+  assert.deepEqual(parseDragonWordList(le.text).words, ["Zoë", "MB"]);
+});
+
+test("parseDragonWordList skips words with control characters or broken surrogates", async () => {
+  const { parseDragonWordList } = await load();
+  const xml =
+    '<WordExport><Word name="a&#0;b"/><Word name="&#xD800;x"/><Word name="ok"/></WordExport>';
+  const r = parseDragonWordList(xml);
+  assert.deepEqual(r.words, ["ok"]);
+  assert.deepEqual(r.warnings, [
+    { code: "UNREADABLE_CHARACTERS", line: 1 },
+    { code: "UNREADABLE_CHARACTERS", line: 2 },
+  ]);
+  const txt = parseDragonWordList("good\nbad\u0000word\n");
+  assert.deepEqual(txt.words, ["good"]);
+  assert.deepEqual(txt.warnings, [{ code: "UNREADABLE_CHARACTERS", line: 2 }]);
+});
+
+test("parseDragonWordList skips written forms longer than the API accepts", async () => {
+  const { parseDragonWordList, DICTIONARY_WORD_MAX_LENGTH } = await load();
+  const longest = "x".repeat(DICTIONARY_WORD_MAX_LENGTH);
+  const r = parseDragonWordList(`${longest}\n${longest}y\\\\spoken\n`);
+  assert.deepEqual(r.words, [longest]);
+  assert.deepEqual(r.warnings, [{ code: "TOO_LONG", line: 2 }]);
+});
+
+test("parseDragonWordList scans unclosed Word tags in linear time", async () => {
+  const { parseDragonWordList } = await load();
+  // The old per-tag regex took over a minute on 300 KB of this.
+  const crafted = '<WordExport><Word name="a"/>' + "<Word ".repeat(500_000);
+  const started = performance.now();
+  const r = parseDragonWordList(crafted);
+  assert.ok(performance.now() - started < 2000, "parse must not be quadratic");
+  assert.deepEqual(r.words, ["a"]);
+});
+
+test("parseDragonWordList keeps a quoted > in a name and stops at an unclosed tag", async () => {
+  const { parseDragonWordList } = await load();
+  const r = parseDragonWordList(
+    '<WordExport><Word name="a>b"/><Word name="c"><Property/></Word><Word name="d'
+  );
+  assert.deepEqual(r.words, ["a>b", "c"]);
+  assert.deepEqual(r.warnings, [{ code: "XML_PROPERTIES_IGNORED" }]);
 });
 
 // Header copied verbatim from a real Dragon Professional Individual 14 export

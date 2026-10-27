@@ -3569,6 +3569,8 @@
       "alreadyPresent": "已在你的词典中，因此跳过：{{count}} 个。",
       "nothingNew": "此文件中的所有词语都已在你的词典中。",
       "unreadable": "无法读取因此跳过的行：{{count}} 行。",
+      "tooLong": "超过 {{max}} 个字符因此跳过的词语：{{count}} 个。",
+      "overLimit": "你的词典最多可容纳 {{max}} 个词语，因此未导入：{{count}} 个。",
       "propertiesIgnored": "不会导入 Dragon 的格式属性。",
       "confirm_one": "导入 {{count}} 个词语",
       "confirm_other": "导入 {{count}} 个词语",

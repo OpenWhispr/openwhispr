@@ -3621,6 +3621,8 @@
       "alreadyPresent": "Ya estaban en tu diccionario, así que se omitieron: {{count}}.",
       "nothingNew": "Todas las palabras de este archivo ya están en tu diccionario.",
       "unreadable": "Líneas que no se pudieron leer, así que se omitieron: {{count}}.",
+      "tooLong": "Palabras de más de {{max}} caracteres, así que se omitieron: {{count}}.",
+      "overLimit": "Tu diccionario admite hasta {{max}} palabras, así que no se importaron: {{count}}.",
       "propertiesIgnored": "Las propiedades de formato de Dragon no se importan.",
       "confirm_one": "Importar {{count}} palabra",
       "confirm_other": "Importar {{count}} palabras",

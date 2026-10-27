@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dictionary
+
+- **Import your Dragon vocabulary.** Dictionary → Import → Import from Dragon takes the list Dragon writes from Vocabulary → Export custom word and phrase list (TXT, or the Windows XML) and adds every custom word to your dictionary after a preview of what's new. Words with a spoken form are imported by their written form; words already present are skipped rather than duplicated, and the file's formatting properties are left behind. Words that can't sync (over 100 characters, or garbled by a wrong encoding) are skipped, and an import stops at the dictionary's 5,000-word limit; the preview counts each. (#2190)
+
 ## [1.10.4] - 2026-10-21
 
 Tone & Style writes your dictation, and the assistant's drafts, in the tone you pick for each kind of app. The AI Summary now writes detailed notes by default, and you can link a calendar event to any note, pick a reasoning effort for each model scope and ask the chat how OpenWhispr works. This release also keeps your transcript when a later step fails, and fixes meeting transcripts, Linux paste and local Whisper on Windows.
@@ -284,10 +288,6 @@ A follow-up to 1.10.0 built from everything that landed since. Notes open straig
 - **Snippets whose trigger starts with the assistant's name expand instead of waking it.** A trigger such as `openwhispr review` was read as an address to the assistant, which stripped the name and sent "review" off as a command. Any match for the assistant's name that falls inside a snippet trigger is now ignored, in both detection and the address stripping, so the two can never disagree. A trigger that is exactly the bare name still shadows the wake word. (#2153)
 - **Quick actions in the tray and the pill.** The tray menu now leads with **Start listening** / **Stop listening**, **Ask assistant** and **Start meeting recording**, and the dictation pill's right-click menu gains **Start meeting recording** while idle. Each action runs where it belongs: listening goes to the existing dictation start and stop, a meeting goes through the same entry the meeting hotkey uses and brings a live recording forward instead of opening an empty note over it, and only **Ask assistant** asks the renderer, since only it can open the panel. If organisation policy forbids the assistant, or policy is still loading, the pill surfaces and says why. (#2163)
 - **Windows: a dictation started from the tray pastes where you were working.** Starting from the tray captured OpenWhispr's own menu-owner window as the paste target, so the fast-paste helper pulled the foreground onto OpenWhispr, dropped the keystroke and restored the clipboard over your text. A target that is ours but is not one of our real windows is now dropped; the note editor remains a valid target. (#2163)
-
-### Dictionary
-
-- **Import your Dragon vocabulary.** Dictionary → Import → Import from Dragon takes the list Dragon writes from Vocabulary → Export custom word and phrase list (TXT, or the Windows XML) and adds every custom word to your dictionary after a preview of what's new. Words with a spoken form are imported by their written form; words already present are skipped rather than duplicated, and the file's formatting properties are left behind. (#2190)
 
 ### Transcription
 
