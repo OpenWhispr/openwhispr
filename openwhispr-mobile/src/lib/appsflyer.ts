@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
   getTrackingAuthorizationStatus,
@@ -42,6 +43,53 @@ let sdkStateChange: Promise<void> | null = null;
 let trackingAuthorizationStatus: TrackingAuthorizationStatus | null = null;
 let trackingRefreshRevision = 0;
 let pendingEvents: PendingEvent[] = [];
+let attributionRevision = 0;
+const attributionListeners = new Set<() => void>();
+let lastNotifiedCollectionAllowed: boolean | undefined;
+
+function notifyAttributionChanged(sessionStarted = false): void {
+  const allowed = collectionAllowed();
+  if (!sessionStarted && allowed === lastNotifiedCollectionAllowed) return;
+  lastNotifiedCollectionAllowed = allowed;
+  attributionRevision += 1;
+  attributionListeners.forEach((listener) => listener());
+}
+
+export function subscribeAppsFlyerAttribution(listener: () => void): () => void {
+  attributionListeners.add(listener);
+  return () => {
+    attributionListeners.delete(listener);
+  };
+}
+
+export function isAppsFlyerAttributionAllowed(): boolean {
+  return collectionAllowed();
+}
+
+// Only expose an identifier from a started, consented session. A slow native
+// lookup must neither hold billing indefinitely nor outlive a consent change.
+export async function getAppsFlyerRevenueId(): Promise<string | null> {
+  const readiness = sdkReady;
+  const revision = attributionRevision;
+  if (!didStartCurrentSession || !readiness || !collectionAllowed()) return null;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const id = await Promise.race([
+      readiness.then((ready) => (ready ? getAppsFlyer().getAppsFlyerUID() : null)),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), 2000);
+      }),
+    ]);
+    return revision === attributionRevision && readiness === sdkReady && collectionAllowed()
+      ? id?.trim() || null
+      : null;
+  } catch (error) {
+    warn('revenue identifier lookup failed')(error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function getAppsFlyer(): AppsFlyerSdk {
   // Keep the native module off shared store import paths so non-native consumers
@@ -88,7 +136,10 @@ function startSessionIfAllowed(): void {
   didStartCurrentSession = true;
   const startOperation = invokeSdk(() => getAppsFlyer().start())
     .then((): boolean => {
-      if (sdkReady === startOperation) flushPendingEvents();
+      if (sdkReady === startOperation) {
+        flushPendingEvents();
+        notifyAttributionChanged(true);
+      }
       return true;
     })
     .catch((error: unknown): boolean => {
@@ -164,11 +215,13 @@ function setSdkStopped(shouldStop: boolean): void {
     if (!updated || stopped) return false;
     startSessionIfAllowed();
     flushPendingEvents();
+    notifyAttributionChanged(true);
     return true;
   });
 }
 
 function applyAttributionPolicy(devKey: string): void {
+  notifyAttributionChanged();
   const enabled = analyticsPreference();
   if (enabled === null) return;
 
@@ -286,7 +339,9 @@ export function logPaywallViewed(placement: SuperwallPlacement): void {
 }
 
 export function logSubscription(productId: string, placement: SuperwallPlacement): void {
-  logAppsFlyerEvent('af_subscribe', {
+  // RevenueCat owns iOS purchase events and revenue, including renewals. Keep
+  // this client-only UX milestone out of the existing af_subscribe mapping.
+  logAppsFlyerEvent(Platform.OS === 'ios' ? 'subscription_completed' : 'af_subscribe', {
     af_subscription_id: productId,
     placement,
   });

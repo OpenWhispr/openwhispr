@@ -18,6 +18,7 @@ const mockRegisterSessionReadyListener = jest.fn((listener: () => void): Promise
   mockSessionReadyListener = listener;
   return Promise.resolve();
 });
+const mockGetAppsFlyerUID = jest.fn<Promise<string>, []>(() => Promise.resolve('af-device'));
 const mockStart = jest.fn((): Promise<void> => Promise.resolve());
 const mockStop = jest.fn((): Promise<void> => Promise.resolve());
 const mockLogEvent = jest.fn((): Promise<void> => Promise.resolve());
@@ -44,6 +45,7 @@ jest.mock('react-native-appsflyer', () => ({
     enableDebug: mockEnableDebug,
     registerSessionReadyListener: mockRegisterSessionReadyListener,
     start: mockStart,
+    getAppsFlyerUID: mockGetAppsFlyerUID,
     stop: mockStop,
     logEvent: mockLogEvent,
   },
@@ -112,6 +114,7 @@ beforeEach(() => {
     mockSessionReadyListener = listener;
     return Promise.resolve();
   });
+  mockGetAppsFlyerUID.mockReset().mockResolvedValue('af-device');
   mockStart.mockReset().mockResolvedValue(undefined);
   mockStop.mockReset().mockResolvedValue(undefined);
   mockLogEvent.mockReset().mockResolvedValue(undefined);
@@ -708,7 +711,7 @@ describe('AppsFlyer MVP events', () => {
     await flushPromises();
 
     expect(mockLogEvent).toHaveBeenCalledWith({
-      eventName: 'af_subscribe',
+      eventName: 'subscription_completed',
       eventValues: {
         af_subscription_id: 'pro.monthly',
         placement: 'account_billing_open',
@@ -758,4 +761,76 @@ describe('AppsFlyer MVP events', () => {
       expect.objectContaining({ message: 'native bridge unavailable' }),
     );
   });
+});
+
+describe('RevenueCat attribution identity', () => {
+  it('returns an ID only after a consented session starts', async () => {
+    const af = await loadInitializedAppsFlyer();
+    await expect(af.getAppsFlyerRevenueId()).resolves.toBeNull();
+    expect(mockGetAppsFlyerUID).not.toHaveBeenCalled();
+    mockSessionReadyListener?.();
+    await flushPromises();
+    await expect(af.getAppsFlyerRevenueId()).resolves.toBe('af-device');
+  });
+
+  it.each(['denied', 'notDetermined'] as const)(
+    'does not read an ID with ATT %s',
+    async (status) => {
+      mockGetTrackingAuthorizationStatus.mockResolvedValue(status);
+      const af = await loadInitializedAppsFlyer();
+      await expect(af.getAppsFlyerRevenueId()).resolves.toBeNull();
+      expect(mockGetAppsFlyerUID).not.toHaveBeenCalled();
+    },
+  );
+
+  it('discards a pending ID when analytics is disabled', async () => {
+    const af = await loadStartedAppsFlyer();
+    const pending = deferred<string>();
+    mockGetAppsFlyerUID.mockReturnValueOnce(pending.promise);
+    const result = af.getAppsFlyerRevenueId();
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    pending.resolve('stale-id');
+    await expect(result).resolves.toBeNull();
+  });
+
+  it('notifies subscribers when consent is revoked and the SDK becomes ready', async () => {
+    const af = await loadInitializedAppsFlyer();
+    const listener = jest.fn();
+    const unsubscribe = af.subscribeAppsFlyerAttribution(listener);
+    mockSessionReadyListener?.();
+    await flushPromises();
+    expect(listener).toHaveBeenCalled();
+    listener.mockClear();
+    af.setAppsFlyerTrackingAuthorizationStatus('denied');
+    expect(listener).toHaveBeenCalled();
+    unsubscribe();
+    listener.mockClear();
+    af.setAppsFlyerTrackingAuthorizationStatus('authorized');
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+it('bounds an unresponsive revenue ID lookup and ignores its late result', async () => {
+  const af = await loadStartedAppsFlyer();
+  jest.useFakeTimers();
+  try {
+    const pending = deferred<string>();
+    mockGetAppsFlyerUID.mockReturnValueOnce(pending.promise);
+    const result = af.getAppsFlyerRevenueId();
+    await jest.advanceTimersByTimeAsync(2001);
+    await expect(result).resolves.toBeNull();
+    pending.resolve('late-id');
+    await expect(result).resolves.toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('returns no revenue ID when the native getter rejects', async () => {
+  const af = await loadStartedAppsFlyer();
+  mockGetAppsFlyerUID.mockRejectedValueOnce(new Error('native unavailable'));
+  await expect(af.getAppsFlyerRevenueId()).resolves.toBeNull();
 });

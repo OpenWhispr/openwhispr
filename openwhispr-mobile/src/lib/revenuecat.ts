@@ -5,8 +5,15 @@ import Purchases, {
   STOREKIT_VERSION,
 } from 'react-native-purchases';
 import { Sentry } from '@/lib/sentry';
+import {
+  getAppsFlyerRevenueId,
+  isAppsFlyerAttributionAllowed,
+  subscribeAppsFlyerAttribution,
+} from '@/lib/appsflyer';
 
 let configured = false;
+let identifiedUserId: string | null = null;
+let requestedUserId: string | null = null;
 let identityQueue: Promise<unknown> = Promise.resolve();
 
 const IDENTITY_CALL_TIMEOUT_MS = 10_000;
@@ -42,6 +49,44 @@ function withIdentity<T>(
   });
 }
 
+async function setRevenueAttributionId(id: string | null): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  try {
+    await Purchases.setAppsflyerID(id);
+    // Setters only update local attributes. Request a push for opt-outs too.
+    // This SDK method can be rate limited without rejecting: do not cache its
+    // result as delivery proof. Retry on future session/policy/purchase signals.
+    await Purchases.syncAttributesAndOfferingsIfNeeded();
+  } catch (error) {
+    reportRevenueCatError('sync-attribution', error);
+  }
+}
+
+async function syncRevenueAttribution(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  const id =
+    identifiedUserId && identifiedUserId === requestedUserId && isAppsFlyerAttributionAllowed()
+      ? await getAppsFlyerRevenueId()
+      : null;
+  // Consent may have changed during the native ID lookup.
+  await setRevenueAttributionId(
+    identifiedUserId === requestedUserId && isAppsFlyerAttributionAllowed() ? id : null,
+  );
+  // A grant can be revoked while the attribute push is in flight. Clear it
+  // before the queued purchase/restore continues, not only in a later callback.
+  if (id && (identifiedUserId !== requestedUserId || !isAppsFlyerAttributionAllowed())) {
+    await setRevenueAttributionId(null);
+  }
+}
+
+// Must run inside withIdentity: attribute setters target the current SDK user.
+async function logInWithAttribution(userId: string): Promise<void> {
+  if (identifiedUserId !== userId) await setRevenueAttributionId(null);
+  await Purchases.logIn(userId);
+  identifiedUserId = userId;
+  await syncRevenueAttribution();
+}
+
 function getRevenueCatApiKey(): string | undefined {
   const key =
     Platform.OS === 'ios'
@@ -74,16 +119,26 @@ export function configureRevenueCat(): void {
     });
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
     configured = true;
+    if (Platform.OS === 'ios') {
+      const refresh = () => {
+        withIdentity(syncRevenueAttribution).catch((error) => {
+          reportRevenueCatError('sync-attribution', error);
+        });
+      };
+      subscribeAppsFlyerAttribution(refresh);
+      refresh();
+    }
   } catch (error) {
     reportRevenueCatError('configure', error);
   }
 }
 
 export async function identifyRevenueCatUser(userId: string): Promise<boolean> {
+  requestedUserId = userId;
   if (!configured) configureRevenueCat();
   if (!configured) return false;
   try {
-    await withIdentity(() => Purchases.logIn(userId));
+    await withIdentity(() => logInWithAttribution(userId));
     return true;
   } catch (error) {
     reportRevenueCatError('identify', error);
@@ -92,9 +147,15 @@ export async function identifyRevenueCatUser(userId: string): Promise<boolean> {
 }
 
 export async function resetRevenueCatUser(): Promise<void> {
+  requestedUserId = null;
   if (!configured) return;
   try {
-    await withIdentity(() => Purchases.logOut());
+    await withIdentity(async () => {
+      await setRevenueAttributionId(null);
+      await Purchases.logOut();
+      identifiedUserId = null;
+      await syncRevenueAttribution();
+    });
   } catch (error) {
     reportRevenueCatError('reset', error);
   }
@@ -106,12 +167,14 @@ export async function reconcileRevenueCatPurchases(
   billingUserId: string,
   isCurrent: () => boolean,
 ): Promise<boolean> {
+  if (!isCurrent()) return false;
+  requestedUserId = billingUserId;
   if (!configured) configureRevenueCat();
   if (!configured) return false;
   try {
     return await withIdentity(async () => {
       if (!isCurrent()) return false;
-      await Purchases.logIn(billingUserId);
+      await logInWithAttribution(billingUserId);
       if (!isCurrent()) return false;
       await Purchases.syncPurchasesForResult();
       return isCurrent();
@@ -131,7 +194,10 @@ export async function recordRevenueCatPurchase(productId: string): Promise<boole
   if (!configured) configureRevenueCat();
   if (!configured) return false;
   try {
-    await withIdentity(() => Purchases.recordPurchase(productId));
+    await withIdentity(async () => {
+      await syncRevenueAttribution();
+      await Purchases.recordPurchase(productId);
+    });
     return true;
   } catch (error) {
     reportRevenueCatError('record-purchase', error);

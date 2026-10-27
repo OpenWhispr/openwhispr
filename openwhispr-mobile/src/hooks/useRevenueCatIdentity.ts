@@ -28,9 +28,14 @@ export function useRevenueCatIdentity(): void {
       // SuperwallEntitlementBridge.
       if (!billingUserId) return;
       if (identifiedUserIdRef.current === billingUserId) return;
+      // Remember the requested identity immediately so sign-out also queues a
+      // reset while the native login is still pending.
+      identifiedUserIdRef.current = billingUserId;
       let cancelled = false;
       identifyRevenueCatUser(billingUserId).then((identified) => {
-        if (identified && !cancelled) identifiedUserIdRef.current = billingUserId;
+        if (!identified && !cancelled && identifiedUserIdRef.current === billingUserId) {
+          identifiedUserIdRef.current = null;
+        }
       });
       return () => {
         cancelled = true;
