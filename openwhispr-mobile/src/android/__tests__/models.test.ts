@@ -29,6 +29,8 @@ beforeEach(async () => {
   jest.clearAllMocks();
   jest.mocked(FileSystem.getFreeDiskStorageAsync).mockReset().mockResolvedValue(4_000_000_000);
   jest.mocked(FileSystem.createDownloadResumable).mockReset();
+  jest.mocked(FileSystem.deleteAsync).mockReset().mockResolvedValue(undefined);
+  jest.mocked(FileSystem.moveAsync).mockReset().mockResolvedValue(undefined);
   await i18n.changeLanguage('en');
   modified++;
   jest.mocked(FileSystem.getInfoAsync).mockImplementation(async (uri) => ({
@@ -80,6 +82,82 @@ it('does not require free space to reuse already verified weights', async () => 
   jest.mocked(FileSystem.getFreeDiskStorageAsync).mockResolvedValueOnce(0);
   await downloadAndroidModel(id);
   expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
+});
+
+it.each([
+  {
+    title: 'reclaims an interrupted download so a low-space retry can finish',
+    budget: 1_100_000_000,
+    ready: true,
+  },
+  {
+    title: 'still refuses a download when reclaiming its partial file is insufficient',
+    budget: 700_000_000,
+    ready: false,
+  },
+])('$title', async ({ budget, ready }) => {
+  const destination = modelPath(id);
+  const partial = `${destination}.part`;
+  const otherPartial = `${modelPath('parakeet-v3')}/encoder.int8.onnx.part`;
+  const preservedModel = ANDROID_MODELS['qwen-balanced'];
+  const preservedPath = modelPath('qwen-balanced');
+  const files = new Map([
+    [partial, { size: 400_000_000, sha256: 'incomplete' }],
+    [otherPartial, { size: 200_000_000, sha256: 'other-incomplete' }],
+    [preservedPath, { size: preservedModel.bytes, sha256: preservedModel.sha256 }],
+  ]);
+  jest.mocked(FileSystem.getInfoAsync).mockImplementation(async (uri) => {
+    const file = files.get(uri);
+    return file
+      ? { exists: true, isDirectory: false, size: file.size, modificationTime: modified, uri }
+      : { exists: false, isDirectory: false, uri };
+  });
+  jest
+    .mocked(FileSystem.getFreeDiskStorageAsync)
+    .mockImplementation(
+      async () =>
+        budget +
+        preservedModel.bytes -
+        [...files.values()].reduce((total, file) => total + file.size, 0),
+    );
+  jest.mocked(FileSystem.deleteAsync).mockImplementation(async (uri) => {
+    files.delete(uri);
+  });
+  jest.mocked(FileSystem.moveAsync).mockImplementation(async ({ from, to }) => {
+    const file = files.get(from);
+    if (!file) throw new Error('Cannot move a missing file');
+    files.set(to, file);
+    files.delete(from);
+  });
+  jest.mocked(AndroidDictation!.sha256).mockImplementation(async (uri) => {
+    const file = files.get(uri);
+    if (!file) throw new Error('Cannot hash a missing file');
+    return file.sha256;
+  });
+  jest.mocked(FileSystem.createDownloadResumable).mockImplementation(
+    (_url, uri) =>
+      ({
+        downloadAsync: jest.fn(async () => {
+          files.set(uri, { size: model.bytes, sha256: model.sha256 });
+          return { status: 200 };
+        }),
+      }) as never,
+  );
+
+  const downloading = downloadAndroidModel(id);
+  if (ready) await expect(downloading).resolves.toBeUndefined();
+  else {
+    await expect(downloading).rejects.toThrow(i18n.t('downloadStorage'));
+    expect(FileSystem.createDownloadResumable).not.toHaveBeenCalled();
+  }
+  await expect(modelReady(id)).resolves.toBe(ready);
+  expect(files.has(partial)).toBe(false);
+  expect(files.get(otherPartial)).toEqual({ size: 200_000_000, sha256: 'other-incomplete' });
+  expect(files.get(preservedPath)).toEqual({
+    size: preservedModel.bytes,
+    sha256: preservedModel.sha256,
+  });
+  expect(useModelDownloads.getState().progress[id]).toBeUndefined();
 });
 
 it('requires the current balanced artifact rather than accepting cached Qwen2.5 weights', async () => {

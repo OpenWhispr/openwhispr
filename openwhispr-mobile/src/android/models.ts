@@ -131,13 +131,15 @@ export async function downloadAndroidModel(
         continue;
       }
       verifiedFiles.delete(file.destination);
+      const temporary = `${file.destination}.part`;
+      // A process interruption can leave this file occupying the space needed for a retry.
+      await FileSystem.deleteAsync(temporary, { idempotent: true });
       if ((await FileSystem.getFreeDiskStorageAsync()) < file.bytes * 1.15)
         throw new Error(i18n.t('downloadStorage'));
       await FileSystem.makeDirectoryAsync(
         file.destination.slice(0, file.destination.lastIndexOf('/')),
         { intermediates: true },
       );
-      const temporary = `${file.destination}.part`;
       try {
         job.download = FileSystem.createDownloadResumable(file.url, temporary, {}, (event) =>
           progress(
