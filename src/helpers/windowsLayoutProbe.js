@@ -117,6 +117,7 @@ class WindowsLayoutProbe {
     for (const line of lines) {
       const result = parseLayoutLine(line.trim());
       if (!result) continue; // READY and anything else
+      debugLogger.debug("[WindowsLayoutProbe] reply", { ...result, pending: this.pending.length });
       const entry = this.pending.shift();
       if (entry) entry.resolve(result);
     }
