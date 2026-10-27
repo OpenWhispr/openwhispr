@@ -119,9 +119,9 @@ test.before(() => {
   Ctor.prototype.setupHandlers.call(fakeThis);
   target._stopMeetingForPolicy = () => stops++;
   target._audioFeaturePolicy = {
-    run: (_event, _purpose, fn) => fn(),
+    run: (_event, _purpose, fn) => fn(new AbortController().signal),
     failure: () => null,
-    signalFor: () => undefined,
+    activeFailure: () => null,
   };
 });
 
