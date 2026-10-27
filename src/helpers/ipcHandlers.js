@@ -7511,7 +7511,8 @@ class IPCHandlers {
         let result;
         const preferredLanguage = settings?.preferredLanguage;
         const language =
-          preferredLanguage && preferredLanguage !== "auto"
+          // "keyboard" is KEYBOARD_LAYOUT_LANGUAGE (src/utils/keyboardLayoutLanguage.ts): auto outside live dictation.
+          preferredLanguage && preferredLanguage !== "auto" && preferredLanguage !== "keyboard"
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
