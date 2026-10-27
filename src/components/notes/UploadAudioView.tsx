@@ -41,6 +41,7 @@ import {
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
+import { LOCAL_MODELS_CHANGED_EVENT } from "../../hooks/useModelDownload";
 import { requestSignIn } from "../../utils/requestSignIn";
 import { describeProviderError } from "../../utils/describeProviderError";
 import {
@@ -416,7 +417,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   useEffect(() => {
     let cancelled = false;
+    let requestSequence = 0;
     const checkProviderReady = async () => {
+      const request = ++requestSequence;
       if (managedActive) {
         setProviderReady(true);
         return;
@@ -454,23 +457,37 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
         return;
       }
-      if (isSherpaLocalProvider(localTranscriptionProvider)) {
-        const r = await window.electronAPI.listParakeetModels?.();
-        if (!cancelled)
+      try {
+        const model =
+          localTranscriptionProvider === "nvidia"
+            ? parakeetModel
+            : localTranscriptionProvider === "cohere"
+              ? cohereModel
+              : whisperModel;
+        const result = isSherpaLocalProvider(localTranscriptionProvider)
+          ? await window.electronAPI.listParakeetModels?.()
+          : await window.electronAPI.listWhisperModels?.();
+        if (!cancelled && request === requestSequence) {
           setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
+            !!(result?.success && result.models.some((m) => m.model === model && m.downloaded))
           );
-      } else {
-        const r = await window.electronAPI.listWhisperModels?.();
-        if (!cancelled)
-          setProviderReady(
-            !!(r?.success && r.models.some((m: { downloaded?: boolean }) => m.downloaded))
-          );
+        }
+      } catch {
+        if (!cancelled && request === requestSequence) setProviderReady(false);
       }
     };
-    checkProviderReady();
+    // Settings can install or remove models while Upload stays mounted behind it.
+    // Re-read disk truth after those transitions; progress alone is not readiness.
+    const handleModelsChanged = () => void checkProviderReady();
+    if (useLocalWhisper && !managedActive) {
+      window.addEventListener(LOCAL_MODELS_CHANGED_EVENT, handleModelsChanged);
+      window.addEventListener("openwhispr-models-cleared", handleModelsChanged);
+    }
+    void checkProviderReady();
     return () => {
       cancelled = true;
+      window.removeEventListener(LOCAL_MODELS_CHANGED_EVENT, handleModelsChanged);
+      window.removeEventListener("openwhispr-models-cleared", handleModelsChanged);
     };
   }, [
     managedActive,
@@ -479,6 +496,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     remoteTranscriptionUrl,
     useLocalWhisper,
     localTranscriptionProvider,
+    whisperModel,
+    parakeetModel,
+    cohereModel,
     cloudTranscriptionProvider,
     cloudTranscriptionBaseUrl,
     openaiApiKey,
