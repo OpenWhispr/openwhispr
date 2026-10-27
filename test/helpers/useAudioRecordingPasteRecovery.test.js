@@ -344,3 +344,26 @@ test("completed batch and streaming dictations are saved when automatic paste is
   }
   assert.equal(h.manager.saves, 2);
 });
+
+test("a dictation asks main to press Enter only while Press Enter after pasting is on", async (t) => {
+  const h = await mount(t);
+  const pastes = [];
+  h.manager.safePaste = async (text, pasteOptions) => {
+    pastes.push(pasteOptions);
+    return { pasted: true };
+  };
+  for (const pressEnterAfterPaste of [false, true]) {
+    h.settings.setState({ autoPasteEnabled: true, pressEnterAfterPaste });
+    await React.act(async () =>
+      h.manager.callbacks.onTranscriptionComplete({
+        success: true,
+        text: "final result",
+        rawText: "raw input",
+        source: "local",
+      })
+    );
+  }
+  assert.equal(pastes.length, 2);
+  assert.equal(pastes[0].pressEnter, undefined);
+  assert.equal(pastes[1].pressEnter, true);
+});

@@ -3345,8 +3345,9 @@ class IPCHandlers {
       // Smart spacing (#856): append a trailing space so the next paste's leading
       // space self-corrects the gap. Reading the char before the cursor to space
       // the front instead would take a macOS Accessibility read costing hundreds
-      // of ms — too slow for the paste hot path.
-      const textToPaste = applySmartSpacing(text);
+      // of ms — too slow for the paste hot path. Skipped when Enter follows the
+      // paste: the field is submitted, so there is no next paste to space for.
+      const textToPaste = options?.pressEnter === true ? text : applySmartSpacing(text);
 
       // Windows: restore the foreground window captured at record start so the
       // paste lands in the field the user was dictating into, not wherever focus

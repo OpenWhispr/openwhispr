@@ -397,6 +397,7 @@ Settings stored in localStorage with these keys:
 - `hotkey`: Custom hotkey configuration
 - `hasCompletedOnboarding`: Onboarding completion flag
 - `customDictionary`: JSON array of words/phrases for improved transcription accuracy
+- `pressEnterAfterPaste`: Press Enter after a dictation's paste lands (`pressEnter` paste option; smart spacing is skipped for it)
 - `keepLocalModelLoaded`: Keeps the shared llama-server loaded instead of unloading it after 5 idle minutes (#1207; default off). Synced to main with `sync-startup-preferences`, outside its policy gate; `LlamaServerManager.setKeepResident` acts only on a change, since every window resyncs on load
 - `toneStyleEnabled`, `toneStyles`: whether Tone & Style is on (the setup dialog's Finish, or Settings' Tones & voices switch) and the tone picked per kind of app (JSON, normalized by `normalizeToneStyles`)
 - `emailDraftTarget`: Where email drafts open (`auto`, `gmail`, `gmailSend`, `outlookWork`, `outlookPersonal`, `mailto`); `gmailSend` sends through the Gmail connector's approval card ("Send from chat (Gmail)"); an unknown value reads as `auto`
