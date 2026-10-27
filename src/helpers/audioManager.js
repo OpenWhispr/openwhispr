@@ -1034,7 +1034,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
     dictationLayoutLanguage = language;
     logger.debug("Dictation language from keyboard layout", { language, probe }, "audio");
-    if (notice) this.onLayoutLanguageNotice?.(notice);
+    if (notice) {
+      logger.debug(
+        "Layout language notice",
+        { notice, hasHandler: typeof this.onLayoutLanguageNotice === "function" },
+        "audio"
+      );
+      this.onLayoutLanguageNotice?.(notice);
+    }
   }
 
   // Fail-open: translation degraded/failed but raw text is still pasted. Surface why.
