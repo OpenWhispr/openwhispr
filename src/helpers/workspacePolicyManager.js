@@ -239,9 +239,13 @@ function createWorkspacePolicyManager({
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
+        // This manager keeps its own freshness window; a Chromium-cached copy
+        // (the endpoint allows max-age=300) would answer a refresh after a
+        // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
           headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          cache: "no-store",
           signal: controller.signal,
         });
         assertIdentityCurrent(identity);

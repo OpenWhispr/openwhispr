@@ -1,7 +1,7 @@
 const { createAbortError } = require("./abortError");
 const { formatTimestamp } = require("./speakerMerge");
 const { i18nMain } = require("./i18nMain");
-const { AUDIO_POLICY_REFUSAL_CODES } = require("./audioFeaturePolicy");
+const { AUDIO_POLICY_REFUSAL_CODES } = require("./audioPolicyRefusals");
 
 // Retry/backoff/concurrency policy for the chunked cloud upload path (#1326).
 // Kept free of electron imports so the rules stay unit-testable.

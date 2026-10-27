@@ -1,20 +1,11 @@
 const { i18nMain } = require("./i18nMain");
+const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
+const { POLICY_TIMEOUT_MS } = require("./connectors/connectorIpc");
 
 const FEATURE_BY_PURPOSE = {
   meeting: "meetingRecordingEnabled",
   upload: "audioUploadEnabled",
 };
-
-// The server's refusals of an audio purpose. Each also means the snapshot that
-// let the request through no longer matches the org's policy.
-const AUDIO_POLICY_REFUSAL_CODES = new Set([
-  "POLICY_MEETING_RECORDING_DISABLED",
-  "POLICY_AUDIO_UPLOAD_DISABLED",
-  "AUDIO_PURPOSE_REQUIRED",
-  "POLICY_UNRESOLVABLE",
-]);
-
-const isAudioPolicyRefusal = (failure) => AUDIO_POLICY_REFUSAL_CODES.has(failure?.code);
 
 function audioFeatureFailure(snapshot, purpose) {
   // Dictation is never restricted by these controls, so an unloaded policy
@@ -40,10 +31,24 @@ function audioFeatureFailure(snapshot, purpose) {
   };
 }
 
-function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
+function createAudioFeaturePolicy({
+  getPolicy,
+  onBlocked = () => {},
+  onChange = () => {},
+  lookupDeadlineMs = POLICY_TIMEOUT_MS,
+}) {
   const jobs = new Map();
   let snapshot = null;
+  // The verdict work already running was allowed under, kept from a
+  // credential change until its re-resolve answers: an account change cancels
+  // that work itself, and a token rotation alone must not interrupt it.
+  let retained = null;
+  // Bumped by invalidate, so a lookup made for the previous credential never lands.
+  let epoch = 0;
+  // New work is gated on the current credential's verdict; work already
+  // running keeps the one it started under until a newer verdict lands.
   const failure = (purpose) => audioFeatureFailure(snapshot, purpose);
+  const activeFailure = (purpose) => audioFeatureFailure(snapshot ?? retained, purpose);
 
   function update(next) {
     if (
@@ -52,8 +57,9 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
       next?.revision < snapshot.revision
     )
       return;
-    const previous = snapshot;
+    const previous = snapshot ?? retained;
     snapshot = next;
+    retained = null;
     for (const purpose of Object.keys(FEATURE_BY_PURPOSE)) {
       const denied = failure(purpose);
       if (!denied) continue;
@@ -62,63 +68,98 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
       }
       if (!previous || !audioFeatureFailure(previous, purpose)) onBlocked(purpose, denied.code);
     }
+    onChange();
+  }
+
+  // Only a successful lookup replaces the snapshot: a failed one says nothing
+  // new about the policy, and must not stop a meeting the snapshot allows.
+  async function lookup(event, options) {
+    const startedIn = epoch;
+    try {
+      const next = await getPolicy(event, options);
+      if (next?.success && startedIn === epoch) update(next);
+    } catch {}
+  }
+
+  // With no usable snapshot, waits for one, but only as long as a policy
+  // decision may take; the lookup still lands if it answers later.
+  async function settle(event) {
+    let timer;
+    await Promise.race([
+      lookup(event),
+      new Promise((done) => {
+        timer = setTimeout(done, lookupDeadlineMs);
+      }),
+    ]);
+    clearTimeout(timer);
   }
 
   // Only a server refusal (it carries an HTTP status) can reveal a stale
   // snapshot; a local one was decided from the snapshot itself.
   function refreshOnRefusal(event, refusal) {
     if (!Number.isInteger(refusal?.status) || !isAudioPolicyRefusal(refusal)) return;
-    void getPolicy(event, { refresh: true }).then(update, () => {});
+    void lookup(event, { refresh: true });
   }
+
+  const cancelled = () => ({
+    success: false,
+    code: "AUDIO_OPERATION_CANCELLED",
+    error: i18nMain.t("notes.upload.batchCancelled"),
+  });
 
   return {
     update,
     failure,
+    activeFailure,
     refreshOnRefusal,
-    signalFor: (event) => jobs.get(event)?.controller.signal,
     // Starts made in main (hotkey, tray, calendar) can arrive before the first
     // policy broadcast; fetch it then rather than refuse on a policy that never
-    // loaded. Only a usable answer replaces the snapshot, so a failed fetch
-    // still fails closed without reporting a block.
+    // loaded. A failed fetch still fails closed without reporting a block.
     async resolve(purpose) {
-      if (!snapshot) {
-        const next = await getPolicy({}).catch(() => null);
-        if (next?.success) update(next);
-      }
+      if (!snapshot?.success) await settle({});
       return failure(purpose);
     },
-    cancelAll() {
+    // The credential changed: new work waits for its policy, which is fetched
+    // now, while work already running keeps the verdict it started under.
+    invalidate() {
+      retained = snapshot ?? retained;
       snapshot = null;
+      epoch += 1;
+      void lookup({});
+    },
+    // The account changed: nothing started for the previous one may finish.
+    cancelJobs() {
       for (const job of jobs.values()) job.controller.abort();
     },
-    async run(event, purpose, handler) {
+    // The handler gets the job's signal, merged with the caller's own cancel
+    // signal when one is given.
+    async run(event, purpose, handler, { signal: cancelSignal } = {}) {
       const job = { purpose, controller: new AbortController() };
       jobs.set(event, job);
       const onDestroyed = () => job.controller.abort();
       event.sender?.once?.("destroyed", onDestroyed);
       try {
-        // An unrestricted purpose must not wait on the network, nor feed a
-        // failed lookup into update(), which can stop a live meeting.
+        // An unrestricted purpose never waits on the network. A held verdict
+        // answers at once and is refreshed behind it.
         if (FEATURE_BY_PURPOSE[purpose]) {
-          const next = await getPolicy(event);
+          if (snapshot?.success) void lookup(event);
+          else await settle(event);
           job.controller.signal.throwIfAborted();
-          update(next);
           const denied = failure(purpose);
           if (denied) return denied;
         }
         job.controller.signal.throwIfAborted();
-        const result = await handler();
-        refreshOnRefusal(event, result);
-        return (
-          failure(purpose) ||
-          (job.controller.signal.aborted
-            ? { success: false, code: "AUDIO_OPERATION_CANCELLED", error: "Cancelled" }
-            : result)
+        const result = await handler(
+          cancelSignal
+            ? AbortSignal.any([job.controller.signal, cancelSignal])
+            : job.controller.signal
         );
+        refreshOnRefusal(event, result);
+        return activeFailure(purpose) || (job.controller.signal.aborted ? cancelled() : result);
       } catch (error) {
         refreshOnRefusal(event, error);
         return (
-          failure(purpose) || {
+          activeFailure(purpose) || {
             success: false,
             error: error.message,
             code: job.controller.signal.aborted
@@ -136,9 +177,4 @@ function createAudioFeaturePolicy({ getPolicy, onBlocked = () => {} }) {
   };
 }
 
-module.exports = {
-  AUDIO_POLICY_REFUSAL_CODES,
-  audioFeatureFailure,
-  createAudioFeaturePolicy,
-  isAudioPolicyRefusal,
-};
+module.exports = { audioFeatureFailure, createAudioFeaturePolicy };

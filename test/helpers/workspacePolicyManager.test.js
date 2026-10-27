@@ -289,7 +289,9 @@ test("a refresh after a server refusal skips the freshness window, not the throt
   updated.data.policy.features.meetingRecordingEnabled = false;
   const responses = [response(200, validPolicy()), response(200, updated)];
   const context = setup(
-    async () => {
+    async (_url, init) => {
+      // Chromium's HTTP cache would otherwise answer within max-age=300.
+      assert.equal(init.cache, "no-store");
       requestCount += 1;
       return responses.shift();
     },
