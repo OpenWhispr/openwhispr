@@ -455,7 +455,15 @@ static void AnswerLayoutQuery(void) {
         return;
     }
 
+    // The layout belongs to the thread that owns keyboard focus. In modern apps
+    // (Windows 11 Notepad) that is not the thread of the top-level window, whose
+    // layout never follows the switch; fall back to it when nothing has focus.
     DWORD tid = GetWindowThreadProcessId(fg, NULL);
+    GUITHREADINFO gui;
+    gui.cbSize = sizeof(gui);
+    if (GetGUIThreadInfo(tid, &gui) && gui.hwndFocus) {
+        tid = GetWindowThreadProcessId(gui.hwndFocus, NULL);
+    }
     HKL hkl = GetKeyboardLayout(tid);
     if (!hkl) {
         printf("LAYOUT_ERROR no-layout\n");
