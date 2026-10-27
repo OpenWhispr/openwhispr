@@ -2465,6 +2465,7 @@
           "admin": "メンバー、招待、グループ、設定を管理します。"
         },
         "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
+        "roleNotAllowed": "{{workspace}} のロールを変更する権限がなくなりました。",
         "invitations": {
           "loading": "招待を読み込んでいます…",
           "failedTitle": "招待を読み込めませんでした",
@@ -2474,7 +2475,8 @@
           "expired": "期限切れ",
           "resend": "招待を再送信",
           "cancel": "招待を取り消す",
-          "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。"
+          "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。",
+          "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。"
         }
       },
       "role": {
@@ -4845,7 +4847,9 @@
         "seatLimit": "このワークスペースはシート数の上限に達しました。",
         "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
         "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
-        "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。"
+        "ssoRequired": "{{workspace}} にユーザーを招待するには、会社のシングルサインオン (SSO) でサインインしてください。",
+        "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
+        "refused": "{{email}} を招待できませんでした：{{reason}}"
       }
     },
     "join": {
@@ -4915,6 +4919,7 @@
       "confirm": "削除",
       "removing": "削除中…",
       "failed": "{{name}} を削除できませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} からユーザーを削除する権限がなくなりました。",
       "alreadyRemoved": "{{name}} はすでに削除されています"
     },
     "cancelInvitation": {

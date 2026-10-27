@@ -1,7 +1,11 @@
-import { classifyInviteError, type InviteErrorKind } from "../lib/workspaceErrors";
+import {
+  classifyInviteError,
+  type InviteErrorKind,
+  type InviteFailure,
+} from "../lib/workspaceErrors";
 import { InvitationsService } from "./InvitationsService";
 
-export type InviteOutcome = { ok: true; emailSent: boolean } | { ok: false; kind: InviteErrorKind };
+export type InviteOutcome = { ok: true; emailSent: boolean } | ({ ok: false } & InviteFailure);
 
 export interface InvitePeopleDependencies {
   send(
@@ -28,7 +32,7 @@ export interface InvitePeople {
 
 // Outcomes that every remaining address would share, so asking again only adds noise.
 function endsTheBatch(kind: InviteErrorKind): boolean {
-  return kind === "notAllowed" || kind === "seatLimit";
+  return kind === "notAllowed" || kind === "seatLimit" || kind === "ssoRequired";
 }
 
 export function createInvitePeople(deps: InvitePeopleDependencies): InvitePeople {
@@ -54,9 +58,9 @@ export function createInvitePeople(deps: InvitePeopleDependencies): InvitePeople
           });
           outcome = { ok: true, emailSent: result.email_sent };
         } catch (error) {
-          const kind = classifyInviteError(error);
-          outcome = { ok: false, kind };
-          if (endsTheBatch(kind)) stopped = outcome;
+          const failure = classifyInviteError(error);
+          outcome = { ok: false, ...failure };
+          if (endsTheBatch(failure.kind)) stopped = outcome;
         }
         onResult(email, outcome);
       }

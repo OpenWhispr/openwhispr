@@ -16,6 +16,7 @@ import {
 import type { InviteErrorKind } from "../../lib/workspaceErrors";
 import { CheckCircle2, ChevronDown, Loader2, X } from "../icons";
 import { cn } from "../lib/utils";
+import { isolate } from "../../utils/bidiIsolate";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import {
@@ -47,12 +48,14 @@ export interface InvitePeopleViewProps {
 
 const ROLES = ["member", "admin"] as const;
 const SUGGESTION_MIN_CHARS = 2;
-// Failures every chip in the run shares: retrying can't help, so their own message replaces the
-// "Try again" summary.
+// Failures retrying can't fix: when these are all that failed, the first one's own message
+// replaces the "Try again" summary.
 const FINAL_FAILURES: ReadonlySet<InviteErrorKind> = new Set([
   "seatLimit",
   "notAllowed",
   "directoryRequired",
+  "ssoRequired",
+  "refused",
 ]);
 
 const BUTTON_BASE =
@@ -63,17 +66,27 @@ const SECONDARY_BUTTON = cn(
   "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
 );
 
+// The interpolation values of a chip's error line. `email` is left to the caller, which isolates
+// it with <bdi> in the error bar and with Unicode isolates in the chip's tooltip.
+function recipientErrorParams(
+  recipient: InviteRecipient,
+  workspaceName: string
+): Record<string, string> {
+  const { state } = recipient;
+  return {
+    workspace: isolate(workspaceName),
+    ...(state.status === "failed" && state.kind === "refused"
+      ? { reason: isolate(state.message) }
+      : {}),
+  };
+}
+
 function recipientErrorKind(recipient: InviteRecipient): InviteErrorKind | null {
   const { state } = recipient;
   if (state.status === "invalid") return "invalid";
   if (state.status === "blocked") return state.reason;
   if (state.status === "failed") return state.kind;
   return null;
-}
-
-// Unicode isolates keep an address readable inside a right-to-left tooltip, where <bdi> can't go.
-function isolate(value: string): string {
-  return `⁨${value}⁩`;
 }
 
 interface ErrorBarContent {
@@ -97,6 +110,8 @@ export function InvitePeopleView({
   const inputId = useId();
   const hintId = useId();
   const listId = useId();
+  const roleLabelId = useId();
+  const roleTriggerId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [listDismissed, setListDismissed] = useState(false);
@@ -114,7 +129,7 @@ export function InvitePeopleView({
     <BidiInterpolatedText
       text={t(`workspaces.invite.errors.${recipientErrorKind(recipient)}`, {
         email: BIDI_VALUE_TOKEN,
-        workspace: workspaceName,
+        ...recipientErrorParams(recipient, workspaceName),
       })}
       value={recipient.email}
     />
@@ -125,11 +140,11 @@ export function InvitePeopleView({
     const refused = summary.invalid[0] ?? summary.blocked[0];
     if (refused) return { message: recipientMessage(refused) };
     if (summary.failed.length === 0) return null;
-    const kinds = new Set(summary.failed.map(recipientErrorKind));
-    const [onlyKind] = kinds;
-    if (kinds.size === 1 && onlyKind && FINAL_FAILURES.has(onlyKind)) {
-      return { message: recipientMessage(summary.failed[0]) };
-    }
+    const allFinal = summary.failed.every((recipient) => {
+      const kind = recipientErrorKind(recipient);
+      return kind !== null && FINAL_FAILURES.has(kind);
+    });
+    if (allFinal) return { message: recipientMessage(summary.failed[0]) };
     return {
       message: t("workspaces.invite.someFailed", { count: summary.failed.length }),
       action: { label: t("workspaces.exit.tryAgain"), onClick: onSend },
@@ -209,7 +224,7 @@ export function InvitePeopleView({
               {t("workspaces.invite.title")}
             </DialogTitle>
             <DialogDescription className="text-sm leading-normal">
-              {t("workspaces.invite.description", { workspace: workspaceName })}
+              {t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
             </DialogDescription>
             {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
             {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
@@ -310,11 +325,14 @@ export function InvitePeopleView({
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium text-muted-foreground">
+              <span id={roleLabelId} className="text-xs font-medium text-muted-foreground">
                 {t("workspaces.invite.roleLabel")}
               </span>
               <DropdownMenu>
                 <DropdownMenuTrigger
+                  id={roleTriggerId}
+                  // The label names the field and the trigger's own text says the current role.
+                  aria-labelledby={`${roleLabelId} ${roleTriggerId}`}
                   disabled={sending}
                   className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface-1 px-3 text-sm text-foreground outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -402,7 +420,7 @@ function RecipientChip({
   const error = kind
     ? t(`workspaces.invite.errors.${kind}`, {
         email: isolate(recipient.email),
-        workspace: workspaceName,
+        ...recipientErrorParams(recipient, workspaceName),
       })
     : undefined;
 
@@ -459,12 +477,15 @@ function InviteDoneContent({
             <BidiInterpolatedText
               text={t("workspaces.invite.sentOne", {
                 email: BIDI_VALUE_TOKEN,
-                workspace: workspaceName,
+                workspace: isolate(workspaceName),
               })}
               value={sent[0].email}
             />
           ) : (
-            t("workspaces.invite.sentMany", { count: sent.length, workspace: workspaceName })
+            t("workspaces.invite.sentMany", {
+              count: sent.length,
+              workspace: isolate(workspaceName),
+            })
           )}
         </DialogDescription>
       </div>

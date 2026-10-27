@@ -2444,6 +2444,7 @@
           "admin": "Gerencia membros, convites, grupos e configurações."
         },
         "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
+        "roleNotAllowed": "Você não tem mais permissão para alterar funções em {{workspace}}.",
         "invitations": {
           "loading": "Carregando convites…",
           "failedTitle": "Não foi possível carregar os convites",
@@ -2454,7 +2455,8 @@
           "expired": "Expirado",
           "resend": "Reenviar convite",
           "cancel": "Cancelar convite",
-          "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente."
+          "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente.",
+          "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}."
         }
       },
       "role": {
@@ -4851,7 +4853,9 @@
         "seatLimit": "Este espaço de trabalho atingiu o limite de assentos.",
         "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
         "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
-        "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente."
+        "ssoRequired": "Entre com o login único (SSO) da sua empresa para convidar pessoas para {{workspace}}.",
+        "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente.",
+        "refused": "Não foi possível convidar {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -4921,6 +4925,7 @@
       "confirm": "Remover",
       "removing": "Removendo…",
       "failed": "Não foi possível remover {{name}}. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para remover pessoas de {{workspace}}.",
       "alreadyRemoved": "{{name}} já foi removido"
     },
     "cancelInvitation": {

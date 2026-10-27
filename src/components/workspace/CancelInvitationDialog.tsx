@@ -4,6 +4,7 @@ import type { ConfirmActionEvent, ConfirmActionState } from "../../lib/confirmAc
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { InvitationsService } from "../../services/InvitationsService";
 import type { WorkspaceInvitation } from "../../types/electron";
+import { isolate } from "../../utils/bidiIsolate";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
@@ -53,7 +54,7 @@ export function CancelInvitationDialog({
     <WorkspaceActionDialog
       open
       icon="trash"
-      title={t("workspaces.cancelInvitation.title", { email: invitation.email })}
+      title={t("workspaces.cancelInvitation.title", { email: isolate(invitation.email) })}
       body={t("workspaces.cancelInvitation.body")}
       error={state.kind === "failed" ? errorLine(state.error) : null}
       primary={{

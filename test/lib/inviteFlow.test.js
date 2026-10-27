@@ -257,3 +257,68 @@ test("removing a chip with nothing sent stays editing", () => {
   assert.equal(state.phase, "editing");
   assert.deepEqual(state.recipients, []);
 });
+
+test("a refused or SSO-blocked chip stays failed but isn't sent again unchanged", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io c@z.org"), { type: "send" });
+  state = run(
+    state,
+    {
+      type: "result",
+      email: "a@x.com",
+      outcome: { ok: false, kind: "refused", message: "Only admins can be invited without a seat" },
+    },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "ssoRequired" } },
+    { type: "result", email: "c@z.org", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+  assert.deepEqual(
+    state.recipients.map((recipient) => recipient.state),
+    [
+      {
+        status: "failed",
+        kind: "refused",
+        message: "Only admins can be invited without a seat",
+      },
+      { status: "failed", kind: "ssoRequired" },
+      { status: "failed", kind: "requestFailed" },
+    ]
+  );
+  const summary = inviteSummary(state);
+  assert.equal(summary.failed.length, 3);
+  assert.deepEqual(summary.sendable, ["c@z.org"]);
+
+  // Retrying takes only the request that may go through this time.
+  state = run(state, { type: "send" });
+  assert.deepEqual(statuses(state), ["failed", "failed", "sending"]);
+});
+
+test("only refused chips left means there is nothing to send", () => {
+  let state = run(commitText(fresh(), "a@x.com"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "refused", message: "No" } },
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "editing");
+  assert.equal(inviteSummary(state).canSend, false);
+});
+
+test("re-typing an address already sent in this dialog blocks it as already invited", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+
+  state = commitText(state, "A@x.com");
+  assert.deepEqual(state.recipients, [
+    { email: "b@y.io", state: { status: "failed", kind: "requestFailed" } },
+    { email: "a@x.com", state: { status: "blocked", reason: "alreadyInvited" } },
+  ]);
+  assert.equal(inviteSummary(state).canSend, false);
+  // The same address typed twice still makes one chip.
+  assert.equal(commitText(state, "a@x.com").recipients.length, 2);
+  assert.deepEqual(state.sent, [{ email: "a@x.com", emailSent: true }]);
+});

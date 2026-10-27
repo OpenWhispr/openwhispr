@@ -2517,6 +2517,7 @@
           "admin": "Gestiona miembros, invitaciones, grupos y ajustes."
         },
         "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "roleNotAllowed": "Ya no tienes permiso para cambiar roles en {{workspace}}.",
         "invitations": {
           "loading": "Cargando invitaciones…",
           "failedTitle": "No se pudieron cargar las invitaciones",
@@ -2527,7 +2528,8 @@
           "expired": "Expirada",
           "resend": "Reenviar invitación",
           "cancel": "Cancelar invitación",
-          "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo."
+          "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo.",
+          "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}."
         }
       },
       "role": {
@@ -4851,7 +4853,9 @@
         "seatLimit": "Este espacio de trabajo alcanzó su límite de puestos.",
         "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
         "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
-        "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo."
+        "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para invitar personas a {{workspace}}.",
+        "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
+        "refused": "No se pudo invitar a {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -4921,6 +4925,7 @@
       "confirm": "Quitar",
       "removing": "Quitando…",
       "failed": "No se pudo quitar a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para quitar personas de {{workspace}}.",
       "alreadyRemoved": "{{name}} ya había sido quitado"
     },
     "cancelInvitation": {

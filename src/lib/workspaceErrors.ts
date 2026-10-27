@@ -7,32 +7,43 @@ export type InviteErrorKind =
   | "seatLimit"
   | "directoryRequired"
   | "notAllowed"
+  | "ssoRequired"
+  | "refused"
   | "requestFailed";
 
-const INVITE_ERROR_CODES: Record<string, InviteErrorKind> = {
+/** A failed invitation: `refused` carries the server's own reason, every other kind its copy. */
+export type InviteFailure =
+  { kind: Exclude<InviteErrorKind, "refused"> } | { kind: "refused"; message: string };
+
+const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused">> = {
   invalid_email: "invalid",
   already_member: "alreadyMember",
   already_invited: "alreadyInvited",
   seat_limit_reached: "seatLimit",
   DIRECTORY_ASSIGNMENT_REQUIRED: "directoryRequired",
+  SSO_REQUIRED: "ssoRequired",
 };
 
 /**
  * Maps an invitation failure to what the dialog says about it. Codes come first; the message
  * rules are only for API versions that predate them and answer with a status and text alone.
  */
-export function classifyInviteError(error: unknown): InviteErrorKind {
-  if (!(error instanceof CloudApiError)) return "requestFailed";
+export function classifyInviteError(error: unknown): InviteFailure {
+  if (!(error instanceof CloudApiError)) return { kind: "requestFailed" };
   const { code, status, message } = error;
 
   const byCode = code ? INVITE_ERROR_CODES[code] : undefined;
-  if (byCode) return byCode;
+  if (byCode) return { kind: byCode };
 
-  if (status === 409 && /already a member/i.test(message)) return "alreadyMember";
-  if (status === 409 && /already pending/i.test(message)) return "alreadyInvited";
-  if (status === 400 && /invalid email/i.test(message)) return "invalid";
-  if (status === 403 || status === 404) return "notAllowed";
-  return "requestFailed";
+  if (status === 409 && /already a member/i.test(message)) return { kind: "alreadyMember" };
+  if (status === 409 && /already pending/i.test(message)) return { kind: "alreadyInvited" };
+  if (status === 400 && /invalid email/i.test(message)) return { kind: "invalid" };
+  // The API's text for these ("Insufficient role", "Workspace not found") says less than the
+  // copy does, and every remaining address would get the same answer.
+  if (status === 403 || status === 404) return { kind: "notAllowed" };
+  const refusal = serverRefusalMessage(error);
+  if (refusal) return { kind: "refused", message: refusal };
+  return { kind: "requestFailed" };
 }
 
 export type RowActionError =

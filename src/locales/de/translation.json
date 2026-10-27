@@ -1740,6 +1740,7 @@
           "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
         },
         "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "roleNotAllowed": "Sie haben keine Berechtigung mehr, Rollen in {{workspace}} zu ändern.",
         "invitations": {
           "loading": "Einladungen werden geladen…",
           "failedTitle": "Einladungen konnten nicht geladen werden",
@@ -1750,7 +1751,8 @@
           "expired": "Abgelaufen",
           "resend": "Einladung erneut senden",
           "cancel": "Einladung zurückziehen",
-          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein."
+          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
+          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden."
         }
       },
       "role": {
@@ -3075,7 +3077,7 @@
     },
     "invite": {
       "title": "Personen einladen",
-      "description": "Sie erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
+      "description": "Die eingeladenen Personen erhalten per E-Mail einen Link, um {{workspace}} beizutreten.",
       "emailLabel": "E-Mail-Adressen",
       "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
       "emailPlaceholder": "E-Mail suchen",
@@ -3113,7 +3115,9 @@
         "seatLimit": "Dieser Workspace hat sein Platzlimit erreicht.",
         "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
         "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
-        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen zu {{workspace}} einzuladen.",
+        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "refused": "{{email}} konnte nicht eingeladen werden: {{reason}}"
       }
     },
     "join": {
@@ -3179,10 +3183,11 @@
     },
     "removeMember": {
       "title": "{{name}} aus {{workspace}} entfernen?",
-      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Du kannst sie jederzeit erneut einladen.",
+      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
       "confirm": "Entfernen",
       "removing": "Wird entfernt…",
-      "failed": "{{name}} konnte nicht entfernt werden. Prüfe deine Verbindung und versuche es erneut.",
+      "failed": "{{name}} konnte nicht entfernt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Personen aus {{workspace}} zu entfernen.",
       "alreadyRemoved": "{{name}} wurde bereits entfernt"
     },
     "cancelInvitation": {

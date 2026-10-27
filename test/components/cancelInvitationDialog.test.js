@@ -104,7 +104,7 @@ test("confirm offers Keep invitation", async (t) => {
 
   assert.match(
     markup,
-    /workspaces\.cancelInvitation\.title\|\{&quot;email&quot;:&quot;ada@example\.com&quot;\}/
+    /workspaces\.cancelInvitation\.title\|\{&quot;email&quot;:&quot;\u2068ada@example\.com\u2069&quot;\}/
   );
   assert.match(markup, /workspaces\.cancelInvitation\.body/);
   assert.match(markup, />settingsPage\.workspace\.people\.invitations\.cancel</);

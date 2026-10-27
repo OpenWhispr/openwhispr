@@ -1740,6 +1740,7 @@
           "admin": "Gère les membres, les invitations, les groupes et les paramètres."
         },
         "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez.",
+        "roleNotAllowed": "Vous n'avez plus l'autorisation de modifier les rôles dans {{workspace}}.",
         "invitations": {
           "loading": "Chargement des invitations…",
           "failedTitle": "Impossible de charger les invitations",
@@ -1750,7 +1751,8 @@
           "expired": "Expirée",
           "resend": "Renvoyer l'invitation",
           "cancel": "Annuler l'invitation",
-          "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne."
+          "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne.",
+          "resendNotAllowed": "Vous n'avez plus l'autorisation de renvoyer des invitations dans {{workspace}}."
         }
       },
       "role": {
@@ -3113,7 +3115,9 @@
         "seatLimit": "Cet espace a atteint sa limite de sièges.",
         "directoryRequired": "Attribuez d'abord {{email}} dans votre fournisseur d'identité.",
         "notAllowed": "Vous ne pouvez plus inviter de personnes dans {{workspace}}.",
-        "requestFailed": "Impossible d'inviter {{email}}. Vérifiez votre connexion et réessayez."
+        "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour inviter des personnes dans {{workspace}}.",
+        "requestFailed": "Impossible d'inviter {{email}}. Vérifiez votre connexion et réessayez.",
+        "refused": "Impossible d'inviter {{email}} : {{reason}}"
       }
     },
     "join": {
@@ -3183,6 +3187,7 @@
       "confirm": "Retirer",
       "removing": "Retrait…",
       "failed": "Impossible de retirer {{name}}. Vérifiez votre connexion et réessayez.",
+      "notAllowed": "Vous n'avez plus l'autorisation de retirer des personnes de {{workspace}}.",
       "alreadyRemoved": "{{name}} a déjà été retiré"
     },
     "cancelInvitation": {

@@ -113,3 +113,33 @@ test("stops calling after the seat limit is reached", async () => {
     ]
   );
 });
+
+test("stops calling once single sign-on is required", async () => {
+  const { results, inputs } = await run(
+    { "a@x.com": new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED") },
+    { emails: ["a@x.com", "b@x.com"] }
+  );
+  assert.equal(inputs.length, 1);
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    [
+      { ok: false, kind: "ssoRequired" },
+      { ok: false, kind: "ssoRequired" },
+    ]
+  );
+});
+
+test("a refusal carries the server's reason and doesn't stop the rest", async () => {
+  const { results, inputs } = await run(
+    { "a@x.com": new CloudApiError("Only admins can be invited without a seat", 400) },
+    { emails: ["a@x.com", "b@x.com"] }
+  );
+  assert.equal(inputs.length, 2);
+  assert.deepEqual(results, [
+    [
+      "a@x.com",
+      { ok: false, kind: "refused", message: "Only admins can be invited without a seat" },
+    ],
+    ["b@x.com", { ok: true, emailSent: true }],
+  ]);
+});

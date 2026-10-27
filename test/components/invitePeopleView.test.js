@@ -27,7 +27,8 @@ async function loadView(t) {
         import React from "react";
         const passThrough = ({ children }) => React.createElement(React.Fragment, null, children);
         export const DropdownMenu = passThrough;
-        export const DropdownMenuTrigger = passThrough;
+        export const DropdownMenuTrigger = ({ children, ...props }) =>
+          React.createElement("button", props, children);
         export const DropdownMenuContent = passThrough;
         export const DropdownMenuRadioGroup = passThrough;
         export const DropdownMenuRadioItem = ({ children, value }) =>
@@ -184,6 +185,94 @@ test("seat limit has no Try again", async (t) => {
   assert.match(markup, /role="alert"[\s\S]*workspaces\.invite\.errors\.seatLimit/);
   assert.doesNotMatch(markup, /someFailed/);
   assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+});
+
+test("a refusal shows the server's reason for that address and no Try again", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [
+      chip("a@x.com", {
+        status: "failed",
+        kind: "refused",
+        message: "Only admins can be invited without a seat",
+      }),
+    ],
+  });
+
+  assert.match(
+    markup,
+    /role="alert"[\s\S]*workspaces\.invite\.errors\.refused\|\{&quot;email&quot;:[^}]*&quot;reason&quot;:&quot;\u2068Only admins can be invited without a seat\u2069&quot;/
+  );
+  assert.match(markup, /title="workspaces\.invite\.errors\.refused[^"]*Only admins/);
+  assert.doesNotMatch(markup, /someFailed/);
+  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+});
+
+test("single sign-on required names the workspace and has no Try again", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [chip("a@x.com", { status: "failed", kind: "ssoRequired" })],
+  });
+
+  assert.match(
+    markup,
+    /role="alert"[\s\S]*workspaces\.invite\.errors\.ssoRequired\|[\s\S]*?&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;/
+  );
+  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+});
+
+test("a mix of failures retrying can't fix shows the first one's message and no Try again", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [
+      chip("a@x.com", { status: "failed", kind: "seatLimit" }),
+      chip("b@x.com", { status: "failed", kind: "refused", message: "No" }),
+      chip("c@x.com", { status: "failed", kind: "notAllowed" }),
+    ],
+  });
+
+  assert.match(markup, /role="alert"[\s\S]*workspaces\.invite\.errors\.seatLimit/);
+  assert.doesNotMatch(markup, /someFailed/);
+  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+});
+
+test("the workspace name is isolated inside the description", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render();
+
+  assert.match(
+    markup,
+    /workspaces\.invite\.description\|\{&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;\}/
+  );
+  const done = render({
+    phase: "done",
+    sent: [
+      { email: "a@x.com", emailSent: true },
+      { email: "b@x.com", emailSent: true },
+    ],
+  });
+  assert.match(
+    done,
+    /workspaces\.invite\.sentMany\|[^<]*&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;/
+  );
+});
+
+test("the role trigger is named by its label and its current role", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render();
+
+  const label = markup.match(/<span id="([^"]+)"[^>]*>workspaces\.invite\.roleLabel<\/span>/);
+  assert.ok(label, "role label with an id");
+  const trigger = markup.match(/<button[^>]*aria-labelledby="([^"]+)"[^>]*>/);
+  assert.ok(trigger, "trigger with aria-labelledby");
+  const [labelledLabel, triggerId] = trigger[1].split(" ");
+  assert.equal(labelledLabel, label[1]);
+  assert.match(trigger[0], new RegExp(`id="${triggerId}"`));
 });
 
 test("done shows the sent count and Done", async (t) => {

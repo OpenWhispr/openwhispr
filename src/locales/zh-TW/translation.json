@@ -2465,6 +2465,7 @@
           "admin": "管理成員、邀請、群組和設定。"
         },
         "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
+        "roleNotAllowed": "你已無權變更 {{workspace}} 中的角色。",
         "invitations": {
           "loading": "正在載入邀請…",
           "failedTitle": "無法載入邀請",
@@ -2474,7 +2475,8 @@
           "expired": "已到期",
           "resend": "重新傳送邀請",
           "cancel": "取消邀請",
-          "resendFailed": "無法向 {{email}} 重新傳送邀請。請取消該邀請，然後重新邀請。"
+          "resendFailed": "無法向 {{email}} 重新傳送邀請。請取消該邀請，然後重新邀請。",
+          "resendNotAllowed": "你已無權在 {{workspace}} 中重新傳送邀請。"
         }
       },
       "role": {
@@ -4845,7 +4847,9 @@
         "seatLimit": "此工作區已達席次上限。",
         "directoryRequired": "請先在身分識別提供者中指派 {{email}}。",
         "notAllowed": "你已無法再邀請他人加入 {{workspace}}。",
-        "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。"
+        "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再邀請他人加入 {{workspace}}。",
+        "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。",
+        "refused": "無法邀請 {{email}}：{{reason}}"
       }
     },
     "join": {
@@ -4915,6 +4919,7 @@
       "confirm": "移除",
       "removing": "正在移除…",
       "failed": "無法移除 {{name}}。請檢查網路連線後再試一次。",
+      "notAllowed": "你已無權從 {{workspace}} 中移除成員。",
       "alreadyRemoved": "{{name}} 已被移除"
     },
     "cancelInvitation": {

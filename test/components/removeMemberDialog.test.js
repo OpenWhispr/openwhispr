@@ -92,7 +92,7 @@ test("confirm shows the name and workspace", async (t) => {
 
   assert.match(
     markup,
-    /workspaces\.removeMember\.title\|\{&quot;name&quot;:&quot;Mia Member&quot;,&quot;workspace&quot;:&quot;Acme&quot;\}/
+    /workspaces\.removeMember\.title\|\{&quot;name&quot;:&quot;\u2068Mia Member\u2069&quot;,&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;\}/
   );
   assert.match(markup, /workspaces\.removeMember\.body/);
   assert.match(markup, /workspaces\.removeMember\.confirm</);
@@ -189,8 +189,8 @@ test("losing the right to remove people shows the not-allowed copy", async (t) =
     error: { kind: "notAllowed" },
   });
 
-  assert.match(markup, /role="alert"[^>]*>workspaces\.invite\.errors\.notAllowed\|/);
-  assert.match(markup, /Acme/);
+  assert.match(markup, /role="alert"[^>]*>workspaces\.removeMember\.notAllowed\|/);
+  assert.match(markup, /\u2068Acme\u2069/);
 });
 
 test("a network failure shows the failed copy with Try again", async (t) => {

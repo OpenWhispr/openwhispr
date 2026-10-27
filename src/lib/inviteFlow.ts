@@ -1,4 +1,4 @@
-import type { InviteErrorKind } from "./workspaceErrors";
+import type { InviteErrorKind, InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
 
 export const MAX_INVITE_RECIPIENTS = 20;
@@ -8,7 +8,7 @@ export type RecipientState =
   | { status: "invalid" }
   | { status: "blocked"; reason: "alreadyMember" | "alreadyInvited" }
   | { status: "sending" }
-  | { status: "failed"; kind: InviteErrorKind };
+  | ({ status: "failed" } & InviteFailure);
 
 export interface InviteRecipient {
   email: string;
@@ -74,18 +74,22 @@ function classify(email: string, memberEmails: string[], invitedEmails: string[]
   return { status: "draft" };
 }
 
-// A sent address is skipped too, so re-adding it cannot invite the same person twice.
+// A sent address comes back blocked as already invited, so re-adding it can't invite the same
+// person twice and doesn't vanish without a word.
 function addEmails(state: InviteFlowState, candidates: string[]): InviteFlowState {
-  const known = new Set([
-    ...state.recipients.map((recipient) => recipient.email),
-    ...state.sent.map((entry) => entry.email),
-  ]);
+  const known = new Set(state.recipients.map((recipient) => recipient.email));
+  const sentEmails = new Set(state.sent.map((entry) => entry.email));
   const added: InviteRecipient[] = [];
   for (const candidate of candidates) {
     const email = normalize(candidate);
     if (!email || known.has(email)) continue;
     known.add(email);
-    added.push({ email, state: classify(email, state.memberEmails, state.invitedEmails) });
+    added.push({
+      email,
+      state: sentEmails.has(email)
+        ? { status: "blocked", reason: "alreadyInvited" }
+        : classify(email, state.memberEmails, state.invitedEmails),
+    });
   }
   return added.length === 0 ? state : { ...state, recipients: [...state.recipients, ...added] };
 }
@@ -128,12 +132,13 @@ function resolveResult(
     };
   }
 
-  const { kind } = outcome;
   let next: RecipientState;
-  if (kind === "invalid") next = { status: "invalid" };
-  else if (kind === "alreadyMember" || kind === "alreadyInvited") {
-    next = { status: "blocked", reason: kind };
-  } else next = { status: "failed", kind };
+  if (outcome.kind === "invalid") next = { status: "invalid" };
+  else if (outcome.kind === "alreadyMember" || outcome.kind === "alreadyInvited") {
+    next = { status: "blocked", reason: outcome.kind };
+  } else if (outcome.kind === "refused") {
+    next = { status: "failed", kind: "refused", message: outcome.message };
+  } else next = { status: "failed", kind: outcome.kind };
 
   return {
     ...state,
@@ -156,9 +161,16 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
   return input.initialEmail ? addEmails(base, [input.initialEmail]) : base;
 }
 
+// The server gave a reason that the same request would get again, so these wait to be removed.
+const UNRETRYABLE_FAILURES: ReadonlySet<InviteErrorKind> = new Set(["refused", "ssoRequired"]);
+
 export function inviteSummary(state: InviteFlowState): InviteSummary {
   const sendable = state.recipients
-    .filter(({ state: chip }) => chip.status === "draft" || chip.status === "failed")
+    .filter(
+      ({ state: chip }) =>
+        chip.status === "draft" ||
+        (chip.status === "failed" && !UNRETRYABLE_FAILURES.has(chip.kind))
+    )
     .map((recipient) => recipient.email);
   const draftText = normalize(state.draft);
   const draftAllowsSend = draftText === "" || isValidEmail(draftText);

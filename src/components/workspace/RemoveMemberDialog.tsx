@@ -4,6 +4,7 @@ import type { ConfirmActionEvent, ConfirmActionState } from "../../lib/confirmAc
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { removeMember } from "../../services/workspaceActions";
 import type { WorkspaceMember } from "../../types/electron";
+import { isolate } from "../../utils/bidiIsolate";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
@@ -26,7 +27,9 @@ export function RemoveMemberDialog({
   if (state.kind === "closed") return null;
 
   const member = state.subject;
-  const name = member.name || member.email;
+  // Isolated: the dialog and toasts take plain strings, where <bdi> can't go.
+  const name = isolate(member.name || member.email);
+  const workspace = isolate(workspaceName);
   const busy = state.kind === "running";
 
   const run = async (): Promise<void> => {
@@ -48,7 +51,7 @@ export function RemoveMemberDialog({
   const errorLine = (error: RowActionError): string => {
     if (error.kind === "refused") return error.message;
     if (error.kind === "notAllowed") {
-      return t("workspaces.invite.errors.notAllowed", { workspace: workspaceName });
+      return t("workspaces.removeMember.notAllowed", { workspace });
     }
     return t("workspaces.removeMember.failed", { name });
   };
@@ -57,7 +60,7 @@ export function RemoveMemberDialog({
     <WorkspaceActionDialog
       open
       icon="trash"
-      title={t("workspaces.removeMember.title", { name, workspace: workspaceName })}
+      title={t("workspaces.removeMember.title", { name, workspace })}
       body={t("workspaces.removeMember.body")}
       error={state.kind === "failed" ? errorLine(state.error) : null}
       primary={{

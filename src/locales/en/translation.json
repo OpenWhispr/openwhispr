@@ -1740,6 +1740,7 @@
           "admin": "Manages members, invites, teams, and settings."
         },
         "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
+        "roleNotAllowed": "You no longer have permission to change roles in {{workspace}}.",
         "invitations": {
           "loading": "Loading invitations…",
           "failedTitle": "Couldn't load invitations",
@@ -1750,7 +1751,8 @@
           "expired": "Expired",
           "resend": "Resend invite",
           "cancel": "Cancel invite",
-          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again."
+          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
+          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}."
         }
       },
       "role": {
@@ -3113,7 +3115,9 @@
         "seatLimit": "This workspace has reached its seat limit.",
         "directoryRequired": "Assign {{email}} in your identity provider first.",
         "notAllowed": "You can no longer invite people to {{workspace}}.",
-        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again."
+        "ssoRequired": "Sign in with your company's single sign-on to invite people to {{workspace}}.",
+        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
+        "refused": "Couldn't invite {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -3183,6 +3187,7 @@
       "confirm": "Remove",
       "removing": "Removing…",
       "failed": "Couldn't remove {{name}}. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
       "alreadyRemoved": "{{name}} was already removed"
     },
     "cancelInvitation": {
