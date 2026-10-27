@@ -528,10 +528,43 @@ export function LocalSetupStep({
 }
 
 /**
- * The card's frame, at about the height of three rows, while the plan is still
- * being worked out (the computer or policy read hasn't landed). Rare: both
- * finish long before anyone reaches the step.
+ * The card's frame while the plan is still being worked out (the computer or
+ * policy read hasn't landed). It has the real card's panels at their heights for
+ * three rows, so nothing moves when the card fills in. With a message (the
+ * policy couldn't be read), the rows' panel says so instead of staying blank.
  */
-export function LocalSetupStepPlaceholder() {
-  return <section aria-busy="true" className={`${CARD_CLASS} h-[35rem]`} />;
+export function LocalSetupStepPlaceholder({ message }: { message?: string }) {
+  return (
+    <section aria-busy={message ? undefined : true} className={CARD_CLASS}>
+      {/* ComputerCard: the header tile, then one line of label and value. */}
+      <div aria-hidden="true" className={`${PANEL_CLASS} px-2 pb-2 pt-3`}>
+        <div className="h-11" />
+        <div className="mt-3 border-t border-[var(--onboarding-control-border)] px-2 pb-1 pt-2.5">
+          <span className="block text-xs">&nbsp;</span>
+          <span className="mt-0.5 block text-sm leading-[1.3]">&nbsp;</span>
+        </div>
+      </div>
+      {/* Three h-24 rows, the two borders between them and the panel's own. */}
+      <div
+        className={`mt-4 ${PANEL_CLASS} flex h-[calc(18rem+4px)] items-center justify-center px-6 text-center text-sm text-[var(--onboarding-text-secondary)]`}
+      >
+        {message}
+      </div>
+      <div aria-hidden="true" className="mt-5 h-10" />
+      <p aria-hidden="true" className="mx-1 mt-3 text-xs leading-normal">
+        &nbsp;
+      </p>
+    </section>
+  );
+}
+
+/** Holds the subtitle's usual two lines until the computer's name is known. */
+export function LocalSetupSubtitlePlaceholder() {
+  return (
+    <span aria-hidden="true">
+      &nbsp;
+      <br />
+      &nbsp;
+    </span>
+  );
 }

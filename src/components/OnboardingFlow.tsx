@@ -13,8 +13,12 @@ import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
 import { ByokProviderStep } from "./onboarding/ProviderSetupStep";
-import { LocalSetupStep, LocalSetupStepPlaceholder } from "./onboarding/LocalSetupStep";
-import { applyLocalSetupSettings } from "./onboarding/localSetupSettings";
+import {
+  LocalSetupStep,
+  LocalSetupStepPlaceholder,
+  LocalSetupSubtitlePlaceholder,
+} from "./onboarding/LocalSetupStep";
+import { planLocalSetup, proceedWithLocalSetup } from "./onboarding/localSetupFlow";
 import { localSetupComputerName, localSetupLanguageLabel } from "./onboarding/localSetupLabels";
 import { useLocalSetupSpace } from "./onboarding/useLocalSetupSpace";
 import { RequiredModelDownloadStep } from "./onboarding/RequiredModelDownloadStep";
@@ -36,12 +40,10 @@ import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
 import {
-  buildLocalSetupPlan,
   enabledDownloads,
   localSetupRequiredBytes,
   type LocalSetupSwitches,
 } from "../config/localSetup";
-import { getParakeetModelInfo, getWhisperModelInfo } from "../models/ModelRegistry";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
   DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
@@ -91,11 +93,6 @@ interface OnboardingFlowProps {
 }
 
 type OnboardingCompletionMode = Exclude<OnboardingSetupMode, null> | "managed";
-
-// The org's required speech model, which replaces the local setup's own pick.
-function firstRequiredSpeechModel(required: string[]): string | undefined {
-  return required.find((id) => getParakeetModelInfo(id) || getWhisperModelInfo(id));
-}
 
 function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string }) {
   const hotkeyStart = text.indexOf(hotkey);
@@ -331,40 +328,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const requiredModelsLatchRef = useRef(session.currentStepId === "required-models");
   const requiredModelsPending = requiredModelsLatchRef.current || requiredModels.missing.length > 0;
 
-  // The local setup's picks. Built only once the policy has resolved: a policy
-  // still loading or errored fails closed and would offer no rows at all, so
-  // until then the step shows its empty frame instead.
+  // The local setup's picks; null until the computer read and the policy have
+  // resolved (see planLocalSetup), and the step shows its empty frame meanwhile.
   const policy = usePolicySnapshot();
-  const policyResolved = policy.status !== "loading" && policy.status !== "error";
   const localSetupPlan = useMemo(
     () =>
-      computerProfile && policyResolved
-        ? buildLocalSetupPlan({
-            profile: computerProfile,
-            spokenLanguages: session.authPath === "guest" ? [] : settings.spokenLanguages,
-            policy,
-            requiredSpeechModelId: firstRequiredSpeechModel(requiredModels.required),
-          })
-        : null,
-    [
-      computerProfile,
-      policy,
-      policyResolved,
-      requiredModels.required,
-      session.authPath,
-      settings.spokenLanguages,
-    ]
+      planLocalSetup({
+        profile: computerProfile,
+        policy,
+        guest: session.authPath === "guest",
+        spokenLanguages: settings.spokenLanguages,
+        requiredModelIds: requiredModels.required,
+      }),
+    [computerProfile, policy, requiredModels.required, session.authPath, settings.spokenLanguages]
   );
-  // The space the Local card quotes: every row on, with the room each download
-  // reserves to unpack. Undefined until both reads land; the card has a default.
-  const localSetupSpace = useLocalSetupSpace();
-  const localSpaceGb = useMemo(() => {
-    if (!localSetupPlan || !localSetupSpace) return undefined;
-    const items = enabledDownloads(localSetupPlan, { cleanup: true, assistant: true }).flatMap(
-      (row) => row.items
-    );
-    return Math.ceil(localSetupRequiredBytes(items, localSetupSpace.factors) / 1e9);
-  }, [localSetupPlan, localSetupSpace]);
 
   const route = useMemo(
     () =>
@@ -384,6 +361,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
+
+  // The space the Local card quotes: every row on, with the room each download
+  // reserves to unpack. Undefined until both reads land; the card has a default.
+  // Read only around the choice, not for every onboarding user on every focus.
+  const localSetupSpace = useLocalSetupSpace(
+    currentStepId === "setup-choice" || currentStepId === "local-setup"
+  );
+  const localSpaceGb = useMemo(() => {
+    if (!localSetupPlan || !localSetupSpace) return undefined;
+    const items = enabledDownloads(localSetupPlan, { cleanup: true, assistant: true }).flatMap(
+      (row) => row.items
+    );
+    return Math.ceil(localSetupRequiredBytes(items, localSetupSpace.factors) / 1e9);
+  }, [localSetupPlan, localSetupSpace]);
   const compact = COMPACT_STEPS.has(currentStepId);
   const setupDecisionPending =
     workspaceResolutionPending && isSetupDecisionStep(currentStepId, route);
@@ -758,8 +749,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const proceedLocalSetup = useCallback(
     async (switches: LocalSetupSwitches) => {
       if (!localSetupPlan) return;
-      applyLocalSetupSettings(localSetupPlan, switches);
-      await finalizeOnboarding("local");
+      await proceedWithLocalSetup(localSetupPlan, switches, () => finalizeOnboarding("local"));
     },
     [finalizeOnboarding, localSetupPlan]
   );
@@ -1281,23 +1271,28 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               title={t("onboarding.rehaul.localSetup.title")}
               wideTitle
               description={
-                localSetupPlan
-                  ? t("onboarding.rehaul.localSetup.subtitle", {
-                      computer: localSetupComputerName(localSetupPlan.profile, t),
-                      language: localSetupLanguageLabel(localSetupPlan.languages, i18n.language),
-                    })
-                  : undefined
+                localSetupPlan ? (
+                  t("onboarding.rehaul.localSetup.subtitle", {
+                    computer: localSetupComputerName(localSetupPlan.profile, t),
+                    language: localSetupLanguageLabel(localSetupPlan.languages, i18n.language),
+                  })
+                ) : (
+                  <LocalSetupSubtitlePlaceholder />
+                )
               }
             />
             {/* The computer and policy reads finish long before anyone gets
-                here; until they do, the card's frame holds its place. */}
+                here; until they do, the card's frame holds its place. A policy
+                that couldn't be read says so (it is read again on focus). */}
             {localSetupPlan ? (
               <LocalSetupStep
                 plan={localSetupPlan}
                 onProceed={(switches) => void proceedLocalSetup(switches)}
               />
             ) : (
-              <LocalSetupStepPlaceholder />
+              <LocalSetupStepPlaceholder
+                message={policy.status === "error" ? t("common.policyUnresolved") : undefined}
+              />
             )}
           </div>
         );

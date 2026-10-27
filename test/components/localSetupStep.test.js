@@ -195,7 +195,8 @@ async function mount(
       "/stores/settingsStore": `export function clearMissingLocalModelSelections() {}`,
     },
   });
-  const { LocalSetupStep } = await vite.ssrLoadModule("/components/onboarding/LocalSetupStep.tsx");
+  const step = await vite.ssrLoadModule("/components/onboarding/LocalSetupStep.tsx");
+  const { LocalSetupStep } = step;
   const setup = await vite.ssrLoadModule("/config/localSetup.ts");
   const claims = await vite.ssrLoadModule("/components/onboarding/localSetupDownloadClaims.ts");
   const plan = mapPlan(
@@ -272,6 +273,7 @@ async function mount(
     plan,
     setup,
     claims,
+    step,
     emit,
     onDisk,
     releaseInventory,
@@ -726,6 +728,38 @@ test("NVIDIA cleanup row size includes the graphics pack, which is never named",
     )
   );
   assert.ok(s.row("cleanup").textContent.includes(s.setup.rowSizeLabel(cleanup, null)));
+});
+
+test("the placeholder holds the card's frame and can say the policy didn't load", async (t) => {
+  const s = await mount(t);
+  const rowHeights = new Set(
+    elements(s.container, (n) => n.attributes["data-local-setup-row"] != null).map((n) =>
+      cls(n).match(/\bh-\d+\b/)?.[0]
+    )
+  );
+  assert.deepEqual([...rowHeights], ["h-24"], "the real rows are h-24");
+  await s.unmount();
+
+  const { LocalSetupStepPlaceholder } = s.step;
+  const render = async (props) => {
+    const root = createRoot(s.container);
+    await React.act(async () => root.render(React.createElement(LocalSetupStepPlaceholder, props)));
+    const [card] = elements(s.container, (n) => n.localName === "section");
+    const html = { busy: card.attributes["aria-busy"], text: card.textContent, card };
+    await React.act(async () => root.unmount());
+    return html;
+  };
+
+  const loading = await render({});
+  assert.equal(loading.busy, "true");
+  // Three h-24 rows (18rem), the two borders between them and the panel's two.
+  const [rowsPanel] = elements(loading.card, (n) => cls(n).includes("h-[calc(18rem+4px)]"));
+  assert.ok(rowsPanel, "the rows' panel is as tall as three rows");
+  assert.equal(loading.text.trim().replace(/\u00a0/g, ""), "");
+
+  const failed = await render({ message: "common.policyUnresolved" });
+  assert.equal(failed.busy, undefined);
+  assert.equal(failed.text.replace(/\u00a0/g, "").trim(), "common.policyUnresolved");
 });
 
 test("header helpers name the computer and join the languages", async (t) => {

@@ -65,6 +65,20 @@ test("no onboarding route hands an older build's pending pick to the tray", () =
   assert.doesNotMatch(source, /hasPendingLocalModels/);
 });
 
+test("the local setup step is wired through its helpers", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  // Plan inputs and Proceed live in localSetupFlow.ts, where they are tested.
+  assert.match(source, /planLocalSetup\(\{/);
+  assert.match(source, /proceedWithLocalSetup\(localSetupPlan, switches,/);
+  assert.doesNotMatch(source, /buildLocalSetupPlan|applyLocalSetupSettings/);
+  // The space read runs only around the choice.
+  const steps = String.raw`currentStepId === "setup-choice" \|\| currentStepId === "local-setup"`;
+  assert.match(source, new RegExp(String.raw`useLocalSetupSpace\(\s*${steps}\s*\)`));
+  // A policy that couldn't be read gets a line instead of a blank card.
+  const placeholder = String.raw`<LocalSetupStepPlaceholder\s+message=\{policy\.status === "error"`;
+  assert.match(source, new RegExp(String.raw`${placeholder} \? t\("common\.policyUnresolved"\)`));
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests
