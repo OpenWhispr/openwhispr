@@ -53,8 +53,10 @@ export function useAgentChat({
   const busy = submissionInFlight || streaming.agentState !== "idle";
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const regenerationRef = useRef<{ sessionVersion: number } | null>(null);
 
-  const { loadConversation, handleNewChat, forkConversation, conversationId } = persistence;
+  const { loadConversation, handleNewChat, forkConversation, conversationId, getSessionVersion } =
+    persistence;
 
   // A message the user wrote. A fork starts with its parent's title; the first
   // one written in it names it, as a new chat's does, unless it was renamed.
@@ -105,24 +107,43 @@ export function useAgentChat({
   // duplicate-send guard still sees them. A screenshot isn't saved, so the
   // regenerated answer has none.
   const regenerate = useCallback(
-    (message: Message) => {
+    async (message: Message): Promise<void> => {
+      const sessionVersion = getSessionVersion();
       const messages = messagesRef.current;
       const index = messages.findIndex((m) => m.id === message.id);
       const request = messages
         .slice(0, index)
         .reverse()
         .find((m) => m.role === "user");
-      if (busyRef.current || index !== messages.length - 1 || !request || conversationId == null) {
+      if (
+        busyRef.current ||
+        regenerationRef.current?.sessionVersion === sessionVersion ||
+        index !== messages.length - 1 ||
+        !request ||
+        conversationId == null
+      ) {
         return;
       }
-      busyRef.current = true;
-      void sendToAI(request.content, messages.slice(0, index), {
-        conversationId,
-        replaceMessage: messages[index],
-        onReplaceFailed: onRegenerateFailed,
-      });
+      // Claiming can finish without a render; keep its lock separate from busy.
+      const regeneration = { sessionVersion };
+      regenerationRef.current = regeneration;
+      const reportFailure = (): void => {
+        if (regenerationRef.current === regeneration && sessionVersion === getSessionVersion())
+          onRegenerateFailed();
+      };
+      try {
+        await sendToAI(request.content, messages.slice(0, index), {
+          conversationId,
+          replaceMessage: messages[index],
+          onReplaceFailed: reportFailure,
+        });
+      } catch {
+        reportFailure();
+      } finally {
+        if (regenerationRef.current === regeneration) regenerationRef.current = null;
+      }
     },
-    [conversationId, onRegenerateFailed, sendToAI]
+    [conversationId, getSessionVersion, onRegenerateFailed, sendToAI]
   );
 
   return {

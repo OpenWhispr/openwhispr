@@ -536,7 +536,7 @@ test("a card that arrives while typing: a question shows above the pill, an answ
   // stays with the window instead of going to the app behind.
   await view.chat({ messages: [user, reply([{ ...askUser, status: "completed" }, slackCall])] });
   await view.askApproval("c5");
-  await view.wait(100);
+  await view.waitForLayout("modal");
   assert.equal(view.layout(), "modal");
   assert.equal(view.main.layouts.at(-1).focus, true);
 });

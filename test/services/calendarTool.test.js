@@ -117,6 +117,44 @@ test("each event gets its local date, weekday and times, across midnight and a D
   ]);
 });
 
+for (const { transition, now, start, end, startTime, endTime, startOffset, endOffset } of [
+  {
+    transition: "fall back",
+    now: "2026-10-30T19:00:00Z",
+    start: "2026-11-01T08:30:00Z",
+    end: "2026-11-01T09:15:00Z",
+    startTime: "1:30 AM",
+    endTime: "1:15 AM",
+    startOffset: "GMT-7",
+    endOffset: "GMT-8",
+  },
+  {
+    transition: "spring forward",
+    now: "2026-03-06T20:00:00Z",
+    start: "2026-03-08T09:30:00Z",
+    end: "2026-03-08T10:15:00Z",
+    startTime: "1:30 AM",
+    endTime: "3:15 AM",
+    startOffset: "GMT-8",
+    endOffset: "GMT-7",
+  },
+]) {
+  test(`an event spanning the ${transition} transition preserves both offsets`, async (t) => {
+    inTimeZone(t, "America/Los_Angeles");
+    t.mock.timers.enable({ apis: ["Date"], now: Date.parse(now) });
+    const { calendarTool } = await load();
+    stubEvents([{ summary: "Maintenance", start_time: start, end_time: end }]);
+
+    const result = await calendarTool.execute({ timeRange: "week" });
+
+    assert.equal(result.success, true);
+    assert.equal(result.data[0].startTime, startTime);
+    assert.equal(result.data[0].endTime, endTime);
+    assert.equal(result.data[0].timeZoneName, startOffset);
+    assert.equal(result.data[0].endTimeZoneName, endOffset);
+  });
+}
+
 test("all-day events are asked for and come back as their days", async (t) => {
   inTimeZone(t, "America/Los_Angeles");
   const { calendarTool } = await load();

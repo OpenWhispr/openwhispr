@@ -436,7 +436,10 @@ export function useChatStreaming({
         options?.conversationId != null && claimConversation
           ? await claimConversation(options.conversationId)
           : undefined;
-      if (claim === false) return;
+      if (claim === false) {
+        options?.onReplaceFailed?.();
+        return;
+      }
       if (sendGeneration !== sendGenerationRef.current) {
         await claim?.release();
         return;

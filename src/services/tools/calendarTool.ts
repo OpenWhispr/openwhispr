@@ -66,6 +66,7 @@ function describeEvent(event: Record<string, unknown>, formatter: Intl.DateTimeF
     endTime: end.time,
     ...endDate,
     timeZoneName: start.timeZoneName,
+    ...(end.timeZoneName !== start.timeZoneName ? { endTimeZoneName: end.timeZoneName } : {}),
     ...(free ? { free: true } : {}),
     joinUrl,
   };

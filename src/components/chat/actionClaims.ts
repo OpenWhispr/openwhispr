@@ -118,6 +118,26 @@ const ASKS_TO_WRITE = /\b(?:write|draft|compose|rewrite|reword)\b/i;
 const DRAFT_LEAD_IN =
   /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|below|here\s+you\s+go)\b/i;
 
+// A bare English translation can say "I sent" in the source author's voice.
+// Require an actual translation request, and keep checking combined requests
+// such as "translate this, then send it": those still promise tool actions.
+const TRANSLATE_REQUEST =
+  /^\s*(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?translate\b(?:\s+(?:this|that|the)\s+(?:email|message|post|file|comment|draft)\b)?(?:[^:;.!?,&\n]*?\b(?:to|into)\s+English\b)?/i;
+const TRANSLATION_ACTION =
+  /\b(?:send|email|message|post|create|file|comment|connect|save|draft|delete|forward|tell)\b/i;
+
+function asksOnlyForTranslation(text: string): boolean {
+  const instructions = text.replace(QUOTED, "");
+  const translation = TRANSLATE_REQUEST.exec(instructions);
+  if (!translation) return false;
+  // The directive may name the source ("this email into English"). Anything
+  // else asking for an action keeps the check, regardless of clause wording.
+  return (
+    !/\b(?:and|then|also)\b|&/i.test(translation[0]) &&
+    !TRANSLATION_ACTION.test(instructions.slice(translation[0].length))
+  );
+}
+
 function draftStart(text: string, askedToWrite: boolean): number | null {
   const ownLine = DRAFT_START.exec(text);
   if (askedToWrite) return (ownLine ?? GREETING_START.exec(text))?.index ?? null;
@@ -253,6 +273,7 @@ export function isUnbackedClaim(
   // Claims sit in short replies, and the matching runs on the renderer's main
   // thread: a long one is left alone rather than blocking the chat.
   if (text.length > MAX_CHECKED_CHARS) return false;
+  if (asksOnlyForTranslation(request.text)) return false;
   const theirWords = normalize(
     [request.text, request.selectedText ?? "", ...turnCalls.flatMap(argumentText)].join("\n")
   );

@@ -153,6 +153,51 @@ test("text the reply writes for the user is not its own voice", async () => {
   assert.equal(await unbacked("All done: I've sent the email to Gabe."), true);
 });
 
+test("a requested English translation is not the assistant's own action claim", async () => {
+  const cases = [
+    ["I sent the email.", { text: "Translate this: J’ai envoyé le courriel." }],
+    ["I sent the email.", { text: "Translate this message: J’ai envoyé le courriel." }],
+    ["I sent the email.", { text: "Please translate this email: J’ai envoyé le courriel." }],
+    [
+      "I sent the email.",
+      { text: "Translate to English, output only the translation: J’ai envoyé le courriel." },
+    ],
+    [
+      "I created the note.",
+      {
+        text: "Translate this to English. Output only the translation.",
+        selectedText: "J’ai créé la note.",
+      },
+    ],
+    [
+      "I sent the email.",
+      { text: 'Could you please translate this email into English: "J’ai envoyé le courriel."' },
+    ],
+  ];
+  for (const [reply, request] of cases) {
+    assert.equal(await unbacked(reply, { request }), false, request.text);
+  }
+});
+
+test("translation requests that also ask for actions still need action evidence", async () => {
+  for (const text of [
+    "Translate this to English and send it to Gabe.",
+    "Translate this into English and afterwards send it to Gabe.",
+    "Translate this into English. I also need you to send it to Gabe.",
+    "Translate this into English & send it to Gabe.",
+    "Translate this; send it to English Club.",
+    "Translate this and afterwards send it to Gabe in English.",
+    "Translate this to English, then email it to Gabe.",
+    "Translate this to English. Could you also post it in #eng?",
+    "Translate this to English: Bonjour. Then send it to Gabe.",
+    'Translate "Bonjour" to English and create a note with it.',
+    'Send Gabe an email explaining what "translate" means.',
+  ]) {
+    assert.equal(await unbacked("I've sent the email.", { request: { text } }), true, text);
+    assert.equal(await unbacked("I've created the note.", { request: { text } }), true, text);
+  }
+});
+
 test("a message written for someone, from its greeting or subject on, is not the reply's voice", async () => {
   const request = { text: "write an email to sam, tell him the revised proposal is with his team" };
   for (const text of [

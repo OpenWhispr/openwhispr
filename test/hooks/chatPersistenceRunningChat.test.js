@@ -118,7 +118,14 @@ function fakeDb() {
 
 async function mountPersistence(
   t,
-  { instances = 1, restore = false, streaming = false, senderConversationId, mockStreaming } = {}
+  {
+    instances = 1,
+    restore = false,
+    streaming = false,
+    agent = false,
+    senderConversationId,
+    mockStreaming,
+  } = {}
 ) {
   const db = fakeDb();
   let root;
@@ -145,7 +152,9 @@ async function mountPersistence(
   const sent = [];
   const streams = [];
   const senders = [];
-  let useChatStreaming, useChatMessageSender, service;
+  const chats = [];
+  const regenerationFailures = [];
+  let useChatStreaming, useChatMessageSender, useAgentChat, service;
   if (streaming || mockStreaming) {
     ({ useChatMessageSender } = await vite.ssrLoadModule(
       "/components/chat/useChatMessageSender.ts"
@@ -166,7 +175,20 @@ async function mountPersistence(
     });
     usePolicyStore.setState({ status: "unmanaged", appVersion: "1.10.0", policy: null });
   }
+  if (agent) {
+    ({ useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts"));
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    useSettingsStore.setState({
+      dictationAgentMode: "providers",
+      dictationAgentProvider: "openai",
+      dictationAgentModel: "gpt-5-mini",
+    });
+  }
   function Harness({ index }) {
+    if (agent) {
+      chats[index] = useAgentChat({ onRegenerateFailed: () => regenerationFailures.push(index) });
+      return null;
+    }
     const value = useChatPersistence();
     persistence[index] = value;
     if (streaming || mockStreaming) {
@@ -201,7 +223,7 @@ async function mountPersistence(
     return null;
   }
   root = createRoot(container);
-  await React.act(async () =>
+  const render = () =>
     root.render(
       React.createElement(
         React.Fragment,
@@ -210,13 +232,15 @@ async function mountPersistence(
           React.createElement(Harness, { key: index, index })
         )
       )
-    )
-  );
+    );
+  await React.act(async () => render());
   const act = (fn) => React.act(async () => fn());
   return {
     db,
     act,
-    current: (index = 0) => persistence[index],
+    current: (index = 0) => (agent ? chats[index] : persistence[index]),
+    regenerationFailures,
+    rerender: () => act(render),
     store,
     sent,
     vite,
@@ -469,6 +493,148 @@ for (const leave of ["new chat", "account", "unmount"]) {
     }
   });
 }
+
+for (const later of ["selection", "fork"]) {
+  for (const firstFinished of ["fork", "selection"]) {
+    test(`a later ${later} wins over pending navigation when ${firstFinished} finishes first`, async (t) => {
+      const h = await mountPersistence(t);
+      const original = await h.db.api.createAgentConversation("Original");
+      const selected = await h.db.api.createAgentConversation("Selected chat");
+      await h.db.api.addAgentMessage(original.id, "assistant", "Reply to fork");
+      await h.act(() => h.current().loadConversation(original.id));
+      const through = h.current().messages[0];
+      const fork = h.db.api.forkAgentConversation;
+      const get = h.db.api.getAgentConversation;
+      const finishFork = Promise.withResolvers();
+      const finishSelection = Promise.withResolvers();
+      h.db.api.forkAgentConversation = async (...args) => {
+        await finishFork.promise;
+        return fork(...args);
+      };
+      h.db.api.getAgentConversation = async (id) => {
+        if (id === selected.id) await finishSelection.promise;
+        return get(id);
+      };
+      let forking, selecting;
+      const startFork = () => {
+        forking = h.current().forkConversation(through);
+      };
+      const startSelection = () => {
+        selecting = h.current().loadConversation(selected.id, () => {});
+      };
+      await h.act(later === "selection" ? startFork : startSelection);
+      await h.act(later === "selection" ? startSelection : startFork);
+      const finishes = { fork: finishFork, selection: finishSelection };
+      await h.act(() => finishes[firstFinished].resolve());
+      await h.act(() => finishes[firstFinished === "fork" ? "selection" : "fork"].resolve());
+      const forkId = await forking;
+      const openedSelection = await selecting;
+      if (later === "selection") {
+        assert.equal(h.current().conversationId, selected.id);
+        assert.equal(forkId, false);
+        assert.equal(openedSelection, true);
+      } else {
+        assert.equal(typeof forkId, "number");
+        assert.equal(h.current().conversationId, forkId);
+        assert.equal(openedSelection, false);
+      }
+    });
+  }
+}
+
+for (const failure of ["owned elsewhere", "claim rejected"]) {
+  test(`regeneration can retry after ${failure}`, async (t) => {
+    const h = await mountPersistence(t, { streaming: true, agent: true });
+    const conversation = await h.db.api.createAgentConversation("Shared");
+    await h.db.api.addAgentMessage(conversation.id, "user", "Hello");
+    await h.db.api.addAgentMessage(conversation.id, "assistant", "Original reply");
+    await h.act(() => h.current().switchChat(conversation.id));
+    const claim = h.db.api.claimAgentConversation;
+    if (failure === "owned elsewhere") await claim(conversation.id, "peer");
+    else
+      h.db.api.claimAgentConversation = async () => {
+        throw new Error("IPC unavailable");
+      };
+    await h.act(() => h.current().regenerate(h.current().messages.at(-1)));
+    h.db.api.claimAgentConversation = claim;
+    await h.act(() => h.db.api.releaseAgentConversation(conversation.id, "peer"));
+    h.service.processTextStreamingAI = async function* () {
+      yield { type: "content", text: "Regenerated reply" };
+    };
+    await h.act(() => h.current().regenerate(h.current().messages.at(-1)));
+    assert.equal(h.current().messages.at(-1).content, "Regenerated reply");
+    assert.equal(h.db.rows.at(-1).content, "Regenerated reply");
+    assert.equal(h.db.rows.length, 2, "retry replaces the saved reply");
+    assert.deepEqual(h.regenerationFailures, [0]);
+  });
+}
+
+test("a pending regeneration excludes duplicate clicks across renders and stale completions", async (t) => {
+  const h = await mountPersistence(t, { streaming: true, agent: true });
+  const conversations = await Promise.all(
+    ["First", "Second"].map((title) => h.db.api.createAgentConversation(title))
+  );
+  for (const conversation of conversations) {
+    await h.db.api.addAgentMessage(conversation.id, "user", conversation.title);
+    await h.db.api.addAgentMessage(conversation.id, "assistant", `${conversation.title} reply`);
+  }
+  await h.act(() => h.current().switchChat(conversations[0].id));
+  const claim = h.db.api.claimAgentConversation;
+  const first = Promise.withResolvers();
+  const second = Promise.withResolvers();
+  let attempts = 0;
+  let firstRegeneration, secondRegeneration;
+  t.after(() => {
+    first.resolve();
+    second.resolve();
+  });
+  h.db.api.claimAgentConversation = async (...args) => {
+    attempts++;
+    await (attempts === 1 ? first.promise : second.promise);
+    return claim(...args);
+  };
+  await h.act(() => {
+    firstRegeneration = h.current().regenerate(h.current().messages.at(-1));
+  });
+  await h.rerender();
+  await h.act(() => h.current().regenerate(h.current().messages.at(-1)));
+  assert.equal(attempts, 1, "a render does not release a pending regeneration");
+  h.db.api.claimAgentConversation = claim;
+  await h.act(() => h.current().switchChat(conversations[1].id));
+  h.db.api.claimAgentConversation = async (...args) => {
+    attempts++;
+    await second.promise;
+    return claim(...args);
+  };
+  await h.act(() => {
+    secondRegeneration = h.current().regenerate(h.current().messages.at(-1));
+  });
+  assert.equal(attempts, 2, "another conversation has its own regeneration");
+  await h.act(async () => {
+    first.reject(new Error("Obsolete claim failed"));
+    await firstRegeneration;
+  });
+  await h.act(() => h.current().regenerate(h.current().messages.at(-1)));
+  assert.equal(attempts, 2, "the old completion cannot release the newer request");
+  assert.deepEqual(
+    h.regenerationFailures,
+    [],
+    "an obsolete failure never interrupts the current chat"
+  );
+  h.service.processTextStreamingAI = async function* () {
+    yield { type: "content", text: "Second regenerated" };
+  };
+  await h.act(async () => {
+    second.resolve();
+    await secondRegeneration;
+  });
+  assert.equal(h.current().messages.at(-1).content, "Second regenerated");
+  assert.equal(
+    h.db.rows.find((row) => row.conversation_id === conversations[0].id && row.role === "assistant")
+      .content,
+    "First reply"
+  );
+});
 
 test("saved messages carry their row id, and a waiting reply is completed in place", async (t) => {
   const { db, act, current } = await mountPersistence(t);
