@@ -26,8 +26,13 @@ const team = (id, name) => ({ id, name });
 // Roots mounted by each test. Unmounting is registered before the browser globals, so it runs
 // while `window` still exists (after hooks run in the order they were added).
 const mountedRoots = new Map();
+// Each test's Vite server, so errors come from the same cloudApi module instance the tab uses.
+const servers = new Map();
 
-async function loadMembersTab(t, { members = MEMBERS, refreshMembers } = {}) {
+async function loadMembersTab(
+  t,
+  { members = MEMBERS, refreshMembers, membersWorkspaceId = "w1", captureRoleMenus = false } = {}
+) {
   t.after(async () => {
     const root = mountedRoots.get(t);
     mountedRoots.delete(t);
@@ -52,16 +57,29 @@ async function loadMembersTab(t, { members = MEMBERS, refreshMembers } = {}) {
         export const useWorkspaceStore = (selector) =>
           selector({
             members: globalThis.__workspaceMembers,
+            membersWorkspaceId: globalThis.__membersWorkspaceId,
             refreshMembers: globalThis.__refreshMembers,
           });
       `,
       "/services/WorkspacesService": `
         export const WorkspacesService = {
           listJoinRequests: async () => [],
+          updateMemberRole: (...args) => globalThis.__updateMemberRole(...args),
         };
       `,
       "/hooks/useAuth": "export const useAuth = () => ({ user: globalThis.__authUser ?? null });",
-      "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
+      "/ui/useToast":
+        "export const useToast = () => ({ toast: (toast) => globalThis.__toasts?.push(toast) });",
+      ...(captureRoleMenus
+        ? {
+            "/MemberRoleMenu": `
+              export function MemberRoleMenu(props) {
+                globalThis.__roleMenus[props.member.user_id] = props;
+                return null;
+              }
+            `,
+          }
+        : {}),
       "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
       "/RemoveMemberDialog": "export const RemoveMemberDialog = () => null;",
       "/MemberAvatar": "export default function Mock() { return null; }",
@@ -83,13 +101,23 @@ async function loadMembersTab(t, { members = MEMBERS, refreshMembers } = {}) {
     },
   });
   const module = await vite.ssrLoadModule("/components/settings/WorkspaceMembersTab.tsx");
+  servers.set(t, vite);
   t.after(() => {
+    servers.delete(t);
     delete globalThis.__workspaceMembers;
+    delete globalThis.__membersWorkspaceId;
     delete globalThis.__refreshMembers;
     delete globalThis.__authUser;
+    delete globalThis.__updateMemberRole;
+    delete globalThis.__toasts;
+    delete globalThis.__roleMenus;
   });
   globalThis.__workspaceMembers = members;
+  globalThis.__membersWorkspaceId = membersWorkspaceId;
   globalThis.__refreshMembers = refreshMembers ?? (async () => {});
+  globalThis.__updateMemberRole = async () => {};
+  globalThis.__toasts = [];
+  globalThis.__roleMenus = {};
   return module.default;
 }
 
@@ -395,4 +423,105 @@ test("Escape clears a non-empty field and is left alone on an empty one", async 
   propsOf(emptyInput).onKeyDown(keydown(emptyEvents));
   assert.deepEqual(changes, []);
   assert.deepEqual(emptyEvents, []);
+});
+
+test("a roster the store holds for another workspace never shows", async (t) => {
+  let calls = 0;
+  const WorkspaceMembersTab = await loadMembersTab(t, {
+    membersWorkspaceId: "w-previous",
+    refreshMembers: async () => {
+      calls += 1;
+    },
+  });
+  const container = await mount(t, WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+  const text = textOf(container);
+
+  for (const member of MEMBERS) assert.doesNotMatch(text, new RegExp(member.name));
+  // The load settled with someone else's roster in the store, so the tab asks once more.
+  assert.equal(calls, 2);
+});
+
+test("seat usage shows only beside the member rows", async (t) => {
+  const loading = await loadMembersTab(t, {
+    members: [],
+    refreshMembers: () => new Promise(() => {}),
+  });
+  const loadingText = textOf(await mount(t, loading, { ...WORKSPACE, role: "admin" }));
+  assert.doesNotMatch(loadingText, /settingsPage\.workspace\.members\.description/);
+});
+
+test("seat usage hides when the roster failed", async (t) => {
+  const failed = await loadMembersTab(t, {
+    members: [],
+    refreshMembers: async () => {
+      throw new Error("offline");
+    },
+  });
+  const failedText = textOf(await mount(t, failed, { ...WORKSPACE, role: "admin" }));
+  assert.match(failedText, /settingsPage\.workspace\.people\.failed\.title/);
+  assert.doesNotMatch(failedText, /settingsPage\.workspace\.members\.description/);
+});
+
+test("seat usage shows with the rows", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+  assert.match(markup, /settingsPage\.workspace\.members\.description#3/);
+});
+
+test("narrow column headers don't wrap", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const markup = render(WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+  const roleHeader = markup.match(/<th[^>]*>settingsPage\.workspace\.people\.columns\.role<\/th>/);
+  assert.ok(roleHeader, "role header");
+  assert.match(roleHeader[0], /whitespace-nowrap/);
+});
+
+async function changeRoleFailing(t, makeError) {
+  let refreshes = 0;
+  const WorkspaceMembersTab = await loadMembersTab(t, {
+    captureRoleMenus: true,
+    refreshMembers: async () => {
+      refreshes += 1;
+    },
+  });
+  await mount(t, WorkspaceMembersTab, { ...WORKSPACE, role: "admin" });
+  const before = refreshes;
+  const error = await makeError(servers.get(t));
+  globalThis.__updateMemberRole = async () => {
+    throw error;
+  };
+  await React.act(async () => globalThis.__roleMenus["u-member"].onRoleChange("admin"));
+  return { toast: globalThis.__toasts.at(-1), reloads: refreshes - before };
+}
+
+const cloudApiError = (message, status, code) => async (vite) => {
+  const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
+  return new CloudApiError(message, status, code);
+};
+
+test("a refused role change shows the server's reason", async (t) => {
+  const { toast, reloads } = await changeRoleFailing(
+    t,
+    cloudApiError("Transfer ownership before demoting the owner", 400)
+  );
+  assert.equal(toast.description, "Transfer ownership before demoting the owner");
+  assert.equal(toast.variant, "destructive");
+  assert.equal(reloads, 0);
+});
+
+test("a role change for someone already gone says so and reloads the roster", async (t) => {
+  const { toast, reloads } = await changeRoleFailing(t, cloudApiError("Member not found", 404));
+  assert.equal(toast.description, "workspaces.removeMember.alreadyRemoved");
+  assert.equal(reloads, 1);
+});
+
+test("a role change without permission says the permission is gone", async (t) => {
+  const { toast, reloads } = await changeRoleFailing(t, cloudApiError("Forbidden", 403));
+  assert.equal(toast.description, "settingsPage.workspace.people.roleNotAllowed");
+  assert.equal(reloads, 0);
+});
+
+test("any other role change failure gives connection advice", async (t) => {
+  const { toast } = await changeRoleFailing(t, async () => new Error("offline"));
+  assert.equal(toast.description, "settingsPage.workspace.people.roleFailed");
 });

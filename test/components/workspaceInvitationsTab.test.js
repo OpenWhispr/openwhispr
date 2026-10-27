@@ -340,7 +340,7 @@ test("a resend for an invitation that is gone reloads and says to invite again",
   assert.equal(reloads, 1);
   assert.deepEqual(globalThis.__toasts, [
     {
-      title: "settingsPage.workspace.people.invitations.resendFailed#ada@example.com",
+      title: "settingsPage.workspace.people.invitations.resendFailed#\u2068ada@example.com\u2069",
       variant: "destructive",
     },
   ]);
@@ -405,4 +405,86 @@ test("a resending row shows the spinner and is disabled", async (t) => {
 
   await React.act(async () => finish({ email_sent: true }));
   assert.doesNotMatch(textOf(container), /resending/);
+});
+
+function allNodes(node, predicate, found = []) {
+  if (node.nodeType === 1 && predicate(node)) found.push(node);
+  for (const child of node.childNodes ?? []) allNodes(child, predicate, found);
+  return found;
+}
+
+const resendItems = (container) =>
+  allNodes(
+    container,
+    (node) =>
+      node.getAttribute("role") === "menuitem" && textOf(node).includes("invitations.resend")
+  );
+const rowTriggers = (container) =>
+  allNodes(container, (node) => node.hasAttribute("data-row-actions"));
+
+test("two resends at once keep their own spinners, and a row resends only once", async (t) => {
+  const { Tab } = await loadTab(t);
+  const finishers = [];
+  globalThis.__resendImpl = () => new Promise((resolve) => finishers.push(resolve));
+  const container = await mount(
+    t,
+    Tab,
+    ready([
+      invitation("i1", "ada@example.com", inDays(3)),
+      invitation("i2", "bob@example.com", inDays(4)),
+    ])
+  );
+
+  await React.act(async () => {
+    propsOf(resendItems(container)[0]).onClick();
+    propsOf(resendItems(container)[1]).onClick();
+    // A second Resend on a row still sending asks nothing of the server.
+    propsOf(resendItems(container)[0]).onClick();
+  });
+  assert.deepEqual(globalThis.__resendCalls, [
+    ["w1", "i1"],
+    ["w1", "i2"],
+  ]);
+  const [first, second] = rowTriggers(container);
+  assert.match(textOf(first), /resending/);
+  assert.match(textOf(second), /resending/);
+
+  await React.act(async () => finishers[0]({ email_sent: true }));
+  const [firstAfter, secondAfter] = rowTriggers(container);
+  assert.doesNotMatch(textOf(firstAfter), /resending/);
+  assert.match(textOf(secondAfter), /resending/);
+  assert.ok(secondAfter.hasAttribute("disabled"));
+
+  await React.act(async () => finishers[1]({ email_sent: true }));
+  assert.doesNotMatch(textOf(container), /resending/);
+});
+
+test("a resend without permission says the permission is gone", async (t) => {
+  const { Tab, CloudApiError } = await loadTab(t);
+  globalThis.__resendImpl = async () => {
+    throw new CloudApiError("Insufficient role", 403);
+  };
+  const container = await mount(t, Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  await React.act(async () => propsOf(resendItems(container)[0]).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title: "settingsPage.workspace.people.invitations.resendNotAllowed",
+      variant: "destructive",
+    },
+  ]);
+});
+
+test("narrow column headers don't wrap", async (t) => {
+  const { Tab } = await loadTab(t);
+  const markup = render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  for (const column of ["role", "status", "actions"]) {
+    const header = markup.match(
+      new RegExp(`<th[^>]*>settingsPage\\.workspace\\.people\\.columns\\.${column}</th>`)
+    );
+    assert.ok(header, column);
+    assert.match(header[0], /whitespace-nowrap/, column);
+  }
 });

@@ -13,10 +13,11 @@ import { useToast } from "../ui/useToast";
 import type { Workspace, WorkspaceJoinRequest, WorkspaceMember } from "../../types/electron";
 import MemberAvatar from "../MemberAvatar";
 import { cn } from "../lib/utils";
+import { isolate } from "../../utils/bidiIsolate";
 import { workspaceCan } from "../../lib/capabilities";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
-import { membersView, rosterHasTeams, teamSummary } from "../../lib/peopleRoster";
-import { classifyRowActionError } from "../../lib/workspaceErrors";
+import { membersView, rosterFor, rosterHasTeams, teamSummary } from "../../lib/peopleRoster";
+import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { RemoveMemberDialog } from "../workspace/RemoveMemberDialog";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
@@ -44,9 +45,10 @@ export default function WorkspaceMembersTab({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { members, refreshMembers } = useWorkspaceStore(
+  const { members, rosterIsOurs, refreshMembers } = useWorkspaceStore(
     useShallow((s) => ({
-      members: s.members,
+      members: rosterFor(s, workspace.id),
+      rosterIsOurs: s.membersWorkspaceId === workspace.id,
       refreshMembers: s.refreshMembers,
     }))
   );
@@ -61,6 +63,7 @@ export default function WorkspaceMembersTab({
   const [membersError, setMembersError] = useState(false);
   const [pendingRoleIds, setPendingRoleIds] = useState<ReadonlySet<string>>(() => new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const rereadRef = useRef(false);
   const canManage = workspaceCan(workspace, "manage_members");
   const canTransferOwnership = workspaceCan(workspace, "transfer_ownership");
 
@@ -119,6 +122,20 @@ export default function WorkspaceMembersTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
+  // A re-read for another workspace (a role change that finished after a switch) can take the
+  // store's one roster slot. Read this workspace's again, once, rather than show nobody.
+  useEffect(() => {
+    if (membersLoading || membersError) return;
+    if (rosterIsOurs) {
+      rereadRef.current = false;
+      return;
+    }
+    if (rereadRef.current) return;
+    rereadRef.current = true;
+    void loadMembers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [membersLoading, membersError, rosterIsOurs]);
+
   function setRolePending(userId: string, pending: boolean): void {
     setPendingRoleIds((current) => {
       const next = new Set(current);
@@ -126,6 +143,21 @@ export default function WorkspaceMembersTab({
       else next.delete(userId);
       return next;
     });
+  }
+
+  function roleChangeError(failure: RowActionError, name: string): string {
+    switch (failure.kind) {
+      case "refused":
+        return failure.message;
+      case "gone":
+        return t("workspaces.removeMember.alreadyRemoved", { name: isolate(name) });
+      case "notAllowed":
+        return t("settingsPage.workspace.people.roleNotAllowed", {
+          workspace: isolate(workspace.name),
+        });
+      case "failed":
+        return t("settingsPage.workspace.people.roleFailed", { name: isolate(name) });
+    }
   }
 
   async function handleRoleChange(
@@ -141,12 +173,7 @@ export default function WorkspaceMembersTab({
       const failure = classifyRowActionError(error);
       toast({
         title: t("common.error"),
-        description:
-          failure.kind === "refused"
-            ? failure.message
-            : failure.kind === "gone"
-              ? t("workspaces.removeMember.alreadyRemoved", { name })
-              : t("settingsPage.workspace.people.roleFailed", { name }),
+        description: roleChangeError(failure, name),
         variant: "destructive",
       });
       if (failure.kind === "gone") void loadMembers();
@@ -264,7 +291,7 @@ export default function WorkspaceMembersTab({
             </button>
           )}
         </div>
-        {canManage && (
+        {canManage && view.kind === "rows" && (
           <p className="ms-auto text-xs text-muted-foreground/80">
             {t("settingsPage.workspace.members.description", {
               count: members.length,
@@ -347,7 +374,7 @@ export default function WorkspaceMembersTab({
                     {t("settingsPage.workspace.people.columns.team")}
                   </th>
                 )}
-                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end")}>
+                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end whitespace-nowrap")}>
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
               </tr>

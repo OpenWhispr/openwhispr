@@ -54,7 +54,8 @@ export function useWorkspaceInvitations(
     try {
       invitations = await InvitationsService.list(targetWorkspaceId);
     } catch {
-      // The list is read again whenever it is shown, so a failure here only marks the slot.
+      // Marks the slot as failed. The list loads once per People mount and again after a resend,
+      // a cancel or an invite, and the failed view offers Try again.
     }
     // A switch, an unmount, or a newer request for this workspace makes this answer stale.
     if (currentWorkspaceRef.current !== targetWorkspaceId) return;

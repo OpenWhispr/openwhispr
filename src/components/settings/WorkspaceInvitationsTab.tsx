@@ -1,4 +1,4 @@
-import React, { useReducer, useState } from "react";
+import React, { useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, MoreHorizontal, Trash2 } from "../icons";
 import { Button } from "../ui/button";
@@ -10,6 +10,7 @@ import {
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
 import { cn } from "../lib/utils";
+import { isolate } from "../../utils/bidiIsolate";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { invitationDaysLeft, invitationStatus, orderInvitations } from "../../lib/peopleRoster";
 import { classifyRowActionError } from "../../lib/workspaceErrors";
@@ -39,14 +40,23 @@ export default function WorkspaceInvitationsTab({
   const [cancelState, dispatchCancel] = useReducer(confirmActionReducer<WorkspaceInvitation>, {
     kind: "closed",
   });
-  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendingIds, setResendingIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Read synchronously, so a second Resend on a row still sending is ignored before any render.
+  const resendingRef = useRef(new Set<string>());
   const { reload } = invitations;
   // One reading of the clock per render, so the order, the status and the day count agree.
   const now = Date.now();
   const rows = orderInvitations(invitations.invitations, now);
 
+  function setResending(invitationId: string, resending: boolean): void {
+    if (resending) resendingRef.current.add(invitationId);
+    else resendingRef.current.delete(invitationId);
+    setResendingIds(new Set(resendingRef.current));
+  }
+
   async function handleResend(invitation: WorkspaceInvitation): Promise<void> {
-    setResendingId(invitation.id);
+    if (resendingRef.current.has(invitation.id)) return;
+    setResending(invitation.id, true);
     try {
       const { email_sent } = await InvitationsService.resend(workspace.id, invitation.id);
       await reload();
@@ -63,11 +73,18 @@ export default function WorkspaceInvitationsTab({
       if (failure.kind === "gone") {
         toast({
           title: t("settingsPage.workspace.people.invitations.resendFailed", {
-            email: invitation.email,
+            email: isolate(invitation.email),
           }),
           variant: "destructive",
         });
         await reload();
+      } else if (failure.kind === "notAllowed") {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resendNotAllowed", {
+            workspace: isolate(workspace.name),
+          }),
+          variant: "destructive",
+        });
       } else {
         toast({
           title: t("common.error"),
@@ -76,7 +93,7 @@ export default function WorkspaceInvitationsTab({
         });
       }
     } finally {
-      setResendingId(null);
+      setResending(invitation.id, false);
     }
   }
 
@@ -134,13 +151,13 @@ export default function WorkspaceInvitationsTab({
                 <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-3 text-start")}>
                   {t("settingsPage.workspace.people.columns.email")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start")}>
+                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start whitespace-nowrap")}>
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start")}>
+                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start whitespace-nowrap")}>
                   {t("settingsPage.workspace.people.columns.status")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end")}>
+                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end whitespace-nowrap")}>
                   {t("settingsPage.workspace.people.columns.actions")}
                 </th>
               </tr>
@@ -148,7 +165,7 @@ export default function WorkspaceInvitationsTab({
             <tbody>
               {rows.map((invitation) => {
                 const expired = invitationStatus(invitation, now) === "expired";
-                const resending = resendingId === invitation.id;
+                const resending = resendingIds.has(invitation.id);
                 return (
                   <tr key={invitation.id} className={cn("h-14", ROW_DIVIDER)}>
                     {/* max-w-0 lets the email truncate inside an auto-layout table. */}

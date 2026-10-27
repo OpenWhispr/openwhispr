@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../lib/utils";
 import { UserPlus } from "../icons";
 import { workspaceCan } from "../../lib/capabilities";
-import { invitationStatus } from "../../lib/peopleRoster";
+import { invitationStatus, rosterFor } from "../../lib/peopleRoster";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace } from "../../types/electron";
 import InviteTeammateDialog from "../InviteTeammateDialog";
@@ -58,7 +59,13 @@ function PeopleBody({
   const { t } = useTranslation();
   const canManage = workspaceCan(workspace, "manage_members");
   const invitations = useWorkspaceInvitations(workspace.id, canManage);
-  const roster = useWorkspaceStore((state) => state.members);
+  const { roster, rosterIsOurs, refreshMembers } = useWorkspaceStore(
+    useShallow((state) => ({
+      roster: rosterFor(state, workspace.id),
+      rosterIsOurs: state.membersWorkspaceId === workspace.id,
+      refreshMembers: state.refreshMembers,
+    }))
+  );
   const [inviteOpen, setInviteOpen] = useState(false);
   const invitedCountRef = useRef(0);
 
@@ -81,7 +88,10 @@ function PeopleBody({
   const openInvite = useCallback((): void => {
     invitedCountRef.current = 0;
     setInviteOpen(true);
-  }, []);
+    // Only the Members tab loads the roster, so Add opened from Invitations right after launch
+    // would flag nobody. A failed read is fine: the server still answers already_member.
+    if (!rosterIsOurs) void refreshMembers(workspace.id).catch(() => undefined);
+  }, [rosterIsOurs, refreshMembers, workspace.id]);
 
   const handleInviteOpenChange = useCallback(
     (open: boolean): void => {
@@ -112,8 +122,8 @@ function PeopleBody({
         </p>
       </div>
 
-      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1">
-        <div role="tablist" className="flex items-center gap-0.5 px-1">
+      <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1 flex items-center gap-0.5 px-1">
+        <div role="tablist" className="flex items-center gap-0.5">
           {visibleTabs.map((id) => (
             <button
               key={id}
@@ -132,18 +142,18 @@ function PeopleBody({
               )}
             </button>
           ))}
-          {canManage && (
-            <button
-              type="button"
-              aria-label={t("settingsPage.workspace.people.addLabel")}
-              onClick={openInvite}
-              className="ms-auto mb-1 inline-flex h-7 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              <UserPlus className="size-3.5" aria-hidden="true" />
-              {t("settingsPage.workspace.people.add")}
-            </button>
-          )}
         </div>
+        {canManage && (
+          <button
+            type="button"
+            aria-label={t("settingsPage.workspace.people.addLabel")}
+            onClick={openInvite}
+            className="ms-auto mb-1 inline-flex h-7 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <UserPlus className="size-3.5" aria-hidden="true" />
+            {t("settingsPage.workspace.people.add")}
+          </button>
+        )}
       </div>
 
       <div className="pt-1">

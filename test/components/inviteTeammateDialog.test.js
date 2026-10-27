@@ -12,7 +12,9 @@ async function mountDialog(t, props) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__viewProps", "__sendCalls", "__seatPreview"]) delete globalThis[key];
+    for (const key of ["__viewProps", "__sendCalls", "__seatPreview", "__sendGate"]) {
+      delete globalThis[key];
+    }
   });
   installBrowserGlobals(t, {
     window: { electronAPI: { searchContacts: async () => ({ success: true, contacts: [] }) } },
@@ -43,6 +45,7 @@ async function mountDialog(t, props) {
         export const invitePeople = {
           async sendInvitations(input) {
             globalThis.__sendCalls.push(input);
+            if (globalThis.__sendGate) await globalThis.__sendGate;
             for (const email of input.emails) input.onResult(email, { ok: true, emailSent: true });
           },
         };
@@ -146,4 +149,40 @@ test("the seat cost line hides once several addresses are added", async (t) => {
     ["a@x.com", "b@x.com"]
   );
   assert.equal(latest().seatCostLine, null);
+});
+
+test("the seat cost line hides while invitations are sending", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 5,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  // Every chip is sending, so none counts as sendable, which once let the one-seat line return.
+  assert.equal(latest().state.phase, "sending");
+  assert.equal(latest().seatCostLine, null);
+
+  await React.act(async () => {
+    release();
+    await sending;
+  });
+  assert.equal(latest().state.phase, "done");
 });

@@ -158,8 +158,9 @@ export default function InviteTeammateDialog({
       ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
       : null;
   // The preview prices one seat, so with several addresses its charge would understate the cost.
+  // While sending no chip counts as sendable, so the phase check keeps the line from returning.
   const seatCostLine =
-    addsBilledSeat && inviteSummary(state).sendable.length <= 1
+    addsBilledSeat && state.phase === "editing" && inviteSummary(state).sendable.length <= 1
       ? t("workspaces.invite.seatCost", {
           amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
         })

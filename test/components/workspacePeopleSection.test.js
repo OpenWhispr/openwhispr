@@ -50,7 +50,11 @@ async function loadSection(t, { storedTab } = {}) {
       `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) =>
-          selector({ members: globalThis.__roster });
+          selector({
+            members: globalThis.__roster,
+            membersWorkspaceId: globalThis.__rosterWorkspaceId,
+            refreshMembers: globalThis.__refreshMembers,
+          });
       `,
       "/SettingsWorkspaceFrame": `
         export default function Frame({ children }) {
@@ -107,6 +111,9 @@ async function loadSection(t, { storedTab } = {}) {
   t.after(() => {
     for (const key of [
       "__roster",
+      "__rosterWorkspaceId",
+      "__refreshMembers",
+      "__refreshMembersCalls",
       "__workspace",
       "__invitationsArgs",
       "__invitationsState",
@@ -119,6 +126,11 @@ async function loadSection(t, { storedTab } = {}) {
     }
   });
   globalThis.__roster = MEMBERS;
+  globalThis.__rosterWorkspaceId = "w1";
+  globalThis.__refreshMembersCalls = [];
+  globalThis.__refreshMembers = async (workspaceId) => {
+    globalThis.__refreshMembersCalls.push(workspaceId);
+  };
   globalThis.__reloadCalls = 0;
   globalThis.__invitationsState = {
     status: "ready",
@@ -272,4 +284,54 @@ test("closing the dialog without inviting anyone keeps the current tab", async (
     findNode(container, (node) => node.getAttribute?.("data-tab-panel") === "invitations"),
     null
   );
+});
+
+test("a roster the store holds for another workspace isn't handed to the invite dialog", async (t) => {
+  const Section = await loadSection(t);
+  globalThis.__rosterWorkspaceId = "w-previous";
+  render(Section, ADMIN);
+
+  assert.deepEqual(globalThis.__dialogProps.knownEmails.members, []);
+});
+
+async function openAdd(container) {
+  const addButton = findNode(
+    container,
+    (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.addLabel"
+  );
+  await React.act(async () => propsOf(addButton).onClick());
+}
+
+test("opening Add reads the roster when the store doesn't hold this workspace's", async (t) => {
+  const Section = await loadSection(t, { storedTab: "invitations" });
+  globalThis.__rosterWorkspaceId = null;
+  globalThis.__refreshMembers = async (workspaceId) => {
+    globalThis.__refreshMembersCalls.push(workspaceId);
+    throw new Error("offline");
+  };
+  const container = await mount(t, Section, ADMIN);
+  assert.deepEqual(globalThis.__refreshMembersCalls, []);
+
+  // A failed read leaves flagging to the server's already_member answer.
+  await openAdd(container);
+  assert.deepEqual(globalThis.__refreshMembersCalls, ["w1"]);
+  assert.equal(globalThis.__dialogProps.open, true);
+});
+
+test("opening Add keeps a roster the store already holds for this workspace", async (t) => {
+  const Section = await loadSection(t, { storedTab: "invitations" });
+  const container = await mount(t, Section, ADMIN);
+
+  await openAdd(container);
+  assert.deepEqual(globalThis.__refreshMembersCalls, []);
+});
+
+test("Add sits beside the tab list, not inside it", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, ADMIN);
+
+  const tablist = markup.match(/<div role="tablist"[^>]*>([\s\S]*?)<\/div>/);
+  assert.ok(tablist, "tab list");
+  assert.doesNotMatch(tablist[1], /settingsPage\.workspace\.people\.addLabel/);
+  assert.match(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
 });
