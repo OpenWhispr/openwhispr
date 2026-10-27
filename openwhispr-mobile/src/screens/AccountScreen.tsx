@@ -316,6 +316,16 @@ export default function AccountScreen() {
           </SettingsSection>
         ) : null}
 
+        <SettingsSection title="Referral">
+          <SettingsRow
+            iconStyle="line"
+            icon="gift"
+            mdIcon="Gift"
+            title="Referral Code"
+            onPress={() => router.push('/(account)/referral')}
+          />
+        </SettingsSection>
+
         <SettingsSection title="Preferences">
           <SettingsRow
             iconStyle="line"

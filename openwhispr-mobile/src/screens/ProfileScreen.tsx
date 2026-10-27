@@ -76,18 +76,6 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {user ? (
-        <SettingsSection>
-          <SettingsRow
-            iconStyle="line"
-            icon="gift"
-            mdIcon="Gift"
-            title="Referral Code"
-            onPress={() => router.push('/(tabs)/(referral)')}
-          />
-        </SettingsSection>
-      ) : null}
-
       <SettingsSection>
         {isAnonymous ? (
           <SettingsRow

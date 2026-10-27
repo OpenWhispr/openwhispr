@@ -237,6 +237,16 @@ test("a section keeps its state while another one is open", async (t) => {
   assert.match(shownText(container), /CONNECTORS SECTION/);
 });
 
+test("the Connectors title carries the one beta badge; other sections carry none", async (t) => {
+  const { container } = await renderView(t);
+  const titleRow = heading(container, "integrations.nav.sections.connectors").parentNode;
+  assert.match(titleRow.textContent, /connectors\.beta/);
+  assert.equal(shownText(container).match(/connectors\.beta/g).length, 1);
+
+  await React.act(async () => click(navButton(container, "api")));
+  assert.doesNotMatch(shownText(container), /connectors\.beta/);
+});
+
 test("Calendars stays mounted from any section, so its listeners keep the nav count fresh", async (t) => {
   const { container } = await renderView(t, { section: "api" });
 
@@ -375,7 +385,8 @@ test("API, MCP and CLI use one docs label and open their own documentation", asy
     ["cli", "https://docs.openwhispr.com/cli/install"],
   ]) {
     await React.act(async () => click(navButton(container, section)));
-    const pane = heading(container, `integrations.nav.sections.${section}`).parentNode.parentNode;
+    const pane = heading(container, `integrations.nav.sections.${section}`).parentNode.parentNode
+      .parentNode;
     await React.act(async () => click(buttonWithText(pane, "integrations.readDocs")));
     assert.equal(openedUrls.at(-1), url);
   }

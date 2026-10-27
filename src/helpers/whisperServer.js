@@ -149,6 +149,13 @@ function getGpuSignature(options = {}) {
   return `gpu:vulkan:${Number.isInteger(deviceIndex) && deviceIndex >= 0 ? deviceIndex : "default"}`;
 }
 
+function parseWhisperGpuBackend(output) {
+  const match = String(output || "").match(
+    /whisper_backend_init_gpu: using (CUDA|Vulkan)\d+ backend/i
+  );
+  return match ? match[1].toLowerCase() : null;
+}
+
 function buildWhisperServerArgs({
   modelPath,
   port,
@@ -299,6 +306,7 @@ class WhisperServerManager extends EventEmitter {
     this.canConvert = false;
     this.useCuda = false;
     this.useVulkan = false;
+    this.activeGpuBackend = null;
     this.startGeneration = 0;
     this._stopRequested = false;
     this.vadSignature = "vad:off";
@@ -307,7 +315,7 @@ class WhisperServerManager extends EventEmitter {
     this.gpuFallbackActive = false;
     this.lastStartOptions = {};
     // Output and exit of the last spawned server, read when a GPU server that
-    // started fine dies mid-transcription (_fallbackToCpuAndRetry). See #1736.
+    // started fine dies mid-transcription (_fallbackAndRetry). See #1736.
     this._lastProcessInfo = null;
   }
 
@@ -515,12 +523,11 @@ class WhisperServerManager extends EventEmitter {
     const nextThreadSignature = getThreadSignature(threadResolution);
     const nextVadSignature = getVadSignature(options);
     const nextGpuSignature = getGpuSignature(options);
-    // gpuFallbackActive pins a fallback session to its working CPU server:
-    // after a CUDA crash the next request can resolve to a different backend
-    // (an installed Vulkan pack, since only the crashed backend is recorded in
-    // WHISPER_GPU_FAILED) and must not tear the session down for a GPU cold
-    // start mid-dictation. stop() clears the pin, so pack downloads, explicit
-    // retries, and app restarts get a fresh GPU attempt.
+    // gpuFallbackActive pins a fallback session to its working CPU server: a
+    // later request that still resolves to a GPU backend must not tear the
+    // session down for a GPU cold start mid-dictation. stop() clears the pin,
+    // so pack downloads, explicit retries, and app restarts get a fresh GPU
+    // attempt.
     if (
       this.ready &&
       this.modelPath === modelPath &&
@@ -564,6 +571,7 @@ class WhisperServerManager extends EventEmitter {
     this.modelPath = modelPath;
     this.useCuda = usingCuda;
     this.useVulkan = usingVulkan;
+    this.activeGpuBackend = null;
 
     // Pin Vulkan to a specific device (see resolveVulkanDeviceIndex; the
     // one-shot restart below passes the explicit index).
@@ -590,9 +598,13 @@ class WhisperServerManager extends EventEmitter {
       spawnEnv.TMP = safeTmp;
     }
 
-    // Add the whisper-server directory to PATH so any companion DLLs are found
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
+    if (process.platform === "linux" && usingCuda) {
+      spawnEnv.LD_LIBRARY_PATH = [serverBinaryDir, process.env.LD_LIBRARY_PATH]
+        .filter(Boolean)
+        .join(":");
+    }
 
     // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
     if (usingCuda) {
@@ -633,8 +645,6 @@ class WhisperServerManager extends EventEmitter {
       threads: threadResolution,
     });
 
-    const startTime = Date.now();
-
     this.process = spawn(serverBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -670,34 +680,68 @@ class WhisperServerManager extends EventEmitter {
       debugLogger.debug("whisper-server process exited", { code, signal });
       this.ready = false;
       this.process = null;
+      this.activeGpuBackend = null;
       this.stopHealthCheck();
       sidecarPidFile.clear("whisper");
     });
 
     const startupTimeoutMs = usingVulkan ? VULKAN_STARTUP_TIMEOUT_MS : STARTUP_TIMEOUT_MS;
+    let pinAction = { action: "none" };
     try {
       await this.waitForReady(getProcessInfo, startupTimeoutMs);
+      if (usingVulkan && !options.vulkanPinChecked) {
+        pinAction = resolveVulkanPinAction({
+          devices: parseVulkanDevices(stderrBuffer),
+          appliedPin: vulkanDeviceIndex,
+        });
+      }
+      const expectedBackend = usingCuda ? "cuda" : usingVulkan ? "vulkan" : null;
+      const activeBackend = parseWhisperGpuBackend(stderrBuffer);
+      // A pin restart below settles the device first: a pin to a device that
+      // is gone leaves the server without its GPU until the pin is cleared.
+      if (expectedBackend && activeBackend !== expectedBackend && pinAction.action === "none") {
+        const error = new Error("server started without initializing its GPU backend");
+        error.gpuBackendMissing = true;
+        throw error;
+      }
+      this.activeGpuBackend = activeBackend;
     } catch (err) {
       // An intentional stop() during startup is not a GPU/thread failure
       if (err.isStopped) throw err;
       if (usingCuda || usingVulkan) {
-        // Fall back on ANY startup rejection — a GPU server can exit early
-        // (missing kernels), die late (VRAM OOM mid-model-load), or hang, and
-        // in every case the CPU binary is the working answer. stop() reaps a
-        // hung process before the CPU restart. The reason travels with the
-        // event so it is saved beside the failure and shown on the GPU card (#1736).
-        const reason = extractWhisperGpuFailureReason({
-          ...getProcessInfo(),
-          timeoutMs: startupTimeoutMs,
-        });
+        // A GPU server can exit early, die during model load, hang, or come up
+        // without its GPU. stop() reaps it before trying the next available
+        // backend. The reason travels with the event so it is saved beside the
+        // failure and shown on the GPU card (#1736). A server that came up on the
+        // CPU neither exited nor timed out: its log or the check itself says why.
+        // A CPU fallback is announced after the CPU start settles, failed or not:
+        // the bundled build can run on the GPU itself (#2168).
+        const reason = err.gpuBackendMissing
+          ? extractWhisperGpuFailureReason(getProcessInfo()) || err.message
+          : extractWhisperGpuFailureReason({ ...getProcessInfo(), timeoutMs: startupTimeoutMs });
+        const backend = usingCuda ? "cuda" : "vulkan";
+        const fallbackToVulkan = usingCuda && options.fallbackToVulkan === true;
         debugLogger.warn(
-          `${usingCuda ? "CUDA" : "Vulkan"} whisper-server failed, falling back to CPU`,
+          fallbackToVulkan
+            ? "CUDA whisper-server failed, trying Vulkan"
+            : `${backend} whisper-server failed, falling back to CPU`,
           { error: err.message, exitCode, reason }
         );
-        this.emit(usingCuda ? "cuda-fallback" : "gpu-fallback", { reason });
+        if (fallbackToVulkan) this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan" });
         await this.stop();
-        this.gpuFallbackActive = true;
-        return this._doStart(modelPath, { ...options, useCuda: false, useVulkan: false });
+        this.gpuFallbackActive = !fallbackToVulkan;
+        const fallbackOptions = { ...options, useCuda: false, useVulkan: fallbackToVulkan };
+        delete fallbackOptions.fallbackToVulkan;
+        try {
+          return await this._doStart(modelPath, fallbackOptions);
+        } finally {
+          if (!fallbackToVulkan) {
+            this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
+              reason,
+              fallbackBackend: this.activeGpuBackend ?? "cpu",
+            });
+          }
+        }
       }
       if (shouldFallbackToDefaultThreads(threadResolution)) {
         const defaultThreadResolution = createThreadResolution(
@@ -725,35 +769,29 @@ class WhisperServerManager extends EventEmitter {
     // (and drop a persisted pin that no longer resolves). vulkanPinChecked
     // bounds this to a single extra start; if the pinned restart fails, the
     // catch above falls back to CPU as usual. See #1606.
-    if (usingVulkan && !options.vulkanPinChecked) {
-      const pinAction = resolveVulkanPinAction({
-        devices: parseVulkanDevices(stderrBuffer),
+    if (pinAction.action === "pin") {
+      debugLogger.info("Vulkan device 0 is integrated; restarting pinned to discrete GPU", {
+        index: pinAction.index,
+      });
+      this.emit("vulkan-device-pinned", { index: pinAction.index });
+      await this.stop();
+      return this._doStart(modelPath, {
+        ...options,
+        vulkanDeviceIndex: pinAction.index,
+        vulkanPinChecked: true,
+      });
+    }
+    if (pinAction.action === "clear") {
+      debugLogger.warn("Persisted Vulkan device pin is out of range; clearing it", {
         appliedPin: vulkanDeviceIndex,
       });
-      if (pinAction.action === "pin") {
-        debugLogger.info("Vulkan device 0 is integrated; restarting pinned to discrete GPU", {
-          index: pinAction.index,
-        });
-        this.emit("vulkan-device-pinned", { index: pinAction.index });
-        await this.stop();
-        return this._doStart(modelPath, {
-          ...options,
-          vulkanDeviceIndex: pinAction.index,
-          vulkanPinChecked: true,
-        });
-      }
-      if (pinAction.action === "clear") {
-        debugLogger.warn("Persisted Vulkan device pin is out of range; clearing it", {
-          appliedPin: vulkanDeviceIndex,
-        });
-        this.emit("vulkan-device-pin-cleared");
-        await this.stop();
-        return this._doStart(modelPath, {
-          ...options,
-          vulkanDeviceIndex: -1,
-          vulkanPinChecked: true,
-        });
-      }
+      this.emit("vulkan-device-pin-cleared");
+      await this.stop();
+      return this._doStart(modelPath, {
+        ...options,
+        vulkanDeviceIndex: -1,
+        vulkanPinChecked: true,
+      });
     }
 
     this.startHealthCheck();
@@ -763,10 +801,15 @@ class WhisperServerManager extends EventEmitter {
       model: path.basename(modelPath),
       cuda: this.useCuda,
       vulkan: this.useVulkan,
+      gpuBackend: this.activeGpuBackend,
       threads: threadResolution.threads || DEFAULT_WHISPER_THREADS,
       threadSource: threadResolution.source,
       availableParallelism: threadResolution.availableParallelism,
     });
+
+    // The bundled whisper-server can itself be a GPU build (a distro package
+    // that compiles it with CUDA, #2168): it runs on the GPU with no pack.
+    if (!usingCuda && !usingVulkan && this.activeGpuBackend) this.emit("bundled-gpu");
   }
 
   async waitForReady(getProcessInfo, timeoutMs = STARTUP_TIMEOUT_MS) {
@@ -1059,7 +1102,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
+        return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1093,13 +1136,14 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark);
+      return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
     }
   }
 
-  async _fallbackToCpuAndRetry(body, boundary, modelPath, stderrMark) {
+  async _fallbackAndRetry(body, boundary, modelPath, stderrMark) {
     const backend = this.useCuda ? "cuda" : "vulkan";
-    // Read the crashed server's output now (the CPU start below replaces it),
+    const fallbackToVulkan = backend === "cuda" && this.lastStartOptions.fallbackToVulkan === true;
+    // Read the crashed server's output now (the start below replaces it),
     // from where the failing request began. A peer's replacement server is a
     // different process, so its output is read whole.
     const processInfo = this._lastProcessInfo();
@@ -1108,15 +1152,35 @@ class WhisperServerManager extends EventEmitter {
       ...processInfo,
       stderr: processInfo.stderr.slice(offset),
     });
-    debugLogger.warn(`${backend} whisper-server died during transcription, falling back to CPU`, {
-      port: this.port,
-      model: modelPath ? path.basename(modelPath) : null,
-      reason,
-    });
-    await this.start(modelPath, { ...this.lastStartOptions, useCuda: false, useVulkan: false });
-    this.gpuFallbackActive = true;
-    // Emit only once the CPU server is up — the notification tells the user CPU is in use
-    this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", { reason });
+    debugLogger.warn(
+      fallbackToVulkan
+        ? "CUDA whisper-server died during transcription, trying Vulkan"
+        : `${backend} whisper-server died during transcription, falling back to CPU`,
+      {
+        port: this.port,
+        model: modelPath ? path.basename(modelPath) : null,
+        reason,
+      }
+    );
+    if (fallbackToVulkan) {
+      this.emit("cuda-fallback", { reason, fallbackBackend: "vulkan" });
+    }
+    const fallbackOptions = {
+      ...this.lastStartOptions,
+      useCuda: false,
+      useVulkan: fallbackToVulkan,
+    };
+    delete fallbackOptions.fallbackToVulkan;
+    await this.start(modelPath, fallbackOptions);
+    this.gpuFallbackActive = !this.useVulkan;
+    // Emit only once the server is up: it tells whether CPU is in use, or a
+    // bundled GPU build of whisper-server (#2168)
+    if (!fallbackToVulkan) {
+      this.emit(backend === "cuda" ? "cuda-fallback" : "gpu-fallback", {
+        reason,
+        fallbackBackend: this.activeGpuBackend ?? "cpu",
+      });
+    }
     return await this._postInference(body, boundary);
   }
 
@@ -1153,6 +1217,7 @@ class WhisperServerManager extends EventEmitter {
   async stop() {
     this._stopRequested = true;
     this.gpuFallbackActive = false;
+    this.activeGpuBackend = null;
     this.stopHealthCheck();
 
     if (this.isRemote) {
@@ -1204,7 +1269,7 @@ class WhisperServerManager extends EventEmitter {
 
   getStatus() {
     const running = this.ready && (this.process !== null || this.isRemote);
-    const gpuBackend = this.useCuda ? "cuda" : this.useVulkan ? "vulkan" : null;
+    const gpuBackend = this.activeGpuBackend;
     return {
       available: this.isAvailable(),
       running,
@@ -1228,6 +1293,7 @@ module.exports.parseVulkanDevices = parseVulkanDevices;
 module.exports.resolveVulkanPinAction = resolveVulkanPinAction;
 module.exports.getVadSignature = getVadSignature;
 module.exports.getGpuSignature = getGpuSignature;
+module.exports.parseWhisperGpuBackend = parseWhisperGpuBackend;
 module.exports.resolveWhisperThreads = resolveWhisperThreads;
 module.exports.shouldFallbackToCpuAfterRequestError = shouldFallbackToCpuAfterRequestError;
 module.exports.shouldRetryAfterServerReplaced = shouldRetryAfterServerReplaced;

@@ -924,6 +924,65 @@ test("confirmed folder delete scrubs chats and finalizes held rows", (t) => {
   assert.ok(acceptedDeleteIds.has(acceptedPredeleted.id));
 });
 
+for (const destination of ["personal", "team"]) {
+  test(`moveFolderToSpace preserves folder chats when moving to ${destination}`, (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    t.after(() => db.db.close());
+    const source = createTestTeamSpace(db, { name: "Source" }).space;
+    const destinationId =
+      destination === "personal"
+        ? db.getPrivateSpaceId()
+        : createTestTeamSpace(db, { name: "Destination" }).space.id;
+    const folder = db.createFolder("Moved", source.id).folder;
+    const chat = db.createAgentConversation("Moved chat", null, source.id, folder.id);
+    db.addAgentMessage(chat.id, "user", "Keep this history");
+    const messages = db.getAgentMessages(chat.id);
+    const stationary = db.createAgentConversation("Source chat", null, source.id);
+    db.addAgentMessage(stationary.id, "user", "Retire this history");
+    const privateChat = db.createAgentConversation("Private chat");
+
+    const moved = db.moveFolderToSpace(folder.id, destinationId);
+    assert.equal(moved.success, true);
+    assert.equal(moved.folder.space_id, destinationId);
+    assert.equal(db.getAgentConversation(chat.id).space_id, destinationId);
+    assert.deepEqual(
+      db.getConversationsForContainer(destinationId, folder.id).map((row) => row.id),
+      [chat.id]
+    );
+
+    assert.equal(db.purgeSpace(source.id).success, true);
+    assert.equal(db.getAgentConversation(chat.id).space_id, destinationId);
+    assert.deepEqual(db.getAgentMessages(chat.id), messages);
+    assert.deepEqual(
+      db.getConversationsForContainer(destinationId, folder.id).map((row) => row.id),
+      [chat.id]
+    );
+    assert.equal(db.getAgentConversation(stationary.id), null);
+    assert.deepEqual(db.getAgentMessages(stationary.id), []);
+    assert.ok(db.getAgentConversation(privateChat.id));
+  });
+}
+
+test("failed and unchanged folder moves preserve chat ownership and history", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.close());
+  const source = createTestTeamSpace(db, { name: "Source" }).space;
+  const destination = createTestTeamSpace(db, { name: "Destination" }).space;
+  const folder = db.createFolder("Docs", source.id).folder;
+  db.createFolder("Docs", destination.id);
+  const chat = db.createAgentConversation("Docs chat", null, source.id, folder.id);
+  db.addAgentMessage(chat.id, "user", "Keep this history");
+  const before = db.getAgentConversation(chat.id);
+  const messages = db.getAgentMessages(chat.id);
+
+  assert.equal(db.moveFolderToSpace(folder.id, source.id).success, true);
+  assert.equal(db.moveFolderToSpace(folder.id, destination.id).success, false);
+  assert.deepEqual(db.getAgentConversation(chat.id), before);
+  assert.deepEqual(db.getAgentMessages(chat.id), messages);
+});
+
 test("relocateRevokedFolder moves or retires the folder's conversations", (t) => {
   const db = createDb(t);
   if (!db) return;

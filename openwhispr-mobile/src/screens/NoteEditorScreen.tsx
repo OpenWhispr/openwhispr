@@ -13,7 +13,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -24,6 +24,7 @@ import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { extractCorrections } from '@/lib/correctionLearner';
 import { useActionProcessing } from '@/hooks/useActionProcessing';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
+import { useChatSendGate } from '@/hooks/useChatSendGate';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useUsageLimitRecovery } from '@/hooks/useUsageLimitRecovery';
 import { EditableMarkdown } from '@/components/notes/EditableMarkdown';
@@ -43,7 +44,6 @@ import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSe
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
 import { VOICE_ALREADY_TAUGHT_ALERT } from '@/lib/voiceEnrollmentMessages';
 import { NoteChatSheet } from '@/components/notes/NoteChatSheet';
-import { isNoteChatEnabled } from '@/lib/dictationAgent';
 import { SpeakerTranscript } from '@/components/notes/SpeakerTranscript';
 import { TranscriptSheet } from '@/components/notes/TranscriptSheet';
 import { NoteMetaRow } from '@/components/notes/NoteMetaRow';
@@ -64,6 +64,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
 import { GlassBackButton } from '@/components/ui/GlassBackButton';
+import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
 import { buildNoteShareContent, exportNote } from '@/lib/noteExport';
 import { AppFont } from '@/lib/fonts';
@@ -82,8 +83,10 @@ import {
   getLocalReasoningUnavailableMessage,
   isLocalContextLimitError,
   isLocalReasoningRequired,
+  LocalReasoningError,
   shouldUseLocalReasoning,
 } from '@/lib/localReasoning';
+import { ChatEmptyAnswerError, toChatErrorMessage } from '@/lib/chat/chatErrorMessage';
 import { providerDisplayName } from '@/lib/mobileProviders';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
@@ -127,7 +130,24 @@ const transcriptStatusText = (status: string): string => {
   }
 };
 
-export default function NoteEditorScreen() {
+/** Where the editor sits: the screens it opens are pushed onto the same tab's stack. */
+export interface NoteEditorStack {
+  /** Where Back goes when there is nothing to go back to. */
+  root: Href;
+  /** The prefix of the stack's actions and voice-enrollment routes. */
+  routePrefix: string;
+}
+
+const NOTES_EDITOR_STACK: NoteEditorStack = {
+  root: '/(tabs)/(notes)',
+  routePrefix: '/(tabs)/(notes)',
+};
+
+export default function NoteEditorScreen({
+  stack = NOTES_EDITOR_STACK,
+}: {
+  stack?: NoteEditorStack;
+}): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = parseInt(id ?? '', 10);
   const router = useRouter();
@@ -175,11 +195,8 @@ export default function NoteEditorScreen() {
   const autoLearnEnabled = useConfigStore((s) => s.config?.autoLearnCorrections ?? true);
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
-  const chatMode = useConfigStore((s) => s.config?.inference?.noteChat?.mode);
-  const chatEnabled = useConfigStore((s) => (s.config ? isNoteChatEnabled(s.config) : true));
+  const { chatEnabled, gate: gateChatSend } = useChatSendGate();
   const providerNotes = notesMode === 'providers';
-  // Only an unset or OpenWhispr chat route reaches Cloud, so only it needs an account and the paywall.
-  const cloudChat = chatMode !== 'providers' && chatMode !== 'local';
   const dictionaryEntries = useDictionaryStore((s) => s.entries);
   const dictionaryWords = useMemo(() => dictionaryEntries.map((e) => e.word), [dictionaryEntries]);
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
@@ -515,8 +532,8 @@ export default function NoteEditorScreen() {
   );
 
   const openVoiceScript = useCallback(() => {
-    router.push(`/(tabs)/(notes)/voice-enrollment?owner=1&noteId=${noteId}`);
-  }, [noteId, router]);
+    router.push(`${stack.routePrefix}/voice-enrollment?owner=1&noteId=${noteId}`);
+  }, [noteId, router, stack.routePrefix]);
 
   // iOS drops a push made while a page sheet is still sliding away, so it waits for the
   // sheet's onDismiss; Android's Modal has no onDismiss.
@@ -736,7 +753,8 @@ export default function NoteEditorScreen() {
     useAudioRecording({
       onComplete: handleDictationComplete,
       onError: handleDictationError,
-      onLocalModelMissing: promptLocalModelFallback,
+      // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
+      onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
       onUsageLimitReached: handleUsageLimitReached,
     });
 
@@ -1003,6 +1021,7 @@ export default function NoteEditorScreen() {
           response = await askAbout(sourceContext);
         }
         if (controller.signal.aborted) return;
+        if (!response.text.trim()) throw new ChatEmptyAnswerError();
         setChatMessages((current) => [
           ...current,
           {
@@ -1014,7 +1033,15 @@ export default function NoteEditorScreen() {
         ]);
       } catch (error) {
         if (controller.signal.aborted) return;
-        setChatError(error instanceof Error ? error.message : 'Chat failed');
+        // An on-device error's text comes from the native layer, so it gets the same worded copy as
+        // the Chat tab, and so does an empty answer.
+        setChatError(
+          error instanceof LocalReasoningError || error instanceof ChatEmptyAnswerError
+            ? toChatErrorMessage(error, { surface: 'noteChat' })
+            : error instanceof Error
+              ? error.message
+              : 'Chat failed',
+        );
       } finally {
         if (chatAbortRef.current === controller) {
           chatAbortRef.current = null;
@@ -1027,44 +1054,19 @@ export default function NoteEditorScreen() {
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
-      if (cloudChat && requiresRealAccount(user)) {
-        showAccountRequiredAlert('AI chat', { cloudOnly: true });
-        return;
-      }
-
-      const gateAndRun = (allowRemoteContent = false) => {
-        if (!cloudChat) {
-          startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
-          return;
-        }
-        registerSuperwallGate({
-          placement: SUPERWALL_PLACEMENTS.noteChatStart,
-          params: { source: 'note_chat' },
-          requiresAccount: false,
-          feature: () => {
-            startChatRequest(question, appendUserMessage, allowRemoteContent).catch(() => {});
-          },
-        }).catch(() => {});
-      };
-
-      if (chatRequiresCloudConfirmation && chatMode !== 'local') {
-        confirmCloudOnce(
-          'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
-          () => gateAndRun(true),
-        );
-        return;
-      }
-
-      gateAndRun();
+      gateChatSend(
+        (allowCloudFallback) => {
+          startChatRequest(question, appendUserMessage, allowCloudFallback).catch(() => {});
+        },
+        {
+          consentMessage: chatRequiresCloudConfirmation
+            ? 'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.'
+            : null,
+          source: 'note_chat',
+        },
+      );
     },
-    [
-      chatMode,
-      chatRequiresCloudConfirmation,
-      cloudChat,
-      registerSuperwallGate,
-      startChatRequest,
-      user,
-    ],
+    [chatRequiresCloudConfirmation, gateChatSend, startChatRequest],
   );
 
   const handleAskNote = useCallback(() => {
@@ -1110,8 +1112,8 @@ export default function NoteEditorScreen() {
   }, []);
 
   const handleManageActions = useCallback(() => {
-    router.push('/(tabs)/(notes)/actions');
-  }, [router]);
+    router.push(`${stack.routePrefix}/actions`);
+  }, [router, stack.routePrefix]);
 
   const handleDelete = useCallback(() => {
     confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
@@ -1208,10 +1210,15 @@ export default function NoteEditorScreen() {
     usesSegmentTranscript && note?.noteType !== 'upload',
   );
 
+  // A deleted note can still be opened from a chat's source link. Both stacks hide the native
+  // header and the tab bar here, so the back button is the only way out.
   if (!note && !isNaN(noteId)) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="text-tertiaryLabel">Note not found</Text>
+      <View className="flex-1 bg-systemBackground">
+        <TabScreenHeader title="" left={<GlassBackButton fallbackRoute={stack.root} />} />
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-tertiaryLabel">Note not found</Text>
+        </View>
       </View>
     );
   }
@@ -1283,7 +1290,7 @@ export default function NoteEditorScreen() {
       ) : null}
       <TabScreenHeader
         title={title || 'Untitled'}
-        left={<GlassBackButton fallbackRoute="/(tabs)/(notes)" />}
+        left={<GlassBackButton fallbackRoute={stack.root} />}
         right={
           <NoteActionsMenu
             noteId={noteId}
@@ -1618,10 +1625,8 @@ export default function NoteEditorScreen() {
   );
 }
 
-// Approximate height of the iOS 18 floating NativeTabs bar (incl. home-indicator
-// inset). Used to lift the floating mic FAB clear of the tab bar.
-const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 110 : 70;
-const FAB_BOTTOM = TAB_BAR_OFFSET + 32;
+// Lifts the floating mic FAB clear of the tab bar.
+const FAB_BOTTOM = TAB_BAR_CLEARANCE + 32;
 const ASK_PILL_HEIGHT = 52;
 const ASK_PILL_GAP = 12;
 const SYSTEM_RED = '#FF3B30';

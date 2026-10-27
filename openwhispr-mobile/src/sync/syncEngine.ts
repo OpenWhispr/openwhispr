@@ -32,6 +32,7 @@ import {
 } from './syncIdentity';
 import { useSyncStore } from './useSyncStore';
 import { ApiError, isPolicyCloudBackupBlockedError } from '@/lib/apiClient';
+import { withChatHistory } from '@/lib/chat/withChatHistory';
 
 export type SyncReason = 'after-write' | 'foreground' | 'sign-in' | 'manual';
 
@@ -181,6 +182,8 @@ function reconcileSyncIdentity(auth: ReturnType<typeof useAuthStore.getState>): 
         level: 'info',
       });
       notesRepository.wipeAllSyncableData();
+      // Chat history never syncs, but it quotes the previous user's notes.
+      withChatHistory((chats) => chats.clearChatHistory());
       // The wipe also deleted the previous user's voice profiles; their meeting voice
       // samples held in memory go with them.
       useNotesStore.getState().loadVoiceProfiles();
