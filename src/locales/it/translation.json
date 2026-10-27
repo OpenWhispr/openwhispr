@@ -3416,6 +3416,7 @@
     },
     "speaker": {
       "you": "Tu",
+      "noteTaker": "Autore degli appunti",
       "them": "Loro",
       "unknown": "Partecipante sconosciuto",
       "label": "Partecipante {{n}}",

@@ -3416,6 +3416,7 @@
     },
     "speaker": {
       "you": "你",
+      "noteTaker": "记录者",
       "them": "对方",
       "unknown": "未知发言者",
       "label": "发言者 {{n}}",

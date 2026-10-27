@@ -3416,6 +3416,7 @@
     },
     "speaker": {
       "you": "Você",
+      "noteTaker": "Quem anotou",
       "them": "Outro",
       "unknown": "Participante desconhecido",
       "label": "Participante {{n}}",

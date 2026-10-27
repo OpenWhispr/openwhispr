@@ -38,7 +38,7 @@ import {
   updateShareCache,
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
-import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
+import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
@@ -90,6 +90,7 @@ import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
+import { recorderTranscriptLabel, resolveNoteRecorder } from "../../utils/noteRecorder";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
@@ -500,14 +501,23 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  const meetingIdentity = useMemo<MeetingIdentity>(
-    () => ({
-      selfName: user?.name?.trim() || null,
-      selfEmail: user?.email?.trim() || null,
-      participants: parsedParticipants,
-    }),
-    [user?.name, user?.email, parsedParticipants]
+  // The roster names a teammate who recorded this note; it isn't fetched for the user's own.
+  const ownerRoster = useSpaceRoster(
+    !ownedByUser && isTeamNote ? (space?.cloud_space_id ?? null) : null
   );
+  const noteOwner = note.owner_user_id ? ownerRoster?.get(note.owner_user_id) : undefined;
+  // The recorder, not necessarily the viewer: the mic lines are theirs.
+  const meetingIdentity = useMemo<MeetingIdentity>(
+    () =>
+      resolveNoteRecorder({
+        ownNote: ownedByUser,
+        user: { name: user?.name, email: user?.email },
+        owner: noteOwner,
+        participants: parsedParticipants,
+      }),
+    [ownedByUser, user?.name, user?.email, noteOwner, parsedParticipants]
+  );
+  const recorderLabel = recorderTranscriptLabel(meetingIdentity, ownedByUser, t);
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -1393,6 +1403,7 @@ export default function NoteEditor({
               ) : (
                 <MeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  recorderLabel={recorderLabel}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}

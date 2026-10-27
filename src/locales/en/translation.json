@@ -3768,6 +3768,7 @@
     },
     "speaker": {
       "you": "You",
+      "noteTaker": "Note taker",
       "them": "Them",
       "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",

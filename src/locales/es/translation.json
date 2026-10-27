@@ -3468,6 +3468,7 @@
     },
     "speaker": {
       "you": "Tú",
+      "noteTaker": "Quien tomó notas",
       "them": "Ellos",
       "unknown": "Participante desconocido",
       "label": "Participante {{n}}",

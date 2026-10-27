@@ -129,3 +129,38 @@ test("a stretch of the user's lines reassigned to someone gets its own colour", 
   );
   assert.equal(html.split("border-s-green-400/50").length - 1, 1, "Bob gets the next one");
 });
+
+test("the recorder's lines carry recorderLabel instead of You on a teammate's note", async () => {
+  const segments = [
+    { id: "y1", text: "I'll send the deck", source: "mic", timestamp: 1, speaker: "you" },
+    {
+      id: "y2",
+      text: "named on the recorder's device",
+      source: "mic",
+      timestamp: 2,
+      speaker: "speaker_0",
+      speakerName: "You",
+      speakerLocked: true,
+      speakerLockSource: "user",
+    },
+    { id: "r1", text: "remote line", source: "system", timestamp: 3, speaker: "speaker_1" },
+  ];
+  const html = await renderChat({ segments, recorderLabel: "Alice Owner" });
+  assert.equal(html.split("Alice Owner").length - 1, 2, "both recorder lines name the owner");
+  assert.ok(!/>You</.test(html), "no row is labelled You");
+
+  const own = await renderChat({ segments });
+  assert.ok(/>You</.test(own), "the user's own note keeps You");
+});
+
+test("a You the viewer set in their own mappings still reads You", async () => {
+  const html = await renderChat({
+    segments: [
+      { id: "p1", text: "me in the room", source: "mic", timestamp: 1, speaker: "speaker_0" },
+    ],
+    speakerMappings: { speaker_0: "You" },
+    recorderLabel: "Alice Owner",
+  });
+  assert.ok(/>You</.test(html));
+  assert.ok(!html.includes("Alice Owner"));
+});

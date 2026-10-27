@@ -48,13 +48,16 @@ const MOCKS = {
   `,
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
   "/hooks/useAuth": `export const useAuth = () => ({ isSignedIn: false, user: globalThis.__user ?? null });`,
+  "/hooks/useSpaceRoster": `
+    export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
+  `,
   "/stores/noteStore": `
     const note = () => globalThis.__note;
     export const setActiveNoteId = () => {};
     export const useActiveNoteId = () => note().id;
     export const useActiveNote = () => note();
     export const useNotes = () => [];
-    export const useSpaces = () => [];
+    export const useSpaces = () => globalThis.__spaces ?? [];
     export const useFolders = () => [];
     export const useActiveFolderId = () => null;
     export const useActiveContext = () => null;
@@ -291,14 +294,18 @@ const USER_AND_INVITEE = [
   { name: "Alice Ng", email: "alice@example.com" },
 ];
 
-async function runSummaryOn(t, note, speakerMappings = []) {
+async function runSummaryOn(t, note, speakerMappings = [], { user, spaces, roster } = {}) {
   const calls = await mountView(t);
   globalThis.window.electronAPI.getSpeakerMappings = async () => speakerMappings;
   globalThis.__noteActionCalls = [];
-  globalThis.__user = { name: "Sam Rivera", email: "sam@example.com" };
+  globalThis.__user = user ?? { name: "Sam Rivera", email: "sam@example.com" };
+  globalThis.__spaces = spaces;
+  globalThis.__roster = roster;
   t.after(() => {
     delete globalThis.__noteActionCalls;
     delete globalThis.__user;
+    delete globalThis.__spaces;
+    delete globalThis.__roster;
   });
   globalThis.__note = { ...NOTE, ...note };
   await calls.rerender();
@@ -341,6 +348,65 @@ test("a meeting with speakers keeps its Meeting Context, speaker lines and known
     "the owner and the invitee"
   );
   assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+});
+
+// A teammate opening a note shared into a team space didn't record it: the mic
+// lines are the owner's, and the viewer is at most an invitee (#2820).
+const TEAMMATE = { id: "bob-id", name: "Bob Lee", email: "bob@example.com" };
+const TEAM_NOTE = {
+  cloud_id: "cloud-note",
+  owner_user_id: "sam-id",
+  transcript: JSON.stringify([
+    { source: "mic", timestamp: 100, text: "I'll send the deck." },
+    { source: "system", timestamp: 200, text: "Ship on Friday.", speaker: "speaker_0" },
+  ]),
+};
+const TEAM_SPACE = { id: NOTE.space_id, kind: "team", cloud_space_id: "team-space" };
+
+test("a teammate's note names its owner from the space roster, not the viewer", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      participants: JSON.stringify([
+        { email: "alice@example.com", displayName: "Alice Ng" },
+        { email: "bob@example.com", displayName: "Bob Lee" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "Alice Ng" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(
+    input.includes(
+      '## Meeting Context\nThe user taking these notes ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>, Bob Lee <bob@example.com>.'
+    ),
+    "the owner recorded it; the viewer is an invitee"
+  );
+  assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+  assert.deepEqual(options.knownPeople, [
+    { name: "Sam Rivera", email: "sam@example.com" },
+    { name: "Alice Ng", email: "alice@example.com" },
+    { name: "Bob Lee", email: "bob@example.com" },
+  ]);
+});
+
+test("without a roster, a teammate's note is attributed to the recorder's calendar self", async (t) => {
+  const { input } = await runSummaryOn(t, { ...TEAM_NOTE, participants: PARTICIPANTS }, [], {
+    user: TEAMMATE,
+  });
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+});
+
+test("an unknown recorder is the note taker, never the viewer", async (t) => {
+  const { input } = await runSummaryOn(t, TEAM_NOTE, [], { user: TEAMMATE });
+  assert.ok(input.includes("Note taker: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.ok(!input.includes("The user taking these notes"));
 });
 
 test("a note without a transcript keeps the personal-note run", async (t) => {

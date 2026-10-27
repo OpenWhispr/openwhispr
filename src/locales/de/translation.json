@@ -3768,6 +3768,7 @@
     },
     "speaker": {
       "you": "Du",
+      "noteTaker": "Protokollant",
       "them": "Gegenüber",
       "unknown": "Unbekannter Sprecher",
       "label": "Sprecher {{n}}",

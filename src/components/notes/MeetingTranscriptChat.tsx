@@ -461,6 +461,7 @@ function SpeakerLabel({
   participants,
   colorIdx,
   isOriginallyYou,
+  recorderLabel,
   self,
   onMap,
   onConfirm,
@@ -474,6 +475,7 @@ function SpeakerLabel({
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
   isOriginallyYou: boolean;
+  recorderLabel: string;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
@@ -519,11 +521,19 @@ function SpeakerLabel({
     );
   }
 
+  // A "You" stored on the segment was named where the note was recorded, so it
+  // is the recorder; a "You" from this device's own mappings is the viewer.
+  const shownName =
+    resolvedName &&
+    resolvedName === segment.speakerName &&
+    isYouSpeakerName(resolvedName, t("notes.speaker.you"))
+      ? recorderLabel
+      : resolvedName;
   const displayLabel =
-    resolvedName ||
+    shownName ||
     segment.speakerName ||
     (isOriginallyYou
-      ? t("notes.speaker.you")
+      ? recorderLabel
       : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
   const isUnmapped = !resolvedName && !segment.speakerName;
 
@@ -651,6 +661,7 @@ export function SelectionBar({
 interface SegmentRowProps {
   segment: TranscriptSegment;
   selfSide: boolean;
+  recorderLabel: string;
   sameSpeaker: boolean;
   isFirst: boolean;
   isNewest: boolean;
@@ -681,6 +692,7 @@ interface SegmentRowProps {
 const SegmentRow = memo(function SegmentRow({
   segment,
   selfSide,
+  recorderLabel,
   sameSpeaker,
   isFirst,
   isNewest,
@@ -725,6 +737,7 @@ const SegmentRow = memo(function SegmentRow({
         participants={participants}
         colorIdx={colorIdx}
         isOriginallyYou={isOriginallyYou}
+        recorderLabel={recorderLabel}
         self={self}
         onMap={onMapSpeaker}
         onConfirm={onConfirmSuggestion}
@@ -822,6 +835,8 @@ interface MeetingTranscriptChatProps {
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
   contentClassName?: string;
+  /** Label for the recorder's own lines; "You" unless the note is someone else's. */
+  recorderLabel?: string;
 }
 
 export function MeetingTranscriptChat({
@@ -847,6 +862,7 @@ export function MeetingTranscriptChat({
   onAttachSpeakerEmail,
   onToggleSelect,
   contentClassName,
+  recorderLabel: recorderLabelProp,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
@@ -890,6 +906,7 @@ export function MeetingTranscriptChat({
   // Per-segment derivations hoisted out of the row map: rows receive them as
   // stable props, so partial ticks (which change neither input) skip every row.
   const youLabel = t("notes.speaker.you");
+  const recorderLabel = recorderLabelProp ?? youLabel;
   const rowMeta = useMemo(
     () =>
       segments.map((segment) => ({
@@ -1060,6 +1077,7 @@ export function MeetingTranscriptChat({
                   <SegmentRow
                     segment={segment}
                     selfSide={selfSide}
+                    recorderLabel={recorderLabel}
                     sameSpeaker={
                       i > 0 && rowMeta[i - 1].key === key && rowMeta[i - 1].selfSide === selfSide
                     }

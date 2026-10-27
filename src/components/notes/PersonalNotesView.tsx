@@ -35,6 +35,9 @@ import {
   collectKnownPeople,
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
+import { recorderLlmLabel, resolveNoteRecorder } from "../../utils/noteRecorder";
+import { ownsNote } from "../../lib/spacePermissions";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 import type { CalendarAttendee, CalendarEvent } from "../../types/calendar";
 import {
@@ -770,11 +773,23 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
-      const identity: MeetingIdentity = {
-        selfName: user?.name?.trim() || null,
-        selfEmail: user?.email?.trim() || null,
+      // The mic lines belong to whoever recorded the note, which on a teammate's
+      // note is its owner, not the user running the action.
+      const ownNote = ownsNote(editorNote, user?.id);
+      const noteSpace = spaces.find((s) => s.id === editorNote.space_id);
+      const ownerId = editorNote.owner_user_id;
+      const owner =
+        !ownNote && ownerId && noteSpace?.kind === "team" && noteSpace.cloud_space_id
+          ? ((await fetchSpaceRoster(noteSpace.cloud_space_id).catch(() => [])).find(
+              (member) => member.user_id === ownerId
+            ) ?? null)
+          : null;
+      const identity: MeetingIdentity = resolveNoteRecorder({
+        ownNote,
+        user,
+        owner,
         participants: parseNoteParticipants(editorNote.participants),
-      };
+      });
       if (segments.length > 0 && speakerlessText === null) {
         isMeetingNote = true;
         const mappingRows =
@@ -782,7 +797,7 @@ export default function PersonalNotesView({
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const selfLabel = identity.selfName || t("notes.speaker.you");
+        const selfLabel = recorderLlmLabel(identity, ownNote, t);
         meetingContext = buildMeetingContext(identity, selfLabel);
         formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);

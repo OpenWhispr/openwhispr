@@ -3344,6 +3344,7 @@
     },
     "speaker": {
       "you": "あなた",
+      "noteTaker": "記録者",
       "them": "相手",
       "unknown": "不明な話者",
       "label": "話者 {{n}}",

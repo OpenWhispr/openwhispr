@@ -211,7 +211,8 @@ async function loadNoteEditor(t, permission) {
           getShareSettings: () => new Promise(() => {}),
         };
       `,
-      "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }`,
+      "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
+export function useSpaceRoster() { return null; }`,
     },
   });
 
