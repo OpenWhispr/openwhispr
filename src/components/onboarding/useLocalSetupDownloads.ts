@@ -131,12 +131,13 @@ export function useLocalSetupDownloads(
   useEffect(() => {
     cancelledRef.current = false;
     return () => {
-      // Back: stop the transfer in flight and start nothing else.
+      // Back: stop the transfer in flight and start nothing else. Its tray claim is
+      // released when the transfer settles, not here: a cancel can't stop an
+      // archive mid-unpack, and a late error must not open a tray row.
       cancelledRef.current = true;
       const running = runningRef.current;
       runningRef.current = null;
       if (!running) return;
-      releaseLocalSetupDownload(running.item);
       if (running.item.kind === "llamaVulkan") {
         void window.electronAPI?.cancelLlamaVulkanDownload?.();
       } else {

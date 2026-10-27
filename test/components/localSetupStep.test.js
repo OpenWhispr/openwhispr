@@ -176,6 +176,7 @@ async function mount(
   });
   const { LocalSetupStep } = await vite.ssrLoadModule("/components/onboarding/LocalSetupStep.tsx");
   const setup = await vite.ssrLoadModule("/config/localSetup.ts");
+  const claims = await vite.ssrLoadModule("/components/onboarding/localSetupDownloadClaims.ts");
   const plan = mapPlan(setup.buildLocalSetupPlan({ profile, spokenLanguages, policy: UNMANAGED }));
   const proceeded = [];
 
@@ -231,6 +232,7 @@ async function mount(
     container,
     plan,
     setup,
+    claims,
     calls,
     proceeded,
     row,
@@ -523,6 +525,19 @@ test("unmount cancels the active item and starts nothing else", async (t) => {
   assert.equal(s.calls.cancelParakeet, 1);
   assert.deepEqual(s.calls.llm, []);
   assert.equal(s.calls.vulkan, 0);
+});
+
+test("Back keeps the tray claim until the transfer settles, so late errors stay out", async (t) => {
+  const s = await mount(t);
+  await s.click(s.button());
+  await s.unmount();
+  const claimed = (now) => s.claims.isLocalSetupDownload("parakeet", DICTATION, now);
+  // The cancel can't stop an archive mid-unpack; the transfer is still main's.
+  assert.equal(claimed(Date.now() + 60_000), true, "claimed while the transfer runs on");
+
+  await s.finish(DICTATION, { success: false, code: "EXTRACTION_FAILED", error: "bad archive" });
+  assert.equal(claimed(Date.now()), true, "its last chunks still arrive");
+  assert.equal(claimed(Date.now() + 60_000), false, "released once it settled");
 });
 
 test("NVIDIA cleanup row size includes the graphics pack, which is never named", async (t) => {
