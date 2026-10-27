@@ -360,7 +360,8 @@ const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
  * Fits the switched-on rows to the free space. A switch the user set in
  * `requested` is kept as set; one left out starts on and may be turned off to fit,
  * the assistant first, then cleanup. When the user's own switches don't fit, the
- * state is "overflow" and the download stays locked instead of re-trimming them.
+ * state is "overflow" and the download stays locked instead of re-trimming them;
+ * no other row is turned off then, since that would still not fit.
  * `requiredBytes` is what the resulting switches need, or dictation alone for
  * "noSpace". Items `isOnDisk` reports cost nothing, and a row whose items are all
  * on disk is never turned off to fit: there is nothing left to download for it.
@@ -410,15 +411,24 @@ export function fitLocalSetupToSpace(
     return { switches, autoOff, state: "noSpace", requiredBytes: dictationOnly };
   }
 
+  const untrimmed = { ...switches };
   for (const id of TRIM_ORDER) {
     if (fits(need(switches))) break;
     if (!trimmable(id)) continue;
     switches[id] = false;
     autoOff.push(id);
   }
-  const requiredBytes = need(switches);
-  const state: SpaceState = !fits(requiredBytes) ? "overflow" : autoOff.length ? "trimmed" : "fits";
-  return { switches, autoOff, state, requiredBytes };
+  // The user's own switches overflow even with the rest trimmed: turning a row
+  // off would free nothing that helps, so leave every row as it was.
+  if (!fits(need(switches))) {
+    return { switches: untrimmed, autoOff: [], state: "overflow", requiredBytes: need(untrimmed) };
+  }
+  return {
+    switches,
+    autoOff,
+    state: autoOff.length ? "trimmed" : "fits",
+    requiredBytes: need(switches),
+  };
 }
 
 function registrySize(download: LocalSetupDownload): string {

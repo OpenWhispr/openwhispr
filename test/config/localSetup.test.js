@@ -559,8 +559,10 @@ test("switching an auto-off row back on overflows", async () => {
   // The user's own switch is kept: the button stops working instead of re-trimming.
   const back = fitLocalSetupToSpace(p, { assistant: true }, space(4));
   assert.equal(back.state, "overflow");
-  assert.equal(back.switches.assistant, true);
-  assert.ok(back.requiredBytes > 4 * GB);
+  // Turning cleanup off would still not fit, so it is left on rather than trimmed for nothing.
+  assert.deepEqual(back.switches, { cleanup: true, assistant: true });
+  assert.deepEqual(back.autoOff, []);
+  assert.ok(Math.abs(back.requiredBytes - (DICTATION_NEED + CLEANUP_NEED + ASSISTANT_NEED)) < 1);
 
   const both = fitLocalSetupToSpace(p, { cleanup: true, assistant: true }, space(4));
   assert.equal(both.state, "overflow");
