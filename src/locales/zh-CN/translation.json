@@ -953,6 +953,10 @@
         "title": "麦克风已恢复",
         "description": "音频采集已恢复。"
       },
+      "continuous": {
+        "segmentFailedTitle": "语句未能转录",
+        "segmentFailedDescription": "消息的一部分未能转录，因此未发送。请检查后再按回车键。"
+      },
       "partialTranscription": {
         "title": "部分转录",
         "description": "部分录音内容无法转录。"
@@ -2035,6 +2039,13 @@
         "title": "剪贴板",
         "autoPaste": "自动粘贴",
         "autoPasteDescription": "听写结束后自动将转录文本粘贴到当前活动的应用中",
+        "pressEnterAfterPaste": "粘贴后按回车键",
+        "pressEnterAfterPasteDescription": "粘贴转录文本后自动按回车键，以自动发送消息或提交命令",
+        "continuousDictation": "连续听写",
+        "continuousDictationDescription": "开始听写后持续聆听：每次停顿时粘贴该句，较长时间静默后按回车键。再次按下快捷键即可停止。各句按转录原文粘贴，不经过 AI 清理。",
+        "continuousSubmitSilence": "静默后发送",
+        "continuousSubmitSilenceDescription": "按下回车键前需要保持静默的时长",
+        "continuousSubmitSilenceSeconds": "{{seconds}} 秒",
         "keepInClipboard": "将转录内容保留在剪贴板",
         "keepInClipboardDescription": "将听写文本保留在剪贴板中，以便在需要时手动粘贴"
       },

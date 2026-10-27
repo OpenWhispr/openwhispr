@@ -285,3 +285,21 @@ test("Accessibility settings opens the macOS system pane and reports launch fail
     error: "launch failed",
   });
 });
+
+test("paste-text passes pressEnter through and skips the smart-spacing trailing space", async () => {
+  const pastes = [];
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  target.clipboardManager = {
+    pasteText: async (text, options) => {
+      pastes.push({ text, options });
+    },
+  };
+
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "send this", { pressEnter: true });
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "keep typing");
+
+  assert.equal(pastes[0].text, "send this");
+  assert.equal(pastes[0].options.pressEnter, true);
+  assert.equal(pastes[1].text, "keep typing ");
+  assert.equal(pastes[1].options.pressEnter, undefined);
+});

@@ -28,6 +28,11 @@ const PASTE_DELAYS = {
 // surfaces as an unpasted transcript instead of an indefinite wait.
 const MODIFIER_RELEASE_WAIT_MS = 1500;
 
+// Gap between a paste and the Enter that follows it, so apps that handle a paste
+// asynchronously (web apps reading rich clipboard data) insert the text before
+// the Enter submits the field.
+const ENTER_AFTER_PASTE_DELAY_MS = 150;
+
 const RESTORE_DELAYS = {
   darwin: 450,
   win32_nircmd: 500,
@@ -783,10 +788,10 @@ class ClipboardManager {
     });
   }
 
-  _runLinuxPasteCommand(command, args, label, { expectedOutput } = {}) {
+  _runLinuxPasteCommand(command, args, label, { expectedOutput, timeoutMs = 2000 } = {}) {
     return new Promise((resolve, reject) => {
       debugLogger.debug("Attempting Linux paste command", { command, args, label }, "clipboard");
-      const proc = spawn(command, args);
+      const proc = spawn(command, args, { windowsHide: true });
       let stdout = "";
       let stderr = "";
       let timedOut = false;
@@ -803,7 +808,7 @@ class ClipboardManager {
         timedOut = true;
         killProcess(proc, "SIGKILL");
         reject(new Error(`${label} timed out`));
-      }, 2000);
+      }, timeoutMs);
 
       proc.on("close", (code) => {
         if (timedOut) return;
@@ -960,9 +965,103 @@ class ClipboardManager {
 
   async pasteText(text, options = {}) {
     return this._runClipboardOperation(
-      () => this._pasteText(text, options),
+      async () => {
+        const result = await this._pasteText(text, options);
+        // Inside the queued operation, so the next paste's chord can't land
+        // between this paste and its Enter.
+        if (options.pressEnter === true && result?.pasted !== false) {
+          await this.pressEnter({ pasteMethod: result?.method });
+        }
+        return result;
+      },
       (result) => result?.restoreComplete
     );
+  }
+
+  // Presses Enter in the focused window after a paste ("Press Enter after
+  // pasting"). Best effort: a failure is logged and never fails the paste,
+  // since the text has already landed.
+  async pressEnter({ pasteMethod } = {}) {
+    await new Promise((resolve) => setTimeout(resolve, ENTER_AFTER_PASTE_DELAY_MS));
+    const candidates = this._enterKeyCandidates(pasteMethod);
+    for (const { cmd, args, timeoutMs } of candidates) {
+      try {
+        await this._runLinuxPasteCommand(cmd, args, `${cmd} enter`, { timeoutMs });
+        debugLogger.info("Pressed Enter after paste", { tool: cmd }, "clipboard");
+        return true;
+      } catch (error) {
+        debugLogger.warn(
+          "Enter after paste failed, trying next tool",
+          { tool: cmd, error: error?.message },
+          "clipboard"
+        );
+      }
+    }
+    debugLogger.warn(
+      "No tool could press Enter after paste",
+      { platform: process.platform, tried: candidates.map((c) => c.cmd) },
+      "clipboard"
+    );
+    return false;
+  }
+
+  _enterKeyCandidates(pasteMethod) {
+    if (process.platform === "darwin") {
+      return [
+        { cmd: "osascript", args: ["-e", 'tell application "System Events" to key code 36'] },
+      ];
+    }
+    if (process.platform === "win32") {
+      const nircmdPath = this.getNircmdPath();
+      return [
+        ...(nircmdPath ? [{ cmd: nircmdPath, args: ["sendkeypress", "enter"] }] : []),
+        {
+          cmd: "powershell.exe",
+          args: [
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')",
+          ],
+          // A cold PowerShell start can take several seconds.
+          timeoutMs: 5000,
+        },
+      ];
+    }
+
+    const { isWayland, xwaylandAvailable, isWlroots, isCosmic } = getLinuxSessionInfo();
+    const tools = {
+      wtype:
+        isWayland && (isWlroots || isCosmic) && this.commandExists("wtype")
+          ? { cmd: "wtype", args: ["-k", "Return"] }
+          : null,
+      ydotool:
+        this.commandExists("ydotool") && this._isYdotoolDaemonRunning()
+          ? {
+              cmd: "ydotool",
+              // ydotool 0.1.x uses key names; 1.0.x uses raw keycodes (28 = KEY_ENTER).
+              args: this._isYdotoolLegacy() ? ["key", "Enter"] : ["key", "28:1", "28:0"],
+            }
+          : null,
+      xdotool:
+        (!isWayland || xwaylandAvailable) && this.commandExists("xdotool")
+          ? { cmd: "xdotool", args: ["key", "Return"] }
+          : null,
+    };
+    // Same order as the paste fallbacks: xdotool first on X11, and on Wayland
+    // the tools that reach native windows before xdotool, which exits 0 even
+    // when a native Wayland window never receives the key. The tool that just
+    // pasted is known to reach the target, so it goes first.
+    const order = !isWayland ? ["xdotool", "ydotool"] : ["wtype", "ydotool", "xdotool"];
+    if (tools[pasteMethod]) {
+      order.splice(order.indexOf(pasteMethod), 1);
+      order.unshift(pasteMethod);
+    }
+    return order.map((name) => tools[name]).filter(Boolean);
   }
 
   async runClipboardOperation(operation) {

@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
+  pressEnter: () => ipcRenderer.invoke("press-enter"),
   captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),

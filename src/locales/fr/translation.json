@@ -953,6 +953,10 @@
         "title": "Microphone rétabli",
         "description": "La capture audio a repris."
       },
+      "continuous": {
+        "segmentFailedTitle": "Phrase non transcrite",
+        "segmentFailedDescription": "Une partie de votre message n'a pas pu être transcrite, il n'a donc pas été envoyé. Vérifiez-le avant d'appuyer sur Entrée."
+      },
       "partialTranscription": {
         "title": "Transcription partielle",
         "description": "Une partie de l'enregistrement n'a pas pu être transcrite."
@@ -2329,6 +2333,13 @@
         "title": "Presse-papiers",
         "autoPaste": "Collage automatique",
         "autoPasteDescription": "Coller automatiquement le texte transcrit dans l'application active à la fin de la dictée",
+        "pressEnterAfterPaste": "Appuyer sur Entrée après le collage",
+        "pressEnterAfterPasteDescription": "Appuyer sur Entrée une fois la transcription collée, pour envoyer automatiquement messages ou commandes",
+        "continuousDictation": "Dictée continue",
+        "continuousDictationDescription": "Continuer d'écouter après le début de la dictée : chaque phrase est collée à chaque pause, et Entrée est pressée après un silence plus long. Appuyez à nouveau sur le raccourci pour arrêter. Les phrases sont collées telles que transcrites, sans nettoyage par IA.",
+        "continuousSubmitSilence": "Envoyer après un silence",
+        "continuousSubmitSilenceDescription": "Durée de silence avant d'appuyer sur Entrée",
+        "continuousSubmitSilenceSeconds": "{{seconds}} secondes",
         "keepInClipboard": "Garder la transcription dans le presse-papiers",
         "keepInClipboardDescription": "Conserver le texte dicté dans le presse-papiers pour pouvoir le coller manuellement si nécessaire"
       },
