@@ -56,7 +56,10 @@ class WindowsLayoutProbe {
       };
     });
     // A timed-out entry stays queued so a late reply still lines up with its query.
-    entry.timer = setTimeout(() => entry.resolve({ ok: false, reason: "timeout" }), REPLY_TIMEOUT_MS);
+    entry.timer = setTimeout(
+      () => entry.resolve({ ok: false, reason: "timeout" }),
+      REPLY_TIMEOUT_MS
+    );
 
     this.pending.push(entry);
     this.lastCapture = entry.promise;

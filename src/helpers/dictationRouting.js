@@ -1,3 +1,5 @@
+import { isKeyboardLayoutLanguage } from "../utils/keyboardLayoutLanguage.ts";
+
 export function resolveModeReachability({ mode, provider, model, isCloud, isSelfHosted }) {
   if (mode === "openwhispr") return isCloud;
   if (mode === "self-hosted") return isSelfHosted;
@@ -154,7 +156,9 @@ export function resolveWakeWordLanguage(
   transcript
 ) {
   const language = typeof preferredLanguage === "string" ? preferredLanguage.trim() : "";
-  if (language && language.toLowerCase() !== "auto") return language;
+  if (language && language.toLowerCase() !== "auto" && !isKeyboardLayoutLanguage(language)) {
+    return language;
+  }
   const detected = typeof detectedLanguage === "string" ? detectedLanguage.trim() : "";
   if (detected && detected.toLowerCase() !== "auto") return detected;
   if (typeof transcript === "string" && ARABIC_SCRIPT_RE.test(transcript)) return "ar";
