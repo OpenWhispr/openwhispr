@@ -3152,6 +3152,14 @@
       },
       "tryAgain": "Try again"
     },
+    "removeMember": {
+      "title": "Remove {{name}} from {{workspace}}?",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "confirm": "Remove",
+      "removing": "Removing…",
+      "failed": "Couldn't remove {{name}}. Check your connection and try again.",
+      "alreadyRemoved": "{{name}} was already removed"
+    },
     "transfer": {
       "title": "Choose a new Owner",
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",

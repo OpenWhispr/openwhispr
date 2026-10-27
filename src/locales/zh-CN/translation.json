@@ -4885,6 +4885,14 @@
       },
       "tryAgain": "重试"
     },
+    "removeMember": {
+      "title": "要将 {{name}} 从 {{workspace}} 移除吗？",
+      "body": "对方将失去此工作区中所有团队空间和团队的访问权限。你可以随时再次邀请对方。",
+      "confirm": "移除",
+      "removing": "正在移除…",
+      "failed": "无法移除 {{name}}。请检查网络连接后重试。",
+      "alreadyRemoved": "{{name}} 已被移除"
+    },
     "transfer": {
       "title": "选择新的所有者",
       "body": "选择一位现有的工作区成员。转让后你将成为管理员。",

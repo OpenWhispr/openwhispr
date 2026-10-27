@@ -3152,6 +3152,14 @@
       },
       "tryAgain": "Erneut versuchen"
     },
+    "removeMember": {
+      "title": "{{name}} aus {{workspace}} entfernen?",
+      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Du kannst sie jederzeit erneut einladen.",
+      "confirm": "Entfernen",
+      "removing": "Wird entfernt…",
+      "failed": "{{name}} konnte nicht entfernt werden. Prüfe deine Verbindung und versuche es erneut.",
+      "alreadyRemoved": "{{name}} wurde bereits entfernt"
+    },
     "transfer": {
       "title": "Neuen Inhaber wählen",
       "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",

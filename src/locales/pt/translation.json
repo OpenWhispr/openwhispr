@@ -4890,6 +4890,14 @@
       },
       "tryAgain": "Tentar novamente"
     },
+    "removeMember": {
+      "title": "Remover {{name}} de {{workspace}}?",
+      "body": "Essa pessoa perderá o acesso a todos os espaços de equipe e equipes deste espaço de trabalho. Você pode convidá-la novamente a qualquer momento.",
+      "confirm": "Remover",
+      "removing": "Removendo…",
+      "failed": "Não foi possível remover {{name}}. Verifique sua conexão e tente novamente.",
+      "alreadyRemoved": "{{name}} já foi removido"
+    },
     "transfer": {
       "title": "Escolha um novo proprietário",
       "body": "Escolha um membro existente do espaço de trabalho. Você se tornará administrador após a transferência.",

@@ -4890,6 +4890,14 @@
       },
       "tryAgain": "Riprova"
     },
+    "removeMember": {
+      "title": "Rimuovere {{name}} da {{workspace}}?",
+      "body": "Perderà l'accesso a tutti gli spazi team e a tutti i team di quest'area di lavoro. Puoi invitarla di nuovo in qualsiasi momento.",
+      "confirm": "Rimuovi",
+      "removing": "Rimozione…",
+      "failed": "Impossibile rimuovere {{name}}. Controlla la connessione e riprova.",
+      "alreadyRemoved": "{{name}} è già stato rimosso"
+    },
     "transfer": {
       "title": "Scegli un nuovo proprietario",
       "body": "Scegli un membro esistente dell'area di lavoro. Dopo il trasferimento diventerai amministratore.",

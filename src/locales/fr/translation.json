@@ -3152,6 +3152,14 @@
       },
       "tryAgain": "Réessayer"
     },
+    "removeMember": {
+      "title": "Retirer {{name}} de {{workspace}} ?",
+      "body": "Cette personne perdra l'accès à tous les espaces d'équipe et à toutes les équipes de cet espace. Vous pouvez l'inviter à nouveau à tout moment.",
+      "confirm": "Retirer",
+      "removing": "Retrait…",
+      "failed": "Impossible de retirer {{name}}. Vérifiez votre connexion et réessayez.",
+      "alreadyRemoved": "{{name}} a déjà été retiré"
+    },
     "transfer": {
       "title": "Choisir un nouveau propriétaire",
       "body": "Choisissez un membre existant de l'espace. Vous deviendrez administrateur après le transfert.",
