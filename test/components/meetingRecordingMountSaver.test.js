@@ -5,6 +5,7 @@ const { createRoot } = require("react-dom/client");
 const { audioFeatureFailure } = require("../../src/helpers/audioFeaturePolicy");
 const { i18nMain, changeLanguage } = require("../../src/helpers/i18nMain");
 const esTranslation = require("../../src/locales/es/translation.json");
+const { deferred } = require("../helpers/harness/deferred");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -267,6 +268,60 @@ test("main ending a meeting it can no longer check reads as a stop, not a retry"
   await start();
 
   await streamError("POLICY_UNRESOLVABLE");
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(
+    toasts.at(-1)?.description,
+    "Recording stopped because your organization's settings couldn't be checked."
+  );
+});
+
+test("a policy flip while the user's own Stop is finishing adds no policy toast", async (t) => {
+  const { start, store, api, toasts, setPolicy } = await setup(t);
+  await start();
+  const reply = deferred();
+  const stop = api.meetingTranscriptionStop;
+  api.meetingTranscriptionStop = async (...args) => {
+    await reply.promise;
+    return stop(...args);
+  };
+  const before = toasts.length;
+
+  const userStop = store.stopRecording();
+  await setPolicy({ status: "error", policy: null });
+  reply.resolve();
+  await React.act(() => userStop);
+  await settle(store);
+
+  assert.deepEqual(toasts.slice(before), []);
+});
+
+test("a policy flip that cancels a start still in progress says why", async (t) => {
+  const { store, api, toasts, setPolicy } = await setup(t);
+  const reply = deferred();
+  const startMain = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...args) => {
+    await reply.promise;
+    return startMain(...args);
+  };
+  t.after(() => reply.resolve());
+  let starting;
+  await React.act(async () => {
+    starting = store.startRecording(START_ARGS);
+    for (let i = 0; i < 20 && !store.useMeetingRecordingStore.getState().isRecording; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  });
+  assert.equal(
+    store.useMeetingRecordingStore.getState().isRecording,
+    true,
+    "the start is under way"
+  );
+
+  await setPolicy({ status: "error", policy: null });
+  reply.resolve();
+  await React.act(() => starting);
+  await settle(store);
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
   assert.equal(

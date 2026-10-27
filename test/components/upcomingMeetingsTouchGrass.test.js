@@ -177,4 +177,8 @@ test("with meeting recording off, a linked event only joins and a link-less one 
   const reasonId = takeNotes.getAttribute("aria-describedby");
   const reason = findElement(container, (element) => element.getAttribute?.("id") === reasonId);
   assert.equal(reason?.textContent, "notes.meeting.recordingDisabledByOrg");
+  assert.ok(
+    reason.hidden || reason.getAttribute("hidden") !== null,
+    "read only as the description"
+  );
 });

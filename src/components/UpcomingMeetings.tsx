@@ -212,7 +212,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
   const joinButton = refusal ? (
     <span title={refusal} className="pointer-events-auto">
       {button}
-      <span id={refusalId} className="sr-only">
+      <span id={refusalId} hidden>
         {refusal}
       </span>
     </span>

@@ -43,8 +43,9 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(transcriptionPolicyErrorFromResponse(426, '')).toMatchObject({ status: 426 });
   });
 
-  it('does not tell the user to update the app when the purpose is missing', () => {
+  it('neither tells the user to update the app nor to retry when the purpose is missing', () => {
     expect(AUDIO_PURPOSE_REQUIRED_MESSAGE).not.toMatch(/update/i);
+    expect(AUDIO_PURPOSE_REQUIRED_MESSAGE).not.toMatch(/try again/i);
   });
 
   it('names the disabled control in the audio refusal messages', () => {

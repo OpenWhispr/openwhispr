@@ -76,6 +76,7 @@ test("a disabled control describes why to assistive tech, not only in its toolti
 
   const describedBy = html.match(/aria-describedby="([^"]+)"/)?.[1];
   assert.ok(describedBy, "the button points at its reason");
-  assert.ok(html.includes(`id="${describedBy}" class="sr-only">${reason}<`));
+  // Hidden, so browse mode doesn't read it a second time beside the button.
+  assert.ok(html.includes(`id="${describedBy}" hidden="">${reason}<`));
   assert.ok(html.includes(`title="${reason}"`));
 });

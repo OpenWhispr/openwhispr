@@ -17,9 +17,10 @@ export const MEETING_RECORDING_DISABLED_MESSAGE =
 export const AUDIO_UPLOAD_DISABLED_MESSAGE = 'Audio upload is disabled by your organization.';
 // The org restricts audio and the request didn't declare what it was for.
 // This app always declares a purpose, so reaching it is a client bug: telling
-// a user already on the latest version to update would be wrong.
+// a user already on the latest version to update would be wrong, and so would
+// a retry, which meets the same refusal.
 export const AUDIO_PURPOSE_REQUIRED_MESSAGE =
-  "This transcription couldn't be checked against your organization's settings. Please try again or contact support.";
+  "This transcription couldn't be checked against your organization's settings. Contact your workspace admin or support.";
 
 // 403 codes for the org's mode and audio controls. Meeting refusals arrive on
 // the realtime meeting token (see RealtimeMeetingWsService), upload refusals on

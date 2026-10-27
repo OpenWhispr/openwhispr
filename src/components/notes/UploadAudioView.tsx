@@ -36,6 +36,7 @@ import {
   findVideosFolder,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
+  uploadRestrictionKey,
   MEETINGS_FOLDER_NAME,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
@@ -74,11 +75,7 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import {
-  isAudioFeatureAllowed,
-  isTranscriptionContextAllowed,
-  type PolicyDecisionSnapshot,
-} from "../../stores/policyRules";
+import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
@@ -98,14 +95,6 @@ const MAX_BATCH_URLS = 50;
 // Every action on this page: the brand pill for the next step, a ghost pill beside it.
 const PRIMARY_ACTION_CLASS = "rounded-full px-5 font-medium";
 const SECONDARY_ACTION_CLASS = "rounded-full px-4";
-
-// Why the org refuses uploads under this policy, as an i18n key.
-function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
-  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
-  return policy.policy.features.audioUploadEnabled === false
-    ? "notes.upload.disabledByOrg"
-    : "common.policyTranscriptionRestricted";
-}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -1055,17 +1044,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               <div className="h-px flex-1 bg-border/70 dark:bg-white/10" />
             </div>
 
-            {urlExpanded ? (
+            {urlExpanded && uploadFeatureAllowed ? (
               <div>
                 <textarea
                   dir="ltr"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder={t("notes.upload.pasteUrls")}
-                  disabled={!uploadFeatureAllowed}
-                  aria-describedby={uploadRestrictionDescription}
                   rows={4}
-                  className="w-full resize-none rounded-2xl! px-4 py-3 text-sm placeholder:text-foreground/45 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full resize-none rounded-2xl! px-4 py-3 text-sm placeholder:text-foreground/45"
                   autoFocus
                 />
                 <div className="mt-3 flex items-center justify-end gap-2">
@@ -1083,7 +1070,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   <Button
                     size="sm"
                     onClick={handleBatchUrlSubmit}
-                    disabled={!uploadFeatureAllowed || !urlInput.trim()}
+                    disabled={!urlInput.trim()}
                     className={PRIMARY_ACTION_CLASS}
                   >
                     {t("notes.upload.addToQueue")}
@@ -1179,7 +1166,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               }
             />
 
-            {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+            {!batch.isProcessing && batch.hasPending && (
               <div className="mt-4 flex flex-col items-center gap-3">
                 {folders.length > 0 && (
                   <FolderSelect

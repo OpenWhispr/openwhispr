@@ -134,7 +134,7 @@ export default function NoteRecordControl({
             )}
           </button>
           {reason && (
-            <span id={reasonId} className="sr-only">
+            <span id={reasonId} hidden>
               {reason}
             </span>
           )}

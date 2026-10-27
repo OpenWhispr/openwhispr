@@ -1699,6 +1699,8 @@ export interface StopRecordingResult {
   // True only when this call ended a live recording — false for a no-op stop
   // (nothing recording, or a scoped stop for a session that is not active).
   stopped: boolean;
+  // True when this call cancelled a start that was still in progress.
+  cancelledStart?: boolean;
 }
 
 export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
@@ -1718,7 +1720,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       currentMicLevel: 0,
       recordingStartedAt: null,
     });
-    return { diarizationSessionId: null, stopped: false };
+    return { diarizationSessionId: null, stopped: false, cancelledStart: true };
   }
 
   await meetingRecordingStopBarrier.waitForPendingStop();
@@ -1849,14 +1851,16 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
 /**
  * Ends a recording this window's policy now refuses, which main may still allow
- * (an unresolved policy, a minimum app version), and says why unless main
- * already ended it with its own reason.
+ * (an unresolved policy, a minimum app version). Says why only when this call
+ * ended it, so not for a stop the user or main already had under way.
  */
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
   const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
-  await stopRecording();
-  if (sessionId && mainStoppedSessionId !== sessionId) reportMeetingError(reason);
+  const { stopped, cancelledStart } = await stopRecording();
+  if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
+    reportMeetingError(reason);
+  }
 }
 
 export function lockSpeaker(speakerId: string, displayName: string): void {

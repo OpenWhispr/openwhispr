@@ -1,6 +1,6 @@
 import { cn } from "../lib/utils";
 import type { FolderItem } from "../../types/electron";
-import type { MeetingRecordingRefusal } from "../../stores/policyRules";
+import type { MeetingRecordingRefusal, PolicyDecisionSnapshot } from "../../stores/policyRules";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
@@ -76,6 +76,27 @@ export const MEETING_RECORDING_REFUSAL_KEYS: Record<MeetingRecordingRefusal, str
   disabled: "notes.meeting.recordingDisabledByOrg",
   restricted: "notes.meeting.restrictedByOrg",
 };
+
+// Why policy refuses an upload, as an i18n key.
+export function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
+  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
+  return policy.policy.features.audioUploadEnabled === false
+    ? "notes.upload.disabledByOrg"
+    : "common.policyTranscriptionRestricted";
+}
+
+// Org-policy refusals from main or the server. Every later upload would meet
+// the same refusal, so a batch stops at the first one.
+const UPLOAD_POLICY_REFUSAL_CODES = new Set([
+  "POLICY_AUDIO_UPLOAD_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+]);
+
+export function isUploadPolicyRefusal(failure: unknown): boolean {
+  const code = (failure as { code?: string } | null | undefined)?.code;
+  return !!code && UPLOAD_POLICY_REFUSAL_CODES.has(code);
+}
 
 // A coded failure arrives either as a returned result (BYOK, local) or as a
 // thrown error — OpenWhispr Cloud rethrows it through withSessionRefresh — so
