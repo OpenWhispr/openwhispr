@@ -214,13 +214,12 @@ const target = {
     tenant: "base",
   }),
 };
+const handlersThis = new Proxy(target, {
+  get: (value, property) => (property in value ? value[property] : anything()),
+});
 test.before(() => {
   const IPCHandlers = require(modulePath);
-  IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
-  );
+  IPCHandlers.prototype.setupHandlers.call(handlersThis);
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
 
@@ -840,5 +839,46 @@ test("an in-flight policy stop rejects another renderer and an auth change befor
   finishStop.resolve();
   for (const result of await Promise.all([foreign, pending, changed])) {
     assert.deepEqual(result, { success: false, reason: "stale-session" });
+  }
+});
+
+test("a sign-out or account switch during a meeting prepare leaves no warm connection behind", async (t) => {
+  const IPCHandlers = require(modulePath);
+  const accountScopeBinding = require("../../src/helpers/accountScopeBinding");
+  for (const method of ["read", "persist", "clear"])
+    t.mock.method(accountScopeBinding, method, () => null);
+  const previousFetch = fetchToken;
+  t.after(() => {
+    fetchToken = previousFetch;
+  });
+
+  for (const leave of [
+    () =>
+      IPCHandlers.prototype._handleAuthTokenChange.call(handlersThis, {
+        token: null,
+        generation: authGeneration,
+      }),
+    () => handlers.get("set-active-account-scope")({}, "another-account", authGeneration),
+  ]) {
+    resetMeeting(t);
+    setWorkspacePolicy(UNMANAGED_POLICY);
+    const mintStarted = deferred();
+    const minted = deferred();
+    fetchToken = async () => {
+      mintStarted.resolve();
+      return minted.promise;
+    };
+    invoke("save-assemblyai-key", "A");
+    const preparing = invoke("meeting-transcription-prepare", {
+      provider: "assemblyai-realtime",
+      mode: "byok",
+    });
+    await mintStarted.promise;
+    await leave();
+    minted.resolve("token-for-the-previous-account");
+
+    const result = await preparing;
+    assert.equal(result.code, "AUDIO_OPERATION_CANCELLED");
+    assert.ok(meetingStreams().every((stream) => !stream?.isConnected));
   }
 });

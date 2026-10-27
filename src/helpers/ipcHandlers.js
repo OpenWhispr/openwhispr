@@ -342,6 +342,11 @@ function approveAudioPath(filePath) {
   }
 }
 
+// Signed out, nothing restricts audio: guests keep every feature.
+function guestAudioPolicy(authGeneration) {
+  return { success: true, managed: false, authGeneration };
+}
+
 // Recordings save-temp-audio wrote for the chat voice draft, until deleted.
 const voiceDraftAudioPaths = new Set();
 
@@ -876,8 +881,10 @@ class IPCHandlers {
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
-    this._audioFeaturePolicy?.invalidate();
-    if (!token) {
+    if (token) {
+      this._audioFeaturePolicy?.invalidate();
+    } else {
+      this._audioFeaturePolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.cancelJobs();
       this._stopMeetingForPolicy?.("accountChanged");
     }
@@ -886,11 +893,6 @@ class IPCHandlers {
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
       accountScopeBinding.clear();
-      this._audioFeaturePolicy?.update({
-        success: true,
-        managed: false,
-        authGeneration: generation,
-      });
       broadcastToWindows("active-account-scope-changed", null);
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
@@ -1594,9 +1596,11 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    // Each handler takes at most one renderer argument, so the job's signal
+    // always lands after it and can't be supplied by the renderer.
     const handleAudioFeature = (channel, purpose, handler) =>
-      ipcMain.handle(channel, (event, ...args) =>
-        this._audioFeaturePolicy.run(event, purpose, () => handler(event, ...args))
+      ipcMain.handle(channel, (event, options) =>
+        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal))
       );
     // Runs a job under the audio policy and the caller's own cancellation
     // ({ signal, release }); the handler gets one signal for both.
@@ -2558,30 +2562,25 @@ class IPCHandlers {
         ...state,
         binding: accountScopeBinding.read(),
       });
-      // Only a different account ends the work and meeting already running. A
-      // rotated bearer no longer matches the stored binding, so the broader
-      // test below also holds for the same account: that only re-scopes.
-      if (this.databaseManager.activeAccountId !== accountId) {
-        this._audioFeaturePolicy?.cancelJobs();
-        this._stopMeetingForPolicy?.("accountChanged");
-      }
-      if (
-        this.databaseManager.activeAccountId !== accountId ||
-        (accountId !== null && previousScope?.accountId !== accountId)
-      ) {
-        this._audioFeaturePolicy?.invalidate();
+      const accountChanged = this.databaseManager.activeAccountId !== accountId;
+      const guestPolicy =
+        accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
+      // A rotated bearer no longer matches the stored binding, so this also
+      // holds for the same account: that only re-scopes the policy, and only a
+      // different account ends the work and meeting already running.
+      if (accountChanged || (accountId !== null && previousScope?.accountId !== accountId)) {
+        this._audioFeaturePolicy?.invalidate(guestPolicy);
+        if (accountChanged) {
+          this._audioFeaturePolicy?.cancelJobs();
+          this._stopMeetingForPolicy?.("accountChanged");
+        }
         this.windowManager.retireMeetingNotificationScope();
+      } else if (guestPolicy) {
+        this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
-      if (accountId === null && !state.token) {
-        this._audioFeaturePolicy?.update({
-          success: true,
-          managed: false,
-          authGeneration: state.generation,
-        });
-      }
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -6691,6 +6690,7 @@ class IPCHandlers {
         if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
       onChange: () => this._syncMeetingDetectorPolicy?.(),
+      logger: debugLogger,
     });
     this.windowManager.getMeetingRecordingRefusal = () =>
       this._audioFeaturePolicy.failure("meeting");
@@ -6700,7 +6700,7 @@ class IPCHandlers {
     // Signed in, load the policy now (from cache when offline): an app started
     // to the tray has no control panel to fetch it, and the tray item, the
     // meeting hotkey, and calendar reminders all read this snapshot.
-    if (!tokenStore.get()) this._audioFeaturePolicy.update({ success: true, managed: false });
+    if (!tokenStore.get()) this._audioFeaturePolicy.update(guestAudioPolicy());
     else void this._audioFeaturePolicy.resolve("meeting");
 
     registerProductHelpIpc({
@@ -8105,7 +8105,9 @@ class IPCHandlers {
       !!this._meetingMicStreaming?.isConnected &&
       (systemAudioMode === "unsupported" || !!this._meetingSystemStreaming?.isConnected);
 
-    const connectRealtimeStreaming = async (event, options) => {
+    // `signal` ends a prepare whose account went away: it must not leave warm
+    // connections minted for that account behind for the next one to reuse.
+    const connectRealtimeStreaming = async (event, options, signal) => {
       // Read before the key is, so a save during the token fetch marks these connections stale.
       const connectionKey = getMeetingConnectionKey(options, credentialGeneration);
       const StreamingClass = getMeetingStreamingClient(options.provider);
@@ -8150,6 +8152,7 @@ class IPCHandlers {
           },
         ];
       }
+      signal?.throwIfAborted();
 
       for (const { ref, source } of pairs) {
         this[ref] = new StreamingClass();
@@ -8167,6 +8170,7 @@ class IPCHandlers {
           )
         );
         assertMeetingAllowed();
+        signal?.throwIfAborted();
         if (pairs.some(({ ref }) => !this[ref]?.isConnected)) {
           throw new Error("Meeting transcription connection closed during startup.");
         }
@@ -9365,7 +9369,7 @@ class IPCHandlers {
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
-    handleAudioFeature("meeting-transcription-prepare", "meeting", async (event, options = {}) => {
+    const prepareMeetingTranscription = async (event, options = {}, signal) => {
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
         return { success: false, error: "Operation in progress" };
@@ -9395,7 +9399,7 @@ class IPCHandlers {
         let timeoutHandle;
         try {
           await Promise.race([
-            connectRealtimeStreaming(event, options),
+            connectRealtimeStreaming(event, options, signal),
             new Promise((_, reject) => {
               timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
             }),
@@ -9413,7 +9417,8 @@ class IPCHandlers {
       })();
 
       return meetingTranscriptionPreparePromise;
-    });
+    };
+    handleAudioFeature("meeting-transcription-prepare", "meeting", prepareMeetingTranscription);
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
       if (isMeetingStreamingConnected() || meetingLocalTimer) {

@@ -35,10 +35,14 @@ function createAudioFeaturePolicy({
   getPolicy,
   onBlocked = () => {},
   onChange = () => {},
+  logger = null,
   lookupDeadlineMs = POLICY_TIMEOUT_MS,
 }) {
   const jobs = new Map();
   let snapshot = null;
+  // The meeting verdict onChange last reported, so listeners (detectors, the
+  // tray) hear about a change rather than every refresh.
+  let reportedMeetingVerdict;
   // The verdict work already running was allowed under, kept from a
   // credential change until its re-resolve answers: an account change cancels
   // that work itself, and a token rotation alone must not interrupt it.
@@ -64,11 +68,15 @@ function createAudioFeaturePolicy({
       const denied = failure(purpose);
       if (!denied) continue;
       for (const job of jobs.values()) {
-        if (job.purpose === purpose) job.controller.abort();
+        if (job.purpose === purpose) job.controller.abort(denied);
       }
       if (!previous || !audioFeatureFailure(previous, purpose)) onBlocked(purpose, denied.code);
     }
-    onChange();
+    const meetingVerdict = failure("meeting")?.code ?? null;
+    if (meetingVerdict !== reportedMeetingVerdict) {
+      reportedMeetingVerdict = meetingVerdict;
+      onChange();
+    }
   }
 
   // Only a successful lookup replaces the snapshot: a failed one says nothing
@@ -78,7 +86,9 @@ function createAudioFeaturePolicy({
     try {
       const next = await getPolicy(event, options);
       if (next?.success && startedIn === epoch) update(next);
-    } catch {}
+    } catch (error) {
+      logger?.warn?.("Audio policy lookup failed", { error: error?.message });
+    }
   }
 
   // With no usable snapshot, waits for one, but only as long as a policy
@@ -101,11 +111,17 @@ function createAudioFeaturePolicy({
     void lookup(event, { refresh: true });
   }
 
-  const cancelled = () => ({
-    success: false,
-    code: "AUDIO_OPERATION_CANCELLED",
-    error: i18nMain.t("notes.upload.batchCancelled"),
-  });
+  // A job aborted by a policy change answers with that refusal; one aborted
+  // for any other reason (owner gone, account changed) was cancelled.
+  const abortedResult = ({ signal }) => {
+    if (!signal.aborted) return null;
+    if (signal.reason?.success === false) return signal.reason;
+    return {
+      success: false,
+      code: "AUDIO_OPERATION_CANCELLED",
+      error: i18nMain.t("notes.upload.batchCancelled"),
+    };
+  };
 
   return {
     update,
@@ -119,16 +135,21 @@ function createAudioFeaturePolicy({
       if (!snapshot?.success) await settle({});
       return failure(purpose);
     },
-    // The credential changed: new work waits for its policy, which is fetched
-    // now, while work already running keeps the verdict it started under.
-    invalidate() {
+    // The credential changed: new work waits for its policy, while work
+    // already running keeps the verdict it started under. The policy is
+    // fetched now, unless the caller already knows it (a sign-out is a guest).
+    invalidate(known) {
       retained = snapshot ?? retained;
       snapshot = null;
       epoch += 1;
-      void lookup({});
+      if (known) update(known);
+      else void lookup({});
     },
-    // The account changed: nothing started for the previous one may finish.
+    // The account changed: nothing started for the previous one may finish,
+    // nor keep the verdict it started under. Called after invalidate, which
+    // would otherwise retain that verdict again.
     cancelJobs() {
+      retained = null;
       for (const job of jobs.values()) job.controller.abort();
     },
     // The handler gets the job's signal, merged with the caller's own cancel
@@ -155,18 +176,15 @@ function createAudioFeaturePolicy({
             : job.controller.signal
         );
         refreshOnRefusal(event, result);
-        return activeFailure(purpose) || (job.controller.signal.aborted ? cancelled() : result);
+        return abortedResult(job.controller) || activeFailure(purpose) || result;
       } catch (error) {
         refreshOnRefusal(event, error);
         return (
+          abortedResult(job.controller) ||
           activeFailure(purpose) || {
             success: false,
             error: error.message,
-            code: job.controller.signal.aborted
-              ? "AUDIO_OPERATION_CANCELLED"
-              : typeof error.code === "string"
-                ? error.code
-                : "AUDIO_OPERATION_FAILED",
+            code: typeof error.code === "string" ? error.code : "AUDIO_OPERATION_FAILED",
           }
         );
       } finally {

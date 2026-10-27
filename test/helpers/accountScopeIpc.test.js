@@ -437,8 +437,12 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
     tokenState = { token: "rotation-token-b", generation: 61 };
     handleAuthTokenChange(tokenState);
     await setScope(nextAccount, 61);
-    // The live meeting keeps transcribing until the new verdict arrives.
-    assert.equal(fakeThis._audioFeaturePolicy.activeFailure("meeting"), null);
+    // The same account's live meeting keeps transcribing until the new verdict
+    // arrives; nothing keeps the previous account's verdict.
+    assert.equal(
+      fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null,
+      accountChanged ? "POLICY_UNRESOLVABLE" : null
+    );
     assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
     finish.resolve();
 

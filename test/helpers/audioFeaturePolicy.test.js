@@ -354,3 +354,67 @@ test("a token rotation lets a running job finish, while an account change cancel
     assert.equal(guard.failure("upload"), null);
   }
 });
+
+test("an account change also drops the verdict running work started under", () => {
+  const guard = createAudioFeaturePolicy({ getPolicy: () => new Promise(() => {}) });
+  guard.update(policy());
+  guard.invalidate();
+  assert.equal(guard.activeFailure("meeting"), null);
+  guard.cancelJobs();
+  assert.equal(guard.activeFailure("meeting").code, "POLICY_UNRESOLVABLE");
+});
+
+test("listeners hear about a changed meeting verdict, not every refresh", async () => {
+  const lookups = [];
+  let changes = 0;
+  const guard = createAudioFeaturePolicy({
+    getPolicy: () => {
+      const lookup = deferred();
+      lookups.push(lookup);
+      return lookup.promise;
+    },
+    onChange: () => changes++,
+  });
+  guard.update(policy(true, true, 1));
+  guard.update(policy(true, true, 2));
+  guard.update(policy(true, false, 3));
+  assert.equal(changes, 1);
+  guard.update(policy(false, true, 4));
+  assert.equal(changes, 2);
+
+  guard.invalidate();
+  assert.equal(changes, 2);
+  lookups.at(-1).resolve(policy(true, true, 5));
+  await new Promise(setImmediate);
+  assert.equal(changes, 3);
+});
+
+test("a sign-out's known verdict is not overwritten by a lookup made before it", async () => {
+  const lookups = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: () => {
+      const lookup = deferred();
+      lookups.push(lookup);
+      return lookup.promise;
+    },
+  });
+  guard.update(policy());
+  guard.invalidate();
+  guard.invalidate({ success: true, managed: false, authGeneration: 2 });
+  assert.equal(lookups.length, 1);
+  lookups[0].resolve(policy(false, false, 9));
+  await new Promise(setImmediate);
+  assert.equal(guard.failure("meeting"), null);
+});
+
+test("a lookup that throws is logged, not raised", async () => {
+  const warnings = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => {
+      throw new Error("offline");
+    },
+    logger: { warn: (message, meta) => warnings.push([message, meta]) },
+  });
+  assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
+  assert.deepEqual(warnings, [["Audio policy lookup failed", { error: "offline" }]]);
+});
