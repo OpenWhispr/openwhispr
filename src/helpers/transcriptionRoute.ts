@@ -30,6 +30,7 @@ import {
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
 import { getRegistryData } from "../models/registryData.js";
 import { retiredReplacement } from "../models/modelLifecycle.js";
+import { isKeyboardLayoutLanguage } from "../utils/keyboardLayoutLanguage.ts";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -252,7 +253,9 @@ export function resolveTranscriptionRoute({
   const managed = policy?.status === "managed";
   const language =
     request?.effectiveLanguage ??
-    (!s.preferredLanguage || s.preferredLanguage === "auto"
+    (!s.preferredLanguage ||
+    s.preferredLanguage === "auto" ||
+    isKeyboardLayoutLanguage(s.preferredLanguage)
       ? undefined
       : s.preferredLanguage.split("-")[0]);
 
