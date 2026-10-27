@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../lib/utils";
@@ -47,6 +47,12 @@ export default function WorkspacePeopleSection({
   }, [initialSubTab, setStoredTab]);
 
   const tab: PeopleTab = isPeopleTab(storedTab) ? storedTab : "members";
+  const [searchQuery, setSearchQuery] = useState("");
+  const workspaceId = state.workspace?.id;
+
+  useEffect(() => {
+    setSearchQuery("");
+  }, [workspaceId]);
 
   return (
     <SettingsWorkspaceFrame state={state}>
@@ -85,7 +91,13 @@ export default function WorkspacePeopleSection({
           </div>
 
           <div className="pt-1">
-            {tab === "members" && <WorkspaceMembersTab workspace={workspace} />}
+            {tab === "members" && (
+              <WorkspaceMembersTab
+                workspace={workspace}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+              />
+            )}
             {tab === "teams" && <WorkspaceTeamsTab workspace={workspace} />}
           </div>
         </>

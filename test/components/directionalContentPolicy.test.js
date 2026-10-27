@@ -44,7 +44,6 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/settings/WorkspaceMembersTab.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{request\.name \?\? request\.email\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{inv\.email\}<\/bdi>/],
     [
       "src/components/notes/UploadAudioView.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,

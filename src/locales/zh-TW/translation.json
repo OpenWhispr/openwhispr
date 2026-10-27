@@ -2429,7 +2429,29 @@
       },
       "people": {
         "title": "人員",
-        "description": "管理工作區中的人員及其角色。"
+        "description": "管理工作區中的人員及其角色。",
+        "columns": {
+          "name": "名稱",
+          "team": "群組",
+          "role": "工作區角色"
+        },
+        "you": "你",
+        "teamsNone": "無",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "正在載入成員…",
+          "body": "工作區成員會顯示在這裡。"
+        },
+        "failed": {
+          "title": "無法載入成員",
+          "body": "請檢查網路連線後再試一次。"
+        },
+        "roleMenuLabel": "變更 {{name}} 的角色",
+        "roleDescription": {
+          "member": "可以檢視和編輯筆記。",
+          "admin": "管理成員、邀請、群組和設定。"
+        },
+        "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。"
       },
       "role": {
         "owner": "擁有者",
@@ -2458,21 +2480,12 @@
         "leaving": "離開中…"
       },
       "members": {
-        "title": "成員",
         "description": "已使用 {{count}} / {{seats}} 個席次。",
-        "invite": "邀請",
-        "empty": "尚無成員。",
         "loadError": "無法載入成員。",
         "roleUpdated": "角色已更新",
         "removed": "已移除 {{name}}",
-        "promote": "設為管理員",
-        "demote": "設為成員",
         "transferOwnership": "轉移擁有權",
-        "remove": "從工作區移除",
-        "removeConfirm": {
-          "title": "要移除這位成員嗎？",
-          "description": "{{name}} 將立即失去 {{workspace}} 的存取權。"
-        }
+        "remove": "從工作區移除"
       },
       "joinRequests": {
         "title": "加入申請",

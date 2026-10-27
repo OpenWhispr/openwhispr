@@ -2429,7 +2429,29 @@
       },
       "people": {
         "title": "Persone",
-        "description": "Gestisci le persone della tua area di lavoro e i loro ruoli."
+        "description": "Gestisci le persone della tua area di lavoro e i loro ruoli.",
+        "columns": {
+          "name": "Nome",
+          "team": "Gruppo",
+          "role": "Ruolo nell'area di lavoro"
+        },
+        "you": "Tu",
+        "teamsNone": "Nessuno",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Caricamento dei membri…",
+          "body": "I membri della tua area di lavoro appariranno qui."
+        },
+        "failed": {
+          "title": "Impossibile caricare i membri",
+          "body": "Controlla la connessione e riprova."
+        },
+        "roleMenuLabel": "Cambia il ruolo di {{name}}",
+        "roleDescription": {
+          "member": "Può visualizzare e modificare le note.",
+          "admin": "Gestisce membri, inviti, gruppi e impostazioni."
+        },
+        "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Controlla la connessione e riprova."
       },
       "role": {
         "owner": "Proprietario",
@@ -2458,21 +2480,12 @@
         "leaving": "Uscita…"
       },
       "members": {
-        "title": "Membri",
         "description": "{{count}} di {{seats}} posti utilizzati.",
-        "invite": "Invita",
-        "empty": "Nessun membro per ora.",
         "loadError": "Impossibile caricare i membri.",
         "roleUpdated": "Ruolo aggiornato",
         "removed": "{{name}} rimosso",
-        "promote": "Rendi amministratore",
-        "demote": "Rendi membro",
         "transferOwnership": "Trasferisci proprietà",
-        "remove": "Rimuovi dall'area di lavoro",
-        "removeConfirm": {
-          "title": "Rimuovere questo membro?",
-          "description": "{{name}} perderà immediatamente l'accesso a {{workspace}}."
-        }
+        "remove": "Rimuovi dall'area di lavoro"
       },
       "joinRequests": {
         "title": "Richieste di accesso",

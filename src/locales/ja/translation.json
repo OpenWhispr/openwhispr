@@ -2429,7 +2429,29 @@
       },
       "people": {
         "title": "ユーザー",
-        "description": "ワークスペースのユーザーとそのロールを管理します。"
+        "description": "ワークスペースのユーザーとそのロールを管理します。",
+        "columns": {
+          "name": "名前",
+          "team": "グループ",
+          "role": "ワークスペースのロール"
+        },
+        "you": "あなた",
+        "teamsNone": "なし",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "メンバーを読み込んでいます…",
+          "body": "ワークスペースのメンバーがここに表示されます。"
+        },
+        "failed": {
+          "title": "メンバーを読み込めませんでした",
+          "body": "接続を確認して、もう一度お試しください。"
+        },
+        "roleMenuLabel": "{{name}} のロールを変更",
+        "roleDescription": {
+          "member": "ノートを閲覧・編集できます。",
+          "admin": "メンバー、招待、グループ、設定を管理します。"
+        },
+        "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。"
       },
       "role": {
         "owner": "オーナー",
@@ -2458,21 +2480,12 @@
         "leaving": "退出中…"
       },
       "members": {
-        "title": "メンバー",
         "description": "{{seats}} シート中 {{count}} シートを使用中。",
-        "invite": "招待",
-        "empty": "まだメンバーがいません。",
         "loadError": "メンバーを読み込めませんでした。",
         "roleUpdated": "役割を更新しました",
         "removed": "{{name}} を削除しました",
-        "promote": "管理者にする",
-        "demote": "メンバーにする",
         "transferOwnership": "オーナー権限を譲渡",
-        "remove": "ワークスペースから削除",
-        "removeConfirm": {
-          "title": "このメンバーを削除しますか？",
-          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
-        }
+        "remove": "ワークスペースから削除"
       },
       "joinRequests": {
         "title": "参加リクエスト",

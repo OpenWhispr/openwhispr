@@ -1704,7 +1704,29 @@
       },
       "people": {
         "title": "Personen",
-        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen."
+        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
+        "columns": {
+          "name": "Name",
+          "team": "Gruppe",
+          "role": "Workspace-Rolle"
+        },
+        "you": "Sie",
+        "teamsNone": "Keine",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Mitglieder werden geladen…",
+          "body": "Die Mitglieder Ihres Workspace werden hier angezeigt."
+        },
+        "failed": {
+          "title": "Mitglieder konnten nicht geladen werden",
+          "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        },
+        "roleMenuLabel": "Rolle von {{name}} ändern",
+        "roleDescription": {
+          "member": "Kann Notizen ansehen und bearbeiten.",
+          "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
+        },
+        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
       },
       "role": {
         "owner": "Inhaber",
@@ -1733,21 +1755,12 @@
         "leaving": "Verlasse…"
       },
       "members": {
-        "title": "Mitglieder",
         "description": "{{count}} von {{seats}} Plätzen belegt.",
-        "invite": "Einladen",
-        "empty": "Noch keine Mitglieder.",
         "loadError": "Mitglieder konnten nicht geladen werden.",
         "roleUpdated": "Rolle aktualisiert",
         "removed": "{{name}} entfernt",
-        "promote": "Zum Administrator machen",
-        "demote": "Zum Mitglied machen",
         "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen",
-        "removeConfirm": {
-          "title": "Dieses Mitglied entfernen?",
-          "description": "{{name}} verliert sofort den Zugriff auf {{workspace}}."
-        }
+        "remove": "Aus Workspace entfernen"
       },
       "joinRequests": {
         "title": "Beitrittsanfragen",

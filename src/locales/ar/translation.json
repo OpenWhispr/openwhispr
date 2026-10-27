@@ -3131,7 +3131,29 @@
       },
       "people": {
         "title": "الأشخاص",
-        "description": "أدر الأشخاص في مساحة العمل وأدوارهم."
+        "description": "أدر الأشخاص في مساحة العمل وأدوارهم.",
+        "columns": {
+          "name": "الاسم",
+          "team": "المجموعة",
+          "role": "الدور في مساحة العمل"
+        },
+        "you": "أنت",
+        "teamsNone": "لا شيء",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "جارٍ تحميل الأعضاء…",
+          "body": "سيظهر أعضاء مساحة العمل هنا."
+        },
+        "failed": {
+          "title": "تعذّر تحميل الأعضاء",
+          "body": "تحقق من اتصالك وحاول مرة أخرى."
+        },
+        "roleMenuLabel": "تغيير دور {{name}}",
+        "roleDescription": {
+          "member": "يمكنه عرض الملاحظات وتعديلها.",
+          "admin": "يدير الأعضاء والدعوات والمجموعات والإعدادات."
+        },
+        "roleFailed": "تعذّر تغيير دور {{name}}. تحقق من اتصالك وحاول مرة أخرى."
       },
       "role": {
         "owner": "مالك",
@@ -3160,7 +3182,6 @@
         "leaving": "جاري المغادرة…"
       },
       "members": {
-        "title": "الأعضاء",
         "description": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_zero": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_one": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
@@ -3168,19 +3189,11 @@
         "description_few": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_many": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
         "description_other": "المقاعد المستخدمة: {{count}} من أصل {{seats}}.",
-        "invite": "دعوة",
-        "empty": "لا يوجد أعضاء بعد.",
         "loadError": "تعذر تحميل الأعضاء.",
         "roleUpdated": "تم تحديث الدور",
         "removed": "تمت إزالة {{name}}",
-        "promote": "تعيين كمسؤول",
-        "demote": "تعيين كعضو",
         "transferOwnership": "نقل الملكية",
-        "remove": "إزالة من مساحة العمل",
-        "removeConfirm": {
-          "title": "إزالة هذا العضو؟",
-          "description": "سيفقد {{name}} إمكانية الوصول إلى {{workspace}} على الفور."
-        }
+        "remove": "إزالة من مساحة العمل"
       },
       "joinRequests": {
         "title": "طلبات الانضمام",

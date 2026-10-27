@@ -1704,7 +1704,29 @@
       },
       "people": {
         "title": "Personnes",
-        "description": "Gérez les personnes de votre espace de travail et leurs rôles."
+        "description": "Gérez les personnes de votre espace de travail et leurs rôles.",
+        "columns": {
+          "name": "Nom",
+          "team": "Groupe",
+          "role": "Rôle dans l'espace"
+        },
+        "you": "Vous",
+        "teamsNone": "Aucun",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Chargement des membres…",
+          "body": "Les membres de votre espace de travail apparaîtront ici."
+        },
+        "failed": {
+          "title": "Impossible de charger les membres",
+          "body": "Vérifiez votre connexion et réessayez."
+        },
+        "roleMenuLabel": "Modifier le rôle de {{name}}",
+        "roleDescription": {
+          "member": "Peut consulter et modifier les notes.",
+          "admin": "Gère les membres, les invitations, les groupes et les paramètres."
+        },
+        "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez."
       },
       "role": {
         "owner": "Propriétaire",
@@ -1733,21 +1755,12 @@
         "leaving": "Départ…"
       },
       "members": {
-        "title": "Membres",
         "description": "{{count}} sur {{seats}} sièges utilisés.",
-        "invite": "Inviter",
-        "empty": "Aucun membre pour l'instant.",
         "loadError": "Impossible de charger les membres.",
         "roleUpdated": "Rôle mis à jour",
         "removed": "{{name}} retiré",
-        "promote": "Promouvoir administrateur",
-        "demote": "Rétrograder membre",
         "transferOwnership": "Transférer la propriété",
-        "remove": "Retirer de l'espace",
-        "removeConfirm": {
-          "title": "Retirer ce membre ?",
-          "description": "{{name}} perdra immédiatement l'accès à {{workspace}}."
-        }
+        "remove": "Retirer de l'espace"
       },
       "joinRequests": {
         "title": "Demandes d'accès",

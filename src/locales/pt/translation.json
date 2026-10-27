@@ -2408,7 +2408,29 @@
       },
       "people": {
         "title": "Pessoas",
-        "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas."
+        "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas.",
+        "columns": {
+          "name": "Nome",
+          "team": "Grupo",
+          "role": "Função no espaço de trabalho"
+        },
+        "you": "Você",
+        "teamsNone": "Nenhum",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Carregando membros…",
+          "body": "Os membros do seu espaço de trabalho aparecerão aqui."
+        },
+        "failed": {
+          "title": "Não foi possível carregar os membros",
+          "body": "Verifique sua conexão e tente novamente."
+        },
+        "roleMenuLabel": "Alterar a função de {{name}}",
+        "roleDescription": {
+          "member": "Pode ver e editar notas.",
+          "admin": "Gerencia membros, convites, grupos e configurações."
+        },
+        "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente."
       },
       "role": {
         "owner": "Proprietário",
@@ -2437,21 +2459,12 @@
         "leaving": "Saindo…"
       },
       "members": {
-        "title": "Membros",
         "description": "{{count}} de {{seats}} assentos usados.",
-        "invite": "Convidar",
-        "empty": "Ainda não há membros.",
         "loadError": "Não foi possível carregar os membros.",
         "roleUpdated": "Função atualizada",
         "removed": "{{name}} removido",
-        "promote": "Tornar administrador",
-        "demote": "Tornar membro",
         "transferOwnership": "Transferir propriedade",
-        "remove": "Remover do espaço de trabalho",
-        "removeConfirm": {
-          "title": "Remover este membro?",
-          "description": "{{name}} perderá o acesso a {{workspace}} imediatamente."
-        }
+        "remove": "Remover do espaço de trabalho"
       },
       "joinRequests": {
         "title": "Pedidos de acesso",

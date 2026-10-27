@@ -2429,7 +2429,29 @@
       },
       "people": {
         "title": "人员",
-        "description": "管理工作区中的人员及其角色。"
+        "description": "管理工作区中的人员及其角色。",
+        "columns": {
+          "name": "名称",
+          "team": "群组",
+          "role": "工作区角色"
+        },
+        "you": "你",
+        "teamsNone": "无",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "正在加载成员…",
+          "body": "工作区成员将显示在这里。"
+        },
+        "failed": {
+          "title": "无法加载成员",
+          "body": "请检查网络连接后重试。"
+        },
+        "roleMenuLabel": "更改 {{name}} 的角色",
+        "roleDescription": {
+          "member": "可以查看和编辑笔记。",
+          "admin": "管理成员、邀请、群组和设置。"
+        },
+        "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。"
       },
       "role": {
         "owner": "所有者",
@@ -2458,21 +2480,12 @@
         "leaving": "退出中…"
       },
       "members": {
-        "title": "成员",
         "description": "已使用 {{count}}/{{seats}} 个席位。",
-        "invite": "邀请",
-        "empty": "暂无成员。",
         "loadError": "无法加载成员。",
         "roleUpdated": "角色已更新",
         "removed": "已移除 {{name}}",
-        "promote": "设为管理员",
-        "demote": "设为成员",
         "transferOwnership": "转让所有权",
-        "remove": "从工作区移除",
-        "removeConfirm": {
-          "title": "移除此成员？",
-          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
-        }
+        "remove": "从工作区移除"
       },
       "joinRequests": {
         "title": "加入申请",
