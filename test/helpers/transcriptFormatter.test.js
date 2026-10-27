@@ -303,3 +303,36 @@ test("SQLite UTC note timestamps are parsed as UTC before local formatting", () 
 
   assert.equal(parsed.toISOString(), "2026-08-04T13:02:00.000Z");
 });
+
+for (const [createdAt, expected] of [
+  ["2026-08-04T13:02:00+0530", "2026-08-04T07:32:00.000Z"],
+  ["2026-08-04T13:02:00-0700", "2026-08-04T20:02:00.000Z"],
+  ["2026-08-04 13:02:00+0530", "2026-08-04T07:32:00.000Z"],
+  ["2026-08-04 13:02:00-0700", "2026-08-04T20:02:00.000Z"],
+  ["2026-08-04T13:02:00+05:30", "2026-08-04T07:32:00.000Z"],
+  ["2026-08-04 13:02:00", "2026-08-04T13:02:00.000Z"],
+]) {
+  test(`note exports preserve the timezone in ${createdAt}`, () => {
+    const { parseNoteDate } = require("../../src/helpers/transcriptFormatter");
+    const parsed = parseNoteDate(createdAt);
+    assert.equal(parsed.getTime(), Date.parse(expected));
+
+    const date = new Date(expected);
+    const expectedDate =
+      date.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) +
+      " " +
+      date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const note = { title: "Meeting", created_at: createdAt };
+    assert.equal(JSON.parse(formatJson(note, [], {})).metadata.date, expectedDate);
+    assert.ok(formatTxt(note, [], {}).includes(expectedDate));
+    assert.ok(formatMd(note, [], {}).includes(expectedDate));
+  });
+}
+
+test("note date parsing retains numeric timestamps and invalid-date fallback", () => {
+  const { parseNoteDate } = require("../../src/helpers/transcriptFormatter");
+  assert.equal(parseNoteDate(1_754_310_000_000).getTime(), 1_754_310_000_000);
+  for (const value of [null, undefined, "", "not a date"]) {
+    assert.ok(Number.isNaN(parseNoteDate(value).getTime()));
+  }
+});

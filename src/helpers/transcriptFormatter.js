@@ -1,4 +1,5 @@
 const { i18nMain } = require("./i18nMain");
+const { parseDbTimestamp } = require("./dbTimestamp");
 
 function resolveSpeaker(seg, speakerMappings) {
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
@@ -29,13 +30,8 @@ function parseNoteDate(createdAt) {
     return new Date(createdAt);
   }
 
-  const value = String(createdAt).trim();
-  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(value)) {
-    return new Date(value);
-  }
-
-  // SQLite CURRENT_TIMESTAMP is UTC without a timezone suffix.
-  return new Date(value.includes("T") ? `${value}Z` : `${value.replace(" ", "T")}Z`);
+  // Share the SQLite UTC and explicit-offset rules used by other date readers.
+  return parseDbTimestamp(String(createdAt)) || new Date(NaN);
 }
 
 function resolveRecordingStartMs(segments, note) {
