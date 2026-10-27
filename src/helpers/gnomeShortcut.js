@@ -265,6 +265,16 @@ class GnomeShortcutManager {
               this.dictationCallback();
             }
           },
+          Start: () => {
+            if (this.dictationCallback) {
+              this.dictationCallback(undefined, "start");
+            }
+          },
+          Stop: () => {
+            if (this.dictationCallback) {
+              this.dictationCallback(undefined, "stop");
+            }
+          },
           ToggleMeeting: () => {
             if (this.meetingCallback) {
               this.meetingCallback();
@@ -286,6 +296,8 @@ class GnomeShortcutManager {
           name: DBUS_INTERFACE,
           methods: {
             Toggle: ["", ""],
+            Start: ["", ""],
+            Stop: ["", ""],
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],

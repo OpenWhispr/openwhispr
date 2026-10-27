@@ -295,13 +295,20 @@ class HyprlandShortcutManager {
         const cb = this.callbacks.dictation;
         if (typeof cb === "function") cb(undefined, "up");
       };
+      toggleMethods.Start = () => {
+        const cb = this.callbacks.dictation;
+        if (typeof cb === "function") cb(undefined, "start");
+      };
+      toggleMethods.Stop = () => {
+        const cb = this.callbacks.dictation;
+        if (typeof cb === "function") cb(undefined, "stop");
+      };
       this.bus.exportInterface(toggleMethods, DBUS_OBJECT_PATH, {
         name: DBUS_INTERFACE,
         methods: Object.fromEntries(
-          [...Object.values(SLOT_TOGGLE_METHOD), "PttDown", "PttUp"].map((method) => [
-            method,
-            ["", ""],
-          ])
+          [...Object.values(SLOT_TOGGLE_METHOD), "PttDown", "PttUp", "Start", "Stop"].map(
+            (method) => [method, ["", ""]]
+          )
         ),
       });
 

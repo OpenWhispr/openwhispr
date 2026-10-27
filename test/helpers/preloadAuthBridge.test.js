@@ -114,10 +114,12 @@ test("dictation lifecycle and audio levels preserve companion routing metadata",
   const { api, sends } = loadPreloadApi();
 
   api.dictationLifecycleStateChanged("recording", "assistant");
+  api.dictationStartRequestSettled(17);
   api.dictationAudioLevelChanged(0.42);
 
   assert.deepEqual(sends, [
     ["dictation-lifecycle-state-changed", "recording", "assistant"],
+    ["dictation-start-request-settled", 17],
     ["dictation-audio-level-changed", 0.42],
   ]);
 });
@@ -223,4 +225,18 @@ test("prepare-dictation forwards the input kind without the Electron event", () 
   dispose();
   assert.deepEqual(received, [{ inputKind: "assistant" }]);
   assert.equal(listeners.has("prepare-dictation"), false);
+});
+
+test("start-dictation forwards its request ID without the Electron event", () => {
+  const { api, listeners } = loadPreloadApi();
+  let received;
+  const unsubscribe = api.onStartDictation((requestId) => {
+    received = requestId;
+  });
+
+  listeners.get("start-dictation")?.({ sender: "ipc" }, 17);
+
+  assert.equal(received, 17);
+  unsubscribe();
+  assert.equal(listeners.has("start-dictation"), false);
 });
