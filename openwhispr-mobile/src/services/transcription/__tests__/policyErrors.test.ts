@@ -4,6 +4,7 @@ import {
   MEETING_RECORDING_DISABLED_MESSAGE,
   POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE,
   UPGRADE_REQUIRED_MESSAGE,
+  transcriptionPolicyErrorFromApiError,
   transcriptionPolicyErrorFromResponse,
 } from '../policyErrors';
 
@@ -78,5 +79,34 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(transcriptionPolicyErrorFromResponse(401, '{}')).toBeUndefined();
     expect(transcriptionPolicyErrorFromResponse(429, '{}')).toBeUndefined();
     expect(transcriptionPolicyErrorFromResponse(500, '{}')).toBeUndefined();
+  });
+});
+
+describe('transcriptionPolicyErrorFromApiError', () => {
+  const apiError = (status: number, code?: string): Error =>
+    Object.assign(new Error('raw server text'), { status, code });
+
+  it.each([
+    ['POLICY_MEETING_RECORDING_DISABLED', MEETING_RECORDING_DISABLED_MESSAGE],
+    ['POLICY_MODE_BLOCKED', POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE],
+  ])('maps 403 + %s to its message, keeping status and code', (code, message) => {
+    const error = transcriptionPolicyErrorFromApiError(apiError(403, code));
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ message, status: 403, code });
+  });
+
+  it('maps 426 to the upgrade message', () => {
+    expect(transcriptionPolicyErrorFromApiError(apiError(426))?.message).toBe(
+      UPGRADE_REQUIRED_MESSAGE,
+    );
+  });
+
+  it('leaves unrelated codes, other statuses, and status-less errors unmapped', () => {
+    expect(transcriptionPolicyErrorFromApiError(apiError(403, 'SOME_OTHER_CODE'))).toBeUndefined();
+    expect(
+      transcriptionPolicyErrorFromApiError(apiError(400, 'INVALID_AUDIO_PURPOSE')),
+    ).toBeUndefined();
+    expect(transcriptionPolicyErrorFromApiError(new Error('network down'))).toBeUndefined();
+    expect(transcriptionPolicyErrorFromApiError('nope')).toBeUndefined();
   });
 });

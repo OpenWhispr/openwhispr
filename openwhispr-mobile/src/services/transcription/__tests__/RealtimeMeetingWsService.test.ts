@@ -8,6 +8,7 @@
 import { Buffer } from 'buffer';
 import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
 import { ROTATION_MS } from '../realtimeReconnect';
+import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
 import * as Network from 'expo-network';
 import { LivePCMStreaming, addPcmFrameListener } from '../../../../modules/live-pcm-streaming/src';
@@ -204,6 +205,41 @@ describe('startRealtimeMeetingWs — token purpose', () => {
     for (const body of bodies) {
       expect(body).toEqual({ purpose: 'meeting', streams: 1, language: 'de' });
     }
+  });
+});
+
+describe('startRealtimeMeetingWs — org policy refusal', () => {
+  const meetingRefusal = (): Error =>
+    Object.assign(new Error('Meeting recording is turned off by your organization.'), {
+      status: 403,
+      code: 'POLICY_MEETING_RECORDING_DISABLED',
+    });
+
+  it('rejects the start with the mapped meeting message, before the mic or a socket opens', async () => {
+    (api.post as jest.Mock).mockRejectedValue(meetingRefusal());
+
+    await expect(startRealtimeMeetingWs({}, {}, { wsFactory })).rejects.toMatchObject({
+      message: MEETING_RECORDING_DISABLED_MESSAGE,
+      status: 403,
+    });
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it('ends a live meeting with the mapped message when the reconnect token is refused, without retrying', async () => {
+    const callbacks = { onError: jest.fn() };
+    const { leg1 } = await boot(callbacks);
+
+    (api.post as jest.Mock).mockClear().mockRejectedValue(meetingRefusal());
+    leg1.serverClose(1006);
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      error: { message: MEETING_RECORDING_DISABLED_MESSAGE },
+    });
   });
 });
 

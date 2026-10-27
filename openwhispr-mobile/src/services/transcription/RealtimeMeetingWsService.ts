@@ -21,6 +21,7 @@ import {
   DEFAULT_SAMPLE_RATE,
   type PcmFrame,
 } from '../../../modules/live-pcm-streaming/src';
+import { transcriptionPolicyErrorFromApiError } from './policyErrors';
 import { createRealtimeEventReducer } from './realtimeEvents';
 import type { RealtimeCallbacks, RealtimeSession } from './realtimeEvents';
 import {
@@ -83,11 +84,16 @@ export async function startRealtimeMeetingWs(
   });
 
   const fetchClientSecret = async (): Promise<string> => {
-    const { clientSecret } = await api.post<TokenResponse>(
-      '/api/openai-realtime-token',
-      tokenBody(),
-    );
-    return clientSecret;
+    try {
+      const { clientSecret } = await api.post<TokenResponse>(
+        '/api/openai-realtime-token',
+        tokenBody(),
+      );
+      return clientSecret;
+    } catch (error) {
+      // Org refusals show the same copy as /api/transcribe, not the raw server text.
+      throw transcriptionPolicyErrorFromApiError(error) ?? error;
+    }
   };
 
   // One reducer per session — this is why utterances survive every leg swap.
