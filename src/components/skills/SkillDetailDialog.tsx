@@ -116,7 +116,8 @@ export function SkillDetailDialog({
   const problem = skill && !skill.valid ? skill.problem : undefined;
 
   // Reread on open, and when the skill changes on disk while it's open. A skill that is
-  // gone, as when it was removed outside the app, closes the pop-up.
+  // gone, as when it was removed outside the app, closes the pop-up. Each refresh has a new
+  // summary even when a repair or quick edit keeps the same updatedAt.
   useEffect(() => {
     if (!open || !name) return;
     let current = true;
@@ -135,7 +136,7 @@ export function SkillDetailDialog({
     return () => {
       current = false;
     };
-  }, [open, name, summary?.updatedAt]);
+  }, [open, name, summary]);
 
   // Asking moves focus to Cancel; cancelling moves it back to Uninstall.
   useEffect(() => {

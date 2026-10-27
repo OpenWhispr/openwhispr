@@ -974,3 +974,355 @@ test("a refused archive leaves nothing on disk", async (t) => {
   assert.deepEqual(listDir(skillsDir), []);
   assert.equal(fs.existsSync(path.join(userDataDir, "escape.md")), false);
 });
+
+test("a future-dated attachment does not hide an equal-length invalid skill edit", (t) => {
+  const { library, skillsDir } = setup(t);
+  writeFolder(skillsDir, "cached", {
+    "SKILL.md": skillText("cached", "Original."),
+    "references/note.md": "An attachment from another computer.",
+  });
+  const future = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  fs.utimesSync(path.join(skillsDir, "cached", "references/note.md"), future, future);
+  assert.equal(library.scan()[0].valid, true);
+  const markdown = path.join(skillsDir, "cached", "SKILL.md");
+  fs.writeFileSync(
+    markdown,
+    readSkill(skillsDir, "cached").replace("description:", "descriptioX:")
+  );
+
+  const [changed] = library.scan();
+
+  assert.equal(changed.valid, false);
+  assert.equal(changed.problem.code, "missingDescription");
+  assert.equal(library.setEnabled("cached", true), false);
+});
+
+test("changed file permissions invalidate a previously readable skill", (t) => {
+  const { library, skillsDir } = setup(t);
+  writeFolder(skillsDir, "cached", { "SKILL.md": skillText("cached") });
+  assert.equal(library.scan()[0].valid, true);
+  const markdown = path.join(skillsDir, "cached", "SKILL.md");
+  const realLstat = fs.lstatSync;
+  const realRead = fs.readFileSync;
+  // Model a permission change on every platform, including privileged test runners.
+  t.mock.method(fs, "lstatSync", (target, ...args) => {
+    const stats = realLstat(target, ...args);
+    if (String(target) === markdown) stats.mode &= ~0o444;
+    return stats;
+  });
+  t.mock.method(fs, "readFileSync", (target, ...args) => {
+    if (String(target) === markdown) {
+      throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+    }
+    return realRead(target, ...args);
+  });
+
+  const [changed] = library.scan();
+
+  assert.equal(changed.valid, false);
+  assert.equal(changed.problem.code, "unreadable");
+  assert.equal(library.setEnabled("cached", true), false);
+});
+
+test("a skill awaiting recovery keeps its enabled state and timestamps across scans", (t) => {
+  const { library, database, userDataDir, skillsDir } = setup(t);
+  library.create({ title: "Recover me", description: "Saved.", instructions: "Go", files: [] });
+  database.markSkillUsed("recover-me");
+  const originalState = database.getSkillStates();
+  const backup = path.join(skillsDir, ".replaced-00000000-0000-4000-8000-000000000000-recover-me");
+  fs.renameSync(path.join(skillsDir, "recover-me"), backup);
+  t.mock.method(fs, "renameSync", () => {
+    throw Object.assign(new Error("temporarily locked"), { code: "EBUSY" });
+  });
+  const waiting = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.deepEqual(waiting.scan(), []);
+  assert.deepEqual(waiting.scan(), []);
+  assert.deepEqual(database.getSkillStates(), originalState);
+  t.mock.restoreAll();
+  const recovered = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(recovered.scan()[0].enabled, true);
+  assert.deepEqual(database.getSkillStates(), originalState);
+});
+
+test("a recovery backup removed externally no longer retains its skill state", (t) => {
+  const { library, database, userDataDir, skillsDir } = setup(t);
+  library.create({ title: "Recover me", description: "Saved.", instructions: "Go", files: [] });
+  const backup = path.join(skillsDir, ".replaced-00000000-0000-4000-8000-000000000000-recover-me");
+  fs.renameSync(path.join(skillsDir, "recover-me"), backup);
+  t.mock.method(fs, "renameSync", () => {
+    throw Object.assign(new Error("temporarily locked"), { code: "EBUSY" });
+  });
+  const waiting = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  waiting.scan();
+  assert.equal(database.getSkillStates().length, 1);
+  t.mock.restoreAll();
+  fs.rmSync(backup, { recursive: true });
+
+  assert.deepEqual(waiting.scan(), []);
+  assert.deepEqual(database.getSkillStates(), []);
+});
+
+test("a database failure rolls back a replacement and keeps its upload retryable", async (t) => {
+  const { library, database, skillsDir } = setup(t);
+  const original = skillText("keep", "Old.");
+  await upload(library, [markdownUpload("old.md", original)]);
+  library.setEnabled("keep", false);
+  const state = database.getSkillStates();
+  const replacement = skillText("keep", "New.");
+  const [preview] = await library.previewUploads([markdownUpload("new.md", replacement)]);
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database is full"), { code: "SQLITE_FULL" });
+  });
+  const failed = library.commitUploads({ tokens: [preview.token], replace: ["keep"] });
+  t.mock.restoreAll();
+  assert.equal(failed.failed.length, 1);
+  assert.equal(readSkill(skillsDir, "keep"), original);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(skillsDir), ["keep"]);
+  assert.deepEqual(library.commitUploads({ tokens: [preview.token], replace: ["keep"] }), {
+    installed: ["keep"],
+    failed: [],
+  });
+  assert.equal(readSkill(skillsDir, "keep"), replacement);
+  assert.equal(library.scan()[0].enabled, false);
+});
+
+test("a database failure leaves no newly installed skill behind", async (t) => {
+  const { library, database, skillsDir } = setup(t);
+  const [preview] = await library.previewUploads([markdownUpload("new.md", skillText("new"))]);
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" });
+  });
+  const failed = library.commitUploads({ tokens: [preview.token], replace: [] });
+  t.mock.restoreAll();
+  assert.equal(failed.failed.length, 1);
+  assert.deepEqual(listDir(skillsDir), []);
+  assert.deepEqual(database.getSkillStates(), []);
+  assert.deepEqual(library.commitUploads({ tokens: [preview.token], replace: [] }), {
+    installed: ["new"],
+    failed: [],
+  });
+});
+
+test("staging refuses a filesystem alias instead of overwriting an earlier file", (t) => {
+  const { library, skillsDir, userDataDir } = setup(t);
+  const probe = path.join(userDataDir, "alias-check");
+  fs.mkdirSync(probe);
+  fs.writeFileSync(path.join(probe, "Σ.md"), "first", { flag: "wx" });
+  if (!fs.existsSync(path.join(probe, "ς.md"))) {
+    t.skip("The filesystem distinguishes these Unicode filenames");
+    return;
+  }
+  // Exercise the final disk boundary independently of the archive's portable preflight.
+  assert.throws(
+    () =>
+      library._writeSkillFolder(
+        "collision",
+        [
+          { path: "SKILL.md", data: Buffer.from(skillText("collision")) },
+          { path: "references/Σ.md", data: Buffer.from("first") },
+          { path: "references/ς.md", data: Buffer.from("second") },
+        ],
+        () => {}
+      ),
+    /EEXIST/
+  );
+  assert.deepEqual(listDir(skillsDir), []);
+});
+
+test("a database failure with a locked rollback restores the original on restart", async (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  const original = skillText("keep", "Old.");
+  await upload(library, [markdownUpload("old.md", original)]);
+  library.setEnabled("keep", false);
+  const state = database.getSkillStates();
+  const [preview] = await library.previewUploads([
+    markdownUpload("new.md", skillText("keep", "New.")),
+  ]);
+  const realRename = fs.renameSync;
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database is full"), { code: "SQLITE_FULL" });
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === path.join(skillsDir, "keep") && path.basename(to).startsWith(".staging-")) {
+      throw Object.assign(new Error("temporarily locked"), { code: "EBUSY" });
+    }
+    return realRename(from, to);
+  });
+
+  const failed = library.commitUploads({ tokens: [preview.token], replace: ["keep"] });
+  t.mock.restoreAll();
+  const recovered = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(failed.failed.length, 1);
+  assert.equal(readSkill(skillsDir, "keep"), original);
+  assert.equal(recovered.scan()[0].enabled, false);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(skillsDir), ["keep"]);
+});
+
+test("a replacement whose commit marker cannot be written rolls back safely", async (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  const original = skillText("keep", "Old.");
+  await upload(library, [markdownUpload("old.md", original)]);
+  library.setEnabled("keep", false);
+  const [preview] = await library.previewUploads([
+    markdownUpload("new.md", skillText("keep", "New.")),
+  ]);
+  const realRename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (
+      path.basename(from).startsWith(".replacing-") &&
+      path.basename(to).startsWith(".replaced-")
+    ) {
+      throw Object.assign(new Error("temporarily locked"), { code: "EBUSY" });
+    }
+    return realRename(from, to);
+  });
+
+  const failed = library.commitUploads({ tokens: [preview.token], replace: ["keep"] });
+  t.mock.restoreAll();
+  const recovered = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(failed.failed.length, 1);
+  assert.equal(readSkill(skillsDir, "keep"), original);
+  assert.equal(recovered.scan()[0].enabled, false);
+  assert.deepEqual(listDir(skillsDir), ["keep"]);
+});
+
+test("startup restores an uncommitted replacement even when its new folder exists", (t) => {
+  const { library, database, userDataDir, skillsDir } = setup(t);
+  library.create({ title: "Pending", description: "Original.", instructions: "Keep", files: [] });
+  library.setEnabled("pending", false);
+  const original = readSkill(skillsDir, "pending");
+  const [originalState] = database.getSkillStates();
+  const backup = path.join(skillsDir, ".replacing-00000000-0000-4000-8000-000000000000-pending");
+  fs.renameSync(path.join(skillsDir, "pending"), backup);
+  writeFolder(skillsDir, "pending", { "SKILL.md": skillText("pending", "Uncommitted.") });
+  // A stop before the commit-marker rename can leave database bookkeeping ahead of disk.
+  database.upsertSkillState("pending", { contentHash: "uncommitted" });
+
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(readSkill(skillsDir, "pending"), original);
+  assert.equal(restarted.scan()[0].enabled, false);
+  assert.equal(database.getSkillStates()[0].contentHash, originalState.contentHash);
+  assert.deepEqual(listDir(skillsDir), ["pending"]);
+});
+
+test("startup keeps a pending replacement backup while its new folder cannot be removed", (t) => {
+  const { library, database, userDataDir, skillsDir } = setup(t);
+  library.create({ title: "Pending", description: "Original.", instructions: "Keep", files: [] });
+  const original = readSkill(skillsDir, "pending");
+  const target = path.join(skillsDir, "pending");
+  const backup = path.join(skillsDir, ".replacing-00000000-0000-4000-8000-000000000000-pending");
+  fs.renameSync(target, backup);
+  const uncommitted = skillText("pending", "Uncommitted.");
+  writeFolder(skillsDir, "pending", { "SKILL.md": uncommitted });
+  const realRename = fs.renameSync;
+  const realRemove = fs.rmSync;
+  const refuseTarget =
+    (operation) =>
+    (from, ...args) => {
+      if (from === target) throw Object.assign(new Error("locked"), { code: "EBUSY" });
+      return operation(from, ...args);
+    };
+  t.mock.method(fs, "renameSync", refuseTarget(realRename));
+  t.mock.method(fs, "rmSync", refuseTarget(realRemove));
+
+  const blocked = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(readSkill(skillsDir, "pending"), uncommitted);
+  assert.equal(fs.readFileSync(path.join(backup, "SKILL.md"), "utf8"), original);
+  blocked.scan();
+  t.mock.restoreAll();
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.equal(readSkill(skillsDir, "pending"), original);
+  assert.equal(restarted.scan()[0].enabled, true);
+  assert.deepEqual(listDir(skillsDir), ["pending"]);
+});
+
+test("retrying after a locked rollback commits the replacement across a restart", async (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  await upload(library, [markdownUpload("old.md", skillText("retry", "Old."))]);
+  const replacement = skillText("retry", "Retried.");
+  const [preview] = await library.previewUploads([markdownUpload("new.md", replacement)]);
+  const realRename = fs.renameSync;
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database full"), { code: "SQLITE_FULL" });
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === path.join(skillsDir, "retry") && path.basename(to).startsWith(".staging-")) {
+      throw Object.assign(new Error("locked"), { code: "EBUSY" });
+    }
+    return realRename(from, to);
+  });
+  assert.equal(
+    library.commitUploads({ tokens: [preview.token], replace: ["retry"] }).failed.length,
+    1
+  );
+  t.mock.restoreAll();
+
+  const retried = library.commitUploads({ tokens: [preview.token], replace: ["retry"] });
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+
+  assert.deepEqual(retried, { installed: ["retry"], failed: [] });
+  assert.equal(readSkill(skillsDir, "retry"), replacement);
+  assert.equal(restarted.scan()[0].description, "Retried.");
+  assert.deepEqual(listDir(skillsDir), ["retry"]);
+});
+
+test("retry refuses a skill whose recovery backup is still locked", async (t) => {
+  const { library, skillsDir } = setup(t);
+  await upload(library, [markdownUpload("old.md", skillText("retry", "Old."))]);
+  const original = readSkill(skillsDir, "retry");
+  const backup = path.join(skillsDir, ".replacing-00000000-0000-4000-8000-000000000000-retry");
+  fs.renameSync(path.join(skillsDir, "retry"), backup);
+  const [preview] = await library.previewUploads([
+    markdownUpload("new.md", skillText("retry", "New.")),
+  ]);
+  const realRename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === backup) throw Object.assign(new Error("locked"), { code: "EBUSY" });
+    return realRename(from, to);
+  });
+
+  const retried = library.commitUploads({ tokens: [preview.token], replace: ["retry"] });
+
+  assert.equal(retried.failed.length, 1);
+  assert.deepEqual(retried.installed, []);
+  assert.equal(fs.existsSync(path.join(skillsDir, "retry")), false);
+  assert.equal(fs.readFileSync(path.join(backup, "SKILL.md"), "utf8"), original);
+});
+
+test("scan does not publish uncommitted replacement content or change its saved state", (t) => {
+  const { library, database, skillsDir } = setup(t);
+  library.create({ title: "Pending", description: "Original.", instructions: "Keep", files: [] });
+  const state = database.getSkillStates();
+  const backup = path.join(skillsDir, ".replacing-00000000-0000-4000-8000-000000000000-pending");
+  fs.renameSync(path.join(skillsDir, "pending"), backup);
+  writeFolder(skillsDir, "pending", { "SKILL.md": skillText("pending", "Uncommitted.") });
+
+  assert.deepEqual(library.scan(), []);
+  assert.deepEqual(database.getSkillStates(), state);
+});
+
+test("recovery cannot overwrite a restored skill without a new replace decision", async (t) => {
+  const { library, skillsDir } = setup(t);
+  await upload(library, [markdownUpload("old.md", skillText("retry", "Old."))]);
+  const original = readSkill(skillsDir, "retry");
+  const backup = path.join(skillsDir, ".replacing-00000000-0000-4000-8000-000000000000-retry");
+  fs.renameSync(path.join(skillsDir, "retry"), backup);
+  const [preview] = await library.previewUploads([
+    markdownUpload("new.md", skillText("retry", "New.")),
+  ]);
+  assert.equal(preview.status, "ready");
+
+  const result = library.commitUploads({ tokens: [preview.token], replace: [] });
+
+  assert.equal(result.failed.length, 1);
+  assert.equal(readSkill(skillsDir, "retry"), original);
+});

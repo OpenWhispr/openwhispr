@@ -455,3 +455,48 @@ test("a file that would take the skill past 25 MB is refused before it is read",
     { title: "video.mov", description: "skills.create.filesTooLarge", variant: "destructive" },
   ]);
 });
+
+for (const finishDraft of ["discard", "save"]) {
+  test(`a file from an earlier screen mount stays out after its draft is ${finishDraft === "save" ? "saved" : "discarded"}`, async (t) => {
+    let remount;
+    const { container, store } = await mountSkillsComponent(t, {
+      modulePath: "/components/skills/CreateSkillScreen.tsx",
+      exportName: "CreateSkillScreen",
+      api: { skillsCreate: async () => ({ ok: true, name: "old-draft" }) },
+      wrap: (Component) => {
+        function Owner() {
+          const [version, setVersion] = React.useState(0);
+          remount = () => setVersion((current) => current + 1);
+          return React.createElement(Component, {
+            key: version,
+            onCreated() {},
+            onBack() {},
+          });
+        }
+        return React.createElement(Owner);
+      },
+    });
+    await fill(container, { name: "Old draft", description: "Does it.", instructions: "Go" });
+    const slow = slowFile("old-file.md");
+    await pick(container, [slow]);
+    // Leaving Integrations and returning creates another screen instance with the same draft.
+    await React.act(async () => remount());
+    await settle();
+    if (finishDraft === "save") {
+      await click(createButton(container));
+      await settle();
+    } else {
+      await click(button(container, "common.cancel"));
+      await click(button(container, "skills.create.discard"));
+    }
+    assert.equal(store.useSkillsStore.getState().createDraft, null);
+    await fill(container, { name: "New draft" });
+
+    await React.act(async () => slow.finishRead());
+    await settle();
+
+    const draft = store.useSkillsStore.getState().createDraft;
+    assert.equal(draft.title, "New draft");
+    assert.deepEqual(draft.files, []);
+  });
+}

@@ -9,6 +9,8 @@ interface SkillsState {
   loaded: boolean;
   loadError: boolean;
   createDraft: SkillCreateDraft | null;
+  /** Invalidates pending file reads across screen mounts when the draft ends. */
+  createDraftGeneration: number;
   /** Bumped to play a skill's icon once; see components/skills/SkillIcon. */
   iconPlays: Record<string, number>;
 }
@@ -18,6 +20,7 @@ export const useSkillsStore = create<SkillsState>(() => ({
   loaded: false,
   loadError: false,
   createDraft: null,
+  createDraftGeneration: 0,
   iconPlays: {},
 }));
 
@@ -65,7 +68,10 @@ export function refreshSkills(): Promise<void> {
 }
 
 export function setCreateDraft(createDraft: SkillCreateDraft | null): void {
-  useSkillsStore.setState({ createDraft });
+  useSkillsStore.setState((state) => ({
+    createDraft,
+    createDraftGeneration: state.createDraftGeneration + (createDraft === null ? 1 : 0),
+  }));
 }
 
 export function playSkillIcon(name: string): void {

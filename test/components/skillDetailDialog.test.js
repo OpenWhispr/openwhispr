@@ -409,3 +409,43 @@ test("the reveal label follows the platform", async (t) => {
     ]
   );
 });
+
+test("a refreshed skill with the same timestamp rereads its instructions", async (t) => {
+  const summary = skill("meeting-prep");
+  let markdown = MARKDOWN;
+  const { container, store, calls } = await openDetail(t, {
+    summary,
+    api: {
+      skillsGet: async () => ({ ...summary, markdown, files: FILES }),
+      skillsList: async () => ({ skills: [{ ...summary }] }),
+    },
+  });
+  markdown = MARKDOWN.replace("## Steps", "## Updated steps");
+
+  await React.act(async () => store.refreshSkills());
+  await settle();
+  await click(button(container, "skills.menu.copyMarkdown"));
+
+  assert.match(label(container), /## Updated steps/);
+  assert.deepEqual(calls.clipboard, [markdown]);
+});
+
+test("repairing a skill refreshes an open dialog even when its timestamp stays unchanged", async (t) => {
+  const summary = skill("meeting-prep");
+  let current = { ...summary, valid: false, problem: { code: "tooLarge" } };
+  const { container, store } = await openDetail(t, {
+    summary: current,
+    api: {
+      skillsGet: async () => ({ ...current, markdown: MARKDOWN, files: FILES }),
+      skillsList: async () => ({ skills: [{ ...current }] }),
+    },
+  });
+  assert.equal(toggle(container).getAttribute("disabled"), "");
+  current = summary;
+
+  await React.act(async () => store.refreshSkills());
+  await settle();
+
+  assert.equal(toggle(container).getAttribute("disabled"), null);
+  assert.doesNotMatch(label(container), /skills\.detail\.problem/);
+});

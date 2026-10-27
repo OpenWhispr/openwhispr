@@ -11,6 +11,66 @@ const MAX_TAIL = END_RECORD_SIZE + 0xffff;
 // Folders and macOS metadata are entries too, so the listing may run past the file cap.
 const ENTRIES_PER_FILE = 4;
 
+// ZIP's legacy filename encoding; the platform TextDecoder has no CP437 codec.
+const CP437_HIGH =
+  "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒ" +
+  "áíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐" +
+  "└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀" +
+  "αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u00a0";
+const UTF8_PATH = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+// A valid Info-ZIP Unicode Path field overrides the legacy bytes. Its checksum binds it
+// to this filename; stale fields and future versions must fall back to the legacy name.
+function decodeArchivePath(entry, extra) {
+  if (entry.isUnicode) return UTF8_PATH.decode(entry.pathBuffer);
+  let unicodePath;
+  for (let offset = 0; offset < extra.length;) {
+    if (offset + 4 > extra.length) throw new Error("Truncated ZIP extra field");
+    const signature = extra.readUInt16LE(offset);
+    const size = extra.readUInt16LE(offset + 2);
+    const start = offset + 4;
+    const end = start + size;
+    if (end > extra.length) throw new Error("Truncated ZIP extra field");
+    if (signature === 0x7075) {
+      if (size < 5) throw new Error("Truncated Unicode path field");
+      if (extra[start] === 1 && extra.readUInt32LE(start + 1) === zlib.crc32(entry.pathBuffer)) {
+        const decoded = UTF8_PATH.decode(extra.subarray(start + 5, end));
+        if (unicodePath !== undefined && unicodePath !== decoded) {
+          throw new Error("Conflicting Unicode path fields");
+        }
+        unicodePath = decoded;
+      }
+    }
+    offset = end;
+  }
+  if (unicodePath !== undefined) return unicodePath;
+  // macOS and Unix archivers also write UTF-8 without setting its ZIP flag. Preserve
+  // valid UTF-8 first; unflagged bytes that are invalid UTF-8 use the legacy encoding.
+  try {
+    return UTF8_PATH.decode(entry.pathBuffer);
+  } catch {
+    return Array.from(entry.pathBuffer, (byte) =>
+      byte < 0x80 ? String.fromCharCode(byte) : CP437_HIGH[byte - 0x80]
+    ).join("");
+  }
+}
+
+// Unzipper exposes filename bytes and flags but discards non-ZIP64 extra fields. Read
+// each central-directory entry's extra bytes so Unicode Path names are not lost.
+function decodeDirectoryPaths(buffer, directory) {
+  let offset = directory.offsetToStartOfCentralDirectory;
+  return directory.files.map((entry) => {
+    if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== 0x02014b50) {
+      throw new Error("Invalid ZIP central directory");
+    }
+    const extraStart = offset + 46 + entry.fileNameLength;
+    const extraEnd = extraStart + entry.extraFieldLength;
+    offset = extraEnd + entry.fileCommentLength;
+    if (offset > buffer.length) throw new Error("Truncated ZIP central directory");
+    return { ...entry, path: decodeArchivePath(entry, buffer.subarray(extraStart, extraEnd)) };
+  });
+}
+
 // Where the end record sits and how many entries it claims, read before the archive is
 // opened: the reader takes a step per claimed entry, so a forged count would exhaust memory.
 // A field at its largest value sends the reader to a zip64 record instead, whose count can
@@ -63,7 +123,8 @@ function hasClashingPaths(paths) {
   const files = new Set();
   const folders = new Set();
   for (const entryPath of paths) {
-    const key = entryPath.normalize("NFC").toLowerCase();
+    // Uppercase first also folds final sigma and long s, which lowercase alone misses.
+    const key = entryPath.normalize("NFC").toUpperCase().toLowerCase().normalize("NFC");
     if (files.has(key)) return true;
     files.add(key);
     const segments = key.split("/");
@@ -104,14 +165,15 @@ async function readSkillArchive(buffer, { limits: overrides } = {}) {
   const end = readEndRecord(buffer);
   if (!end) return refuse("unreadableArchive");
   if (end.entries > limits.maxFiles * ENTRIES_PER_FILE) return refuse("tooManyFiles");
-  let directory;
+  let decodedEntries;
   try {
-    directory = await unzipper.Open.buffer(buffer, { tailSize: end.tailSize });
+    const directory = await unzipper.Open.buffer(buffer, { tailSize: end.tailSize });
+    decodedEntries = decodeDirectoryPaths(buffer, directory);
   } catch {
     return refuse("unreadableArchive");
   }
 
-  const entries = directory.files.filter(
+  const entries = decodedEntries.filter(
     (entry) => entry.type !== "Directory" && !isJunk(entry.path)
   );
   if (!entries.every(hasSizes)) return refuse("unreadableArchive");

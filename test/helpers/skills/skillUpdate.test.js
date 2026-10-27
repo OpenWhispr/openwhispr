@@ -454,3 +454,81 @@ test("Undo is refused once the skill was deleted by hand", (t) => {
 
   assert.equal(library.undo(NAME, versionId), false);
 });
+
+
+test("an update whose database write fails preserves files and prior Undo history", (t) => {
+  const { library, database, skillsDir, versionsDir } = playbook(t);
+  const original = snapshot(path.join(skillsDir, NAME));
+  const first = library.applyUpdate(SSO);
+  const before = snapshot(path.join(skillsDir, NAME));
+  const state = database.getSkillStates();
+  const versions = listDir(versionsDir);
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database full"), { code: "SQLITE_FULL" });
+  });
+
+  assert.throws(
+    () => library.applyUpdate({ ...SSO, instructions: "A second update." }),
+    /database full/
+  );
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(versionsDir), versions);
+  t.mock.restoreAll();
+
+  assert.equal(library.undo(NAME, first.versionId), true);
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), original);
+});
+
+test("a failed assistant replacement keeps a disabled skill unchanged and can retry", (t) => {
+  const { library, database, skillsDir, versionsDir } = playbook(t);
+  database.setSkillEnabled(NAME, false);
+  const proposal = {
+    title: "Enterprise call playbook",
+    description: "Updated playbook.",
+    instructions: "Ask about SSO.",
+    files: [],
+  };
+  const { hash } = library.checkProposal({ kind: "create", proposal });
+  const draft = { ...proposal, baseHash: hash };
+  const before = snapshot(path.join(skillsDir, NAME));
+  const state = database.getSkillStates();
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database full"), { code: "SQLITE_FULL" });
+  });
+
+  assert.throws(() => library.saveProposal(draft), /database full/);
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(versionsDir), []);
+  t.mock.restoreAll();
+
+  const saved = library.saveProposal(draft);
+  assert.equal(saved.name, NAME);
+  assert.equal(library.get(NAME).enabled, true);
+  assert.equal(library.undo(NAME, saved.versionId), true);
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), before);
+  assert.equal(library.get(NAME).enabled, false);
+});
+
+test("Undo whose database write fails keeps the saved version available for retry", (t) => {
+  const { library, database, skillsDir, versionsDir } = playbook(t);
+  const original = snapshot(path.join(skillsDir, NAME));
+  const { versionId } = library.applyUpdate(SSO);
+  const updated = snapshot(path.join(skillsDir, NAME));
+  const state = database.getSkillStates();
+  const versions = listDir(versionsDir);
+  t.mock.method(database, "upsertSkillState", () => {
+    throw Object.assign(new Error("database full"), { code: "SQLITE_FULL" });
+  });
+
+  assert.throws(() => library.undo(NAME, versionId), /database full/);
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), updated);
+  assert.deepEqual(database.getSkillStates(), state);
+  assert.deepEqual(listDir(versionsDir), versions);
+  t.mock.restoreAll();
+
+  assert.equal(library.undo(NAME, versionId), true);
+  assert.deepEqual(snapshot(path.join(skillsDir, NAME)), original);
+  assert.deepEqual(listDir(versionsDir), []);
+});
