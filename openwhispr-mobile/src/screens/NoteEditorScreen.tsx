@@ -474,12 +474,13 @@ export default function NoteEditorScreen() {
   const hasEnhancedTab = hasEnhanced || enhancedEditing;
   const bodyTabInput = useMemo(
     () => ({
+      isUpload: note?.noteType === 'upload',
       usesSegmentTranscript,
       transcriptPending,
       contentIsTranscript,
       hasEnhanced: hasEnhancedTab,
     }),
-    [contentIsTranscript, hasEnhancedTab, transcriptPending, usesSegmentTranscript],
+    [contentIsTranscript, hasEnhancedTab, note?.noteType, transcriptPending, usesSegmentTranscript],
   );
   // A private note asks before any AI leaves this iPhone. Local Mode asks too for note chat; note
   // formatting follows its own selection there.
