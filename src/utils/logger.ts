@@ -100,4 +100,9 @@ const logger = {
   },
 };
 
+// The Settings debug toggle changes the level while windows are open.
+if (typeof window !== "undefined") {
+  window.electronAPI?.onLogLevelChanged?.(logger.refreshLogLevel);
+}
+
 export default logger;
