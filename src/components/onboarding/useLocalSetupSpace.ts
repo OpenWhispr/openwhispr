@@ -7,9 +7,10 @@ export type LocalSetupSpaceReading = LocalSetupSpace & { refresh: () => void };
  * Free disk space for the local setup downloads, with the room each kind
  * reserves. null until the first read lands (or while it keeps failing). It is
  * read again when the window regains focus, so space freed in Finder or Explorer
- * shows up, and on refresh().
+ * shows up, and on refresh(). While `enabled` is false nothing is read; the last
+ * reading is kept.
  */
-export function useLocalSetupSpace(): LocalSetupSpaceReading | null {
+export function useLocalSetupSpace(enabled = true): LocalSetupSpaceReading | null {
   const [space, setSpace] = useState<LocalSetupSpace | null>(null);
   const mountedRef = useRef(false);
   const requestRef = useRef(0);
@@ -25,6 +26,7 @@ export function useLocalSetupSpace(): LocalSetupSpaceReading | null {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     mountedRef.current = true;
     refresh();
     window.addEventListener("focus", refresh);
@@ -32,7 +34,7 @@ export function useLocalSetupSpace(): LocalSetupSpaceReading | null {
       mountedRef.current = false;
       window.removeEventListener("focus", refresh);
     };
-  }, [refresh]);
+  }, [enabled, refresh]);
 
   return useMemo(() => (space ? { ...space, refresh } : null), [space, refresh]);
 }
