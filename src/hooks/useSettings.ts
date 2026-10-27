@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   useSettingsStore,
@@ -22,6 +22,7 @@ import {
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "./usePolicy";
+import { subscribeAgentNameChanges } from "../utils/agentName";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -129,16 +130,22 @@ export interface ChatAgentSettings {
   chatAgentCustomApiKey: string;
 }
 
-function useSettingsInternal() {
-  const store = useSettingsStore();
-  const { applyCustomDictionaryFromExternal, applySnippetsFromExternal } = store;
+interface AutoLearnCorrectionsValue {
+  autoLearnCorrections: boolean;
+  setAutoLearnCorrections: (enabled: boolean) => void;
+}
 
-  // One-time initialization: sync API keys, dictation key, activation mode,
-  // UI language, and dictionary from the main process / SQLite.
-  const hasInitialized = useRef(false);
+const AutoLearnCorrectionsContext = createContext<AutoLearnCorrectionsValue | null>(null);
+
+function useSettingsLifecycle(): AutoLearnCorrectionsValue {
+  const applyCustomDictionaryFromExternal = useSettingsStore(
+    (settings) => settings.applyCustomDictionaryFromExternal
+  );
+  const applySnippetsFromExternal = useSettingsStore(
+    (settings) => settings.applySnippetsFromExternal
+  );
+
   useEffect(() => {
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
     initializeSettings().catch((err) => {
       logger.warn(
         "Failed to initialize settings store",
@@ -148,30 +155,43 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Refresh the in-memory store from main-process broadcasts (auto-learn, sync
-  // pulls) without re-triggering a sync — that would loop, since pulls emit the
-  // broadcast. Writes that must sync go through setCustomDictionary instead.
+  useEffect(subscribeAgentNameChanges, []);
+
+  // Startup sends the initial snapshot before hydration; subscribe only to changes.
+  useEffect(
+    () =>
+      useSettingsStore.subscribe((state, previous) => {
+        if (
+          state.notificationsEnabled === previous.notificationsEnabled &&
+          state.notifyMeetingDetection === previous.notifyMeetingDetection &&
+          state.notifyCalendarReminders === previous.notifyCalendarReminders &&
+          state.meetingProcessDetection === previous.meetingProcessDetection
+        )
+          return;
+        window.electronAPI?.syncNotificationPreferences?.({
+          notificationsEnabled: state.notificationsEnabled,
+          notifyMeetingDetection: state.notifyMeetingDetection,
+          notifyCalendarReminders: state.notifyCalendarReminders,
+          meetingProcessDetection: state.meetingProcessDetection,
+        });
+      }),
+    []
+  );
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
-    const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
-      if (Array.isArray(words)) {
-        applyCustomDictionaryFromExternal(words);
-      }
+    return window.electronAPI.onDictionaryUpdated((words: string[]) => {
+      if (Array.isArray(words)) applyCustomDictionaryFromExternal(words);
     });
-    return unsubscribe;
   }, [applyCustomDictionaryFromExternal]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onSnippetsUpdated) return;
-    const unsubscribe = window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
-      if (Array.isArray(snippets)) {
-        applySnippetsFromExternal(snippets);
-      }
+    return window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
+      if (Array.isArray(snippets)) applySnippetsFromExternal(snippets);
     });
-    return unsubscribe;
   }, [applySnippetsFromExternal]);
 
-  // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
     "autoLearnCorrections",
     true,
@@ -180,33 +200,19 @@ function useSettingsInternal() {
       deserialize: (value: string) => value !== "false",
     }
   );
-
-  const setAutoLearnCorrections = useCallback(
-    (enabled: boolean) => {
-      setAutoLearnCorrectionsRaw(enabled);
-      window.electronAPI?.setAutoLearnEnabled?.(enabled);
-    },
-    [setAutoLearnCorrectionsRaw]
-  );
-
-  // Sync auto-learn state to main process on mount
   useEffect(() => {
     window.electronAPI?.setAutoLearnEnabled?.(autoLearnCorrections);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [autoLearnCorrections]);
 
-  // Retention periods are enforced by the main process cleanup sweep
-  const { audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled } = store;
+  const audioRetentionDays = useSettingsStore((settings) => settings.audioRetentionDays);
+  const transcriptRetentionDays = useSettingsStore((settings) => settings.transcriptRetentionDays);
+  const dataRetentionEnabled = useSettingsStore((settings) => settings.dataRetentionEnabled);
   const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
     effectiveAudioRetentionDays(policyState, audioRetentionDays)
   );
-  // Sent alongside the periods because the main process reconstructs Insights
-  // history from stored transcripts, and that must answer to the same switch.
   const enforcedDataRetentionEnabled = usePolicyStore((policyState) =>
     effectiveLocalHistoryEnabled(policyState, dataRetentionEnabled)
   );
-  // Reported alongside the value because history reconstruction reads that
-  // switch as consent, and until the policy settles it is only a default.
   const localHistoryPolicyResolved = usePolicyStore(isLocalHistoryPolicyResolved);
   useEffect(() => {
     window.electronAPI?.syncRetentionSettings?.({
@@ -222,18 +228,17 @@ function useSettingsInternal() {
     localHistoryPolicyResolved,
   ]);
 
-  // Sync startup pre-warming preferences to main process
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    whisperModel,
-    parakeetModel,
-    cohereModel,
-    preferredLanguage,
-    keepLocalModelLoaded,
-  } = store;
-  // Every window runs this sync, and the main process stops the shared
-  // llama-server from it, so it must see every scope's resolved local model.
+  // Sync startup pre-warming preferences to main process. Every window sends
+  // policy-effective local models for all scopes before main decides to stop the shared server.
+  const useLocalWhisper = useSettingsStore((settings) => settings.useLocalWhisper);
+  const localTranscriptionProvider = useSettingsStore(
+    (settings) => settings.localTranscriptionProvider
+  );
+  const whisperModel = useSettingsStore((settings) => settings.whisperModel);
+  const parakeetModel = useSettingsStore((settings) => settings.parakeetModel);
+  const cohereModel = useSettingsStore((settings) => settings.cohereModel);
+  const preferredLanguage = useSettingsStore((settings) => settings.preferredLanguage);
+  const keepLocalModelLoaded = useSettingsStore((settings) => settings.keepLocalModelLoaded);
   const policySnapshot = usePolicySnapshot();
   const localServerPrefs = useSettingsStore(
     useShallow((state) => selectLocalServerPrefs(state, policySnapshot))
@@ -249,7 +254,6 @@ function useSettingsInternal() {
       }),
     []
   );
-
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
 
@@ -289,197 +293,23 @@ function useSettingsInternal() {
     signOuts,
   ]);
 
-  return {
-    useLocalWhisper: store.useLocalWhisper,
-    whisperModel: store.whisperModel,
-    uiLanguage: store.uiLanguage,
-    localTranscriptionProvider: store.localTranscriptionProvider,
-    parakeetModel: store.parakeetModel,
-    cohereModel: store.cohereModel,
-    allowOpenAIFallback: store.allowOpenAIFallback,
-    allowLocalFallback: store.allowLocalFallback,
-    fallbackWhisperModel: store.fallbackWhisperModel,
-    preferredLanguage: store.preferredLanguage,
-    chineseScriptPreference: store.chineseScriptPreference,
-    cloudTranscriptionProvider: store.cloudTranscriptionProvider,
-    cloudTranscriptionModel: store.cloudTranscriptionModel,
-    cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
-    cleanupCloudBaseUrl: store.cleanupCloudBaseUrl,
-    cloudTranscriptionMode: store.cloudTranscriptionMode,
-    cleanupCloudMode: store.cleanupCloudMode,
-    transcriptionMode: store.transcriptionMode,
-    remoteTranscriptionType: store.remoteTranscriptionType,
-    remoteTranscriptionUrl: store.remoteTranscriptionUrl,
-    remoteTranscriptionModel: store.remoteTranscriptionModel,
-    cleanupMode: store.cleanupMode,
-    cleanupRemoteUrl: store.cleanupRemoteUrl,
-    customDictionary: store.customDictionary,
-    snippets: store.snippets,
-    setSnippets: store.setSnippets,
-    assemblyAiStreaming: store.assemblyAiStreaming,
-    setAssemblyAiStreaming: store.setAssemblyAiStreaming,
-    autoGenerateNoteTitle: store.autoGenerateNoteTitle,
-    setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
-    useCleanupModel: store.useCleanupModel,
-    useDictationAgent: store.useDictationAgent,
-    cleanupModel: store.cleanupModel,
-    cleanupProvider: store.cleanupProvider,
-    openaiApiKey: store.openaiApiKey,
-    anthropicApiKey: store.anthropicApiKey,
-    geminiApiKey: store.geminiApiKey,
-    groqApiKey: store.groqApiKey,
-    xaiApiKey: store.xaiApiKey,
-    mistralApiKey: store.mistralApiKey,
-    openrouterApiKey: store.openrouterApiKey,
-    tinfoilApiKey: store.tinfoilApiKey,
-    deepgramApiKey: store.deepgramApiKey,
-    assemblyaiApiKey: store.assemblyaiApiKey,
-    dictationKey: store.dictationKey,
-    meetingKey: store.meetingKey,
-    voiceAgentKey: store.voiceAgentKey,
-    meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
-    setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
-    theme: store.theme,
-    setUseLocalWhisper: store.setUseLocalWhisper,
-    setWhisperModel: store.setWhisperModel,
-    setUiLanguage: store.setUiLanguage,
-    setLocalTranscriptionProvider: store.setLocalTranscriptionProvider,
-    setParakeetModel: store.setParakeetModel,
-    setCohereModel: store.setCohereModel,
-    setAllowOpenAIFallback: store.setAllowOpenAIFallback,
-    setAllowLocalFallback: store.setAllowLocalFallback,
-    setFallbackWhisperModel: store.setFallbackWhisperModel,
-    setPreferredLanguage: store.setPreferredLanguage,
-    setChineseScriptPreference: store.setChineseScriptPreference,
-    setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
-    setCloudTranscriptionModel: store.setCloudTranscriptionModel,
-    setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
-    setCloudTranscriptionMode: store.setCloudTranscriptionMode,
-    setCleanupCloudBaseUrl: store.setCleanupCloudBaseUrl,
-    setCleanupCloudMode: store.setCleanupCloudMode,
-    setTranscriptionMode: store.setTranscriptionMode,
-    setRemoteTranscriptionType: store.setRemoteTranscriptionType,
-    setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
-    setRemoteTranscriptionModel: store.setRemoteTranscriptionModel,
-    setCleanupMode: store.setCleanupMode,
-    setCleanupRemoteUrl: store.setCleanupRemoteUrl,
-    setCustomDictionary: store.setCustomDictionary,
-    updateCustomDictionary: store.updateCustomDictionary,
-    setUseCleanupModel: store.setUseCleanupModel,
-    setUseDictationAgent: store.setUseDictationAgent,
-    setCleanupModel: store.setCleanupModel,
-    setCleanupProvider: store.setCleanupProvider,
-    setOpenaiApiKey: store.setOpenaiApiKey,
-    setAnthropicApiKey: store.setAnthropicApiKey,
-    setGeminiApiKey: store.setGeminiApiKey,
-    setGroqApiKey: store.setGroqApiKey,
-    setMistralApiKey: store.setMistralApiKey,
-    customTranscriptionApiKey: store.customTranscriptionApiKey,
-    setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
-    cleanupCustomApiKey: store.cleanupCustomApiKey,
-    setCleanupCustomApiKey: store.setCleanupCustomApiKey,
-    setDictationKey: store.setDictationKey,
-    setMeetingKey: store.setMeetingKey,
-    setVoiceAgentKey: store.setVoiceAgentKey,
-    onboardingUseCases: store.onboardingUseCases,
-    setOnboardingUseCases: store.setOnboardingUseCases,
-    onboardingUseCaseNote: store.onboardingUseCaseNote,
-    setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
-    spokenLanguages: store.spokenLanguages,
-    setSpokenLanguages: store.setSpokenLanguages,
-    setTheme: store.setTheme,
-    activationMode: store.activationMode,
-    setActivationMode: store.setActivationMode,
-    notificationsEnabled: store.notificationsEnabled,
-    setNotificationsEnabled: store.setNotificationsEnabled,
-    notifyMeetingDetection: store.notifyMeetingDetection,
-    setNotifyMeetingDetection: store.setNotifyMeetingDetection,
-    notifyCalendarReminders: store.notifyCalendarReminders,
-    setNotifyCalendarReminders: store.setNotifyCalendarReminders,
-    autoUpdatesEnabled: store.autoUpdatesEnabled,
-    setAutoUpdatesEnabled: store.setAutoUpdatesEnabled,
-    audioCuesEnabled: store.audioCuesEnabled,
-    setAudioCuesEnabled: store.setAudioCuesEnabled,
-    pauseMediaOnDictation: store.pauseMediaOnDictation,
-    setPauseMediaOnDictation: store.setPauseMediaOnDictation,
-    floatingIconAutoHide: store.floatingIconAutoHide,
-    setFloatingIconAutoHide: store.setFloatingIconAutoHide,
-    startMinimized: store.startMinimized,
-    setStartMinimized: store.setStartMinimized,
-    panelStartPosition: store.panelStartPosition,
-    setPanelStartPosition: store.setPanelStartPosition,
-    microphoneSelectionMode: store.microphoneSelectionMode,
-    preferBuiltInMic: store.preferBuiltInMic,
-    selectedMicDeviceId: store.selectedMicDeviceId,
-    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
-    micWarmHoldSeconds: store.micWarmHoldSeconds,
-    setMicrophoneSelectionMode: store.setMicrophoneSelectionMode,
-    setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDevice: store.setSelectedMicDevice,
-    setMicWarmHoldSeconds: store.setMicWarmHoldSeconds,
-    autoLearnCorrections,
-    setAutoLearnCorrections,
-    showTranscriptionPreview: store.showTranscriptionPreview,
-    setShowTranscriptionPreview: store.setShowTranscriptionPreview,
-    autoPasteEnabled: store.autoPasteEnabled,
-    setAutoPasteEnabled: store.setAutoPasteEnabled,
-    keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
-    setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
-    noteFilesEnabled: store.noteFilesEnabled,
-    setNoteFilesEnabled: store.setNoteFilesEnabled,
-    noteFilesPath: store.noteFilesPath,
-    setNoteFilesPath: store.setNoteFilesPath,
-    dictationSileroEnabled: store.dictationSileroEnabled,
-    setDictationSileroEnabled: store.setDictationSileroEnabled,
-    noteRecordingSileroEnabled: store.noteRecordingSileroEnabled,
-    setNoteRecordingSileroEnabled: store.setNoteRecordingSileroEnabled,
-    meetingSileroEnabled: store.meetingSileroEnabled,
-    setMeetingSileroEnabled: store.setMeetingSileroEnabled,
-    whisperVadThreshold: store.whisperVadThreshold,
-    setWhisperVadThreshold: store.setWhisperVadThreshold,
-    whisperVadMinSpeechDurationMs: store.whisperVadMinSpeechDurationMs,
-    setWhisperVadMinSpeechDurationMs: store.setWhisperVadMinSpeechDurationMs,
-    whisperVadMinSilenceDurationMs: store.whisperVadMinSilenceDurationMs,
-    setWhisperVadMinSilenceDurationMs: store.setWhisperVadMinSilenceDurationMs,
-    whisperVadMaxSpeechDurationS: store.whisperVadMaxSpeechDurationS,
-    setWhisperVadMaxSpeechDurationS: store.setWhisperVadMaxSpeechDurationS,
-    whisperVadSpeechPadMs: store.whisperVadSpeechPadMs,
-    setWhisperVadSpeechPadMs: store.setWhisperVadSpeechPadMs,
-    whisperVadSamplesOverlap: store.whisperVadSamplesOverlap,
-    setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
-    cloudBackupEnabled: store.cloudBackupEnabled,
-    setCloudBackupEnabled: store.setCloudBackupEnabled,
-    insightsSyncEnabled: store.insightsSyncEnabled,
-    setInsightsSyncEnabled: store.setInsightsSyncEnabled,
-    telemetryEnabled: store.telemetryEnabled,
-    setTelemetryEnabled: store.setTelemetryEnabled,
-    audioRetentionDays: store.audioRetentionDays,
-    setAudioRetentionDays: store.setAudioRetentionDays,
-    transcriptRetentionDays: store.transcriptRetentionDays,
-    setTranscriptRetentionDays: store.setTranscriptRetentionDays,
-    dataRetentionEnabled: store.dataRetentionEnabled,
-    setDataRetentionEnabled: store.setDataRetentionEnabled,
-    saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
-    setSaveDiscardedTranscriptions: store.setSaveDiscardedTranscriptions,
-    updateTranscriptionSettings: store.updateTranscriptionSettings,
-    updateCleanupSettings: store.updateCleanupSettings,
-    updateApiKeys: store.updateApiKeys,
-  };
+  return useMemo(
+    () => ({ autoLearnCorrections, setAutoLearnCorrections: setAutoLearnCorrectionsRaw }),
+    [autoLearnCorrections, setAutoLearnCorrectionsRaw]
+  );
 }
-
-export type SettingsValue = ReturnType<typeof useSettingsInternal>;
-
-const SettingsContext = createContext<SettingsValue | null>(null);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const value = useSettingsInternal();
-  return React.createElement(SettingsContext.Provider, { value }, children);
+  const autoLearnCorrections = useSettingsLifecycle();
+  return React.createElement(
+    AutoLearnCorrectionsContext.Provider,
+    { value: autoLearnCorrections },
+    children
+  );
 }
 
-export function useSettings(): SettingsValue {
-  const ctx = useContext(SettingsContext);
-  if (!ctx) {
-    throw new Error("useSettings must be used within a SettingsProvider");
-  }
-  return ctx;
+export function useAutoLearnCorrections(): AutoLearnCorrectionsValue {
+  const value = useContext(AutoLearnCorrectionsContext);
+  if (!value) throw new Error("useAutoLearnCorrections must be used within SettingsProvider");
+  return value;
 }

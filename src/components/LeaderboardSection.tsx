@@ -598,12 +598,12 @@ export default function LeaderboardSection({
         defaultName={domainToWorkspaceName(access?.domain ?? null)}
         open={createWorkspaceOpen}
         onOpenChange={setCreateWorkspaceOpen}
+        onReconciled={() => loadAccess()}
         onCreated={(workspaceId) => {
           const created = useWorkspaceStore
             .getState()
             .workspaces.find((workspace) => workspace.id === workspaceId);
           setInviteWorkspace({ id: workspaceId, name: created?.name ?? t("common.unknown") });
-          void loadAccess();
         }}
       />
       {inviteWorkspace && (
@@ -614,9 +614,9 @@ export default function LeaderboardSection({
           }}
           workspaceId={inviteWorkspace.id}
           workspaceName={inviteWorkspace.name}
-          onInvited={() => {
+          onReconciled={() => {
             setPendingInviteRevision((current) => current + 1);
-            void loadAccess();
+            return loadAccess();
           }}
         />
       )}

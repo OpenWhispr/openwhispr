@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Users, UserPlus, Trash2, LogOut, ChevronDown, Loader2 } from "../icons";
@@ -33,11 +33,7 @@ import type { Workspace } from "../../types/electron";
 const SUB_TABS = ["general", "members", "teams", "developer"] as const;
 type WorkspaceTab = (typeof SUB_TABS)[number];
 
-interface Props {
-  initialSubTab?: string;
-}
-
-export default function WorkspaceSection({ initialSubTab }: Props) {
+export default function WorkspaceSection() {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const { workspaces, activeWorkspaceId, setActiveWorkspaceId, loaded, loading, error, refresh } =
@@ -52,32 +48,42 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
         refresh: s.refresh,
       }))
     );
-  const [storedTab, setStoredTab] = useLocalStorage<string>(
-    "settings.workspaceTab",
-    SUB_TABS.includes(initialSubTab as WorkspaceTab) ? (initialSubTab as WorkspaceTab) : "members"
-  );
+  const [storedTab, setStoredTab] = useLocalStorage<string>("settings.workspaceTab", "members");
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusedControl = useRef<HTMLElement | null>(null);
+  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
+  const canManage = !!workspace && canManageWorkspace(workspace.role);
+  const visibleTabs = SUB_TABS.filter((id) => id !== "developer" || canManage);
+  const tab: WorkspaceTab = visibleTabs.includes(storedTab as WorkspaceTab)
+    ? (storedTab as WorkspaceTab)
+    : "members";
+
+  useLayoutEffect(() => {
+    const previous = focusedControl.current;
+    if (!previous || previous.isConnected) return;
+    focusedControl.current = null;
+    if (document.activeElement !== document.body) return;
+    rootRef.current
+      ?.querySelector<HTMLButtonElement>('[data-workspace-choice][aria-pressed="true"]')
+      ?.focus();
+  }, [workspace?.id, workspace?.role, tab]);
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
   }, [isSignedIn, loaded, refresh]);
 
-  useEffect(() => {
-    if (initialSubTab && SUB_TABS.includes(initialSubTab as WorkspaceTab)) {
-      setStoredTab(initialSubTab);
-    }
-  }, [initialSubTab, setStoredTab]);
-
   if (!isSignedIn) return null;
 
   // Shared by the empty and populated branches so the create→invite chain
   // survives the branch switch when the first workspace lands in the store.
+  // The key keeps the dialog mounted although its index differs per branch.
   const inviteWorkspace = inviteWorkspaceId
     ? (workspaces.find((w) => w.id === inviteWorkspaceId) ?? null)
     : null;
   const createDialog = (
-    <>
+    <React.Fragment key="create-workspace">
       <CreateWorkspaceDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -94,7 +100,7 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
           cancelLabel={t("common.skip")}
         />
       )}
-    </>
+    </React.Fragment>
   );
 
   if (!loaded) {
@@ -150,15 +156,18 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
     );
   }
 
-  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
-  const canManage = canManageWorkspace(workspace.role);
-  const visibleTabs = SUB_TABS.filter((id) => id !== "developer" || canManage);
-  const tab: WorkspaceTab = visibleTabs.includes(storedTab as WorkspaceTab)
-    ? (storedTab as WorkspaceTab)
-    : "members";
-
   return (
-    <div className="space-y-4">
+    <div
+      ref={rootRef}
+      onFocusCapture={(event) => {
+        focusedControl.current = event.target as HTMLElement;
+      }}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          focusedControl.current = null;
+      }}
+      className="space-y-4"
+    >
       <div className="flex items-center justify-between">
         <div className="min-w-0">
           <DropdownMenu modal={false}>
@@ -200,12 +209,13 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
       </div>
 
       <div className="border-b border-border/70 dark:border-border-subtle/60 -mx-1">
-        <div role="tablist" className="flex gap-0.5 px-1">
+        <div className="flex gap-0.5 px-1">
           {visibleTabs.map((id) => (
             <button
               key={id}
-              role="tab"
-              aria-selected={tab === id}
+              type="button"
+              data-workspace-choice={id}
+              aria-pressed={tab === id}
               onClick={() => setStoredTab(id)}
               className={cn(
                 "px-3 h-8 text-xs font-medium outline-none transition-colors relative",
@@ -222,7 +232,8 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
         </div>
       </div>
 
-      <div className="pt-1">
+      {/* Workspace/role-owned drafts, rosters and one-time keys must not survive a switch. */}
+      <div key={`${workspace.id}:${workspace.role}`} className="pt-1">
         {tab === "general" && <GeneralTab workspace={workspace} />}
         {tab === "members" && <WorkspaceMembersTab workspace={workspace} />}
         {tab === "teams" && <WorkspaceTeamsTab workspace={workspace} />}
@@ -240,7 +251,6 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
   const { user } = useAuth();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const refresh = useWorkspaceStore((s) => s.refresh);
-  const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
   const [name, setName] = useState(workspace.name);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -257,7 +267,7 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
     setSaving(true);
     try {
       await WorkspacesService.update(workspace.id, { name });
-      await refresh();
+      await refresh(true);
       toast({ title: t("settingsPage.workspace.general.saved") });
     } catch (error) {
       toast({
@@ -280,8 +290,8 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
         setDeleting(true);
         try {
           await WorkspacesService.remove(workspace.id);
-          setActive(null);
-          await refresh();
+          // Read after the write, resolving the current selection rather than this closure's workspace.
+          await refresh(true);
           toast({ title: t("settingsPage.workspace.general.deleted") });
         } catch (error) {
           toast({
@@ -307,8 +317,7 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
         setLeaving(true);
         try {
           await WorkspacesService.removeMember(workspace.id, user.id);
-          setActive(null);
-          await refresh();
+          await refresh(true);
           toast({ title: t("settingsPage.workspace.general.left", { name: workspace.name }) });
         } catch (error) {
           toast({

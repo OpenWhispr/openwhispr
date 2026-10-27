@@ -25,10 +25,11 @@ export function getCleanupSystemPrompt(
   customDictionary?: string[],
   language?: string,
   uiLanguage?: string,
-  toneStyle?: DictationToneStyle | null
+  toneStyle?: DictationToneStyle | null,
+  promptTemplate?: string
 ): string {
   return appendToneStyleSuffix(
-    resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage }),
+    resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage, promptTemplate }),
     toneStyle
   );
 }

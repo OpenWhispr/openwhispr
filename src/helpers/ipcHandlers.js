@@ -17,8 +17,8 @@ const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason")
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
+const { createCloudApiRequestHandler, captureAuthFence } = require("./cloudApiRequest");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
-const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
@@ -1567,6 +1567,16 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    ipcMain.handle("settings-document-id", (event) =>
+      this.windowManager.getSettingsDocumentId(event)
+    );
+    ipcMain.on("settings-host-ready", (event, hostId, ready, documentId) =>
+      this.windowManager.setSettingsHostReady(event, hostId, ready, documentId)
+    );
+    ipcMain.on("settings-open-consumed", (event, hostId, requestId) =>
+      this.windowManager.acknowledgeSettingsOpen(event, hostId, requestId)
+    );
+
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );
@@ -1807,26 +1817,20 @@ class IPCHandlers {
 
     // Counts changes to any key in Settings. A streaming socket keeps the count it
     // was opened under, so a start never reuses one authenticated before a change.
+    // Renderers learn of a change from the environment manager's secret-key-changed event.
     let credentialGeneration = 0;
-    const saveSecretKey = (getter, saver, storeKey) => (event, key) => {
+    const saveSecretKey = (getter, saver) => (_event, key) => {
       if (typeof key !== "string") throw new TypeError("API key must be a string");
       // Committing an unedited key field saves the same value again.
       const changed = this.environmentManager[getter]() !== key;
       const result = this.environmentManager[saver](key);
-      if (!changed) return result;
-      credentialGeneration += 1;
-      // Notify peers by setting name only; leave the editor's pending input alone.
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed() && win.webContents.id !== event.sender.id) {
-          win.webContents.send("api-key-updated", storeKey);
-        }
-      }
+      if (changed) credentialGeneration += 1;
       return result;
     };
 
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
-      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save, k.storeKey));
+      ipcMain.handle(`save-${k.base}-key`, saveSecretKey(k.get, k.save));
     }
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
@@ -2040,12 +2044,17 @@ class IPCHandlers {
 
     ipcMain.handle("delete-all-audio", async () => {
       const result = this.audioStorageManager.deleteAllAudio();
+      // Only a failed directory listing fails without an ID, and it deleted nothing.
+      if (result.failed && result.failedIds.length === 0) return result;
       try {
-        const rows = this.databaseManager.db
+        // Files that were already missing still clear their flags; failed deletes keep theirs.
+        const ids = this.databaseManager.db
           .prepare("SELECT id FROM transcriptions WHERE has_audio = 1")
-          .all();
-        if (rows.length > 0) {
-          this.databaseManager.clearAudioFlags(rows.map((r) => r.id));
+          .all()
+          .map((row) => row.id)
+          .filter((id) => !result.failedIds.includes(String(id)));
+        if (ids.length > 0) {
+          this.databaseManager.clearAudioFlags(ids);
         }
       } catch (error) {
         debugLogger.error(
@@ -2053,6 +2062,7 @@ class IPCHandlers {
           { error: error.message },
           "audio-storage"
         );
+        return { ...result, failed: true };
       }
       return result;
     });
@@ -4351,7 +4361,9 @@ class IPCHandlers {
 
       // Delete audio files
       try {
-        this.audioStorageManager.deleteAllAudio();
+        if (this.audioStorageManager.deleteAllAudio().failed) {
+          errors.push("Audio delete: some files could not be removed");
+        }
       } catch (e) {
         errors.push(`Audio delete: ${e.message}`);
       }
@@ -4365,7 +4377,8 @@ class IPCHandlers {
         errors.push(`Whisper models: ${e.message}`);
       }
       try {
-        await this.parakeetManager?.deleteAllParakeetModels();
+        const result = await this.parakeetManager?.deleteAllParakeetModels();
+        if (result && !result.success) errors.push("Parakeet models: deletion incomplete");
       } catch (e) {
         errors.push(`Parakeet models: ${e.message}`);
       }
@@ -4736,16 +4749,21 @@ class IPCHandlers {
       return await this.windowManager.stopControlPanelDrag();
     });
 
-    ipcMain.handle("open-external", async (event, url) => {
+    ipcMain.handle("open-external", async (event, url, expectedAuthGeneration) => {
       try {
+        const fence =
+          expectedAuthGeneration === undefined
+            ? null
+            : captureAuthFence(tokenStore, expectedAuthGeneration);
         const { protocol } = new URL(url);
         if (!["http:", "https:", "mailto:"].includes(protocol)) {
           return { success: false, error: `Blocked URL scheme: ${protocol}` };
         }
-        await openExternalUrl(url);
+        if (fence) await fence.awaitBound(() => openExternalUrl(url));
+        else await openExternalUrl(url);
         return { success: true };
       } catch (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, code: error.code };
       }
     });
 
@@ -5019,10 +5037,7 @@ class IPCHandlers {
       return this.environmentManager.getCortiClientId();
     });
 
-    ipcMain.handle(
-      "save-corti-client-id",
-      saveSecretKey("getCortiClientId", "saveCortiClientId", "cortiClientId")
-    );
+    ipcMain.handle("save-corti-client-id", saveSecretKey("getCortiClientId", "saveCortiClientId"));
 
     ipcMain.handle("get-corti-client-secret", async () => {
       return this.environmentManager.getCortiClientSecret();
@@ -5030,7 +5045,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "save-corti-client-secret",
-      saveSecretKey("getCortiClientSecret", "saveCortiClientSecret", "cortiClientSecret")
+      saveSecretKey("getCortiClientSecret", "saveCortiClientSecret")
     );
 
     ipcMain.handle(
@@ -5098,11 +5113,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "save-custom-transcription-key",
-      saveSecretKey(
-        "getCustomTranscriptionKey",
-        "saveCustomTranscriptionKey",
-        "customTranscriptionApiKey"
-      )
+      saveSecretKey("getCustomTranscriptionKey", "saveCustomTranscriptionKey")
     );
 
     ipcMain.handle("get-cleanup-custom-key", async () => {
@@ -5111,7 +5122,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "save-cleanup-custom-key",
-      saveSecretKey("getCleanupCustomKey", "saveCleanupCustomKey", "cleanupCustomApiKey")
+      saveSecretKey("getCleanupCustomKey", "saveCleanupCustomKey")
     );
 
     // Enterprise provider key handlers
@@ -5132,25 +5143,21 @@ class IPCHandlers {
     });
     ipcMain.handle(
       "save-bedrock-access-key-id",
-      saveSecretKey("getBedrockAccessKeyId", "saveBedrockAccessKeyId", "bedrockAccessKeyId")
+      saveSecretKey("getBedrockAccessKeyId", "saveBedrockAccessKeyId")
     );
     ipcMain.handle("get-bedrock-secret-access-key", async () => {
       return this.environmentManager.getBedrockSecretAccessKey();
     });
     ipcMain.handle(
       "save-bedrock-secret-access-key",
-      saveSecretKey(
-        "getBedrockSecretAccessKey",
-        "saveBedrockSecretAccessKey",
-        "bedrockSecretAccessKey"
-      )
+      saveSecretKey("getBedrockSecretAccessKey", "saveBedrockSecretAccessKey")
     );
     ipcMain.handle("get-bedrock-session-token", async () => {
       return this.environmentManager.getBedrockSessionToken();
     });
     ipcMain.handle(
       "save-bedrock-session-token",
-      saveSecretKey("getBedrockSessionToken", "saveBedrockSessionToken", "bedrockSessionToken")
+      saveSecretKey("getBedrockSessionToken", "saveBedrockSessionToken")
     );
     ipcMain.handle("get-azure-endpoint", async () => {
       return this.environmentManager.getAzureEndpoint();
@@ -5161,10 +5168,7 @@ class IPCHandlers {
     ipcMain.handle("get-azure-api-key", async () => {
       return this.environmentManager.getAzureApiKey();
     });
-    ipcMain.handle(
-      "save-azure-api-key",
-      saveSecretKey("getAzureApiKey", "saveAzureApiKey", "azureApiKey")
-    );
+    ipcMain.handle("save-azure-api-key", saveSecretKey("getAzureApiKey", "saveAzureApiKey"));
     ipcMain.handle("get-azure-deployment", async () => {
       return this.environmentManager.getAzureDeployment();
     });
@@ -5192,10 +5196,7 @@ class IPCHandlers {
     ipcMain.handle("get-vertex-api-key", async () => {
       return this.environmentManager.getVertexApiKey();
     });
-    ipcMain.handle(
-      "save-vertex-api-key",
-      saveSecretKey("getVertexApiKey", "saveVertexApiKey", "vertexApiKey")
-    );
+    ipcMain.handle("save-vertex-api-key", saveSecretKey("getVertexApiKey", "saveVertexApiKey"));
 
     // Enterprise provider test connection
     ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
@@ -10504,115 +10505,28 @@ class IPCHandlers {
       }
     });
 
-    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const headers = { ...authHeader };
-        const fetchOpts = { method: "POST", headers };
-        if (body) {
-          headers["Content-Type"] = "application/json";
-          fetchOpts.body = JSON.stringify(body);
-        }
-
-        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-          }
-          if (response.status === 503) {
-            return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-          }
-          const errorData = await response.json().catch(() => ({}));
-          const message = errorData.error || `API error: ${response.status}`;
-          debugLogger.error(`${errorPrefix}: ${message}`);
-          return { success: false, error: message, code: errorData.code };
-        }
-
-        const data = await response.json();
-        return { success: true, url: data.url };
-      } catch (error) {
-        debugLogger.error(`${errorPrefix}: ${error.message}`);
-        return { success: false, error: error.message };
-      }
+    // Named billing channels reuse the same bearer-generation fence as cloud CRUD.
+    const requestBilling = async (path, body, expectedAuthGeneration) => {
+      const result = await handleCloudApiRequest({
+        method: "POST",
+        path,
+        body,
+        expectedAuthGeneration,
+      });
+      return result.success ? { success: true, ...result.data } : result;
     };
-
-    ipcMain.handle("cloud-checkout", (event, opts) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
+    ipcMain.handle("cloud-checkout", (_event, opts, generation) =>
+      requestBilling("/api/stripe/checkout", opts, generation)
     );
-
-    ipcMain.handle("cloud-billing-portal", (event) =>
-      fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
+    ipcMain.handle("cloud-billing-portal", (_event, generation) =>
+      requestBilling("/api/stripe/portal", undefined, generation)
     );
-
-    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
-          method: "POST",
-          headers: { ...authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(opts),
-        });
-
-        if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (response.status === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          return { success: false, error: data.error || "Failed to switch plan" };
-        }
-        return data;
-      } catch (error) {
-        debugLogger.error(`Cloud switch plan error: ${error.message}`);
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const authHeader = await getAuthHeader(event);
-        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
-
-        const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
-          method: "POST",
-          headers: { ...authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify(opts),
-        });
-
-        if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (response.status === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          return { success: false, error: data.error || "Failed to preview plan change" };
-        }
-        return { success: true, ...data };
-      } catch (error) {
-        debugLogger.error(`Cloud preview switch error: ${error.message}`);
-        return { success: false, error: error.message };
-      }
-    });
+    ipcMain.handle("cloud-switch-plan", (_event, opts, generation) =>
+      requestBilling("/api/stripe/switch-plan", opts, generation)
+    );
+    ipcMain.handle("cloud-preview-switch", (_event, opts, generation) =>
+      requestBilling("/api/stripe/preview-switch", opts, generation)
+    );
 
     ipcMain.handle("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
 
@@ -11154,10 +11068,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-ydotool-status", () => {
-      const { getYdotoolStatus } = require("./ensureYdotool");
-      return getYdotoolStatus();
-    });
+    ipcMain.handle("get-ydotool-status", () => require("./ensureYdotool").getYdotoolStatus());
 
     ipcMain.handle("get-debug-state", async () => {
       try {
@@ -12553,10 +12464,6 @@ class IPCHandlers {
       return this.windowManager?.consumePendingNoteNavigation() ?? null;
     });
 
-    ipcMain.handle("get-pending-settings-section", async () => {
-      return this.windowManager?.consumePendingSettingsSection() ?? null;
-    });
-
     ipcMain.handle("meeting-notification-ready", async (event) => {
       this.windowManager?.showNotificationWindow(event.sender);
     });
@@ -12658,6 +12565,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("granola-import-pick-and-preview", async (event) => {
+      // A canceled or superseded picker must not leave an earlier preview runnable.
+      const request = (this._granolaImportRequest = (this._granolaImportRequest || 0) + 1);
+      this._granolaImportPending = null;
       try {
         const { dialog } = require("electron");
         // Parent the dialog so it opens as a sheet on the settings window —
@@ -12672,6 +12582,7 @@ class IPCHandlers {
         const result = parentWindow
           ? await dialog.showOpenDialog(parentWindow, dialogOptions)
           : await dialog.showOpenDialog(dialogOptions);
+        if (request !== this._granolaImportRequest) return { canceled: true };
         if (result.canceled || !result.filePaths.length) {
           return { canceled: true };
         }
@@ -12709,7 +12620,8 @@ class IPCHandlers {
         const freshNotes = notes.filter((n) => !existing.has(n.clientNoteId));
         // The run handler only ever imports what this preview parsed — the
         // renderer never sends a file path across the bridge.
-        this._granolaImportPending = { notes };
+        if (request !== this._granolaImportRequest) return { canceled: true };
+        this._granolaImportPending = { notes, sender: event.sender };
         return {
           canceled: false,
           success: true,
@@ -12730,10 +12642,12 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("granola-import-run", async () => {
+    ipcMain.handle("granola-import-run", async (event) => {
       const pending = this._granolaImportPending;
+      if (!pending || pending.sender !== event.sender) {
+        return { success: false, error: "NO_PENDING_IMPORT" };
+      }
       this._granolaImportPending = null;
-      if (!pending) return { success: false, error: "NO_PENDING_IMPORT" };
       try {
         const result = this.databaseManager.importNotes(pending.notes);
         if (result.imported > 0) {

@@ -32,6 +32,7 @@ async function runAgentDictation(
     cachePrefix: "openwhispr-failed-agent-route-test-",
     settingsKey: "__failedAgentRouteSettings",
     settings: {
+      agentName: "Nova",
       useLocalWhisper: false,
       cloudTranscriptionMode: "byok",
       cloudTranscriptionProvider: "custom",
@@ -52,7 +53,6 @@ async function runAgentDictation(
       "/config/prompts": "export const resolvePrompt = () => 'agent prompt';",
     },
   });
-  window.localStorage.setItem("agentName", "Nova");
 
   const saved = [];
   const errors = [];

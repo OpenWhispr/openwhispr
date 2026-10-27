@@ -19,6 +19,7 @@ import { InvitationsService } from "../services/InvitationsService";
 import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
 import { formatAmount } from "../utils/formatAmount";
 import { useToast } from "./ui/useToast";
+import { useDialogSession } from "../hooks/useDialogSession";
 
 interface Props {
   open: boolean;
@@ -27,6 +28,7 @@ interface Props {
   workspaceName: string;
   /** Receives the normalized email the invitation was sent to. */
   onInvited?: (email: string) => void;
+  onReconciled?: (email: string) => void | Promise<void>;
   cancelLabel?: string;
   /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
@@ -41,6 +43,7 @@ export default function InviteTeammateDialog({
   workspaceId,
   workspaceName,
   onInvited,
+  onReconciled,
   cancelLabel,
   teamIds,
   spaceIds,
@@ -52,6 +55,14 @@ export default function InviteTeammateDialog({
   const [role, setRole] = useState<"admin" | "member">("member");
   const [submitting, setSubmitting] = useState(false);
   const showSpinner = useDelayedFlag(submitting);
+  const { sessionKey, capture, invalidate, bindSession } = useDialogSession(
+    open,
+    JSON.stringify([workspaceId, teamIds, spaceIds])
+  );
+  const handleOpenChange = (next: boolean) => {
+    if (!next) invalidate();
+    onOpenChange(next);
+  };
   const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
@@ -72,6 +83,9 @@ export default function InviteTeammateDialog({
         setSeatsUsed(preview.seats_used);
       })
       .catch(async () => {
+        if (cancelled) return;
+        setSeatPreview(null);
+        setSeatsUsed(null);
         // Free workspace — the preview needs a subscription. Fall back to the
         // member count so the seat line still renders, with nothing to bill.
         try {
@@ -84,22 +98,24 @@ export default function InviteTeammateDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, workspaceId]);
+  }, [open, workspaceId, sessionKey]);
 
-  useEffect(() => {
-    if (open) {
-      if (initialEmail) setEmail(initialEmail);
-    } else {
-      setEmail("");
-      setRole("member");
-      setSeatsUsed(null);
-      setSeatPreview(null);
-    }
-  }, [open, initialEmail]);
+  const draftOwner = JSON.stringify([sessionKey, initialEmail]);
+  const [previousOwner, setPreviousOwner] = useState("");
+  if (previousOwner !== draftOwner) {
+    setPreviousOwner(draftOwner);
+    setEmail(open ? (initialEmail ?? "") : "");
+    setRole("member");
+    setSubmitting(false);
+    setSeatPreview(null);
+    setSeatsUsed(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || submitting) return;
+    const completion = capture();
+    if (!completion.isCurrent()) return;
     setSubmitting(true);
     const normalizedEmail = email.trim().toLowerCase();
     try {
@@ -109,6 +125,8 @@ export default function InviteTeammateDialog({
         ...(teamIds && teamIds.length > 0 ? { team_ids: teamIds } : {}),
         ...(spaceIds && spaceIds.length > 0 ? { space_ids: spaceIds } : {}),
       });
+      if (completion.isAccountCurrent()) await onReconciled?.(normalizedEmail);
+      if (!completion.isCurrent()) return;
       if (result.email_sent) {
         toast({
           title: t("workspaces.invite.sentTitle"),
@@ -122,20 +140,21 @@ export default function InviteTeammateDialog({
         });
       }
       onInvited?.(normalizedEmail);
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch (error) {
+      if (!completion.isCurrent()) return;
       toast({
         title: t("workspaces.invite.errorTitle"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      if (completion.isCurrent()) setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{t("workspaces.invite.title", { workspace: workspaceName })}</DialogTitle>
@@ -146,7 +165,7 @@ export default function InviteTeammateDialog({
             </p>
           )}
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form ref={bindSession} onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="invite-email" className="text-xs font-medium">
               {t("workspaces.invite.emailLabel")}
@@ -208,7 +227,7 @@ export default function InviteTeammateDialog({
             <Button
               type="button"
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               disabled={submitting}
             >
               {cancelLabel ?? t("common.cancel")}

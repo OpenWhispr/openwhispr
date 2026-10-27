@@ -1,237 +1,188 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const os = require("node:os");
-const path = require("node:path");
+const React = require("react");
+const { mountPromptStudio } = require("../lib/promptStudioFixture");
 
-function findRunButton(node) {
-  if (!node) return null;
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findRunButton(child);
-      if (match) return match;
+test("Prompt Studio tests are request-local and cannot revert concurrent saves", async (t) => {
+  const mounted = await mountPromptStudio(t);
+  const { container, observed, PromptStudio, resolvePrompt, click } = mounted;
+  let root = mounted.root;
+  const draft = "Test {{agentName}} to {{targetLanguage}}";
+  for (const kind of ["cleanup", "dictationAgent", "translate"]) {
+    for (const action of kind === "cleanup" ? ["different", "failure"] : ["different"]) {
+      await t.test(`${kind}: ${action}`, async (subtest) => {
+        subtest.after(async () => {
+          await React.act(async () => observed.pending?.resolve("settled"));
+        });
+        await React.act(async () => {
+          observed.store.setState({ customPrompts: { [kind]: "Saved {{agentName}}" } });
+          root.render(React.createElement(PromptStudio, { kind, key: `${kind}-${action}` }));
+        });
+        await click("promptStudio.tabs.customize");
+        await React.act(async () => observed.edit.onChange({ target: { value: draft } }));
+        await click("promptStudio.tabs.test");
+        const writes = observed.writes.length;
+        await click("promptStudio.test.run");
+        assert.equal(observed.writes.length, writes, "testing never writes shared settings");
+        assert.equal(
+          resolvePrompt(kind, { agentName: "Whisper" }),
+          "Saved Whisper",
+          "a simultaneous ordinary request still resolves the saved prompt"
+        );
+        const config = observed.calls.at(-1)[3];
+        if (kind === "cleanup") {
+          assert.equal(config.cleanupPrompt, draft);
+          assert.equal(
+            config.systemPrompt,
+            undefined,
+            "cleanup must not become an agent-style request"
+          );
+          assert.equal(config.inferenceScope, "dictationCleanup");
+          assert.equal(config.disableThinking, true);
+        } else {
+          assert.match(config.systemPrompt, /Test Whisper/);
+          assert.match(config.systemPrompt, /OpenWhispr/);
+          if (kind === "dictationAgent") {
+            assert.equal(config.requiresAgent, true, "agent policy enforcement stays enabled");
+            assert.equal(config.inferenceScope, "dictationAgent");
+            assert.match(config.systemPrompt, /French|français/i);
+          } else {
+            assert.match(config.systemPrompt, /Spanish/);
+            assert.equal(config.inferenceScope, "dictationTranslation");
+          }
+        }
+        await click("promptStudio.tabs.customize");
+        const saved = action === "different" ? "Different saved text" : draft;
+        await React.act(async () => observed.edit.onChange({ target: { value: saved } }));
+        await click("promptStudio.common.save");
+        const afterSave = observed.writes.length;
+        await React.act(async () => {
+          if (action === "failure") observed.pending.reject(new Error("test failure"));
+          else observed.pending.resolve("result");
+        });
+        assert.equal(observed.store.getState().customPrompts[kind], saved);
+        assert.equal(observed.writes.length, afterSave, "settling never restores an old prompt");
+        await click("promptStudio.tabs.test");
+        assert.match(
+          container.textContent,
+          action === "failure" ? /promptStudio.test.failed/ : /result/
+        );
+      });
     }
-    return null;
   }
-  if (node.props?.className === "w-full" && typeof node.props.onClick === "function") return node;
-  return findRunButton(node.props?.children);
-}
 
-test("Prompt Studio labels dictation-agent runs for policy enforcement", async (t) => {
-  const calls = [];
-  globalThis.__promptStudioReasoningCalls = calls;
-
-  const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-prompt-studio-test-"));
-  const vite = await createServer({
-    root: path.resolve(__dirname, "../../src"),
-    cacheDir,
-    configFile: false,
-    appType: "custom",
-    logLevel: "silent",
-    optimizeDeps: { noDiscovery: true },
-    ssr: { noExternal: true },
-    plugins: [
-      {
-        name: "prompt-studio-agent-policy-dependencies",
-        enforce: "pre",
-        resolveId(source) {
-          const modules = {
-            react: "react",
-            "react/jsx-dev-runtime": "jsx-runtime",
-            "react/jsx-runtime": "jsx-runtime",
-            "react-i18next": "i18n",
-            "zustand/react/shallow": "zustand-shallow",
-            "./button": "button",
-            "./textarea": "textarea",
-            "../icons": "icons",
-            "./dialog": "dialog",
-          };
-          if (modules[source]) return `\0prompt-studio-${modules[source]}`;
-          if (source.endsWith("/hooks/useDialogs")) return "\0prompt-studio-dialogs";
-          if (source.endsWith("/hooks/usePolicy")) return "\0prompt-studio-policy";
-          if (source.endsWith("/utils/agentName")) return "\0prompt-studio-agent-name";
-          if (source.endsWith("/services/ReasoningService")) return "\0prompt-studio-reasoning";
-          if (source.endsWith("/models/ModelRegistry")) return "\0prompt-studio-models";
-          if (source.endsWith("/utils/logger")) return "\0prompt-studio-logger";
-          if (source.endsWith("/config/prompts")) return "\0prompt-studio-prompts";
-          if (source.endsWith("/stores/settingsStore")) return "\0prompt-studio-settings";
-          if (source.endsWith("/utils/languageSupport")) return "\0prompt-studio-language";
-          if (source.endsWith("/utils/snippets")) return "\0prompt-studio-snippets";
-          if (source.endsWith("/helpers/dictationAgentInference")) {
-            return "\0prompt-studio-agent-inference";
-          }
-          if (source.endsWith("/helpers/dictationTranslationInference")) {
-            return "\0prompt-studio-translation-inference";
-          }
-          return null;
-        },
-        load(id) {
-          if (id === "\0prompt-studio-react") {
-            return `
-              let call = 0;
-              export function useState(initial) {
-                call += 1;
-                const value = call === 1 ? "test" : typeof initial === "function" ? initial() : initial;
-                return [value, () => {}];
+  for (const kind of ["cleanup", "dictationAgent", "translate"]) {
+    await t.test(
+      `${kind}: narrow subscriptions keep hidden drafts and read fresh test settings`,
+      async (subtest) => {
+        subtest.after(async () => {
+          container.hidden = false;
+          await React.act(async () => observed.pending?.resolve("settled"));
+        });
+        const modelKey =
+          kind === "translate"
+            ? "translationModel"
+            : kind === "dictationAgent"
+              ? "dictationAgentModel"
+              : "cleanupModel";
+        let commits = 0;
+        await React.act(async () => {
+          observed.policy.setState({ patch: {} });
+          observed.store.setState({
+            uiLanguage: "en",
+            isSignedIn: true,
+            useCleanupModel: true,
+            useDictationAgent: true,
+            useDictationTranslation: true,
+            cleanupModel: "cleanup",
+            dictationAgentModel: "agent",
+            translationModel: "translate",
+            dictationAgentProvider: "openwhispr",
+            translationProvider: "openwhispr",
+            customPrompts: { cleanup: "Saved", dictationAgent: "Saved", translate: "Saved" },
+          });
+          root.render(
+            React.createElement(
+              React.Profiler,
+              { id: kind, onRender: () => commits++ },
+              React.createElement(PromptStudio, { kind, key: `subscriptions-${kind}` })
+            )
+          );
+        });
+        await click("promptStudio.tabs.customize");
+        await React.act(async () => observed.edit.onChange({ target: { value: draft } }));
+        container.hidden = true;
+        const before = commits;
+        const otherScope =
+          kind === "cleanup"
+            ? {
+                dictationAgentModel: "other-agent",
+                dictationAgentProvider: "anthropic",
+                translationModel: "other-translation",
               }
-            `;
-          }
-          if (id === "\0prompt-studio-jsx-runtime") {
-            return `
-              export const Fragment = Symbol.for("prompt-studio-fragment");
-              export function jsxDEV(type, props, key) { return { type, props, key }; }
-              export const jsx = jsxDEV;
-              export const jsxs = jsxDEV;
-            `;
-          }
-          if (id === "\0prompt-studio-i18n") {
-            return `export function useTranslation() { return { t: (key) => key }; }`;
-          }
-          if (id === "\0prompt-studio-zustand-shallow") {
-            return `export function useShallow(selector) { return selector; }`;
-          }
-          if (id === "\0prompt-studio-button") return "export function Button() {}";
-          if (id === "\0prompt-studio-textarea") return "export function Textarea() {}";
-          if (id === "\0prompt-studio-icons") {
-            return `
-              export const Eye = () => null;
-              export const Edit3 = () => null;
-              export const Play = () => null;
-              export const Save = () => null;
-              export const RotateCcw = () => null;
-              export const Copy = () => null;
-              export const TestTube = () => null;
-              export const AlertTriangle = () => null;
-              export const Check = () => null;
-            `;
-          }
-          if (id === "\0prompt-studio-dialog") return "export function AlertDialog() {}";
-          if (id === "\0prompt-studio-dialogs") {
-            return `
-              export function useDialogs() {
-                return {
-                  alertDialog: { open: false, title: "", description: "" },
-                  showAlertDialog() {},
-                  hideAlertDialog() {},
-                };
-              }
-            `;
-          }
-          if (id === "\0prompt-studio-policy") {
-            return `
-              export function usePolicySnapshot() {
-                return { status: "unmanaged", policy: null, appVersion: "1.8.1" };
-              }
-            `;
-          }
-          if (id === "\0prompt-studio-agent-name") {
-            return `export function useAgentName() { return { agentName: "Whisper" }; }`;
-          }
-          if (id === "\0prompt-studio-reasoning") {
-            return `
-              export default {
-                async processText(...args) {
-                  globalThis.__promptStudioReasoningCalls.push(args);
-                  return "result";
-                },
-              };
-            `;
-          }
-          if (id === "\0prompt-studio-models") {
-            return `export function getModelProvider() { return "openai"; }`;
-          }
-          if (id === "\0prompt-studio-logger") {
-            return `export default { debug() {}, error() {} };`;
-          }
-          if (id === "\0prompt-studio-prompts") {
-            return `
-              export function getDefaultPromptText() { return "default prompt"; }
-              export function resolvePrompt() { return "resolved agent prompt"; }
-            `;
-          }
-          if (id === "\0prompt-studio-settings") {
-            return `
-              const state = {
-                uiLanguage: "en",
-                useCleanupModel: true,
-                cleanupModel: "",
-                useDictationAgent: true,
-                dictationAgentMode: "openwhispr",
-                dictationAgentProvider: "openwhispr",
-                dictationAgentModel: "auto",
-                useDictationTranslation: true,
-                translationMode: "openwhispr",
-                translationProvider: "openwhispr",
-                translationModel: "auto",
-                translationRemoteUrl: "",
-                translationCloudBaseUrl: "",
-                translationCustomApiKey: "",
-                translationDisableThinking: false,
-                translationTargetLanguage: "es",
-                customPrompts: { cleanup: "", dictationAgent: "", translate: "" },
-                preferredLanguage: "en",
-                cleanupDisableThinking: false,
-                setCustomPrompt() {},
-              };
-              export function useSettingsStore(selector) { return selector(state); }
-              useSettingsStore.getState = () => state;
-              export function selectPolicyEffectiveSettings(settings) { return settings; }
-              export const selectIsCloudCleanupMode = () => true;
-              export const selectIsCloudDictationAgentMode = () => true;
-              export const selectIsCloudTranslationMode = () => true;
-            `;
-          }
-          if (id === "\0prompt-studio-language") {
-            return `export function getLanguageLabel(value) { return value; }`;
-          }
-          if (id === "\0prompt-studio-snippets") {
-            return `export function getDictionaryHintWords() { return []; }`;
-          }
-          if (id === "\0prompt-studio-agent-inference") {
-            return `
-              export function resolveDictationAgentInference() {
-                return {
-                  reachable: true,
-                  model: "auto",
-                  displayProvider: "openwhispr",
-                  config: { provider: "openwhispr" },
-                };
-              }
-            `;
-          }
-          if (id === "\0prompt-studio-translation-inference") {
-            return `
-              export function resolveDictationTranslationInference() {
-                return {
-                  reachable: true,
-                  model: "auto",
-                  displayProvider: "openwhispr",
-                  config: { provider: "openwhispr" },
-                };
-              }
-            `;
-          }
-          return null;
-        },
-      },
-    ],
-    server: { middlewareMode: true },
-  });
-
-  t.after(async () => {
-    await vite.close();
-    fs.rmSync(cacheDir, { recursive: true, force: true });
-    delete globalThis.__promptStudioReasoningCalls;
-  });
-
-  const { default: PromptStudio } = await vite.ssrLoadModule("/components/ui/PromptStudio.tsx");
-  const rendered = PromptStudio({ kind: "dictationAgent" });
-  const runButton = findRunButton(rendered);
-  assert.ok(runButton, "expected the Prompt Studio test action to render");
-
-  await runButton.props.onClick();
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][3].requiresAgent, true);
+            : { cleanupModel: "other-cleanup", cleanupMode: "providers" };
+        await React.act(async () =>
+          observed.store.setState({
+            ...otherScope,
+            theme: "dark",
+            hotkey: "F9",
+            whisperModel: "large",
+            customDictionary: ["FreshDictionary"],
+            preferredLanguage: "de",
+            cleanupDisableThinking: false,
+            dictationAgentCustomApiKey: "fresh-agent-key",
+            dictationAgentRemoteUrl: "http://localhost:8080/v1",
+            translationCustomApiKey: "fresh-translation-key",
+            translationRemoteUrl: "http://localhost:9090/v1",
+          })
+        );
+        assert.equal(
+          commits,
+          before,
+          "unrelated/cross-scope/test-only writes do not render a hidden editor"
+        );
+        assert.equal(observed.edit.value, draft);
+        await React.act(async () => observed.store.setState({ [modelKey]: "chosen-model" }));
+        assert.ok(commits > before, "the current kind's model stays reactive");
+        let previous = commits;
+        await React.act(async () => observed.store.setState({ isSignedIn: false }));
+        assert.ok(commits > previous, "auth-derived cloud mode stays reactive");
+        previous = commits;
+        await React.act(async () =>
+          observed.policy.setState({ patch: { [modelKey]: "policy-model" } })
+        );
+        assert.ok(commits > previous, "policy-effective selection stays reactive");
+        previous = commits;
+        await React.act(async () => observed.store.setState({ uiLanguage: "es" }));
+        assert.ok(commits > previous, "default-prompt language stays reactive");
+        assert.equal(observed.edit.value, draft, "relevant updates do not reset the draft");
+        container.hidden = false;
+        await click("promptStudio.tabs.test");
+        assert.match(container.textContent, /policy-model/);
+        await click("promptStudio.test.run");
+        const [, model, , config] = observed.calls.at(-1);
+        assert.equal(model, "policy-model");
+        if (kind === "cleanup") {
+          assert.equal(
+            config.disableThinking,
+            false,
+            "Test uses the latest non-subscribed sampling setting"
+          );
+          assert.equal(config.cleanupPrompt, draft);
+        } else {
+          assert.match(config.systemPrompt, /FreshDictionary/);
+          assert.equal(
+            config.customApiKey,
+            kind === "dictationAgent" ? "fresh-agent-key" : "fresh-translation-key"
+          );
+          assert.equal(
+            config.lanUrl,
+            kind === "dictationAgent" ? "http://localhost:8080/v1" : "http://localhost:9090/v1"
+          );
+          if (kind === "dictationAgent") assert.match(config.systemPrompt, /German|Deutsch/i);
+        }
+        await React.act(async () => observed.pending.resolve("result"));
+      }
+    );
+  }
 });

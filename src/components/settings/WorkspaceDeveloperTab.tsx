@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Copy, Trash2, Check, Key, Loader2 } from "../icons";
 import { Button } from "../ui/button";
@@ -18,6 +18,7 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { WorkspaceApiKeysService } from "../../services/WorkspaceApiKeysService";
 import type { Workspace, WorkspaceApiKey, NewWorkspaceApiKey } from "../../types/electron";
 import { cn } from "../lib/utils";
+import { useDialogSession } from "../../hooks/useDialogSession";
 
 interface Props {
   workspace: Workspace;
@@ -66,34 +67,89 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   const [keys, setKeys] = useState<WorkspaceApiKey[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [newKey, setNewKey] = useState<NewWorkspaceApiKey | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<NewWorkspaceApiKey | null>(null);
+  const copied = newKey !== null && copiedKey === newKey;
   const [name, setName] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function refresh() {
+  const copyRequest = useRef(0);
+  const secretLease = useRef<NewWorkspaceApiKey | null>(null);
+  const { sessionKey, capture, bindSession } = useDialogSession(
+    true,
+    JSON.stringify([workspace.id, workspace.role])
+  );
+  const { capture: captureCreateForm, bindSession: bindCreateForm } = useDialogSession(
+    createOpen,
+    sessionKey
+  );
+  const [previousOwner, setPreviousOwner] = useState(sessionKey);
+  if (previousOwner !== sessionKey) {
+    setPreviousOwner(sessionKey);
+    setNewKey(null);
+    setCopiedKey(null);
+    setKeys([]);
+    setName("");
+    setSelectedScopes(new Set());
+    setSubmitting(false);
+    setCreateOpen(false);
+    setLoadError(false);
+  }
+
+  const invalidateCopy = useCallback(() => {
+    ++copyRequest.current;
+    if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = null;
+  }, []);
+  const keysRequest = useRef(0);
+  const bindOwner = useCallback(
+    (node: HTMLDivElement | null) => {
+      const cleanup = bindSession(node);
+      if (!cleanup) return;
+      return () => {
+        cleanup();
+        ++keysRequest.current;
+        invalidateCopy();
+      };
+    },
+    [bindSession, invalidateCopy]
+  );
+  const bindSecret = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || !newKey) return;
+      secretLease.current = newKey;
+      return () => {
+        secretLease.current = null;
+        invalidateCopy();
+      };
+    },
+    [newKey, invalidateCopy]
+  );
+
+  function replaceKey(key: NewWorkspaceApiKey | null) {
+    invalidateCopy();
+    setCopiedKey(null);
+    setNewKey(key);
+  }
+
+  const refresh = useCallback(async () => {
+    const completion = capture();
+    if (!completion.isCurrent()) return;
+    const request = ++keysRequest.current;
     setLoadError(false);
     try {
-      setKeys(await WorkspaceApiKeysService.list(workspace.id));
+      const list = await WorkspaceApiKeysService.list(workspace.id);
+      if (completion.isCurrent() && request === keysRequest.current) setKeys(list);
     } catch {
-      setKeys([]);
-      setLoadError(true);
+      if (completion.isCurrent() && request === keysRequest.current) setLoadError(true);
     }
-  }
+  }, [capture, workspace.id]);
 
   useEffect(() => {
     void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace.id]);
-
-  useEffect(
-    () => () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-    },
-    []
-  );
+  }, [refresh, sessionKey]);
 
   function toggleScope(id: string) {
     setSelectedScopes((prev) => {
@@ -106,30 +162,39 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || selectedScopes.size === 0) return;
+    if (!name.trim() || selectedScopes.size === 0 || submitting) return;
+    const completion = capture();
+    const formCompletion = captureCreateForm();
     setSubmitting(true);
     try {
       const created = await WorkspaceApiKeysService.create(workspace.id, {
         name: name.trim(),
         scopes: Array.from(selectedScopes),
       });
-      setNewKey(created);
-      setName("");
-      setSelectedScopes(new Set());
-      setCreateOpen(false);
+      if (!completion.isCurrent()) return;
+      // Keep the one-time secret available while this tab owns it, but don't
+      // erase a newer form reopened while creation was pending.
+      replaceKey(created);
+      if (formCompletion.isCurrent()) {
+        setName("");
+        setSelectedScopes(new Set());
+        setCreateOpen(false);
+      }
       await refresh();
     } catch (error) {
+      if (!completion.isCurrent()) return;
       toast({
         title: t("common.error"),
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      if (completion.isCurrent()) setSubmitting(false);
     }
   }
 
   function confirmRevoke(key: WorkspaceApiKey) {
+    const completion = capture();
     showConfirmDialog({
       title: t("settingsPage.workspace.developer.revokeConfirm.title"),
       description: t("settingsPage.workspace.developer.revokeConfirm.description", {
@@ -138,11 +203,15 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
       confirmText: t("settingsPage.workspace.developer.revoke"),
       variant: "destructive",
       onConfirm: async () => {
+        if (!completion.isCurrent()) return;
         try {
           await WorkspaceApiKeysService.revoke(workspace.id, key.id);
+          if (!completion.isCurrent()) return;
           await refresh();
+          if (!completion.isCurrent()) return;
           toast({ title: t("settingsPage.workspace.developer.revoked", { name: key.name }) });
         } catch (error) {
+          if (!completion.isCurrent()) return;
           toast({
             title: t("common.error"),
             description: error instanceof Error ? error.message : t("common.unknownError"),
@@ -154,19 +223,29 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   }
 
   async function handleCopy() {
-    if (!newKey) return;
+    if (!newKey || secretLease.current !== newKey) return;
+    const completion = capture();
+    invalidateCopy();
+    setCopiedKey(null);
+    const request = copyRequest.current;
+    const isCurrent = () =>
+      completion.isCurrent() && secretLease.current === newKey && request === copyRequest.current;
     try {
       await navigator.clipboard.writeText(newKey.key);
-      setCopied(true);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+      if (!isCurrent()) return;
+      setCopiedKey(newKey);
+      copyTimerRef.current = setTimeout(() => {
+        if (!isCurrent()) return;
+        copyTimerRef.current = null;
+        setCopiedKey(null);
+      }, 2000);
     } catch {
-      // Clipboard write failed — user can still manually select+copy
+      // Clipboard write failed — user can still manually select+copy.
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={bindOwner} className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-xs font-semibold text-foreground">
@@ -238,7 +317,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               {t("settingsPage.workspace.developer.createDescription")}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-3">
+          <form ref={bindCreateForm} onSubmit={handleCreate} className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="key-name" className="text-xs font-medium">
                 {t("settingsPage.workspace.developer.nameLabel")}
@@ -321,13 +400,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
       <Dialog
         open={!!newKey}
         onOpenChange={(open) => {
-          if (!open) {
-            setNewKey(null);
-            setCopied(false);
-          }
+          if (!open) replaceKey(null);
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent ref={bindSecret} className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("settingsPage.workspace.developer.keyCreatedTitle")}</DialogTitle>
             <DialogDescription>
@@ -354,7 +430,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                 </>
               )}
             </Button>
-            <Button onClick={() => setNewKey(null)} size="sm">
+            <Button onClick={() => replaceKey(null)} size="sm">
               {t("common.done")}
             </Button>
           </DialogFooter>

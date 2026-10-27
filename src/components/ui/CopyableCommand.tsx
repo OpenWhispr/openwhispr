@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Check } from "../icons";
 
@@ -21,7 +21,7 @@ export function CopyableCommand({
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = () => {
     navigator.clipboard
       .writeText(command)
       .then(() => {
@@ -30,7 +30,7 @@ export function CopyableCommand({
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(() => {});
-  }, [command, onCopied]);
+  };
 
   return (
     <div className={className}>

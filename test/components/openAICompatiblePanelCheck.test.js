@@ -188,7 +188,7 @@ test("a parent's new setter on each render never reloads a failed list", async (
   assert.equal(globalThis.fetch.mock.calls.length, 1, "the list never sees a half-typed key");
 });
 
-test("a key typed while the list is still loading retries once the load settles", async (t) => {
+test("an accepted key supersedes an obsolete in-flight catalog without waiting for it", async (t) => {
   // The first list load answers only when the test says so; later loads answer at once.
   let settle;
   const slow = new Promise((resolve) => {
@@ -204,7 +204,8 @@ test("a key typed while the list is still loading retries once the load settles"
   await panel.wait(500);
   assert.equal(panel.requests().at(-1).apiKey, "sk-late");
   await panel.answer({ success: true });
-  assert.equal(globalThis.fetch.mock.calls.length, 1, "the retry waits for the loading list");
+  assert.equal(globalThis.fetch.mock.calls.length, 2, "the accepted key starts its own catalog");
+  assert.equal(globalThis.fetch.mock.calls[0].arguments[1].signal.aborted, true);
   settle(await respond(401)());
   await panel.wait(0);
   assert.equal(globalThis.fetch.mock.calls.length, 2, "the settled list retries with the key");
@@ -217,11 +218,15 @@ test("a key typed while the list is still loading retries once the load settles"
 test("a hidden panel's failed list stays quiet when its key changes elsewhere", async (t) => {
   const panel = await mount(t, { fetch: respond(401), visible: false });
   await panel.wait(0);
-  assert.equal(globalThis.fetch.mock.calls.length, 1, "the list loads once at mount");
+  assert.equal(globalThis.fetch.mock.calls.length, 0, "a hidden mount performs no discovery");
   await panel.setProps({ apiKey: "sk-elsewhere" });
   await panel.wait(5000);
-  assert.equal(globalThis.fetch.mock.calls.length, 1);
+  assert.equal(globalThis.fetch.mock.calls.length, 0);
   assert.equal(panel.requests().length, 0);
+  await panel.setVisible(true);
+  await panel.wait(0);
+  assert.equal(globalThis.fetch.mock.calls.length, 1);
+  assert.equal(panel.requests().length, 1, "revealing restores checks and discovery");
 });
 
 test("a server key saves trimmed once its field is left, and the address is checked again", async (t) => {

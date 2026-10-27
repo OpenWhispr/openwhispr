@@ -16,7 +16,7 @@ export const openwhisprProvider: InferenceProvider = {
 
     const customPrompt = config.systemPrompt
       ? undefined
-      : getSettings().customPrompts.cleanup || undefined;
+      : (config.cleanupPrompt ?? getSettings().customPrompts.cleanup) || undefined;
 
     // "agent" only rides with a screenshot (which already requires the new
     // API) — older servers reject unknown promptMode values, so plain agent

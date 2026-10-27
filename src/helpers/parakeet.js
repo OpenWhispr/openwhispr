@@ -669,13 +669,15 @@ class ParakeetManager {
       }
     }
 
-    return { model: modelName, deleted: false, error: "Model not found", success: false };
+    // Already absent counts as deleted, so the renderer refreshes its stale list.
+    return { model: modelName, deleted: false, freed_bytes: 0, freed_mb: 0, success: true };
   }
 
   async deleteAllParakeetModels() {
     const modelsDir = this.getModelsDir();
     let totalFreed = 0;
     let deletedCount = 0;
+    let failed = false;
 
     try {
       if (!fs.existsSync(modelsDir)) {
@@ -687,16 +689,18 @@ class ParakeetManager {
         if (entry.isDirectory()) {
           const dirPath = path.join(modelsDir, entry.name);
           try {
-            totalFreed += this._getModelWeightsSize(dirPath);
-
+            const size = this._getModelWeightsSize(dirPath);
             fs.rmSync(dirPath, { recursive: true, force: true });
+            totalFreed += size;
             deletedCount++;
-          } catch {}
+          } catch {
+            failed = true;
+          }
         }
       }
 
       return {
-        success: true,
+        success: !failed,
         deleted_count: deletedCount,
         freed_bytes: totalFreed,
         freed_mb: Math.round(totalFreed / (1024 * 1024)),

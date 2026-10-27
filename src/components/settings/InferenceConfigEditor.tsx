@@ -1,5 +1,5 @@
-import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
+import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2, ShieldCheck, AlertTriangle } from "../icons";
 import {
@@ -29,7 +29,10 @@ import { enterpriseProviderName } from "../../models/ModelRegistry";
 import { AUTO_REASONING_EFFORT, isReasoningEffortSupported } from "../../models/reasoningEffort";
 import { selectableReasoningEffort } from "../../services/ai/chatRequestBody";
 import { offersThinkingToggle } from "../../services/ai/thinkingSuppression";
-import { useManagedScopeResolution } from "../../stores/enterpriseIdentityStore";
+import {
+  useManagedScopeResolution,
+  useEnterpriseIdentityStore,
+} from "../../stores/enterpriseIdentityStore";
 import { modeSwitchPatch } from "../../utils/llmModeSwitch";
 import { requestSignIn } from "../../utils/requestSignIn";
 import TestConnectionButton from "../TestConnectionButton";
@@ -41,6 +44,7 @@ const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 
 interface InferenceConfigEditorProps {
   scope: InferenceScope;
+  navigation?: SettingsNavigationStore;
   onModeChange?: (mode: InferenceMode) => void;
   /** Restrict the selectable modes (e.g. vision override offers cloud/BYOK only). */
   allowedModes?: InferenceMode[];
@@ -48,6 +52,7 @@ interface InferenceConfigEditorProps {
 
 export default function InferenceConfigEditor({
   scope,
+  navigation,
   onModeChange,
   allowedModes,
 }: InferenceConfigEditorProps) {
@@ -71,6 +76,14 @@ export default function InferenceConfigEditor({
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
   const managedAvailable = useManagedScopeResolution(scope, "managed");
+  const managedIdentity = useEnterpriseIdentityStore(
+    useShallow((s) => ({
+      accountId: s.accountId,
+      workspaceId: s.workspaceId,
+      authGeneration: s.authGeneration,
+      generation: s.config?.generation,
+    }))
+  );
 
   const { modes, effectiveMode, isModeAllowed } = usePolicyModeOptions<InferenceModeOption>(
     (
@@ -117,31 +130,26 @@ export default function InferenceConfigEditor({
     }
   );
 
-  const setField = useCallback(
+  const setField =
     <K extends keyof Omit<typeof config, "scope">>(field: K) =>
-      (value: NonNullable<(typeof config)[K]>) => {
-        setResolvedLLMConfig(scope, { [field]: value });
-      },
-    [scope]
-  );
+    (value: NonNullable<(typeof config)[K]>) => {
+      setResolvedLLMConfig(scope, { [field]: value });
+    };
 
-  const handleModeSelect = useCallback(
-    (mode: InferenceMode) => {
-      if (!isModeAllowed(mode)) return;
-      if (mode === "openwhispr" && !isSignedIn) {
-        requestSignIn();
-        return;
-      }
-      if (mode === effectiveMode) return;
+  const handleModeSelect = (mode: InferenceMode) => {
+    if (!isModeAllowed(mode)) return;
+    if (mode === "openwhispr" && !isSignedIn) {
+      requestSignIn();
+      return;
+    }
+    if (mode === effectiveMode) return;
 
-      setResolvedLLMConfig(
-        scope,
-        modeSwitchPatch({ provider: config.provider, model: config.model }, mode)
-      );
-      onModeChange?.(mode);
-    },
-    [scope, config.provider, config.model, effectiveMode, isSignedIn, onModeChange, isModeAllowed]
-  );
+    setResolvedLLMConfig(
+      scope,
+      modeSwitchPatch({ provider: config.provider, model: config.model }, mode)
+    );
+    onModeChange?.(mode);
+  };
 
   const setMode = setField("mode");
   const setProvider = setField("provider");
@@ -149,6 +157,8 @@ export default function InferenceConfigEditor({
 
   const renderModelSelector = (mode?: "cloud" | "local") => (
     <ReasoningModelSelector
+      settingsScope={scope}
+      settingsNavigation={navigation}
       reasoningModel={config.model}
       setReasoningModel={setModel}
       localReasoningProvider={config.provider}
@@ -210,6 +220,13 @@ export default function InferenceConfigEditor({
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
           <TestConnectionButton
             provider={managed.provider}
+            configurationKey={JSON.stringify([
+              scope,
+              enterpriseSetupMode,
+              managedIdentity,
+              managed.model,
+              managed.record,
+            ])}
             getConfig={() => ({
               ...getEnterpriseCallSettings(managed.provider, scope),
               model: managed.model,
@@ -291,7 +308,11 @@ export default function InferenceConfigEditor({
             </h4>
             <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
           </div>
-          <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+          <Toggle
+            ariaLabel={t("reasoning.disableThinking.label")}
+            checked={config.disableThinking}
+            onChange={setField("disableThinking")}
+          />
         </div>
       )}
 

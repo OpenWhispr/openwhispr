@@ -63,18 +63,15 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
     };
   }, []);
 
-  const describeError = useCallback(
-    (error: AuthActionError) => {
-      const key = error.code ? AUTH_ERROR_KEYS[error.code] : undefined;
-      return key ? t(key) : t("settingsPage.account.profile.errors.generic");
-    },
-    [t]
-  );
+  const describeError = (error: AuthActionError) => {
+    const key = error.code ? AUTH_ERROR_KEYS[error.code] : undefined;
+    return key ? t(key) : t("settingsPage.account.profile.errors.generic");
+  };
 
   const trimmedName = displayName.trim();
   const nameDirty = trimmedName.length > 0 && trimmedName !== savedName.trim();
 
-  const handleSaveName = useCallback(async () => {
+  const handleSaveName = async () => {
     if (!nameDirty || savingName) return;
     setSavingName(true);
     const { error } = await updateDisplayName(trimmedName);
@@ -90,7 +87,7 @@ export default function ProfileSection({ name, onSessionRefresh }: ProfileSectio
     setSavedName(trimmedName);
     onSessionRefresh();
     toast({ title: t("settingsPage.account.profile.name.saved") });
-  }, [nameDirty, savingName, trimmedName, toast, t, describeError, onSessionRefresh]);
+  };
 
   return (
     <>

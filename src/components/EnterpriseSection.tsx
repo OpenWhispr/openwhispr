@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
@@ -32,10 +31,8 @@ export default function EnterpriseSection({
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
   const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
   const policyState = usePolicySnapshot();
-  const providerAllowed = useCallback(
-    (providerId: string) => isEnterpriseProviderAllowed(policyState, providerId),
-    [policyState]
-  );
+  const providerAllowed = (providerId: string) =>
+    isEnterpriseProviderAllowed(policyState, providerId);
 
   const providerTabs = filterEnterpriseProviderOptionsByPolicy(
     ENTERPRISE_PROVIDER_TABS,
@@ -45,33 +42,23 @@ export default function EnterpriseSection({
     ? currentProvider
     : "";
 
-  const handleEnterpriseSelect = useCallback(
-    (providerId: string) => {
-      if (selectedEnterprise === providerId) return;
-      if (!providerAllowed(providerId)) return;
-      setLocalReasoningProvider(providerId);
+  const handleEnterpriseSelect = (providerId: string) => {
+    if (selectedEnterprise === providerId) return;
+    if (!providerAllowed(providerId)) return;
+    setLocalReasoningProvider(providerId);
 
-      const providerData = REASONING_PROVIDERS[providerId];
-      if (providerData?.models?.length) {
-        const defaultModel = providerData.models[0].value;
-        setReasoningModel(
-          providerId === "bedrock"
-            ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
-            : defaultModel
-        );
-      } else if (providerId === "azure" && azureDeploymentName) {
-        setReasoningModel(azureDeploymentName);
-      }
-    },
-    [
-      azureDeploymentName,
-      bedrockRegion,
-      providerAllowed,
-      selectedEnterprise,
-      setLocalReasoningProvider,
-      setReasoningModel,
-    ]
-  );
+    const providerData = REASONING_PROVIDERS[providerId];
+    if (providerData?.models?.length) {
+      const defaultModel = providerData.models[0].value;
+      setReasoningModel(
+        providerId === "bedrock"
+          ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
+          : defaultModel
+      );
+    } else if (providerId === "azure" && azureDeploymentName) {
+      setReasoningModel(azureDeploymentName);
+    }
+  };
 
   return (
     <div className="space-y-2">

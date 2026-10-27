@@ -101,6 +101,41 @@ test("a stable authenticated request is bearer-only and returns parsed data", as
   });
 });
 
+test("billing plan routes use the shared authenticated request contract", async (t) => {
+  for (const [path, data] of [
+    ["/api/stripe/switch-plan", { success: true, alreadyOnPlan: false }],
+    ["/api/stripe/preview-switch", { amountDue: 1200, currency: "usd" }],
+  ]) {
+    await t.test(path, async () => {
+      const state = { current: { token: "token-a", generation: 13 } };
+      const body = { plan: "annual", tier: "pro" };
+      let fetchCalls = 0;
+      const handler = createHandler(state, async (url, options) => {
+        fetchCalls += 1;
+        assert.equal(url, `https://api.openwhispr.test${path}`);
+        assert.equal(options.method, "POST");
+        assert.equal(options.useSessionCookies, false);
+        assert.equal(options.headers.Authorization, "Bearer token-a");
+        assert.equal(options.headers["x-openwhispr-policy-version"], "1");
+        assert.equal(options.headers["x-openwhispr-version"], "1.2.3");
+        assert.equal(options.headers["x-openwhispr-source"], "desktop");
+        assert.equal(options.headers["Content-Type"], "application/json");
+        assert.deepEqual(JSON.parse(options.body), body);
+        return new Response(JSON.stringify(data));
+      });
+
+      assert.deepEqual(await handler({ method: "POST", path, body, expectedAuthGeneration: 13 }), {
+        success: true,
+        data,
+      });
+      state.current = { token: "token-b", generation: 14 };
+      const stale = await handler({ method: "POST", path, body, expectedAuthGeneration: 13 });
+      assert.equal(stale.code, "AUTH_CONTEXT_CHANGED");
+      assert.equal(fetchCalls, 1, "a stale billing request must not reach the network");
+    });
+  }
+});
+
 test("public requests carry neither bearer nor cookies", async () => {
   const state = { current: { token: "token-a", generation: 21 } };
   const handler = createHandler(state, async (_url, options) => {

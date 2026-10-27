@@ -16,8 +16,6 @@ const helperSources = fs
 
 const NON_POLICY_ROUTE_REASONS = new Map([
   ["usage", "entitlement and recovery status must remain available"],
-  ["stripe/switch-plan", "billing recovery must remain available"],
-  ["stripe/preview-switch", "billing recovery must remain available"],
   ["referrals/stats", "referral data is outside the policy capability surface"],
   ["referrals/invite", "referral actions are outside the policy capability surface"],
   ["referrals/invites", "referral data is outside the policy capability surface"],

@@ -18,9 +18,15 @@ function addTeardown(t, teardown) {
   });
 }
 
-function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {} } = {}) {
-  const originalWindow = globalThis.window;
-  const originalLocalStorage = globalThis.localStorage;
+function installBrowserGlobals(
+  t,
+  { initialStorage = {}, window: windowProps = {}, windowInstance = null, globals = {} } = {}
+) {
+  const saved = [];
+  const install = (name, value) => {
+    saved.push([name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  };
   const values = new Map(Object.entries(initialStorage));
   const storage = {
     getItem: (key) => (values.has(key) ? values.get(key) : null),
@@ -28,8 +34,7 @@ function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {
     removeItem: (key) => values.delete(key),
     clear: () => values.clear(),
   };
-  globalThis.localStorage = storage;
-  globalThis.window = {
+  const browserWindow = windowInstance ?? {
     innerWidth: 1200,
     localStorage: storage,
     addEventListener() {},
@@ -40,11 +45,14 @@ function installBrowserGlobals(t, { initialStorage = {}, window: windowProps = {
     electronAPI: {},
     ...windowProps,
   };
+  install("window", browserWindow);
+  install("localStorage", browserWindow.localStorage ?? storage);
+  for (const [name, value] of Object.entries(globals)) install(name, value);
   t.after(() => {
-    if (originalWindow === undefined) delete globalThis.window;
-    else globalThis.window = originalWindow;
-    if (originalLocalStorage === undefined) delete globalThis.localStorage;
-    else globalThis.localStorage = originalLocalStorage;
+    for (const [name, descriptor] of saved.reverse()) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
   });
   return { window: globalThis.window, storage };
 }
@@ -175,6 +183,13 @@ function installHostDom(t) {
       return child;
     }
 
+    contains(candidate) {
+      for (let current = candidate; current; current = current.parentNode) {
+        if (current === this) return true;
+      }
+      return false;
+    }
+
     setAttribute(name, value) {
       this.attributes[name] = String(value);
     }
@@ -195,6 +210,28 @@ function installHostDom(t) {
     removeEventListener() {}
     focus() {}
     blur() {}
+
+    matches(selector) {
+      return parseSelector(selector).some((chain) => matchesChain(this, chain));
+    }
+
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] ?? null;
+    }
+
+    querySelectorAll(selector) {
+      const results = [];
+      const visit = (node) => {
+        for (const child of node.childNodes) {
+          if (child.nodeType === 1) {
+            if (child.matches(selector)) results.push(child);
+            visit(child);
+          }
+        }
+      };
+      visit(this);
+      return results;
+    }
 
     get textContent() {
       if (this.nodeType === 3) return this.nodeValue;
@@ -218,7 +255,48 @@ function installHostDom(t) {
   document.body = document.createElement("body");
   const container = document.createElement("div");
   document.documentElement = container;
+  document.querySelector = (selector) => document.body.querySelector(selector);
+  document.querySelectorAll = (selector) => document.body.querySelectorAll(selector);
   return container;
+}
+
+// Minimal selector support for HostNode audit lookups: tag/#id/.class/[attr] with descendant and comma alternatives.
+const SELECTOR_TOKEN =
+  /^(\*|[a-zA-Z][\w-]*)?(?:#([\w-]+))?(?:\.([\w-]+))?(?:\[([\w-]+)(?:([*$^]?=)([^\]]*))?\])?$/;
+
+function parseSelector(selector) {
+  return selector
+    .split(",")
+    .map((part) => part.trim().split(/\s+/).filter(Boolean))
+    .filter((chain) => chain.length > 0);
+}
+
+function matchesSimple(node, simple) {
+  const token = SELECTOR_TOKEN.exec(simple);
+  if (!token) return false;
+  const [, tag, id, className, attr, operator, rawValue] = token;
+  if (tag && tag !== "*" && node.localName !== tag.toLowerCase()) return false;
+  if (id && node.getAttribute("id") !== id) return false;
+  if (className && !(node.getAttribute("class") ?? "").split(/\s+/).includes(className))
+    return false;
+  if (attr === undefined) return true;
+  const value = node.getAttribute(attr);
+  if (operator === undefined) return value !== null;
+  const expected = rawValue.replace(/^"(.*)"$/, "$1");
+  if (value === null) return false;
+  return operator === "^=" ? value.startsWith(expected) : value === expected;
+}
+
+function matchesChain(node, chain) {
+  if (!matchesSimple(node, chain[chain.length - 1])) return false;
+  let ancestor = node.parentNode;
+  for (let index = chain.length - 2; index >= 0; index--) {
+    while (ancestor && ancestor.nodeType === 1 && !matchesSimple(ancestor, chain[index]))
+      ancestor = ancestor.parentNode;
+    if (!ancestor || ancestor.nodeType !== 1) return false;
+    ancestor = ancestor.parentNode;
+  }
+  return true;
 }
 
 // mockModules maps an import-path suffix (e.g. "/utils/logger") to the ESM
@@ -229,7 +307,7 @@ async function createRendererServer(
     cachePrefix = "openwhispr-renderer-test-",
     mockModules = {},
     noExternal = false,
-    resolveAlias = {},
+    resolveAlias = { "@": path.resolve(__dirname, "../../src") },
   } = {}
 ) {
   const { createServer } = await import("vite");

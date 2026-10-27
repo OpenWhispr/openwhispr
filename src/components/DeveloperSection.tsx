@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { FolderOpen, Copy, Check } from "./icons";
@@ -16,14 +16,19 @@ export default function DeveloperSection() {
   const [isToggling, setIsToggling] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
   const { toast } = useToast();
+  const debugRequest = useRef(0);
+  const debugAction = useRef(0);
 
   const loadDebugState = useCallback(async () => {
+    const request = ++debugRequest.current;
     try {
       setIsLoading(true);
       const state = await window.electronAPI.getDebugState();
+      if (request !== debugRequest.current) return;
       setDebugEnabled(state.enabled);
       setLogPath(state.logPath);
     } catch (error) {
+      if (request !== debugRequest.current) return;
       logger.error("Failed to load debug state", { error }, "developer");
       toast({
         title: t("developerSection.toasts.loadFailed.title"),
@@ -31,21 +36,35 @@ export default function DeveloperSection() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      if (request === debugRequest.current) setIsLoading(false);
     }
   }, [t, toast]);
 
   useEffect(() => {
-    loadDebugState();
+    void loadDebugState();
+    const requests = debugRequest;
+    return () => {
+      ++requests.current;
+    };
   }, [loadDebugState]);
+
+  useEffect(
+    () => () => {
+      ++debugAction.current;
+    },
+    []
+  );
 
   const handleToggleDebug = async () => {
     if (isToggling) return;
+    const action = ++debugAction.current;
+    ++debugRequest.current;
 
     try {
       setIsToggling(true);
       const newState = !debugEnabled;
       const result = await window.electronAPI.setDebugLogging(newState);
+      if (action !== debugAction.current) return;
 
       if (!result.success) {
         throw new Error(result.error || "Failed to update debug logging");
@@ -53,6 +72,7 @@ export default function DeveloperSection() {
 
       setDebugEnabled(newState);
       await loadDebugState();
+      if (action !== debugAction.current) return;
 
       toast({
         title: newState
@@ -64,13 +84,14 @@ export default function DeveloperSection() {
         variant: "success",
       });
     } catch (error) {
+      if (action !== debugAction.current) return;
       toast({
         title: t("developerSection.toasts.updateFailed.title"),
         description: t("developerSection.toasts.updateFailed.description"),
         variant: "destructive",
       });
     } finally {
-      setIsToggling(false);
+      if (action === debugAction.current) setIsToggling(false);
     }
   };
 
@@ -145,6 +166,7 @@ export default function DeveloperSection() {
             </div>
             <div className="shrink-0">
               <Toggle
+                ariaLabel={t("developerSection.debugMode.label")}
                 checked={debugEnabled}
                 onChange={handleToggleDebug}
                 disabled={isLoading || isToggling}
@@ -166,7 +188,13 @@ export default function DeveloperSection() {
               >
                 {logPath}
               </code>
-              <Button onClick={handleCopyPath} variant="ghost" size="icon" className="size-8">
+              <Button
+                onClick={handleCopyPath}
+                aria-label={t("common.copy")}
+                variant="ghost"
+                size="icon"
+                className="size-8"
+              >
                 {copiedPath ? (
                   <Check className="h-3.5 w-3.5 text-success" />
                 ) : (
