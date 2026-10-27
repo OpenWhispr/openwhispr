@@ -4,7 +4,24 @@ import { initReactI18next } from 'react-i18next';
 import en from '@/locales/en/translation.json';
 import ar from '@/locales/ar/translation.json';
 import { Alert, AppState, Keyboard, ScrollView, Platform } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import {
+  act,
+  fireEvent,
+  render as renderScreen,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
+
+function render(element: React.ReactElement) {
+  return renderScreen(element, {
+    wrapper: ({ children }) => (
+      <SafeAreaInsetsContext.Provider value={{ top: 24, right: 0, bottom: 24, left: 0 }}>
+        {children}
+      </SafeAreaInsetsContext.Provider>
+    ),
+  });
+}
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();

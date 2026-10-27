@@ -12,6 +12,7 @@ import {
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useNavigation, usePreventRemove } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SettingsScreen } from '@/components/ui/SettingsScreen';
 import {
   SettingsRow,
@@ -371,6 +372,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const { toast, showToast } = useToast();
   const headerHeight = useHeaderHeight();
   const keyboardHeight = useKeyboardHeight();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const diagnosticController = useRef<AbortController | null>(null);
   useEffect(
@@ -1014,6 +1016,8 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       enabled={Platform.OS === 'android' && keyboardHeight > 0}
     >
       <SettingsScreen
+        // TalkBack scrolls focused controls to the viewport edge, past content padding.
+        style={Platform.OS === 'android' ? { marginBottom: insets.bottom } : undefined}
         automaticallyAdjustKeyboardInsets
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
