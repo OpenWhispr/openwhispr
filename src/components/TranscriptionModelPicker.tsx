@@ -56,6 +56,11 @@ import {
 } from "../hooks/useConnectionAutoCheck";
 import { getCachedPlatform } from "../utils/platform";
 import { pickWhisperGpuBackend } from "../utils/whisperGpuPack";
+import {
+  describeLocalModelLanguageFit,
+  describeModelOnlyLanguage,
+  getLocalModelLanguageFit,
+} from "../utils/localModelLanguageFit";
 import logger from "../utils/logger";
 import type { ParakeetCheckResult } from "../types/electron";
 
@@ -78,7 +83,8 @@ interface LocalModelCardProps {
   isInstalling: boolean;
   recommended?: boolean;
   provider: string;
-  languageLabel?: string;
+  languageLabel?: string | null;
+  languageNote?: string | null;
   modelCardUrl?: string;
   onSelect: () => void;
   onDelete: () => void;
@@ -101,6 +107,7 @@ function LocalModelCard({
   recommended,
   provider,
   languageLabel,
+  languageNote,
   modelCardUrl,
   onSelect,
   onDelete,
@@ -207,6 +214,12 @@ function LocalModelCard({
           )}
         </div>
       </div>
+      {languageNote && (
+        <p className="flex items-start gap-1 ms-7 me-2 mb-2 text-xs leading-snug text-warning">
+          <CircleAlert size={12} className="mt-px shrink-0" aria-hidden="true" />
+          <span>{languageNote}</span>
+        </p>
+      )}
       {modelCardUrl && (
         <a
           href={modelCardUrl}
@@ -448,7 +461,9 @@ export default function TranscriptionModelPicker({
   mode,
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const spokenLanguages = useSettingsStore((s) => s.spokenLanguages);
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
   );
@@ -1368,6 +1383,11 @@ export default function TranscriptionModelPicker({
               isInstalling={parakeetDownloads[modelId]?.phase === "installing"}
               recommended={info.recommended}
               provider={getASRModelOrganization(modelId)}
+              languageLabel={describeModelOnlyLanguage(modelId, { t, locale: i18n.language })}
+              languageNote={describeLocalModelLanguageFit(
+                getLocalModelLanguageFit({ modelId, preferredLanguage, spokenLanguages }),
+                { surface: "card", t, locale: i18n.language }
+              )}
               modelCardUrl={info.modelCardUrl}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}

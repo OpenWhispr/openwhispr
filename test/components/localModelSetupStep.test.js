@@ -40,6 +40,8 @@ async function createSetupHarness(
     resumeState,
     capability = { supported: true },
     freshInstall = false,
+    preferredLanguage = "auto",
+    spokenLanguages = [],
   } = {}
 ) {
   let unmount = async () => {};
@@ -105,7 +107,7 @@ async function createSetupHarness(
     mockModules: {
       "react-i18next": `
         const t = (key) => key;
-        export function useTranslation() { return { t }; }
+        export function useTranslation() { return { t, i18n: { language: "en" } }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
       "/OnboardingShell": `export function BrandMark() { return null; }`,
@@ -120,6 +122,8 @@ async function createSetupHarness(
     chatAgentProvider: assistant ? provider : "qwen",
     chatAgentModel: assistant ? selectedModel : "",
     chatAgentMode: "local",
+    preferredLanguage,
+    spokenLanguages,
   });
   // The store setter also persists the choice; only a fresh install has no key.
   if (!assistant && !freshInstall) {
@@ -302,6 +306,27 @@ for (const fixture of [
     assert.equal(setup.canProceed(), true);
   });
 }
+
+test("rows note the dictation languages a local model can't transcribe", async (t) => {
+  const NOTE = "transcription.languageFit.card.unsupported";
+  const englishOnly = ["parakeet-unified-en-0.6b", "nemotron-speech-streaming-en-0.6b"];
+
+  const french = await createSetupHarness(t, { provider: "nvidia", preferredLanguage: "fr" });
+  for (const modelId of englishOnly) {
+    assert.ok(textContent(french.row(modelId)).includes(NOTE), modelId);
+  }
+  assert.ok(!textContent(french.row(PARAKEET)).includes(NOTE));
+});
+
+test("rows carry no language note when the model covers every spoken language", async (t) => {
+  const setup = await createSetupHarness(t, {
+    provider: "nvidia",
+    spokenLanguages: ["en-US", "en-GB"],
+  });
+  for (const modelId of ["parakeet-unified-en-0.6b", PARAKEET]) {
+    assert.ok(!textContent(setup.row(modelId)).includes("languageFit"), modelId);
+  }
+});
 
 test("a fresh install opens the local dictation step on Oruk with Orukeet offered", async (t) => {
   const setup = await createSetupHarness(t, { freshInstall: true });

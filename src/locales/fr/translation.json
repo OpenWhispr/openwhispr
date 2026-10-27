@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil diffuse avec Voxtral Mini 4B et traite les lots avec Voxtral Small 24B.",
       "docsLink": "Voir la documentation"
+    },
+    "languageFit": {
+      "only": "Uniquement en {{language}}",
+      "card": {
+        "unsupported": "Langue non prise en charge : {{languages}}.",
+        "needsLanguage": "Pas de détection de la langue. Choisissez {{languages}} comme langue de transcription, sinon la transcription sera en anglais."
+      },
+      "settings": {
+        "unsupported": "Votre modèle local, {{model}}, ne prend pas en charge : {{languages}}. Choisissez un autre modèle dans Reconnaissance vocale.",
+        "needsLanguage": "Votre modèle local, {{model}}, ne détecte pas la langue. Choisissez {{languages}} ici, sinon la transcription sera en anglais."
+      }
     }
   },
   "hooks": {

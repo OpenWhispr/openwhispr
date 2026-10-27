@@ -7,7 +7,7 @@ import {
   type FocusEvent,
   type ReactNode,
 } from "react";
-import { AudioLines, Check, CircleCheck, Download, MousePointer2 } from "../icons";
+import { AudioLines, Check, CircleAlert, CircleCheck, Download, MousePointer2 } from "../icons";
 import { useTranslation } from "react-i18next";
 import { FieldLabel, ProviderCheckField } from "../ui/ProviderCheckField";
 import { ConnectionCheckAnnouncer } from "../ui/ConnectionCheckAnnouncer";
@@ -21,6 +21,10 @@ import type { ParakeetCheckResult } from "../../types/electron";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { normalizeBaseUrl } from "../../config/constants";
 import { withHttpsScheme } from "../../utils/urlUtils";
+import {
+  describeLocalModelLanguageFit,
+  getLocalModelLanguageFit,
+} from "../../utils/localModelLanguageFit";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
 import {
   filterByokProviderOptionsByPolicy,
@@ -761,7 +765,7 @@ export function LocalModelSetupStep({
   resumeState?: OnboardingLocalModelDraft;
   onResumeStateChange?: (state: OnboardingLocalModelDraft) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const store = useSettingsStore();
   const assistant = stepId === "local-assistant";
   const [initialSelection] = useState(() =>
@@ -1071,6 +1075,16 @@ export function LocalModelSetupStep({
           const isDownloading = Boolean(download);
           const isSelected = selectedModel === model.id && isDownloaded;
           const percentage = Math.round(download?.progress ?? 0);
+          const languageNote = assistant
+            ? null
+            : describeLocalModelLanguageFit(
+                getLocalModelLanguageFit({
+                  modelId: model.id,
+                  preferredLanguage: store.preferredLanguage,
+                  spokenLanguages: store.spokenLanguages,
+                }),
+                { surface: "card", t, locale: i18n.language }
+              );
           return (
             <div
               key={model.id}
@@ -1096,6 +1110,12 @@ export function LocalModelSetupStep({
                   {model.size}
                   {!assistant && model.recommended && ` - ${t("common.recommended")}`}
                 </span>
+                {languageNote && (
+                  <span className="mt-1 flex items-start gap-1 text-xs leading-snug text-warning">
+                    <CircleAlert className="mt-px size-3 shrink-0" aria-hidden="true" />
+                    <span>{languageNote}</span>
+                  </span>
+                )}
               </button>
 
               {isDownloading ? (

@@ -37,6 +37,7 @@ import {
   Wand2,
   Upload,
   Languages,
+  CircleAlert,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut } from "../lib/auth";
@@ -99,6 +100,11 @@ import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
+import {
+  describeLocalModelLanguageFit,
+  getLocalModelLanguageFit,
+  getLocalModelName,
+} from "../utils/localModelLanguageFit";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
@@ -1161,6 +1167,7 @@ export default function SettingsPage({
     cohereModel,
     uiLanguage,
     preferredLanguage,
+    spokenLanguages,
     chineseScriptPreference,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
@@ -1287,6 +1294,23 @@ export default function SettingsPage({
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
+
+  const activeSherpaModel = !useLocalWhisper
+    ? null
+    : localTranscriptionProvider === "nvidia"
+      ? parakeetModel
+      : localTranscriptionProvider === "cohere"
+        ? cohereModel
+        : null;
+  const transcriptionLanguageNote = describeLocalModelLanguageFit(
+    getLocalModelLanguageFit({ modelId: activeSherpaModel, preferredLanguage, spokenLanguages }),
+    {
+      surface: "settings",
+      t,
+      locale: i18n.language,
+      modelName: getLocalModelName(activeSherpaModel),
+    }
+  );
 
   const [currentVersion, setCurrentVersion] = useState<string>("");
   const [isRemovingModels, setIsRemovingModels] = useState(false);
@@ -3300,6 +3324,12 @@ export default function SettingsPage({
                       }
                     />
                   </SettingsRow>
+                  {transcriptionLanguageNote && (
+                    <p className="mt-2 flex items-start gap-1.5 text-xs leading-snug text-warning">
+                      <CircleAlert size={12} className="mt-px shrink-0" aria-hidden="true" />
+                      <span>{transcriptionLanguageNote}</span>
+                    </p>
+                  )}
                 </SettingsPanelRow>
                 {preferredLanguage === "auto" && (
                   <SettingsPanelRow>

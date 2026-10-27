@@ -278,6 +278,8 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
+- **Language fit**: a sherpa model's `supportedLanguages` is what it can transcribe; speech in any other language comes out wrong (an English-only model returns English) and nothing fails. `src/utils/localModelLanguageFit.ts` compares it with the transcription language (or, on auto, the onboarding `spokenLanguages`) and a warning note appears on the model's card (Settings pickers and onboarding's local step) and under Settings → Language → Transcription language for the active local model. Cohere has no detection, so on auto it asks for the language to be set instead (`needsExplicitLanguage`, kept in step with `resolveModelLanguage` by a test). Nothing is blocked or rewritten. Whisper models report no gap. Tests: `test/utils/localModelLanguageFit.test.js`
+
 ### Local Semantic Search (Qdrant + MiniLM)
 
 Offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Its resources are lazy (#2143): Qdrant and the embedding model start on the first semantic search (or the first vector write while the index is active), the embedding model downloads on that first activation if missing, and everything is released after 5 minutes idle. While asleep, keyword FTS5 serves searches and note changes are journaled in SQLite.

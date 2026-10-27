@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil 流式转录使用 Voxtral Mini 4B，批量转录使用 Voxtral Small 24B。",
       "docsLink": "查看文档"
+    },
+    "languageFit": {
+      "only": "仅{{language}}",
+      "card": {
+        "unsupported": "不支持转录{{languages}}。",
+        "needsLanguage": "无法自动识别语言。请将转录语言设为{{languages}}，否则将按英语转录。"
+      },
+      "settings": {
+        "unsupported": "你的本地模型 {{model}} 不支持转录{{languages}}。请在“语音转文字”中选择其他模型。",
+        "needsLanguage": "你的本地模型 {{model}} 无法自动识别语言。请在此处选择{{languages}}，否则将按英语转录。"
+      }
     }
   },
   "hooks": {

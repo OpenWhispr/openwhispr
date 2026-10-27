@@ -4371,6 +4371,17 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "languageFit": {
+      "only": "{{language}} فقط",
+      "card": {
+        "unsupported": "لا يدعم اللغة: {{languages}}.",
+        "needsLanguage": "لا يكتشف اللغة تلقائيًا. اضبط لغة التفريغ الصوتي على {{languages}}، وإلا فسيُفرَّغ الكلام بالإنجليزية."
+      },
+      "settings": {
+        "unsupported": "نموذجك المحلي {{model}} لا يدعم اللغة: {{languages}}. اختر نموذجًا آخر في تحويل الكلام إلى نص.",
+        "needsLanguage": "نموذجك المحلي {{model}} لا يكتشف اللغة تلقائيًا. اختر {{languages}} هنا، وإلا فسيُفرَّغ الكلام بالإنجليزية."
+      }
     }
   },
   "cleanupPrompt": "التنظيف",

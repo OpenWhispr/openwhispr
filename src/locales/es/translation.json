@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
       "docsLink": "Ver la documentación"
+    },
+    "languageFit": {
+      "only": "Solo {{language}}",
+      "card": {
+        "unsupported": "No transcribe {{languages}}.",
+        "needsLanguage": "No detecta idiomas. Elige {{languages}} como idioma de transcripción o transcribirá en inglés."
+      },
+      "settings": {
+        "unsupported": "Tu modelo local, {{model}}, no transcribe {{languages}}. Elige otro modelo en Conversión de voz a texto.",
+        "needsLanguage": "Tu modelo local, {{model}}, no detecta idiomas. Elige {{languages}} aquí o transcribirá en inglés."
+      }
     }
   },
   "hooks": {

@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
       "docsLink": "Открыть документацию"
+    },
+    "languageFit": {
+      "only": "Только {{language}}",
+      "card": {
+        "unsupported": "Не поддерживает язык: {{languages}}.",
+        "needsLanguage": "Не определяет язык. Выберите язык транскрипции: {{languages}}, иначе текст будет на английском."
+      },
+      "settings": {
+        "unsupported": "Ваша локальная модель {{model}} не поддерживает язык: {{languages}}. Выберите другую модель в разделе «Речь в текст».",
+        "needsLanguage": "Ваша локальная модель {{model}} не определяет язык. Выберите здесь: {{languages}}, иначе текст будет на английском."
+      }
     }
   },
   "hooks": {

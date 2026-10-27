@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
       "docsLink": "ドキュメントを見る"
+    },
+    "languageFit": {
+      "only": "{{language}}のみ",
+      "card": {
+        "unsupported": "{{languages}}は文字起こしできません。",
+        "needsLanguage": "言語を自動検出できません。文字起こし言語を{{languages}}に設定しないと、英語で文字起こしされます。"
+      },
+      "settings": {
+        "unsupported": "ローカルモデル {{model}} は{{languages}}を文字起こしできません。「音声認識」で別のモデルを選んでください。",
+        "needsLanguage": "ローカルモデル {{model}} は言語を自動検出できません。ここで{{languages}}を選ばないと、英語で文字起こしされます。"
+      }
     }
   },
   "hooks": {

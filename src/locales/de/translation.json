@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
       "docsLink": "Zur Dokumentation"
+    },
+    "languageFit": {
+      "only": "Nur {{language}}",
+      "card": {
+        "unsupported": "Transkribiert kein {{languages}}.",
+        "needsLanguage": "Erkennt keine Sprachen. Stellen Sie die Transkriptionssprache auf {{languages}}, sonst wird auf Englisch transkribiert."
+      },
+      "settings": {
+        "unsupported": "Ihr lokales Modell {{model}} transkribiert kein {{languages}}. Wählen Sie unter Spracherkennung ein anderes Modell.",
+        "needsLanguage": "Ihr lokales Modell {{model}} erkennt keine Sprachen. Wählen Sie hier {{languages}}, sonst wird auf Englisch transkribiert."
+      }
     }
   },
   "hooks": {

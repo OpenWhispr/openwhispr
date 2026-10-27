@@ -919,6 +919,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
       "docsLink": "Read the docs"
+    },
+    "languageFit": {
+      "only": "{{language}} only",
+      "card": {
+        "unsupported": "Doesn't transcribe {{languages}}.",
+        "needsLanguage": "Can't detect languages. Set your transcription language to {{languages}}, or it transcribes English."
+      },
+      "settings": {
+        "unsupported": "Your local model, {{model}}, doesn't transcribe {{languages}}. Choose another model in Speech-to-Text.",
+        "needsLanguage": "Your local model, {{model}}, can't detect languages. Choose {{languages}} here, or it transcribes English."
+      }
     }
   },
   "hooks": {
