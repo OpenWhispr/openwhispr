@@ -490,6 +490,40 @@ class EnvironmentManager {
     return { success: true, path: envPath };
   }
 
+  saveDebugLogging(enabled) {
+    const logLevel = enabled ? "debug" : "info";
+    const envPath = path.join(app.getPath("userData"), ".env");
+    // Queue the entire read-modify-write so other saves cannot restore a stale level.
+    envWriteQueue = envWriteQueue
+      .catch(() => {})
+      .then(async () => {
+        let content = "";
+        try {
+          content = await fsPromises.readFile(envPath, "utf8");
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+
+        const lines = content.split("\n");
+        const logLevelIndex = lines.findIndex((line) =>
+          line.trim().startsWith("OPENWHISPR_LOG_LEVEL=")
+        );
+        const logLevelLine = `OPENWHISPR_LOG_LEVEL=${logLevel}`;
+        if (logLevelIndex !== -1) {
+          lines[logLevelIndex] = logLevelLine;
+        } else {
+          if (lines[lines.length - 1] !== "") lines.push("");
+          lines.push(logLevelLine);
+        }
+
+        const tmpPath = `${envPath}.tmp`;
+        await fsPromises.writeFile(tmpPath, lines.join("\n"), "utf8");
+        await fsPromises.rename(tmpPath, envPath);
+        process.env.OPENWHISPR_LOG_LEVEL = logLevel;
+      });
+    return envWriteQueue;
+  }
+
   async clearAllPersistedData() {
     for (const envVarName of PERSISTED_KEYS) {
       delete process.env[envVarName];
