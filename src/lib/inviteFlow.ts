@@ -218,12 +218,16 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
       return addEmails(state, [event.email]);
     case "remove": {
       const target = normalize(event.email);
-      return state.recipients.some((recipient) => recipient.email === target)
-        ? {
-            ...state,
-            recipients: state.recipients.filter((recipient) => recipient.email !== target),
-          }
-        : state;
+      if (!state.recipients.some((recipient) => recipient.email === target)) return state;
+      const recipients = state.recipients.filter((recipient) => recipient.email !== target);
+      // Removing the last failed chip of a partial send must still confirm the invitations that
+      // went out, and warn about any whose email wasn't delivered.
+      const settled =
+        state.phase === "editing" &&
+        recipients.length === 0 &&
+        state.draft === "" &&
+        state.sent.length > 0;
+      return { ...state, recipients, phase: settled ? "done" : state.phase };
     }
     case "role":
       return { ...state, role: event.role };

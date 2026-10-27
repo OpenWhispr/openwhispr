@@ -12,7 +12,7 @@ async function mountDialog(t, props) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__viewProps", "__sendCalls"]) delete globalThis[key];
+    for (const key of ["__viewProps", "__sendCalls", "__seatPreview"]) delete globalThis[key];
   });
   installBrowserGlobals(t, {
     window: { electronAPI: { searchContacts: async () => ({ success: true, contacts: [] }) } },
@@ -52,7 +52,10 @@ async function mountDialog(t, props) {
       `,
       "/services/WorkspacesService": `
         export const WorkspacesService = {
-          previewSeats: () => Promise.reject(new Error("no subscription")),
+          previewSeats: () =>
+            globalThis.__seatPreview
+              ? Promise.resolve(globalThis.__seatPreview)
+              : Promise.reject(new Error("no subscription")),
           listMembers: async () => [],
         };
       `,
@@ -116,4 +119,31 @@ test("knownEmails blocks an address already in the workspace", async (t) => {
   assert.deepEqual(latest().state.recipients, [
     { email: "mia@x.com", state: { status: "blocked", reason: "alreadyMember" } },
   ]);
+});
+
+test("the seat cost line hides once several addresses are added", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 5,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
+
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCost\|/);
+
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+
+  assert.deepEqual(
+    latest().state.recipients.map((recipient) => recipient.email),
+    ["a@x.com", "b@x.com"]
+  );
+  assert.equal(latest().seatCostLine, null);
 });

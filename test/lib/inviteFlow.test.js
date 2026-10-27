@@ -229,3 +229,31 @@ test("suggestions leave out members, pending invites and chips", () => {
   assert.equal(inviteSuggestions(contacts, exclude, 2).length, 2);
   assert.equal(inviteSuggestions(contacts, [], 99).length, 6);
 });
+
+test("removing the last failed chip after a partial send shows the outcome", () => {
+  const sending = run(commitText(fresh(), "a@x.com b@x.com c@x.com"), { type: "send" });
+  const finished = run(
+    sending,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: false } },
+    { type: "result", email: "b@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "result", email: "c@x.com", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+  assert.equal(finished.phase, "editing");
+
+  const state = run(finished, { type: "remove", email: "c@x.com" });
+
+  assert.equal(state.phase, "done");
+  assert.deepEqual(
+    state.sent.map((entry) => entry.email),
+    ["a@x.com", "b@x.com"]
+  );
+  assert.equal(inviteSummary(state).noEmailCount, 1);
+});
+
+test("removing a chip with nothing sent stays editing", () => {
+  const state = run(commitText(fresh(), "a@x.com"), { type: "remove", email: "a@x.com" });
+
+  assert.equal(state.phase, "editing");
+  assert.deepEqual(state.recipients, []);
+});

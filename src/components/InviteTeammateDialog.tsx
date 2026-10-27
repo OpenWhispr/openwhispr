@@ -6,6 +6,7 @@ import {
   createInviteFlow,
   inviteReducer,
   inviteSuggestions,
+  inviteSummary,
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
@@ -156,11 +157,13 @@ export default function InviteTeammateDialog({
     seatsUsed !== null && seats !== null
       ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
       : null;
-  const seatCostLine = addsBilledSeat
-    ? t("workspaces.invite.seatCost", {
-        amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
-      })
-    : null;
+  // The preview prices one seat, so with several addresses its charge would understate the cost.
+  const seatCostLine =
+    addsBilledSeat && inviteSummary(state).sendable.length <= 1
+      ? t("workspaces.invite.seatCost", {
+          amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
+        })
+      : null;
 
   const handleSend = async (): Promise<void> => {
     if (running.current) return;
