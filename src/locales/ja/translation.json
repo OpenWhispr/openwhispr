@@ -2425,11 +2425,15 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
+        "invitations": "招待",
         "teams": "グループ"
       },
       "people": {
         "title": "ユーザー",
         "description": "ワークスペースのユーザーとそのロールを管理します。",
+        "subtitleView": "ワークスペースのユーザーとそのロール。",
+        "add": "追加",
+        "addLabel": "メンバーを招待",
         "columns": {
           "name": "名前",
           "team": "グループ",

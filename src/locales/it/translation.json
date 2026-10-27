@@ -2425,11 +2425,15 @@
       "tab": {
         "general": "Generale",
         "members": "Membri",
+        "invitations": "Inviti",
         "teams": "Gruppi"
       },
       "people": {
         "title": "Persone",
         "description": "Gestisci le persone della tua area di lavoro e i loro ruoli.",
+        "subtitleView": "Le persone della tua area di lavoro e i loro ruoli.",
+        "add": "Aggiungi",
+        "addLabel": "Invita persone",
         "columns": {
           "name": "Nome",
           "team": "Gruppo",

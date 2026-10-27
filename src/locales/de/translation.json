@@ -1700,11 +1700,15 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
+        "invitations": "Einladungen",
         "teams": "Gruppen"
       },
       "people": {
         "title": "Personen",
         "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
+        "subtitleView": "Die Personen in Ihrem Workspace und ihre Rollen.",
+        "add": "Hinzufügen",
+        "addLabel": "Personen einladen",
         "columns": {
           "name": "Name",
           "team": "Gruppe",

@@ -2404,11 +2404,15 @@
       "tab": {
         "general": "Geral",
         "members": "Membros",
+        "invitations": "Convites",
         "teams": "Grupos"
       },
       "people": {
         "title": "Pessoas",
         "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas.",
+        "subtitleView": "As pessoas do seu espaço de trabalho e as funções delas.",
+        "add": "Adicionar",
+        "addLabel": "Convidar pessoas",
         "columns": {
           "name": "Nome",
           "team": "Grupo",

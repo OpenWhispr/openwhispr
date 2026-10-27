@@ -2477,11 +2477,15 @@
       "tab": {
         "general": "General",
         "members": "Miembros",
+        "invitations": "Invitaciones",
         "teams": "Grupos"
       },
       "people": {
         "title": "Personas",
         "description": "Gestiona las personas de tu espacio de trabajo y sus roles.",
+        "subtitleView": "Las personas de tu espacio de trabajo y sus roles.",
+        "add": "Añadir",
+        "addLabel": "Invitar personas",
         "columns": {
           "name": "Nombre",
           "team": "Grupo",

@@ -1700,11 +1700,15 @@
       "tab": {
         "general": "Général",
         "members": "Membres",
+        "invitations": "Invitations",
         "teams": "Groupes"
       },
       "people": {
         "title": "Personnes",
         "description": "Gérez les personnes de votre espace de travail et leurs rôles.",
+        "subtitleView": "Les personnes de votre espace de travail et leurs rôles.",
+        "add": "Ajouter",
+        "addLabel": "Inviter des personnes",
         "columns": {
           "name": "Nom",
           "team": "Groupe",

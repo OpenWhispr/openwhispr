@@ -2425,11 +2425,15 @@
       "tab": {
         "general": "常规",
         "members": "成员",
+        "invitations": "邀请",
         "teams": "群组"
       },
       "people": {
         "title": "人员",
         "description": "管理工作区中的人员及其角色。",
+        "subtitleView": "工作区中的人员及其角色。",
+        "add": "添加",
+        "addLabel": "邀请成员",
         "columns": {
           "name": "名称",
           "team": "群组",
