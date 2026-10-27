@@ -1,7 +1,7 @@
 // Onboarding's "We recommend these settings" pick: which local models suit this
 // computer and these languages, and how fast each will feel. Every number and
 // label comes from localSetupTable.json; this module only looks them up.
-import type { ComputerProfile } from "../types/electron";
+import type { ComputerProfile, LocalSetupDownloadKind, LocalSetupSpace } from "../types/electron";
 import { isAgentAllowed, isModeAllowedByPolicy } from "../stores/policyRules";
 import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
@@ -22,7 +22,7 @@ export type MachineType =
   | `mac-m${number}-${"pro" | "max"}`; // e.g. "mac-m4-pro"; Ultra and unlisted tiers → mac-16-plus
 export type LanguageGroup = "english" | "european" | "hindi" | "other";
 export interface LocalSetupDownload {
-  kind: "whisper" | "parakeet" | "llm" | "llamaVulkan";
+  kind: LocalSetupDownloadKind;
   id: string;
   bytes: number;
 }
@@ -342,8 +342,7 @@ export function enabledDownloads(
 }
 
 export type SpaceState = "fits" | "trimmed" | "overflow" | "noSpace";
-/** The room each download kind reserves while it downloads and unpacks (main's disk checks). */
-export type LocalSetupFactors = Record<LocalSetupDownload["kind"], number>;
+export type LocalSetupFactors = LocalSetupSpace["factors"];
 
 /** Free disk space the downloads need, counting the room each one reserves. */
 export function localSetupRequiredBytes(

@@ -1244,9 +1244,13 @@ export interface ComputerProfile {
 }
 
 /** Free space where local models download, and the room each download kind reserves. */
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
 export interface LocalSetupSpace {
   availableBytes: number;
-  factors: Record<"whisper" | "parakeet" | "llm" | "llamaVulkan", number>;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
 }
 
 export interface LlamaVulkanStatus {
