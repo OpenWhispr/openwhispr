@@ -361,7 +361,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
   const remembered = useRef<Record<string, InferenceSelection>>({});
   const [picker, setPicker] = useState<Picker | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [configured, setConfigured] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState<'test' | 'discover' | null>(null);
   // Set when On-Device was tapped with no model on this phone and the model list opened, or
@@ -533,7 +533,14 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
       (selection.providerId !== savedSelection.providerId ||
         modelId !== savedSelection.modelId ||
         (selection.endpoint ?? '') !== (savedSelection.endpoint ?? '')));
-  const canSave = hasUnsavedChanges && !busy;
+  // Removing a key does not silently opt a saved server into anonymous requests.
+  const canSaveWithoutRemovedKey =
+    Platform.OS === 'android' &&
+    selection.mode === 'providers' &&
+    provider?.id === 'custom' &&
+    configured === false &&
+    !!savedSelection.credentialRef;
+  const canSave = (hasUnsavedChanges || canSaveWithoutRemovedKey) && !busy;
   usePreventRemove(hasUnsavedChanges, ({ data }) =>
     confirmDestructive(
       copy('workflowSettings.discardTitle', 'Discard unsaved changes?'),
@@ -555,7 +562,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
 
   useEffect(() => {
     let cancelled = false;
-    setConfigured(false);
+    setConfigured(null);
     if (
       (Platform.OS === 'ios' || Platform.OS === 'android') &&
       selection.mode === 'providers' &&
@@ -1246,6 +1253,7 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
                 <View className="mx-4 mb-7">
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel={copy('save', 'Save')}
                     accessibilityState={{ disabled: !canSave, busy }}
                     onPress={save}
                     disabled={!canSave}

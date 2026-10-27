@@ -86,11 +86,29 @@ it('keeps the selected mode and enables retry after a switch fails', async () =>
     fireEvent(screen.getByRole('switch', { name: 'privateMode' }), 'valueChange', false),
   );
   await waitFor(() =>
-    expect(Alert.alert).toHaveBeenCalledWith('errorTitle', 'Unable to switch mode'),
+    expect(Alert.alert).toHaveBeenCalledWith('errorTitle', 'Unable to switch mode', [
+      { text: 'close' },
+    ]),
   );
   const control = screen.getByRole('switch', { name: 'privateMode' });
   expect(control.props.value).toBe(true);
   expect(control.props.disabled).toBe(false);
+});
+
+it('offers a translated dismissal after a failed download and allows retry', async () => {
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockDownload.mockRejectedValueOnce(new Error('Localized download failure'));
+  const view = render(<ModelsContent />);
+  await act(async () => undefined);
+  fireEvent.press(view.getByText('Meeting speakers'));
+  await act(async () => fireEvent.press(view.getByText('download')));
+  expect(Alert.alert).toHaveBeenCalledWith('errorTitle', 'Localized download failure', [
+    { text: 'close' },
+  ]);
+  expect(view.queryByText('removeModel')).toBeNull();
+  await act(async () => fireEvent.press(view.getByText('download')));
+  expect(mockDownload).toHaveBeenCalledTimes(2);
+  expect(view.getByText('removeModel')).toBeTruthy();
 });
 
 it('offers the 42 MB speaker package for download and removal without choosing it as speech', async () => {

@@ -40,7 +40,7 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       const error = useConfigStore.getState().error;
       if (error) throw new Error(error);
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
     } finally {
       setSaving(false);
     }
@@ -51,7 +51,7 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
     try {
       await setPrivateMode(enabled);
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
     } finally {
       setRequestedPrivateMode(null);
     }
@@ -73,7 +73,7 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       await downloadAndroidModel(id);
       await refresh();
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
     }
   };
   const remove = async (id: AndroidModelId) => {
@@ -82,7 +82,7 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       await removeAndroidModel(id);
       await refresh();
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      Alert.alert(t('errorTitle'), (error as Error).message, [{ text: t('close') }]);
     } finally {
       setRemoving(false);
     }

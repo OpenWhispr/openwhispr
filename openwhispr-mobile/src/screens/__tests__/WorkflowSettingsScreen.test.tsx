@@ -965,6 +965,106 @@ it('keeps Save disabled until something changes', async () => {
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
+describe('Android custom server with a removed key', () => {
+  const endpoint = 'http://10.0.2.2:18329';
+  const credentialRef = `custom.${endpoint}`;
+  const originalPlatform = Platform.OS;
+
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockScope = 'notes';
+    mockConfig = {
+      inference: {
+        notes: {
+          mode: 'providers',
+          providerId: 'custom',
+          endpoint,
+          modelId: 'ow-byok-local-test',
+          credentialRef,
+        },
+      },
+    };
+  });
+
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it('lets the user explicitly save without the removed key, without changing another field', async () => {
+    mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+    const alert = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation((_title, _message, buttons) =>
+        buttons?.find((button) => button.style === 'destructive')?.onPress?.(),
+      );
+    try {
+      render(<WorkflowSettingsScreen />);
+      fireEvent.press(await screen.findByText('Remove Key'));
+      await screen.findByText('Server key removed.');
+      expect(mockRemoveCredential).toHaveBeenCalledWith(credentialRef);
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+      expect(screen.getByText('Save')).toBeEnabled();
+      mockCredentialStatus.mockResolvedValue({ isConfigured: false });
+      fireEvent.press(screen.getByText('Save'));
+      await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+      expect(mockUpdateConfig.mock.calls[0][0].inference.notes).toEqual({
+        mode: 'providers',
+        providerId: 'custom',
+        endpoint,
+        modelId: 'ow-byok-local-test',
+      });
+      expect(mockSetCredential).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('waits for the key lookup before offering an anonymous save after reopening', async () => {
+    let finishLookup!: (value: { isConfigured: boolean }) => void;
+    mockCredentialStatus.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLookup = resolve;
+      }),
+    );
+    render(<WorkflowSettingsScreen />);
+    await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+    expect(screen.getByText('Save')).toBeDisabled();
+    await act(async () => finishLookup({ isConfigured: false }));
+    expect(screen.getByText('Save')).toBeEnabled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unchanged server with a saved key disabled', async () => {
+    mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+    render(<WorkflowSettingsScreen />);
+    await screen.findByText('Saved');
+    expect(screen.getByText('Save')).toBeDisabled();
+  });
+
+  it.each(['ios', 'named provider', 'already anonymous'])(
+    'does not enable the removed-key action for %s',
+    async (control) => {
+      if (control === 'ios') Platform.OS = 'ios';
+      mockConfig = {
+        inference: {
+          notes: {
+            mode: 'providers',
+            providerId: control === 'named provider' ? 'openai' : 'custom',
+            endpoint: control === 'named provider' ? undefined : endpoint,
+            modelId: 'ow-byok-local-test',
+            credentialRef: control === 'already anonymous' ? undefined : credentialRef,
+          },
+        },
+      };
+      mockCredentialStatus.mockResolvedValue({ isConfigured: false });
+      render(<WorkflowSettingsScreen />);
+      await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+      expect(screen.getByText('Save')).toBeDisabled();
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    },
+  );
+});
+
 it('shows a saved key as saved, until a replacement is typed', async () => {
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   render(<WorkflowSettingsScreen />);
