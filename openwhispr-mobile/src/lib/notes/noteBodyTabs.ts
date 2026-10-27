@@ -4,7 +4,7 @@ export interface NoteBodyTabInput {
   usesSegmentTranscript: boolean;
   /** The transcript is still being made or failed, so its tab shows that status. */
   transcriptPending: boolean;
-  /** Uploaded audio stores its flat transcript as the note body; it has no notes of its own. */
+  /** An upload from before desktop stored its text as the transcript: its body is that text. */
   contentIsTranscript: boolean;
   hasEnhanced: boolean;
 }

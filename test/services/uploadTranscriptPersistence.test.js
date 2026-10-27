@@ -86,7 +86,7 @@ for (const source of ["file", "url"]) {
         JSON.parse(note.transcript).map((segment) => segment.text),
         [text]
       );
-      assert.equal(JSON.parse(note.transcript)[0].speakerName, timed ? "Speaker 1" : undefined);
+      assert.equal(JSON.parse(note.transcript)[0].speaker, timed ? "speaker_0" : undefined);
       assert.equal(typeof JSON.parse(note.transcript)[0].timestamp, timed ? "number" : "undefined");
       assert.equal(note.note_type, "upload");
       assert.equal(note.title, source === "file" ? "Generated title" : "Public title");
@@ -185,30 +185,78 @@ test("upload transcript crosses the actual preload and save IPC handler before b
   assert.equal(mirrored[0].transcript, stored.transcript);
 });
 
-for (const segments of [
-  [{ text: "First sentence.", start: 0 }],
-  [
-    { text: "First sentence.", start: 0 },
-    { text: "Second sentence.", start: NaN },
-  ],
+test("a segment without a start keeps the complete uploaded text without invented times", async (t) => {
+  const db = createDb(t);
+  assert.ok(db);
+  const { window } = installBrowserGlobals(t);
+  window.electronAPI.saveNote = async (...args) => db.saveNote(...args);
+  const { saveUploadNote } = await import("../../src/services/uploadNotes.ts");
+  const text = "First sentence. Second sentence.";
+  const saved = await saveUploadNote({
+    title: "Full result",
+    text,
+    sourceName: "fixture.wav",
+    folderId: null,
+    segments: [
+      { text: "First sentence.", start: 0 },
+      { text: "Second sentence.", start: NaN },
+    ],
+    diarization: { enabled: false, localModelsReady: false, numSpeakers: null },
+  });
+  assert.equal(saved.note.content, "");
+  assert.deepEqual(JSON.parse(db.getNote(saved.note.id).transcript), [{ text }]);
+});
+
+// The provider's text is formatted for reading (speaker headers) or joined
+// without spaces (CJK), so it never equals the segments' text; the segments
+// still hold the words, and their timing and speakers must survive.
+for (const { name, text, segments, speakers } of [
+  {
+    name: "a provider-diarized upload keeps its speakers and times",
+    text: "[A] 00:00 - 00:02\nhello there\n\n[B] 00:02 - 00:04\nhi back",
+    segments: [
+      { speaker: "A", text: "hello there", start: 0, end: 2 },
+      { speaker: "B", text: "hi back", start: 2, end: 4 },
+    ],
+    speakers: ["speaker_0", "speaker_1"],
+  },
+  {
+    name: "a CJK upload keeps its segment times",
+    text: "你好。今天开会。",
+    segments: [
+      { text: "你好。", start: 0, end: 1 },
+      { text: "今天开会。", start: 1, end: 2 },
+    ],
+    speakers: [undefined, undefined],
+  },
 ]) {
-  test("incomplete timing rows retain the complete uploaded text without invented times", async (t) => {
+  test(name, async (t) => {
     const db = createDb(t);
     assert.ok(db);
     const { window } = installBrowserGlobals(t);
     window.electronAPI.saveNote = async (...args) => db.saveNote(...args);
     const { saveUploadNote } = await import("../../src/services/uploadNotes.ts");
-    const text = "First sentence. Second sentence.";
     const saved = await saveUploadNote({
-      title: "Full result",
+      title: "Timed",
       text,
       sourceName: "fixture.wav",
       folderId: null,
       segments,
       diarization: { enabled: false, localModelsReady: false, numSpeakers: null },
     });
-    assert.equal(saved.note.content, "");
-    assert.deepEqual(JSON.parse(db.getNote(saved.note.id).transcript), [{ text }]);
+    const stored = JSON.parse(db.getNote(saved.note.id).transcript);
+    assert.deepEqual(
+      stored.map((segment) => segment.text),
+      segments.map((segment) => segment.text)
+    );
+    assert.deepEqual(
+      stored.map((segment) => segment.speaker),
+      speakers
+    );
+    assert.equal(
+      stored[1].timestamp - stored[0].timestamp,
+      (segments[1].start - segments[0].start) * 1000
+    );
   });
 }
 

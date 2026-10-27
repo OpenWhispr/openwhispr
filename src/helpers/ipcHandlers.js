@@ -4186,7 +4186,7 @@ class IPCHandlers {
           end: typeof s.end === "number" && isFinite(s.end) ? s.end : 0,
         }));
         const merged = mergeSpeakersWithText(sanitizedSegments, text, duration);
-        return { success: true, text: formatSpeakerTranscript(merged) };
+        return { success: true, text: formatSpeakerTranscript(merged), segments: merged };
       } catch (error) {
         debugLogger.error("Speaker merge error", { error: error.message });
         return { success: false, error: error.message };
@@ -10973,6 +10973,12 @@ class IPCHandlers {
             debugLogger.warn("BYOK diarization requested but provider returned no speaker data");
           }
           const segments = timestamps ? mapVerboseSegments(data.data) : null;
+          if (timestamps && !segments) {
+            debugLogger.debug("BYOK transcription returned no usable segment timing", {
+              provider: route.provider,
+              hasSegments: Array.isArray(data.data?.segments),
+            });
+          }
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (rawError) {
           const error = providerErrorContext

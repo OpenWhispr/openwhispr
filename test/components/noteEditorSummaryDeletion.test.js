@@ -309,8 +309,7 @@ test("an uploaded transcript opens in Transcript and leaves Your notes available
   });
   const note = db.getNote(saved.note.id);
   await render(undefined, { note });
-  assert.ok(collectEditorValues(latest()).includes(""), "Your notes starts empty");
-  await click("transcript");
+  // No click: an upload without notes opens on its transcript.
   let transcript = null;
   walk(latest(), (node) => {
     if (node.props.segments) transcript = node.props.segments;
@@ -319,6 +318,8 @@ test("an uploaded transcript opens in Transcript and leaves Your notes available
     transcript?.map((segment) => segment.text),
     [text]
   );
+  await click("raw");
+  assert.ok(collectEditorValues(latest()).includes(""), "Your notes starts empty");
   db.updateNote(note.id, { content: "My own reminder" });
   await render(undefined, { note: db.getNote(note.id) });
   await click("raw");
