@@ -169,9 +169,14 @@ export function TransferOwnershipDialog({
               </span>
               <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
             </DropdownMenuTrigger>
+            {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
+                buttons, and picking enables Transfer ownership, so a double-click would land
+                on it and transfer before the confirmation was read. */}
             <DropdownMenuContent
+              side="top"
               align="start"
-              className="max-h-64 w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+              avoidCollisions={false}
+              className="max-h-[min(16rem,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
             >
               {candidates.map((member) => (
                 <DropdownMenuItem

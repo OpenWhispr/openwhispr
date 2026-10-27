@@ -30,6 +30,7 @@ async function loadDialog(t) {
       "__transferCalls",
       "__transferImpl",
       "__pickerDisabled",
+      "__menuContentProps",
     ]) {
       delete globalThis[key];
     }
@@ -69,7 +70,10 @@ async function loadDialog(t) {
         import React from "react";
         const passThrough = ({ children }) => React.createElement(React.Fragment, null, children);
         export const DropdownMenu = passThrough;
-        export const DropdownMenuContent = passThrough;
+        export const DropdownMenuContent = (props) => {
+          globalThis.__menuContentProps = props;
+          return passThrough(props);
+        };
         export const DropdownMenuTrigger = ({ children, disabled }) => {
           globalThis.__pickerDisabled = Boolean(disabled);
           return React.createElement("button", { "data-picker": "", disabled: disabled || undefined }, children);
@@ -189,6 +193,17 @@ test("a roster already in the store is read again, so a member who left isn't of
   assert.equal(reads, 1);
   assert.match(text, /Adam Admin/);
   assert.doesNotMatch(text, /Mia Member/);
+});
+
+// Picking enables Transfer ownership, which sits below the picker: a list opened downward put the
+// second click of a double-click on it, transferring before the confirmation was read.
+test("the candidate list opens upward and never flips over the buttons", async (t) => {
+  const { mount } = await loadDialog(t);
+
+  await mount({ kind: "choosing", candidateId: null });
+
+  assert.equal(globalThis.__menuContentProps.side, "top");
+  assert.equal(globalThis.__menuContentProps.avoidCollisions, false);
 });
 
 test("transferring is busy with its own copy", async (t) => {
