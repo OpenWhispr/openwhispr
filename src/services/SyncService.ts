@@ -1713,17 +1713,22 @@ export class SyncService {
 
   private async pushPendingFolders(teamOnly = false): Promise<void> {
     // A subfolder waits for its parent's cloud id, so a parent created in this
-    // pass pushes first and its subfolders follow in a second round.
-    for (let round = 0; round < 2; round++) {
-      if (!(await this.pushPendingFolderRound(teamOnly))) return;
-    }
+    // pass pushes first and the subfolders that waited follow in a second round.
+    const waiting = await this.pushPendingFolderRound(teamOnly);
+    if (waiting.size > 0) await this.pushPendingFolderRound(teamOnly, waiting);
   }
 
-  // Returns whether a subfolder is still waiting for its parent's cloud id.
-  private async pushPendingFolderRound(teamOnly: boolean): Promise<boolean> {
-    const pending =
-      (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? [];
-    if (pending.length === 0) return false;
+  // Returns the subfolders still waiting for their parent's cloud id. `only`
+  // limits the round to those ids, so rows that already failed aren't retried.
+  private async pushPendingFolderRound(
+    teamOnly: boolean,
+    only?: Set<number>
+  ): Promise<Set<number>> {
+    const waiting = new Set<number>();
+    const pending = (
+      (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? []
+    ).filter((folder) => !only || only.has(folder.id));
+    if (pending.length === 0) return waiting;
 
     const ctx = await this.buildSpaceContext();
     const { localToCloud } = await this.buildLocalToCloudFolderMap();
@@ -1732,13 +1737,12 @@ export class SyncService {
       scope: PushScopeFields;
       parentFolderId: string | null;
     }> = [];
-    let waiting = false;
     for (const folder of pending) {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
       const parentFolderId = this.cloudParentFolderId(folder, localToCloud);
       if (parentFolderId === undefined) {
-        waiting = true;
+        waiting.add(folder.id);
         continue;
       }
       pushable.push({ folder, scope, parentFolderId });
@@ -1799,7 +1803,7 @@ export class SyncService {
           console.error(
             `Folder batch create returned ${created.length} folders for ${fresh.length} inputs; skipping identity adoption`
           );
-          return false;
+          return waiting;
         }
         for (const [i, cloudFolder] of created.entries()) {
           const local = fresh[i].folder;

@@ -4505,7 +4505,7 @@ class DatabaseManager {
         .prepare(
           "INSERT INTO folders (name, sort_order, space_id, parent_folder_id, client_folder_id, account_id) VALUES (?, ?, ?, ?, ?, ?)"
         )
-        .run(trimmed, sortOrder, spaceId, parentFolderId ?? null, clientFolderId, accountId);
+        .run(trimmed, sortOrder, spaceId, parentFolderId, clientFolderId, accountId);
       const folder = this.db
         .prepare("SELECT * FROM folders WHERE id = ?")
         .get(result.lastInsertRowid);
@@ -4812,16 +4812,25 @@ class DatabaseManager {
       if (!space) return { success: false, error: "Space not found" };
       if (folder.space_id === spaceId) return { success: true, folder, notes: [] };
       const folderScope = this._accountScopeCondition("folders");
+      // D6: cloud-backed rows leaving a team must keep pushing their scope
+      // retraction even in the backup-off team-only pass (left_team).
+      const oldKind = this.db
+        .prepare("SELECT kind FROM spaces WHERE id = ?")
+        .get(folder.space_id)?.kind;
+      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       // Subfolders move with their parent; a subfolder moved on its own
-      // becomes a top-level folder in the target space.
+      // becomes a top-level folder in the target space. Leaving a team, they
+      // stay behind top-level instead: the server keeps a teammate's subfolder
+      // in the team, and desktop can't tell whose a subfolder is.
       const children = this.db
         .prepare(
           `SELECT id, name FROM folders
            WHERE parent_folder_id = ? AND deleted_at IS NULL AND ${folderScope.sql}`
         )
         .all(id, ...folderScope.params);
-      const folderIds = [id, ...children.map((child) => child.id)];
-      const names = [folder.name, ...children.map((child) => child.name)];
+      const carried = leftTeam ? [] : children;
+      const folderIds = [id, ...carried.map((child) => child.id)];
+      const names = [folder.name, ...carried.map((child) => child.name)];
       const placeholders = (values) => values.map(() => "?").join(", ");
       const existing = this.db
         .prepare(
@@ -4831,15 +4840,16 @@ class DatabaseManager {
         )
         .get(...names, spaceId, ...folderScope.params);
       if (existing) return { success: false, error: "A folder with that name already exists" };
-      // D6: cloud-backed rows leaving a team must keep pushing their scope
-      // retraction even in the backup-off team-only pass (left_team).
-      const oldKind = this.db
-        .prepare("SELECT kind FROM spaces WHERE id = ?")
-        .get(folder.space_id)?.kind;
-      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       const nextAccountId = this._accountIdForSpace(spaceId);
       const inFolders = `IN (${placeholders(folderIds)})`;
       const notes = this.db.transaction(() => {
+        if (leftTeam) {
+          this.db
+            .prepare(
+              "UPDATE folders SET parent_folder_id = NULL, sync_status = 'pending', updated_at = datetime('now') WHERE parent_folder_id = ? AND deleted_at IS NULL"
+            )
+            .run(id);
+        }
         this.db
           .prepare(
             `UPDATE folders SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'),
@@ -4861,7 +4871,7 @@ class DatabaseManager {
           .all(...folderIds);
       })();
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-      return { success: true, folder: updated, notes };
+      return { success: true, folder: updated, notes, unnestedFolders: leftTeam ? children : [] };
     } catch (error) {
       debugLogger.error("Error moving folder to space", { error: error.message }, "spaces");
       throw error;
@@ -8415,7 +8425,6 @@ class DatabaseManager {
         id,
         noteIds,
         relocatedNotes,
-        name: folder?.name ?? null,
       };
     } catch (error) {
       debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
@@ -8521,7 +8530,7 @@ class DatabaseManager {
           deletedNoteIds,
         };
       })();
-      return { success: true, folderName: folder.name, ...result };
+      return { success: true, ...result };
     } catch (error) {
       debugLogger.error("Error relocating revoked folder", { error: error.message }, "database");
       throw error;
@@ -8635,9 +8644,9 @@ class DatabaseManager {
 
   // Pulled folders arrive in updated_at order, so a subfolder can come before
   // its parent; links are applied once the page is stored. A parent unknown
-  // here, in another space, or itself nested leaves the folder top-level, and
-  // a final pass undoes any chain deeper than one level whatever order the
-  // links came in. Pending rows keep their unpushed local parent.
+  // here or in another space leaves the folder top-level, and a final pass
+  // undoes any chain deeper than one level whatever order the links came in.
+  // Pending rows keep their unpushed local parent.
   applyCloudFolderParents(links) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -8657,7 +8666,6 @@ class DatabaseManager {
             parent &&
             parent.id !== folder.id &&
             parent.space_id === folder.space_id &&
-            parent.parent_folder_id == null &&
             !folder.is_default;
           const parentId = nestable ? parent.id : null;
           if (parentId === folder.parent_folder_id) continue;

@@ -506,10 +506,15 @@ test("a new parent and subfolder push in two rounds, the subfolder carrying its 
   if (!ctx) return;
   const { db, cloud } = ctx;
 
+  // A linked folder whose PATCH 404s must not be retried by the second round.
+  const gone = db.createFolder("Gone").folder;
+  db.markFolderSynced(gone.id, "folder-missing");
+  db.renameFolder(gone.id, "Gone Renamed");
   const parent = db.createFolder("Client A").folder;
   db.createFolder("Q1", null, parent.id);
   await (await newSyncService(t)).syncAll(true);
 
+  assert.equal(cloud.logFor("/api/folders/update").length, 1);
   const batches = cloud.logFor("/api/folders/batch-create");
   assert.equal(batches.length, 2);
   assert.ok(!batches[0].body.folders.some((f) => f.name === "Q1"));

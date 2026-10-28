@@ -485,7 +485,7 @@ class CliBridge {
         "POST",
         "/v1/folders/create",
         ({ body }) => {
-          const result = db.createFolder(body?.name, null, body?.parent_folder_id ?? null);
+          const result = db.createFolder(body?.name, null, body?.parent_folder_id);
           if (result.error) {
             const err = new Error(result.error);
             err.code = "VALIDATION";

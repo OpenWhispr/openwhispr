@@ -1443,7 +1443,6 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
   const result = db.relocateRevokedFolder(folder.id, privateId, false);
   assert.ok(result.success);
   assert.equal(result.folder, null);
-  assert.equal(result.folderName, "Q3 calls");
   assert.deepEqual(result.deletedNoteIds, [clean.id]);
   assert.deepEqual(
     result.relocatedNotes.map((n) => n.id).sort((a, b) => a - b),
@@ -2032,6 +2031,18 @@ test("moveFolderToSpace moves a parent with its subfolders; a subfolder alone go
   const alone = db.moveFolderToSpace(child.id, db.getPrivateSpaceId());
   assert.ok(alone.success);
   assert.equal(alone.folder.parent_folder_id, null);
+
+  const sibling = db.createFolder("Q2", team.id, parent.id).folder;
+  db.markFolderSynced(sibling.id, "cloud-q2");
+  const leaving = db.moveFolderToSpace(parent.id, db.getPrivateSpaceId());
+  assert.ok(leaving.success);
+  assert.deepEqual(
+    leaving.unnestedFolders.map((f) => f.id),
+    [sibling.id]
+  );
+  const stayed = db.getFolders(team.id).find((f) => f.id === sibling.id);
+  assert.equal(stayed.parent_folder_id, null, "leaving a team, subfolders stay behind top-level");
+  assert.equal(stayed.sync_status, "pending");
   assert.ok(taken);
 });
 
@@ -2101,6 +2112,18 @@ test("applyCloudFolderParents links pulled subfolders and keeps invalid ones top
 
   db.applyCloudFolderParents([{ cloudId: "c-child", parentCloudId: null }]);
   assert.equal(parentOf(child.id), null);
+
+  db.applyCloudFolderParents([{ cloudId: "c-grandchild", parentCloudId: "c-parent" }]);
+  db.applyCloudFolderParents([
+    { cloudId: "c-child", parentCloudId: "c-grandchild" },
+    { cloudId: "c-grandchild", parentCloudId: null },
+  ]);
+  assert.equal(
+    parentOf(child.id),
+    grandchild.id,
+    "a link to a parent un-nested later in the same pull still lands"
+  );
+  assert.equal(parentOf(grandchild.id), null);
 });
 
 test("a pulled space change clears a stale parent and a parent's hard delete frees its children", (t) => {

@@ -774,7 +774,7 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId, parentFolderId = null) {
+  createFolderWithEffects(name, spaceId, parentFolderId) {
     const result = this.databaseManager.createFolder(name, spaceId, parentFolderId);
     if (result?.success && result?.folder) {
       setImmediate(() => {
@@ -2641,7 +2641,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-create-folder", (_event, name, spaceId, parentFolderId) =>
-      this.createFolderWithEffects(name, spaceId, parentFolderId ?? null)
+      this.createFolderWithEffects(name, spaceId, parentFolderId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
@@ -2686,6 +2686,9 @@ class IPCHandlers {
           setImmediate(() => {
             broadcastToWindows("folder-synced", result.folder);
             this._mirrorMoveFolder(previousMirrorFolder, id);
+            for (const child of result.unnestedFolders ?? []) {
+              this._mirrorMoveFolder([previousMirrorFolder, child.name], child.id);
+            }
           });
         }
       }
@@ -3161,7 +3164,7 @@ class IPCHandlers {
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
-          if (mirrorFolder && result.name) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
+          if (mirrorFolder) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
         });
       }
       return result;
