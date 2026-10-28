@@ -209,6 +209,8 @@ export async function authContextFetch(
   await assertAuthRequestCurrent(init);
   try {
     const response = await globalThis.fetch(input, { ...init, credentials: "omit" });
+    // Fetch resolves at headers; a broken session body must fence the lease too.
+    if (isGetSessionRequest((init ?? {}) as AuthRequest)) await response.clone().text();
     await assertAuthRequestCurrent(init);
     return response;
   } catch (error) {

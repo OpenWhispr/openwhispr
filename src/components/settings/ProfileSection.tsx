@@ -149,6 +149,7 @@ export default function ProfileSection({
 
       <ChangePasswordDialog
         open={passwordOpen}
+        readOnly={readOnly}
         onOpenChange={setPasswordOpen}
         describeError={describeError}
       />
@@ -158,11 +159,17 @@ export default function ProfileSection({
 
 interface ChangePasswordDialogProps {
   open: boolean;
+  readOnly: boolean;
   onOpenChange: (open: boolean) => void;
   describeError: (error: AuthActionError) => string;
 }
 
-function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePasswordDialogProps) {
+function ChangePasswordDialog({
+  open,
+  readOnly,
+  onOpenChange,
+  describeError,
+}: ChangePasswordDialogProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [currentPassword, setCurrentPassword] = useState("");
@@ -204,6 +211,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
     currentPassword.length > 0 &&
     newPassword.length >= MIN_PASSWORD_LENGTH &&
     newPassword === confirmPassword &&
+    !readOnly &&
     !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,7 +256,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                disabled={submitting}
+                disabled={submitting || readOnly}
                 autoComplete="current-password"
                 autoFocus
               />
@@ -264,7 +272,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 minLength={MIN_PASSWORD_LENGTH}
-                disabled={submitting}
+                disabled={submitting || readOnly}
                 autoComplete="new-password"
               />
               {tooShort && (
@@ -283,7 +291,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={submitting}
+                disabled={submitting || readOnly}
                 autoComplete="new-password"
               />
               {mismatch && (
@@ -297,7 +305,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: ChangePassw
                 type="checkbox"
                 checked={revokeOtherSessions}
                 onChange={(e) => setRevokeOtherSessions(e.target.checked)}
-                disabled={submitting}
+                disabled={submitting || readOnly}
                 className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
               />
               <span className="text-xs text-foreground">
