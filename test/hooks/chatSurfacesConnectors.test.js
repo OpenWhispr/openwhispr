@@ -137,6 +137,17 @@ test("a note of unknown ownership reads as someone else's, and one without parti
   });
 });
 
+test("the onboarding assistant demo answers on the Voice Assistant scope, like the panel", async (t) => {
+  const options = await streamingOptionsOf(
+    t,
+    "/hooks/useOnboardingAssistantDemo.ts",
+    "useOnboardingAssistantDemo",
+    () => {}
+  );
+
+  assert.equal(options.inferenceScope, "dictationAgent");
+});
+
 test("a folder or space chat never offers the connector tools", async (t) => {
   const options = await streamingOptionsOf(t, "/hooks/useContainerChat.ts", "useContainerChat", {
     space: { id: 1, name: "Team" },

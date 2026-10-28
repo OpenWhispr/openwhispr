@@ -161,6 +161,8 @@ export interface PromptTool {
 }
 
 export interface AgentSystemPromptOptions {
+  /** A surface-specific base; shared capability and tool rules still follow it. */
+  basePrompt?: string;
   /** Capabilities that exist but aren't usable here, with what the user can do about it. */
   unavailable?: ReadonlyArray<UnavailableCapability>;
   /** History carries [Tools used: …] notes on earlier assistant turns. */
@@ -194,7 +196,7 @@ export function getAgentSystemPrompt(
   noteContext?: string,
   options: AgentSystemPromptOptions = {}
 ): string {
-  let prompt = resolvePrompt("chatAgent", { agentName: null });
+  let prompt = options.basePrompt ?? resolvePrompt("chatAgent", { agentName: null });
 
   const tools = (availableTools ?? []).map((tool): PromptTool =>
     typeof tool === "string" ? { name: tool } : tool

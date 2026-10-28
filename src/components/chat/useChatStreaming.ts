@@ -32,8 +32,10 @@ import {
   appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   getAgentSystemPrompt,
+  resolvePrompt,
 } from "../../config/prompts";
 import { resolveUnavailableCapabilities } from "../../config/agentCapabilities";
+import { getAgentName } from "../../utils/agentName";
 import type { ToneAppCategory } from "../../config/toneStyle";
 import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
@@ -527,6 +529,15 @@ export function useChatStreaming({
         // jargon — same suffix the dictation prompts carry.
         let systemPrompt = appendDictionarySuffix(
           getAgentSystemPrompt(registry?.getAll(), libraryContext || undefined, {
+            // The Voice Assistant answers from its own Assistant prompt, or the
+            // built-in Voice Assistant prompt when none is saved, never Chat's.
+            basePrompt:
+              inferenceScope === "dictationAgent"
+                ? resolvePrompt("dictationAgent", {
+                    agentName: getAgentName(),
+                    uiLanguage: settings.uiLanguage,
+                  })
+                : undefined,
             unavailable: nameUnavailableCapabilities ? unavailable : [],
             toolTrace: registry !== null,
             openNote: openNoteContext || undefined,

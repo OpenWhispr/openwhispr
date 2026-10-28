@@ -236,15 +236,14 @@ export default function DictationAgentSettings() {
 
       {voiceAgentSection}
 
-      {useDictationAgent && (
-        <div className="border-t border-border/70 pt-6">
-          <SectionHeader
-            title={t("dictationAgent.prompt.title")}
-            description={t("dictationAgent.prompt.description")}
-          />
-          <PromptStudio kind="dictationAgent" />
-        </div>
-      )}
+      {/* Shown even with the toggle off: the Voice Assistant hotkey still answers from it. */}
+      <div className="border-t border-border/70 pt-6">
+        <SectionHeader
+          title={t("dictationAgent.prompt.title")}
+          description={t("dictationAgent.prompt.description")}
+        />
+        <PromptStudio kind="dictationAgent" />
+      </div>
     </div>
   );
 }
