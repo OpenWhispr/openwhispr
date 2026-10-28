@@ -220,14 +220,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
         const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        const activeChanged = resolvedActiveId !== activeId;
+        if (activeChanged) membersRequestSeq++;
         set({
           workspaces,
           loaded: true,
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
+          ...(activeChanged ? { members: [] } : {}),
         });
-        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
+        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
         writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {

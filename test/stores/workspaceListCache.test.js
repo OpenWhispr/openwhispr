@@ -14,7 +14,10 @@ const WORKSPACES = [
 
 // accountId and the service's list result are read from globals so each test steers them.
 async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } = {}) {
-  const { storage } = installBrowserGlobals(t, { initialStorage });
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage,
+    window: { dispatchEvent() {} },
+  });
   globalThis.__workspaceCacheTest = {
     accountId,
     list: list ?? (async () => WORKSPACES),
@@ -25,12 +28,16 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-workspace-list-cache-",
     mockModules: {
-      "/services/WorkspacesService": `
+      "/WorkspacesService": `
         export const WorkspacesService = {
           list: () => globalThis.__workspaceCacheTest.list(),
           create: (name) => globalThis.__workspaceCacheTest.create(name),
+          listMembers: (id) => globalThis.__workspaceCacheTest.listMembers(id),
+          removeMember: (id, userId) => globalThis.__workspaceCacheTest.remove(id, userId),
+          remove: (id) => globalThis.__workspaceCacheTest.remove(id),
         };
       `,
+      "/SyncService": `export const syncService = { requestSyncAll() {} };`,
       "/policyStore": `
         export const usePolicyStore = {
           getState: () => ({
@@ -45,7 +52,7 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
     },
   });
   const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
-  return { storage, store: useWorkspaceStore };
+  return { storage, store: useWorkspaceStore, vite };
 }
 
 const failing = async () => {
@@ -205,6 +212,70 @@ test("forgetting the active workspace makes the next one active, even if the ref
 
   assert.equal(store.getState().activeWorkspaceId, "team");
   assert.equal(store.getState().error, true);
+});
+
+for (const action of ["leaveWorkspace", "deleteWorkspace"]) {
+  test(`${action} with a lost response clears the departed roster and invalidates its pending fetch`, async (t) => {
+    const { store, storage, vite } = await loadStore(t, {
+      list: async () => [GONE, ...WORKSPACES],
+    });
+    const actions = await vite.ssrLoadModule("/services/workspaceActions.ts");
+    const departedMembers = [{ user_id: "departed-user", role: "member" }];
+    globalThis.__workspaceCacheTest.listMembers = async () => departedMembers;
+    await store.getState().refresh();
+    await store.getState().refreshMembers("gone");
+
+    let answerStale;
+    globalThis.__workspaceCacheTest.listMembers = () =>
+      new Promise((resolve) => (answerStale = () => resolve(departedMembers)));
+    const stale = store.getState().refreshMembers("gone");
+    let membersAtSwitch;
+    const unsubscribe = store.subscribe((state, previous) => {
+      if (state.activeWorkspaceId !== previous.activeWorkspaceId) membersAtSwitch = state.members;
+    });
+    t.after(unsubscribe);
+    globalThis.__workspaceCacheTest.remove = async (id) => {
+      assert.equal(id, "gone");
+      globalThis.__workspaceCacheTest.list = async () => WORKSPACES;
+      throw new Error("response lost");
+    };
+
+    await actions[action]("gone", "departed-user");
+
+    assert.equal(store.getState().activeWorkspaceId, "team");
+    assert.equal(storage.getItem("activeWorkspaceId"), "team");
+    assert.deepEqual(store.getState().workspaces, WORKSPACES);
+    assert.deepEqual(membersAtSwitch, []);
+    assert.deepEqual(store.getState().members, []);
+    answerStale();
+    await stale;
+    assert.deepEqual(store.getState().members, []);
+
+    globalThis.__workspaceCacheTest.listMembers = failing;
+    await assert.rejects(store.getState().refreshMembers("team"), /offline/);
+    assert.deepEqual(store.getState().members, []);
+  });
+}
+
+test("refreshing an unchanged active workspace preserves its roster and pending member fetch", async (t) => {
+  const { store } = await loadStore(t);
+  const members = [{ user_id: "existing-user", role: "member" }];
+  globalThis.__workspaceCacheTest.listMembers = async () => members;
+  await store.getState().refresh();
+  await store.getState().refreshMembers("team");
+
+  let answerMembers;
+  const updatedMembers = [...members, { user_id: "new-user", role: "member" }];
+  globalThis.__workspaceCacheTest.listMembers = () =>
+    new Promise((resolve) => (answerMembers = () => resolve(updatedMembers)));
+  const pending = store.getState().refreshMembers("team");
+  await store.getState().refresh();
+
+  assert.equal(store.getState().activeWorkspaceId, "team");
+  assert.deepEqual(store.getState().members, members);
+  answerMembers();
+  await pending;
+  assert.deepEqual(store.getState().members, updatedMembers);
 });
 
 test("a fresh refresh drops the answer of a request sent before the change", async (t) => {
