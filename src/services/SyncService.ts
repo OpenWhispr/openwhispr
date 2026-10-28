@@ -968,12 +968,17 @@ export class SyncService {
     const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("folder", folder, ctx);
     if (!scope) return;
+    const { localToCloud } = await this.buildLocalToCloudFolderMap();
+    const parentFolderId = this.cloudParentFolderId(folder, localToCloud);
+    // The parent hasn't reached the cloud yet; a full pass pushes it first.
+    if (parentFolderId === undefined) return;
 
     if (folder.cloud_id) {
       try {
         await FoldersService.update(folder.cloud_id, {
           name: folder.name,
           sort_order: folder.sort_order,
+          parent_folder_id: parentFolderId,
           ...scope,
         });
         // Settle like the batch path: a delivered row left pending would both
@@ -1003,20 +1008,35 @@ export class SyncService {
         }
       }
     } else {
-      await this.createCloudFolder(folder, scope);
+      await this.createCloudFolder(folder, scope, parentFolderId);
     }
+  }
+
+  // A parent travels as its cloud id: null for a top-level folder, undefined
+  // while the parent has no cloud id yet (the subfolder's push waits for it).
+  private cloudParentFolderId(
+    folder: FolderItem,
+    localToCloud: Map<number, string>
+  ): string | null | undefined {
+    if (folder.parent_folder_id == null) return null;
+    return localToCloud.get(folder.parent_folder_id);
   }
 
   // Single-folder create shared by the debounced push and the batch-create
   // isolation fallback. On a same-name collision the API returns the WINNER's
   // existing row; adopt its identity (as the batch path does) so later pulls
   // of that row match this folder instead of inserting a colliding duplicate.
-  private async createCloudFolder(folder: FolderItem, scope: PushScopeFields): Promise<void> {
+  private async createCloudFolder(
+    folder: FolderItem,
+    scope: PushScopeFields,
+    parentFolderId: string | null
+  ): Promise<void> {
     const cloud = await FoldersService.create({
       name: folder.name,
       client_folder_id: folder.client_folder_id,
       is_default: !!folder.is_default,
       sort_order: folder.sort_order,
+      parent_folder_id: parentFolderId,
       ...scope,
     });
     await window.electronAPI.acknowledgeFolderCreate?.(
@@ -1692,27 +1712,48 @@ export class SyncService {
   }
 
   private async pushPendingFolders(teamOnly = false): Promise<void> {
+    // A subfolder waits for its parent's cloud id, so a parent created in this
+    // pass pushes first and its subfolders follow in a second round.
+    for (let round = 0; round < 2; round++) {
+      if (!(await this.pushPendingFolderRound(teamOnly))) return;
+    }
+  }
+
+  // Returns whether a subfolder is still waiting for its parent's cloud id.
+  private async pushPendingFolderRound(teamOnly: boolean): Promise<boolean> {
     const pending =
       (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? [];
-    if (pending.length === 0) return;
+    if (pending.length === 0) return false;
 
     const ctx = await this.buildSpaceContext();
-    const pushable: Array<{ folder: FolderItem; scope: PushScopeFields }> = [];
+    const { localToCloud } = await this.buildLocalToCloudFolderMap();
+    const pushable: Array<{
+      folder: FolderItem;
+      scope: PushScopeFields;
+      parentFolderId: string | null;
+    }> = [];
+    let waiting = false;
     for (const folder of pending) {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
-      pushable.push({ folder, scope });
+      const parentFolderId = this.cloudParentFolderId(folder, localToCloud);
+      if (parentFolderId === undefined) {
+        waiting = true;
+        continue;
+      }
+      pushable.push({ folder, scope, parentFolderId });
     }
 
     const migration = pushable.filter(({ folder }) => folder.cloud_id);
     const fresh = pushable.filter(({ folder }) => !folder.cloud_id);
 
     let denied = false;
-    for (const { folder, scope } of migration) {
+    for (const { folder, scope, parentFolderId } of migration) {
       try {
         await FoldersService.update(folder.cloud_id!, {
           name: folder.name,
           sort_order: folder.sort_order,
+          parent_folder_id: parentFolderId,
           ...scope,
         });
         // Settle only if the row wasn't edited while the PATCH was in flight.
@@ -1742,11 +1783,12 @@ export class SyncService {
     if (fresh.length > 0) {
       try {
         const { created } = await FoldersService.batchCreate(
-          fresh.map(({ folder, scope }) => ({
+          fresh.map(({ folder, scope, parentFolderId }) => ({
             name: folder.name,
             client_folder_id: folder.client_folder_id,
             is_default: !!folder.is_default,
             sort_order: folder.sort_order,
+            parent_folder_id: parentFolderId,
             ...scope,
           }))
         );
@@ -1757,7 +1799,7 @@ export class SyncService {
           console.error(
             `Folder batch create returned ${created.length} folders for ${fresh.length} inputs; skipping identity adoption`
           );
-          return;
+          return false;
         }
         for (const [i, cloudFolder] of created.entries()) {
           const local = fresh[i].folder;
@@ -1775,14 +1817,15 @@ export class SyncService {
           // A typed rejection can't be attributed to a row from the batch
           // response; create individually so one rejected folder settles
           // terminally without stranding (or relocating) the rest.
-          for (const { folder, scope } of fresh) {
-            await this.pushFreshFolder(folder, scope, ctx);
+          for (const { folder, scope, parentFolderId } of fresh) {
+            await this.pushFreshFolder(folder, scope, parentFolderId, ctx);
           }
         } else {
           console.error("Folder batch create failed:", err);
         }
       }
     }
+    return waiting;
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
@@ -1791,10 +1834,11 @@ export class SyncService {
   private async pushFreshFolder(
     folder: FolderItem,
     scope: PushScopeFields,
+    parentFolderId: string | null,
     ctx: SpaceSyncContext
   ): Promise<void> {
     try {
-      await this.createCloudFolder(folder, scope);
+      await this.createCloudFolder(folder, scope, parentFolderId);
     } catch (err) {
       if (isFolderNameTakenError(err)) {
         this.dispatchFolderNameTaken(folder.name);
@@ -1820,6 +1864,7 @@ export class SyncService {
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
       let parkedRows = 0;
+      const parentLinks: Array<{ cloudId: string; parentCloudId: string | null }> = [];
 
       for (const cloudFolder of cloudFolders) {
         try {
@@ -1861,6 +1906,14 @@ export class SyncService {
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             }
             continue;
+          }
+
+          // An API without subfolders sends no parent; the local one stands.
+          if (!cloudFolder.deleted_at && cloudFolder.parent_folder_id !== undefined) {
+            parentLinks.push({
+              cloudId: cloudFolder.id,
+              parentCloudId: cloudFolder.parent_folder_id,
+            });
           }
 
           if (teamOnly && !cloudFolder.space_id) {
@@ -1959,6 +2012,7 @@ export class SyncService {
           console.error(`Folder pull failed for cloud folder ${cloudFolder.id}:`, err);
         }
       }
+      if (parentLinks.length > 0) await window.electronAPI.applyCloudFolderParents?.(parentLinks);
 
       const { advanceCursor, advanceTeamCursor } = resolvePullCursorAdvance({
         snapshot,

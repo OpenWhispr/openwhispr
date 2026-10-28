@@ -55,9 +55,12 @@ class MarkdownMirror {
     );
   }
 
+  // A folder is its name, or [parent, name] for a subfolder, whose directory
+  // sits inside its parent's.
   _folderCandidatePath(folderName) {
     if (!this._baseRealPath) return null;
-    return path.join(this._baseRealPath, this._safeFolderName(folderName));
+    const segments = Array.isArray(folderName) ? folderName : [folderName];
+    return path.join(this._baseRealPath, ...segments.map((name) => this._safeFolderName(name)));
   }
 
   _displayPath(canonicalPath) {
@@ -161,7 +164,10 @@ class MarkdownMirror {
         }
       }
 
-      const frontmatter = this._buildFrontmatter(note, folderName || "Personal");
+      const frontmatter = this._buildFrontmatter(
+        note,
+        [].concat(folderName || "Personal").join("/")
+      );
       const body = note.enhanced_content || note.content || "";
       fs.writeFileSync(newFilePath, `${frontmatter}\n\n${body}`, "utf-8");
     } catch (err) {
@@ -251,6 +257,7 @@ class MarkdownMirror {
       const newPath = this._folderCandidatePath(newName);
       if (!newPath || oldPath === newPath) return;
       if (fs.existsSync(newPath)) this._resolveExistingFolderPath(newPath);
+      fs.mkdirSync(path.dirname(newPath), { recursive: true });
       fs.renameSync(oldPath, newPath);
     } catch (err) {
       debugLogger.error(
@@ -326,20 +333,32 @@ class MarkdownMirror {
     }
   }
 
+  // Every folder directory, including the subfolder directories inside them.
+  _folderDirs() {
+    const dirs = [];
+    const collect = (parentPath, isTopLevel) => {
+      for (const entry of fs.readdirSync(parentPath, { withFileTypes: true })) {
+        if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+        let dirPath;
+        try {
+          dirPath = this._resolveExistingFolderPath(path.join(parentPath, entry.name));
+        } catch {
+          continue;
+        }
+        dirs.push(dirPath);
+        if (isTopLevel) collect(dirPath, false);
+      }
+    };
+    collect(this._baseRealPath, true);
+    return dirs;
+  }
+
   _globNoteFiles(noteId) {
     if (!this._baseRealPath) return [];
     const results = [];
     try {
       const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
-      for (const dir of dirs) {
-        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
-        let dirPath;
-        try {
-          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
-        } catch {
-          continue;
-        }
+      for (const dirPath of this._folderDirs()) {
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
           const filePath = path.join(dirPath, file);
@@ -361,15 +380,7 @@ class MarkdownMirror {
     const results = [];
     try {
       const prefix = `${noteId}-`;
-      const dirs = fs.readdirSync(this._baseRealPath, { withFileTypes: true });
-      for (const dir of dirs) {
-        if (!dir.isDirectory() || dir.isSymbolicLink()) continue;
-        let dirPath;
-        try {
-          dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dir.name));
-        } catch {
-          continue;
-        }
+      for (const dirPath of this._folderDirs()) {
         const files = fs.readdirSync(dirPath);
         for (const file of files) {
           const filePath = path.join(dirPath, file);

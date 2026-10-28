@@ -128,6 +128,9 @@ function createElectronApi(db, options = {}) {
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
     getFolderIdMap: async () => db.getFolderIdMap(),
+    applyCloudFolderParents: async (links) => {
+      db.applyCloudFolderParents(links);
+    },
     hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
 
     // Spaces

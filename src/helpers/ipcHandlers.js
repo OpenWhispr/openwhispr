@@ -774,14 +774,14 @@ class IPCHandlers {
     }
   }
 
-  createFolderWithEffects(name, spaceId) {
-    const result = this.databaseManager.createFolder(name, spaceId);
+  createFolderWithEffects(name, spaceId, parentFolderId = null) {
+    const result = this.databaseManager.createFolder(name, spaceId, parentFolderId);
     if (result?.success && result?.folder) {
       setImmediate(() => {
         broadcastToWindows("folder-created", result.folder);
         if (this._noteFilesEnabled) {
           const markdownMirror = require("./markdownMirror");
-          markdownMirror.ensureFolder(result.folder.name);
+          markdownMirror.ensureFolder(this._getMirrorFolder(result.folder.id));
         }
       });
     }
@@ -1131,16 +1131,29 @@ class IPCHandlers {
     this.getSemanticSearch?.()?.notifyChanges();
   }
 
-  _mirrorDeleteFolderIfUnshared(folderName) {
+  _mirrorDeleteFolderIfUnshared(mirrorFolder) {
     if (!this._noteFilesEnabled) return;
-    // Folder names are only unique per space — a live same-named folder in
-    // another space shares the mirror directory, so leave it on disk.
+    // Folder names are only unique per space — a live folder with the same
+    // path in another space shares the mirror directory, so leave it on disk.
+    const [parentName, name] = Array.isArray(mirrorFolder) ? mirrorFolder : [null, mirrorFolder];
     const stillLive = this.databaseManager.db
-      .prepare("SELECT 1 FROM folders WHERE name = ? AND deleted_at IS NULL")
-      .get(folderName);
+      .prepare(
+        `SELECT 1 FROM folders f LEFT JOIN folders p ON p.id = f.parent_folder_id
+         WHERE f.name = ? AND p.name IS ? AND f.deleted_at IS NULL`
+      )
+      .get(name, parentName);
     if (stillLive) return;
     const markdownMirror = require("./markdownMirror");
-    markdownMirror.deleteFolder(folderName);
+    markdownMirror.deleteFolder(mirrorFolder);
+  }
+
+  // Renames or moves a folder's mirror directory after a change to its path.
+  _mirrorMoveFolder(previousMirrorFolder, folderId) {
+    if (!this._noteFilesEnabled || !previousMirrorFolder) return;
+    const mirrorFolder = this._getMirrorFolder(folderId);
+    if (JSON.stringify(mirrorFolder) === JSON.stringify(previousMirrorFolder)) return;
+    const markdownMirror = require("./markdownMirror");
+    markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder);
   }
 
   _asyncMirrorWrite(note) {
@@ -1154,10 +1167,10 @@ class IPCHandlers {
     }
     setImmediate(() => {
       const markdownMirror = require("./markdownMirror");
-      const folderName = this._getFolderName(note.folder_id);
-      markdownMirror.writeNote(note, folderName);
+      const mirrorFolder = this._getMirrorFolder(note.folder_id);
+      markdownMirror.writeNote(note, mirrorFolder);
       if (note.transcript) {
-        markdownMirror.writeTranscript(note, folderName, this._buildSpeakerMappings(note.id));
+        markdownMirror.writeTranscript(note, mirrorFolder, this._buildSpeakerMappings(note.id));
       }
     });
   }
@@ -1175,9 +1188,11 @@ class IPCHandlers {
 
   _buildFolderMap() {
     const folders = this.databaseManager.getFolders();
+    const names = new Map(folders.map((f) => [f.id, f.name]));
     const map = {};
     for (const f of folders) {
-      map[f.id] = f.name;
+      const parentName = names.get(f.parent_folder_id);
+      map[f.id] = parentName ? [parentName, f.name] : f.name;
     }
     return map;
   }
@@ -1306,12 +1321,19 @@ class IPCHandlers {
     markdownMirror.rebuildAll(notes, this._buildFolderMap(), speakerMappingsMap);
   }
 
-  _getFolderName(folderId) {
+  // The folder as the markdown mirror addresses it: its name, or
+  // [parent, name] for a subfolder.
+  _getMirrorFolder(folderId) {
     if (!folderId) return "Personal";
     const folder = this.databaseManager.db
-      .prepare("SELECT name FROM folders WHERE id = ?")
+      .prepare(
+        `SELECT f.name, p.name AS parent_name FROM folders f
+         LEFT JOIN folders p ON p.id = f.parent_folder_id
+         WHERE f.id = ?`
+      )
       .get(folderId);
-    return folder?.name || "Personal";
+    if (!folder) return "Personal";
+    return folder.parent_name ? [folder.parent_name, folder.name] : folder.name;
   }
 
   // Every word that already reaches the transcription prompt: personal plus the
@@ -2618,12 +2640,12 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId) =>
-      this.createFolderWithEffects(name, spaceId)
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, parentFolderId) =>
+      this.createFolderWithEffects(name, spaceId, parentFolderId ?? null)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
-      const folderName = this._noteFilesEnabled ? this._getFolderName(id) : null;
+      const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
@@ -2633,36 +2655,51 @@ class IPCHandlers {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
         setImmediate(() => {
-          broadcastToWindows("folder-deleted", { id });
-          if (folderName) this._mirrorDeleteFolderIfUnshared(folderName);
+          for (const folderId of result.folderIds) {
+            broadcastToWindows("folder-deleted", { id: folderId });
+          }
+          if (mirrorFolder) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
         });
       }
       return result;
     });
 
     ipcMain.handle("db-rename-folder", async (event, id, name) => {
-      const oldName = this._noteFilesEnabled ? this._getFolderName(id) : null;
+      const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       const result = this.databaseManager.renameFolder(id, name);
       if (result?.success && result?.folder) {
         setImmediate(() => {
           broadcastToWindows("folder-renamed", result.folder);
-          if (this._noteFilesEnabled && oldName) {
-            const markdownMirror = require("./markdownMirror");
-            markdownMirror.renameFolder(oldName, name);
-          }
+          this._mirrorMoveFolder(previousMirrorFolder, id);
         });
       }
       return result;
     });
 
     ipcMain.handle("db-move-folder-to-space", async (event, id, spaceId) => {
+      const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       const result = this.databaseManager.moveFolderToSpace(id, spaceId);
       if (result?.success) {
         // Qdrant payloads carry space_id — the triggers journaled the moved notes.
         this.notifyVectorChanges();
         if (result.folder) {
-          setImmediate(() => broadcastToWindows("folder-synced", result.folder));
+          setImmediate(() => {
+            broadcastToWindows("folder-synced", result.folder);
+            this._mirrorMoveFolder(previousMirrorFolder, id);
+          });
         }
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-set-folder-parent", async (event, id, parentFolderId) => {
+      const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
+      const result = this.databaseManager.setFolderParent(id, parentFolderId ?? null);
+      if (result?.success && result?.folder) {
+        setImmediate(() => {
+          broadcastToWindows("folder-synced", result.folder);
+          this._mirrorMoveFolder(previousMirrorFolder, id);
+        });
       }
       return result;
     });
@@ -3087,6 +3124,12 @@ class IPCHandlers {
       this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-apply-cloud-folder-parents", (_, links) => {
+      const changed = this.databaseManager.applyCloudFolderParents(links);
+      setImmediate(() => {
+        for (const folder of changed) broadcastToWindows("folder-synced", folder);
+      });
+    });
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
@@ -3107,6 +3150,7 @@ class IPCHandlers {
       return result;
     });
     ipcMain.handle("db-hard-delete-folder", (_, id) => {
+      const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
@@ -3117,12 +3161,13 @@ class IPCHandlers {
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
-          if (result.name) this._mirrorDeleteFolderIfUnshared(result.name);
+          if (mirrorFolder && result.name) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
         });
       }
       return result;
     });
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
+      const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
@@ -3143,9 +3188,11 @@ class IPCHandlers {
           for (const noteId of result.deletedNoteIds ?? []) {
             broadcastToWindows("note-deleted", { id: noteId });
           }
-          const folderGone = !result.folder || result.folder.name !== result.folderName;
-          if (result.folderName && folderGone) {
-            this._mirrorDeleteFolderIfUnshared(result.folderName);
+          const folderGone =
+            !result.folder ||
+            JSON.stringify(this._getMirrorFolder(id)) !== JSON.stringify(previousMirrorFolder);
+          if (previousMirrorFolder && folderGone) {
+            this._mirrorDeleteFolderIfUnshared(previousMirrorFolder);
           }
         });
       }
@@ -13495,17 +13542,17 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("show-folder-in-explorer", async (_event, folderName) => {
+    ipcMain.handle("show-folder-in-explorer", async (_event, folderId) => {
       try {
         const markdownMirror = require("./markdownMirror");
-        const dirPath = markdownMirror.getFolderPath(folderName);
+        const dirPath = markdownMirror.getFolderPath(this._getMirrorFolder(folderId));
         if (!dirPath) return { success: false };
         await shell.openPath(dirPath);
         return { success: true };
       } catch (error) {
         debugLogger.error(
           "Failed to show folder",
-          { folderName, error: error.message },
+          { folderId, error: error.message },
           "note-files"
         );
         return { success: false };

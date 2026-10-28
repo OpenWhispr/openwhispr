@@ -178,7 +178,7 @@ test("a fresh device adopts the cloud's default folders by name instead of pushi
   assert.equal(folderByName(db, "Meetings").cloud_id, cloudMeetings.id);
 });
 
-test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in row order and links each folder on ack", async (t) => {
+test("pushPendingFolders sends name/client_folder_id/is_default/sort_order/parent_folder_id in row order and links each folder on ack", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -200,8 +200,10 @@ test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in ro
       "client_folder_id",
       "is_default",
       "name",
+      "parent_folder_id",
       "sort_order",
     ]);
+    assert.equal(folder.parent_folder_id, null, "a top-level folder states it has no parent");
     assert.equal(folder.is_default, true, "SQLite's 1 must be coerced to a boolean on the wire");
     assert.equal(typeof folder.sort_order, "number");
     assert.equal(typeof folder.client_folder_id, "string");
@@ -238,7 +240,12 @@ test("a renamed linked folder PATCHes /api/folders/update instead of creating a 
   const patches = cloud.logFor("/api/folders/update");
   assert.equal(patches.length, 1);
   assert.equal(patches[0].method, "PATCH");
-  assert.deepEqual(patches[0].body, { id: cloudId, name: "Work Renamed", sort_order: 3 });
+  assert.deepEqual(patches[0].body, {
+    id: cloudId,
+    name: "Work Renamed",
+    sort_order: 3,
+    parent_folder_id: null,
+  });
 
   assert.equal(cloud.folder(cloudId).name, "Work Renamed");
   assert.equal(
@@ -276,8 +283,18 @@ test("a failed folder PATCH leaves that folder pending and does not abort the re
     2,
     "the second folder must still be attempted after the first threw"
   );
-  assert.deepEqual(patches[0].body, { id: alphaCloudId, name: "Alpha Renamed", sort_order: 3 });
-  assert.deepEqual(patches[1].body, { id: betaCloudId, name: "Beta Renamed", sort_order: 4 });
+  assert.deepEqual(patches[0].body, {
+    id: alphaCloudId,
+    name: "Alpha Renamed",
+    sort_order: 3,
+    parent_folder_id: null,
+  });
+  assert.deepEqual(patches[1].body, {
+    id: betaCloudId,
+    name: "Beta Renamed",
+    sort_order: 4,
+    parent_folder_id: null,
+  });
 
   assert.equal(
     folderByName(db, "Alpha Renamed").sync_status,
@@ -481,5 +498,85 @@ test("a folder tombstone arriving in the delta pull hard-deletes the local folde
     db.db.prepare("SELECT * FROM folders WHERE id = ?").get(shared.id),
     undefined,
     "a remote delete must remove the local folder"
+  );
+});
+
+test("a new parent and subfolder push in two rounds, the subfolder carrying its parent's cloud id", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  db.createFolder("Q1", null, parent.id);
+  await (await newSyncService(t)).syncAll(true);
+
+  const batches = cloud.logFor("/api/folders/batch-create");
+  assert.equal(batches.length, 2);
+  assert.ok(!batches[0].body.folders.some((f) => f.name === "Q1"));
+  const parentCloudId = folderByName(db, "Client A").cloud_id;
+  assert.deepEqual(
+    batches[1].body.folders.map((f) => [f.name, f.parent_folder_id]),
+    [["Q1", parentCloudId]]
+  );
+
+  const child = folderByName(db, "Q1");
+  assert.equal(child.sync_status, "synced");
+  assert.equal(child.parent_folder_id, parent.id);
+  assert.equal(cloud.folder(child.cloud_id).parent_folder_id, parentCloudId);
+});
+
+test("nesting and un-nesting a synced folder PATCHes the parent's cloud id, then null", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1").folder;
+  await (await newSyncService(t)).syncAll(true);
+  const parentCloudId = folderByName(db, "Client A").cloud_id;
+  const quarterCloudId = folderByName(db, "Q1").cloud_id;
+
+  db.setFolderParent(quarter.id, parent.id);
+  setFolderRow(db, quarter.id, { updated_at: "2027-01-01 00:00:00" });
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloud.logFor("/api/folders/update").at(-1).body.parent_folder_id, parentCloudId);
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id, parentCloudId);
+
+  db.setFolderParent(quarter.id, null);
+  setFolderRow(db, quarter.id, { updated_at: "2027-01-02 00:00:00" });
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloud.logFor("/api/folders/update").at(-1).body.parent_folder_id, null);
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id, null);
+  assert.equal(folderByName(db, "Q1").parent_folder_id, null);
+});
+
+test("a pulled subfolder that arrives before its parent is linked once the page is stored", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parentRow = cloud.seedFolder({
+    client_folder_id: "cf-client",
+    name: "Client A",
+    is_default: false,
+    sort_order: 9,
+  });
+  cloud.seedFolder({
+    client_folder_id: "cf-quarter",
+    name: "Q1",
+    is_default: false,
+    sort_order: 8,
+    parent_folder_id: parentRow.id,
+  });
+  await (await newSyncService(t)).syncAll(true);
+
+  const localParent = folderByClientId(db, "cf-client");
+  const localChild = folderByClientId(db, "cf-quarter");
+  assert.equal(localChild.parent_folder_id, localParent.id);
+  assert.equal(localChild.sync_status, "synced");
+  assert.equal(
+    cloud.logFor("/api/folders/update").length,
+    0,
+    "linking a pulled parent is not a local edit to push back"
   );
 });

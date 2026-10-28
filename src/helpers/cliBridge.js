@@ -485,7 +485,12 @@ class CliBridge {
         "POST",
         "/v1/folders/create",
         ({ body }) => {
-          const result = db.createFolder(body?.name);
+          const result = db.createFolder(body?.name, null, body?.parent_folder_id ?? null);
+          if (result.error) {
+            const err = new Error(result.error);
+            err.code = "VALIDATION";
+            throw err;
+          }
           const folder = unwrapMutationResult(result, "folder");
           setImmediate(() => broadcastToWindows("folder-created", folder));
           return { data: folder };

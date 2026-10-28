@@ -319,3 +319,49 @@ test("a note file re-saved with a BOM or CRLF is still recognised as its note", 
     assert.equal(markdownMirror.getNotePath(note.id), notePath);
   }
 });
+
+test("a subfolder mirrors inside its parent's directory and moves with it", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  const note = { id: 21, title: "Budget", content: "Numbers" };
+  markdownMirror.writeNote(note, ["Client A", "Q1"]);
+  const nestedPath = path.join(basePath, "Client A", "Q1", "21-budget.md");
+  assert.equal(fs.existsSync(nestedPath), true);
+  assert.match(fs.readFileSync(nestedPath, "utf-8"), /^folder: Client A\/Q1$/m);
+  assert.equal(markdownMirror.getNotePath(21), nestedPath);
+
+  markdownMirror.renameFolder("Client A", "Client B");
+  const renamedPath = path.join(basePath, "Client B", "Q1", "21-budget.md");
+  assert.equal(
+    markdownMirror.getNotePath(21),
+    renamedPath,
+    "renaming a parent carries its subfolders"
+  );
+
+  markdownMirror.renameFolder(["Client B", "Q1"], "Q1");
+  assert.equal(markdownMirror.getNotePath(21), path.join(basePath, "Q1", "21-budget.md"));
+
+  markdownMirror.renameFolder("Q1", ["Client B", "Q1"]);
+  markdownMirror.writeNote(note, "Personal");
+  assert.equal(markdownMirror.getNotePath(21), path.join(basePath, "Personal", "21-budget.md"));
+  assert.equal(
+    fs.readdirSync(path.join(basePath, "Client B", "Q1")).length,
+    0,
+    "the stale nested copy is removed"
+  );
+});
+
+test("each subfolder segment gets a portable directory name", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  markdownMirror.writeNote({ id: 22, title: "Plan", content: "Body" }, ["CON", "../up"]);
+  const notePath = markdownMirror.getNotePath(22);
+  assert.ok(notePath.startsWith(basePath + path.sep));
+  const [parentDir, childDir] = path.relative(basePath, path.dirname(notePath)).split(path.sep);
+  assert.match(parentDir, /^__ow-[0-9a-f]{64}$/);
+  assert.match(childDir, /^__ow-[0-9a-f]{64}$/);
+});
