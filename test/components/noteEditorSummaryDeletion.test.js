@@ -507,7 +507,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
   assert.equal(
     chatTranscript(),
-    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note owner ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
   );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
@@ -955,4 +955,104 @@ test("the note header hands its event link to the dropdown, changeable only by e
   } finally {
     await unmount();
   }
+});
+
+test("a teammate's This is me correction saves their identity for display and generation", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  const saved = [];
+  const mapped = [];
+  globalThis.window.electronAPI.setSpeakerMapping = async (...args) => mapped.push(args);
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify([{ source: "mic", speaker: "speaker_0", text: "I'll send it." }]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+    });
+    await chat.props.onMapSpeaker("speaker_0", "You");
+  });
+  assert.equal(mapped[0][2], "You", "the global self profile must keep its relative name");
+  assert.equal(JSON.parse(saved[0].transcript)[0].speakerName, "Bob Viewer");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  assert.equal(
+    buildLlmTranscript(JSON.parse(saved[0].transcript), {}, "Alice", (key) => key),
+    "Bob Viewer: I'll send it."
+  );
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onToggleSelect) chat = node;
+    });
+    chat.props.onToggleSelect(chat.props.segments[0].id);
+  });
+  await React.act(async () => {
+    let selection;
+    walk(latest(), (node) => {
+      if (node.props.onAssignName) selection = node;
+    });
+    await selection.props.onAssignName("You");
+  });
+  assert.equal(JSON.parse(saved.at(-1).transcript)[0].speakerName, "Bob Viewer");
+  await unmount();
+});
+
+test("the owner can correct a teammate's self row without renaming earlier sessions", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "alice", name: "Alice Owner", email: "alice@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  const saved = [];
+  globalThis.window.electronAPI.setSpeakerMapping = async () => {
+    throw new Error("a cross-session self ID must not create a global mapping");
+  };
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify([
+        {
+          source: "mic",
+          speaker: "you",
+          text: "Old words",
+          speakerName: "Original correction",
+          speakerLocked: true,
+        },
+        { source: "mic", speaker: "you", text: "New words", recorderName: "Bob Viewer" },
+      ]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+    });
+    await chat.props.onMapSpeaker("you", "You", null, undefined, "Bob Viewer");
+  });
+  const segments = JSON.parse(saved.at(-1).transcript);
+  assert.equal(segments[0].speakerName, "Original correction");
+  assert.equal(segments[1].speakerName, "Alice Owner");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  assert.equal(
+    buildLlmTranscript(segments, {}, "Alice Owner", (key) => key),
+    "Original correction: Old words\nAlice Owner: New words"
+  );
+  await unmount();
 });

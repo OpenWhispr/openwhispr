@@ -107,7 +107,7 @@ test("note generation on a teammate's note attributes the mic to the owner and l
     buildMeetingContext(recorder, label),
     [
       "## Meeting Context",
-      'The user taking these notes ("Alice Owner" in the transcript) is Alice Owner <alice@acme.com>.',
+      'The note owner ("Alice Owner" in the transcript) is Alice Owner <alice@acme.com>.',
       "Invited participants: Bob Viewer <bob@acme.com>.",
     ].join("\n")
   );
@@ -115,4 +115,25 @@ test("note generation on a teammate's note attributes the mic to the owner and l
     { name: "Alice Owner", email: "alice@acme.com" },
     { name: "Bob Viewer", email: "bob@acme.com" },
   ]);
+});
+
+test("new recording attribution follows the viewer only on somebody else's note", async () => {
+  const { recordingRecorderName, resolveSpeakerAssignmentName } = await load();
+  const user = { id: "bob", ...viewer };
+  assert.equal(
+    recordingRecorderName({ cloud_id: "cloud", owner_user_id: "alice" }, user, t),
+    "Bob Viewer"
+  );
+  assert.equal(
+    recordingRecorderName({ cloud_id: "cloud", owner_user_id: "bob" }, user, t),
+    undefined
+  );
+  assert.equal(recordingRecorderName({ cloud_id: null, owner_user_id: null }, user, t), undefined);
+  assert.equal(
+    resolveSpeakerAssignmentName("You", { email: "bob@acme.com" }, false, t),
+    "bob@acme.com"
+  );
+  assert.equal(resolveSpeakerAssignmentName("You", null, false, t), "Note taker");
+  assert.equal(resolveSpeakerAssignmentName("You", user, true, t), "You");
+  assert.equal(resolveSpeakerAssignmentName("Alice", user, false, t), "Alice");
 });

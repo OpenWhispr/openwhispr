@@ -477,8 +477,14 @@ function SpeakerLabel({
   isOriginallyYou: boolean;
   recorderLabel: string;
   self?: "offer" | "exclude";
-  onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
-  onConfirm?: (speakerId: string, name: string, profileId: number) => void;
+  onMap?: (
+    speakerId: string,
+    name: string,
+    email?: string | null,
+    profileId?: number,
+    recorderName?: string
+  ) => void;
+  onConfirm?: (speakerId: string, name: string, profileId: number, recorderName?: string) => void;
   onDismiss?: (speakerId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
@@ -505,7 +511,12 @@ function SpeakerLabel({
         </span>
         <button
           onClick={() =>
-            onConfirm?.(speakerId, segment.suggestedName!, segment.suggestedProfileId!)
+            onConfirm?.(
+              speakerId,
+              segment.suggestedName!,
+              segment.suggestedProfileId!,
+              segment.recorderName
+            )
           }
           className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
         >
@@ -559,7 +570,9 @@ function SpeakerLabel({
           speakerProfiles={speakerProfiles}
           participants={participants}
           onSelectName={(name, email, profileId) => {
-            onMap?.(speakerId, name, email, profileId);
+            if (segment.recorderName)
+              onMap?.(speakerId, name, email, profileId, segment.recorderName);
+            else onMap?.(speakerId, name, email, profileId);
             setOpen(false);
           }}
           self={self}
@@ -675,9 +688,15 @@ interface SegmentRowProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
@@ -727,7 +746,7 @@ const SegmentRow = memo(function SegmentRow({
     !isYouSpeakerName(matchedProfile.display_name, t("notes.speaker.you")) &&
     !!onAttachSpeakerEmail;
 
-  const labelElement = hasSpeaker && (
+  const labelElement = hasSpeaker ? (
     <div className="flex items-center gap-1">
       <SpeakerLabel
         speakerId={segment.speaker!}
@@ -737,7 +756,7 @@ const SegmentRow = memo(function SegmentRow({
         participants={participants}
         colorIdx={colorIdx}
         isOriginallyYou={isOriginallyYou}
-        recorderLabel={recorderLabel}
+        recorderLabel={segment.recorderName || recorderLabel}
         self={self}
         onMap={onMapSpeaker}
         onConfirm={onConfirmSuggestion}
@@ -752,7 +771,13 @@ const SegmentRow = memo(function SegmentRow({
         />
       )}
     </div>
-  );
+  ) : segment.source === "mic" && segment.recorderName ? (
+    <span className="text-[11px] font-medium mb-0.5 px-1.5" dir="auto">
+      {activeName && !isYouSpeakerName(activeName, t("notes.speaker.you"))
+        ? activeName
+        : segment.recorderName}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -828,9 +853,15 @@ interface MeetingTranscriptChatProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
@@ -910,7 +941,7 @@ export function MeetingTranscriptChat({
   const rowMeta = useMemo(
     () =>
       segments.map((segment) => ({
-        key: getEffectiveSpeakerKey(segment, speakerMappings),
+        key: `${getEffectiveSpeakerKey(segment, speakerMappings)}:${segment.recorderName ?? ""}`,
         activeName: resolveSegmentSpeakerName(segment, speakerMappings),
         selfSide: isSelfSideSegment(segment, speakerMappings, youLabel),
       })),

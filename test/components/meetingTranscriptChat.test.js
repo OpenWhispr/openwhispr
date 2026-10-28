@@ -164,3 +164,39 @@ test("a You the viewer set in their own mappings still reads You", async () => {
   assert.ok(/>You</.test(html));
   assert.ok(!html.includes("Alice Owner"));
 });
+
+test("a later recorder's mic lines retain their name in the shared transcript", async () => {
+  const html = await renderChat({
+    recorderLabel: "Alice Owner",
+    segments: [
+      {
+        id: "bob",
+        source: "mic",
+        text: "My new recording",
+        timestamp: 1,
+        recorderName: "Bob Viewer",
+      },
+    ],
+  });
+  assert.ok(html.includes("Bob Viewer"));
+  assert.ok(!html.includes("Alice Owner"));
+});
+
+test("a correction of an unnumbered recorder line overrides its session identity", async () => {
+  const html = await renderChat({
+    recorderLabel: "Alice Owner",
+    segments: [
+      {
+        id: "bob",
+        source: "mic",
+        text: "Corrected",
+        timestamp: 1,
+        recorderName: "Bob Viewer",
+        speakerName: "Alice Owner",
+        speakerLocked: true,
+      },
+    ],
+  });
+  assert.ok(html.includes("Alice Owner"));
+  assert.ok(!html.includes("Bob Viewer"));
+});

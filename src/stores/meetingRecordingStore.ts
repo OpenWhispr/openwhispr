@@ -62,6 +62,8 @@ export interface TranscriptSegment {
   timestamp?: number;
   speaker?: string;
   speakerName?: string;
+  /** Session recorder for self-labelled lines appended to somebody else's note. */
+  recorderName?: string;
   speakerIsPlaceholder?: boolean;
   suggestedName?: string;
   suggestedProfileId?: number;
@@ -430,15 +432,17 @@ let segmentsRefValue: TranscriptSegment[] = [];
 // session's diarization covers only its own audio, so its result must not be
 // matched against the seeded rows. Keyed by diarization session at stop.
 let sessionSeedLength = 0;
+let sessionRecorderName: string | undefined;
 const seedLengthByDiarizationSession = new Map<
   string,
-  { noteId: number | null; seedLength: number; fallbackTranscript: string }
+  { noteId: number | null; seedLength: number; fallbackTranscript: string; recorderName?: string }
 >();
 // The stopping session's seed, until its stop call returns and keys it above.
 let stoppingSeed: {
   noteId: number | null;
   seedLength: number;
   fallbackTranscript: string;
+  recorderName?: string;
 } | null = null;
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
@@ -798,6 +802,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  recorderName?: string;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
@@ -838,17 +843,24 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
     const locks = new Map<string, string>();
+    const keepSeedSelfLocks = !args.recorderName && !seed.some((segment) => segment.recorderName);
     let maxSpeakerIndex = -1;
     for (const s of seed) {
       const idx = getSpeakerNumericIndex(s.speaker);
       if (idx != null && idx > maxSpeakerIndex) maxSpeakerIndex = idx;
-      if (s.speakerLocked && s.speaker && s.speakerName) {
+      if (
+        s.speakerLocked &&
+        s.speaker &&
+        s.speakerName &&
+        (s.speaker !== "you" || keepSeedSelfLocks)
+      ) {
         locks.set(s.speaker, s.speakerName);
       }
     }
 
     segmentsRefValue = seed;
     sessionSeedLength = seed.length;
+    sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
     sessionSpeakerIndexBase = maxSpeakerIndex + 1;
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
@@ -1124,7 +1136,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
               // still see the previous segments, exactly as before the reducer extraction.
               decorateFinal: (rawSegment) => {
-                let decorated = rawSegment;
+                let decorated = args.recorderName
+                  ? { ...rawSegment, recorderName: args.recorderName }
+                  : rawSegment;
                 for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
                   decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
                 }
@@ -1726,6 +1740,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           noteId: recordingNoteId,
           seedLength: sessionSeedLength,
           fallbackTranscript: "",
+          recorderName: sessionRecorderName,
         };
         stoppingSeed = seed;
         await cleanup();
@@ -1794,11 +1809,13 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
-export function lockSpeaker(speakerId: string, displayName: string): void {
+export function lockSpeaker(speakerId: string, displayName: string, recorderName?: string): void {
   if (!speakerId || !displayName) return;
-  speakerLocks.set(speakerId, displayName);
+  if (speakerId !== "you" || recorderName === sessionRecorderName) {
+    speakerLocks.set(speakerId, displayName);
+  }
   const next = useMeetingRecordingStore.getState().segments.map((s) =>
-    s.speaker === speakerId
+    s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
       ? lockTranscriptSpeaker(s, {
           speakerName: displayName,
           speakerIsPlaceholder: false,
@@ -1897,11 +1914,14 @@ if (typeof window !== "undefined") {
         recordingNoteId,
         targetNoteId,
       });
+      const recordedSegments = seed?.recorderName
+        ? data.segments.map((segment) => ({ ...segment, recorderName: seed.recorderName }))
+        : data.segments;
       const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
         seedLength,
         fallbackTranscript: seed?.fallbackTranscript,
-        segments: data.segments,
+        segments: recordedSegments,
         removedSegments: data.removedSegments,
       });
 
@@ -1939,7 +1959,7 @@ if (typeof window !== "undefined") {
           existing: current.segments,
           seedLength,
           fallbackTranscript: seed.fallbackTranscript,
-          segments: data.segments,
+          segments: recordedSegments,
           removedSegments: data.removedSegments,
         });
         sessionSeedLength -= merged.removedCount;

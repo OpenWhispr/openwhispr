@@ -27,14 +27,16 @@ export function resolveLlmSpeakerLabel(
   selfLabel: string,
   t: Translate
 ): string {
+  const recorderLabel = segment.recorderName || selfLabel;
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
-  if (resolved) return isYouSpeakerName(resolved, t("notes.speaker.you")) ? selfLabel : resolved;
-  if (segment.speaker === "you") return selfLabel;
+  if (resolved)
+    return isYouSpeakerName(resolved, t("notes.speaker.you")) ? recorderLabel : resolved;
+  if (segment.speaker === "you") return recorderLabel;
   if (segment.speaker) {
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
     if (!Number.isNaN(num)) return t("notes.speaker.label", { n: num + 1 });
   }
-  if (segment.source === "mic") return selfLabel;
+  if (segment.source === "mic") return recorderLabel;
   return t("notes.speaker.them");
 }
 
@@ -65,7 +67,7 @@ export function buildMeetingContext(identity: MeetingIdentity, selfLabel: string
   const lines: string[] = [];
   const self = formatPerson(identity.selfName, identity.selfEmail);
   if (self) {
-    lines.push(`The user taking these notes ("${selfLabel}" in the transcript) is ${self}.`);
+    lines.push(`The note owner ("${selfLabel}" in the transcript) is ${self}.`);
   }
   const invited = identity.participants
     .filter((p) => !isSelfParticipant(p, identity))
@@ -110,6 +112,9 @@ export function collectKnownPeople(
     push(p.displayName || p.email.split("@")[0], p.email);
   }
   for (const name of Object.values(speakerMappings)) push(name, null);
-  for (const segment of segments) push(segment.speakerName, null);
+  for (const segment of segments) {
+    push(segment.speakerName, null);
+    push(segment.recorderName, null);
+  }
   return people;
 }

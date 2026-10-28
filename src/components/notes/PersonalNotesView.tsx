@@ -35,7 +35,11 @@ import {
   collectKnownPeople,
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
-import { recorderLlmLabel, resolveNoteRecorder } from "../../utils/noteRecorder";
+import {
+  recorderLlmLabel,
+  resolveNoteRecorder,
+  recordingRecorderName,
+} from "../../utils/noteRecorder";
 import { ownsNote } from "../../lib/spacePermissions";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
@@ -419,7 +423,11 @@ export default function PersonalNotesView({
       : undefined;
   const calendarEventName = linkedEvent?.summary ?? null;
 
-  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
+  const startRecording = useCallback(
+    () =>
+      startRecordingForNote(activeNote ?? null, recordingRecorderName(activeNote ?? null, user, t)),
+    [activeNote, user, t]
+  );
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -719,6 +727,7 @@ export default function PersonalNotesView({
         noteTitle: note?.title ?? null,
         folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
         seedSegments,
+        recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
@@ -739,7 +748,14 @@ export default function PersonalNotesView({
         "meeting"
       );
     });
-  }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
+  }, [
+    meetingRecordingRequest,
+    activeNoteId,
+    activeNote,
+    onMeetingRecordingRequestHandled,
+    user,
+    t,
+  ]);
 
   // Final and periodic transcript persistence live in MeetingRecordingMount /
   // the store — this view can be unmounted when an auto-end stop fires.
@@ -773,8 +789,7 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
-      // The mic lines belong to whoever recorded the note, which on a teammate's
-      // note is its owner, not the user running the action.
+      // Legacy self labels fall back to the owner; newer sessions retain their recorder.
       const ownNote = ownsNote(editorNote, user?.id);
       const noteSpace = spaces.find((s) => s.id === editorNote.space_id);
       const ownerId = editorNote.owner_user_id;

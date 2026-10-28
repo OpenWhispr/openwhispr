@@ -90,7 +90,11 @@ import { compileChatActionPrompt } from "../../helpers/templatePrompts";
 import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
-import { recorderTranscriptLabel, resolveNoteRecorder } from "../../utils/noteRecorder";
+import {
+  recorderTranscriptLabel,
+  resolveNoteRecorder,
+  resolveSpeakerAssignmentName,
+} from "../../utils/noteRecorder";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
@@ -221,7 +225,7 @@ interface NoteEditorProps {
   actionProgress?: NoteActionProgress | null;
   onCancelAction?: () => void;
   diarizationSessionId?: string | null;
-  onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
+  onLiveSpeakerLock?: (speakerId: string, displayName: string, recorderName?: string) => void;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -506,7 +510,7 @@ export default function NoteEditor({
     !ownedByUser && isTeamNote ? (space?.cloud_space_id ?? null) : null
   );
   const noteOwner = note.owner_user_id ? ownerRoster?.get(note.owner_user_id) : undefined;
-  // The recorder, not necessarily the viewer: the mic lines are theirs.
+  // Legacy segments without a session recorder fall back to the note owner.
   const meetingIdentity = useMemo<MeetingIdentity>(
     () =>
       resolveNoteRecorder({
@@ -694,25 +698,40 @@ export default function NoteEditor({
       speakerId: string,
       displayName: string,
       email?: string | null,
-      profileId?: number | null
+      profileId?: number | null,
+      recorderName?: string
     ) => {
-      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
-      await window.electronAPI?.setSpeakerMapping?.(
-        note.id,
-        speakerId,
+      const segments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const hasOtherRecorders = segments.some((segment) => segment.recorderName);
+      const scopeSelfSpeaker = speakerId === "you" && hasOtherRecorders;
+      const profileName = displayName;
+      displayName = resolveSpeakerAssignmentName(
         displayName,
-        email,
-        profileId
+        user,
+        ownedByUser && !hasOtherRecorders,
+        t
       );
+      // The reserved self ID is shared by recording sessions. Its corrections
+      // live on those sessions' rows, never in a mapping that renames all of them.
+      if (!scopeSelfSpeaker) {
+        setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+        await window.electronAPI?.setSpeakerMapping?.(
+          note.id,
+          speakerId,
+          profileName,
+          email,
+          profileId
+        );
+      }
 
       if (isRecording) {
-        onLiveSpeakerLock?.(speakerId, displayName);
+        onLiveSpeakerLock?.(speakerId, displayName, recorderName);
         refreshSpeakerProfiles();
         return;
       }
 
       const currentSegments = displaySegments.map((s) =>
-        s.speaker === speakerId
+        s.speaker === speakerId && (!scopeSelfSpeaker || s.recorderName === recorderName)
           ? lockTranscriptSpeaker(s, {
               speakerName: displayName,
               speaker: speakerId,
@@ -729,6 +748,9 @@ export default function NoteEditor({
     [
       diarizedSegments,
       displaySegments,
+      user,
+      ownedByUser,
+      t,
       isRecording,
       note.id,
       onLiveSpeakerLock,
@@ -738,8 +760,8 @@ export default function NoteEditor({
   );
 
   const handleConfirmSuggestion = useCallback(
-    async (speakerId: string, suggestedName: string, profileId: number) => {
-      await handleMapSpeaker(speakerId, suggestedName, null, profileId);
+    async (speakerId: string, suggestedName: string, profileId: number, recorderName?: string) => {
+      await handleMapSpeaker(speakerId, suggestedName, null, profileId, recorderName);
     },
     [handleMapSpeaker]
   );
@@ -801,6 +823,12 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
+      displayName = resolveSpeakerAssignmentName(
+        displayName,
+        user,
+        ownedByUser && !displaySegments.some((segment) => segment.recorderName),
+        t
+      );
       const nextSegments = displaySegments.map((segment) =>
         selectedSegmentIds.has(segment.id)
           ? lockTranscriptSpeaker(segment, {
@@ -814,7 +842,15 @@ export default function NoteEditor({
       await persistDisplaySegments(nextSegments);
       handleClearSelection();
     },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+    [
+      displaySegments,
+      selectedSegmentIds,
+      persistDisplaySegments,
+      handleClearSelection,
+      user,
+      ownedByUser,
+      t,
+    ]
   );
 
   const handleTitleInput = useCallback(() => {
@@ -1385,6 +1421,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  recorderLabel={recorderLabel}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}

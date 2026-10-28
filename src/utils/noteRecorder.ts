@@ -1,3 +1,6 @@
+import { isYouSpeakerName } from "./transcriptSpeakerState";
+import { ownsNote } from "../lib/spacePermissions";
+import type { NoteItem } from "../types/electron";
 import type { CalendarAttendee } from "../types/calendar";
 import type { MeetingIdentity } from "./llmTranscript";
 
@@ -25,12 +28,7 @@ const toIdentity = (
   participants,
 });
 
-/**
- * Whoever recorded the note, whose voice the mic lines ("you") carry: the user
- * on their own note. On a teammate's note it's the owner from the space roster,
- * else the attendee the recorder's calendar flagged `self`; never the viewer,
- * who is at most an attendee there. Unknown leaves name and email null.
- */
+/** Legacy segments have no session recorder, so their fallback is the note owner. */
 export function resolveNoteRecorder({
   ownNote,
   user,
@@ -65,4 +63,27 @@ export function recorderLlmLabel(
   t: Translate
 ): string {
   return ownNote ? recorder.selfName || t("notes.speaker.you") : otherRecorderLabel(recorder, t);
+}
+
+// A relative self label cannot cross devices: a teammate's correction must
+// store the person who made it, rather than becoming the owner's voice.
+export function resolveSpeakerAssignmentName(
+  name: string,
+  user: PersonRef | null | undefined,
+  ownNote: boolean,
+  t: Translate
+): string {
+  return !ownNote && isYouSpeakerName(name, t("notes.speaker.you"))
+    ? user?.name?.trim() || user?.email?.trim() || t("notes.speaker.noteTaker")
+    : name;
+}
+
+export function recordingRecorderName(
+  note: Pick<NoteItem, "cloud_id" | "owner_user_id"> | null,
+  user: (PersonRef & { id: string }) | null | undefined,
+  t: Translate
+): string | undefined {
+  return note && !ownsNote(note, user?.id)
+    ? resolveSpeakerAssignmentName(t("notes.speaker.you"), user, false, t)
+    : undefined;
 }

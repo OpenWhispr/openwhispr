@@ -40,17 +40,18 @@ function codePointBoundary(text: string, index: number): number {
 }
 
 function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string, string>): string {
+  const recorderLabel = segment.recorderName || NOTE_TAKER_LABEL;
   // Stored JSON is untrusted: a malformed name must not block the transcript.
   const resolved: unknown = resolveSegmentSpeakerName(segment, speakerMappings);
   if (typeof resolved === "string" && resolved) {
-    return isYouSpeakerName(resolved, i18n.t("notes.speaker.you")) ? NOTE_TAKER_LABEL : resolved;
+    return isYouSpeakerName(resolved, i18n.t("notes.speaker.you")) ? recorderLabel : resolved;
   }
-  if (segment.speaker === "you") return NOTE_TAKER_LABEL;
+  if (segment.speaker === "you") return recorderLabel;
   // Numbered from 1, as the note shows speakers. An in-person meeting is
   // diarized on the mic, so a numbered mic speaker isn't the note taker.
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
   if (numbered) return `Speaker ${Number(numbered[1]) + 1}`;
-  if (segment.source === "mic") return NOTE_TAKER_LABEL;
+  if (segment.source === "mic") return recorderLabel;
   if (typeof segment.speaker === "string" && segment.speaker) return segment.speaker;
   return segment.source === "system" ? "Others" : "";
 }

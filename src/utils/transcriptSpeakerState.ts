@@ -100,7 +100,10 @@ export const lockTranscriptSpeaker = (
   });
 
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
-  const merged = { ...incoming } as TranscriptSegment;
+  const merged = {
+    ...incoming,
+    ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
+  } as TranscriptSegment;
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
 
@@ -198,6 +201,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       timestamp: segment.timestamp,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
+      recorderName: segment.recorderName,
       speakerIsPlaceholder: segment.speakerIsPlaceholder,
       suggestedName: segment.suggestedName,
       suggestedProfileId: segment.suggestedProfileId,
@@ -216,7 +220,12 @@ export const resolveSegmentSpeakerName = (
   speakerMappings?: Record<string, string>
 ): string | undefined => {
   if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return segment.speakerName;
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
+  // A legacy self mapping belongs to the original recorder, not a teammate
+  // who subsequently recorded into the note. Explicit row corrections win above.
+  const mapped =
+    segment.speaker && !(segment.speaker === "you" && segment.recorderName)
+      ? speakerMappings?.[segment.speaker]
+      : undefined;
   return mapped || segment.speakerName;
 };
 

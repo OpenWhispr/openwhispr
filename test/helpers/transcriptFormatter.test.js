@@ -331,3 +331,22 @@ test("untimed upload text exports without invented times or speakers", () => {
   assert.deepEqual(json.speakers, []);
   assert.equal(json.segments[0].speaker, null);
 });
+
+test("exports keep different recorders' adjacent self lines separate", () => {
+  const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+  const segments = [
+    { source: "mic", speaker: "you", text: "old", timestamp: 0 },
+    {
+      source: "mic",
+      speaker: "you",
+      recorderName: "Bob",
+      speakerName: "You",
+      text: "new",
+      timestamp: 1,
+    },
+  ];
+  assert.match(formatTxt(note, segments, {}), /Bob:/);
+  assert.match(formatMd(note, segments, {}), /\*\*Bob\*\*/);
+  assert.match(formatSrt(segments, {}, note), /Bob: new/);
+  assert.equal(JSON.parse(formatJson(note, segments, {})).segments[1].speaker, "Bob");
+});

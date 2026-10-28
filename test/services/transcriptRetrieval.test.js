@@ -386,7 +386,7 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   };
   assert.equal(
     noteChatTranscript(segments, mappings, owner),
-    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note owner ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
   );
   // Signed out, the user's own note still says the note taker is the user.
   assert.equal(
@@ -411,4 +411,13 @@ test("a longer match cut off at the end of a passage is found by the next call",
   ).data;
   assert.equal(second.transcript_match_found, true);
   assert.match(second.transcript, /a {5}b and more/);
+});
+
+test("note chat and retrieval keep appended recorders distinct from the owner", async () => {
+  const { readableTranscript } = await import("../../src/utils/transcriptEvidence.ts");
+  const raw = JSON.stringify([
+    { source: "mic", speaker: "you", text: "old" },
+    { source: "mic", speaker: "you", recorderName: "Bob", text: "new" },
+  ]);
+  assert.equal(readableTranscript(raw).text, "Note taker: old\nBob: new");
 });
