@@ -284,12 +284,14 @@ export default function CommandSearch({
       }
     }
     for (const folder of orderFoldersAsTree(folders)) {
-      if (visibleIds.has(folder.space_id) && folderMatchesQuery(folder, t, q)) {
+      if (!visibleIds.has(folder.space_id)) continue;
+      const label = folderPathLabel(folder, folders, t);
+      if (folderMatchesQuery(folder, t, q) || label.toLowerCase().includes(q)) {
         targets.push({
           key: `f:${folder.id}`,
           spaceId: folder.space_id,
           folderId: folder.id,
-          label: folderPathLabel(folder, folders, t),
+          label,
           space: spaceMap.get(folder.space_id),
         });
       }

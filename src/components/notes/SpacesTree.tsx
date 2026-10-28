@@ -789,7 +789,7 @@ function FolderRow({
                     onSearchChange={setFolderSearch}
                     searchPlaceholder={t("notes.context.searchFolders")}
                   >
-                    {isSubfolder && (
+                    {isSubfolder && !folderSearch && (
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();

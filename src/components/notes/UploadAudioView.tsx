@@ -1797,9 +1797,7 @@ function FolderSelect({
         <SelectContent>
           {orderFoldersAsTree(folders).map((f) => {
             // The default Meetings folder takes no uploads yet, and neither do its subfolders.
-            const isMeetings =
-              meetingsFolderId != null &&
-              (f.id === meetingsFolderId || f.parent_folder_id === meetingsFolderId);
+            const isMeetings = f.id === meetingsFolderId || f.parent_folder_id === meetingsFolderId;
             return (
               <SelectItem
                 key={f.id}

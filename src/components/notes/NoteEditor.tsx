@@ -469,7 +469,11 @@ export default function NoteEditor({
   const filteredFolders = useMemo(
     () =>
       folderSearch && folders
-        ? folders.filter((f) => folderMatchesQuery(f, t, folderSearch))
+        ? folders.filter(
+            (f) =>
+              folderMatchesQuery(f, t, folderSearch) ||
+              folderPathLabel(f, folders, t).toLowerCase().includes(folderSearch.toLowerCase())
+          )
         : (folders ?? []),
     [folders, folderSearch, t]
   );
