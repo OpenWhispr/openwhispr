@@ -6,6 +6,8 @@ import type { Message } from "./types";
 interface ChatMessagesProps {
   messages: Message[];
   emptyState?: React.ReactNode;
+  /** Shown above the first message, and alone while there are none (the skill creator's opening). */
+  leading?: React.ReactNode;
   onOpenNote?: (noteId: number) => void;
   /** Extra classes for the message column (e.g. a page-width cap); the scroll container stays full width. */
   contentClassName?: string;
@@ -17,6 +19,7 @@ interface ChatMessagesProps {
 export function ChatMessages({
   messages,
   emptyState,
+  leading,
   onOpenNote,
   contentClassName,
   scrollClassName,
@@ -54,10 +57,11 @@ export function ChatMessages({
       }}
       className={cn("min-h-0 flex-1 overflow-y-auto agent-chat-scroll px-3 py-2", scrollClassName)}
     >
-      {messages.length === 0 ? (
+      {messages.length === 0 && !leading ? (
         (emptyState ?? null)
       ) : (
         <div className={cn("flex flex-col gap-1.5", contentClassName)}>
+          {leading}
           {messages
             .filter((msg) => msg.role !== "tool")
             .map((msg) => (

@@ -179,6 +179,7 @@ describe('useTranscriptStore retry support', () => {
         audioUri: 'file://docs/transcript-audio/t1.m4a',
         provider: 'cloud',
         requestContext: 'keyboard',
+        purpose: 'dictation',
         keyboardTone: 'formal',
         language: 'en',
       }),
@@ -308,6 +309,7 @@ describe('useTranscriptStore retry support', () => {
         mimeType: 'audio/wav',
         provider: 'local',
         requestContext: 'file',
+        purpose: 'upload',
       }),
     );
     expect(mockAudioToolsCleanup).toHaveBeenCalledWith(['file://tmp/retry.wav']);

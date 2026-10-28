@@ -150,3 +150,57 @@ test("preserves policy and upgrade metadata from authenticated cloud failures", 
     minAppVersion: "2.0.0",
   });
 });
+
+test("keeps top-level conflicts of a failure body that has no data envelope", async () => {
+  const state = { current: { token: "token-a", generation: 23 } };
+  const conflicts = [{ id: "personal-1", word: "Kubernetes" }];
+  const handler = createHandler(
+    state,
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: "A personal word changed",
+          code: "SHARED_DICTIONARY_PERSONAL_CHANGED",
+          conflicts,
+        }),
+        { status: 409 }
+      )
+  );
+
+  const result = await handler({
+    method: "POST",
+    path: "/api/shared-dictionary/share",
+    expectedAuthGeneration: 23,
+  });
+
+  assert.equal(result.status, 409);
+  assert.equal(result.code, "SHARED_DICTIONARY_PERSONAL_CHANGED");
+  assert.deepEqual(result.details, { conflicts });
+});
+
+test("a 400 keeps its status with or without a code, so callers can tell it from offline", async () => {
+  const state = { current: { token: "token-a", generation: 24 } };
+  const bodies = [
+    { error: "word too long", code: "SHARED_DICTIONARY_INVALID_REQUEST" },
+    { error: "since_id requires since" },
+  ];
+  const handler = createHandler(
+    state,
+    async () => new Response(JSON.stringify(bodies.shift()), { status: 400 })
+  );
+  const request = {
+    method: "POST",
+    path: "/api/shared-dictionary/create",
+    expectedAuthGeneration: 24,
+  };
+
+  const coded = await handler(request);
+  const uncoded = await handler(request);
+
+  assert.deepEqual(
+    [coded.status, coded.code, coded.error],
+    [400, "SHARED_DICTIONARY_INVALID_REQUEST", "word too long"]
+  );
+  assert.deepEqual([uncoded.status, uncoded.code], [400, undefined]);
+  assert.equal(uncoded.success, false);
+});

@@ -21,7 +21,8 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('../LocalWhisperService', () => ({ LocalWhisperService: {} }));
 jest.mock('../LocalTranscriptionService', () => ({ LocalTranscriptionService: {} }));
 jest.mock('@/lib/dictationHints', () => ({
-  buildDictationHints: () => [],
+  buildDictationHintTiers: () => [[], [], []],
+  buildLlmDictionary: () => ({ personal: [], shared: [] }),
   isDictationContext: () => true,
 }));
 jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
@@ -104,6 +105,50 @@ describe.each(['keyboard', 'recording'] as const)('%s upload headers', (requestC
           expect.objectContaining({ headers }),
         );
         expect(FileSystem.uploadAsync).not.toHaveBeenCalled();
+      }
+    },
+  );
+});
+
+describe('declared audio purpose', (): void => {
+  const uploadedParameters = (): (Record<string, string> | undefined)[] => [
+    ...jest.mocked(BackgroundUploader.upload).mock.calls.map(([options]) => options.parameters),
+    ...jest
+      .mocked(FileSystem.uploadAsync)
+      .mock.calls.map(
+        ([, , options]) =>
+          (options as { parameters?: Record<string, string> } | undefined)?.parameters,
+      ),
+  ];
+
+  it.each([
+    { requestContext: 'keyboard', purpose: 'dictation' },
+    { requestContext: 'recording', purpose: 'dictation' },
+    { requestContext: 'file', purpose: 'upload' },
+  ] as const)(
+    'sends $purpose for $requestContext on inline, chunked and cleanup uploads',
+    async ({ requestContext, purpose }): Promise<void> => {
+      const request: TranscriptionRequest = {
+        audioUri: 'file:///recording.wav',
+        provider: 'cloud',
+        requestContext,
+        purpose,
+      };
+      await TranscriptionService.transcribe(request);
+      await TranscriptionService.transcribeWithCloudCleanup(request);
+      jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+        exists: true,
+        isDirectory: false,
+        uri: 'file:///recording.wav',
+        size: 8 * 1024 * 1024,
+        modificationTime: 0,
+      });
+      await TranscriptionService.transcribe(request);
+
+      const parameters = uploadedParameters();
+      expect(parameters).toHaveLength(3);
+      for (const sent of parameters) {
+        expect(sent).toMatchObject({ purpose, requestContext });
       }
     },
   );

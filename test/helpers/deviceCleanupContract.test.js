@@ -42,6 +42,19 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
   assert.ok(source.includes("PAID_KEY_CHECKS_FILE"), "device cleanup removes paid key checks");
 });
 
+test("Reset app removes the skills folder and its versions folder", () => {
+  assert.ok(cleanupHandler, "cleanup-app handler is present");
+  const list = cleanupHandler[1].match(/for \(const directoryName of (\[[^\]]*\])\)/);
+  assert.ok(list, "device cleanup still removes its userData folders in one list");
+  assert.deepEqual(JSON.parse(list[1]), [
+    "bin",
+    "llama-cpp",
+    "connectors",
+    "skills",
+    "skill-versions",
+  ]);
+});
+
 // cleanup-app can't run outside Electron (it closes the database, clears
 // sessions and relaunches), so this pins the order in its source. Settings
 // signs out before calling it, so the revoke must not depend on a signed-in
@@ -63,7 +76,7 @@ test("device cleanup revokes every stored connector login before the files and r
 
   for (const later of [
     "this.databaseManager?.db?.close()",
-    'for (const directoryName of ["bin", "llama-cpp", "connectors"])',
+    'for (const directoryName of ["bin", "llama-cpp", "connectors", "skills", "skill-versions"])',
   ]) {
     const at = source.indexOf(later);
     assert.ok(at >= 0, `device cleanup still contains ${later}`);

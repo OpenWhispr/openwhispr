@@ -147,14 +147,16 @@ test("connection identity follows key saves exactly when the token comes from a 
   const { fetchRealtimeTokenForProvider } =
     await import("../../src/helpers/realtimeTokenProviders.js");
 
-  for (const provider of Object.keys(STREAMING_CLIENT_BY_PROVIDER)) {
+  for (const provider of Object.keys(STREAMING_CLIENT_BY_PROVIDER).filter(
+    (id) => id !== "enterprise-realtime"
+  )) {
     for (const mode of ["byok", "openwhispr"]) {
       let readsSavedKey = false;
       const savedKey = () => {
         readsSavedKey = true;
         return "key";
       };
-      const options = { provider, mode };
+      const options = { provider, mode, purpose: "meeting" };
       await fetchRealtimeTokenForProvider(
         provider,
         {
@@ -172,4 +174,33 @@ test("connection identity follows key saves exactly when the token comes from a 
       );
     }
   }
+});
+
+test("enterprise meeting reuse is scoped to workspace, profile and credential generation", async () => {
+  const { getMeetingConnectionKey } = await load();
+  const options = {
+    provider: "enterprise-realtime",
+    mode: "enterprise",
+    managedContext: { workspaceId: "workspace-a", generation: 1 },
+    enterpriseConnection: {
+      endpoint: "wss://gateway.test/realtime",
+      protocol: "openai-transcription-ga",
+    },
+  };
+  const original = getMeetingConnectionKey(options, 1);
+  assert.notEqual(original, getMeetingConnectionKey(options, 2));
+  assert.notEqual(
+    original,
+    getMeetingConnectionKey(
+      { ...options, managedContext: { workspaceId: "workspace-b", generation: 1 } },
+      1
+    )
+  );
+  assert.notEqual(
+    original,
+    getMeetingConnectionKey(
+      { ...options, managedContext: { workspaceId: "workspace-a", generation: 2 } },
+      1
+    )
+  );
 });

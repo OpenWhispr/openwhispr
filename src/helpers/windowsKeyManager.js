@@ -136,13 +136,11 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     if (line === "KEY_DOWN") {
-      debugLogger.debug("[WindowsKeyManager] KEY_DOWN detected", { key });
       this.emit("key-down", key);
       return;
     }
 
     if (line === "KEY_UP") {
-      debugLogger.debug("[WindowsKeyManager] KEY_UP detected", { key });
       this.emit("key-up", key);
       return;
     }

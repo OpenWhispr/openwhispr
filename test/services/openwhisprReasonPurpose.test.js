@@ -100,3 +100,86 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
   assert.equal(requests[1].purpose, "cleanup");
   assert.equal(requests[2].purpose, "translation");
 });
+
+test("OpenWhispr reasoning splits teammates' words into sharedDictionary", async (t) => {
+  const originalWindow = globalThis.window;
+  const requests = [];
+  globalThis.window = {
+    electronAPI: {
+      cloudReason: async (_text, options) => {
+        requests.push(options);
+        return { success: true, text: "result", model: "model", provider: "openwhispr" };
+      },
+    },
+  };
+  const { createServer } = await import("vite");
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-reason-shared-test-"));
+  globalThis.__reasonSharedSettings = {
+    customPrompts: { cleanup: "" },
+    customDictionary: ["Piha"],
+    snippets: [{ trigger: "my sig", replacement: "Chad" }],
+    sharedDictionaryHints: { space: [], workspace: ["Acme"] },
+  };
+  const vite = await createServer({
+    root: path.resolve(__dirname, "../../src"),
+    cacheDir,
+    configFile: false,
+    appType: "custom",
+    logLevel: "silent",
+    optimizeDeps: { noDiscovery: true },
+    plugins: [
+      {
+        name: "openwhispr-reason-shared-dependencies",
+        enforce: "pre",
+        resolveId(source) {
+          if (source.endsWith("/lib/auth")) return "\0reason-shared-auth";
+          if (source.endsWith("/stores/settingsStore")) return "\0reason-shared-settings";
+          if (source.endsWith("/utils/logger")) return "\0reason-shared-logger";
+          return null;
+        },
+        load(id) {
+          if (id === "\0reason-shared-auth") {
+            return "export async function withSessionRefresh(callback) { return callback(); }";
+          }
+          if (id === "\0reason-shared-settings") {
+            return "export function getSettings() { return globalThis.__reasonSharedSettings; }";
+          }
+          if (id === "\0reason-shared-logger") return "export default { logReasoning() {} };";
+          return null;
+        },
+      },
+    ],
+    server: { middlewareMode: true },
+  });
+  t.after(async () => {
+    await vite.close();
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    delete globalThis.__reasonSharedSettings;
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+  const { openwhisprProvider } = await vite.ssrLoadModule(
+    "/services/ai/inferenceProviders/openwhispr.ts"
+  );
+  const call = (words) =>
+    openwhisprProvider.call({
+      text: "clean this",
+      model: "",
+      agentName: "Whisper",
+      config: { inferenceScope: "dictationCleanup" },
+      ctx: {
+        getCustomDictionary: () => words,
+        getPreferredLanguage: () => "en",
+        getUiLanguage: () => "en",
+      },
+    });
+
+  await call(["Piha", "my sig", "Acme"]);
+  assert.deepEqual(requests[0].customDictionary, ["Piha", "my sig"]);
+  assert.deepEqual(requests[0].sharedDictionary, ["Acme"]);
+
+  globalThis.__reasonSharedSettings.sharedDictionaryHints = { space: [], workspace: [] };
+  await call(["Piha", "my sig"]);
+  assert.deepEqual(requests[1].customDictionary, ["Piha", "my sig"]);
+  assert.equal(Object.hasOwn(requests[1], "sharedDictionary"), false);
+});

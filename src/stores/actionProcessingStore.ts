@@ -9,6 +9,7 @@ import {
   type ResolvedNoteFormatting,
 } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
+import { getLlmDictionaryWords } from "../utils/snippets";
 import { generateNoteTitle } from "../utils/generateTitle";
 import { buildNoteFormattingOverrides } from "../helpers/noteFormattingOverrides";
 import { PROVIDER_ERROR_CODES } from "../helpers/providerHttpErrors.js";
@@ -565,7 +566,9 @@ export function runBackgroundAction(
       const systemPrompt = appendDictionarySuffix(
         instructions,
         // Any transcript is speech-to-text, which misspells names.
-        options.isMeetingNote || options.hasPlainTranscript ? settings.customDictionary : undefined,
+        options.isMeetingNote || options.hasPlainTranscript
+          ? getLlmDictionaryWords(settings, { includeTriggers: false })
+          : undefined,
         settings.uiLanguage
       );
       const requestConfig: ReasoningConfig = {

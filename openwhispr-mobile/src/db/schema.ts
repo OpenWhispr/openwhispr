@@ -134,6 +134,9 @@ export const dictionaryEntries = sqliteTable('dictionary_entries', {
   clientDictId: text('client_dict_id'),
   remoteId: text('remote_id'),
   deletedAt: text('deleted_at'),
+  sharedAt: text('shared_at'),
+  // 1 while an explicit re-add's clear of shared_at still has to reach the server.
+  sharedAtCleared: integer('shared_at_cleared').notNull().default(0),
   pendingSync: integer('pending_sync').notNull().default(0),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
@@ -150,6 +153,27 @@ export const snippets = sqliteTable('snippets', {
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
 });
+
+export const chatConversations = sqliteTable('chat_conversations', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const chatMessages = sqliteTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id').notNull(),
+    role: text('role').notNull(),
+    text: text('text').notNull(),
+    stepsJson: text('steps_json'),
+    sourcesJson: text('sources_json'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [index('idx_chat_messages_conversation').on(table.conversationId, table.createdAt)],
+);
 
 export const syncState = sqliteTable('sync_state', {
   key: text('key').primaryKey(),

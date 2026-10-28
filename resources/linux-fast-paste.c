@@ -386,6 +386,11 @@ static int contains_terminal_name(const char *wm_class, const char *name) {
 
 static int is_terminal(const char *wm_class) {
     if (!wm_class) return 0;
+    /* Omarchy assigns terminal-launched apps their own IDs. Keep in sync with
+     * OMARCHY_TERMINAL_PREFIXES in src/helpers/clipboard.js. */
+    if (strncasecmp(wm_class, "org.omarchy.", strlen("org.omarchy.")) == 0 ||
+        strncasecmp(wm_class, "tui.", strlen("tui.")) == 0)
+        return 1;
     for (int i = 0; terminal_classes[i]; i++) {
         if (contains_terminal_name(wm_class, terminal_classes[i]))
             return 1;

@@ -32,6 +32,7 @@ import {
   type TranscriptionProviderData,
 } from "../../models/ModelRegistry";
 import { pickDefaultModelId } from "../../models/providerDefaultModel";
+import { isListedModel } from "../../models/legacyModels";
 import {
   RESUME_DRAFT_PERSIST_DELAY_MS,
   type OnboardingByokDraft,
@@ -375,7 +376,12 @@ export function ByokProviderStep({
   };
 
   const chooseProvider = (providerId: string) => {
-    const fallbackModel = pickDefaultModelId(providers.find((item) => item.id === providerId));
+    // Returning to the provider this card opened on restores its model: a legacy
+    // one can't be picked again from the list.
+    const fallbackModel =
+      providerId === seed.provider && seed.model
+        ? seed.model
+        : pickDefaultModelId(providers.find((item) => item.id === providerId));
     setSelectedProvider(providerId);
     setSelectedModel(fallbackModel);
     setDraftApiKey(providerCredential(providerId, store).value);
@@ -593,11 +599,18 @@ export function ByokProviderStep({
                   )}
                 </SelectTrigger>
                 <SelectContent className={`max-h-[14.625rem] ${SELECT_PANEL_CLASS}`}>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.id} className={SELECT_ITEM_CLASS}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
+                  {models
+                    .filter((model) => isListedModel(model, model.id === selectedModel))
+                    .map((model) => (
+                      <SelectItem
+                        key={model.id}
+                        value={model.id}
+                        disabled={model.legacy}
+                        className={SELECT_ITEM_CLASS}
+                      >
+                        {model.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </label>
