@@ -1491,6 +1491,7 @@ declare global {
             maxCharacters?: number;
           }
       >;
+      cancelSelectionEdit?: (sessionId: string) => Promise<void>;
       replaceSelectedText?: (
         sessionId: string,
         text: string,
@@ -1500,6 +1501,7 @@ declare global {
         code?:
           | "invalid_replacement"
           | "session_expired"
+          | "cancelled"
           | "target_changed"
           | "selection_unavailable"
           | "selection_changed"

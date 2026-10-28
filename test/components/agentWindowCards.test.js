@@ -1517,6 +1517,26 @@ test("closing during a selection edit aborts it and cannot replace text later", 
   assert.deepEqual(globalThis.__chat.sent, []);
 });
 
+test("closing cancels the captured session while native replacement is still pending", async (t) => {
+  const view = await mountWindow(t);
+  const replacement = defer();
+  const cancelled = [];
+  globalThis.__selectionEdits.result = "Edited";
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "pending-native",
+    text: "Original",
+  });
+  view.happyWindow.electronAPI.replaceSelectedText = () => replacement.promise;
+  view.happyWindow.electronAPI.cancelSelectionEdit = async (sessionId) => cancelled.push(sessionId);
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  await React.act(async () => view.main.handlers.dismiss());
+  assert.deepEqual(cancelled, ["pending-native"]);
+  await React.act(async () => replacement.resolve({ success: false, code: "cancelled" }));
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
 test("composer Stop cancels a selection edit after switching to the keyboard", async (t) => {
   const view = await mountWindow(t);
   const edit = defer();
@@ -1682,4 +1702,71 @@ test("an unsuccessful agent fork leaves the current take intact", async (t) => {
   const cancelled = globalThis.__voice.cancels;
   await React.act(async () => view.button("Fork").click());
   assert.equal(globalThis.__voice.cancels, cancelled);
+});
+
+test("a delayed transcript cannot edit the next take's selected text", async (t) => {
+  const view = await mountWindow(t);
+  const first = defer();
+  let captures = 0;
+  view.happyWindow.electronAPI.captureSelectedText = () =>
+    ++captures === 1
+      ? first.promise
+      : Promise.resolve({
+          status: "selected",
+          sessionId: "new-session",
+          text: "NEW SELECTED TEXT",
+        });
+  const replacements = [];
+  view.happyWindow.electronAPI.replaceSelectedText = async (...args) => {
+    replacements.push(args);
+    return { success: true };
+  };
+  globalThis.__selectionEdits.result = "REPLACEMENT FROM OLD INSTRUCTION";
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("OLD INSTRUCTION", "submit")
+  );
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => first.resolve({ status: "none" }));
+  assert.deepEqual(
+    replacements,
+    [],
+    "a first transcript must not replace a second capture's session"
+  );
+  globalThis.__selectionEdits.result = "Replacement from the new instruction";
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("NEW INSTRUCTION", "submit")
+  );
+  assert.equal(globalThis.__selectionEdits.calls.at(-1).selectedText, "NEW SELECTED TEXT");
+  assert.equal(replacements.at(-1)[0], "new-session");
+  assert.equal(replacements.at(-1)[1], "Replacement from the new instruction");
+});
+test("a typed request awaiting a screenshot stays available if a voice take supersedes it", async (t) => {
+  const view = await mountWindow(t);
+  const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  settings.useSettingsStore.setState({ voiceAgentScreenContext: true });
+  const screen = defer();
+  let captures = 0;
+  view.happyWindow.electronAPI.captureScreenContext = () =>
+    ++captures === 1 ? screen.promise : Promise.resolve(null);
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  const field = view.host.querySelector("textarea");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(
+      view.happyWindow.HTMLTextAreaElement.prototype,
+      "value"
+    ).set.call(field, "Original typed request");
+    field.dispatchEvent(new view.happyWindow.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => view.button("Send").click());
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await React.act(async () => screen.resolve({ data: "typed-screen", mediaType: "image/jpeg" }));
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  assert.ok(
+    globalThis.__chat.sent.includes("Original typed request") ||
+      view.host.querySelector("textarea")?.value === "Original typed request",
+    "the first request must be sent or restored"
+  );
 });

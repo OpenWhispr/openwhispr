@@ -49,7 +49,8 @@ test("web search is for anything that may have changed, and when in doubt the mo
     prompt,
     /Use web_search whenever the answer depends on public information that may have changed/
   );
-  assert.match(prompt, /whenever the user asks you to look something up/);
+  assert.match(prompt, /whenever the user explicitly asks for a web search/);
+  assert.match(prompt, /check supplied notes or search_notes before web_search/);
   assert.match(prompt, /search rather than decline/);
   assert.match(
     prompt,

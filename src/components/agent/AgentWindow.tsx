@@ -380,7 +380,6 @@ export default function AgentWindow() {
       busyRef.current = true;
       stopReading();
       openedByTakeRef.current = false;
-      dispatch({ type: "submitted", typed });
       const press = pressRef.current;
       const restoreUnsent = () => {
         if (press !== pressRef.current) return;
@@ -400,6 +399,7 @@ export default function AgentWindow() {
         const image =
           typed || !extras ? ((await captureRequestScreen()) ?? attachment) : attachment;
         if (press !== pressRef.current) return true;
+        dispatch({ type: "submitted", typed, draft: current.draft });
         return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
           ...(image ? { attachment: image } : {}),
@@ -425,8 +425,8 @@ export default function AgentWindow() {
       pressCaptureRef.current = null;
       const press = pressRef.current;
       if (pending) await Promise.race([pending, delay(PRESS_CAPTURE_WAIT_MS)]);
-      if (press === pressRef.current) pressRef.current += 1;
-      if (dropped()) return;
+      if (dropped() || take !== takeRef.current || press !== pressRef.current) return;
+      pressRef.current += 1;
       const target = editTargetRef.current;
       editTargetRef.current = null;
       const extras = {
@@ -438,6 +438,11 @@ export default function AgentWindow() {
         return;
       }
       const controller = new AbortController();
+      const cancelReplacement = () => {
+        if (target.kind === "external")
+          void window.electronAPI?.cancelSelectionEdit?.(target.sessionId).catch(() => {});
+      };
+      controller.signal.addEventListener("abort", cancelReplacement, { once: true });
       selectionEditRef.current?.abort();
       selectionEditRef.current = controller;
       busyRef.current = true;
@@ -508,6 +513,7 @@ export default function AgentWindow() {
             notice: "hooks.audioRecording.selectionEditing.reasoningFailed",
           });
       } finally {
+        controller.signal.removeEventListener("abort", cancelReplacement);
         if (selectionEditRef.current === controller) {
           selectionEditRef.current = null;
           busyRef.current = chatBusyRef.current;

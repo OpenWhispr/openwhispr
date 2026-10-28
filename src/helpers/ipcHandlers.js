@@ -3350,6 +3350,10 @@ class IPCHandlers {
       return this.selectionManager.captureSelectedText();
     });
 
+    ipcMain.handle("cancel-selection-edit", (_event, sessionId) => {
+      this.selectionManager?.cancelSelectionEdit(sessionId);
+    });
+
     ipcMain.handle("replace-selected-text", async (event, sessionId, text, options = {}) => {
       if (!this.selectionManager) {
         return { success: false, code: "selection_manager_unavailable" };

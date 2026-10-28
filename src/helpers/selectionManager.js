@@ -273,6 +273,10 @@ class SelectionManager {
     });
   }
 
+  cancelSelectionEdit(sessionId) {
+    this.sessions.delete(sessionId);
+  }
+
   async replaceSelectedText(sessionId, replacement, options = {}) {
     if (typeof replacement !== "string" || replacement.length === 0) {
       return { success: false, code: "invalid_replacement" };
@@ -281,10 +285,11 @@ class SelectionManager {
     return this.clipboardManager.runClipboardOperation(async () => {
       this._pruneSessions();
       const session = this.sessions.get(sessionId);
-      this.sessions.delete(sessionId);
       if (!session) return { success: false, code: "session_expired" };
 
       const current = await this._readCurrentSelection(session.target, { activate: true });
+      if (this.sessions.get(sessionId) !== session) return { success: false, code: "cancelled" };
+      this.sessions.delete(sessionId);
       if (current.status === "target_changed") {
         return { success: false, code: "target_changed" };
       }

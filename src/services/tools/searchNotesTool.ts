@@ -34,7 +34,8 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       properties: {
         query: {
           type: "string",
-          description: "The search query to find relevant notes",
+          description:
+            "A few topic keywords, not the full question. For questions about plan costs or prices, search for pricing.",
         },
         limit: {
           type: "number",

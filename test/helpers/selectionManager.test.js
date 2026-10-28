@@ -162,6 +162,18 @@ test("does not paste when the selection changed", async () => {
   assert.equal(pastes.length, 0);
 });
 
+test("cancelling a selection edit while native revalidation waits prevents its paste", async () => {
+  const { manager, pastes } = makeHarness({ selections: ["original"] });
+  const capture = await manager.captureSelectedText();
+  let finishRead;
+  manager._readCurrentSelection = () => new Promise((resolve) => (finishRead = resolve));
+  const replacement = manager.replaceSelectedText(capture.sessionId, "Late edit");
+  manager.cancelSelectionEdit(capture.sessionId);
+  finishRead({ status: "selected", text: "original", target: { kind: "mac-pid", pid: 42 } });
+  assert.deepEqual(await replacement, { success: false, code: "cancelled" });
+  assert.deepEqual(pastes, []);
+});
+
 // Keys still held past the modifier wait (#2113) block the edit at two points.
 // Both must say so: "selection_unavailable" sends the user to permissions
 // settings and "paste_failed" hides that the edit is on the clipboard.
