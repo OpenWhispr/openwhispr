@@ -7,7 +7,7 @@ import { formatHotkeyListLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useLinuxPillInteractivity } from "./hooks/useLinuxPillInteractivity";
 import { useAudioRecording } from "./hooks/useAudioRecording";
-import { useAssistantPanel } from "./hooks/useAssistantPanel";
+import { useAssistantFollowUpThinking, useAssistantPanel } from "./hooks/useAssistantPanel";
 import { useOnboardingAssistantDemo } from "./hooks/useOnboardingAssistantDemo";
 import { useLiveTranscriptPanel } from "./hooks/useLiveTranscriptPanel";
 import { useMainWindowSizeOwner } from "./hooks/useMainWindowSizeOwner";
@@ -26,6 +26,7 @@ import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
 import { PillCommandMenu } from "./components/dictation/PillCommandMenu";
 import { LiquidCancelButton } from "./components/dictation/LiquidCancelButton";
+import AssistantNoteUndoListener from "./components/notes/AssistantNoteUndoListener";
 import { createMainWindowResizeCoordinator } from "./utils/mainWindowResizeCoordinator";
 import {
   ASSISTANT_FOOTER_TRANSITION_TIMING,
@@ -206,18 +207,7 @@ export default function App() {
     }
   }, [assistantOpenRef, setWindowInteractivity]);
 
-  const {
-    isRecording,
-    isProcessing,
-    isAssistantVoice,
-    isPreparing,
-    isStopping,
-    micCaptureStatus,
-    toggleListening,
-    cancelRecording,
-    cancelProcessing,
-    getAudioLevel,
-  } = useAudioRecording(toast, {
+  const recording = useAudioRecording(toast, {
     onToggle: handleDictationToggle,
     onDemoEvent: publishOnboardingDemoEvent,
     onAssistantCommand: assistant.handleCommand,
@@ -236,6 +226,18 @@ export default function App() {
     },
     assistantOpenRef,
   });
+  const {
+    isRecording,
+    isProcessing,
+    isAssistantVoice,
+    isPreparing,
+    isStopping,
+    micCaptureStatus,
+    toggleListening,
+    cancelRecording,
+    cancelProcessing,
+    getAudioLevel,
+  } = recording;
   const isVisuallyProcessing = isProcessing || isPreparing || isStopping;
 
   useLayoutEffect(() => {
@@ -280,12 +282,7 @@ export default function App() {
     );
   }, [mainWindowHorizontalDirection, panelStartPosition, voiceDirectionLocked]);
 
-  const { beginThinking: beginAssistantThinking } = assistant;
-  useEffect(() => {
-    if (isAssistantVoice && isProcessing && assistantOpenRef.current) {
-      beginAssistantThinking();
-    }
-  }, [isAssistantVoice, isProcessing, assistantOpenRef, beginAssistantThinking]);
+  useAssistantFollowUpThinking(recording, assistant);
 
   // While the Agent panel is open, plain dictation renders on the
   // opposite-edge companion pill — neither its recording nor its processing
@@ -597,6 +594,8 @@ export default function App() {
     panelStartPosition,
     horizontalDirection: voiceHorizontalDirection,
   });
+  const voicePillPopoverAlign =
+    panelStartPosition === "center" ? "center" : voiceHorizontalDirection;
   const voicePillTravelDuration =
     liveTranscript.open && liveTranscript.entrancePhase === "encapsulate"
       ? LIVE_TRANSCRIPT_ENTRANCE_TIMING.encapsulateMs
@@ -672,7 +671,7 @@ export default function App() {
           <PillTooltip
             content={canReopenLiveTranscript ? t("transcriptionPreview.label") : micTooltip}
             disabled={anyPanelMounted}
-            align={panelStartPosition === "center" ? "center" : voiceHorizontalDirection}
+            align={voicePillPopoverAlign}
           >
             <VoicePill
               ref={buttonRef}
@@ -767,6 +766,7 @@ export default function App() {
           {!anyPanelMounted && isCommandMenuOpen && (
             <PillCommandMenu
               buttonRef={buttonRef}
+              align={voicePillPopoverAlign}
               isRecording={isRecording}
               agentAllowed={agentAllowed}
               meetingAllowed={meetingAllowed}
@@ -844,6 +844,8 @@ export default function App() {
           />
         )}
       </VoiceModePanelCore>
+      {/* The assistant panel edits notes here; its Undo shows once the panel has focus. */}
+      <AssistantNoteUndoListener />
     </div>
   );
 }

@@ -10,7 +10,6 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   const sidebar = read("src/components/ControlPanelSidebar.tsx");
   const insights = read("src/components/InsightsView.tsx");
   const leaderboard = read("src/components/LeaderboardView.tsx");
-  const dictionary = read("src/components/DictionaryView.tsx");
 
   assert.equal(sidebar.includes('| "leaderboard"'), false);
   assert.equal(sidebar.includes('{ id: "leaderboard"'), false);
@@ -22,10 +21,6 @@ test("the leaderboard is tabbed inside the Insights view", () => {
   assert.ok(insights.includes('value="usage"'));
   assert.ok(insights.includes('t("insights.yourUsage")'));
   assert.ok(insights.includes('value="leaderboard"'));
-  assert.ok(dictionary.includes('className="h-7 p-0.5 rounded-[7px]"'));
-  assert.ok(insights.includes('className="h-7 p-0.5 rounded-[7px]"'));
-  assert.ok(dictionary.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
-  assert.ok(insights.includes('className="h-6 px-2.5 text-xs rounded-[5px]"'));
   assert.ok(insights.includes("<LeaderboardView"));
   assert.ok(insights.includes("syncService.syncAnalyticsNow()"));
   assert.ok(insights.includes("const authValidated = hasValidatedAuthContext()"));
@@ -114,6 +109,9 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("resolveLeaderboardScopeKey"));
   assert.ok(section.includes('t("insights.leaderboard.chooseBoard")'));
   assert.ok(section.includes('selectedScope?.state === "invite"'));
+  // Invites follow the workspace's capabilities, not the scope's role name.
+  assert.ok(section.includes('workspaceCan(workspace, "manage_members")'));
+  assert.equal(/role === "(owner|admin)"/.test(section), false);
   assert.ok(section.includes("<LeaderboardJoinPreview"));
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);

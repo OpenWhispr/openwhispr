@@ -12,10 +12,14 @@ import {
   isNotNull,
   isNull,
   inArray,
+  type SQL,
+  type SQLWrapper,
 } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system/legacy';
 import { parseRemoteTranscript, serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
 import { randomUUID } from '@/lib/uuid';
+import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
+import { LATIN_WORD_TERM, NUMBER_TERM, WHOLE_WORD_TERM } from '@/lib/chat/chatTerms';
 import {
   folderDeleteJournal,
   folders,
@@ -50,6 +54,9 @@ import type {
   RemoteFolder,
   RemoteNote,
   ConflictedNote,
+  ChatCandidateNotes,
+  ChatCandidateOptions,
+  ChatNoteWindow,
   Segment,
   NewSegment,
   Speaker,
@@ -132,6 +139,176 @@ const NOTE_PUSH_ACK_FIELDS: ReadonlyArray<keyof Note> = [
   'calendarEventId',
   'deletedAt',
 ];
+
+const pushRejectedKey = (localId: number): string => `note.pushRejected.${localId}`;
+
+// What a word starts after: whitespace, punctuation, and the brackets, quotes (an elided "l’équipe"
+// too), slashes, dashes, tags and Markdown marks that open one. A LIKE per character skims the
+// text, where a GLOB class in front of the term would be tried at every position, several times
+// slower on notes holding the term mid-word ("report" for "port").
+const WORD_STARTS_AFTER = [
+  ' ',
+  '\u00a0',
+  '\n',
+  '\t',
+  '(',
+  '[',
+  '"',
+  "'",
+  '“',
+  '‘',
+  '’',
+  '„',
+  '‚',
+  '«',
+  '¿',
+  '¡',
+  '`',
+  '/',
+  '-',
+  '–',
+  '—',
+  '*',
+  '_',
+  '#',
+  '@',
+  ',',
+  '.',
+  ':',
+  ';',
+];
+// Transcribed speech carries no Markdown, tags or brackets, and a meeting's many segments are each
+// searched, so they look for fewer.
+const SPOKEN_WORD_STARTS_AFTER = [' ', '-', '"', "'", '’', '(', ',', '.', '—'];
+// Chinese, Japanese and Korean put no space before a Latin word ("会議でbudget"), so a term right
+// after one of their characters starts a word too: CJK punctuation, kana and ideographs, Hangul,
+// and fullwidth forms, as code point ranges.
+const CJK_CODE_POINTS: readonly (readonly [number, number])[] = [
+  [0x3000, 0x9fff],
+  [0xac00, 0xd7af],
+  [0xff00, 0xffef],
+];
+
+// Only the term's first occurrence is checked: a GLOB class in front of it would be tried at every
+// position of every note holding it mid-word. Positions line up because lower() folds ASCII only.
+const followsCjk = (column: SQLWrapper, term: string): SQL => {
+  const at = sql`instr(lower(${column}), ${term})`;
+  const before = sql`unicode(substr(${column}, ${at} - 1, 1))`;
+  return sql`(${at} > 1 AND (${sql.join(
+    CJK_CODE_POINTS.map(([low, high]) => sql`${before} BETWEEN ${low} AND ${high}`),
+    sql` OR `,
+  )}))`;
+};
+// A number matches whole numbers only: "10" never matches "100", "2010", "10:30", "1.10" or
+// "10,000", and "1.10" never matches "1.100". A `.`, `:` or `,` between digits joins them, but one
+// after a number ends it ("10.").
+const numberPatterns = (term: string): string[] => {
+  const before = ['*[^A-Za-z0-9.:,]', '*[^0-9][.:,]'];
+  const after = ['[^A-Za-z0-9.:,]*', '[.:,][^0-9]*'];
+  return before.flatMap((start) => after.map((end) => `${start}${term}${end}`));
+};
+
+// GLOB patterns for a term that must match whole, or null for one matched anywhere. Terms are
+// letters and digits, joined in a number by `.`, `,` or `:`, none of which GLOB treats specially.
+const wholeTermPatterns = (term: string): string[] | null => {
+  if (NUMBER_TERM.test(term)) return numberPatterns(term);
+  if (!WHOLE_WORD_TERM.test(term)) return null;
+  // GLOB folds no case at all.
+  const letters = Array.from(term, (character) =>
+    /[a-z]/.test(character) ? `[${character.toUpperCase()}${character}]` : character,
+  ).join('');
+  return [`*[^A-Za-z0-9]${letters}[^A-Za-z0-9]*`];
+};
+
+// Escape LIKE wildcards so a term such as "50%" matches literally.
+const escapeLike = (text: string): string => text.replace(/[\\%_]/g, '\\$&');
+
+const likeAny = (column: SQLWrapper, patterns: string[]): SQL =>
+  sql`(${sql.join(
+    patterns.map((pattern) => sql`${column} LIKE ${pattern} ESCAPE '\\'`),
+    sql` OR `,
+  )})`;
+
+// Search terms arrive lowercased. SQLite's LIKE folds ASCII case only, so a term with other letters
+// also looks for its capitalised form ("Übergabe" heading a title).
+const chatTermMatcher = (
+  term: string,
+  wordStartsAfter: readonly string[] = WORD_STARTS_AFTER,
+): ((column: SQLWrapper) => SQL) => {
+  const globs = wholeTermPatterns(term);
+  if (globs) {
+    // The GLOBs run over a padded copy of the column, so a term at its start or end meets a
+    // boundary too. That copy and the GLOBs cost several times a LIKE, so a LIKE rules out the
+    // rows that don't hold the term at all first.
+    return (column) =>
+      sql`(${likeAny(column, [`%${escapeLike(term)}%`])} AND (${sql.join(
+        globs.map((pattern) => sql`(' ' || ${column} || ' ') GLOB ${pattern}`),
+        sql` OR `,
+      )}))`;
+  }
+
+  const capitalised = `${term.charAt(0).toUpperCase()}${term.slice(1)}`;
+  const forms = (
+    /\P{ASCII}/u.test(term) && capitalised !== term ? [term, capitalised] : [term]
+  ).map(escapeLike);
+  const anywhere = forms.map((form) => `%${form}%`);
+  if (!LATIN_WORD_TERM.test(term)) return (column) => likeAny(column, anywhere);
+
+  // The single LIKE rules out most notes before the word starts are looked for.
+  const wordStart = forms.flatMap((form) => [
+    `${form}%`,
+    ...wordStartsAfter.map((before) => `%${escapeLike(before)}${form}%`),
+  ]);
+  return (column) =>
+    sql`(${likeAny(column, anywhere)} AND (${likeAny(column, wordStart)} OR ${followsCjk(column, term)}))`;
+};
+
+interface ScoredChatNote {
+  id: number;
+  recency: string;
+  /** A digit per term: 2 when it matches the title, 1 elsewhere in the note, 0 nowhere. */
+  matches: string;
+}
+
+// A term counts for less the more of the notes searched hold it, so a word in most of them
+// ("answers", "time") weighs little next to the one naming the topic. A note is kept only when it
+// scores at least half as well as the best one: one sharing only a common word with the question
+// is dropped rather than sent, while notes on equally rare topics ("pricing", "hiring") all stay.
+// The weight never reaches zero, so a library where every note holds the term still finds them.
+const rankByRarity = (
+  rows: ScoredChatNote[],
+  searched: number,
+  limit: number,
+): { id: number; total: number }[] => {
+  const flags = rows.map((row) => Array.from(row.matches, Number));
+  const weights = flags[0].map((_, term) => {
+    const holding = flags.filter((noteFlags) => noteFlags[term] > 0).length;
+    return holding === 0 ? 0 : Math.log(1 + searched / holding);
+  });
+  const scores = flags.map((noteFlags) =>
+    noteFlags.reduce((score, flag, term) => score + flag * weights[term], 0),
+  );
+  const best = Math.max(...scores);
+  const kept = rows
+    .map((row, index) => ({ id: row.id, recency: row.recency, score: scores[index] }))
+    .filter(({ score }) => score >= best / 2)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.recency === b.recency) return 0;
+      return a.recency < b.recency ? 1 : -1;
+    });
+  return kept.slice(0, limit).map(({ id }) => ({ id, total: kept.length }));
+};
+
+// Notes carry SQLite's "YYYY-MM-DD HH:MM:SS" (UTC) or the server's ISO timestamps, so both sides go
+// through datetime() to compare instants rather than strings.
+const createdIn = ({ start, end, meetingsOnly }: ChatNoteWindow): SQL | undefined =>
+  and(
+    sql`datetime(${notes.createdAt}) >= datetime(${start.toISOString()})`,
+    sql`datetime(${notes.createdAt}) < datetime(${end.toISOString()})`,
+    // An uploaded recording is a meeting too, as the note editor treats it.
+    meetingsOnly ? inArray(notes.noteType, ['meeting', 'upload']) : undefined,
+  );
 
 export class LocalNotesRepository implements NotesRepository {
   private readonly database: NotesDb;
@@ -558,6 +735,113 @@ export class LocalNotesRepository implements NotesRepository {
     return this.database.select().from(notes).where(condition).orderBy(desc(notes.updatedAt)).all();
   }
 
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes {
+    const { window } = options;
+    const visible = and(
+      isNull(notes.deletedAt),
+      eq(notes.leftTeam, 0),
+      options.includePrivate ? undefined : eq(notes.isPrivate, 0),
+      window ? createdIn(window) : undefined,
+    );
+    // A period's notes are listed by when they were made, since editing an old meeting doesn't
+    // make it one of this week's.
+    const recency = window ? sql`datetime(${notes.createdAt})` : sql`${notes.updatedAt}`;
+    // Only the ids are ranked and counted, so the heavy columns (content, transcript JSON) are read
+    // for the notes returned alone. The count runs before the limit, so it counts every match, or
+    // with no terms every note in the period.
+    const total = sql<number>`count(*) OVER ()`;
+    const ranked =
+      terms.length === 0
+        ? this.database
+            .select({ id: notes.id, total })
+            .from(notes)
+            .where(visible)
+            .orderBy(desc(recency))
+            .limit(options.limit)
+            .all()
+        : this.rankChatMatches(terms, { visible, recency, limit: options.limit });
+    if (ranked.length === 0) return { notes: [], total: 0 };
+
+    const ids = ranked.map(({ id }) => id);
+    const rows = new Map(
+      this.database
+        .select()
+        .from(notes)
+        .where(inArray(notes.id, ids))
+        .all()
+        .map((note) => [note.id, note]),
+    );
+    const found = { notes: ranked.flatMap(({ id }) => rows.get(id) ?? []), total: ranked[0].total };
+    if (terms.length === 0) return found;
+    return { ...found, transcriptMatchIds: this.findTranscriptMatches(ids, terms) };
+  }
+
+  // Scoring stops at a note's first matching field, so whether a note that matched in its title or
+  // text also matched in its transcript is asked again, for the few notes returned alone.
+  private findTranscriptMatches(noteIds: number[], terms: string[]): number[] {
+    return this.database
+      .selectDistinct({ noteId: transcriptSegments.noteId })
+      .from(transcriptSegments)
+      .where(
+        and(
+          inArray(transcriptSegments.noteId, noteIds),
+          isNull(transcriptSegments.deletedAt),
+          or(
+            ...terms.map((term) =>
+              chatTermMatcher(term, SPOKEN_WORD_STARTS_AFTER)(transcriptSegments.text),
+            ),
+          ),
+        ),
+      )
+      .all()
+      .map(({ noteId }) => noteId);
+  }
+
+  private rankChatMatches(
+    terms: string[],
+    query: { visible: SQL | undefined; recency: SQL; limit: number },
+  ): { id: number; total: number }[] {
+    const termMatches = terms.map((term) => {
+      const matches = chatTermMatcher(term);
+      const spoken = chatTermMatcher(term, SPOKEN_WORD_STARTS_AFTER);
+      // notes.transcript is JSON, whose keys ("source", "text", "speaker") would match every
+      // meeting, so a transcript is searched through its segments' text.
+      const inTranscript = sql`EXISTS (
+        SELECT 1 FROM ${transcriptSegments}
+        WHERE ${transcriptSegments.noteId} = ${notes.id}
+          AND ${transcriptSegments.deletedAt} IS NULL
+          AND ${spoken(transcriptSegments.text)}
+      )`;
+      return sql`(CASE WHEN ${matches(notes.title)} THEN 2
+        WHEN ${matches(notes.content)} OR ${matches(notes.enhancedContent)} OR ${inTranscript} THEN 1
+        ELSE 0 END)`;
+    });
+    // Each note is scored once, as a digit per term. A LIMIT, even one that keeps every row, stops
+    // SQLite inlining the subquery or pushing the filter into it, either of which would run every
+    // LIKE and EXISTS again.
+    const scored = this.database
+      .select({
+        id: notes.id,
+        recency: sql<string>`${query.recency}`.as('recency'),
+        matches: sql<string>`CAST(${sql.join(termMatches, sql` || `)} AS TEXT)`.as('matches'),
+      })
+      .from(notes)
+      .where(query.visible)
+      .limit(Number.MAX_SAFE_INTEGER)
+      .as('scored');
+    const rows = this.database
+      .select()
+      .from(scored)
+      .where(sql`${scored.matches} GLOB '*[12]*'`)
+      .all();
+    if (rows.length === 0) return [];
+    // Counted apart: a window over the scored rows makes SQLite score every note again.
+    const searched =
+      this.database.select({ searched: count() }).from(notes).where(query.visible).get()
+        ?.searched ?? rows.length;
+    return rankByRarity(rows, searched, query.limit);
+  }
+
   getActions(): Action[] {
     return this.database
       .select()
@@ -829,6 +1113,7 @@ export class LocalNotesRepository implements NotesRepository {
           // space, the team pass passes the space it resolved.
           spaceId: options.spaceId ?? this.getPrivateSpaceId(),
           ...this.remoteOwnershipValues(remote, options.applyOwnership),
+          ...(remote.created_at ? { createdAt: remote.created_at } : {}),
           cloudUpdatedAt: remote.updated_at,
           updatedAt: remote.updated_at,
         })
@@ -844,8 +1129,7 @@ export class LocalNotesRepository implements NotesRepository {
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      this.hardDeleteNote(local.id);
       return;
     }
 
@@ -862,14 +1146,28 @@ export class LocalNotesRepository implements NotesRepository {
     localFolderId: number | null,
     options: ApplyRemoteNoteOptions & { forceTranscript?: boolean } = {},
   ): void {
+    // A note filed in a folder the server has never seen reaches it unfiled, so a null
+    // coming back keeps the note in that folder. While the folder is still on its way up,
+    // the note is queued again, and pushNotes sends it once the folder has a cloud id.
+    // A team pass that moves the note to another space is followed: the folder stays behind.
+    const folderUnknownToServer =
+      remote.folder_id == null ? this.getFolderUnknownToServer(local.folderId) : null;
+    const unsyncedFolder =
+      options.spaceId === undefined || folderUnknownToServer?.spaceId === options.spaceId
+        ? folderUnknownToServer
+        : null;
     this.database
       .update(notes)
       .set({
         title: remote.title ?? 'Untitled',
         content: remote.content,
-        folderId: localFolderId,
+        folderId: unsyncedFolder ? unsyncedFolder.id : localFolderId,
         noteType: remote.note_type,
-        sourceFile: remote.source_file,
+        // Device-local recordings push as null, so a null coming back must not erase the
+        // path this device still plays and reprocesses from.
+        sourceFile:
+          remote.source_file ??
+          (isManagedMeetingAudioUri(local.id, local.sourceFile) ? local.sourceFile : null),
         audioDurationSeconds: remote.audio_duration_seconds,
         calendarEventId: remote.calendar_event_id ?? null,
         participants: remote.participants ?? null,
@@ -878,17 +1176,21 @@ export class LocalNotesRepository implements NotesRepository {
         clientNoteId: remote.client_note_id ?? local.clientNoteId,
         remoteId: remote.id,
         deletedAt: null,
-        pendingSync: 0,
+        pendingSync: isFolderAwaitingUpload(unsyncedFolder) ? 1 : 0,
         conflictServerNote: null,
         // Only the team pass relocates an existing note; without an explicit
         // space the row keeps whatever space it already sits in.
         ...(options.spaceId !== undefined ? { spaceId: options.spaceId } : {}),
         ...this.remoteOwnershipValues(remote, options.applyOwnership),
+        // Also repairs rows pulled before created_at synced, which carry their pull time.
+        ...(remote.created_at ? { createdAt: remote.created_at } : {}),
         cloudUpdatedAt: remote.updated_at,
         updatedAt: remote.updated_at,
       })
       .where(eq(notes.id, local.id))
       .run();
+
+    this.clearSyncState(pushRejectedKey(local.id));
 
     // Rebuild the transcript when the server sent a different one. Normally
     // gated on !hasDirtyTranscript (un-pushed local edits are authoritative
@@ -938,6 +1240,16 @@ export class LocalNotesRepository implements NotesRepository {
 
   getFolderByRemoteId(remoteId: string): Folder | null {
     return this.database.select().from(folders).where(eq(folders.remoteId, remoteId)).get() ?? null;
+  }
+
+  private getFolderUnknownToServer(folderId: number | null): Folder | null {
+    if (folderId == null) return null;
+    const folder = this.database
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, folderId), isNull(folders.deletedAt)))
+      .get();
+    return folder && !folder.remoteId ? folder : null;
   }
 
   private resolveFolderByRemoteId(serverFolderId: string | null): number | null {
@@ -1009,6 +1321,7 @@ export class LocalNotesRepository implements NotesRepository {
     remoteId: string,
     serverUpdatedAt: string,
     cloudUpdatedAt: string | null = serverUpdatedAt,
+    serverCreatedAt?: string,
   ): void {
     const current = this.getNoteById(pushed.id);
     // Forked or re-identified while the request was in flight: the ack names
@@ -1021,22 +1334,30 @@ export class LocalNotesRepository implements NotesRepository {
     // record the server revision so the follow-up push PATCHes the right base
     // instead of re-creating the note.
     const unchanged = NOTE_PUSH_ACK_FIELDS.every((field) => current[field] === pushed[field]);
+    const createdAt = serverCreatedAt ? { createdAt: serverCreatedAt } : {};
     this.database
       .update(notes)
       .set(
         unchanged
-          ? { remoteId, pendingSync: 0, updatedAt: serverUpdatedAt, cloudUpdatedAt }
-          : { remoteId, cloudUpdatedAt },
+          ? { remoteId, pendingSync: 0, updatedAt: serverUpdatedAt, cloudUpdatedAt, ...createdAt }
+          : { remoteId, cloudUpdatedAt, ...createdAt },
       )
       .where(eq(notes.id, pushed.id))
       .run();
+    if (unchanged) this.clearSyncState(pushRejectedKey(pushed.id));
   }
 
   markNoteTerminal(localId: number): void {
     // Clear pendingSync so the row stops re-attempting; preserve the local state
     // so the user still sees their attempted change. They can edit it to fix and
     // retry — that will re-flag pending.
-    this.database.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    this.database.transaction((tx) => {
+      tx.insert(syncState)
+        .values({ key: pushRejectedKey(localId), value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes).set({ pendingSync: 0 }).where(eq(notes.id, localId)).run();
+    });
   }
 
   dropNotePushAttempt(localId: number): void {
@@ -1044,11 +1365,17 @@ export class LocalNotesRepository implements NotesRepository {
     // whatever it was before — the next pull carries the truth. Clearing
     // cloud_updated_at alongside pendingSync means that pull re-seeds the sync
     // base instead of leaving a base this device can no longer trust.
-    this.database
-      .update(notes)
-      .set({ pendingSync: 0, cloudUpdatedAt: null })
-      .where(eq(notes.id, localId))
-      .run();
+    this.database.transaction((tx) => {
+      // A cleared queue flag alone must never be mistaken for uploaded content.
+      tx.insert(syncState)
+        .values({ key: pushRejectedKey(localId), value: '1' })
+        .onConflictDoUpdate({ target: syncState.key, set: { value: '1' } })
+        .run();
+      tx.update(notes)
+        .set({ pendingSync: 0, cloudUpdatedAt: null })
+        .where(eq(notes.id, localId))
+        .run();
+    });
   }
 
   parkNoteConflict(localId: number, serverNote: RemoteNote): void {
@@ -1125,10 +1452,8 @@ export class LocalNotesRepository implements NotesRepository {
       // "Use server's copy" must mean accepting that, not resurrecting a
       // zombie local row that still points remoteId at a gone server note —
       // the delta-cursor pull may never re-deliver that tombstone once our
-      // watermark has moved past it. Mirrors applyRemoteNote's own tombstone
-      // path (deleteNoteChildrenAndAudio + hard delete).
-      this.deleteNoteChildrenAndAudio(local.id);
-      this.database.delete(notes).where(eq(notes.id, local.id)).run();
+      // watermark has moved past it. Mirrors applyRemoteNote's tombstone path.
+      this.hardDeleteNote(local.id);
       return;
     }
     // Bypasses applyRemoteNote's pendingSync/conflict guards on purpose — the
@@ -1144,7 +1469,12 @@ export class LocalNotesRepository implements NotesRepository {
     this.database.delete(folders).where(eq(folders.id, localId)).run();
   }
 
+  isNotePushRejected(localId: number): boolean {
+    return this.getSyncState(pushRejectedKey(localId)) !== null;
+  }
+
   hardDeleteNote(localId: number): void {
+    this.clearSyncState(pushRejectedKey(localId));
     this.deleteNoteChildrenAndAudio(localId);
     this.database.delete(notes).where(eq(notes.id, localId)).run();
   }
@@ -1436,9 +1766,22 @@ export class LocalNotesRepository implements NotesRepository {
 
   upsertSpeakers(noteId: number, rows: NewSpeaker[]): void {
     this.database.transaction((tx) => {
+      // Numbered after the note's existing speakers, so a re-diarization that adds one
+      // never shows a second "Speaker 1".
+      const nextSortOrder = tx
+        .select({ sortOrder: speakers.sortOrder })
+        .from(speakers)
+        .where(and(eq(speakers.noteId, noteId), isNull(speakers.deletedAt)))
+        .all()
+        .reduce((next, row) => Math.max(next, row.sortOrder + 1), 0);
       rows.forEach((row, index) => {
         tx.insert(speakers)
-          .values({ ...row, noteId, sortOrder: row.sortOrder ?? index, pendingSync: 1 })
+          .values({
+            ...row,
+            noteId,
+            sortOrder: row.sortOrder ?? nextSortOrder + index,
+            pendingSync: 1,
+          })
           .run();
       });
     });
@@ -1566,6 +1909,49 @@ export class LocalNotesRepository implements NotesRepository {
     }
   }
 
+  createOwnerProfileForSpeaker(
+    speakerId: number,
+    profileInput: Omit<NewSpeakerProfile, 'isOwner'>,
+    speakerPatch: Partial<Speaker>,
+  ): SpeakerProfile {
+    this.validateSpeakerProfileEmbedding(profileInput.embedding);
+
+    let result: { profile: SpeakerProfile; noteId: number };
+    try {
+      result = this.database.transaction((tx) => {
+        const row = tx
+          .insert(speakerProfiles)
+          .values({
+            ...profileInput,
+            isOwner: 1,
+            embedding: encodeSpeakerProfileEmbedding(profileInput.embedding),
+          })
+          .returning()
+          .get();
+        const profile = this.mapSpeakerProfile(row);
+        const [linked] = tx
+          .update(speakers)
+          .set({
+            ...speakerPatch,
+            profileId: profile.id,
+            pendingSync: 1,
+            updatedAt: sql`datetime('now')`,
+          })
+          .where(and(eq(speakers.id, speakerId), isNull(speakers.deletedAt)))
+          .returning({ noteId: speakers.noteId })
+          .all();
+        // Throwing rolls back the insert, so no owner profile is saved without its speaker.
+        if (!linked) throw new Error(`Speaker ${speakerId} not found`);
+        return { profile, noteId: linked.noteId };
+      });
+    } catch (error) {
+      mapSpeakerProfileOwnerConstraint(error);
+    }
+
+    this.markNoteTranscriptDirty(result.noteId);
+    return result.profile;
+  }
+
   updateSpeakerProfile(id: number, updates: Partial<SpeakerProfile>): void {
     const { embedding, ...rest } = updates;
     delete rest.id;
@@ -1653,6 +2039,14 @@ export class LocalNotesRepository implements NotesRepository {
       .update(notes)
       .set({ ...updates, updatedAt: sql`datetime('now')` })
       .where(eq(notes.id, noteId))
+      .run();
+  }
+
+  restoreMeetingRecordingPath(noteId: number, sourceFile: string): void {
+    this.database
+      .update(notes)
+      .set({ sourceFile })
+      .where(and(eq(notes.id, noteId), isNull(notes.sourceFile)))
       .run();
   }
 

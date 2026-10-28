@@ -1,18 +1,37 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check, Search, FileText, ChevronDown, ChevronRight, CircleAlert } from "../icons";
+import {
+  Copy,
+  CopyRounded,
+  Check,
+  Search,
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+} from "../icons";
 import { cn } from "../lib/utils";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
-import type { ToolCallInfo } from "./types";
+import { TechnicalErrorDetails } from "../ui/TechnicalErrorDetails";
+import { openProviderSettings } from "../../utils/describeProviderError";
+import type { MessageError, ToolCallInfo } from "./types";
 import { extractNoteCards } from "./noteCards";
+import { helpAnswerPlainText } from "./helpEvidenceText";
+import { HelpEvidence } from "./GroundedHelpEvidence";
+import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
+import { ApprovalCard } from "./ApprovalCard";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 
 interface ChatMessageProps {
+  messageId: string;
   role: "user" | "assistant";
   content: string;
   isStreaming: boolean;
   toolCalls?: ToolCallInfo[];
+  error?: MessageError;
   onOpenNote?: (noteId: number) => void;
+  plain?: boolean;
 }
 
 function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
@@ -120,6 +139,15 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
   );
 }
 
+// Subscribes to its own approval entry only, so editing one card doesn't
+// re-render every message in the thread.
+function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: ToolCallInfo }) {
+  const approval = useConnectorApprovalStore(
+    (state) => state.entries[approvalKey(messageId, toolCall.id)]
+  );
+  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
+}
+
 function NoteCard({
   noteId,
   title,
@@ -162,19 +190,28 @@ function NoteCard({
   );
 }
 
-export function ChatMessage({
+// Memoized: hosts re-render on every keystroke in their composer (or, for note chat, in
+// the note), and only the streaming reply's props change between those renders.
+export const ChatMessage = memo(function ChatMessage({
+  messageId,
   role,
   content,
   isStreaming,
   toolCalls,
+  error,
   onOpenNote,
+  plain = false,
 }: ChatMessageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
+
+  const helpEvidence = role === "assistant" ? extractHelpEvidence(toolCalls) : null;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(
+        helpAnswerPlainText(content, helpEvidence, t, i18n?.resolvedLanguage)
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -191,18 +228,22 @@ export function ChatMessage({
         <div
           data-chat-bubble
           className={cn(
-            "max-w-[80%] px-3 py-2 rounded-lg rounded-ee-sm",
-            "bg-primary/90 text-primary-foreground",
-            "text-[13px] leading-relaxed"
+            "max-w-[80%] text-[13px] leading-relaxed",
+            plain
+              ? "rounded-2xl rounded-ee-md bg-foreground/[0.07] px-3.5 py-2 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+              : "rounded-lg rounded-ee-sm bg-primary/90 px-3 py-2 text-primary-foreground"
           )}
         >
-          <span dir="auto">{content}</span>
+          <span dir="auto" className="whitespace-pre-wrap">
+            {content}
+          </span>
         </div>
       </div>
     );
   }
 
-  const hasToolCalls = toolCalls && toolCalls.length > 0;
+  const visibleToolCalls = toolCalls?.filter((tc) => tc.name !== "grounded_product_help");
+  const hasToolCalls = visibleToolCalls && visibleToolCalls.length > 0;
   const hasContent = content.length > 0;
   const noteCards = extractNoteCards(toolCalls, t("notes.list.untitledNote"));
 
@@ -214,9 +255,10 @@ export function ChatMessage({
       <div
         data-chat-bubble
         className={cn(
-          "max-w-[85%] px-3 py-2 rounded-lg rounded-es-sm",
-          "bg-surface-1 border border-border/70 text-foreground",
-          "text-[13px] leading-relaxed"
+          "text-[13px] leading-relaxed text-foreground",
+          plain
+            ? "max-w-full px-1 py-1"
+            : "max-w-[85%] rounded-lg rounded-es-sm border border-border/70 bg-surface-1 px-3 py-2"
         )}
       >
         {hasToolCalls && (
@@ -225,8 +267,8 @@ export function ChatMessage({
               (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
             )}
           >
-            {toolCalls.map((tc) => (
-              <ToolCallStep key={tc.id} toolCall={tc} />
+            {visibleToolCalls.map((tc) => (
+              <ToolCallItem key={tc.id} messageId={messageId} toolCall={tc} />
             ))}
           </div>
         )}
@@ -237,6 +279,8 @@ export function ChatMessage({
             className="text-[13px] leading-relaxed [&_p]:text-[13px] [&_li]:text-[13px]"
           />
         )}
+
+        {helpEvidence && <HelpEvidence evidence={helpEvidence} />}
 
         {isStreaming && hasContent && (
           <span
@@ -250,6 +294,17 @@ export function ChatMessage({
             {t("agentMode.input.thinking")}...
           </span>
         )}
+
+        {error?.settingsTarget && (
+          <button
+            type="button"
+            onClick={() => openProviderSettings(error.settingsTarget!)}
+            className="mt-1.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+          >
+            {t("providerErrors.openSettings")}
+          </button>
+        )}
+        {error?.technicalDetails && <TechnicalErrorDetails details={error.technicalDetails} />}
 
         {noteCards.length > 0 && !isStreaming && (
           <div>
@@ -265,21 +320,31 @@ export function ChatMessage({
         )}
 
         {hasContent && !isStreaming && (
-          <div className="flex justify-start mt-1.5 -mb-0.5">
+          <div className={cn("flex justify-start mt-1.5", !plain && "-mb-0.5")}>
             <button
+              type="button"
               onClick={handleCopy}
+              aria-label={t(copied ? "common.copied" : "common.copy")}
+              title={t(copied ? "common.copied" : "common.copy")}
               className={cn(
-                "p-1 rounded-sm",
-                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
-                "opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
+                plain
+                  ? // Always there in the note chat, not only on hover.
+                    "flex size-7 items-center justify-center rounded-full text-foreground/45 hover:bg-foreground/[0.07] hover:text-foreground dark:hover:bg-white/[0.08] transition-colors duration-150"
+                  : "p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               )}
             >
-              {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+              {copied ? (
+                <Check size={plain ? 15 : 12} className="text-emerald-500" />
+              ) : plain ? (
+                <CopyRounded size={15} />
+              ) : (
+                <Copy size={12} />
+              )}
             </button>
           </div>
         )}
       </div>
     </div>
   );
-}
+});

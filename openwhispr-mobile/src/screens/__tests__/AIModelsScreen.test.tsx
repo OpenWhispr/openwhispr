@@ -1,0 +1,305 @@
+import React from 'react';
+import { Alert, AppState, Platform, type AppStateStatus } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+
+const mockPush = jest.fn();
+const mockClearCredentials = jest.fn().mockResolvedValue(undefined);
+let mockActiveMode = 'cloud';
+let mockConfig: Record<string, unknown> | null = null;
+let mockUser: { id: string; isAnonymous: boolean } | null = null;
+jest.mock('@/store/useAuthStore', () => ({
+  useAuthStore: (selector: (state: unknown) => unknown) => selector({ user: mockUser }),
+}));
+const mockCredentialStatus = jest.fn();
+let mockCredentialListener: (() => void) | null = null;
+const MockText = require('react-native').Text;
+
+jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('expo-router', () => ({ router: { push: (...args: unknown[]) => mockPush(...args) } }));
+jest.mock('@react-navigation/elements', () => ({ useHeaderHeight: () => 0 }));
+jest.mock('@/components/ui/Toast', () => ({
+  Toast: ({ message, visible, type }: { message: string; visible: boolean; type: string }) =>
+    visible ? <MockText testID={`toast-${type}`}>{message}</MockText> : null,
+}));
+jest.mock('@/store/useConfigStore', () => ({
+  useConfigStore: (selector: (state: unknown) => unknown) => selector({ config: mockConfig }),
+}));
+jest.mock('@/store/useProcessingModeStore', () => ({
+  useProcessingModeStore: (selector: (state: unknown) => unknown) =>
+    selector({ activeMode: mockActiveMode }),
+}));
+jest.mock('@/hooks/useConfigToggle', () => ({ useConfigToggle: () => jest.fn() }));
+const mockReadiness = jest.fn();
+jest.mock('@/lib/localReasoning', () => ({
+  getLocalReasoningReadiness: (...args: unknown[]) => mockReadiness(...args),
+}));
+jest.mock('@/services/providers/ProviderCredentials', () => ({
+  clearProviderCredentials: (...args: unknown[]) => mockClearCredentials(...args),
+  getProviderCredentialReference: jest.fn(async (providerId: string) => `provider.${providerId}`),
+  getProviderCredentialStatus: (...args: unknown[]) => mockCredentialStatus(...args),
+  subscribeProviderCredentialChanges: (listener: () => void) => {
+    mockCredentialListener = listener;
+    return () => {
+      mockCredentialListener = null;
+    };
+  },
+}));
+
+import AIModelsScreen from '../AIModelsScreen';
+
+const originalPlatform = Platform.OS;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockActiveMode = 'cloud';
+  mockConfig = null;
+  mockUser = null;
+  Platform.OS = 'ios';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
+});
+
+afterAll(() => {
+  Platform.OS = originalPlatform;
+});
+
+it('shows what each workflow runs, naming the provider or on-device model', async () => {
+  mockActiveMode = 'providers';
+  mockConfig = {
+    defaultMode: 'providers',
+    inference: {
+      dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      upload: { mode: 'local', modelId: 'whisper-base' },
+      notes: { mode: 'openwhispr' },
+      noteChat: { mode: 'providers', providerId: 'custom', modelId: 'llama' },
+      agent: { mode: 'providers', providerId: 'custom', modelId: 'llama' },
+    },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.getByText('OpenAI')).toBeTruthy();
+  expect(screen.getByText('Whisper base')).toBeTruthy();
+  // Bring Your Own Key dictation skips cleanup until a provider is saved for it.
+  expect(screen.getByText('Not set')).toBeTruthy();
+  expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
+  expect(screen.getAllByText('Custom server')).toHaveLength(2);
+  expect(screen.queryByText(/Meeting/)).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('opens the tapped workflow on its own page', async () => {
+  render(<AIModelsScreen />);
+  fireEvent.press(screen.getByText('Text Cleanup'));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/(account)/ai-workflow',
+    params: { scope: 'cleanup' },
+  });
+  await screen.findByText(/Status: Ready/);
+});
+
+it('keeps the meeting speaker model with the other on-device settings', async () => {
+  render(<AIModelsScreen />);
+  fireEvent.press(screen.getByText('Speaker Separation'));
+  expect(mockPush).toHaveBeenCalledWith('/(account)/diarization-model');
+  expect(screen.getByText('Local Apple Intelligence')).toBeTruthy();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('says Apple Intelligence is downloading its model while it is not ready', async () => {
+  mockReadiness.mockResolvedValue({ status: 'modelNotReady', tokenCounting: false });
+  render(<AIModelsScreen />);
+  await screen.findByText(/Status: Downloading model/);
+});
+
+it('removes every saved provider key after confirmation', async () => {
+  jest
+    .spyOn(Alert, 'alert')
+    .mockImplementation((_title, _message, buttons) => buttons?.[1]?.onPress?.());
+  render(<AIModelsScreen />);
+  fireEvent.press(screen.getByText('Remove All Provider Keys'));
+  expect(await screen.findByTestId('toast-success')).toHaveTextContent(
+    'All provider keys were removed.',
+  );
+  expect(mockClearCredentials).toHaveBeenCalledTimes(1);
+});
+
+it('has no provider keys to remove on Android', async () => {
+  Platform.OS = 'android';
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Dictation')).toBeTruthy();
+  expect(screen.queryByText('Remove All Provider Keys')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('shows what each workflow runs while Local Mode is on', async () => {
+  mockActiveMode = 'private';
+  mockUser = { id: 'u', isAnonymous: false };
+  mockConfig = {
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local', modelId: 'whisper-base' },
+      upload: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      cleanup: { mode: 'openwhispr' },
+    },
+  };
+  render(<AIModelsScreen />);
+  // A picked model keeps its name; uploads and cleanup run what is saved for them.
+  expect(screen.getByText('Whisper base')).toBeTruthy();
+  expect(screen.getByText('OpenAI')).toBeTruthy();
+  // Cleanup, plus note formatting, note chat and the voice assistant, which run their own choices
+  // in Local Mode: OpenWhispr Cloud when unset.
+  expect(screen.getAllByText('OpenWhispr Cloud')).toHaveLength(4);
+  await screen.findByText(/Status: Ready/);
+});
+
+it('says a saved Cloud cleanup is skipped in Local Mode without an account', async () => {
+  mockActiveMode = 'private';
+  mockUser = { id: 'a', isAnonymous: true };
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' }, cleanup: { mode: 'openwhispr' } },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Skipped · Sign in')).toBeTruthy();
+  await screen.findByText(/Status: Ready/);
+});
+
+// With nothing saved, Local Mode uploads to Cloud with any session and cleans there when signed in.
+// Note formatting, note chat and the voice assistant are always OpenWhispr Cloud rows.
+it.each([
+  ['no session', 3, null],
+  ['an anonymous session', 4, { id: 'a', isAnonymous: true }],
+  ['a signed-in account', 5, { id: 'u', isAnonymous: false }],
+])('with nothing saved in Local Mode for %s, shows %d Cloud rows', async (_label, count, user) => {
+  mockUser = user;
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  render(<AIModelsScreen />);
+  expect(screen.getAllByText('OpenWhispr Cloud')).toHaveLength(count);
+  await screen.findByText(/Status: Ready/);
+});
+
+it('names a cleanup provider saved in Local Mode', async () => {
+  mockActiveMode = 'private';
+  mockConfig = {
+    defaultMode: 'private',
+    inference: {
+      dictation: { mode: 'local' },
+      cleanup: { mode: 'providers', providerId: 'openai', modelId: 'gpt-5-mini' },
+    },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.getByText('OpenAI')).toBeTruthy();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('shows On-Device cleanup as running in On-Device mode', async () => {
+  mockActiveMode = 'private';
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { dictation: { mode: 'local' }, cleanup: { mode: 'local' } },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.queryByText('Skipped')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('says cleanup is skipped, and why, while Apple Intelligence is off', async () => {
+  mockReadiness.mockResolvedValue({ status: 'appleIntelligenceOff', tokenCounting: false });
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  render(<AIModelsScreen />);
+  expect(await screen.findByText('Skipped · Apple Intelligence off')).toBeTruthy();
+});
+
+// Apple Intelligence is turned on in iOS Settings, outside the app.
+it('stops saying skipped once Apple Intelligence is on when the app comes back', async () => {
+  mockReadiness.mockResolvedValue({ status: 'appleIntelligenceOff', tokenCounting: false });
+  mockActiveMode = 'private';
+  mockConfig = { defaultMode: 'private', inference: { dictation: { mode: 'local' } } };
+  render(<AIModelsScreen />);
+  expect(await screen.findByText('Skipped · Apple Intelligence off')).toBeTruthy();
+
+  const onAppState = (AppState.addEventListener as jest.Mock).mock.calls.at(-1)?.[1] as (
+    state: AppStateStatus,
+  ) => void;
+  mockReadiness.mockResolvedValue({ status: 'ready', tokenCounting: false });
+  await act(async () => onAppState('active'));
+
+  expect(screen.queryByText('Skipped · Apple Intelligence off')).toBeNull();
+});
+
+it('shows provider note chat as On-Device, which answers it on this iPhone first', async () => {
+  mockActiveMode = 'private';
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockConfig = {
+    defaultMode: 'private',
+    inference: { noteChat: { mode: 'providers', providerId: 'groq', modelId: 'llama' } },
+  };
+  render(<AIModelsScreen />);
+  expect(screen.queryByText('Groq')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('flags a provider workflow whose key was removed', async () => {
+  mockActiveMode = 'providers';
+  mockConfig = {
+    defaultMode: 'providers',
+    inference: {
+      dictation: { mode: 'providers', providerId: 'openai', modelId: 'whisper-1' },
+      cleanup: { mode: 'providers', providerId: 'groq', modelId: 'llama' },
+    },
+  };
+  mockCredentialStatus.mockImplementation(async (reference: string) => ({
+    reference,
+    isConfigured: reference !== 'provider.openai',
+  }));
+  render(<AIModelsScreen />);
+  expect(await screen.findByText('OpenAI · Key missing')).toBeTruthy();
+  expect(screen.getByText('Groq')).toBeTruthy();
+
+  mockCredentialStatus.mockResolvedValue({ isConfigured: false });
+  mockCredentialListener?.();
+  expect(await screen.findByText('Groq · Key missing')).toBeTruthy();
+});
+
+it.each([
+  ['unsupportedDevice', 'Not supported on this iPhone'],
+  ['unsupportedOS', 'Needs iOS 26'],
+])('says when this iPhone cannot run Apple Intelligence (%s)', async (status, label) => {
+  mockReadiness.mockResolvedValue({ status, tokenCounting: false });
+  render(<AIModelsScreen />);
+  expect(await screen.findByText(new RegExp(`Status: ${label}\\s`))).toBeTruthy();
+});
+
+it('says when the iPhone is set to a language Apple Intelligence does not support', async () => {
+  mockReadiness.mockResolvedValue({
+    status: 'unsupportedLanguage',
+    deviceLanguage: 'English (South Africa)',
+    tokenCounting: false,
+  });
+  render(<AIModelsScreen />);
+  expect(await screen.findByText(/Status: Language not supported\s/)).toBeTruthy();
+});
+
+// Dictation owns Local Mode, so AI Models has no switch of its own.
+it('has no Local Mode switch', async () => {
+  render(<AIModelsScreen />);
+  expect(screen.queryByLabelText('Local Mode')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});
+
+it('puts the Apple Intelligence status on its own line', async () => {
+  render(<AIModelsScreen />);
+  expect((await screen.findByText(/Status: Ready/)).props.children).toBe(
+    'Status: Ready\nRuns On-Device text workflows, and private and signed-out note generation.',
+  );
+});
+
+it('lists Chat and Voice Assistant as separate workflows', async () => {
+  render(<AIModelsScreen />);
+  expect(screen.getByText('Chat')).toBeTruthy();
+  expect(screen.getByText('Voice Assistant')).toBeTruthy();
+  expect(screen.queryByText('Chat & Voice Assistant')).toBeNull();
+  await screen.findByText(/Status: Ready/);
+});

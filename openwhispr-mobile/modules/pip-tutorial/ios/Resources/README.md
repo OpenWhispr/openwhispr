@@ -55,4 +55,4 @@ Save the resulting `keyboard-install.mp4` into this folder, then `npx expo prebu
 
 ## Behavior when missing
 
-If a video file is absent, `PipTutorial.start(name)` returns `false`. Callers fall back to the existing static `InstructionOverlay` (the in-app dark card on `KeyboardSetupStep`). No build break, no runtime error.
+If a video file is absent, `PipTutorial.start(name)` resolves `video_missing`, which `startKeyboardPipTutorial` reports to Sentry. Callers fall back to the existing static `InstructionOverlay` (the in-app dark card on `KeyboardIntroStep`). No build break, no runtime error.

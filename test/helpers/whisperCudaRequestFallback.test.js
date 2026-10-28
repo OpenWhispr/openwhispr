@@ -7,6 +7,7 @@ const {
   shouldFallbackToCpuAfterRequestError,
   shouldRetryAfterServerReplaced,
 } = require("../../src/helpers/whisperServer");
+const { CUDA_KERNEL_IMAGE_STDERR } = require("./harness/whisperServerStderr");
 
 const base = {
   isConnectionError: true,
@@ -97,7 +98,7 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-function createManager(port, { useCuda, useVulkan = false }) {
+function createManager(port, { useCuda, useVulkan = false, fallbackToVulkan = false }) {
   const manager = new WhisperServerManager();
   manager.ready = true;
   manager.hostname = "127.0.0.1";
@@ -106,8 +107,9 @@ function createManager(port, { useCuda, useVulkan = false }) {
   manager.useVulkan = useVulkan;
   manager.canConvert = true;
   manager.process = {};
+  manager._lastProcessInfo = () => ({ stderr: "", exitCode: null, signal: null });
   manager.modelPath = "/tmp/model.bin";
-  manager.lastStartOptions = { useCuda, useVulkan };
+  manager.lastStartOptions = { useCuda, useVulkan, fallbackToVulkan };
   manager._convertToWav = async (buffer) => buffer;
   return manager;
 }
@@ -154,6 +156,49 @@ test("falls back to CPU and retries once when the CUDA server dies mid-request",
   assert.equal(startCalls[0].options.useVulkan, false);
 });
 
+test("falls back to an available Vulkan pack when CUDA dies mid-request", async (t) => {
+  let manager;
+  let requestCount = 0;
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true, fallbackToVulkan: true });
+
+  const startCalls = [];
+  manager.start = async (modelPath, options) => {
+    startCalls.push({ modelPath, options });
+    manager.useCuda = false;
+    manager.useVulkan = true;
+    manager.ready = true;
+  };
+
+  let fallbackBackend = null;
+  manager.on("cuda-fallback", (details) => {
+    fallbackBackend = details.fallbackBackend;
+  });
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.equal(requestCount, 2);
+  assert.equal(fallbackBackend, "vulkan");
+  assert.equal(startCalls.length, 1);
+  assert.equal(startCalls[0].options.useCuda, false);
+  assert.equal(startCalls[0].options.useVulkan, true);
+  assert.equal(Object.hasOwn(startCalls[0].options, "fallbackToVulkan"), false);
+  assert.equal(manager.gpuFallbackActive, false);
+});
+
 test("falls back to CPU and emits gpu-fallback when a Vulkan server dies mid-request", async (t) => {
   let manager;
   let requestCount = 0;
@@ -193,6 +238,85 @@ test("falls back to CPU and emits gpu-fallback when a Vulkan server dies mid-req
   assert.equal(startCalls[0].options.useVulkan, false);
 });
 
+test("the mid-transcription fallback carries the crashed server's error line", async (t) => {
+  let manager;
+  let requestCount = 0;
+  // An earlier request's output; the abort is printed while serving this one
+  let stderr = "whisper_print_timings:    total time =   640.12 ms\n";
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      stderr += CUDA_KERNEL_IMAGE_STDERR;
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: true });
+  // What _doStart records for the server it spawned: its output and how it ended
+  manager._lastProcessInfo = () => ({ stderr, exitCode: null, signal: "SIGABRT" });
+  manager.start = async () => {
+    // The CPU restart spawns a new process, so the reason must be read before it
+    manager._lastProcessInfo = () => ({ stderr: "", exitCode: null, signal: null });
+    manager.useCuda = false;
+    manager.ready = true;
+  };
+
+  const events = [];
+  manager.on("cuda-fallback", (payload) => events.push(payload));
+
+  const result = await manager.transcribe(Buffer.from("audio"));
+
+  assert.equal(result.text, "hello");
+  assert.deepEqual(events, [
+    {
+      reason: "CUDA error: no kernel image is available for execution on the device",
+      fallbackBackend: "cpu",
+    },
+  ]);
+});
+
+test("the mid-transcription reason ignores what earlier requests printed", async (t) => {
+  let manager;
+  let requestCount = 0;
+  // A bad earlier request left an error line in the long-running server's stderr
+  const stderr =
+    "error: failed to read audio data\nwhisper_print_timings:    total time =   9.12 ms\n";
+
+  const { server, port } = await startServer((req, res) => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      // A driver crash: the process dies without printing anything
+      manager.process = null;
+      req.socket.destroy();
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ text: "hello" }));
+  });
+  t.after(() => server.close());
+
+  manager = createManager(port, { useCuda: false, useVulkan: true });
+  manager._lastProcessInfo = () => ({ stderr, exitCode: 3221225477, signal: null });
+  manager.start = async () => {
+    manager._lastProcessInfo = () => ({ stderr: "", exitCode: null, signal: null });
+    manager.useVulkan = false;
+    manager.ready = true;
+  };
+
+  const events = [];
+  manager.on("gpu-fallback", (payload) => events.push(payload));
+
+  await manager.transcribe(Buffer.from("audio"));
+
+  assert.deepEqual(events, [{ reason: "exit code 0xC0000005", fallbackBackend: "cpu" }]);
+});
+
 test("falls back to CPU when a peer's replacement is another doomed CUDA server", async (t) => {
   let manager;
   let requestCount = 0;
@@ -204,6 +328,12 @@ test("falls back to CPU when a peer's replacement is another doomed CUDA server"
       manager.process = null;
       manager.startGeneration += 1;
       manager.ready = true;
+      // The replacement is a new process: its output is read from the start
+      manager._lastProcessInfo = () => ({
+        stderr: CUDA_KERNEL_IMAGE_STDERR,
+        exitCode: null,
+        signal: "SIGABRT",
+      });
       req.socket.destroy();
       return;
     }
@@ -219,6 +349,9 @@ test("falls back to CPU when a peer's replacement is another doomed CUDA server"
   t.after(() => server.close());
 
   manager = createManager(port, { useCuda: true });
+  // The crashed server's long output, longer than all of the replacement's
+  const crashedStderr = "whisper_print_timings:    total time =   640.12 ms\n".repeat(40);
+  manager._lastProcessInfo = () => ({ stderr: crashedStderr, exitCode: null, signal: null });
 
   const startCalls = [];
   manager.start = async (modelPath, options) => {
@@ -227,16 +360,19 @@ test("falls back to CPU when a peer's replacement is another doomed CUDA server"
     manager.ready = true;
   };
 
-  let fallbackEvents = 0;
-  manager.on("cuda-fallback", () => {
-    fallbackEvents += 1;
-  });
+  const fallbackEvents = [];
+  manager.on("cuda-fallback", (payload) => fallbackEvents.push(payload));
 
   const result = await manager.transcribe(Buffer.from("audio"));
 
   assert.equal(result.text, "hello");
   assert.equal(requestCount, 3);
-  assert.equal(fallbackEvents, 1);
+  assert.deepEqual(fallbackEvents, [
+    {
+      reason: "CUDA error: no kernel image is available for execution on the device",
+      fallbackBackend: "cpu",
+    },
+  ]);
   assert.equal(startCalls.length, 1);
   assert.equal(startCalls[0].options.useCuda, false);
 });

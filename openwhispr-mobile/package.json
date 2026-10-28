@@ -12,6 +12,7 @@
     "prebuild:production": "OPENWHISPR_APP_ENV=production expo prebuild",
     "web": "expo start --web",
     "build:ios-return-map": "node scripts/build-ios-return-map.mjs",
+    "download:brand-fonts": "node ../scripts/download-brand-fonts.js --output-dir assets/fonts/yowza",
     "format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:write": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\"",
@@ -21,15 +22,17 @@
     "clean": "npm run format && npm run lint && npm run typecheck",
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
+    "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
-    "postinstall": "patch-package",
+    "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
+    "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },
   "engines": {
     "node": "24.x"
   },
   "dependencies": {
-    "@better-auth/expo": "1.6.22",
+    "@better-auth/expo": "1.7.14",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@hookform/resolvers": "^5.2.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -38,23 +41,23 @@
     "@react-navigation/native-stack": "^7.14.5",
     "@sentry/react-native": "~7.11.0",
     "@shopify/flash-list": "^2.0.2",
-    "better-auth": "1.6.22",
+    "better-auth": "1.7.14",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
-    "expo": "~55.0.31",
+    "expo": "~55.0.32",
     "expo-apple-authentication": "~55.0.17",
     "expo-application": "~55.0.19",
     "expo-asset": "~55.0.20",
     "expo-audio": "~55.0.18",
-    "expo-auth-session": "~55.0.18",
+    "expo-auth-session": "~55.0.19",
     "expo-blur": "~55.0.18",
     "expo-build-properties": "~55.0.18",
     "expo-clipboard": "~55.0.17",
     "expo-constants": "~55.0.17",
     "expo-crypto": "~55.0.19",
-    "expo-dev-client": "~55.0.40",
+    "expo-dev-client": "~55.0.41",
     "expo-document-picker": "~55.0.17",
     "expo-file-system": "~55.0.26",
     "expo-font": "~55.0.4",
@@ -67,14 +70,14 @@
     "expo-notifications": "~55.0.27",
     "expo-router": "~55.0.18",
     "expo-secure-store": "~55.0.18",
-    "expo-sharing": "~55.0.24",
+    "expo-sharing": "~55.0.25",
     "expo-splash-screen": "~55.0.25",
     "expo-sqlite": "~55.0.20",
     "expo-status-bar": "~55.0.6",
     "expo-superwall": "1.2.0",
     "expo-symbols": "~55.0.9",
     "expo-tracking-transparency": "~55.0.18",
-    "expo-updates": "~55.0.31",
+    "expo-updates": "~55.0.33",
     "expo-video": "~55.0.21",
     "expo-web-browser": "~55.0.20",
     "lucide-react-native": "^0.545.0",
@@ -86,7 +89,7 @@
     "react-native-appsflyer": "^7.0.2",
     "react-native-css-interop": "^0.2.1",
     "react-native-gesture-handler": "~2.30.0",
-    "react-native-purchases": "^10.4.1",
+    "react-native-purchases": "^10.10.0",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.23.0",
@@ -95,7 +98,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^3.4.18",
     "whisper.rn": "^0.6.0",
-    "zod": "^4.1.12",
+    "zod": "^4.6.7",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -129,11 +132,16 @@
     },
     "@typescript-eslint/typescript-estree": {
       "minimatch": {
-        "brace-expansion": "2.1.4"
+        "brace-expansion": "2.1.7"
       }
     },
     "postcss": "8.5.28",
-    "@better-auth/core": "1.6.22"
+    "xcode": {
+      "uuid": "11.1.1"
+    },
+    "@expo/cli": {
+      "zod": "4.6.7"
+    }
   },
   "private": true
 }

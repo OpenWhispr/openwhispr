@@ -2,25 +2,26 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const MicrosoftCalendarOAuth = require("./microsoftCalendarOAuth");
 const CalendarSyncInterval = require("./calendarSyncInterval");
-const { MAX_BUFFER_MINUTES } = require("./calendarAvailability");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 
+// webLink is the series' page: a stripped occurrence has none of its own, and
+// the series is the nearest page to open without a request per occurrence.
 const SERIES_MASTER_FIELDS =
-  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
+  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees,webLink";
 
 // Graph's deltaLink permanently encodes the calendarView window it was created
-// with — it never rolls forward. Sync a 38-day window and discard the token
-// after 7 days so coverage never drops below the app's 31-day lookahead.
+// with — it never rolls forward. Sync from CALENDAR_LOOKBACK_MS back to 38 days
+// ahead and discard the token after 7 days so coverage never drops below the
+// app's 31-day lookahead.
 const DELTA_WINDOW_MS = 38 * 24 * 60 * 60 * 1000;
 const DELTA_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // A failed series-master backfill can't be retried via delta (unchanged
 // occurrences are never re-delivered); a short TTL forces an early full sync.
 const BACKFILL_RETRY_TTL_MS = 10 * 60 * 1000;
-const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
-const LOOKBACK_SAFETY_MS = 24 * 60 * 60 * 1000;
 
 const AVAILABILITY_STATUS_BY_GRAPH = {
   free: "free",
@@ -165,6 +166,7 @@ class MicrosoftCalendarManager {
       } catch (err) {
         debugLogger.error("Error fetching calendars", { email, error: err.message }, "mcal");
       }
+      await this._refreshOwnAddresses(email);
     }
 
     this.databaseManager.applyMicrosoftPrimaryOnlyToSelection(this.primaryOnly);
@@ -237,21 +239,38 @@ class MicrosoftCalendarManager {
 
     const toUpsert = [];
     const contactsToUpsert = [];
+    const notContacts = [];
+    const ownAddresses = new Set([
+      (accountEmail || "").toLowerCase(),
+      ...this.databaseManager.getMicrosoftOwnAddresses(accountEmail),
+    ]);
     for (const item of events) {
       // An occurrence still stripped after backfill (master fetch failed) has no
       // subject, attendees, or join link. Overwriting a row a previous sync
       // stored in full would demote that meeting to an untitled time block, so
-      // keep the stored row and only insert bare stubs we've never seen.
-      if (isStrippedOccurrence(item) && this.databaseManager.getCalendarEventById(item.id)) {
-        continue;
+      // keep its details while applying any explicit RSVP update.
+      if (isStrippedOccurrence(item)) {
+        const cached = this.databaseManager.getCalendarEventById(item.id);
+        if (cached) {
+          if (typeof item.responseStatus?.response === "string") {
+            toUpsert.push({
+              ...cached,
+              self_response_status:
+                RESPONSE_STATUS_BY_GRAPH[item.responseStatus.response] || "unknown",
+            });
+          }
+          continue;
+        }
       }
       toUpsert.push(this._mapEvent(item, calendar));
       for (const a of item.attendees || []) {
-        if (a.emailAddress?.address) {
-          contactsToUpsert.push({
-            email: a.emailAddress.address,
-            displayName: a.emailAddress.name || null,
-          });
+        const address = a.emailAddress?.address;
+        if (!address) continue;
+        // Rooms and the user's own addresses aren't people to write to.
+        if (a.type === "resource" || ownAddresses.has(address.toLowerCase())) {
+          notContacts.push(address);
+        } else {
+          contactsToUpsert.push({ email: address, displayName: a.emailAddress.name || null });
         }
       }
     }
@@ -271,7 +290,12 @@ class MicrosoftCalendarManager {
     if (deltaLink) {
       this.databaseManager.updateMicrosoftCalendarSyncToken(calendar.id, deltaLink, tokenExpiresAt);
     }
-    if (contactsToUpsert.length > 0) this.databaseManager.upsertContacts(contactsToUpsert);
+    this.databaseManager.syncCalendarContacts(
+      "microsoft",
+      accountEmail,
+      contactsToUpsert,
+      notContacts
+    );
   }
 
   // Merges each stripped occurrence with its series master (fetched once per
@@ -329,6 +353,7 @@ class MicrosoftCalendarManager {
         extractMeetingUrl([item.location?.displayName, item.bodyPreview]),
       conference_data: null,
       organizer_email: item.organizer?.emailAddress?.address || null,
+      web_link: item.webLink || null,
       attendees_count: attendees.length,
       attendees: attendees.length
         ? JSON.stringify(
@@ -337,6 +362,7 @@ class MicrosoftCalendarManager {
               displayName: a.emailAddress?.name || null,
               responseStatus: RESPONSE_STATUS_BY_GRAPH[a.status?.response] || "needsAction",
               self: (a.emailAddress?.address || "").toLowerCase() === accountEmail,
+              ...(a.type === "resource" ? { resource: true } : {}),
             }))
           )
         : null,
@@ -378,11 +404,35 @@ class MicrosoftCalendarManager {
     return Array.from(this.accounts.keys());
   }
 
+  // Attendee lists address the user by their primary SMTP address or an
+  // alias, which can differ from the sign-in name the account is stored under.
+  async _refreshOwnAddresses(email) {
+    try {
+      const me = await this._apiGet("/me?$select=mail,userPrincipalName,proxyAddresses", email);
+      const aliases = (me.proxyAddresses || [])
+        .filter((entry) => /^smtp:/i.test(entry))
+        .map((entry) => entry.slice("smtp:".length));
+      const addresses = [me.mail, me.userPrincipalName, ...aliases]
+        .filter((address) => typeof address === "string" && address.includes("@"))
+        .map((address) => address.toLowerCase());
+      const ownAddresses = [...new Set(addresses)];
+      this.databaseManager.saveMicrosoftOwnAddresses(email, ownAddresses);
+      // Syncs before this lookup may have stored an alias as a contact.
+      this.databaseManager.removeContacts(ownAddresses);
+    } catch (err) {
+      debugLogger.warn(
+        "Error fetching Microsoft account addresses",
+        { email, error: err.message },
+        "mcal"
+      );
+    }
+  }
+
   // calendarView/delta expands recurrences into occurrences and returns a
   // deltaLink for incremental syncs (stored in microsoft_calendars.sync_token).
   _deltaUrl(calendarId) {
     const params = new URLSearchParams({
-      startDateTime: new Date(Date.now() - LOOKBACK_SAFETY_MS - BUFFER_COVERAGE_MS).toISOString(),
+      startDateTime: new Date(Date.now() - CALENDAR_LOOKBACK_MS).toISOString(),
       endDateTime: new Date(Date.now() + DELTA_WINDOW_MS).toISOString(),
     });
     return `/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta?${params.toString()}`;

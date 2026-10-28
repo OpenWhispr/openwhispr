@@ -15,6 +15,7 @@ import {
 } from "./icons";
 import { cn } from "./lib/utils";
 import { useDismissGuard } from "./ui/useDismissGuard";
+import { blurBehindOverlays } from "./ui/overlayBlur";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -24,6 +25,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
+import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 
 interface ConversationResult {
@@ -59,12 +61,17 @@ type FlatItem =
   | { kind: "conversation"; conversation: ConversationResult };
 
 function stripMarkdownPreview(text: string): string {
-  return text
-    .replace(/#{1,6}\s+/g, "")
-    .replace(/[*_~`]+/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/\n+/g, " ")
-    .trim();
+  return (
+    text
+      .replace(/#{1,6}\s+/g, "")
+      .replace(/[*_~`]+/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Table delimiter rows, then the pipes between cells.
+      .replace(/^[ \t|:-]+$/gm, "")
+      .replace(/\\?\|/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 export default function CommandSearch({
@@ -323,7 +330,12 @@ export default function CommandSearch({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Overlay
+          className={cn(
+            "fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            blurBehindOverlays && "backdrop-blur-sm"
+          )}
+        />
         <DialogPrimitive.Content
           ref={registerContent}
           onInteractOutside={(e) => {
@@ -655,7 +667,16 @@ function NoteRow({
   t: (key: string, opts?: Record<string, unknown>) => string;
   locale?: string;
 }) {
-  const preview = stripMarkdownPreview(note.content).slice(0, 90);
+  // An upload's transcription lives in its transcript, so one without notes previews that.
+  const preview = useMemo(() => {
+    const transcriptOnly = note.note_type === "upload" && !note.content.trim();
+    const text = transcriptOnly
+      ? parseTranscriptSegments(note.transcript || "")
+          .map((segment) => segment.text)
+          .join(" ")
+      : note.content;
+    return stripMarkdownPreview(text).slice(0, 90);
+  }, [note.content, note.note_type, note.transcript]);
   const NoteIcon =
     note.note_type === "meeting" ? Users : note.note_type === "upload" ? Upload : FileText;
   return (

@@ -32,6 +32,9 @@ const platform = getCachedPlatform();
 const ACTION_BUTTON_CLASS =
   "h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground hover:bg-foreground/6 dark:hover:bg-white/6";
 
+const TRANSCRIPT_TEXT_CLASS =
+  "text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground";
+
 function getShowInFolderKey(): string {
   if (platform === "win32") return "controlPanel.history.showInFolderWindows";
   if (platform === "linux") return "controlPanel.history.showInFolderLinux";
@@ -52,7 +55,7 @@ interface TranscriptionItemProps {
   onDelete: (id: number) => void;
   onShowAudioInFolder?: (id: number) => void;
   onRetryTranscription?: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (section?: string) => void;
 }
 
 export default function TranscriptionItem({
@@ -95,11 +98,18 @@ export default function TranscriptionItem({
       : null;
   const rawText = item.raw_text;
   const hasAudio = item.has_audio === 1;
+  // A failed row keeps the transcript when only a later step failed.
+  const hasKeptText = isFailed && item.text.trim() !== "";
 
   const errorCode = item.error_code as TranscriptionErrorCode;
   const isConfigError =
     errorCode === "API_KEY_MISSING" ||
     errorCode === "INVALID_KEY" ||
+    errorCode === "PROVIDER_AUTH_FAILED" ||
+    errorCode === "PROVIDER_ACCESS_DENIED" ||
+    errorCode === "PROVIDER_QUOTA_EXHAUSTED" ||
+    errorCode === "PROVIDER_MODEL_NOT_FOUND" ||
+    errorCode === "PROVIDER_NO_RESPONSE" ||
     errorCode === "MODEL_NOT_AVAILABLE" ||
     errorCode === "CUSTOM_ENDPOINT_INVALID";
   const isLimitError = errorCode === "LIMIT_REACHED";
@@ -169,12 +179,13 @@ export default function TranscriptionItem({
               "opacity-0 group-hover/row:opacity-100 has-[:focus-visible]:opacity-100 has-[[data-state=open]]:opacity-100"
           )}
         >
-          {isTranscribed && (
+          {(isTranscribed || hasKeptText) && (
             <Tooltip content={t("controlPanel.history.copyText")}>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => onCopy(item.text)}
+                aria-label={t("controlPanel.history.copyText")}
                 className={ACTION_BUTTON_CLASS}
               >
                 <Copy size={13} />
@@ -222,14 +233,28 @@ export default function TranscriptionItem({
             <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-destructive">
-                {t("controlPanel.history.transcriptionFailed")}
+                {t(
+                  hasKeptText
+                    ? "controlPanel.history.editFailedTranscriptKept"
+                    : "controlPanel.history.transcriptionFailed"
+                )}
               </p>
               {item.error_message && (
                 <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
                   {item.error_message}
                 </p>
               )}
-              {isConfigError && (
+              {isConfigError && hasKeptText && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <button
+                    onClick={() => onOpenSettings?.("dictationAgent")}
+                    className="cursor-pointer text-primary hover:underline"
+                  >
+                    {t("controlPanel.history.failedCtaAiSettings")}
+                  </button>
+                </p>
+              )}
+              {isConfigError && !hasKeptText && (
                 <p className="mt-1 text-xs text-muted-foreground">
                   {hasAudio ? (
                     <>
@@ -277,10 +302,12 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p
-            dir="auto"
-            className="text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground"
-          >
+          <p dir="auto" className={TRANSCRIPT_TEXT_CLASS}>
+            {item.text}
+          </p>
+        )}
+        {hasKeptText && (
+          <p dir="auto" className={cn("mt-2", TRANSCRIPT_TEXT_CLASS)}>
             {item.text}
           </p>
         )}

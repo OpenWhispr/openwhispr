@@ -40,10 +40,12 @@ export function useGpuBannerAvailability({
         try {
           const status = await window.electronAPI?.getCudaWhisperStatus?.();
           if (status?.gpuInfo.hasNvidiaGpu && status.gpuInfo.cudaSupported) {
-            if (!status.downloaded) results.transcription = true;
+            if (!status.downloaded && !status.bundledGpu) results.transcription = true;
           } else {
             const vulkan = await window.electronAPI?.getVulkanWhisperStatus?.();
-            if (vulkan?.vulkan.available && !vulkan.downloaded) results.transcription = true;
+            if (vulkan?.vulkan.available && !vulkan.downloaded && !vulkan.bundledGpu) {
+              results.transcription = true;
+            }
           }
         } catch {}
       }
@@ -59,8 +61,12 @@ export function useGpuBannerAvailability({
       if (!cancelled) setAvailability(results);
     };
     detect();
+    // A whisper-server that comes up on a bundled GPU build after this probe
+    // (the launch pre-warm) takes the offer back
+    const unsubscribe = window.electronAPI?.onWhisperGpuStatusChanged?.(detect);
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, [settings, agentAllowedByPolicy, dismissed, settingsOpen, platform]);
 

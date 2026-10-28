@@ -1,4 +1,6 @@
+import { SIGN_IN_PROMPTED_AT_KEY } from "../../utils/requestSignIn";
 import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+import type { PermissionGuideId } from "../../types/permissionGuide";
 
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
@@ -88,6 +90,7 @@ export interface OnboardingSession {
    * dropped with the session at finalization.
    */
   screenContextRequested: boolean;
+  permissionGuide: PermissionGuideId | null;
   resume: OnboardingResumeState;
 }
 
@@ -204,6 +207,7 @@ export function createOnboardingSession(): OnboardingSession {
     setupMode: null,
     selfHostedRequested: false,
     screenContextRequested: false,
+    permissionGuide: null,
     resume: createOnboardingResumeState(),
   };
 }
@@ -215,6 +219,8 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("skipAuth");
   storage.removeItem("localSetupPending");
   storage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  // A restart is not the sign-in that marker announces.
+  storage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
@@ -287,6 +293,13 @@ export function isSetupDecisionStep(stepId: OnboardingStepId, route: OnboardingS
 
 export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
+}
+
+function isPermissionGuideId(value: unknown): value is PermissionGuideId {
+  return (
+    typeof value === "string" &&
+    ["microphone", "accessibility", "system-audio", "screen-context"].includes(value)
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -437,6 +450,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
       screenContextRequested: parsed.screenContextRequested ?? false,
+      permissionGuide: isPermissionGuideId(parsed.permissionGuide) ? parsed.permissionGuide : null,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {

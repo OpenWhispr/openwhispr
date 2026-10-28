@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { withRetry, createApiRetryStrategy, httpError } from "../../../utils/retry";
+import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS } from "../../../config/constants";
 import {
   getLlmRequestTimeoutSeconds,
@@ -7,9 +7,13 @@ import {
 } from "../../../helpers/llmRequestTimeout.js";
 import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
-import { extractApiErrorMessage } from "../apiErrorMessage";
-import { emptyOutputError, truncatedOutputError } from "../chatRequestBody";
+import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import {
+  asProviderError,
+  providerHttpError,
+  redactProviderBody,
+} from "../../../helpers/providerHttpErrors.js";
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -27,14 +31,18 @@ interface GeminiResponse {
 interface GeminiGenerationConfig {
   temperature: number;
   thinkingConfig?: {
-    thinkingLevel?: "minimal" | "low";
+    thinkingLevel?: string;
     thinkingBudget?: number;
     includeThoughts: boolean;
   };
 }
 
-// Thinking controls differ by model: Pro cannot use minimal, and 2.5 uses budgets.
+// Thinking controls differ by model: Pro, 3.8 Flash and 4 Argon cannot use
+// minimal, and 2.5 uses budgets.
 const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> = {
+  "gemini-3.6-flash": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.8-flash": { thinkingLevel: "low", includeThoughts: false },
+  "gemini-4-argon": { thinkingLevel: "low", includeThoughts: false },
   "gemini-3.5-flash": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.5-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.1-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
@@ -53,7 +61,7 @@ export const geminiProvider: InferenceProvider = {
     const apiKey = await ctx.getApiKey("gemini");
     logger.logReasoning("GEMINI_API_KEY", { hasApiKey: !!apiKey, keyLength: apiKey?.length || 0 });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
 
     const isGemini = model.startsWith("gemini-");
@@ -69,7 +77,12 @@ export const geminiProvider: InferenceProvider = {
       // limit and the request timeout bound the reply.
     };
 
-    if (config.disableThinking === true && minimalThinking[model]) {
+    // A chosen level is only offered while thinking isn't suppressed, so it wins
+    // over the minimal floor that a model without the toggle gets by default.
+    const thinkingLevel = chosenReasoningEffort("gemini", model, config);
+    if (thinkingLevel) {
+      generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
+    } else if (config.disableThinking === true && minimalThinking[model]) {
       generationConfig.thinkingConfig = minimalThinking[model];
     }
 
@@ -115,24 +128,20 @@ export const geminiProvider: InferenceProvider = {
 
         if (!res.ok) {
           const errorText = await res.text();
-          let errorData: { error?: { message?: string } | string; message?: string } = {
-            error: res.statusText,
-          };
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: errorText || res.statusText };
-          }
-
           logger.logReasoning("GEMINI_API_ERROR_DETAIL", {
             status: res.status,
             statusText: res.statusText,
-            error: errorData,
-            fullResponse: errorText.substring(0, 500),
+            fullResponse: redactProviderBody(errorText),
           });
 
-          const errMsg = extractApiErrorMessage(errorData, `Gemini API error: ${res.status}`);
-          throw httpError(errMsg, res.status);
+          throw providerHttpError({
+            provider: "Gemini",
+            model,
+            status: res.status,
+            body: errorText,
+            headers: res.headers,
+            surface: "llm",
+          });
         }
 
         const jsonResponse = (await res.json()) as GeminiResponse;
@@ -152,7 +161,11 @@ export const geminiProvider: InferenceProvider = {
       } finally {
         clearTimeout(timeoutId);
       }
-    }, createApiRetryStrategy());
+    }, createApiRetryStrategy()).catch((error) => {
+      // Classified only once it has left withRetry, so the deadline is still
+      // attempted exactly once.
+      throw asProviderError(error, { provider: "Gemini", model, surface: "llm" });
+    });
 
     const candidate = response.candidates?.[0];
     // Outside withRetry: don't repeat cutoffs/blocks; cleanup falls back to the original.

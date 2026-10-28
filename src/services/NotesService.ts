@@ -1,5 +1,6 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
+import type { CloudNoteCreateResult } from "./noteCreateAck";
 
 interface NoteInput {
   client_note_id?: string;
@@ -9,6 +10,7 @@ interface NoteInput {
   content?: string;
   enhanced_content?: string | null;
   enhancement_prompt?: string | null;
+  enhancement_template_id?: string | null;
   note_type?: "personal" | "meeting" | "upload";
   source_file?: string | null;
   audio_duration_seconds?: number | null;
@@ -25,9 +27,16 @@ interface NoteInput {
   // last acked. The server 409s (note_version_conflict) when a newer write
   // landed; omitted = legacy last-write-wins.
   base_updated_at?: string;
+  base_revision?: number;
+  field_updates?: { content?: "set" | "clear"; enhanced_content?: "set" | "clear" };
 }
 
 export interface CloudNote {
+  revision?: number;
+  content_state?: "set" | "clear" | null;
+  enhanced_content_state?: "set" | "clear" | null;
+  write_applied?: boolean;
+  row_created?: boolean;
   id: string;
   client_note_id: string | null;
   title: string | null;
@@ -35,6 +44,8 @@ export interface CloudNote {
   enhanced_content: string | null;
   note_type: string;
   enhancement_prompt: string | null;
+  // Absent from APIs that predate note templates.
+  enhancement_template_id?: string | null;
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: string | null;
@@ -70,13 +81,12 @@ async function create(note: NoteInput): Promise<CloudNote> {
   return cloudPost<CloudNote>("/api/notes/create", note);
 }
 
-async function batchCreate(
-  notes: NoteInput[]
-): Promise<{ created: { client_note_id: string; id: string; updated_at?: string }[] }> {
-  return cloudPost<{ created: { client_note_id: string; id: string; updated_at?: string }[] }>(
-    "/api/notes/batch-create",
-    { notes }
-  );
+interface NoteBatchCreateResult {
+  created: CloudNoteCreateResult[];
+}
+
+async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {
+  return cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes });
 }
 
 async function update(id: string, updates: Partial<NoteInput>): Promise<CloudNote> {

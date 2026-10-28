@@ -23,10 +23,14 @@ interface ModelDownloadState {
   completedCount: number;
   startDownload: (key?: LocalModelKey) => Promise<void>;
   cancelDownload: (key: LocalModelKey) => Promise<void>;
+  cancelActiveDownloads: (except?: LocalModelKey) => Promise<void>;
   reset: (key?: LocalModelKey) => void;
 }
 
 const idleEntry = (): ModelDownloadEntry => ({ status: 'idle', progress: 0, error: undefined });
+
+const isActive = (entry: ModelDownloadEntry): boolean =>
+  entry.status === 'downloading' || entry.status === 'preparing';
 
 const idleDownloads = (): Record<LocalModelKey, ModelDownloadEntry> => ({
   'whisper-base': idleEntry(),
@@ -90,7 +94,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
         {
           status: 'error',
           error:
-            'Local Whisper is not available. Build the app with `npx expo run:ios` to enable private mode.',
+            'Local Whisper is not available. Build the app with `npx expo run:ios` to enable Local Mode.',
         },
         requestId,
       );
@@ -165,10 +169,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
     completedCount: 0,
 
     startDownload: async (key = 'whisper-base') => {
-      const busy = Object.values(get().downloads).some(
-        (entry) => entry.status === 'downloading' || entry.status === 'preparing',
-      );
-      if (busy) {
+      if (Object.values(get().downloads).some(isActive)) {
         return;
       }
       const requestId = beginRequest(key);
@@ -201,6 +202,14 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => {
       } finally {
         patchEntry(key, idleEntry());
       }
+    },
+
+    cancelActiveDownloads: async (except) => {
+      const { downloads, cancelDownload } = get();
+      const active = (Object.keys(downloads) as LocalModelKey[]).filter(
+        (key) => key !== except && isActive(downloads[key]),
+      );
+      await Promise.all(active.map(cancelDownload));
     },
 
     reset: (key) => {

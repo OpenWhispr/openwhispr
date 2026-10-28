@@ -5,6 +5,9 @@ const requestedMainWindowPositions = [];
 const createdBrowserWindows = [];
 const screenListeners = [];
 const builtMenus = [];
+const inputRegionRequests = [];
+const requestFocus = async () => inputRegionRequests.push("focus");
+let focusInputRegion = requestFocus;
 
 // Same stub set as windowManagerMeetingNotification.test.js: WindowManager
 // pulls in electron + sibling managers at require time.
@@ -117,11 +120,20 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       DEV_SERVER_PORT: 5173,
       DEV_SERVER_URL: "http://localhost:5173",
+      getAppUrl: () => null,
       getAppFilePath: () => ({ path: "/app/index.html", query: {} }),
       waitForDevServer: async () => undefined,
     };
   if (request === "./dockManager") return {};
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
+  if (request === "./linuxWindowInputRegion") {
+    return {
+      createLinuxWindowInputRegion: () => ({
+        focus: () => focusInputRegion(),
+        stop: () => undefined,
+      }),
+    };
+  }
   if (request === "./windowConfig") {
     return {
       MAIN_WINDOW_CONFIG: {},
@@ -153,9 +165,10 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
 const WindowManager = require("../../src/helpers/windowManager");
 Module._load = originalLoad;
 
-function fakeWindow({ visible }) {
+function fakeWindow({ visible, focused = false }) {
   const calls = [];
   let isVisible = visible;
+  let isFocused = focused;
   return {
     calls,
     window: {
@@ -175,7 +188,12 @@ function fakeWindow({ visible }) {
         calls.push("hide");
       },
       focus: () => calls.push("focus"),
-      blur: () => calls.push("blur"),
+      // Like Electron, blur() clears the flag even where X focus stays put.
+      blur: () => {
+        isFocused = false;
+        calls.push("blur");
+      },
+      isFocused: () => isFocused,
       setFocusable: (value) => calls.push(`focusable:${value}`),
       setContentProtection: () => undefined,
       getBounds: () => ({ x: 0, y: 0, width: 96, height: 96 }),
@@ -217,6 +235,46 @@ test("the Assistant response context menu exposes native Copy only for selected 
   manager._assistantPanelOpen = false;
   onContextMenu(null, { selectionText: "outside Assistant" });
   assert.equal(builtMenus.length, 1);
+});
+
+// Assistant replies can carry links an injected prompt chose, so the dictation
+// window hands them to the browser like the control panel instead of opening
+// an in-app window, and never passes a local path to the OS.
+test("assistant panel links open in the browser, never an in-app window or a local file", () => {
+  const manager = new WindowManager();
+  const opened = [];
+  manager.openExternalUrl = (url) => opened.push(url);
+  const listeners = new Map();
+  let openHandler;
+  const window = {
+    webContents: {
+      on: (event, listener) => listeners.set(event, listener),
+      setWindowOpenHandler: (handler) => {
+        openHandler = handler;
+      },
+    },
+  };
+
+  manager.registerExternalLinkHandlers(window, false);
+
+  for (const url of [
+    "https://attacker.example/chart.png",
+    "mailto:someone@example.com",
+    "file:///C:/Windows/System32/cmd.exe",
+    "javascript:alert(1)",
+  ]) {
+    assert.deepEqual(openHandler({ url }), { action: "deny" });
+  }
+  assert.deepEqual(opened, ["https://attacker.example/chart.png", "mailto:someone@example.com"]);
+
+  opened.length = 0;
+  let prevented = 0;
+  const event = { preventDefault: () => (prevented += 1) };
+  listeners.get("will-navigate")(event, "file:///app/index.html?panel=false");
+  listeners.get("will-navigate")(event, "https://attacker.example/");
+  listeners.get("will-navigate")(event, "file:///C:/Windows/System32/cmd.exe");
+  assert.equal(prevented, 2, "only the app's own reload may navigate the window");
+  assert.deepEqual(opened, ["https://attacker.example/"]);
 });
 
 test("the Agent companion follows the edge opposite the panel", () => {
@@ -482,6 +540,149 @@ test("closing the assistant panel blurs only where opening focused", () => {
       assert.ok(calls.includes("blur"), `${platform} hands the foreground back`);
     });
   }
+});
+
+test("opening the assistant panel asks X for keyboard focus only on Linux", () => {
+  for (const [platform, expected] of [
+    ["linux", ["focus"]],
+    ["win32", []],
+    ["darwin", []],
+  ]) {
+    withPlatform(platform, () => {
+      inputRegionRequests.length = 0;
+      const { manager } = makeManager({ visible: true });
+      manager.setAssistantPanelOpen(true);
+      // focusable:false made the Linux pill override-redirect, so focus()
+      // alone never reaches the window manager.
+      assert.deepEqual(inputRegionRequests, expected, platform);
+    });
+  }
+});
+
+test("closing the assistant panel on Linux remaps a window that held the keyboard", () => {
+  withPlatform("linux", () => {
+    const { manager, calls } = makeManager({ visible: true, focused: true });
+    manager.setAssistantPanelOpen(false);
+    // GNOME returns focus to the previous app only when the focused
+    // override-redirect window unmaps.
+    assert.deepEqual(calls, ["blur", "focusable:false", "hide", "showInactive"]);
+  });
+  withPlatform("linux", () => {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    manager.setAssistantPanelOpen(false);
+    assert.deepEqual(calls, ["blur", "focusable:false"], "focus already left for another app");
+  });
+  for (const platform of ["win32", "darwin"]) {
+    withPlatform(platform, () => {
+      const { manager, calls } = makeManager({ visible: true, focused: true });
+      manager.setAssistantPanelOpen(false);
+      assert.ok(!calls.includes("hide"), `${platform} never remaps the pill`);
+    });
+  }
+});
+
+test("closing the panel during a click's focus request hands the keyboard back once it lands", async () => {
+  let land;
+  focusInputRegion = () =>
+    new Promise((resolve) => {
+      land = resolve;
+    });
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      manager._assistantPanelOpen = true;
+      // The user is in another app; their click on Close re-takes focus on
+      // mouseDown, and the close arrives before the helper granted it.
+      manager._focusLinuxMainWindow();
+      manager.setAssistantPanelOpen(false);
+    });
+    assert.deepEqual(calls, ["blur", "focusable:false"]);
+    land();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, ["blur", "focusable:false", "hide", "showInactive"]);
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
+test("a panel reopened before the closing click's focus request lands keeps the keyboard", async () => {
+  const lands = [];
+  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      manager._assistantPanelOpen = true;
+      manager._focusLinuxMainWindow();
+      manager.setAssistantPanelOpen(false);
+      manager.setAssistantPanelOpen(true);
+    });
+    for (const land of lands) land();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(
+      calls,
+      ["blur", "focusable:false", "focusable:true", "focus"],
+      "the reopened panel must keep the keyboard"
+    );
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
+test("a pill hidden before the closing click's focus request lands stays hidden", async () => {
+  let land;
+  focusInputRegion = () =>
+    new Promise((resolve) => {
+      land = resolve;
+    });
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      manager._assistantPanelOpen = true;
+      manager._focusLinuxMainWindow();
+      manager.setAssistantPanelOpen(false);
+    });
+    // Tray Hide, a push-to-talk cancel or onboarding hides the pill meanwhile.
+    manager.mainWindow.hide();
+    land();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls, ["blur", "focusable:false", "hide"]);
+    assert.equal(manager.mainWindow.isVisible(), false);
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
+test("a close waits for the latest focus request, not one an earlier request settled", async () => {
+  const lands = [];
+  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
+  try {
+    const { manager, calls } = makeManager({ visible: true, focused: false });
+    withPlatform("linux", () => {
+      // Opening asks for focus, then a click on Close asks again before the
+      // first request has landed.
+      manager.setAssistantPanelOpen(true);
+      manager._focusLinuxMainWindow();
+    });
+    lands[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    withPlatform("linux", () => manager.setAssistantPanelOpen(false));
+    assert.ok(!calls.includes("hide"), "the click's request is still pending");
+    lands[1]();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(calls.slice(-2), ["hide", "showInactive"]);
+  } finally {
+    focusInputRegion = requestFocus;
+  }
+});
+
+test("a focus request that already landed leaves a later close alone", async () => {
+  const { manager, calls } = makeManager({ visible: true, focused: false });
+  withPlatform("linux", () => manager.setAssistantPanelOpen(true));
+  await new Promise((resolve) => setImmediate(resolve));
+  // The user has since moved to another app, so the pill must not remap.
+  withPlatform("linux", () => manager.setAssistantPanelOpen(false));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(!calls.includes("hide"));
 });
 
 test("showDictationPanel still surfaces a hidden window while the panel is open", () => {

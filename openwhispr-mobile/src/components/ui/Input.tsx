@@ -1,7 +1,7 @@
 import React from 'react';
 import { TextInput, TextInputProps, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { cn } from '../../lib/utils';
 
 export interface InputProps extends TextInputProps {
@@ -23,7 +23,7 @@ export const Input = React.forwardRef<TextInput, InputProps>(
             className,
           )}
           placeholderTextColor="#9CA3AF"
-          style={[{ fontFamily: SpaceGrotesk.regular }, style]}
+          style={[{ fontFamily: AppFont.regular }, style]}
           {...props}
         />
         {error && <Text className="text-sm text-destructive">{error}</Text>}

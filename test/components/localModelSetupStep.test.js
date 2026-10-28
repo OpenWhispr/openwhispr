@@ -11,6 +11,7 @@ const {
 const FIRST_LLM = "qwen3.5-4b-q4_k_m";
 const SECOND_LLM = "qwen3.5-2b-q4_k_m";
 const PARAKEET = "parakeet-tdt-0.6b-v3";
+const LEGACY_LLM = "llama-3.2-3b-instruct-q4_k_m";
 
 function findElement(node, predicate) {
   if (Array.isArray(node)) {
@@ -108,7 +109,6 @@ async function createSetupHarness(
         export function useTranslation() { return { t }; }
         export const initReactI18next = { type: "3rdParty", init() {} };
       `,
-      "/ProviderConnectionTest": `export default function ProviderConnectionTest() { return null; }`,
       "/OnboardingShell": `export function BrandMark() { return null; }`,
       "/ui/ProviderIcon": `export function ProviderIcon() { return null; }`,
     },
@@ -141,6 +141,7 @@ async function createSetupHarness(
   let trayTree;
   let ready = false;
   let proceeded = false;
+  let skipped = false;
   const resumeDrafts = [];
   const props = {
     stepId: assistant ? "local-assistant" : "local-dictation",
@@ -150,7 +151,9 @@ async function createSetupHarness(
     onProceed() {
       proceeded = true;
     },
-    onSkip() {},
+    onSkip() {
+      skipped = true;
+    },
     resumeState,
     onResumeStateChange: (draft) => resumeDrafts.push(draft),
   };
@@ -266,6 +269,7 @@ async function createSetupHarness(
       await React.act(async () => button.props.onClick());
     },
     proceeded: () => proceeded,
+    skipped: () => skipped,
     ready: () => ready,
     resumeDrafts: () => resumeDrafts,
     canProceed: () => !actionButton("onboarding.rehaul.provider.proceed").props.disabled,
@@ -273,6 +277,10 @@ async function createSetupHarness(
       const button = actionButton("common.skip");
       return Boolean(button && !button.props.disabled);
     },
+    providerListed: (providerId) =>
+      Boolean(
+        findElement(tree, (node) => node.key === providerId && node.props?.value === providerId)
+      ),
   };
 }
 
@@ -361,7 +369,7 @@ test("a refused concurrent Whisper download preserves the original pending selec
   assert.equal(setup.ready(), true);
 });
 
-test("cancelling the newest assistant download blocks both ways to continue until a model is chosen", async (t) => {
+test("cancelling the newest assistant download permits Skip without activating an older model", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true });
   await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
   await setup.click(SECOND_LLM, "onboarding.rehaul.local.download");
@@ -372,8 +380,10 @@ test("cancelling the newest assistant download blocks both ways to continue unti
   assert.equal(setup.pending.hasPendingLocalModels(), false);
   assert.deepEqual(
     { proceed: setup.canProceed(), skip: setup.canSkip() },
-    { proceed: false, skip: false }
+    { proceed: false, skip: true }
   );
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
   await setup.complete(FIRST_LLM);
   assert.equal(setup.store.getState().chatAgentModel, "");
   assert.equal(setup.canProceed(), false);
@@ -428,12 +438,54 @@ test("a resumed local-model draft overrides the previously saved model", async (
   assert.equal(setup.canProceed(), true);
 });
 
+test("a provider left with nothing to list opens on Qwen instead", async (t) => {
+  // The store still names llama after its legacy model was deleted.
+  const setup = await createSetupHarness(t, { assistant: true, provider: "llama" });
+  assert.equal(setup.providerListed("llama"), false);
+  assert.match(textContent(setup.row(FIRST_LLM)), /onboarding\.rehaul\.local\.download/);
+});
+
+test("browsing away from an installed legacy model and back restores it", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "llama",
+    selectedModel: LEGACY_LLM,
+    installed: { llm: [LEGACY_LLM] },
+  });
+  assert.match(textContent(setup.row(LEGACY_LLM)), /onboarding\.rehaul\.local\.selected/);
+
+  await setup.chooseProvider("qwen");
+  assert.equal(setup.providerListed("llama"), true, "the saved model's provider stays reachable");
+  assert.equal(setup.ready(), false);
+
+  await setup.chooseProvider("llama");
+  assert.match(textContent(setup.row(LEGACY_LLM)), /onboarding\.rehaul\.local\.selected/);
+  assert.equal(setup.ready(), true);
+  assert.equal(setup.store.getState().chatAgentModel, LEGACY_LLM);
+});
+
+test("a selected legacy model that isn't downloaded offers no Download", async (t) => {
+  const setup = await createSetupHarness(t, {
+    assistant: true,
+    provider: "llama",
+    resumeState: { provider: "llama", modelId: LEGACY_LLM },
+  });
+  assert.doesNotMatch(textContent(setup.row(LEGACY_LLM)), /onboarding\.rehaul\.local\.download/);
+});
+
 test("Skip marks a pending model for background activation", async (t) => {
   const setup = await createSetupHarness(t, { assistant: true });
   await setup.click(FIRST_LLM, "onboarding.rehaul.local.download");
   assert.equal(setup.canSkip(), true);
   await setup.skip();
   assert.equal(localStorage.getItem("localSetupPending"), "true");
+});
+
+test("the assistant step can be skipped with no model selected or downloading", async (t) => {
+  const setup = await createSetupHarness(t, { assistant: true });
+  assert.equal(setup.canProceed(), false);
+  await setup.skip();
+  assert.equal(setup.skipped(), true);
 });
 
 test("choosing a local model records it in the resume draft", async (t) => {

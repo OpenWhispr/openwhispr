@@ -3,10 +3,9 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 // Regression for the upload/URL-ingest path dropping diarization metadata: the
-// batch queue ran the diarizer but persisted none of diarization_enabled,
-// expected_speaker_count, or audio_duration_seconds, so an uploaded note that
-// WAS diarized presented to the app as though it was not (the meeting path
-// persists all of them).
+// batch queue ran the diarizer but persisted neither diarization_enabled nor
+// audio_duration_seconds, so an uploaded note that WAS diarized presented to
+// the app as though it was not (the meeting path persists both).
 
 const transcription = {
   useLocalWhisper: true,
@@ -59,7 +58,14 @@ function installUploadElectronAPI(window, { diarizedDurationSeconds }) {
         durationSeconds: diarizedDurationSeconds,
       };
     },
-    mergeSpeakerText: async () => ({ success: true, text: "[Speaker 1] hello [Speaker 2] hi" }),
+    mergeSpeakerText: async () => ({
+      success: true,
+      text: "[Speaker 1] 0:00 - 0:30\nhello\n\n[Speaker 2] 0:30 - 1:00\nhi",
+      segments: [
+        { speaker: "Speaker 1", text: "hello", start: 0, end: 30 },
+        { speaker: "Speaker 2", text: "hi", start: 30, end: 60 },
+      ],
+    }),
     saveNote: async (...args) => {
       calls.saveNote.push(args);
       return { success: true, note: { id: 7 } };
@@ -94,7 +100,19 @@ test("a diarized file upload persists the diarization metadata", async (t) => {
 
   assert.equal(calls.saveNote.length, 1);
   const [, content, noteType, sourceFile, audioDuration] = calls.saveNote[0];
-  assert.equal(content, "[Speaker 1] hello [Speaker 2] hi");
+  // The transcription is the note's transcript, split at the merged speaker
+  // turns (local whisper returns no segments of its own), so "Your notes"
+  // stays empty for the user's own.
+  assert.equal(content, "");
+  const transcript = JSON.parse(calls.saveNote[0][7]);
+  assert.deepEqual(
+    transcript.map(({ text, speaker }) => ({ text, speaker })),
+    [
+      { text: "hello", speaker: "speaker_0" },
+      { text: "hi", speaker: "speaker_1" },
+    ]
+  );
+  assert.equal(transcript[1].timestamp - transcript[0].timestamp, 30_000);
   assert.equal(noteType, "upload");
   assert.equal(sourceFile, "board-meeting.m4a");
   assert.equal(audioDuration, 4359.87);
@@ -105,7 +123,7 @@ test("a diarized file upload persists the diarization metadata", async (t) => {
   // The diarizer runs under the same cancellable requestId as the
   // transcription, so one cancel-upload-transcription aborts both.
   assert.equal(typeof calls.diarize[0].requestId, "string");
-  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1, expected_speaker_count: 2 }]]);
+  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1 }]]);
 });
 
 test("a diarized URL ingest persists the diarization metadata", async (t) => {
@@ -141,7 +159,7 @@ test("a diarized URL ingest persists the diarization metadata", async (t) => {
   assert.equal(sourceFile, "Board Meeting Recording");
   assert.equal(audioDuration, 4359.87);
 
-  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1, expected_speaker_count: 2 }]]);
+  assert.deepEqual(calls.updateNote, [[7, { diarization_enabled: 1 }]]);
   assert.deepEqual(calls.deletedTempFiles, ["/tmp/ow-url-download.m4a"]);
 });
 

@@ -136,13 +136,11 @@ class WindowsKeyManager extends EventEmitter {
     }
 
     if (line === "KEY_DOWN") {
-      debugLogger.debug("[WindowsKeyManager] KEY_DOWN detected", { key });
       this.emit("key-down", key);
       return;
     }
 
     if (line === "KEY_UP") {
-      debugLogger.debug("[WindowsKeyManager] KEY_UP detected", { key });
       this.emit("key-up", key);
       return;
     }
@@ -162,6 +160,13 @@ class WindowsKeyManager extends EventEmitter {
    */
   isAvailable() {
     return this.resolveListenerBinary() !== null;
+  }
+
+  // Same shape as LinuxKeyManager.checkAvailability, for HotkeyManager's probe.
+  checkAvailability() {
+    return this.isAvailable()
+      ? { available: true }
+      : { available: false, reason: "binary_missing" };
   }
 
   /**

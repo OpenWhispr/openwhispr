@@ -14,6 +14,7 @@ import {
   buildAzureTranscriptionUrl,
 } from "../utils/urlUtils.ts";
 import {
+  isOrukeetEndpoint,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
@@ -200,7 +201,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "deepgram") return "nova-3";
-  if (provider === "assemblyai") return "universal-3-5-pro";
+  if (provider === "assemblyai") return "universal-3-6-pro";
   return "gpt-transcribe";
 }
 
@@ -312,7 +313,9 @@ export function resolveTranscriptionRoute({
         provider: "self-hosted",
         endpoint: buildBatchEndpoint(rawUrl, base, selfHostedModel),
         model: selfHostedModel,
-        auth: { scheme: "none", keyRef: null },
+        auth: isOrukeetEndpoint(s)
+          ? { scheme: "bearer", keyRef: "custom" }
+          : { scheme: "none", keyRef: null },
         sizeCapBytes: null,
         language,
       };

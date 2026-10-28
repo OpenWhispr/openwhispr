@@ -598,6 +598,21 @@ test("copying an existing share link follows its own visibility", async () => {
   }
 });
 
+test("resending an invitation needs sharing to be on", async () => {
+  const { isShareActionAllowed } = await load();
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+  const allowed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  for (const snapshot of [unmanaged, allowed]) {
+    for (const visibility of ["link", "domain", "invited"]) {
+      assert.equal(isShareActionAllowed(snapshot, "resend-invitation", visibility), true);
+    }
+    // Disabling sharing suspends invitations, so the email could not open the note.
+    assert.equal(isShareActionAllowed(snapshot, "resend-invitation", "private"), false);
+    assert.equal(isShareActionAllowed(snapshot, "revoke-invitation", "private"), true);
+  }
+});
+
 test("sharing recovery remains available when exposure-increasing actions are blocked", async () => {
   const { isShareActionAllowed } = await load();
   const blockedSnapshots = [
@@ -822,6 +837,40 @@ test("screen context is allowed unless a managed policy turns it off", async () 
   );
 });
 
+test("only a resolved managed policy reports web search as turned off by the org", async () => {
+  const { isWebSearchBlockedByOrg } = await load();
+  const managed = (features) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, ...features } },
+    appVersion: "1.8.1",
+  });
+
+  assert.equal(isWebSearchBlockedByOrg(managed({ webSearchEnabled: false })), true);
+  assert.equal(isWebSearchBlockedByOrg(managed({})), false);
+  // Still loading, or the fetch failed: web search fails closed, but nothing
+  // says an organization turned it off.
+  for (const status of ["idle", "loading", "error", "unmanaged"]) {
+    assert.equal(
+      isWebSearchBlockedByOrg({ status, policy: null, appVersion: "1.8.1" }),
+      false,
+      status
+    );
+  }
+  // An org that only requires a newer build hasn't turned web search off.
+  assert.equal(
+    isWebSearchBlockedByOrg({
+      status: "managed",
+      policy: {
+        ...policy,
+        minAppVersion: "9.9.9",
+        features: { ...policy.features, webSearchEnabled: false },
+      },
+      appVersion: "1.8.1",
+    }),
+    false
+  );
+});
+
 test("cloud-backup resume fires only on a denial-to-grant transition", async () => {
   const { cloudBackupResumed } = await load();
   const unmanaged = { status: "unmanaged", policy: null, appVersion: null };
@@ -1013,6 +1062,18 @@ test("the enterprise transcription tile is offered only to a managed policy snap
     managedOptions.map((o) => o.id),
     ["openwhispr", "providers", "local", "self-hosted", "enterprise"]
   );
+});
+
+test("a failed policy fetch is settled, but idle and loading are not", async () => {
+  const { isPolicySettled } = await load();
+  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+
+  for (const status of ["managed", "unmanaged", "error"]) {
+    assert.equal(isPolicySettled(snapshot(status)), true, status);
+  }
+  for (const status of ["idle", "loading"]) {
+    assert.equal(isPolicySettled(snapshot(status)), false, status);
+  }
 });
 
 test("the local-history policy is resolved only once the fetch has settled", async () => {

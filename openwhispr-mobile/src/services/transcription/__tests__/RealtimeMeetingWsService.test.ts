@@ -113,6 +113,18 @@ async function flushMicro(): Promise<void> {
   }
 }
 
+/**
+ * Advance fake time onto the rotation seam. advanceTimersByTimeAsync yields a real event-loop
+ * turn after every timer it fires, and the flush interval fires 20,000 times before the seam, so
+ * walking all of ROTATION_MS that way tied these tests' wall time to CPU load until they hit
+ * Jest's timeout. The flush ticks queue no async work, so walk them synchronously and cross only
+ * the seam itself (where the rotation's token fetch and leg open run) asynchronously.
+ */
+async function advanceToRotation(): Promise<void> {
+  jest.advanceTimersByTime(ROTATION_MS - 1);
+  await jest.advanceTimersByTimeAsync(1);
+}
+
 function emitFrame(bytes: number[]): void {
   const calls = (addPcmFrameListener as jest.Mock).mock.calls;
   const cb = calls[calls.length - 1]?.[0] as ((frame: { audio: string }) => void) | undefined;
@@ -298,7 +310,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
     const { session, leg1 } = await boot();
     leg1.emit(completed('a', 'leg one'));
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
 
     const leg2 = lastLeg();
@@ -326,7 +338,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
 
     // The rotation's token fetch fails once; the follow-up reconnect then succeeds.
     (api.post as jest.Mock).mockRejectedValueOnce(new Error('rotate token failed'));
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
 
     // Rotation failed → fell back to a reconnect (old leg still live meanwhile).
@@ -357,7 +369,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
     });
     expect(onPartial).toHaveBeenLastCalledWith('half a senten', 'L1:x');
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
     lastLeg().open();
     await flushMicro();
@@ -369,7 +381,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
   it('routes PCM to exactly one leg across the seam', async () => {
     await boot();
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
     const leg2 = lastLeg();
     leg2.open();

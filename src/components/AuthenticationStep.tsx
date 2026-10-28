@@ -14,11 +14,10 @@ import { discoverEmailAuth } from "../lib/emailAuthDiscovery";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
-import { AlertCircle, ArrowRight, Building2, Check, Loader2, ChevronLeft } from "./icons";
+import { AlertCircle, ArrowLeft, ArrowRight, Building2, Loader2 } from "./icons";
 import logger from "../utils/logger";
 import { EMAIL_REGEX } from "../utils/validation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
-import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 import { CompactOnboardingFrame } from "./onboarding/OnboardingShell";
 import {
@@ -75,14 +74,14 @@ function ProviderTile({
       disabled={disabled}
       title={title}
       aria-label={label}
-      className="flex h-12 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
+      className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 py-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
     >
       {loading ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : (
         <Icon className="size-4" />
       )}
-      <span className="truncate text-[13px]">{label}</span>
+      <span className="truncate text-[13px] leading-5">{label}</span>
     </button>
   );
 }
@@ -166,7 +165,6 @@ export default function AuthenticationStep({
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
-  const isMacOS = getCachedPlatform() === "darwin";
 
   const needsVerificationRef = useRef(false);
 
@@ -445,16 +443,15 @@ export default function AuthenticationStep({
     return (
       <CompactOnboardingFrame embedded={embedded}>
         <div className={`${frameInset("pt-48")} text-center`}>
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-border bg-card shadow-sm">
-            <Check className="size-5 text-success" />
-          </div>
-          <p className="mt-6 text-2xl font-medium leading-tight tracking-tight">
-            <span className="block">{t("auth.signedIn.welcomeBack")}</span>
-            {user?.name && <span className="mt-1 block">{user.name}</span>}
-          </p>
-          <Button onClick={onAuthComplete} className="mt-7 h-12 w-fit min-w-32 px-6">
+          {/* One string with the name interpolated, so each locale places the
+              name and its punctuation itself (ja appends さん, ar uses ،). */}
+          <h1 className={`${titleClass} text-balance`}>
+            {user?.name
+              ? t("auth.signedIn.welcomeBackNamed", { name: user.name })
+              : t("auth.signedIn.welcomeBack")}
+          </h1>
+          <Button onClick={onAuthComplete} className="mt-6 h-10 w-full text-[15px]">
             {t("auth.common.continue")}
-            <ArrowRight className="size-4 rtl:rotate-180" />
           </Button>
           {onSignOut && (
             <button
@@ -560,7 +557,7 @@ export default function AuthenticationStep({
             onClick={handleBack}
             className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ChevronLeft className="h-3 w-3 rtl:rotate-180" />
+            <ArrowLeft className="h-3 w-3 rtl:rotate-180" />
             {t("auth.common.back")}
           </button>
 
@@ -660,7 +657,7 @@ export default function AuthenticationStep({
               style={embedded ? undefined : ({ WebkitAppRegion: "no-drag" } as React.CSSProperties)}
               disabled={isSubmitting}
             >
-              <ChevronLeft className="size-3.5 rtl:rotate-180" />
+              <ArrowLeft className="size-3.5 rtl:rotate-180" />
               {t("auth.common.back")}
             </button>
           )}
@@ -775,17 +772,13 @@ export default function AuthenticationStep({
       onClick: () => handleSocialSignIn("google"),
       loading: isSocialLoading === "google",
     },
-    ...(isMacOS
-      ? [
-          {
-            id: "apple",
-            label: "Apple",
-            icon: AppleIcon,
-            onClick: () => handleSocialSignIn("apple"),
-            loading: isSocialLoading === "apple",
-          },
-        ]
-      : []),
+    {
+      id: "apple",
+      label: "Apple",
+      icon: AppleIcon,
+      onClick: () => handleSocialSignIn("apple"),
+      loading: isSocialLoading === "apple",
+    },
     {
       id: "microsoft",
       label: "Microsoft",

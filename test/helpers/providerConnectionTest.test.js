@@ -1,8 +1,9 @@
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const test = require("node:test");
 const providerTest = require("../../src/helpers/providerConnectionTest.js");
 
-const { resolveProviderRequest, testProviderConnection } = providerTest;
+const { describeCortiTokenFailure, resolveProviderRequest, testProviderConnection } = providerTest;
 
 test("builds provider tests without placing credentials in the URL", () => {
   const request = resolveProviderRequest({ provider: "openai", apiKey: "secret" });
@@ -16,6 +17,7 @@ test("honors OpenAI base URL overrides from the environment", () => {
   try {
     const request = resolveProviderRequest({ provider: "openai", apiKey: "secret" });
     assert.deepEqual(request.endpoints, ["https://proxy.example.com/v1/models"]);
+    assert.equal(request.redirect, "follow");
   } finally {
     delete process.env.OPENAI_BASE_URL;
   }
@@ -23,7 +25,7 @@ test("honors OpenAI base URL overrides from the environment", () => {
 
 test("the realtime STT providers use their own auth schemes, not Bearer", () => {
   const deepgram = resolveProviderRequest({ provider: "deepgram", apiKey: "dg-secret" });
-  assert.equal(deepgram.endpoint, "https://api.deepgram.com/v1/models");
+  assert.equal(deepgram.endpoint, "https://api.deepgram.com/v1/auth/token");
   assert.equal(deepgram.endpoint.includes("dg-secret"), false);
   assert.equal(deepgram.headers.Authorization, "Token dg-secret");
 
@@ -33,11 +35,10 @@ test("the realtime STT providers use their own auth schemes, not Bearer", () => 
   assert.equal(assemblyai.headers.Authorization, "aai-secret");
 });
 
-// Neither payload is OpenAI-shaped, so responseOffersModel would report
+// AssemblyAI's payload is not OpenAI-shaped, so responseOffersModel would report
 // modelNotFound for a perfectly valid key.
 test("a 200 is the whole signal for providers with no OpenAI-shaped model list", async () => {
   for (const [provider, model, payload] of [
-    ["deepgram", "nova-3", { stt: [{ name: "nova-3", canonical_name: "nova-3-general" }] }],
     ["assemblyai", "universal-streaming-english", { transcripts: [], page_details: {} }],
   ]) {
     assert.deepEqual(
@@ -165,7 +166,12 @@ test("maps authentication and transport failures to safe messages", async () => 
     await testProviderConnection({ provider: "openai", apiKey: "bad" }, async () => {
       throw new Error("secret upstream detail");
     }),
-    { success: false, errorCode: "network", error: "The provider could not be reached." }
+    {
+      success: false,
+      errorCode: "network",
+      error: "The provider could not be reached.",
+      unverified: true,
+    }
   );
 
   assert.deepEqual(
@@ -178,8 +184,119 @@ test("maps authentication and transport failures to safe messages", async () => 
       errorCode: "providerStatus",
       error: "The provider returned status 500.",
       status: 500,
+      unverified: true,
     }
   );
+});
+
+test("a provider that is slow, busy or down gives no verdict, so the failure is unverified", async () => {
+  for (const status of [408, 429, 500, 502, 503, 504]) {
+    const result = await testProviderConnection({ provider: "openai", apiKey: "k" }, async () => ({
+      ok: false,
+      status,
+    }));
+    assert.equal(result.success, false, String(status));
+    assert.equal(result.errorCode, "providerStatus", String(status));
+    assert.equal(result.unverified, true, String(status));
+  }
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  for (const [error, errorCode] of [
+    [aborted, "timeout"],
+    [new TypeError("fetch failed"), "network"],
+  ]) {
+    const result = await testProviderConnection({ provider: "openai", apiKey: "k" }, async () => {
+      throw error;
+    });
+    assert.equal(result.errorCode, errorCode);
+    assert.equal(result.unverified, true, errorCode);
+  }
+});
+
+test("an answer that faults the key or the setup is never unverified", async () => {
+  const cases = [
+    [
+      { provider: "openai", apiKey: "bad" },
+      () => ({ ok: false, status: 401 }),
+      "credentialsRejected",
+    ],
+    [
+      { provider: "openai", apiKey: "bad" },
+      () => ({ ok: false, status: 403 }),
+      "credentialsRejected",
+    ],
+    [{ provider: "openai", apiKey: "k" }, () => ({ ok: false, status: 400 }), "providerStatus"],
+    [{ provider: "openai", apiKey: "k" }, () => ({ ok: false, status: 402 }), "providerStatus"],
+    [{ provider: "openai", apiKey: "k" }, () => ({ ok: false, status: 404 }), "providerStatus"],
+    [
+      { provider: "openai", apiKey: "k", model: "gone" },
+      () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: "other" }] }) }),
+      "modelNotFound",
+    ],
+    [
+      { provider: "custom", baseUrl: "http://localhost:1234" },
+      () => ({ ok: false, status: 404 }),
+      "endpointNotFound",
+    ],
+    [
+      { provider: "gemini", apiKey: "made-up" },
+      () => ({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { details: [{ reason: "API_KEY_INVALID" }] } }),
+      }),
+      "credentialsRejected",
+    ],
+  ];
+  for (const [config, answer, errorCode] of cases) {
+    const result = await testProviderConnection(config, async () => answer());
+    assert.equal(result.errorCode, errorCode, `${config.provider} ${errorCode}`);
+    assert.equal(result.unverified, undefined, `${config.provider} ${errorCode}`);
+  }
+});
+
+test("across a custom server's addresses, an answer outranks no answer", async () => {
+  const base = "http://localhost:1234";
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  const answer = (models, v1) => async (url) => {
+    const reply = url.includes("/v1/models") ? v1 : models;
+    if (reply instanceof Error) throw reply;
+    return reply;
+  };
+  const check = (config, fetchImpl) =>
+    testProviderConnection({ provider: "custom", baseUrl: base, ...config }, fetchImpl);
+  const listWithout = {
+    ok: true,
+    status: 200,
+    json: async () => ({ data: [{ id: "other" }] }),
+  };
+
+  // A busy address never hides a refused key or a missing model on the other one.
+  const missing = await check({ model: "m" }, answer({ ok: false, status: 503 }, listWithout));
+  assert.equal(missing.errorCode, "modelNotFound");
+  assert.equal(missing.unverified, undefined);
+  const refused = await check({ apiKey: "bad" }, answer(aborted, { ok: false, status: 401 }));
+  assert.equal(refused.errorCode, "credentialsRejected");
+
+  // A real status wins whichever address answered it.
+  for (const [first, second] of [
+    [400, 503],
+    [503, 400],
+  ]) {
+    const result = await check(
+      {},
+      answer({ ok: false, status: first }, { ok: false, status: second })
+    );
+    assert.equal(result.status, 400, `${first} then ${second}`);
+    assert.equal(result.unverified, undefined, `${first} then ${second}`);
+  }
+
+  // No answer outranks an address without a model list, which the server may not use.
+  const busy = await check({}, answer({ ok: false, status: 404 }, { ok: false, status: 503 }));
+  assert.equal(busy.status, 503);
+  assert.equal(busy.unverified, true);
+  const slow = await check({}, answer({ ok: false, status: 404 }, aborted));
+  assert.equal(slow.errorCode, "timeout");
+  assert.equal(slow.unverified, true);
 });
 
 test("succeeds when only the /v1 candidate responds", async () => {
@@ -226,6 +343,27 @@ test("accepts selected models from OpenAI and Gemini model-list shapes", async (
       { success: true }
     );
   }
+});
+
+// Anthropic's model list carries only dated snapshots of the aliases the registry uses.
+test("accepts an Anthropic alias by its dated snapshot, but not a prefix", async () => {
+  const check = (config, id) =>
+    testProviderConnection({ apiKey: "k", ...config }, async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [{ id }] }),
+    }));
+  const snapshot = "claude-opus-4-5-20251101";
+  assert.deepEqual(await check({ provider: "anthropic", model: "claude-opus-4-5" }, snapshot), {
+    success: true,
+  });
+  assert.equal(
+    (await check({ provider: "anthropic", model: "claude-opus-4" }, snapshot)).errorCode,
+    "modelNotFound"
+  );
+  // A custom server matches ids exactly, so it would reject the undated id.
+  const custom = { provider: "custom", baseUrl: "http://localhost:1234/v1", model: "foo" };
+  assert.equal((await check(custom, "foo-20251001")).errorCode, "modelNotFound");
 });
 
 test("continues to a compatible candidate when an earlier model list omits the selection", async () => {
@@ -278,4 +416,626 @@ test("reports endpointNotFound only after every candidate 404s", async () => {
       status: 401,
     }
   );
+});
+
+const jsonResponse = (status, body) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  // undefined is an empty body; a string is raw text (JSON.parse throws on non-JSON).
+  json: async () => {
+    if (body === undefined) throw new SyntaxError("Unexpected end of JSON input");
+    return typeof body === "string" ? JSON.parse(body) : body;
+  },
+});
+
+function recordingFetch(answer) {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return answer(url, init);
+  };
+  return { calls, fetchImpl };
+}
+
+async function listen(t, handler) {
+  const server = http.createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  return `http://127.0.0.1:${server.address().port}`;
+}
+
+const GEMINI_INVALID_KEY = {
+  error: {
+    code: 400,
+    status: "INVALID_ARGUMENT",
+    details: [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        reason: "API_KEY_INVALID",
+        domain: "googleapis.com",
+      },
+    ],
+  },
+};
+const GEMINI_OTHER_REASON = {
+  error: { code: 400, details: [{ reason: "API_KEY_SERVICE_BLOCKED" }] },
+};
+const XAI_BAD_KEY = { code: "invalid-argument", error: "Incorrect API key provided: xa***00." };
+const CORTI_MALFORMED_HEADER = { message: "Missing or malformed Authorization header" };
+
+test("any 2xx from Deepgram's key check passes, whatever the body or model", async () => {
+  const { calls, fetchImpl } = recordingFetch(() => ({ ok: true, status: 200 }));
+  const config = { provider: "deepgram", apiKey: "dg-key", model: "nova-3" };
+  assert.deepEqual(await testProviderConnection(config, fetchImpl), { success: true });
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://api.deepgram.com/v1/auth/token"]
+  );
+});
+
+test("Deepgram rejects a made-up key without trying the fallback", async () => {
+  for (const status of [401, 403]) {
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status));
+    const config = { provider: "deepgram", apiKey: "made-up" };
+    const result = await testProviderConnection(config, fetchImpl);
+    assert.equal(result.errorCode, "credentialsRejected");
+    assert.equal(result.status, status);
+    assert.deepEqual(
+      calls.map((call) => call.url),
+      ["https://api.deepgram.com/v1/auth/token"]
+    );
+  }
+});
+
+test("a retired Deepgram key route falls back to the key's project list", async () => {
+  const { calls, fetchImpl } = recordingFetch((url) =>
+    url.endsWith("/v1/auth/token") ? jsonResponse(404) : jsonResponse(200, { projects: [] })
+  );
+  const config = { provider: "deepgram", apiKey: "dg-key" };
+  assert.deepEqual(await testProviderConnection(config, fetchImpl), { success: true });
+  assert.deepEqual(
+    calls.map((call) => [call.url, call.init.headers.Authorization, call.init.redirect]),
+    [
+      ["https://api.deepgram.com/v1/auth/token", "Token dg-key", "error"],
+      ["https://api.deepgram.com/v1/projects", "Token dg-key", "error"],
+    ]
+  );
+});
+
+test("the project-list fallback passes only with its project list", async () => {
+  const afterRetiredRoute = (answer) =>
+    recordingFetch((url) => (url.endsWith("/v1/auth/token") ? jsonResponse(404) : answer))
+      .fetchImpl;
+  const config = { provider: "deepgram", apiKey: "dg-key" };
+  assert.deepEqual(
+    await testProviderConnection(config, afterRetiredRoute(jsonResponse(200, { data: [] }))),
+    { success: false }
+  );
+  const rejected = await testProviderConnection(config, afterRetiredRoute(jsonResponse(401)));
+  assert.equal(rejected.errorCode, "credentialsRejected");
+});
+
+test("a network failure on Deepgram's key check does not try the fallback", async () => {
+  const { calls, fetchImpl } = recordingFetch(() => {
+    throw new TypeError("fetch failed");
+  });
+  const result = await testProviderConnection({ provider: "deepgram", apiKey: "k" }, fetchImpl);
+  assert.equal(result.errorCode, "network");
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://api.deepgram.com/v1/auth/token"]
+  );
+});
+
+test("Deepgram's other failures keep their status and skip the fallback", async () => {
+  for (const status of [400, 429, 500]) {
+    const { calls, fetchImpl } = recordingFetch(() => jsonResponse(status));
+    const result = await testProviderConnection({ provider: "deepgram", apiKey: "k" }, fetchImpl);
+    assert.equal(result.errorCode, "providerStatus", String(status));
+    assert.equal(calls.length, 1, String(status));
+  }
+});
+
+test("Anthropic and Gemini are asked for their largest page of models", () => {
+  assert.equal(
+    resolveProviderRequest({ provider: "anthropic", apiKey: "k" }).endpoint,
+    "https://api.anthropic.com/v1/models?limit=1000"
+  );
+  assert.equal(
+    resolveProviderRequest({ provider: "gemini", apiKey: "k" }).endpoint,
+    "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+  );
+});
+
+test("Gemini, xAI and Corti rejections are read from the provider's error body", async () => {
+  const cases = [
+    ["gemini", 400, GEMINI_INVALID_KEY, "credentialsRejected"],
+    ["gemini", 400, { error: { status: "FAILED_PRECONDITION" } }, "providerStatus"],
+    ["gemini", 400, GEMINI_OTHER_REASON, "providerStatus"],
+    ["gemini", 400, undefined, "providerStatus"],
+    ["xai", 400, XAI_BAD_KEY, "credentialsRejected"],
+    ["xai", 400, { error: "incorrect api KEY provided." }, "credentialsRejected"],
+    ["xai", 400, { error: "Model grok-x does not exist" }, "providerStatus"],
+    ["xai", 400, "Bad Request", "providerStatus"],
+    ["xai", 500, XAI_BAD_KEY, "providerStatus"],
+    ["corti", 400, undefined, "credentialsRejected"],
+    ["corti", 400, "Bad Request", "credentialsRejected"],
+    ["corti", 400, { message: "Unsupported model" }, "providerStatus"],
+    ["corti", 401, CORTI_MALFORMED_HEADER, "credentialsRejected"],
+    ["corti", 500, undefined, "providerStatus"],
+  ];
+  for (const [provider, status, body, errorCode] of cases) {
+    const fetchImpl = async () => jsonResponse(status, body);
+    const result = await testProviderConnection({ provider, apiKey: "made-up" }, fetchImpl);
+    assert.equal(result.errorCode, errorCode, `${provider} ${status} ${JSON.stringify(body)}`);
+    assert.equal(result.status, status);
+  }
+});
+
+test("an error body that never arrives is a timeout or a network failure", async () => {
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  for (const [error, errorCode] of [
+    [aborted, "timeout"],
+    [new TypeError("terminated"), "network"],
+  ]) {
+    for (const provider of ["gemini", "xai", "corti"]) {
+      const fetchImpl = async () => ({
+        ok: false,
+        status: 400,
+        json: async () => {
+          throw error;
+        },
+      });
+      const result = await testProviderConnection({ provider, apiKey: "made-up" }, fetchImpl);
+      assert.equal(result.errorCode, errorCode, `${provider} ${error.name}`);
+    }
+  }
+});
+
+test("a 401 or 403 is a rejection whatever its body does", async () => {
+  let reads = 0;
+  for (const provider of ["gemini", "xai", "corti"]) {
+    for (const status of [401, 403]) {
+      const fetchImpl = async () => ({
+        ok: false,
+        status,
+        json: async () => {
+          reads += 1;
+          throw new TypeError("terminated");
+        },
+      });
+      const result = await testProviderConnection({ provider, apiKey: "made-up" }, fetchImpl);
+      assert.equal(result.errorCode, "credentialsRejected", `${provider} ${status}`);
+    }
+  }
+  assert.equal(reads, 0, "the status alone decides");
+});
+
+test("the 12 s cap covers the whole answer, body included", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  // Like fetch's own promises, these settle only when the probe's signal aborts.
+  const whenAborted = (signal) =>
+    new Promise((resolve, reject) => signal.addEventListener("abort", () => reject(aborted)));
+  const stalls = {
+    headers: (url, init) => whenAborted(init.signal),
+    body: async (url, init) => ({ ok: false, status: 400, json: () => whenAborted(init.signal) }),
+  };
+  for (const [stage, fetchImpl] of Object.entries(stalls)) {
+    const pending = testProviderConnection({ provider: "gemini", apiKey: "made-up" }, fetchImpl);
+    await new Promise(setImmediate);
+    t.mock.timers.tick(12000);
+    const settled = await Promise.race([
+      pending,
+      new Promise((resolve) => setImmediate(resolve, { errorCode: "still pending" })),
+    ]);
+    assert.equal(settled.errorCode, "timeout", stage);
+  }
+});
+
+test("other providers' error bodies are never read", async () => {
+  let reads = 0;
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => {
+      reads += 1;
+      return { error: { message: "Incorrect API key provided: sk-ma****" } };
+    },
+  });
+  for (const provider of ["openai", "groq", "mistral", "anthropic", "assemblyai", "deepgram"]) {
+    const result = await testProviderConnection({ provider, apiKey: "k" }, fetchImpl);
+    assert.equal(result.errorCode, "providerStatus", provider);
+  }
+  assert.equal(reads, 0);
+});
+
+test("a Corti key of only spaces is never sent", async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls += 1;
+  };
+  const result = await testProviderConnection({ provider: "corti", apiKey: "   " }, fetchImpl);
+  assert.equal(result.errorCode, "apiKeyRequired");
+  assert.equal(calls, 0);
+});
+
+test("hosted providers refuse redirects; custom servers keep following them", async () => {
+  const hosted = [
+    "openai",
+    "groq",
+    "xai",
+    "mistral",
+    "anthropic",
+    "gemini",
+    "openrouter",
+    "corti",
+    "tinfoil",
+    "deepgram",
+    "assemblyai",
+  ];
+  for (const provider of hosted) {
+    assert.equal(resolveProviderRequest({ provider, apiKey: "k" }).redirect, "error", provider);
+  }
+  const custom = resolveProviderRequest({ provider: "custom", baseUrl: "http://localhost:1234" });
+  assert.equal(custom.redirect, "follow");
+
+  const { calls, fetchImpl } = recordingFetch(() => jsonResponse(200, { data: [{ id: "m" }] }));
+  await testProviderConnection({ provider: "openai", apiKey: "k", model: "m" }, fetchImpl);
+  assert.equal(calls[0].init.redirect, "error");
+});
+
+test("a hosted provider's redirect fails before the key reaches another host", async (t) => {
+  const received = [];
+  const target = await listen(t, (request, response) => {
+    received.push(request.headers["x-api-key"]);
+    response.end("{}");
+  });
+  const origin = await listen(t, (request, response) => {
+    response.writeHead(302, { location: `${target}/v1/models` }).end();
+  });
+  const inits = [];
+  // Only the host changes: the real request, headers and redirect mode go to the local origin.
+  const viaOrigin = (url, init) => {
+    inits.push(init);
+    return fetch(`${origin}${new URL(url).pathname}`, init);
+  };
+  const config = { provider: "anthropic", apiKey: "sk-ant-test", model: "claude-test" };
+  assert.equal((await testProviderConnection(config, viaOrigin)).errorCode, "network");
+  assert.deepEqual(received, []);
+  // The same request allowed to follow would hand the key over, so this test can fail.
+  await fetch(`${origin}/v1/models`, { ...inits[0], redirect: "follow", signal: undefined });
+  assert.deepEqual(received, ["sk-ant-test"]);
+});
+
+test("a custom server can still redirect within itself", async (t) => {
+  const base = await listen(t, (request, response) => {
+    if (request.url === "/v1/models") {
+      response.writeHead(308, { location: "/v1/models/" }).end();
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ data: [{ id: "local-model" }] }));
+  });
+  const config = { provider: "custom", baseUrl: `${base}/v1`, model: "local-model" };
+  assert.deepEqual(await testProviderConnection(config), { success: true });
+});
+
+test("OpenRouter is checked at its key route, which a made-up key cannot pass", async () => {
+  const request = resolveProviderRequest({ provider: "openrouter", apiKey: "sk-or-made-up" });
+  assert.equal(request.endpoint, "https://openrouter.ai/api/v1/key");
+  assert.equal(request.headers.Authorization, "Bearer sk-or-made-up");
+  assert.equal(request.redirect, "error");
+  for (const status of [401, 403]) {
+    const fetchImpl = async () => jsonResponse(status, { error: { message: "User not found." } });
+    const config = { provider: "openrouter", apiKey: "sk-or-made-up" };
+    const result = await testProviderConnection(config, fetchImpl);
+    assert.equal(result.errorCode, "credentialsRejected", String(status));
+  }
+});
+
+test("an OpenRouter management key is refused, since it cannot run requests", async () => {
+  for (const flag of ["is_management_key", "is_provisioning_key"]) {
+    const fetchImpl = async () => jsonResponse(200, { data: { label: "admin", [flag]: true } });
+    const config = { provider: "openrouter", apiKey: "k" };
+    const result = await testProviderConnection(config, fetchImpl);
+    assert.equal(result.errorCode, "credentialsRejected", flag);
+  }
+});
+
+const ORDINARY_KEY = { data: { label: "laptop", is_free_tier: true, limit_remaining: null } };
+
+test("any other OpenRouter key passes, with no model check", async () => {
+  const { calls, fetchImpl } = recordingFetch(() => jsonResponse(200, ORDINARY_KEY));
+  const config = { provider: "openrouter", apiKey: "sk-or-key", model: "anthropic/claude-test" };
+  assert.deepEqual(await testProviderConnection(config, fetchImpl), { success: true });
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://openrouter.ai/api/v1/key"]
+  );
+  const unreadable = async () => jsonResponse(200, "not json");
+  assert.deepEqual(await testProviderConnection(config, unreadable), { success: true });
+  const outage = await testProviderConnection(config, async () => jsonResponse(503));
+  assert.equal(outage.errorCode, "providerStatus");
+});
+
+// The key route answers 200 with the key's description. Any other 2xx carries no key to
+// read, so an empty 204 must not pass as an ordinary key.
+test("only a 200 from the OpenRouter key route can pass", async () => {
+  const config = { provider: "openrouter", apiKey: "sk-or-key" };
+  for (const status of [204, 202]) {
+    const result = await testProviderConnection(config, async () => jsonResponse(status));
+    assert.deepEqual(
+      result,
+      {
+        success: false,
+        errorCode: "providerStatus",
+        error: `The provider returned status ${status}.`,
+        status,
+      },
+      String(status)
+    );
+  }
+});
+
+// A stand-in speech server with no model list. Its transcription address answers `status`,
+// and every request it gets is recorded with its body.
+async function speechServer(t, status) {
+  const received = [];
+  const base = await listen(t, (request, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += chunk));
+    request.on("end", () => {
+      received.push({ method: request.method, url: request.url, headers: request.headers, body });
+      response.writeHead(request.method === "POST" ? status : 404).end("{}");
+    });
+  });
+  return { base, received };
+}
+
+const speech = (baseUrl, extra = {}) => ({
+  scope: "transcription",
+  provider: "custom",
+  baseUrl,
+  model: "whisper-large-v3",
+  ...extra,
+});
+
+test("a speech server with no model list is checked at its transcription address", async (t) => {
+  for (const status of [400, 422]) {
+    const { base, received } = await speechServer(t, status);
+    const result = await testProviderConnection(speech(base, { apiKey: "sk-local" }));
+    assert.deepEqual(result, { success: true }, String(status));
+    assert.deepEqual(
+      received.map((entry) => `${entry.method} ${entry.url}`),
+      ["GET /models", "GET /v1/models", "POST /audio/transcriptions"]
+    );
+    const post = received[2];
+    assert.match(post.headers["content-type"], /^multipart\/form-data; boundary=/);
+    assert.equal(post.headers.authorization, "Bearer sk-local");
+    assert.match(post.body, /name="model"\r\n\r\nwhisper-large-v3\r\n/);
+    assert.doesNotMatch(post.body, /filename=/, "no audio is sent");
+  }
+});
+
+test("the transcription address is the one the app sends audio to", async (t) => {
+  const { base, received } = await speechServer(t, 422);
+  assert.deepEqual(await testProviderConnection(speech(`${base}/v1`)), { success: true });
+  assert.deepEqual(
+    received.map((entry) => `${entry.method} ${entry.url}`),
+    ["GET /v1/models", "POST /v1/audio/transcriptions"]
+  );
+  assert.equal(received[1].headers.authorization, undefined, "no key, no header");
+
+  // The full address with a trailing slash: the slash hides the suffix from one pass of
+  // normalizeBaseUrl, and the app's second pass is what strips it.
+  const typedInFull = await speechServer(t, 422);
+  const fullAddress = `${typedInFull.base}/v1/audio/transcriptions/`;
+  assert.deepEqual(await testProviderConnection(speech(fullAddress)), { success: true });
+  assert.deepEqual(
+    typedInFull.received
+      .filter((entry) => entry.method === "POST")
+      .map((entry) => `${entry.method} ${entry.url}`),
+    ["POST /v1/audio/transcriptions"]
+  );
+});
+
+test("the transcription address's answers keep their meaning", async (t) => {
+  const nothingHere = "Nothing takes transcriptions at this address.";
+  for (const [status, errorCode, error] of [
+    [401, "credentialsRejected", "The provider rejected these credentials."],
+    [403, "credentialsRejected", "The provider rejected these credentials."],
+    [404, "transcriptionEndpointNotFound", nothingHere],
+    [405, "transcriptionEndpointNotFound", nothingHere],
+    [500, "providerStatus", "The provider returned status 500."],
+    [200, "providerStatus", "The provider returned status 200."],
+  ]) {
+    const { base } = await speechServer(t, status);
+    const result = await testProviderConnection(speech(base));
+    assert.equal(result.errorCode, errorCode, String(status));
+    assert.equal(result.status, status);
+    assert.equal(result.error, error, String(status));
+  }
+  const flaky = recordingFetch((url, init) => {
+    if (init.method === "POST") throw new TypeError("fetch failed");
+    return jsonResponse(404);
+  });
+  const offline = await testProviderConnection(speech("http://127.0.0.1:9"), flaky.fetchImpl);
+  assert.equal(offline.errorCode, "network");
+  assert.deepEqual([flaky.calls[2].init.method, flaky.calls[2].init.redirect], ["POST", "follow"]);
+});
+
+test("only a speech check with every model list missing asks that address", async (t) => {
+  const { base, received } = await speechServer(t, 422);
+  // A language-model server keeps today's answer.
+  const reasoning = await testProviderConnection({ ...speech(base), scope: "reasoning" });
+  assert.equal(reasoning.errorCode, "endpointNotFound");
+  assert.equal(
+    received.some((entry) => entry.method === "POST"),
+    false
+  );
+
+  const keyed = recordingFetch((url) => jsonResponse(url.endsWith("/v1/models") ? 401 : 404));
+  const config = speech("http://127.0.0.1:9", { apiKey: "k" });
+  const rejected = await testProviderConnection(config, keyed.fetchImpl);
+  assert.equal(rejected.errorCode, "credentialsRejected");
+  assert.equal(keyed.calls.length, 2, "a list that answered anything but 404 already said why");
+
+  const down = recordingFetch(() => {
+    throw new TypeError("fetch failed");
+  });
+  const unreachable = await testProviderConnection(speech("http://127.0.0.1:9"), down.fetchImpl);
+  assert.equal(unreachable.errorCode, "network");
+  assert.equal(down.calls.length, 2);
+});
+
+const TINFOIL_MODELS = { data: [{ id: "voxtral-small-24b" }, { id: "gpt-oss-120b" }] };
+const TINFOIL_KEY_ROUTE = "https://inference.tinfoil.sh/v1/embeddings";
+
+function tinfoilFetch(keyAnswer, models = jsonResponse(200, TINFOIL_MODELS)) {
+  return recordingFetch((url) => (url === TINFOIL_KEY_ROUTE ? keyAnswer() : models));
+}
+
+test("a made-up Tinfoil key is refused, though Tinfoil's model list is public", async () => {
+  const { calls, fetchImpl } = tinfoilFetch(() => jsonResponse(401));
+  const result = await testProviderConnection(
+    { provider: "tinfoil", apiKey: " made-up ", model: "voxtral-small-24b" },
+    fetchImpl
+  );
+  assert.equal(result.errorCode, "credentialsRejected");
+  assert.deepEqual(
+    calls.map((call) => [call.url, call.init.method]),
+    [
+      ["https://inference.tinfoil.sh/v1/models", "GET"],
+      [TINFOIL_KEY_ROUTE, "POST"],
+    ]
+  );
+  const keyCheck = calls[1].init;
+  assert.equal(keyCheck.headers.Authorization, "Bearer made-up");
+  assert.equal(keyCheck.headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(keyCheck.body), { model: "nomic-embed-text", input: "." });
+  assert.equal(keyCheck.redirect, "error");
+});
+
+test("Tinfoil's key check spends a token, so it runs through runPaidCheck", async () => {
+  const paid = [];
+  const runPaidCheck = async (key, check) => {
+    paid.push(key);
+    return check();
+  };
+  const { fetchImpl } = tinfoilFetch(() => jsonResponse(200, { data: [] }));
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "tinfoil", apiKey: " tf-key ", model: "gpt-oss-120b" },
+      fetchImpl,
+      runPaidCheck
+    ),
+    { success: true }
+  );
+  assert.deepEqual(paid, ["tf-key"], "keyed by the trimmed key");
+
+  // A key the caller already paid for is not checked again.
+  const { calls, fetchImpl: remembered } = tinfoilFetch(() => assert.fail("paid twice"));
+  assert.deepEqual(
+    await testProviderConnection(
+      { provider: "tinfoil", apiKey: "tf-key", model: "gpt-oss-120b" },
+      remembered,
+      async () => ({ success: true })
+    ),
+    { success: true }
+  );
+  assert.equal(calls.length, 1, "the free model list still runs");
+});
+
+test("Tinfoil's model is checked on its public list before anything is paid for", async () => {
+  for (const [models, errorCode] of [
+    [jsonResponse(200, TINFOIL_MODELS), "modelNotFound"],
+    [jsonResponse(503), "providerStatus"],
+  ]) {
+    const { calls, fetchImpl } = tinfoilFetch(() => assert.fail("paid"), models);
+    const result = await testProviderConnection(
+      { provider: "tinfoil", apiKey: "tf-key", model: "retired-model" },
+      fetchImpl,
+      () => assert.fail("paid")
+    );
+    assert.equal(result.errorCode, errorCode);
+    assert.equal(calls.length, 1);
+  }
+});
+
+test("a busy Tinfoil, or a retired check model, gives no verdict on the key", async () => {
+  for (const status of [404, 429, 503]) {
+    const { fetchImpl } = tinfoilFetch(() => jsonResponse(status));
+    const result = await testProviderConnection(
+      { provider: "tinfoil", apiKey: "tf-key", model: "gpt-oss-120b" },
+      fetchImpl
+    );
+    assert.equal(result.errorCode, "providerStatus", String(status));
+    assert.equal(result.unverified, true, String(status));
+  }
+  const { fetchImpl } = tinfoilFetch(() => jsonResponse(402));
+  const unpaid = await testProviderConnection(
+    { provider: "tinfoil", apiKey: "tf-key", model: "gpt-oss-120b" },
+    fetchImpl
+  );
+  assert.equal(unpaid.status, 402);
+  assert.equal(unpaid.unverified, undefined, "an account Tinfoil refuses is an answer");
+});
+
+test("only Corti's own answer refuses its credentials; no answer is unverified", () => {
+  const cortiError = (message, status) => Object.assign(new Error(message), { status });
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  for (const [error, errorCode, unverified] of [
+    [aborted, "timeout", true],
+    [new TypeError("fetch failed"), "network", true],
+    [
+      cortiError("Corti authentication failed: 503 Service Unavailable", 503),
+      "providerStatus",
+      true,
+    ],
+    [cortiError("Corti authentication failed: 429", 429), "providerStatus", true],
+    [cortiError("Corti authentication failed: 401 invalid_client", 401), "credentialsRejected"],
+    [
+      cortiError("Corti authentication failed: 400 unauthorized_client", 400),
+      "credentialsRejected",
+    ],
+    [cortiError("Corti authentication failed: no access token in response"), "credentialsRejected"],
+    [cortiError("Invalid Corti tenant name"), "credentialsRejected"],
+  ]) {
+    const result = describeCortiTokenFailure(error);
+    assert.equal(result.success, false, error.message);
+    assert.equal(result.errorCode, errorCode, error.message);
+    assert.equal(result.unverified, unverified, error.message);
+    assert.doesNotMatch(result.error, /invalid_client|unauthorized_client/, "no upstream detail");
+  }
+});
+
+test("a model list whose body never arrives is no verdict, not a missing model", async () => {
+  const aborted = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+  for (const [error, errorCode] of [
+    [aborted, "timeout"],
+    [new TypeError("terminated"), "network"],
+  ]) {
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw error;
+      },
+    });
+    const result = await testProviderConnection(
+      { provider: "openai", apiKey: "k", model: "gpt-test" },
+      fetchImpl
+    );
+    assert.equal(result.errorCode, errorCode);
+    assert.equal(result.unverified, true);
+  }
+  const unreadable = await testProviderConnection(
+    { provider: "openai", apiKey: "k", model: "gpt-test" },
+    async () => jsonResponse(200, "not json")
+  );
+  assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
 });

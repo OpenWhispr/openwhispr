@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Keyboard, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import Animated, {
   Easing,
@@ -15,11 +16,10 @@ import Animated, {
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { KeyboardDetectedToast } from '@/components/onboarding/KeyboardDetectedToast';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { useKeyboardHeartbeat } from '@/hooks/useKeyboardHeartbeat';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
-
-const STEP_ID = 'keyboard-switch';
+import { describeOnboardingError } from '@/lib/onboardingErrors';
+import { KeyboardSwitchHelpSheet } from './KeyboardSwitchHelpSheet';
 
 // Worklet-safe color literals — `interpolateColor` runs on the UI thread, so
 // PlatformColor / iosColor() can't be used here. These match `systemBlue` and
@@ -34,9 +34,16 @@ const TRANSPARENT = 'rgba(0,0,0,0)';
 const ROW_HEIGHT = 48;
 
 export function KeyboardSwitchStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
+  const { goNext, progress } = useOnboardingStep('keyboard-switch');
   const inputRef = useRef<TextInput>(null);
-  const detected = useKeyboardHeartbeat(goNext);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const [helpVisible, setHelpVisible] = useState(false);
+  const advanceOnDetection = useCallback((): void => {
+    goNext().catch((error: unknown) => {
+      setAdvanceError(describeOnboardingError(error, 'Could not save progress.'));
+    });
+  }, [goNext]);
+  const detected = useKeyboardHeartbeat(advanceOnDetection);
 
   useEffect(() => {
     // Bring up the system keyboard so the user can reach the globe key.
@@ -46,21 +53,31 @@ export function KeyboardSwitchStep() {
     return () => clearTimeout(focusTimer);
   }, []);
 
-  const handleManualAdvance = useCallback(() => {
-    goNext();
-  }, [goNext]);
-
   const titleNode = <KeyboardSwitchTitle />;
+
+  // The keyboard covers this step's button and iOS keeps it above a modal, so help puts it away
+  // while open and brings it back for another try once the sheet has gone.
+  const openHelp = (): void => {
+    Keyboard.dismiss();
+    setHelpVisible(true);
+  };
+  const closeHelp = (): void => setHelpVisible(false);
 
   return (
     <>
       <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
-        title="Almost done. Press and hold the globe icon in the bottom-left corner of your keyboard, then select OpenWhispr."
+        progress={progress}
+        onHelp={openHelp}
+        title="Press and hold the globe icon in the bottom-left corner of your keyboard, then select OpenWhispr."
         titleNode={titleNode}
-        ctaLabel="I switched"
-        onCta={handleManualAdvance}
+        ctaLabel={advanceError ? 'Retry' : 'I switched'}
+        onCta={goNext}
       >
+        {advanceError ? (
+          <Text accessibilityRole="alert" className="text-systemRed">
+            {advanceError}
+          </Text>
+        ) : null}
         <View className="flex-1 items-center justify-start pt-6">
           <AnimatedKeyboardSwitchPreview />
         </View>
@@ -79,6 +96,11 @@ export function KeyboardSwitchStep() {
         />
       </OnboardingShell>
 
+      <KeyboardSwitchHelpSheet
+        visible={helpVisible}
+        onClose={closeHelp}
+        onDismissed={() => inputRef.current?.focus()}
+      />
       {detected ? <KeyboardDetectedToast message="OpenWhispr keyboard is active" /> : null}
     </>
   );
@@ -87,15 +109,26 @@ export function KeyboardSwitchStep() {
 function KeyboardSwitchTitle() {
   return (
     <View>
-      <Text className="text-[28px] font-medium leading-[34px] text-label">Almost done.</Text>
+      <Text
+        accessibilityRole="header"
+        className="text-[28px] font-medium leading-[34px] text-label"
+      >
+        Switch to OpenWhispr.
+      </Text>
       <View className="flex-row flex-wrap items-center">
-        <Text className="text-[28px] font-medium leading-[34px] text-label">
+        <Text
+          accessibilityRole="header"
+          className="text-[28px] font-medium leading-[34px] text-label"
+        >
           Press and hold the{' '}
         </Text>
         <View className="h-8 w-8 items-center justify-center rounded-full bg-secondarySystemGroupedBackground">
           <SystemIcon name="globe" mdName="Globe" size={16} color="label" />
         </View>
-        <Text className="text-[28px] font-medium leading-[34px] text-label">
+        <Text
+          accessibilityRole="header"
+          className="text-[28px] font-medium leading-[34px] text-label"
+        >
           {' '}
           icon in the bottom-left corner of your keyboard, then select{' '}
           <Text className="text-primary">OpenWhispr</Text>
@@ -193,7 +226,7 @@ function Divider() {
 
 const styles = StyleSheet.create({
   highlightedRowLabel: {
-    fontFamily: SpaceGrotesk.semibold,
+    fontFamily: AppFont.semibold,
     fontSize: 16,
     fontWeight: '600',
   },

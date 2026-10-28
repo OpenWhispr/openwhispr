@@ -79,6 +79,7 @@ test("_mapEvent maps a Graph event to the shared calendar_events shape", () => {
       responseStatus: { response: "declined" },
       onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
       organizer: { emailAddress: { address: "organizer@example.com" } },
+      webLink: "https://outlook.office365.com/owa/?itemid=abc",
       attendees: [
         {
           emailAddress: { address: "me@example.com", name: "Me" },
@@ -98,6 +99,7 @@ test("_mapEvent maps a Graph event to the shared calendar_events shape", () => {
   assert.equal(mapped.self_response_status, "declined");
   assert.equal(mapped.hangout_link, "https://teams.microsoft.com/l/meetup-join/abc");
   assert.equal(mapped.organizer_email, "organizer@example.com");
+  assert.equal(mapped.web_link, "https://outlook.office365.com/owa/?itemid=abc");
   assert.equal(mapped.attendees_count, 2);
 
   const attendees = JSON.parse(mapped.attendees);
@@ -144,8 +146,9 @@ function createManager(MicrosoftCalendarManager, upserted, contacts = [], overri
       upsertCalendarEvents: (events) => upserted.push(...events),
       removeCalendarEvents: () => {},
       updateMicrosoftCalendarSyncToken: () => {},
-      upsertContacts: (rows) => contacts.push(...rows),
+      syncCalendarContacts: (_provider, _accountEmail, rows) => contacts.push(...rows),
       getCalendarEventById: () => null,
+      getMicrosoftOwnAddresses: () => [],
       ...overrides,
     },
     {}
@@ -197,11 +200,12 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
       id: "master-1",
       subject: "Standup",
       isAllDay: false,
+      webLink: "https://outlook.office365.com/owa/?itemid=master-1",
       onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
       organizer: { emailAddress: { address: "organizer@example.com" } },
       attendees: [
         {
-          emailAddress: { address: "me@example.com", name: "Me" },
+          emailAddress: { address: "teammate@example.com", name: "Teammate" },
           status: { response: "accepted" },
         },
       ],
@@ -212,16 +216,24 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
 
   assert.equal(masterFetches.length, 1);
   assert.match(masterFetches[0], /^\/me\/calendars\/cal-1\/events\/master-1\?\$select=/);
+  assert.ok(
+    new URL(masterFetches[0], "https://graph.microsoft.com").searchParams
+      .get("$select")
+      .split(",")
+      .includes("webLink"),
+    "the master fetch asks for its web link"
+  );
 
   const occurrence = upserted.find((event) => event.id === "occ-1");
   assert.equal(occurrence.summary, "Standup");
   assert.equal(occurrence.start_time, "2026-07-20T09:25:00Z");
   assert.equal(occurrence.hangout_link, "https://teams.microsoft.com/l/meetup-join/abc");
   assert.equal(occurrence.organizer_email, "organizer@example.com");
+  assert.equal(occurrence.web_link, "https://outlook.office365.com/owa/?itemid=master-1");
   assert.equal(occurrence.attendees_count, 1);
   assert.equal(upserted.find((event) => event.id === "occ-2").summary, "Standup");
   assert.equal(upserted.find((event) => event.id === "evt-1").summary, "One-off");
-  assert.ok(contacts.some((contact) => contact.email === "me@example.com"));
+  assert.ok(contacts.some((contact) => contact.email === "teammate@example.com"));
   assert.ok(tokenWrites[0].expiresAt > Date.now() + 6 * 24 * 60 * 60 * 1000);
 });
 
@@ -307,4 +319,187 @@ test("_syncCalendar keeps the stored row when a stripped occurrence's master fet
     ["evt-1"]
   );
   assert.deepEqual(staleKeepLists, [["occ-1", "evt-1"]]);
+});
+
+test("_syncCalendar flags rooms and resources and keeps them and the user out of contacts", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const upserted = [];
+  const synced = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    syncCalendarContacts: (...args) => synced.push(args),
+  });
+  manager._apiGet = async () => ({
+    "@odata.deltaLink": "delta-link",
+    value: [
+      {
+        id: "evt-room",
+        subject: "Planning",
+        start: { dateTime: "2026-07-20T17:00:00.0000000" },
+        end: { dateTime: "2026-07-20T17:30:00.0000000" },
+        attendees: [
+          {
+            type: "required",
+            emailAddress: { address: "ana@example.com", name: "Ana" },
+            status: { response: "accepted" },
+          },
+          {
+            type: "resource",
+            emailAddress: { address: "boardroom@example.com", name: "Boardroom" },
+            status: { response: "accepted" },
+          },
+          {
+            type: "required",
+            emailAddress: { address: "Me@example.com", name: "Me" },
+            status: { response: "organizer" },
+          },
+        ],
+      },
+    ],
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+
+  const attendees = JSON.parse(upserted[0].attendees);
+  assert.equal(attendees[0].resource, undefined);
+  assert.equal(attendees[1].resource, true);
+  // Rows older builds stored for the room and the user are purged.
+  assert.deepEqual(synced, [
+    [
+      "microsoft",
+      "me@example.com",
+      [{ email: "ana@example.com", displayName: "Ana" }],
+      ["boardroom@example.com", "Me@example.com"],
+    ],
+  ]);
+});
+
+test("_syncCalendar keeps the user's other Microsoft addresses out of contacts", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const synced = [];
+  const manager = createManager(MicrosoftCalendarManager, [], [], {
+    getMicrosoftOwnAddresses: (email) =>
+      email === "cpiha@corp.test" ? ["chad.piha@corp.test"] : [],
+    syncCalendarContacts: (...args) => synced.push(args),
+  });
+  manager._apiGet = async () => ({
+    "@odata.deltaLink": "delta-link",
+    value: [
+      {
+        id: "evt-1",
+        subject: "Planning",
+        start: { dateTime: "2026-07-20T17:00:00.0000000" },
+        end: { dateTime: "2026-07-20T17:30:00.0000000" },
+        attendees: [
+          { type: "required", emailAddress: { address: "ana@corp.test", name: "Ana" } },
+          { type: "required", emailAddress: { address: "Chad.Piha@corp.test", name: "Chad" } },
+        ],
+      },
+    ],
+  });
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "cpiha@corp.test" });
+
+  assert.deepEqual(synced[0].slice(2), [
+    [{ email: "ana@corp.test", displayName: "Ana" }],
+    ["Chad.Piha@corp.test"],
+  ]);
+});
+
+test("fetchCalendars stores the account's mail, sign-in name and SMTP aliases", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const saved = [];
+  const manager = new MicrosoftCalendarManager(
+    {
+      saveMicrosoftCalendars: () => {},
+      saveMicrosoftOwnAddresses: (email, addresses) => saved.push([email, addresses]),
+      applyMicrosoftPrimaryOnlyToSelection: () => {},
+      removeEventsFromDeselectedCalendars: () => {},
+    },
+    {}
+  );
+  const paths = [];
+  manager._apiGet = async (path) => {
+    paths.push(path);
+    if (path.startsWith("/me/calendars")) return { value: [] };
+    return {
+      mail: "Chad.Piha@corp.test",
+      userPrincipalName: "cpiha@corp.test",
+      proxyAddresses: ["SMTP:Chad.Piha@corp.test", "smtp:chad@old-corp.test", "SIP:chad@corp.test"],
+    };
+  };
+
+  await manager.fetchCalendars("cpiha@corp.test");
+
+  assert.deepEqual(saved, [
+    ["cpiha@corp.test", ["chad.piha@corp.test", "cpiha@corp.test", "chad@old-corp.test"]],
+  ]);
+  assert.ok(paths.includes("/me?$select=mail,userPrincipalName,proxyAddresses"));
+});
+
+test("fetchCalendars still saves the calendars when the address lookup fails", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const savedCalendars = [];
+  const manager = new MicrosoftCalendarManager(
+    {
+      saveMicrosoftCalendars: (calendars) => savedCalendars.push(...calendars),
+      saveMicrosoftOwnAddresses: () => assert.fail("nothing to save"),
+      applyMicrosoftPrimaryOnlyToSelection: () => {},
+      removeEventsFromDeselectedCalendars: () => {},
+    },
+    {}
+  );
+  manager._apiGet = async (path) => {
+    if (path.startsWith("/me?")) throw new Error("API error 400");
+    return { value: [{ id: "cal-1", name: "Calendar", isDefaultCalendar: true }] };
+  };
+
+  const calendars = await manager.fetchCalendars("me@outlook.test");
+
+  assert.equal(calendars.length, 1);
+  assert.equal(savedCalendars.length, 1);
+});
+
+test("a stripped occurrence keeps details but applies explicit RSVP after master failure", async () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const original = {
+    id: "occ-1",
+    calendar_id: "cal-1",
+    provider: "microsoft",
+    summary: "Standup",
+    start_time: "2026-10-01T10:00:00Z",
+    end_time: "2026-10-01T11:00:00Z",
+    is_all_day: 0,
+    status: "confirmed",
+    availability_status: "busy",
+    self_response_status: "accepted",
+    hangout_link: "https://teams.live.com/meet/123",
+    attendees_count: 1,
+    attendees: '[{"email":"guest@example.com"}]',
+  };
+  const upserted = [];
+  const manager = createManager(MicrosoftCalendarManager, upserted, [], {
+    getCalendarEventById: () => original,
+  });
+  manager._apiGet = async (url) => {
+    if (!url.includes("/calendarView/delta")) throw new Error("master unavailable");
+    return {
+      value: [{ ...STRIPPED_OCCURRENCE, responseStatus: { response: "declined" } }],
+    };
+  };
+  await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
+  assert.deepEqual(upserted, [{ ...original, self_response_status: "declined" }]);
+});
+
+test("_deltaUrl starts CALENDAR_LOOKBACK_DAYS back", () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const { CALENDAR_LOOKBACK_MS } = require("../../src/helpers/calendarCacheWindow.js");
+  const manager = new MicrosoftCalendarManager({}, {});
+
+  const params = new URL(manager._deltaUrl("cal-1"), "https://graph.microsoft.com").searchParams;
+
+  const now = Date.now();
+  assert.ok(
+    Math.abs(Date.parse(params.get("startDateTime")) - (now - CALENDAR_LOOKBACK_MS)) < 5_000
+  );
+  assert.ok(Math.abs(Date.parse(params.get("endDateTime")) - (now + 38 * 86_400_000)) < 5_000);
 });

@@ -9,7 +9,7 @@ import {
 } from "../stores/noteStore";
 import { startRecording, useMeetingRecordingStore } from "../stores/meetingRecordingStore";
 import { useTranscriptionContextAllowed } from "./usePolicy";
-import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
+import { parseSeedSegments } from "../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/participants";
 import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 
@@ -19,7 +19,7 @@ export function startRecordingForNote(note: NoteItem | null): Promise<boolean> {
     noteId: note?.id ?? null,
     noteTitle: note?.title ?? null,
     folderId: note?.folder_id ?? null,
-    seedSegments: note?.transcript ? parseTranscriptSegments(note.transcript) : [],
+    seedSegments: parseSeedSegments(note?.transcript),
     diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
     expectedCount: resolveExpectedSpeakerCount(note),
     expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),

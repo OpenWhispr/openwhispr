@@ -14,14 +14,18 @@ class CalendarSyncInterval {
     this.timer = null;
     this._consecutiveFailures = 0;
     this._lastFocusSync = 0;
+    // Pending syncs must not revive a stopped timer or alter a later run.
+    this._generation = 0;
   }
 
   start() {
+    this._generation++;
     this._consecutiveFailures = 0;
     this._schedule();
   }
 
   stop() {
+    this._generation++;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -32,7 +36,7 @@ class CalendarSyncInterval {
   notifySuccess() {
     if (this._consecutiveFailures > 0) {
       this._consecutiveFailures = 0;
-      this._schedule();
+      if (this.timer) this._schedule();
     }
   }
 
@@ -41,8 +45,11 @@ class CalendarSyncInterval {
     if (now - this._lastFocusSync < FOCUS_SYNC_THROTTLE_MS) return;
     this._lastFocusSync = now;
 
+    const generation = this._generation;
     this.syncFn()
-      .then(() => this.notifySuccess())
+      .then(() => {
+        if (generation === this._generation) this.notifySuccess();
+      })
       .catch((err) =>
         debugLogger.error("Focus-triggered sync failed", { error: err.message }, this.logScope)
       );
@@ -58,10 +65,14 @@ class CalendarSyncInterval {
       this.logScope
     );
 
+    const generation = this._generation;
     this.timer = setInterval(() => {
       this.syncFn()
-        .then(() => this.notifySuccess())
+        .then(() => {
+          if (generation === this._generation) this.notifySuccess();
+        })
         .catch((err) => {
+          if (generation !== this._generation) return;
           this._consecutiveFailures++;
           debugLogger.error(
             "Calendar sync failed",

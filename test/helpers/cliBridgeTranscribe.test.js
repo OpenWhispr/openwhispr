@@ -15,6 +15,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 };
 
 const CliBridge = require("../../src/helpers/cliBridge.js");
+const { call } = require("./harness/cliBridge.js");
 
 const MODELS = [
   { provider: "whisper", model: "base", downloaded: true, default: true },
@@ -34,16 +35,6 @@ function createBridge(models = MODELS) {
     },
   });
   return { bridge, calls };
-}
-
-function call(bridge, method, pathname, body) {
-  for (const route of bridge.routes) {
-    if (route.method !== method) continue;
-    const params = route.match(pathname);
-    if (!params) continue;
-    return route.handler({ params, query: new URLSearchParams(), body });
-  }
-  throw new Error(`No route for ${method} ${pathname}`);
 }
 
 function audioFile() {

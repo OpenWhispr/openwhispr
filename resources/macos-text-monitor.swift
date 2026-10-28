@@ -1,3 +1,4 @@
+import Carbon
 import Cocoa
 import Foundation
 import Darwin
@@ -31,6 +32,16 @@ func writeTextOutput(_ prefix: String, _ value: String) {
     writeOutput("\(prefix):\(truncated)")
 }
 
+func elementRole(_ element: AXUIElement) -> String? {
+    var roleValue: AnyObject?
+    guard AXUIElementCopyAttributeValue(
+        element,
+        kAXRoleAttribute as CFString,
+        &roleValue
+    ) == .success else { return nil }
+    return roleValue as? String
+}
+
 func isEditableTextElement(_ element: AXUIElement) -> Bool {
     // A live selection means an editable verdict would let generated text
     // paste over the user's highlighted text (--editable-target mode probes
@@ -62,12 +73,7 @@ func isEditableTextElement(_ element: AXUIElement) -> Bool {
         return false
     }
 
-    var roleValue: AnyObject?
-    guard AXUIElementCopyAttributeValue(
-        element,
-        kAXRoleAttribute as CFString,
-        &roleValue
-    ) == .success, let role = roleValue as? String,
+    guard let role = elementRole(element),
           ["AXTextField", "AXTextArea", "AXComboBox"].contains(role)
     else {
         return false
@@ -113,18 +119,24 @@ func observerCallback(
 //        macos-text-monitor --selected-text <pid>
 //        macos-text-monitor --editable-target <pid>
 //        macos-text-monitor --window-bounds <pid>
+//        macos-text-monitor --app-context <pid>
 let selectionReadMode = CommandLine.arguments.count >= 3 &&
     CommandLine.arguments[1] == "--selected-text"
 let editableTargetMode = CommandLine.arguments.count >= 3 &&
     CommandLine.arguments[1] == "--editable-target"
 let windowBoundsMode = CommandLine.arguments.count >= 3 &&
     CommandLine.arguments[1] == "--window-bounds"
-let pidArgumentIndex = selectionReadMode || editableTargetMode || windowBoundsMode ? 2 : 1
+let appContextMode = CommandLine.arguments.count >= 3 &&
+    CommandLine.arguments[1] == "--app-context"
+let pidArgumentIndex =
+    selectionReadMode || editableTargetMode || windowBoundsMode || appContextMode ? 2 : 1
 
 guard CommandLine.arguments.count > pidArgumentIndex,
       let targetPid = Int32(CommandLine.arguments[pidArgumentIndex]),
       targetPid > 0 else {
-    writeError("Usage: macos-text-monitor [--selected-text|--editable-target|--window-bounds] <pid>")
+    writeError(
+        "Usage: macos-text-monitor [--selected-text|--editable-target|--window-bounds|--app-context] <pid>"
+    )
     writeOutput("NO_ELEMENT")
     exit(1)
 }
@@ -161,6 +173,48 @@ if windowBoundsMode {
         exit(1)
     }
     writeOutput("BOUNDS:\(window.x),\(window.y),\(window.width),\(window.height)")
+    exit(0)
+}
+
+// Names the target app and the page a browser shows, so dictation cleanup can
+// match the tone to where the text goes. The window title comes from
+// accessibility, which needs no Screen Recording permission (only window
+// server titles do); the page URL comes from the focused element's web area,
+// which Safari exposes and Chromium exposes once its tree is awake. Only the
+// URL's host is printed. Anything unreadable is left out.
+if appContextMode {
+    if let app = NSRunningApplication(processIdentifier: targetPid) {
+        if let name = app.localizedName { writeTextOutput("APP_NAME", name) }
+        if let bundleId = app.bundleIdentifier { writeTextOutput("BUNDLE_ID", bundleId) }
+    }
+
+    // Set on the system-wide element, the timeout covers every element read
+    // below, so a busy app can't hold the dictation for the 6 s default.
+    AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.5)
+    let app = AXUIElementCreateApplication(targetPid)
+    func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
+        var value: AnyObject?
+        return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success
+            ? value : nil
+    }
+
+    if let window = attribute(app, kAXFocusedWindowAttribute),
+       let title = attribute(window as! AXUIElement, kAXTitleAttribute) as? String,
+       !title.isEmpty {
+        writeTextOutput("WINDOW_TITLE", title)
+    }
+
+    var element = attribute(app, kAXFocusedUIElementAttribute).map { $0 as! AXUIElement }
+    for _ in 0..<40 {
+        guard let current = element else { break }
+        if elementRole(current) == "AXWebArea" {
+            if let host = (attribute(current, "AXURL") as? URL)?.host {
+                writeOutput("URL_HOST:\(host)")
+            }
+            break
+        }
+        element = attribute(current, kAXParentAttribute).map { $0 as! AXUIElement }
+    }
     exit(0)
 }
 
@@ -201,14 +255,33 @@ for attempt in 1...maxRetries {
     }
 }
 
+// The editable probe answers in three states: UNKNOWN is the dormant-tree
+// signature (Chromium-family apps never resolve a focused element, or resolve
+// only the bare window), telling the caller accessibility cannot see the field
+// — distinct from a resolved non-text element, a confirmed NOT_EDITABLE.
+if editableTargetMode {
+    // Secure input is a session-global flag set while a password field holds
+    // keyboard focus, covering the fields a dormant tree hides from the
+    // AXSecureTextField subrole check.
+    if IsSecureEventInputEnabled() {
+        writeOutput("NOT_EDITABLE")
+        exit(0)
+    }
+    guard let element = focusedElement else {
+        writeOutput("UNKNOWN")
+        exit(0)
+    }
+    if isEditableTextElement(element) {
+        writeOutput("EDITABLE")
+    } else {
+        writeOutput(elementRole(element) == "AXWindow" ? "UNKNOWN" : "NOT_EDITABLE")
+    }
+    exit(0)
+}
+
 guard let resolvedElement = focusedElement else {
     writeOutput("NO_ELEMENT")
     exit(1)
-}
-
-if editableTargetMode {
-    writeOutput(isEditableTextElement(resolvedElement) ? "EDITABLE" : "NOT_EDITABLE")
-    exit(0)
 }
 
 // Selection capture is a short-lived, read-only mode used before an AI edit.
@@ -232,7 +305,11 @@ if selectionReadMode {
     }
 
     if selectionResult == .noValue || selectionResult == .attributeUnsupported {
-        writeOutput("NONE:")
+        // A dormant Chromium tree reports the window itself as the focused
+        // element; its unsupported AXSelectedText is not evidence of an empty
+        // selection, so surface it as UNKNOWN and let the synthetic-copy path
+        // read the real selection state.
+        writeOutput(elementRole(resolvedElement) == "AXWindow" ? "UNKNOWN:" : "NONE:")
         exit(0)
     }
 

@@ -11,13 +11,20 @@ test("non-streaming LLM requests use the fixed 30-second timeout", async () => {
   assert.equal(getLlmRequestTimeoutSeconds({ scope: "dictationCleanup" }), 30);
 });
 
-test("streaming LLM requests keep their fixed 60-second timeout", async () => {
+test("streaming LLM requests use a 60-second idle timeout", async () => {
   const { getLlmRequestTimeoutSeconds } = await load();
 
   assert.equal(typeof getLlmRequestTimeoutSeconds, "function");
   assert.equal(getLlmRequestTimeoutSeconds({ streaming: true }), 60);
   // Streaming keeps its idle deadline whatever the scope: bytes are expected to flow.
   assert.equal(getLlmRequestTimeoutSeconds({ streaming: true, scope: "noteFormatting" }), 60);
+});
+
+test("local and self-hosted streams get a longer wait for the first bytes", async () => {
+  const { getLlmStreamingFirstByteTimeoutSeconds } = await load();
+
+  assert.equal(getLlmStreamingFirstByteTimeoutSeconds(), 60);
+  assert.equal(getLlmStreamingFirstByteTimeoutSeconds({ selfHosted: true }), 600);
 });
 
 test("note formatting gets a long deadline, since a whole transcript can take minutes to reason over", async () => {

@@ -10,6 +10,7 @@ const makeLocal = () =>
   ({
     replaceSegments: jest.fn(),
     updateSpeaker: jest.fn(),
+    createOwnerProfileForSpeaker: jest.fn(() => ({ id: 3 })),
     mergeSpeakers: jest.fn(),
     moveNoteToSpace: jest.fn(),
     getNotesBySpace: jest.fn(() => []),
@@ -29,6 +30,19 @@ describe('SyncedNotesRepository — transcript writes are syncable', () => {
     const local = makeLocal();
     new SyncedNotesRepository(local).updateSpeaker(5, { displayName: 'Alice' });
     expect(local.updateSpeaker).toHaveBeenCalledWith(5, { displayName: 'Alice' });
+    expect(mockRequestSync).toHaveBeenCalledWith('after-write');
+  });
+
+  it('createOwnerProfileForSpeaker delegates and nudges a debounced sync for the speaker row', () => {
+    const local = makeLocal();
+    const input = { displayName: 'Me', embedding: [1], consentAt: 'now' };
+    const profile = new SyncedNotesRepository(local).createOwnerProfileForSpeaker(5, input, {
+      displayName: 'Me',
+    });
+    expect(local.createOwnerProfileForSpeaker).toHaveBeenCalledWith(5, input, {
+      displayName: 'Me',
+    });
+    expect(profile).toEqual({ id: 3 });
     expect(mockRequestSync).toHaveBeenCalledWith('after-write');
   });
 

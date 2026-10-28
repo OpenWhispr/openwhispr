@@ -1,3 +1,5 @@
+jest.mock('@/lib/inferenceRouting', () => ({ getInferenceSelection: jest.fn(() => undefined) }));
+
 jest.mock('@/lib/apiClient', () => ({
   api: {
     post: jest.fn(),

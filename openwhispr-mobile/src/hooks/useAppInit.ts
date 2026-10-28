@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -33,4 +34,10 @@ export function useAppInit() {
     loadConfig,
     loadTranscripts,
   ]);
+
+  // After notes load and before any meeting can start: recover meeting notes whose
+  // process died mid-recording or mid-pipeline.
+  useEffect(() => {
+    if (isNotesInitialized) startMeetingRecoveryOnce();
+  }, [isNotesInitialized]);
 }

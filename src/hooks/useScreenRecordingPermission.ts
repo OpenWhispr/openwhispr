@@ -52,6 +52,8 @@ export function useScreenRecordingPermission() {
     granted: access?.granted ?? false,
     supported: access?.supported ?? true,
     needsRelaunch: access?.needsRelaunch ?? false,
+    loaded: access !== null,
+    check,
     request,
     isMacOS,
   };

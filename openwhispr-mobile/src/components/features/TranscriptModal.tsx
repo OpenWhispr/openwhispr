@@ -66,6 +66,10 @@ export function TranscriptModal({ transcript, visible, onClose }: TranscriptModa
           </GlassIconButton>
         </View>
 
+        {transcript.cleanupWarning ? (
+          <Text className="mx-6 mb-2 text-sm text-secondaryLabel">{transcript.cleanupWarning}</Text>
+        ) : null}
+
         {hasReasonedText && (
           <View className="mx-6 mb-2 flex-row bg-tertiarySystemFill rounded-lg p-0.5">
             <Pressable

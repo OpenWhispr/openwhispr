@@ -60,6 +60,26 @@ describe('LocalTranscriptionService', () => {
     });
   });
 
+  it('transcribes with the model picked for the workflow', async () => {
+    setLanguages(['en']);
+    const response = await LocalTranscriptionService.transcribe('file://a.wav', {
+      language: 'en',
+      model: 'parakeet-v3',
+    });
+    expect(mockParakeet.transcribe).toHaveBeenCalledWith(
+      'file://a.wav',
+      expect.objectContaining({ version: 'v3' }),
+    );
+    expect(response.endpoint).toBe('parakeet-v3');
+  });
+
+  it('warms the picked model instead of the automatic one', async () => {
+    setLanguages(['en']);
+    await LocalTranscriptionService.prepareForLanguage('en', 'whisper-base');
+    expect(mockWhisper.prepareForLanguage).toHaveBeenCalledWith('en');
+    expect(mockParakeet.prepare).not.toHaveBeenCalled();
+  });
+
   it('routes English dictation to Parakeet v2 with the language hint', async () => {
     setLanguages(['en']);
     const response = await LocalTranscriptionService.transcribe('file://a.wav', {

@@ -1,5 +1,6 @@
 import {
   PARAKEET_V3_LANGUAGES,
+  localModelCoversLanguages,
   preferredEngineForLanguages,
   selectLocalEngine,
   type LocalEngineAvailability,
@@ -67,26 +68,40 @@ describe('selectLocalEngine', () => {
     expect(selectLocalEngine(['de'], all())).toEqual({ engine: 'parakeet', version: 'v3' });
   });
 
-  it('falls back to Whisper when the preferred Parakeet is not downloaded', () => {
+  it('falls back to the next downloaded model that covers the languages', () => {
     expect(selectLocalEngine(['en'], all({ parakeetV2Downloaded: false }))).toEqual({
-      engine: 'whisper',
+      engine: 'parakeet',
+      version: 'v3',
     });
+    expect(
+      selectLocalEngine(['en'], all({ parakeetV2Downloaded: false, parakeetV3Downloaded: false })),
+    ).toEqual({ engine: 'whisper' });
     expect(selectLocalEngine(['de'], all({ parakeetV3Downloaded: false }))).toEqual({
       engine: 'whisper',
     });
   });
 
-  it('reports the missing preferred model when nothing is downloaded', () => {
+  it('uses Parakeet v3 for English when it is the only model downloaded', () => {
     expect(
       selectLocalEngine(['en'], all({ parakeetV2Downloaded: false, whisperDownloaded: false })),
-    ).toEqual({ engine: 'none', preferred: 'parakeet-v2' });
-    expect(
-      selectLocalEngine(['de'], all({ parakeetV3Downloaded: false, whisperDownloaded: false })),
-    ).toEqual({ engine: 'none', preferred: 'parakeet-v3' });
-    expect(selectLocalEngine([], all({ whisperDownloaded: false }))).toEqual({
+    ).toEqual({ engine: 'parakeet', version: 'v3' });
+  });
+
+  it('reports the missing preferred model when nothing is downloaded', () => {
+    const nothing = {
+      parakeetV2Downloaded: false,
+      parakeetV3Downloaded: false,
+      whisperDownloaded: false,
+    };
+    expect(selectLocalEngine(['en'], all(nothing))).toEqual({
       engine: 'none',
-      preferred: 'whisper',
+      preferred: 'parakeet-v2',
     });
+    expect(selectLocalEngine(['de'], all(nothing))).toEqual({
+      engine: 'none',
+      preferred: 'parakeet-v3',
+    });
+    expect(selectLocalEngine([], all(nothing))).toEqual({ engine: 'none', preferred: 'whisper' });
   });
 
   it('always routes to Whisper when the native module is unsupported (Android/Expo Go)', () => {
@@ -98,10 +113,65 @@ describe('selectLocalEngine', () => {
     ).toEqual({ engine: 'none', preferred: 'whisper' });
   });
 
-  it('never falls "up" to Parakeet for Whisper-bound selections', () => {
+  it('uses a downloaded model that misses a language rather than none at all', () => {
     expect(selectLocalEngine(['ja'], all({ whisperDownloaded: false }))).toEqual({
-      engine: 'none',
-      preferred: 'whisper',
+      engine: 'parakeet',
+      version: 'v3',
+    });
+    expect(
+      selectLocalEngine([], all({ parakeetV2Downloaded: false, whisperDownloaded: false })),
+    ).toEqual({ engine: 'parakeet', version: 'v3' });
+    expect(
+      selectLocalEngine(['de'], all({ parakeetV3Downloaded: false, whisperDownloaded: false })),
+    ).toEqual({ engine: 'parakeet', version: 'v2' });
+  });
+});
+
+describe('localModelCoversLanguages', () => {
+  it('limits Parakeet v2 to English', () => {
+    expect(localModelCoversLanguages('parakeet-v2', ['en-US', 'en'])).toBe(true);
+    expect(localModelCoversLanguages('parakeet-v2', ['en', 'fr'])).toBe(false);
+  });
+
+  it('limits Parakeet v3 to its languages', () => {
+    expect(localModelCoversLanguages('parakeet-v3', ['fr', 'de'])).toBe(true);
+    expect(localModelCoversLanguages('parakeet-v3', ['he'])).toBe(false);
+  });
+
+  it('leaves auto-detect to Whisper', () => {
+    expect(localModelCoversLanguages('parakeet-v2', [])).toBe(false);
+    expect(localModelCoversLanguages('parakeet-v3', ['auto'])).toBe(false);
+    expect(localModelCoversLanguages('whisper-base', [])).toBe(true);
+    expect(localModelCoversLanguages('whisper-base', ['he', 'fr'])).toBe(true);
+  });
+});
+
+describe('selectLocalEngine with a picked model', () => {
+  it('uses a downloaded model that covers the languages over the automatic choice', () => {
+    expect(selectLocalEngine(['fr'], all(), 'whisper-base')).toEqual({ engine: 'whisper' });
+    expect(selectLocalEngine(['en'], all(), 'parakeet-v3')).toEqual({
+      engine: 'parakeet',
+      version: 'v3',
+    });
+  });
+
+  it('falls back to the automatic choice when the picked model is not downloaded', () => {
+    expect(selectLocalEngine(['en'], all({ parakeetV3Downloaded: false }), 'parakeet-v3')).toEqual({
+      engine: 'parakeet',
+      version: 'v2',
+    });
+  });
+
+  it('falls back to the automatic choice when the picked model misses a language', () => {
+    expect(selectLocalEngine(['fr'], all(), 'parakeet-v2')).toEqual({
+      engine: 'parakeet',
+      version: 'v3',
+    });
+  });
+
+  it('falls back when Parakeet is unavailable on this device', () => {
+    expect(selectLocalEngine(['en'], all({ parakeetSupported: false }), 'parakeet-v2')).toEqual({
+      engine: 'whisper',
     });
   });
 });

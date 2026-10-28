@@ -18,3 +18,8 @@ describe('keyboardTone', () => {
     expect(isToneApplicable('private', true)).toBe(false);
   });
 });
+
+it('supports Providers mode', () => {
+  expect(isToneApplicable('providers', true)).toBe(true);
+  expect(isToneApplicable('providers', false)).toBe(false);
+});

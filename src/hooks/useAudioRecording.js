@@ -6,6 +6,7 @@ import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
+import { providerErrorActions } from "../utils/describeProviderError";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { needsSttConfigBeforeStart } from "../helpers/sttConfigPolicy";
 import {
@@ -33,6 +34,13 @@ const SELECTION_EDIT_DETAIL_KEY_BY_CODE = {
   selection_changed: "changed",
   session_expired: "expired",
   paste_failed: "pasteFailed",
+  wl_copy_missing: "wlCopyMissing",
+  wl_copy_failed: "wlCopyFailed",
+};
+// Pastes held back because Wayland apps can't read the text yet (#2621).
+const WAYLAND_CLIPBOARD_REASON_KEYS = {
+  "wl-copy-missing": "wlCopyMissing",
+  "wl-copy-failed": "wlCopyFailed",
 };
 const COMPANION_AUDIO_LEVEL_INTERVAL_MS = 80;
 
@@ -40,6 +48,12 @@ export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  // The audio manager settles processing before the transcript is pasted; the
+  // hook keeps the pill in processing until the paste attempt has settled (a
+  // Linux paste can wait up to 1.5 s for held modifier keys). Main is never told:
+  // it drops dictation hotkeys while processing, and the next dictation may start
+  // while a paste is still waiting.
+  const [isPasting, setIsPasting] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAssistantVoice, setIsAssistantVoice] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
@@ -53,7 +67,10 @@ export const useAudioRecording = (toast, options = {}) => {
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
+  const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
+  const pastesInFlightRef = useRef(0);
+  const cancellingRef = useRef(false);
   const wasMicUnavailableRef = useRef(false);
   const demoKindRef = useRef("dictation");
   const onDemoEventRef = useRef(options.onDemoEvent);
@@ -73,6 +90,13 @@ export const useAudioRecording = (toast, options = {}) => {
     onDemoEvent,
     assistantOpenRef,
   } = options;
+
+  useEffect(
+    () => () => {
+      dictationErrorGenerationRef.current += 1;
+    },
+    []
+  );
 
   useEffect(() => {
     onDemoEventRef.current = onDemoEvent;
@@ -154,8 +178,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // device still opens exactly once.
         void audioManagerRef.current.prepareMicCapture?.();
 
-        // The floating dictation panel is non-focusable, so the foreground app is
-        // still the user's actual editing target here. Refresh it for recordings
+        // The floating dictation panel only takes focus while the assistant panel
+        // is open, so the foreground app is otherwise still the user's actual
+        // editing target here. Refresh it for recordings
         // started from the panel itself as well as from global hotkeys; otherwise
         // paste can reactivate a stale target from the preceding dictation.
         try {
@@ -197,11 +222,21 @@ export const useAudioRecording = (toast, options = {}) => {
           audioManagerRef.current.beginSelectionCapture();
         }
 
-        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready).
-        // Await it only when it can change the start decision (signed-in
-        // OpenWhispr-cloud streaming); for local STT or a signed-out session the
-        // fetch stalls on auth resolution and would delay the mic open (#1673).
-        if (!audioManagerRef.current.sttConfig) {
+        // Tone & Style names the app being dictated into while the user speaks,
+        // for cleanup and for an assistant answer typed or edited in place there.
+        if (getSettings().toneStyleEnabled && !translationRequested) {
+          audioManagerRef.current.beginToneStyleCapture();
+        }
+
+        // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready),
+        // and refresh a copy older than its TTL so a server-side rollout change
+        // reaches a long-running app. Await it only when it can change the start
+        // decision (no config yet, signed-in OpenWhispr-cloud streaming); for
+        // local STT or a signed-out session the fetch stalls on auth resolution
+        // and would delay the mic open (#1673). A stale-but-present copy is
+        // refreshed in the background and this recording keeps the old decision.
+        if (audioManagerRef.current.isSttConfigStale()) {
+          const hadConfig = Boolean(audioManagerRef.current.sttConfig);
           const configFetch = (async () => {
             const config = await window.electronAPI.getSttConfig?.();
             if (config?.success) {
@@ -210,7 +245,7 @@ export const useAudioRecording = (toast, options = {}) => {
           })().catch((error) => {
             logger.warn("STT config fetch failed", { error: error?.message });
           });
-          if (needsSttConfigBeforeStart(getSettings())) {
+          if (!hadConfig && needsSttConfigBeforeStart(getSettings())) {
             await configFetch;
           }
         }
@@ -219,7 +254,10 @@ export const useAudioRecording = (toast, options = {}) => {
           ? await audioManagerRef.current.startStreamingRecording()
           : await audioManagerRef.current.startRecording();
         recordingStarted = didStart;
-        if (didStart) dismissDictationError?.();
+        if (didStart) {
+          dictationErrorGenerationRef.current += 1;
+          dismissDictationError?.();
+        }
 
         // A stop that landed while the start was still awaiting the mic open was
         // dropped (isRecording was still false), leaving a runaway recording
@@ -320,6 +358,11 @@ export const useAudioRecording = (toast, options = {}) => {
     // would otherwise wait on the device lookup before the mic can open.
     void audioManagerRef.current.cacheMicrophoneDeviceId?.();
 
+    // Keep this at mount: it opens the recording spool, which a hung main process would block.
+    void audioManagerRef.current.recoverInterruptedRecordings?.(
+      t("hooks.audioRecording.interruptedRecordingRecovered")
+    );
+
     // Reset stale main-process state after a renderer reload or crash recovery.
     reportLifecycle("idle");
 
@@ -329,18 +372,126 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current?.streamingPartialText
       ).trim() || fallback.trim();
 
-    const showDictationError = ({ title, description, transcript = "", duration }) => {
+    // `onRetry` replaces the default Retry (a new recording) for a pill whose
+    // transcript is already kept and only needs delivering again.
+    const showDictationError = ({
+      title,
+      description,
+      transcript = "",
+      duration,
+      code,
+      settingsLaunchFailed = false,
+      onRetry,
+      settingsTarget,
+      technicalDetails,
+    }) => {
+      const errorGeneration = ++dictationErrorGenerationRef.current;
+      const isCurrent = () => errorGeneration === dictationErrorGenerationRef.current;
       const recoverAssistant = Boolean(audioManagerRef.current?.voiceAgentRequested);
       onDictationError?.({ recoverAssistant });
+      if (code === "ACCESSIBILITY_PERMISSION_REQUIRED") {
+        let settingsOpening = false;
+        const actions = [
+          {
+            label: t("hooks.audioRecording.pastePermission.openSettings"),
+            icon: "settings",
+            dismissOnClick: false,
+            onClick: async () => {
+              if (settingsOpening || !isCurrent()) return;
+              settingsOpening = true;
+              let opened = false;
+              try {
+                const result = await window.electronAPI?.openAccessibilitySettings?.();
+                opened = result?.success === true;
+              } catch {
+                // Keep the manual path available if System Settings cannot open.
+              } finally {
+                settingsOpening = false;
+              }
+              // A recording that is starting owns the pill; re-showing the card now would
+              // dismiss that recording's live transcript.
+              if (!opened && isCurrent() && !startLockRef.current) {
+                showDictationError({
+                  title,
+                  description,
+                  transcript,
+                  code,
+                  settingsLaunchFailed: true,
+                });
+              }
+            },
+          },
+        ];
+        if (transcript.trim()) {
+          actions.push({
+            label: t("hooks.audioRecording.pastePermission.copyToClipboard"),
+            icon: "copy",
+            dismissOnClick: false,
+            feedback: {
+              successLabel: t("common.copied"),
+              failureLabel: t("hooks.audioRecording.pastePermission.copyFailed"),
+            },
+            onClick: async () => {
+              if (!isCurrent()) return;
+              let copied = false;
+              try {
+                const result = await window.electronAPI?.writeClipboard?.(transcript);
+                copied = result?.success === true;
+              } catch {
+                copied = false;
+              }
+              if (isCurrent()) return copied;
+            },
+          });
+        }
+        toast({
+          title,
+          description: [
+            settingsLaunchFailed
+              ? t("hooks.audioRecording.pastePermission.settingsFailed")
+              : description,
+            transcript.trim()
+              ? t("hooks.audioRecording.pastePermission.manualPaste", { shortcut: "Cmd+V" })
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+          descriptionHotkey: transcript.trim() ? "Cmd+V" : undefined,
+          variant: "destructive",
+          presentation: "dictation-error",
+          duration: 0,
+          dismissible: true,
+          onClose: () => {
+            if (isCurrent()) dictationErrorGenerationRef.current += 1;
+          },
+          actions,
+        });
+        return;
+      }
       const recoverableTranscript = getRecoverableTranscript(transcript);
+      // A retried paste can wait on held keys with no visible progress, so a
+      // second click is ignored until it settles, and a paste that lands after
+      // a newer pill or recording leaves that one alone.
+      let retrying = false;
+      const retry = async () => {
+        if (retrying || !isCurrent()) return;
+        retrying = true;
+        try {
+          if ((await onRetry()) && isCurrent()) dismissDictationError?.();
+        } finally {
+          retrying = false;
+        }
+      };
       const actions = [
         {
           label: t("common.retry"),
           icon: "retry",
           dismissOnClick: false,
-          onClick: () => performStartRecording(lastStartOptionsRef.current),
+          onClick: onRetry ? retry : () => performStartRecording(lastStartOptionsRef.current),
         },
       ];
+
+      actions.push(...providerErrorActions({ settingsTarget, technicalDetails }, t, isCurrent));
 
       if (recoverableTranscript) {
         actions.push({
@@ -435,6 +586,10 @@ export const useAudioRecording = (toast, options = {}) => {
             title,
             description,
             duration: error?.code === "AUTH_EXPIRED" ? 8000 : undefined,
+            code: error?.code,
+            transcript: error?.transcript,
+            settingsTarget: error?.settingsTarget,
+            technicalDetails: error?.technicalDetails,
           });
         }
         if (getSettings().pauseMediaOnDictation) {
@@ -483,6 +638,7 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
+          dictationErrorGenerationRef.current += 1;
           dismissDictationError?.();
           const transcribedText = result.text?.trim();
 
@@ -505,8 +661,14 @@ export const useAudioRecording = (toast, options = {}) => {
           setTranscript(result.text);
           if (result.assistantConversation) {
             window.electronAPI?.hideDictationPreview?.();
-            const { screenContext, transcript, selectedContext, deliverySessionId } =
-              result.assistantConversation;
+            const {
+              screenContext,
+              transcript,
+              selectedContext,
+              deliverySessionId,
+              deliveryAcceptsMarkdown,
+              deliveryAppCategory,
+            } = result.assistantConversation;
             const command = {
               text: expandSnippets(transcript, getSettings().snippets),
               attachment: screenContext
@@ -530,6 +692,8 @@ export const useAudioRecording = (toast, options = {}) => {
                 delivery: createAssistantResponseDelivery({
                   autoPasteEnabled,
                   deliverySessionId,
+                  acceptsMarkdown: deliveryAcceptsMarkdown,
+                  appCategory: deliveryAppCategory,
                   restoreClipboard: !keepTranscriptionInClipboard,
                   allowClipboardFallback: isAccessibilitySkipped(),
                 }),
@@ -611,37 +775,138 @@ export const useAudioRecording = (toast, options = {}) => {
             }
           };
 
+          const pasteOptions = {
+            restoreClipboard: !keepTranscriptionInClipboard,
+            allowClipboardFallback: isAccessibilitySkipped(),
+          };
+
+          const whilePasting = async (attempt) => {
+            pastesInFlightRef.current += 1;
+            setIsPasting(true);
+            try {
+              return await attempt();
+            } finally {
+              pastesInFlightRef.current -= 1;
+              if (pastesInFlightRef.current === 0) setIsPasting(false);
+            }
+          };
+
+          // A paste held back (keys still down, or no Wayland clipboard written) keeps
+          // the transcript and says why it did not land. `onRetry`, when given, replaces the
+          // pill's record-again Retry. `generation` is the pill
+          // generation when the attempt began: if the next dictation started while
+          // it waited, that recording owns the pill (and would dismiss this one at
+          // once) and its live preview, so the transcript only stays on the clipboard.
+          let heldBehindNewerDictation = false;
+          const reportHeldBackPaste = async (
+            delivery,
+            { title, description, descriptionClipboardFailed, onRetry },
+            generation = dictationErrorGenerationRef.current
+          ) => {
+            const keptInClipboard = await keepInClipboard(delivery);
+            if (generation !== dictationErrorGenerationRef.current) {
+              logger.info(
+                "Held-back paste kept on the clipboard behind a newer dictation",
+                { delivery, keptInClipboard },
+                "clipboard"
+              );
+              heldBehindNewerDictation = true;
+              return;
+            }
+            window.electronAPI?.hideDictationPreview?.();
+            showDictationError({
+              title,
+              // Never promise a clipboard that rejected the write; the transcript
+              // action on this pill is the recovery path either way.
+              description: keptInClipboard ? description : descriptionClipboardFailed,
+              transcript: result.rawText ?? result.text,
+              onRetry,
+            });
+          };
+
+          const pasteTranscript = async () => {
+            const generation = dictationErrorGenerationRef.current;
+            const pasteOutcome = await whilePasting(() =>
+              audioManagerRef.current.safePaste(result.text, {
+                ...(isStreaming ? { fromStreaming: true } : {}),
+                ...pasteOptions,
+              })
+            );
+            if (pasteOutcome.reason === "modifiers-held") {
+              await reportHeldBackPaste(
+                "modifiers-held",
+                {
+                  title: t("hooks.audioRecording.modifiersHeld.title"),
+                  description: t("hooks.audioRecording.modifiersHeld.description"),
+                  descriptionClipboardFailed: t(
+                    "hooks.audioRecording.modifiersHeld.descriptionClipboardFailed"
+                  ),
+                  // The modifier wait runs again, so the kept text is safe to re-paste.
+                  onRetry: pasteTranscript,
+                },
+                generation
+              );
+            } else if (WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]) {
+              // Wayland apps may not read the clipboard copy here either, so the text
+              // never claims to be on it. Retry writes and pastes the kept text again.
+              const description = t(
+                `hooks.audioRecording.waylandClipboard.${WAYLAND_CLIPBOARD_REASON_KEYS[pasteOutcome.reason]}`
+              );
+              await reportHeldBackPaste(
+                pasteOutcome.reason,
+                {
+                  title: t("hooks.audioRecording.waylandClipboard.title"),
+                  description,
+                  descriptionClipboardFailed: description,
+                  onRetry: pasteTranscript,
+                },
+                generation
+              );
+            }
+            return pasteOutcome.pasted;
+          };
+
+          let pasted = false;
           if (pushForceStoppedRef.current && autoPasteEnabled && !result.assistantConversation) {
             // The push hit its safety ceiling while the trigger keys were still
             // down. Injecting the paste shortcut into those held modifiers is
-            // what silently loses the transcript, so keep it instead.
-            const keptInClipboard = await keepInClipboard("push-force-stopped");
-            window.electronAPI?.hideDictationPreview?.();
-            showDictationError({
+            // what silently loses the transcript, so keep it instead. Only macOS
+            // and Windows force-stop, and neither waits for held modifiers, so
+            // Retry records again rather than pasting.
+            await reportHeldBackPaste("push-force-stopped", {
               title: t("hooks.audioRecording.pushForceStopped.title"),
-              // Never promise a clipboard that rejected the write; the transcript
-              // action on this pill is the recovery path either way.
-              description: t(
-                keptInClipboard
-                  ? "hooks.audioRecording.pushForceStopped.description"
-                  : "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
+              description: t("hooks.audioRecording.pushForceStopped.description"),
+              descriptionClipboardFailed: t(
+                "hooks.audioRecording.pushForceStopped.descriptionClipboardFailed"
               ),
-              transcript: result.rawText ?? result.text,
             });
           } else if (autoPasteEnabled && !result.assistantConversation) {
             const pasteStart = performance.now();
             let pasteSucceeded = true;
             if (result.selectionEdit?.sessionId) {
-              const replacement = await window.electronAPI?.replaceSelectedText?.(
-                result.selectionEdit.sessionId,
-                result.text,
-                {
-                  restoreClipboard: !keepTranscriptionInClipboard,
-                  allowClipboardFallback: isAccessibilitySkipped(),
-                }
+              const generation = dictationErrorGenerationRef.current;
+              const replacement = await whilePasting(() =>
+                window.electronAPI?.replaceSelectedText?.(
+                  result.selectionEdit.sessionId,
+                  result.text,
+                  pasteOptions
+                )
               );
               pasteSucceeded = replacement?.success === true;
-              if (!pasteSucceeded) {
+              if (replacement?.code === "modifiers_held") {
+                await reportHeldBackPaste(
+                  "selection-edit-modifiers-held",
+                  {
+                    title: t("hooks.audioRecording.selectionEditing.notAppliedTitle"),
+                    description: t("hooks.audioRecording.selectionEditing.modifiersHeld"),
+                    descriptionClipboardFailed: t(
+                      "hooks.audioRecording.selectionEditing.modifiersHeldClipboardFailed"
+                    ),
+                    onRetry: pasteTranscript,
+                  },
+                  generation
+                );
+              } else if (!pasteSucceeded) {
                 window.electronAPI?.hideDictationPreview?.();
                 if (keepTranscriptionInClipboard) {
                   await keepInClipboard("selection-edit-fallback");
@@ -655,11 +920,7 @@ export const useAudioRecording = (toast, options = {}) => {
                 });
               }
             } else {
-              pasteSucceeded = await audioManagerRef.current.safePaste(result.text, {
-                ...(isStreaming ? { fromStreaming: true } : {}),
-                restoreClipboard: !keepTranscriptionInClipboard,
-                allowClipboardFallback: isAccessibilitySkipped(),
-              });
+              pasteSucceeded = await pasteTranscript();
             }
             logger.info(
               "Paste timing",
@@ -678,10 +939,24 @@ export const useAudioRecording = (toast, options = {}) => {
             // visible somewhere.
             if (pasteSucceeded) {
               window.electronAPI?.hideDictationPreview?.();
-              if (result.cleanupFailure) recordCleanupFailure(result.cleanupFailure);
             }
+            pasted = pasteSucceeded;
           } else if (keepTranscriptionInClipboard && !result.assistantConversation) {
             await keepInClipboard("clipboard-only");
+          }
+
+          // Cleanup can be missing or can fail whether or not the paste landed
+          // (#2631, #1003), so the toast is told which. The onboarding demo's
+          // paste is a no-op into its own text box, so it reports nothing there.
+          // A paste held back behind a newer dictation stays quiet too: that
+          // recording owns the pill, and an unconfigured warning stays unspent.
+          if (
+            result.cleanupFailure &&
+            !heldBehindNewerDictation &&
+            localStorage.getItem("onboardingCompleted") === "true"
+          ) {
+            recordCleanupFailure({ ...result.cleanupFailure, pasted });
+            audioManagerRef.current.markCleanupNoticeShown(result.cleanupFailure);
           }
 
           if (result.source === "openai" && getSettings().useLocalWhisper) {
@@ -864,7 +1139,16 @@ export const useAudioRecording = (toast, options = {}) => {
       // A streaming start in its mic-open phase is not yet `isStreaming`;
       // only the streaming cancel knows how to abandon it.
       if (state.isStreaming || state.isStreamingStartInProgress) {
-        return await audioManagerRef.current.cancelStreamingRecording();
+        // The streaming cancel reports processing while it tears the stream
+        // down; flagged first so the follow-up thinking effect doesn't read
+        // that as a command. A ref, so clearing it can't re-run that effect
+        // while a pending paste still reports processing.
+        cancellingRef.current = true;
+        try {
+          return await audioManagerRef.current.cancelStreamingRecording();
+        } finally {
+          cancellingRef.current = false;
+        }
       }
       return audioManagerRef.current.cancelRecording();
     }
@@ -908,7 +1192,7 @@ export const useAudioRecording = (toast, options = {}) => {
     voiceAgentRequested = false,
     translationRequested = false,
   } = {}) => {
-    if (!isRecording && !isProcessing) {
+    if (!isRecording && !isProcessing && !isPasting) {
       await performStartRecording({ voiceAgentRequested, translationRequested });
     } else if (isRecording) {
       await performStopRecording();
@@ -917,9 +1201,12 @@ export const useAudioRecording = (toast, options = {}) => {
 
   return {
     isRecording,
-    isProcessing,
+    // A paste still waiting when the next recording starts must not paint that
+    // recording's pill as processing.
+    isProcessing: isProcessing || (isPasting && !isRecording),
     isStreaming,
     isAssistantVoice,
+    cancellingRef,
     isPreparing,
     isStopping,
     micCaptureStatus,

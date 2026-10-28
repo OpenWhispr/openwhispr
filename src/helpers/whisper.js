@@ -2,6 +2,7 @@ const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
 const debugLogger = require("./debugLogger");
+const { warnGpuFallback } = require("./gpuFallbackLog");
 const {
   downloadFile,
   createDownloadSignal,
@@ -12,7 +13,11 @@ const {
 } = require("./downloadUtils");
 const WhisperServerManager = require("./whisperServer");
 const { createAbortError } = require("./abortError");
-const { getModelsDirForService } = require("./modelDirUtils");
+const {
+  getCacheRoot,
+  getModelsDirForService,
+  pathHasProblematicChars,
+} = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
 
@@ -30,6 +35,39 @@ function getWhisperModelConfig(modelName) {
 
 function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
+}
+
+// whisper-server reads its arguments in the Windows ANSI code page and crashes
+// on a non-ASCII --vad-model path, as on the model paths #1514 moved (#1208).
+// An install under such a folder bundles the VAD model there, so it is copied
+// into the ASCII-safe cache root. The copy follows pathHasProblematicChars, the
+// rule #1514 uses for the cache root, so a path with spaces is copied too. That
+// root can be the shared ProgramData folder, so an existing copy is reused only
+// when its bytes match, and a new one is renamed into place: a write cut short
+// there would leave a file other accounts can neither use nor replace.
+function asciiSafeVadModelPath(bundledPath) {
+  if (process.platform !== "win32" || !pathHasProblematicChars(bundledPath)) return bundledPath;
+
+  const copyPath = path.join(getCacheRoot(), "whisper-vad", path.basename(bundledPath));
+  const tempPath = `${copyPath}.${process.pid}.tmp`;
+  try {
+    const model = fs.readFileSync(bundledPath);
+    if (!fs.existsSync(copyPath) || !fs.readFileSync(copyPath).equals(model)) {
+      fs.mkdirSync(path.dirname(copyPath), { recursive: true });
+      fs.writeFileSync(tempPath, model);
+      fs.renameSync(tempPath, copyPath);
+    }
+    return copyPath;
+  } catch (error) {
+    try {
+      fs.rmSync(tempPath, { force: true });
+    } catch {}
+    debugLogger.warn("Could not copy the VAD model to an ASCII-safe path", {
+      error: error.message,
+    });
+    // Spaces alone don't crash whisper-server, so such a path keeps VAD working.
+    return /^[\x20-\x7E]*$/.test(bundledPath) ? bundledPath : null;
+  }
 }
 
 // WHISPER_GPU_FAILED holds a comma-separated list of backends that fell back
@@ -93,12 +131,78 @@ class WhisperManager {
       (process.env.WHISPER_CUDA_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("cuda") &&
       !!this._cudaBinaryManager?.isDownloaded();
-    const useVulkan =
-      !useCuda &&
+    const vulkanAvailable =
       (process.env.WHISPER_VULKAN_ENABLED || "").toLowerCase() !== "false" &&
       !failed.includes("vulkan") &&
       !!this._vulkanBinaryManager?.isDownloaded();
-    return { useCuda, useVulkan };
+    // Always set fallbackToVulkan: callers merge this over the last start's
+    // options, so an omitted false would keep a stale true
+    return {
+      useCuda,
+      useVulkan: !useCuda && vulkanAvailable,
+      fallbackToVulkan: useCuda && vulkanAvailable,
+    };
+  }
+
+  // Why a backend the user wants can't be used, or null when it isn't wanted.
+  // Like resolveGpuStartOptions, an unset flag still wants a pack on disk.
+  _gpuFallbackReason(envVar, manager, backend) {
+    const flag = (process.env[envVar] || "").toLowerCase();
+    if (flag === "false") return null;
+    const needsUpdate = !!manager?.needsUpdate?.();
+    const downloaded = !!manager?.isDownloaded?.();
+    if (flag !== "true" && !needsUpdate && !downloaded) return null;
+    if (needsUpdate) return "pack needs update";
+    if (!downloaded) return "pack not installed or missing required libraries";
+    // A wanted, downloaded pack is skipped only after it failed on this machine.
+    return resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED).includes(backend)
+      ? "previous failure recorded"
+      : null;
+  }
+
+  _warnIfGpuFallback() {
+    const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+    if (useCuda) return;
+    const runningOn = useVulkan ? "Vulkan" : "CPU";
+    const cudaReason = this._gpuFallbackReason(
+      "WHISPER_CUDA_ENABLED",
+      this._cudaBinaryManager,
+      "cuda"
+    );
+    const vulkanReason = this._gpuFallbackReason(
+      "WHISPER_VULKAN_ENABLED",
+      this._vulkanBinaryManager,
+      "vulkan"
+    );
+    const [label, pack, reason] = cudaReason
+      ? ["CUDA", "CUDA whisper", cudaReason]
+      : ["Vulkan", "Vulkan whisper", vulkanReason];
+    if (!reason) return;
+
+    const key = `${pack}:${reason}:${runningOn}`;
+    if (this._lastGpuFallbackWarning === key) return;
+    this._lastGpuFallbackWarning = key;
+    warnGpuFallback(`Whisper ${label} enabled but cannot be used, falling back to ${runningOn}`, {
+      pack,
+      reason,
+    });
+  }
+
+  // The pack the settings card describes, so the card never disagrees with the
+  // server (#1736): the pack every server start picks now (a GPU server always
+  // runs on it; while a pack change restarts the server, it names the target),
+  // else the installed pack that fell back to CPU, CUDA first, so its reason
+  // and Retry show. null when neither applies (no pack, or a pack opted out
+  // with WHISPER_*_ENABLED=false that never failed): the card then chooses
+  // which pack to offer.
+  resolveGpuPackInUse() {
+    const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+    if (useCuda) return "cuda";
+    if (useVulkan) return "vulkan";
+    const failed = resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    if (failed.includes("cuda") && this._cudaBinaryManager?.isDownloaded()) return "cuda";
+    if (failed.includes("vulkan") && this._vulkanBinaryManager?.isDownloaded()) return "vulkan";
+    return null;
   }
 
   // Re-resolve GPU options and reload the server in place. Used after a GPU
@@ -149,8 +253,10 @@ class WhisperManager {
     candidates.push(path.join(__dirname, "..", "..", "resources", "bin", "whisper-vad", fileName));
 
     const resolved = candidates.find((p) => fs.existsSync(p)) || null;
-    this.cachedVadModelPath = resolved;
-    return resolved;
+    const vadModelPath = resolved && asciiSafeVadModelPath(resolved);
+    // A failed copy is retried on the next request rather than kept for the session.
+    if (vadModelPath || !resolved) this.cachedVadModelPath = vadModelPath;
+    return vadModelPath;
   }
 
   async initializeAtStartup(settings = {}) {
@@ -163,7 +269,8 @@ class WhisperManager {
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
       const { localTranscriptionProvider, whisperModel } = settings;
-      const { useCuda, useVulkan } = this.resolveGpuStartOptions();
+      const gpuOptions = this.resolveGpuStartOptions();
+      const { useCuda, useVulkan } = gpuOptions;
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -173,6 +280,7 @@ class WhisperManager {
         const modelPath = this.getModelPath(whisperModel);
 
         if (fs.existsSync(modelPath)) {
+          this._warnIfGpuFallback();
           debugLogger.info("Pre-warming whisper-server", {
             model: whisperModel,
             modelPath,
@@ -182,7 +290,7 @@ class WhisperManager {
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath, { useCuda, useVulkan });
+            await this.serverManager.start(modelPath, gpuOptions);
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -424,9 +532,10 @@ class WhisperManager {
     const vadEnabled = options.vadEnabled === true;
     const vadModelPath = vadEnabled ? this.getVadModelPath() : null;
     if (vadEnabled && !vadModelPath) {
-      debugLogger.warn("VAD requested but ggml-silero model not found; running without VAD");
+      debugLogger.warn("VAD requested but ggml-silero model unavailable; running without VAD");
     }
 
+    this._warnIfGpuFallback();
     await this.serverManager.start(modelPath, {
       ...this.resolveGpuStartOptions(),
       vadEnabled,

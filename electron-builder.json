@@ -121,6 +121,7 @@
         "macos-mic-listener",
         "macos-calendar-listener",
         "macos-text-monitor",
+        "macos-window-bounds",
         "macos-media-remote",
         "MediaRemoteAdapter.framework/**",
         "linux-fast-paste",
@@ -177,7 +178,7 @@
     }
   },
   "win": {
-    "target": ["nsis", "portable"],
+    "target": ["nsis"],
     "icon": "src/assets/icon.ico",
     "forceCodeSigning": true,
     "azureSignOptions": {
