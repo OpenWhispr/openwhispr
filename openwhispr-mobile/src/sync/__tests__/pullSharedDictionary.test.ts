@@ -493,6 +493,59 @@ describe('pullSharedDictionary', () => {
     expect(await loadSharedDictionaryState()).toEqual(STORED);
   });
 
+  it.each([false, true])(
+    'clears revoked membership before resolving usage (known=%s)',
+    async (known) => {
+      await seedStored();
+      const workspaces = [
+        { id: 'ws-2', name: 'Other' },
+        { id: 'ws-3', name: 'Third' },
+      ];
+      mockFetchMyWorkspaces.mockResolvedValue({ data: workspaces });
+      mockUsageState.load.mockImplementation(async () => {
+        expect(await loadSharedDictionaryState()).toBeNull();
+        return { usage: null };
+      });
+
+      await expect(pullSharedDictionary(undefined, known ? workspaces : null)).resolves.toEqual({
+        changed: true,
+      });
+
+      expect(mockFetchSharedDictionary).not.toHaveBeenCalled();
+      expect(await loadSharedDictionaryState()).toBeNull();
+      expect(mockSyncState.has(SHARED_DICTIONARY_CURSOR_KEY)).toBe(false);
+      expect(mockSyncState.has(SHARED_DICTIONARY_HIDES_CURSOR_KEY)).toBe(false);
+    },
+  );
+
+  it('refreshes cached usage before selecting the entitled workspace', async () => {
+    await seedStored();
+    mockUsageState.usage = { entitlementSources: { workspaceIds: ['ws-1'] } };
+    mockUsageState.load.mockImplementation(async () => {
+      mockUsageState.usage = { entitlementSources: { workspaceIds: ['ws-2'] } };
+      return { usage: mockUsageState.usage };
+    });
+
+    await pullSharedDictionary(undefined, [
+      { id: 'ws-1', name: 'Acme' },
+      { id: 'ws-2', name: 'Other' },
+    ]);
+
+    expect(mockFetchSharedDictionary).toHaveBeenCalledWith('ws-2', { limit: 200 });
+    expect((await loadSharedDictionaryState())?.workspaceId).toBe('ws-2');
+  });
+
+  it('reports revoked state removal when the replacement endpoint is unavailable', async () => {
+    const isolated = loadIsolatedPull();
+    await seedStored();
+    mockFetchSharedDictionary.mockRejectedValueOnce(apiError(404, undefined, isolated.ApiError));
+
+    await expect(isolated.pull(undefined, [{ id: 'ws-2', name: 'Other' }])).resolves.toEqual({
+      changed: true,
+    });
+    expect(await loadSharedDictionaryState()).toBeNull();
+  });
+
   it('a different workspace starts a fresh snapshot', async () => {
     await seedStored({ ...STORED, workspaceId: 'ws-old' });
 

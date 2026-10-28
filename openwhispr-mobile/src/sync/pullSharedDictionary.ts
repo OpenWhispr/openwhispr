@@ -139,24 +139,15 @@ function currentUsage(): UsageInfo | null {
 // usage can't be read: keep what is stored rather than clear it on a blip.
 async function resolveWorkspace(
   checkpoint: SyncCheckpoint,
-  known: RemoteWorkspace[] | null,
+  workspaces: RemoteWorkspace[],
 ): Promise<WorkspaceTarget> {
-  let workspaces = known;
-  if (!workspaces) {
-    checkpoint();
-    workspaces = (await fetchMyWorkspaces()).data;
-    checkpoint();
-  }
   const ids = workspaces.map((workspace) => workspace.id);
   let entitled: string[] = [];
   if (new Set(ids).size > 1) {
-    let usage = currentUsage();
-    if (!usage) {
-      checkpoint();
-      await useUsageStore.getState().load();
-      checkpoint();
-      usage = currentUsage();
-    }
+    checkpoint();
+    await useUsageStore.getState().load();
+    checkpoint();
+    const usage = currentUsage();
     if (!usage) return 'unknown';
     entitled = usage.entitlementSources?.workspaceIds ?? [];
   }
@@ -387,10 +378,18 @@ export async function pullSharedDictionary(
   // Whether this run already removed a stored state, for the paths that end early.
   let removed = false;
   try {
+    if (!workspaces) {
+      checkpoint();
+      workspaces = (await fetchMyWorkspaces()).data;
+      checkpoint();
+    }
+    if (stored && !workspaces.some((workspace) => workspace.id === stored.workspaceId)) {
+      removed = await clearSharedDictionary(checkpoint);
+    }
     const workspace = await resolveWorkspace(checkpoint, workspaces);
-    if (workspace === 'unknown') return { changed: false };
+    if (workspace === 'unknown') return { changed: removed };
     if (!workspace) {
-      return { changed: await clearSharedDictionary(checkpoint) };
+      return { changed: (await clearSharedDictionary(checkpoint)) || removed };
     }
 
     const base = stored?.workspaceId === workspace.id ? stored : null;
@@ -398,7 +397,7 @@ export async function pullSharedDictionary(
       checkpoint();
       // The old workspace's words go too: if this workspace's first snapshot
       // fails, they must not be republished as its words.
-      removed = await saveSharedDictionaryState(null);
+      removed = (await saveSharedDictionaryState(null)) || removed;
       resetSharedDictionaryCursors();
     }
 
