@@ -1377,6 +1377,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Contacts
   searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
+  searchInviteContacts: (query, exclude) =>
+    ipcRenderer.invoke("search-invite-contacts", query, exclude),
   upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
   getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
 

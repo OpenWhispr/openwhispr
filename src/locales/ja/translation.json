@@ -2425,11 +2425,61 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
+        "invitations": "招待",
         "teams": "グループ"
       },
       "people": {
         "title": "ユーザー",
-        "description": "ワークスペースのユーザーとそのロールを管理します。"
+        "description": "ワークスペースのユーザーとそのロールを管理します。",
+        "subtitleView": "ワークスペースのユーザーとそのロール。",
+        "add": "追加",
+        "addLabel": "メンバーを招待",
+        "columns": {
+          "name": "名前",
+          "team": "グループ",
+          "role": "ワークスペースのロール",
+          "email": "メール",
+          "status": "ステータス",
+          "actions": "操作"
+        },
+        "you": "あなた",
+        "teamsNone": "なし",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "メンバーを読み込んでいます…",
+          "body": "ワークスペースのメンバーがここに表示されます。"
+        },
+        "failed": {
+          "title": "メンバーを読み込めませんでした",
+          "body": "接続を確認して、もう一度お試しください。"
+        },
+        "search": {
+          "placeholder": "メンバーを検索",
+          "clear": "検索をクリア",
+          "noResultsTitle": "「{{query}}」に一致するメンバーはいません",
+          "noResultsBody": "スペルを確認するか、メールアドレスで検索してください。"
+        },
+        "roleMenuLabel": "{{name}} のロールを変更",
+        "roleDescription": {
+          "member": "ノートを閲覧・編集できます。",
+          "admin": "メンバー、招待、グループ、設定を管理します。"
+        },
+        "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
+        "roleNotAllowed": "{{workspace}} のロールを変更する権限がなくなりました。",
+        "invitations": {
+          "loading": "招待を読み込んでいます…",
+          "failedTitle": "招待を読み込めませんでした",
+          "emptyTitle": "招待はありません",
+          "emptyBody": "新しい招待は、承諾されるまでここに表示されます。",
+          "pending_other": "保留中 · 有効期限まであと{{count}}日",
+          "expired": "期限切れ",
+          "resend": "招待を再送信",
+          "cancel": "招待を取り消す",
+          "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。",
+          "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。",
+          "noLongerPending": "{{email}} への招待は保留中ではなくなりました",
+          "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。"
+        }
       },
       "role": {
         "owner": "オーナー",
@@ -2458,21 +2508,12 @@
         "leaving": "退出中…"
       },
       "members": {
-        "title": "メンバー",
         "description": "{{seats}} シート中 {{count}} シートを使用中。",
-        "invite": "招待",
-        "empty": "まだメンバーがいません。",
         "loadError": "メンバーを読み込めませんでした。",
         "roleUpdated": "役割を更新しました",
         "removed": "{{name}} を削除しました",
-        "promote": "管理者にする",
-        "demote": "メンバーにする",
         "transferOwnership": "オーナー権限を譲渡",
-        "remove": "ワークスペースから削除",
-        "removeConfirm": {
-          "title": "このメンバーを削除しますか？",
-          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
-        }
+        "remove": "ワークスペースから削除"
       },
       "joinRequests": {
         "title": "参加リクエスト",
@@ -2513,22 +2554,9 @@
         }
       },
       "invites": {
-        "title": "保留中の招待",
-        "expiresIn_one": "有効期限まであと{{count}}日",
-        "expiresIn_other": "有効期限まであと{{count}}日",
-        "expired": "期限切れ",
-        "loadError": "招待を読み込めませんでした。",
-        "resend": "再送信",
         "resending": "再送信中…",
-        "revoke": "取り消す",
         "resent": "招待を再送信しました",
-        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。",
-        "revoked": "招待を取り消しました",
-        "revokeFailed": "招待を取り消せませんでした",
-        "revokeConfirm": {
-          "title": "この招待を取り消しますか？",
-          "description": "{{email}} への招待リンクが無効になります。"
-        }
+        "resentNoEmail": "招待を更新しましたが、メールを配信できませんでした。"
       },
       "billing": {
         "plan": "プラン",
@@ -2892,7 +2920,8 @@
         "viaGroup": "{{group}} 経由",
         "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
         "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。",
-        "invited": "{{email}} に招待を送信しました"
+        "invited": "{{email}} に招待を送信しました",
+        "invitedMany_other": "{{count}} 人に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
@@ -4787,27 +4816,46 @@
       "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "{{workspace}} に招待",
-      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "title": "ユーザーを招待",
+      "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
       "emailLabel": "メールアドレス",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "役割",
+      "emailHint": "メールアドレスはカンマで区切ります。全員に同じロールが付与されます。",
+      "emailPlaceholder": "メールを検索",
+      "removeRecipient": "{{email}} を削除",
+      "suggestions": "候補",
+      "roleLabel": "ワークスペースのロール",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
       "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
-      "submit": "招待を送信",
-      "submitting": "送信中…",
-      "sentTitle": "招待を送信しました",
-      "sentDescription": "{{email}} に招待を送信しました。",
-      "sentNoEmailTitle": "招待を作成しましたが、メールは送信されませんでした",
-      "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
-      "errorTitle": "招待を送信できませんでした",
+      "seatCostMany_other": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "seatCostManyUnpriced_other": "すべて承諾されるとプランに {{count}} 席追加されます。",
+      "submit_other": "{{count}} 件の招待を送信",
+      "submitting": "招待しています…",
+      "sentTitle_other": "招待を送信しました",
+      "sentOne": "{{email}} を {{workspace}} に招待しました",
+      "sentMany_other": "{{count}} 人を {{workspace}} に招待しました",
+      "noEmail_other": "{{count}} 件の招待を作成しましたが、メールを配信できませんでした。「招待」から再送信してください。",
+      "someFailed_other": "{{count}} 件のアドレスを招待できませんでした。修正または削除してから、もう一度お試しください。",
+      "tooMany": "一度に招待できるのは 20 人までです。",
+      "done": "完了",
       "role": {
-        "admin": "管理者",
-        "member": "メンバー"
+        "admin": "ワークスペースの管理者",
+        "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバーと請求を管理できます",
-        "member": "ワークスペースを利用できます"
+        "admin": "メンバー、招待、グループ、設定を管理します。",
+        "member": "ノートを閲覧・編集できます。"
+      },
+      "errors": {
+        "invalid": "{{email}} は有効なメールアドレスではありません",
+        "alreadyMember": "{{email}} はすでにメンバーです",
+        "alreadyInvited": "{{email}} にはすでに保留中の招待があります。「招待」から再送信してください。",
+        "seatLimit": "このワークスペースはシート数の上限に達しました。",
+        "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
+        "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
+        "ssoRequired": "{{workspace}} にユーザーを招待するには、会社のシングルサインオン (SSO) でサインインしてください。",
+        "sessionExpired": "{{email}} を招待できませんでした。サインインの有効期限が切れたか、変更されました。もう一度サインインしてから、やり直してください。",
+        "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
+        "refused": "{{email}} を招待できませんでした：{{reason}}"
       }
     },
     "join": {
@@ -4871,6 +4919,25 @@
       },
       "tryAgain": "もう一度試す"
     },
+    "removeMember": {
+      "title": "{{name}} を {{workspace}} から削除しますか？",
+      "body": "この人は、このワークスペース内のすべてのチームスペースとチームにアクセスできなくなります。いつでももう一度招待できます。",
+      "confirm": "削除",
+      "removing": "削除中…",
+      "failed": "{{name}} を削除できませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} からユーザーを削除する権限がなくなりました。",
+      "alreadyRemoved": "{{name}} はすでに削除されています"
+    },
+    "cancelInvitation": {
+      "title": "{{email}} への招待を取り消しますか？",
+      "body": "この招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
+      "keep": "招待を残す",
+      "canceling": "取り消しています…",
+      "done": "招待を取り消しました",
+      "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} の招待を取り消す権限がなくなりました。"
+    },
+    "ssoRequired": "{{workspace}} のメンバーを管理するには、会社のシングルサインオン (SSO) でサインインしてください。",
     "transfer": {
       "title": "新しいオーナーを選択",
       "body": "既存のワークスペースメンバーを選んでください。譲渡後、あなたは管理者になります。",

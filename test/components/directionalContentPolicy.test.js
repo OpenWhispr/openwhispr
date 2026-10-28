@@ -44,7 +44,6 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/settings/WorkspaceMembersTab.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{request\.name \?\? request\.email\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{inv\.email\}<\/bdi>/],
     [
       "src/components/notes/UploadAudioView.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,
@@ -82,6 +81,10 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
     ],
     ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceInvitationsTab.tsx",
+      /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
+    ],
     [
       "src/components/dictation/AssistantPanel.tsx",
       /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,
@@ -144,7 +147,7 @@ test("localized sentences isolate technical interpolations without changing word
     ],
     [
       "src/components/notes/SpaceMembersPanel.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmail\}/,
+      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmails\[0\]\}/,
     ],
     [
       "src/components/integrations/CalendarsPane.tsx",

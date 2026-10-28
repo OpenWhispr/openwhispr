@@ -1700,11 +1700,62 @@
       "tab": {
         "general": "General",
         "members": "Members",
+        "invitations": "Invitations",
         "teams": "Groups"
       },
       "people": {
         "title": "People",
-        "description": "Manage people in your workspace and their roles."
+        "description": "Manage people in your workspace and their roles.",
+        "subtitleView": "People in your workspace and their roles.",
+        "add": "Add",
+        "addLabel": "Invite people",
+        "columns": {
+          "name": "Name",
+          "team": "Team",
+          "role": "Workspace role",
+          "email": "Email",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "you": "You",
+        "teamsNone": "None",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Loading members…",
+          "body": "Your workspace members will appear here."
+        },
+        "failed": {
+          "title": "Couldn't load members",
+          "body": "Check your connection and try again."
+        },
+        "search": {
+          "placeholder": "Search members",
+          "clear": "Clear search",
+          "noResultsTitle": "No members match “{{query}}”",
+          "noResultsBody": "Check the spelling or search by email."
+        },
+        "roleMenuLabel": "Change {{name}}'s role",
+        "roleDescription": {
+          "member": "Can view and edit notes.",
+          "admin": "Manages members, invites, teams, and settings."
+        },
+        "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
+        "roleNotAllowed": "You no longer have permission to change roles in {{workspace}}.",
+        "invitations": {
+          "loading": "Loading invitations…",
+          "failedTitle": "Couldn't load invitations",
+          "emptyTitle": "No invitations",
+          "emptyBody": "New invitations appear here until they're accepted.",
+          "pending_one": "Pending · Expires in {{count}} day",
+          "pending_other": "Pending · Expires in {{count}} days",
+          "expired": "Expired",
+          "resend": "Resend invite",
+          "cancel": "Cancel invite",
+          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
+          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}.",
+          "noLongerPending": "The invitation for {{email}} is no longer pending",
+          "refreshFailed": "Couldn't refresh invitations. This list may be out of date."
+        }
       },
       "role": {
         "owner": "Owner",
@@ -1733,21 +1784,12 @@
         "leaving": "Leaving…"
       },
       "members": {
-        "title": "Members",
         "description": "{{count}} of {{seats}} seats used.",
-        "invite": "Invite",
-        "empty": "No members yet.",
         "loadError": "Couldn't load members.",
         "roleUpdated": "Role updated",
         "removed": "Removed {{name}}",
-        "promote": "Make admin",
-        "demote": "Make member",
         "transferOwnership": "Transfer ownership",
-        "remove": "Remove from workspace",
-        "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
-        }
+        "remove": "Remove from workspace"
       },
       "joinRequests": {
         "title": "Requests to join",
@@ -1788,22 +1830,9 @@
         }
       },
       "invites": {
-        "title": "Pending invitations",
-        "expiresIn_one": "Expires in {{count}} day",
-        "expiresIn_other": "Expires in {{count}} days",
-        "expired": "Expired",
-        "loadError": "Couldn't load invitations.",
-        "resend": "Resend",
         "resending": "Resending…",
-        "revoke": "Revoke",
         "resent": "Invitation resent",
-        "resentNoEmail": "Invitation updated, but the email couldn't be delivered.",
-        "revoked": "Invitation revoked",
-        "revokeFailed": "Could not revoke invitation",
-        "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
+        "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
         "plan": "Plan",
@@ -3049,27 +3078,53 @@
       "description": "You're now the owner of {{name}}."
     },
     "invite": {
-      "title": "Invite to {{workspace}}",
-      "description": "Add teammates by email. They'll get a link to join.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "Role",
+      "title": "Invite people",
+      "description": "They'll get an email link to join {{workspace}}.",
+      "emailLabel": "Email addresses",
+      "emailHint": "Separate emails with commas. Everyone gets the same role.",
+      "emailPlaceholder": "Search email",
+      "removeRecipient": "Remove {{email}}",
+      "suggestions": "Suggestions",
+      "roleLabel": "Workspace role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
       "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
-      "submit": "Send invite",
-      "submitting": "Sending…",
-      "sentTitle": "Invite sent",
-      "sentDescription": "We sent an invitation to {{email}}.",
-      "sentNoEmailTitle": "Invite created, but not emailed",
-      "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
-      "errorTitle": "Couldn't send invitation",
+      "seatCostMany_one": "If all are accepted, adds {{count}} seat to your plan · estimated prorated charge {{amount}}.",
+      "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
+      "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
+      "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
+      "submit_one": "Send invitation",
+      "submit_other": "Send {{count}} invitations",
+      "submitting": "Inviting…",
+      "sentTitle_one": "Invitation sent",
+      "sentTitle_other": "Invitations sent",
+      "sentOne": "Invited {{email}} to {{workspace}}",
+      "sentMany_one": "Invited {{count}} person to {{workspace}}",
+      "sentMany_other": "Invited {{count}} people to {{workspace}}",
+      "noEmail_one": "{{count}} invitation was created, but its email couldn't be delivered. Resend it from Invitations.",
+      "noEmail_other": "{{count}} invitations were created, but their emails couldn't be delivered. Resend them from Invitations.",
+      "someFailed_one": "{{count}} couldn't be invited. Fix or remove it to try again.",
+      "someFailed_other": "{{count}} couldn't be invited. Fix or remove them to try again.",
+      "tooMany": "You can invite up to 20 people at a time.",
+      "done": "Done",
       "role": {
-        "admin": "Admin",
-        "member": "Member"
+        "admin": "Workspace Admin",
+        "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members and billing",
-        "member": "Uses the workspace"
+        "admin": "Manages members, invites, teams, and settings.",
+        "member": "Can view and edit notes."
+      },
+      "errors": {
+        "invalid": "{{email}} isn't a valid email address",
+        "alreadyMember": "{{email}} is already a member",
+        "alreadyInvited": "{{email}} already has a pending invitation. Resend it from Invitations.",
+        "seatLimit": "This workspace has reached its seat limit.",
+        "directoryRequired": "Assign {{email}} in your identity provider first.",
+        "notAllowed": "You can no longer invite people to {{workspace}}.",
+        "ssoRequired": "Sign in with your company's single sign-on to invite people to {{workspace}}.",
+        "sessionExpired": "Couldn't invite {{email}}: your sign-in expired or changed. Sign in again, then try again.",
+        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
+        "refused": "Couldn't invite {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -3133,6 +3188,25 @@
       },
       "tryAgain": "Try again"
     },
+    "removeMember": {
+      "title": "Remove {{name}} from {{workspace}}?",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "confirm": "Remove",
+      "removing": "Removing…",
+      "failed": "Couldn't remove {{name}}. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
+      "alreadyRemoved": "{{name}} was already removed"
+    },
+    "cancelInvitation": {
+      "title": "Cancel the invitation for {{email}}?",
+      "body": "They won't be able to join with this invitation. Current members keep their access.",
+      "keep": "Keep invitation",
+      "canceling": "Canceling…",
+      "done": "Invitation canceled",
+      "failed": "Couldn't cancel the invitation. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to cancel invitations in {{workspace}}."
+    },
+    "ssoRequired": "Sign in with your company's single sign-on to manage people in {{workspace}}.",
     "transfer": {
       "title": "Choose a new Owner",
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
@@ -3375,7 +3449,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Added through {{group}}. Remove them there.",
         "roleFromGroup": "Admin through {{group}}. Change it there.",
-        "invited": "Invitation sent to {{email}}"
+        "invited": "Invitation sent to {{email}}",
+        "invitedMany_one": "Invitation sent to {{count}} person",
+        "invitedMany_other": "Invitations sent to {{count}} people"
       },
       "invitedTo_one": "You'll join {{count}} team space",
       "invitedTo_other": "You'll join {{count}} team spaces",

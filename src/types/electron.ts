@@ -757,6 +757,11 @@ export interface Workspace {
   has_subscription?: boolean;
 }
 
+export interface MemberTeamRef {
+  id: string;
+  name: string;
+}
+
 export interface WorkspaceMember {
   user_id: string;
   role: WorkspaceRole;
@@ -765,6 +770,7 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[]; // absent from APIs before release 3
 }
 
 export type TeamRole = "admin" | "member";
@@ -3291,6 +3297,14 @@ declare global {
       searchContacts: (query: string) => Promise<{
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
+      }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
       }>;
       upsertContact: (contact: {
         email: string;

@@ -11,6 +11,7 @@ import MemberPickList from "./MemberPickList";
 import { TeamsService } from "../services/TeamsService";
 import { addTeamMembers } from "../services/spaceActions";
 import { orderMemberCandidates } from "../lib/memberCandidates";
+import { rosterFor } from "../lib/peopleRoster";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useAuth } from "../hooks/useAuth";
 import { useDelayedFlag } from "../hooks/useDelayedFlag";
@@ -35,7 +36,7 @@ export default function CreateTeamDialog({
   const { toast } = useToast();
   const { user } = useAuth();
   const { members: roster, refreshMembers } = useWorkspaceStore(
-    useShallow((s) => ({ members: s.members, refreshMembers: s.refreshMembers }))
+    useShallow((s) => ({ members: rosterFor(s, workspaceId), refreshMembers: s.refreshMembers }))
   );
   const [name, setName] = useState("");
   const [memberSearch, setMemberSearch] = useState("");

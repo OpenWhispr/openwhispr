@@ -2404,11 +2404,62 @@
       "tab": {
         "general": "Geral",
         "members": "Membros",
+        "invitations": "Convites",
         "teams": "Grupos"
       },
       "people": {
         "title": "Pessoas",
-        "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas."
+        "description": "Gerencie as pessoas do seu espaço de trabalho e as funções delas.",
+        "subtitleView": "As pessoas do seu espaço de trabalho e as funções delas.",
+        "add": "Adicionar",
+        "addLabel": "Convidar pessoas",
+        "columns": {
+          "name": "Nome",
+          "team": "Grupo",
+          "role": "Função no espaço de trabalho",
+          "email": "E-mail",
+          "status": "Status",
+          "actions": "Ações"
+        },
+        "you": "Você",
+        "teamsNone": "Nenhum",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Carregando membros…",
+          "body": "Os membros do seu espaço de trabalho aparecerão aqui."
+        },
+        "failed": {
+          "title": "Não foi possível carregar os membros",
+          "body": "Verifique sua conexão e tente novamente."
+        },
+        "search": {
+          "placeholder": "Pesquisar membros",
+          "clear": "Limpar pesquisa",
+          "noResultsTitle": "Nenhum membro corresponde a “{{query}}”",
+          "noResultsBody": "Verifique a ortografia ou pesquise por e-mail."
+        },
+        "roleMenuLabel": "Alterar a função de {{name}}",
+        "roleDescription": {
+          "member": "Pode ver e editar notas.",
+          "admin": "Gerencia membros, convites, grupos e configurações."
+        },
+        "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
+        "roleNotAllowed": "Você não tem mais permissão para alterar funções em {{workspace}}.",
+        "invitations": {
+          "loading": "Carregando convites…",
+          "failedTitle": "Não foi possível carregar os convites",
+          "emptyTitle": "Nenhum convite",
+          "emptyBody": "Os novos convites aparecem aqui até serem aceitos.",
+          "pending_one": "Pendente · Expira em {{count}} dia",
+          "pending_other": "Pendente · Expira em {{count}} dias",
+          "expired": "Expirado",
+          "resend": "Reenviar convite",
+          "cancel": "Cancelar convite",
+          "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente.",
+          "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}.",
+          "noLongerPending": "O convite para {{email}} não está mais pendente",
+          "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada."
+        }
       },
       "role": {
         "owner": "Proprietário",
@@ -2437,21 +2488,12 @@
         "leaving": "Saindo…"
       },
       "members": {
-        "title": "Membros",
         "description": "{{count}} de {{seats}} assentos usados.",
-        "invite": "Convidar",
-        "empty": "Ainda não há membros.",
         "loadError": "Não foi possível carregar os membros.",
         "roleUpdated": "Função atualizada",
         "removed": "{{name}} removido",
-        "promote": "Tornar administrador",
-        "demote": "Tornar membro",
         "transferOwnership": "Transferir propriedade",
-        "remove": "Remover do espaço de trabalho",
-        "removeConfirm": {
-          "title": "Remover este membro?",
-          "description": "{{name}} perderá o acesso a {{workspace}} imediatamente."
-        }
+        "remove": "Remover do espaço de trabalho"
       },
       "joinRequests": {
         "title": "Pedidos de acesso",
@@ -2492,22 +2534,9 @@
         }
       },
       "invites": {
-        "title": "Convites pendentes",
-        "expiresIn_one": "Expira em {{count}} dia",
-        "expiresIn_other": "Expira em {{count}} dias",
-        "expired": "Expirado",
-        "loadError": "Não foi possível carregar os convites.",
-        "resend": "Reenviar",
         "resending": "Reenviando…",
-        "revoke": "Revogar",
         "resent": "Convite reenviado",
-        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail.",
-        "revoked": "Convite revogado",
-        "revokeFailed": "Não foi possível revogar o convite",
-        "revokeConfirm": {
-          "title": "Revogar este convite?",
-          "description": "O link de convite de {{email}} deixará de funcionar."
-        }
+        "resentNoEmail": "Convite atualizado, mas não foi possível entregar o e-mail."
       },
       "billing": {
         "plan": "Plano",
@@ -2964,7 +2993,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Adicionado por meio de {{group}}. Remova a pessoa lá.",
         "roleFromGroup": "Administrador por meio de {{group}}. Altere isso lá.",
-        "invited": "Convite enviado para {{email}}"
+        "invited": "Convite enviado para {{email}}",
+        "invitedMany_one": "Convite enviado para {{count}} pessoa",
+        "invitedMany_other": "Convites enviados para {{count}} pessoas"
       },
       "invitedTo_one": "Você entrará em {{count}} espaço de equipe",
       "invitedTo_other": "Você entrará em {{count}} espaços de equipe",
@@ -4787,27 +4818,53 @@
       "description": "Agora você é o proprietário de {{name}}."
     },
     "invite": {
-      "title": "Convidar para {{workspace}}",
-      "description": "Adicione colegas por e-mail. Eles receberão um link para entrar.",
-      "emailLabel": "E-mail",
-      "emailPlaceholder": "colega@exemplo.com",
-      "roleLabel": "Função",
+      "title": "Convidar pessoas",
+      "description": "Elas receberão um link por e-mail para entrar em {{workspace}}.",
+      "emailLabel": "Endereços de e-mail",
+      "emailHint": "Separe os e-mails com vírgulas. Todos recebem a mesma função.",
+      "emailPlaceholder": "Pesquisar e-mail",
+      "removeRecipient": "Remover {{email}}",
+      "suggestions": "Sugestões",
+      "roleLabel": "Função no espaço de trabalho",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
       "seatCost": "Se a pessoa aceitar, será adicionado um assento ao plano · cobrança proporcional estimada de {{amount}}.",
-      "submit": "Enviar convite",
-      "submitting": "Enviando…",
-      "sentTitle": "Convite enviado",
-      "sentDescription": "Enviamos um convite para {{email}}.",
-      "sentNoEmailTitle": "Convite criado, mas não enviado por e-mail",
-      "sentNoEmailDescription": "{{email}} foi convidado, mas não foi possível entregar o e-mail. Reenvie-o mais tarde ou compartilhe o link de convite de outra forma.",
-      "errorTitle": "Não foi possível enviar o convite",
+      "seatCostMany_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostMany_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostManyUnpriced_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano.",
+      "seatCostManyUnpriced_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano.",
+      "submit_one": "Enviar convite",
+      "submit_other": "Enviar {{count}} convites",
+      "submitting": "Convidando…",
+      "sentTitle_one": "Convite enviado",
+      "sentTitle_other": "Convites enviados",
+      "sentOne": "Você convidou {{email}} para {{workspace}}",
+      "sentMany_one": "Você convidou {{count}} pessoa para {{workspace}}",
+      "sentMany_other": "Você convidou {{count}} pessoas para {{workspace}}",
+      "noEmail_one": "{{count}} convite foi criado, mas o e-mail não pôde ser entregue. Reenvie-o em Convites.",
+      "noEmail_other": "{{count}} convites foram criados, mas os e-mails não puderam ser entregues. Reenvie-os em Convites.",
+      "someFailed_one": "Não foi possível convidar {{count}} endereço. Corrija-o ou remova-o para tentar novamente.",
+      "someFailed_other": "Não foi possível convidar {{count}} endereços. Corrija-os ou remova-os para tentar novamente.",
+      "tooMany": "Você pode convidar até 20 pessoas de cada vez.",
+      "done": "Concluído",
       "role": {
-        "admin": "Administrador",
-        "member": "Membro"
+        "admin": "Administrador do espaço de trabalho",
+        "member": "Membro do espaço de trabalho"
       },
       "roleDescription": {
-        "admin": "Gerencia membros e cobrança",
-        "member": "Usa o espaço de trabalho"
+        "admin": "Gerencia membros, convites, grupos e configurações.",
+        "member": "Pode ver e editar notas."
+      },
+      "errors": {
+        "invalid": "{{email}} não é um endereço de e-mail válido",
+        "alreadyMember": "{{email}} já é membro",
+        "alreadyInvited": "{{email}} já tem um convite pendente. Reenvie-o em Convites.",
+        "seatLimit": "Este espaço de trabalho atingiu o limite de assentos.",
+        "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
+        "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
+        "ssoRequired": "Entre com o login único (SSO) da sua empresa para convidar pessoas para {{workspace}}.",
+        "sessionExpired": "Não foi possível convidar {{email}}: seu login expirou ou mudou. Entre novamente e tente outra vez.",
+        "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente.",
+        "refused": "Não foi possível convidar {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -4871,6 +4928,25 @@
       },
       "tryAgain": "Tentar novamente"
     },
+    "removeMember": {
+      "title": "Remover {{name}} de {{workspace}}?",
+      "body": "Essa pessoa perderá o acesso a todos os espaços de equipe e equipes deste espaço de trabalho. Você pode convidá-la novamente a qualquer momento.",
+      "confirm": "Remover",
+      "removing": "Removendo…",
+      "failed": "Não foi possível remover {{name}}. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para remover pessoas de {{workspace}}.",
+      "alreadyRemoved": "{{name}} já foi removido"
+    },
+    "cancelInvitation": {
+      "title": "Cancelar o convite para {{email}}?",
+      "body": "A pessoa não poderá entrar com este convite. Os membros atuais mantêm o acesso.",
+      "keep": "Manter convite",
+      "canceling": "Cancelando…",
+      "done": "Convite cancelado",
+      "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para cancelar convites em {{workspace}}."
+    },
+    "ssoRequired": "Entre com o login único (SSO) da sua empresa para gerenciar as pessoas de {{workspace}}.",
     "transfer": {
       "title": "Escolha um novo proprietário",
       "body": "Escolha um membro existente do espaço de trabalho. Você se tornará administrador após a transferência.",

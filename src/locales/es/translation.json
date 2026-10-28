@@ -2477,11 +2477,62 @@
       "tab": {
         "general": "General",
         "members": "Miembros",
+        "invitations": "Invitaciones",
         "teams": "Grupos"
       },
       "people": {
         "title": "Personas",
-        "description": "Gestiona las personas de tu espacio de trabajo y sus roles."
+        "description": "Gestiona las personas de tu espacio de trabajo y sus roles.",
+        "subtitleView": "Las personas de tu espacio de trabajo y sus roles.",
+        "add": "Añadir",
+        "addLabel": "Invitar personas",
+        "columns": {
+          "name": "Nombre",
+          "team": "Grupo",
+          "role": "Rol en el espacio de trabajo",
+          "email": "Correo electrónico",
+          "status": "Estado",
+          "actions": "Acciones"
+        },
+        "you": "Tú",
+        "teamsNone": "Ninguno",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Cargando miembros…",
+          "body": "Los miembros de tu espacio de trabajo aparecerán aquí."
+        },
+        "failed": {
+          "title": "No se pudieron cargar los miembros",
+          "body": "Comprueba tu conexión e inténtalo de nuevo."
+        },
+        "search": {
+          "placeholder": "Buscar miembros",
+          "clear": "Borrar búsqueda",
+          "noResultsTitle": "Ningún miembro coincide con «{{query}}»",
+          "noResultsBody": "Revisa la ortografía o busca por correo electrónico."
+        },
+        "roleMenuLabel": "Cambiar el rol de {{name}}",
+        "roleDescription": {
+          "member": "Puede ver y editar notas.",
+          "admin": "Gestiona miembros, invitaciones, grupos y ajustes."
+        },
+        "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "roleNotAllowed": "Ya no tienes permiso para cambiar roles en {{workspace}}.",
+        "invitations": {
+          "loading": "Cargando invitaciones…",
+          "failedTitle": "No se pudieron cargar las invitaciones",
+          "emptyTitle": "No hay invitaciones",
+          "emptyBody": "Las nuevas invitaciones aparecen aquí hasta que se aceptan.",
+          "pending_one": "Pendiente · Expira en {{count}} día",
+          "pending_other": "Pendiente · Expira en {{count}} días",
+          "expired": "Expirada",
+          "resend": "Reenviar invitación",
+          "cancel": "Cancelar invitación",
+          "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo.",
+          "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}.",
+          "noLongerPending": "La invitación para {{email}} ya no está pendiente",
+          "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día."
+        }
       },
       "role": {
         "owner": "Propietario",
@@ -2510,21 +2561,12 @@
         "leaving": "Saliendo…"
       },
       "members": {
-        "title": "Miembros",
         "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
         "loadError": "No se pudieron cargar los miembros.",
         "roleUpdated": "Rol actualizado",
         "removed": "{{name}} eliminado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
         "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo",
-        "removeConfirm": {
-          "title": "¿Quitar a este miembro?",
-          "description": "{{name}} perderá el acceso a {{workspace}} de inmediato."
-        }
+        "remove": "Quitar del espacio de trabajo"
       },
       "joinRequests": {
         "title": "Solicitudes de acceso",
@@ -2565,22 +2607,9 @@
         }
       },
       "invites": {
-        "title": "Invitaciones pendientes",
-        "expiresIn_one": "Expira en {{count}} día",
-        "expiresIn_other": "Expira en {{count}} días",
-        "expired": "Expirada",
-        "loadError": "No se pudieron cargar las invitaciones.",
-        "resend": "Reenviar",
         "resending": "Reenviando…",
-        "revoke": "Revocar",
         "resent": "Invitación reenviada",
-        "resentNoEmail": "Invitación actualizada, pero no se pudo entregar el correo.",
-        "revoked": "Invitación revocada",
-        "revokeFailed": "No se pudo revocar la invitación",
-        "revokeConfirm": {
-          "title": "¿Revocar esta invitación?",
-          "description": "El enlace de invitación para {{email}} dejará de funcionar."
-        }
+        "resentNoEmail": "Invitación actualizada, pero no se pudo entregar el correo."
       },
       "billing": {
         "plan": "Plan",
@@ -3016,7 +3045,9 @@
         "viaGroup": "vía {{group}}",
         "managedByGroup": "Añadido a través de {{group}}. Quítalo desde ahí.",
         "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí.",
-        "invited": "Invitación enviada a {{email}}"
+        "invited": "Invitación enviada a {{email}}",
+        "invitedMany_one": "Invitación enviada a {{count}} persona",
+        "invitedMany_other": "Invitaciones enviadas a {{count}} personas"
       },
       "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
       "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
@@ -4787,27 +4818,53 @@
       "description": "Ahora eres el propietario de {{name}}."
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "emailPlaceholder": "colega@ejemplo.com",
-      "roleLabel": "Rol",
+      "title": "Invitar personas",
+      "description": "Recibirán un enlace por correo para unirse a {{workspace}}.",
+      "emailLabel": "Direcciones de correo",
+      "emailHint": "Separa los correos con comas. Todos reciben el mismo rol.",
+      "emailPlaceholder": "Buscar correo",
+      "removeRecipient": "Quitar {{email}}",
+      "suggestions": "Sugerencias",
+      "roleLabel": "Rol en el espacio de trabajo",
       "seatUsage": "Usando {{used}} de {{seats}} asientos",
       "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "sentNoEmailTitle": "Invitación creada, pero no enviada por correo",
-      "sentNoEmailDescription": "Se invitó a {{email}}, pero no se pudo entregar el correo. Reenvíalo más tarde o comparte el enlace de invitación de otra forma.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "seatCostMany_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostMany_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostManyUnpriced_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan.",
+      "seatCostManyUnpriced_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan.",
+      "submit_one": "Enviar invitación",
+      "submit_other": "Enviar {{count}} invitaciones",
+      "submitting": "Invitando…",
+      "sentTitle_one": "Invitación enviada",
+      "sentTitle_other": "Invitaciones enviadas",
+      "sentOne": "Invitaste a {{email}} a {{workspace}}",
+      "sentMany_one": "Invitaste a {{count}} persona a {{workspace}}",
+      "sentMany_other": "Invitaste a {{count}} personas a {{workspace}}",
+      "noEmail_one": "Se creó {{count}} invitación, pero no se pudo entregar su correo. Reenvíala desde Invitaciones.",
+      "noEmail_other": "Se crearon {{count}} invitaciones, pero no se pudieron entregar sus correos. Reenvíalas desde Invitaciones.",
+      "someFailed_one": "No se pudo invitar a {{count}} dirección. Corrígela o quítala para volver a intentarlo.",
+      "someFailed_other": "No se pudo invitar a {{count}} direcciones. Corrígelas o quítalas para volver a intentarlo.",
+      "tooMany": "Puedes invitar hasta 20 personas a la vez.",
+      "done": "Listo",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "Administrador del espacio de trabajo",
+        "member": "Miembro del espacio de trabajo"
       },
       "roleDescription": {
-        "admin": "Administra miembros y facturación",
-        "member": "Usa el espacio de trabajo"
+        "admin": "Gestiona miembros, invitaciones, grupos y ajustes.",
+        "member": "Puede ver y editar notas."
+      },
+      "errors": {
+        "invalid": "{{email}} no es una dirección de correo válida",
+        "alreadyMember": "{{email}} ya es miembro",
+        "alreadyInvited": "{{email}} ya tiene una invitación pendiente. Reenvíala desde Invitaciones.",
+        "seatLimit": "Este espacio de trabajo alcanzó su límite de puestos.",
+        "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
+        "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
+        "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para invitar personas a {{workspace}}.",
+        "sessionExpired": "No se pudo invitar a {{email}}: tu sesión caducó o cambió. Vuelve a iniciar sesión e inténtalo de nuevo.",
+        "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
+        "refused": "No se pudo invitar a {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -4871,6 +4928,25 @@
       },
       "tryAgain": "Intentar de nuevo"
     },
+    "removeMember": {
+      "title": "¿Quitar a {{name}} de {{workspace}}?",
+      "body": "Perderá el acceso a todos los espacios de equipo y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
+      "confirm": "Quitar",
+      "removing": "Quitando…",
+      "failed": "No se pudo quitar a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para quitar personas de {{workspace}}.",
+      "alreadyRemoved": "{{name}} ya había sido quitado"
+    },
+    "cancelInvitation": {
+      "title": "¿Cancelar la invitación para {{email}}?",
+      "body": "No podrá unirse con esta invitación. Los miembros actuales conservan su acceso.",
+      "keep": "Conservar invitación",
+      "canceling": "Cancelando…",
+      "done": "Invitación cancelada",
+      "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para cancelar invitaciones en {{workspace}}."
+    },
+    "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para gestionar a las personas de {{workspace}}.",
     "transfer": {
       "title": "Elige un nuevo propietario",
       "body": "Elige a un miembro existente del espacio de trabajo. Pasarás a ser administrador tras la transferencia.",

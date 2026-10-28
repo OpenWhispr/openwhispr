@@ -1,4 +1,11 @@
-import { cloudGet, cloudGetPublic, cloudPost, cloudDelete, type DataWrap } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudGetPublic,
+  cloudPost,
+  cloudPostForAuthGeneration,
+  cloudDelete,
+  type DataWrap,
+} from "./cloudApi.js";
 import type { WorkspaceInvitation, InvitationPreview } from "../types/electron";
 
 // email_sent is separate because the invite row is created even when the email fails.
@@ -14,12 +21,19 @@ async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
 async function send(
   workspaceId: string,
   // space_ids become member grants applied when the invitation is accepted.
-  input: { email: string; role?: "admin" | "member"; team_ids?: string[]; space_ids?: string[] }
+  input: { email: string; role?: "admin" | "member"; team_ids?: string[]; space_ids?: string[] },
+  // Pins a batch to the sign-in it started under.
+  authGeneration?: number
 ): Promise<InvitationSendResult> {
-  const res = await cloudPost<DataWrap<InvitationSendResult>>(
-    `/api/workspaces/${workspaceId}/invitations`,
-    input
-  );
+  const path = `/api/workspaces/${workspaceId}/invitations`;
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<InvitationSendResult>>(path, input)
+      : await cloudPostForAuthGeneration<DataWrap<InvitationSendResult>>(
+          path,
+          input,
+          authGeneration
+        );
   return res.data;
 }
 

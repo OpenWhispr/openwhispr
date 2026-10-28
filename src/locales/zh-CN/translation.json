@@ -2425,11 +2425,61 @@
       "tab": {
         "general": "常规",
         "members": "成员",
+        "invitations": "邀请",
         "teams": "群组"
       },
       "people": {
         "title": "人员",
-        "description": "管理工作区中的人员及其角色。"
+        "description": "管理工作区中的人员及其角色。",
+        "subtitleView": "工作区中的人员及其角色。",
+        "add": "添加",
+        "addLabel": "邀请成员",
+        "columns": {
+          "name": "名称",
+          "team": "群组",
+          "role": "工作区角色",
+          "email": "电子邮件",
+          "status": "状态",
+          "actions": "操作"
+        },
+        "you": "你",
+        "teamsNone": "无",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "正在加载成员…",
+          "body": "工作区成员将显示在这里。"
+        },
+        "failed": {
+          "title": "无法加载成员",
+          "body": "请检查网络连接后重试。"
+        },
+        "search": {
+          "placeholder": "搜索成员",
+          "clear": "清除搜索",
+          "noResultsTitle": "没有与“{{query}}”匹配的成员",
+          "noResultsBody": "请检查拼写，或按电子邮件地址搜索。"
+        },
+        "roleMenuLabel": "更改 {{name}} 的角色",
+        "roleDescription": {
+          "member": "可以查看和编辑笔记。",
+          "admin": "管理成员、邀请、群组和设置。"
+        },
+        "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。",
+        "roleNotAllowed": "你已无权更改 {{workspace}} 中的角色。",
+        "invitations": {
+          "loading": "正在加载邀请…",
+          "failedTitle": "无法加载邀请",
+          "emptyTitle": "没有邀请",
+          "emptyBody": "新邀请会显示在这里，直到被接受。",
+          "pending_other": "待处理 · {{count}} 天后过期",
+          "expired": "已过期",
+          "resend": "重新发送邀请",
+          "cancel": "取消邀请",
+          "resendFailed": "无法向 {{email}} 重新发送邀请。请取消该邀请，然后重新邀请。",
+          "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。",
+          "noLongerPending": "{{email}} 的邀请已不再处于待处理状态",
+          "refreshFailed": "无法刷新邀请。此列表可能不是最新的。"
+        }
       },
       "role": {
         "owner": "所有者",
@@ -2458,21 +2508,12 @@
         "leaving": "退出中…"
       },
       "members": {
-        "title": "成员",
         "description": "已使用 {{count}}/{{seats}} 个席位。",
-        "invite": "邀请",
-        "empty": "暂无成员。",
         "loadError": "无法加载成员。",
         "roleUpdated": "角色已更新",
         "removed": "已移除 {{name}}",
-        "promote": "设为管理员",
-        "demote": "设为成员",
         "transferOwnership": "转让所有权",
-        "remove": "从工作区移除",
-        "removeConfirm": {
-          "title": "移除此成员？",
-          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
-        }
+        "remove": "从工作区移除"
       },
       "joinRequests": {
         "title": "加入申请",
@@ -2513,22 +2554,9 @@
         }
       },
       "invites": {
-        "title": "待处理的邀请",
-        "expiresIn_one": "{{count}} 天后过期",
-        "expiresIn_other": "{{count}} 天后过期",
-        "expired": "已过期",
-        "loadError": "无法加载邀请。",
-        "resend": "重新发送",
         "resending": "重新发送中…",
-        "revoke": "撤销",
         "resent": "邀请已重新发送",
-        "resentNoEmail": "邀请已更新，但邮件无法送达。",
-        "revoked": "邀请已撤销",
-        "revokeFailed": "无法撤销邀请",
-        "revokeConfirm": {
-          "title": "撤销此邀请？",
-          "description": "发送给 {{email}} 的邀请链接将失效。"
-        }
+        "resentNoEmail": "邀请已更新，但邮件无法送达。"
       },
       "billing": {
         "plan": "套餐",
@@ -2964,7 +2992,8 @@
         "viaGroup": "通过 {{group}}",
         "managedByGroup": "通过 {{group}} 添加。请在该群组中移除。",
         "roleFromGroup": "通过 {{group}} 获得管理员身份，请在该群组中更改。",
-        "invited": "已向 {{email}} 发送邀请"
+        "invited": "已向 {{email}} 发送邀请",
+        "invitedMany_other": "已向 {{count}} 人发送邀请"
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
       "invitedTo_other": "你将加入 {{count}} 个团队空间",
@@ -4787,27 +4816,46 @@
       "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "邀请加入 {{workspace}}",
-      "description": "通过电子邮件添加同事。他们将收到加入链接。",
-      "emailLabel": "电子邮件",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
+      "title": "邀请他人",
+      "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
+      "emailLabel": "电子邮件地址",
+      "emailHint": "用逗号分隔多个邮箱地址。所有人将获得相同的角色。",
+      "emailPlaceholder": "搜索邮箱",
+      "removeRecipient": "移除 {{email}}",
+      "suggestions": "建议",
+      "roleLabel": "工作区角色",
       "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
       "seatCost": "接受邀请后将为你的方案增加一个席位 · 预计按比例收取 {{amount}}。",
-      "submit": "发送邀请",
-      "submitting": "发送中…",
-      "sentTitle": "邀请已发送",
-      "sentDescription": "我们已向 {{email}} 发送邀请。",
-      "sentNoEmailTitle": "邀请已创建，但未发送邮件",
-      "sentNoEmailDescription": "已邀请 {{email}}，但邮件无法送达。请稍后重新发送，或通过其他方式分享邀请链接。",
-      "errorTitle": "无法发送邀请",
+      "seatCostMany_other": "全部接受后将为你的方案增加 {{count}} 个席位 · 预计按比例收取 {{amount}}。",
+      "seatCostManyUnpriced_other": "全部接受后将为你的方案增加 {{count}} 个席位。",
+      "submit_other": "发送 {{count}} 份邀请",
+      "submitting": "正在邀请…",
+      "sentTitle_other": "邀请已发送",
+      "sentOne": "已邀请 {{email}} 加入 {{workspace}}",
+      "sentMany_other": "已邀请 {{count}} 人加入 {{workspace}}",
+      "noEmail_other": "已创建 {{count}} 份邀请，但邮件未能送达。请在“邀请”中重新发送。",
+      "someFailed_other": "{{count}} 个地址未能邀请。请修正或移除后重试。",
+      "tooMany": "一次最多可邀请 20 人。",
+      "done": "完成",
       "role": {
-        "admin": "管理员",
-        "member": "成员"
+        "admin": "工作区管理员",
+        "member": "工作区成员"
       },
       "roleDescription": {
-        "admin": "管理成员和账单",
-        "member": "使用工作区"
+        "admin": "管理成员、邀请、群组和设置。",
+        "member": "可以查看和编辑笔记。"
+      },
+      "errors": {
+        "invalid": "{{email}} 不是有效的电子邮件地址",
+        "alreadyMember": "{{email}} 已是成员",
+        "alreadyInvited": "{{email}} 已有待处理的邀请。请在“邀请”中重新发送。",
+        "seatLimit": "此工作区已达到席位上限。",
+        "directoryRequired": "请先在身份提供商中分配 {{email}}。",
+        "notAllowed": "你已无法再邀请他人加入 {{workspace}}。",
+        "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再邀请他人加入 {{workspace}}。",
+        "sessionExpired": "无法邀请 {{email}}：你的登录已过期或已更改。请重新登录后再试。",
+        "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。",
+        "refused": "无法邀请 {{email}}：{{reason}}"
       }
     },
     "join": {
@@ -4871,6 +4919,25 @@
       },
       "tryAgain": "重试"
     },
+    "removeMember": {
+      "title": "要将 {{name}} 从 {{workspace}} 移除吗？",
+      "body": "对方将失去此工作区中所有团队空间和团队的访问权限。你可以随时再次邀请对方。",
+      "confirm": "移除",
+      "removing": "正在移除…",
+      "failed": "无法移除 {{name}}。请检查网络连接后重试。",
+      "notAllowed": "你已无权从 {{workspace}} 中移除成员。",
+      "alreadyRemoved": "{{name}} 已被移除"
+    },
+    "cancelInvitation": {
+      "title": "取消发给 {{email}} 的邀请？",
+      "body": "对方将无法通过此邀请加入。现有成员仍保留访问权限。",
+      "keep": "保留邀请",
+      "canceling": "正在取消…",
+      "done": "邀请已取消",
+      "failed": "无法取消邀请。请检查网络连接后重试。",
+      "notAllowed": "你已无权取消 {{workspace}} 中的邀请。"
+    },
+    "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再管理 {{workspace}} 的成员。",
     "transfer": {
       "title": "选择新的所有者",
       "body": "选择一位现有的工作区成员。转让后你将成为管理员。",
