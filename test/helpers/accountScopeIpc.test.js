@@ -110,7 +110,13 @@ const databaseManager = new Proxy(
 );
 
 function buildFakeThis() {
-  const target = { sessionId: "test-session", connectorManager, databaseManager };
+  const target = {
+    sessionId: "test-session",
+    connectorManager,
+    databaseManager,
+    _meetingMicStreaming: null,
+    _meetingSystemStreaming: null,
+  };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -232,6 +238,21 @@ test("meeting prompt retirement precedes scope mutation and skips a true no-op",
   fakeThis.windowManager = originalManager;
 });
 
+test("a sign-out or account switch stops the meeting as an account change, not a policy refusal", async (t) => {
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const reasons = [];
+  fakeThis._stopMeetingForPolicy = (reason) => reasons.push(reason);
+  t.after(() => {
+    fakeThis._stopMeetingForPolicy = originalStop;
+  });
+  tokenState = { token: "switch-token", generation: 40 };
+  databaseManager.activeAccountId = "first-account";
+  await setScope("second-account", 40);
+  handleAuthTokenChange({ token: "rotated", generation: 41 });
+  handleAuthTokenChange({ token: null, generation: 42 });
+  assert.deepEqual(reasons, ["accountChanged", "accountChanged"]);
+});
+
 test("activation storage failure cannot prevent clearing the local bearer", async () => {
   const manager = fakeThis.metaActivation;
   fakeThis.metaActivation = {
@@ -247,5 +268,188 @@ test("activation storage failure cannot prevent clearing the local bearer", asyn
     assert.equal(tokenState.generation, 31);
   } finally {
     fakeThis.metaActivation = manager;
+  }
+});
+
+test("signed-out transitions restore guest meeting detection without granting a replacement bearer guest permissions", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalManager = fakeThis.windowManager;
+  const originalEngine = fakeThis.meetingDetectionEngine;
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis.windowManager = originalManager;
+    fakeThis.meetingDetectionEngine = originalEngine;
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const applied = [];
+  fakeThis.windowManager = { notificationPrefs: {}, retireMeetingNotificationScope() {} };
+  fakeThis.meetingDetectionEngine = { setPreferences: (prefs) => applied.push(prefs) };
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({ success: false }),
+    onChange: () => fakeThis._syncMeetingDetectorPolicy(),
+  });
+  fakeThis._audioFeaturePolicy.update({
+    success: true,
+    managed: true,
+    policy: { features: { meetingRecordingEnabled: false } },
+  });
+  await handlers.get("sync-notification-preferences")(
+    {},
+    {
+      notificationsEnabled: true,
+      notifyMeetingDetection: true,
+      meetingProcessDetection: true,
+    }
+  );
+  assert.deepEqual(applied.at(-1), { audioDetection: false, processDetection: false });
+
+  tokenState = { token: null, generation: 40 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
+  assert.deepEqual(applied.at(-1), { audioDetection: true, processDetection: true });
+
+  tokenState = { token: "replacement-bearer", generation: 41 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  await setScope(null, 41);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+
+  tokenState = { token: null, generation: 42 };
+  databaseManager.activeAccountId = "departing-account";
+  await setScope(null, 42);
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
+  assert.deepEqual(applied.at(-1), { audioDetection: true, processDetection: true });
+});
+
+test("senderless audio policy uses the current bearer or a live app window's cookies, while renderer auth stays scoped", async (t) => {
+  const originalManager = fakeThis.windowManager;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fakeThis.windowManager = originalManager;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+    requests.push(init.headers);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { managed: false, policy: null, policyUpdatedAt: null } }),
+    };
+  });
+  const windowWithCookie = (value, destroyed = false) => ({
+    isDestroyed: () => destroyed,
+    webContents: {
+      session: { cookies: { get: async () => (value ? [{ name: "session", value }] : []) } },
+    },
+  });
+  const renderer = windowWithCookie("renderer-session");
+  t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => renderer);
+  for (const [token, controlPanel, main, event, expected] of [
+    ["cli-bearer", null, null, {}, { Authorization: "Bearer cli-bearer" }],
+    [null, windowWithCookie("control-session"), null, {}, { Cookie: "session=control-session" }],
+    [
+      null,
+      windowWithCookie("stale", true),
+      windowWithCookie("main-session"),
+      {},
+      { Cookie: "session=main-session" },
+    ],
+    [
+      null,
+      windowWithCookie("control-session"),
+      null,
+      { sender: {} },
+      { Cookie: "session=renderer-session" },
+    ],
+    [null, windowWithCookie(""), null, {}, null],
+  ]) {
+    tokenState = { token, generation: tokenState.generation + 1 };
+    databaseManager.activeAccountId = expected ? "cli-account" : null;
+    fakeThis.windowManager = { controlPanelWindow: controlPanel, mainWindow: main };
+    const before = requests.length;
+    assert.deepEqual(
+      await fakeThis._audioFeaturePolicy.run(event, "upload", () => ({ success: true })),
+      { success: true }
+    );
+    // With a verdict already held, the lookup runs behind the answer.
+    for (let turn = 0; expected && turn < 50 && requests.length === before; turn++) {
+      await new Promise(setImmediate);
+    }
+    assert.equal(requests.length - before, expected ? 1 : 0);
+    if (expected) {
+      for (const [key, value] of Object.entries(expected)) {
+        assert.equal(requests.at(-1)[key], value);
+      }
+    }
+  }
+});
+
+test("a token rotation keeps the account's running jobs and meeting; another account ends them", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis._stopMeetingForPolicy = originalStop;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const allowed = { success: true, managed: true, policy: { features: {} } };
+  const stops = [];
+  fakeThis._stopMeetingForPolicy = (reason) => stops.push(reason);
+
+  for (const [nextAccount, accountChanged] of [
+    ["rotation-account", false],
+    ["other-account", true],
+  ]) {
+    stops.length = 0;
+    let lookup = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => lookup.promise });
+    tokenState = { token: "rotation-token-a", generation: 60 };
+    databaseManager.activeAccountId = "rotation-account";
+    await setScope("rotation-account", 60);
+    fakeThis._audioFeaturePolicy.update(allowed);
+
+    const entered = deferred();
+    const finish = deferred();
+    const upload = fakeThis._audioFeaturePolicy.run({}, "upload", async () => {
+      entered.resolve();
+      await finish.promise;
+      return { success: true };
+    });
+    await entered.promise;
+    lookup = deferred();
+
+    tokenState = { token: "rotation-token-b", generation: 61 };
+    handleAuthTokenChange(tokenState);
+    await setScope(nextAccount, 61);
+    // The same account's live meeting keeps transcribing until the new verdict
+    // arrives; nothing keeps the previous account's verdict.
+    assert.equal(
+      fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null,
+      accountChanged ? "POLICY_UNRESOLVABLE" : null
+    );
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+    finish.resolve();
+
+    assert.deepEqual(stops, accountChanged ? ["accountChanged"] : []);
+    assert.equal((await upload).success, !accountChanged);
+    lookup.resolve(allowed);
+    await new Promise(setImmediate);
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
   }
 });

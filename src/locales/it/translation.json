@@ -3233,7 +3233,8 @@
       "urlFileTooLarge": "Il file è troppo grande per essere scaricato. La dimensione massima è 500 MB.",
       "urlYoutubeBlocked": "YouTube sta bloccando temporaneamente i download dalla tua rete. Riprova tra poco.",
       "customEndpointInvalid": "L'endpoint di trascrizione personalizzato non è configurato o non è valido. Aggiornalo nelle Impostazioni.",
-      "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi."
+      "streamingOnlyProvider": "Questo provider supporta solo la trascrizione dal vivo. Scegli un altro provider per i caricamenti di file e i nuovi tentativi.",
+      "disabledByOrg": "Il caricamento di audio è disattivato dalla tua organizzazione."
     },
     "meeting": {
       "title": "Note delle riunioni",
@@ -3260,7 +3261,10 @@
       "systemAudioQuiet": {
         "title": "L'audio della riunione è diventato silenzioso",
         "description": "Non si sente nessuno da qualche minuto. Se la chiamata è ancora in corso, controlla il dispositivo di uscita audio."
-      }
+      },
+      "recordingDisabledByOrg": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+      "stoppedAccountChanged": "La registrazione si è interrotta perché sei uscito dall'account o hai cambiato account.",
+      "stoppedPolicyUnresolved": "La registrazione si è interrotta perché non è stato possibile verificare le impostazioni della tua organizzazione."
     },
     "meetingPill": {
       "returnToNote": "Torna alla registrazione",
@@ -5124,6 +5128,7 @@
     },
     "start": "Prendi appunti",
     "join": "Partecipa e trascrivi",
+    "joinOnly": "Partecipa alla riunione",
     "folders": {
       "choose": "Scegli cartella della riunione",
       "search": "Cerca cartelle",
@@ -5156,7 +5161,9 @@
         "CREATE_FAILED": "Impossibile completare. Riprova.",
         "LINKED_NOTE_CHANGED": "Controlla la destinazione, poi partecipa di nuovo.",
         "NOTE_UNAVAILABLE": "Questa nota non è disponibile. Riprova senza crearne un’altra.",
-        "START_FAILED": "Impossibile completare. Riprova."
+        "START_FAILED": "Impossibile completare. Riprova.",
+        "POLICY_MEETING_RECORDING_DISABLED": "La registrazione delle riunioni è disattivata dalla tua organizzazione.",
+        "POLICY_UNRESOLVABLE": "Le impostazioni della tua organizzazione non sono ancora state caricate. Riprova tra un momento."
       }
     }
   },

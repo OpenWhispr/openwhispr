@@ -186,6 +186,10 @@ export interface StructuredMeetingNotes {
   followUps: string[];
 }
 
+// What the audio is for. /api/transcribe applies org policy to it instead of
+// inferring it from requestContext, where 'recording' would fit a meeting too.
+export type AudioPurpose = 'dictation' | 'meeting' | 'upload';
+
 export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
@@ -196,6 +200,7 @@ export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   jobId?: string;
   clientTranscriptionId?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
+  purpose?: AudioPurpose;
   // Per-job snapshot of the keyboard tone taken at record-start. Threaded to
   // cleanup; never re-read live. Only set for keyboard dictation.
   keyboardTone?: KeyboardTone;

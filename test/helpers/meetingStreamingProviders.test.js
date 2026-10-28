@@ -154,7 +154,7 @@ test("connection identity follows key saves exactly when the token comes from a 
         readsSavedKey = true;
         return "key";
       };
-      const options = { provider, mode };
+      const options = { provider, mode, purpose: "meeting" };
       await fetchRealtimeTokenForProvider(
         provider,
         {

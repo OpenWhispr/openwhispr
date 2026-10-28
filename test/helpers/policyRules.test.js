@@ -1091,3 +1091,36 @@ test("the local-history policy is resolved only once the fetch has settled", asy
   assert.equal(isLocalHistoryPolicyResolved(snapshot("loading")), false);
   assert.equal(isLocalHistoryPolicyResolved(snapshot("error")), false);
 });
+
+test("audio controls independently gate every mode while leaving dictation available", async () => {
+  const { isAudioFeatureAllowed, isTranscriptionSelectionAllowed } = await load();
+  for (const meetingRecordingEnabled of [true, false]) {
+    for (const audioUploadEnabled of [true, false]) {
+      const state = {
+        status: "managed",
+        appVersion: "1.11.0",
+        policy: {
+          ...policy,
+          transcription: {
+            allowedModes: ["local", "providers", "self-hosted", "openwhispr", "enterprise"],
+            allowedByokProviders: ["openai"],
+            allowedEnterpriseProviders: ["azure"],
+          },
+          features: { ...policy.features, meetingRecordingEnabled, audioUploadEnabled },
+        },
+      };
+      assert.equal(isAudioFeatureAllowed(state, "meeting"), meetingRecordingEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "upload"), audioUploadEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "dictation"), true);
+      for (const [mode, provider] of [
+        ["local", "whisper"],
+        ["providers", "openai"],
+        ["self-hosted", "custom"],
+        ["openwhispr", "openai"],
+        ["enterprise", "azure"],
+      ]) {
+        assert.equal(isTranscriptionSelectionAllowed(state, { mode, provider }), true);
+      }
+    }
+  }
+});

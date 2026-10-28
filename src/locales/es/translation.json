@@ -3285,7 +3285,8 @@
       "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
       "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde.",
       "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes.",
-      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos."
+      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+      "disabledByOrg": "Tu organización ha desactivado la carga de audio."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -3312,7 +3313,10 @@
       "systemAudioQuiet": {
         "title": "El audio de la reunión se ha quedado en silencio",
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
-      }
+      },
+      "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
+      "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
+      "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
@@ -5124,6 +5128,7 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir",
+    "joinOnly": "Unirse a la reunión",
     "folders": {
       "choose": "Elegir carpeta de la reunión",
       "search": "Buscar carpetas",
@@ -5156,7 +5161,9 @@
         "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
         "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
         "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
-        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Tu organización ha desactivado la grabación de reuniones.",
+        "POLICY_UNRESOLVABLE": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento."
       }
     }
   },

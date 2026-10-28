@@ -8,7 +8,13 @@ const load = () => import("../../src/components/notes/shared.ts");
 // Codes chunkedCloudTranscribe and interpretTranscribeResponse surface to the
 // upload UI. Anything added there needs a locale key or it reaches the user as
 // a raw English main-process string.
-const MAPPED_CODES = ["NO_SPEECH_DETECTED", "CHUNK_LOSS_EXCEEDED", "CUSTOM_ENDPOINT_INVALID"];
+const MAPPED_CODES = [
+  "NO_SPEECH_DETECTED",
+  "CHUNK_LOSS_EXCEEDED",
+  "CUSTOM_ENDPOINT_INVALID",
+  "POLICY_AUDIO_UPLOAD_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+];
 
 test("every mapped code resolves to a key that exists in en", async () => {
   const { transcriptionErrorKey } = await load();
@@ -56,4 +62,12 @@ test("unmapped, codeless and absent failures fall through to the raw message", a
   assert.equal(transcriptionErrorKey(new Error("boom")), undefined);
   assert.equal(transcriptionErrorKey(null), undefined);
   assert.equal(transcriptionErrorKey(undefined), undefined);
+});
+
+test("a server upload refusal under org policy names the disabled control", async () => {
+  const { transcriptionErrorKey } = await load();
+
+  for (const code of ["POLICY_AUDIO_UPLOAD_DISABLED", "AUDIO_PURPOSE_REQUIRED"]) {
+    assert.equal(transcriptionErrorKey({ code, status: 403 }), "disabledByOrg", code);
+  }
 });

@@ -54,6 +54,10 @@ function isValidPolicyShape(policy) {
     isKnownList(policy.llm.allowedEnterpriseProviders, ENTERPRISE_PROVIDERS) &&
     typeof policy.features?.agentEnabled === "boolean" &&
     typeof policy.features?.webSearchEnabled === "boolean" &&
+    (policy.features?.meetingRecordingEnabled === undefined ||
+      typeof policy.features.meetingRecordingEnabled === "boolean") &&
+    (policy.features?.audioUploadEnabled === undefined ||
+      typeof policy.features.audioUploadEnabled === "boolean") &&
     // Additive within policy version 1: absent (older server) means allowed.
     (policy.features?.screenContextEnabled === undefined ||
       typeof policy.features.screenContextEnabled === "boolean") &&
