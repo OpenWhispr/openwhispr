@@ -24,6 +24,14 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-translation/",
     name: "OpenWhispr Translation",
   },
+  polish: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-polish/",
+    name: "OpenWhispr Polish",
+  },
+  promptEngineer: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-prompt-engineer/",
+    name: "OpenWhispr Prompt Engineer",
+  },
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
@@ -165,12 +173,30 @@ function getDBus() {
   }
 }
 
+// A non-production channel (npm run dev) gets its own bus name and gsettings
+// paths, so it never takes over the shortcuts of an installed build running
+// beside it. Read lazily: main sets OPENWHISPR_CHANNEL after some requires.
+function getChannelSuffix() {
+  const channel = process.env.OPENWHISPR_CHANNEL;
+  return channel && channel !== "production" ? channel : "";
+}
+
+function getDBusServiceName() {
+  const channel = getChannelSuffix();
+  return channel ? `${DBUS_SERVICE_NAME}.${channel}` : DBUS_SERVICE_NAME;
+}
+
 function getSlotConfig(slotName) {
   const config = SLOT_CONFIG[slotName];
   if (!config) {
     throw new Error(`[GnomeShortcut] Unknown slot: "${slotName}"`);
   }
-  return config;
+  const channel = getChannelSuffix();
+  if (!channel) return config;
+  return {
+    path: config.path.replace(/\/openwhispr(?=[-/])/, `/openwhispr-${channel}`),
+    name: config.name.replace(/^OpenWhispr/, `OpenWhispr (${channel})`),
+  };
 }
 
 class GnomeShortcutManager {
@@ -180,6 +206,8 @@ class GnomeShortcutManager {
     this.meetingCallback = null;
     this.voiceAgentCallback = null;
     this.translationCallback = null;
+    this.polishCallback = null;
+    this.promptEngineerCallback = null;
     this.globalShortcutsPortal = new GnomeGlobalShortcutsPortal();
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
@@ -213,6 +241,16 @@ class GnomeShortcutManager {
   setTranslationCallback(callback) {
     this.translationCallback = callback;
     debugLogger.log("[GnomeShortcut] Translation callback registered");
+  }
+
+  setPolishCallback(callback) {
+    this.polishCallback = callback;
+    debugLogger.log("[GnomeShortcut] Polish callback registered");
+  }
+
+  setPromptEngineerCallback(callback) {
+    this.promptEngineerCallback = callback;
+    debugLogger.log("[GnomeShortcut] Prompt Engineer callback registered");
   }
 
   // Older builds persisted a gsettings keybinding for the removed chat-agent
@@ -259,7 +297,7 @@ class GnomeShortcutManager {
       this.bus.connection.on("error", (err) => {
         debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
       });
-      this.bus.requestName(DBUS_SERVICE_NAME, 0);
+      this.bus.requestName(getDBusServiceName(), 0);
       this.bus.exportInterface(
         {
           Toggle: () => {
@@ -286,6 +324,16 @@ class GnomeShortcutManager {
               this.translationCallback();
             }
           },
+          RunPolish: () => {
+            if (this.polishCallback) {
+              this.polishCallback();
+            }
+          },
+          RunPromptEngineer: () => {
+            if (this.promptEngineerCallback) {
+              this.promptEngineerCallback();
+            }
+          },
         },
         DBUS_OBJECT_PATH,
         {
@@ -295,6 +343,8 @@ class GnomeShortcutManager {
             ToggleMeeting: ["", ""],
             ToggleVoiceAgent: ["", ""],
             ToggleTranslation: ["", ""],
+            RunPolish: ["", ""],
+            RunPromptEngineer: ["", ""],
           },
         }
       );
@@ -388,9 +438,11 @@ class GnomeShortcutManager {
       meeting: "ToggleMeeting",
       voiceAgent: "ToggleVoiceAgent",
       translation: "ToggleTranslation",
+      polish: "RunPolish",
+      promptEngineer: "RunPromptEngineer",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
-    const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
+    const command = `dbus-send --session --type=method_call --dest=${getDBusServiceName()} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
 
     try {
       const existing = this.getExistingKeybindings();

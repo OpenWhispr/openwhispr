@@ -15,6 +15,8 @@ const SLOT_TOGGLE_METHOD = {
   meeting: "ToggleMeeting",
   voiceAgent: "ToggleVoiceAgent",
   translation: "ToggleTranslation",
+  polish: "RunPolish",
+  promptEngineer: "RunPromptEngineer",
 };
 
 // Map Electron modifier names to Hyprland modifier names

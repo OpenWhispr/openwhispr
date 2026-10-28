@@ -2241,6 +2241,14 @@
       "translationHotkey": {
         "title": "Atajo de Traducción",
         "description": "Dicta en cualquier idioma: el texto pegado sale traducido"
+      },
+      "polishHotkey": {
+        "title": "Atajo de Pulir",
+        "description": "Selecciona texto en cualquier app y pulsa este atajo para reescribirlo en su lugar: gramática corregida, muletillas eliminadas, más claro y con tu tono de Tono y estilo. Usa tu modelo de Limpieza de dictado."
+      },
+      "promptEngineerHotkey": {
+        "title": "Atajo de Ingeniero de prompts",
+        "description": "Selecciona texto en cualquier app y pulsa este atajo para reescribirlo en su lugar como un prompt detallado para un asistente de IA. Usa tu modelo de Limpieza de dictado."
       }
     },
     "permissions": {
@@ -2682,6 +2690,30 @@
       "upgradeCta": "Actualizar ahora",
       "upgradedTitle": "Actualizado a Enterprise",
       "upgradedDescription": "{{workspace}} ahora está en Enterprise."
+    },
+    "transforms": {
+      "title": "Pulir e Ingeniero de prompts",
+      "description": "Reescribe texto con el modelo de Limpieza de dictado de arriba, incluso con la limpieza de texto desactivada. Selecciona texto y pulsa los atajos de Ajustes → Atajos, o aplica uno a cada dictado.",
+      "autoApply": {
+        "label": "Aplicar después de cada dictado",
+        "description": "Reescribe cada dictado antes de pegarlo. Los comandos del asistente y las traducciones no se modifican.",
+        "options": {
+          "off": "Desactivado",
+          "polish": "Pulir",
+          "promptEngineer": "Ingeniero de prompts"
+        }
+      },
+      "polishStrength": {
+        "label": "Intensidad de Pulir",
+        "options": {
+          "light": "Ligera",
+          "strong": "Fuerte"
+        },
+        "descriptions": {
+          "light": "Corrige gramática, muletillas y puntuación, y mantiene tus frases tal como están. Segura con modelos locales pequeños.",
+          "strong": "Reescribe como un editor: empieza por lo importante, elimina la palabrería y crea listas. Funciona mejor con un modelo grande o en la nube."
+        }
+      }
     }
   },
   "models": {
@@ -5108,5 +5140,28 @@
     "permissionDenied": "Denegado",
     "permissionRestricted": "Restringido",
     "permissionNotDetermined": "No solicitado"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Pulir",
+      "promptEngineer": "Ingeniero de prompts"
+    },
+    "errors": {
+      "title": "{{name}} no se ejecutó",
+      "notAppliedTitle": "{{name}} no se aplicó",
+      "onClipboard": "El resultado está en tu portapapeles.",
+      "noModel": "Primero configura un modelo de Limpieza de dictado en Ajustes → Modelos de lenguaje.",
+      "nothingSelected": "Selecciona algo de texto y luego pulsa el atajo.",
+      "tooLarge": "La selección es demasiado larga. Selecciona 6000 caracteres o menos.",
+      "changed": "El texto seleccionado o la app cambiaron antes de que OpenWhispr pudiera leerlo. No se cambió nada.",
+      "unavailable": "OpenWhispr no pudo leer el texto seleccionado. Revisa los permisos de accesibilidad o de automatización de entrada e inténtalo de nuevo.",
+      "failed": "La IA no pudo terminar. Tu texto no se cambió.",
+      "invalidResponse": "La IA devolvió un resultado no válido. Tu texto no se cambió.",
+      "emptyResponse": "La IA devolvió un resultado vacío. Tu texto no se cambió.",
+      "truncatedResponse": "La IA se detuvo antes de terminar. Tu texto no se cambió. Prueba con menos texto."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} no se ejecutó en este dictado"
+    }
   }
 }

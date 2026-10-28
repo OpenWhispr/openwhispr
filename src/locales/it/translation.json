@@ -2189,6 +2189,14 @@
       "translationHotkey": {
         "title": "Hotkey Traduzione",
         "description": "Detta in qualsiasi lingua: il testo incollato esce tradotto"
+      },
+      "polishHotkey": {
+        "title": "Scorciatoia di Rifinisci",
+        "description": "Seleziona del testo in qualsiasi app e premi questa scorciatoia per riscriverlo sul posto: grammatica corretta, intercalari rimossi, più chiaro e nel tuo tono di Tono e stile. Usa il tuo modello di Pulizia della dettatura."
+      },
+      "promptEngineerHotkey": {
+        "title": "Scorciatoia di Prompt Engineer",
+        "description": "Seleziona del testo in qualsiasi app e premi questa scorciatoia per riscriverlo sul posto come prompt dettagliato per un assistente IA. Usa il tuo modello di Pulizia della dettatura."
       }
     },
     "permissions": {
@@ -2630,6 +2638,30 @@
       "upgradeCta": "Esegui l'upgrade",
       "upgradedTitle": "Upgrade completato",
       "upgradedDescription": "{{workspace}} è ora su Enterprise."
+    },
+    "transforms": {
+      "title": "Rifinisci e Prompt Engineer",
+      "description": "Riscrivi il testo con il modello di Pulizia della dettatura qui sopra, anche con la pulizia del testo disattivata. Seleziona del testo e premi le scorciatoie impostate in Impostazioni → Scorciatoie, oppure applicane una a ogni dettatura.",
+      "autoApply": {
+        "label": "Applica dopo ogni dettatura",
+        "description": "Riscrive ogni dettatura prima di incollarla. I comandi dell'assistente e le traduzioni restano invariati.",
+        "options": {
+          "off": "Disattivato",
+          "polish": "Rifinisci",
+          "promptEngineer": "Prompt Engineer"
+        }
+      },
+      "polishStrength": {
+        "label": "Intensità di Rifinisci",
+        "options": {
+          "light": "Leggera",
+          "strong": "Forte"
+        },
+        "descriptions": {
+          "light": "Corregge grammatica, intercalari e punteggiatura, e lascia le tue frasi come sono. Sicura con i modelli locali piccoli.",
+          "strong": "Riscrive come un editor: parte dal punto principale, taglia le lungaggini e crea elenchi. Ideale con un modello grande o in cloud."
+        }
+      }
     }
   },
   "models": {
@@ -5108,5 +5140,28 @@
     "permissionDenied": "Negata",
     "permissionRestricted": "Limitata",
     "permissionNotDetermined": "Non richiesta"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Rifinisci",
+      "promptEngineer": "Prompt Engineer"
+    },
+    "errors": {
+      "title": "{{name}} non è stato eseguito",
+      "notAppliedTitle": "{{name}} non applicato",
+      "onClipboard": "Il risultato è negli appunti.",
+      "noModel": "Configura prima un modello di Pulizia della dettatura in Impostazioni → Modelli linguistici.",
+      "nothingSelected": "Seleziona prima del testo, poi premi la scorciatoia.",
+      "tooLarge": "La selezione è troppo lunga. Seleziona al massimo 6.000 caratteri.",
+      "changed": "Il testo selezionato o l'app sono cambiati prima che OpenWhispr potesse leggerlo. Non è stato modificato nulla.",
+      "unavailable": "OpenWhispr non è riuscito a leggere il testo selezionato. Controlla i permessi di accessibilità o di automazione dell'input e riprova.",
+      "failed": "L'IA non è riuscita a finire. Il tuo testo non è stato modificato.",
+      "invalidResponse": "L'IA ha restituito un risultato non valido. Il tuo testo non è stato modificato.",
+      "emptyResponse": "L'IA ha restituito un risultato vuoto. Il tuo testo non è stato modificato.",
+      "truncatedResponse": "L'IA si è fermata prima di finire. Il tuo testo non è stato modificato. Prova con meno testo."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} non è stato eseguito su questa dettatura"
+    }
   }
 }

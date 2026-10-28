@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -137,6 +137,8 @@ import {
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
   type HotkeyRegistrationResult,
+  type PolishStrengthSetting,
+  type TransformAutoApplySetting,
 } from "../stores/settingsStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { decideProPlanCardCta, storeSubscriptionsUrl } from "../lib/upsell";
@@ -842,8 +844,86 @@ function NoteFormattingSettings() {
   );
 }
 
+// Polish and Prompt Engineer run on the dictation cleanup model; their hotkeys
+// live under Settings → Hotkeys, and auto-apply runs one after each dictation.
+function TransformsSection() {
+  const { t } = useTranslation();
+  const transformAutoApply = useSettingsStore((s) => s.transformAutoApply);
+  const setTransformAutoApply = useSettingsStore((s) => s.setTransformAutoApply);
+  const polishStrength = useSettingsStore((s) => s.polishStrength);
+  const setPolishStrength = useSettingsStore((s) => s.setPolishStrength);
+
+  return (
+    <div className="border-t border-border/70 pt-6">
+      <SectionHeader
+        title={t("settingsPage.transforms.title")}
+        description={t("settingsPage.transforms.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transforms.autoApply.label")}
+            description={t("settingsPage.transforms.autoApply.description")}
+          >
+            <Select
+              value={transformAutoApply}
+              onValueChange={(value) => setTransformAutoApply(value as TransformAutoApplySetting)}
+            >
+              <SelectTrigger className="h-7 w-40 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["off", "polish", "promptEngineer"] as const).map((value) => (
+                  <SelectItem
+                    key={value}
+                    value={value}
+                    className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+                  >
+                    {t(`settingsPage.transforms.autoApply.options.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transforms.polishStrength.label")}
+            description={t(`settingsPage.transforms.polishStrength.descriptions.${polishStrength}`)}
+          >
+            <Select
+              value={polishStrength}
+              onValueChange={(value) => setPolishStrength(value as PolishStrengthSetting)}
+            >
+              <SelectTrigger className="h-7 w-40 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(["light", "strong"] as const).map((value) => (
+                  <SelectItem
+                    key={value}
+                    value={value}
+                    className="text-xs py-1.5 ps-2.5 pe-7 rounded-md"
+                  >
+                    {t(`settingsPage.transforms.polishStrength.options.${value}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+    </div>
+  );
+}
+
 function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
+  // Polish and Prompt Engineer run on this model even with cleanup off, so the
+  // picker stays reachable once either is in use.
+  const transformsInUse = useSettingsStore(
+    (s) => s.transformAutoApply !== "off" || !!s.polishKey || !!s.promptEngineerKey
+  );
 
   const handleCleanupModeChange = (mode: InferenceMode) => {
     const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
@@ -868,7 +948,7 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
         </SettingsPanelRow>
       </SettingsPanel>
 
-      {useCleanupModel && (
+      {(useCleanupModel || transformsInUse) && (
         <>
           <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
           <GpuDeviceSelector purpose="intelligence" />
@@ -1270,6 +1350,10 @@ export default function SettingsPage({
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const translationKey = useSettingsStore((s) => s.translationKey);
   const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  const polishKey = useSettingsStore((s) => s.polishKey);
+  const setPolishKey = useSettingsStore((s) => s.setPolishKey);
+  const promptEngineerKey = useSettingsStore((s) => s.promptEngineerKey);
+  const setPromptEngineerKey = useSettingsStore((s) => s.setPromptEngineerKey);
 
   const settingsPolicyState = usePolicySnapshot();
   const agentAllowedByPolicy = isAgentAllowed(settingsPolicyState);
@@ -1481,60 +1565,55 @@ export default function SettingsPage({
     [showAlertDialog, t]
   );
 
-  const validateDictationHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [meetingKey, voiceAgentKey, translationKey, t]
+  // Every hotkey slot by its Settings title, so each one is checked against
+  // all of the others.
+  const slotHotkeysByTitle = useMemo(
+    () => ({
+      "settingsPage.general.hotkey.title": dictationKey,
+      "settingsPage.general.meetingHotkey.title": meetingKey,
+      "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+      "settingsPage.general.translationHotkey.title": translationKey,
+      "settingsPage.general.polishHotkey.title": polishKey,
+      "settingsPage.general.promptEngineerHotkey.title": promptEngineerKey,
+    }),
+    [dictationKey, meetingKey, voiceAgentKey, translationKey, polishKey, promptEngineerKey]
   );
 
-  const validateMeetingHotkey = useCallback(
-    (hotkey: string) =>
+  const createSlotValidator = useCallback(
+    (ownTitle: string) => (hotkey: string) =>
       validateHotkeyForSlot(
         hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
+        Object.fromEntries(
+          Object.entries(slotHotkeysByTitle).filter(([title]) => title !== ownTitle)
+        ),
         t
       ),
-    [dictationKey, voiceAgentKey, translationKey, t]
+    [slotHotkeysByTitle, t]
   );
 
-  const validateVoiceAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.translationHotkey.title": translationKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, translationKey, t]
+  const validateDictationHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.hotkey.title"),
+    [createSlotValidator]
   );
-
-  const validateTranslationHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+  const validateMeetingHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.meetingHotkey.title"),
+    [createSlotValidator]
+  );
+  const validateVoiceAgentHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.voiceAgentHotkey.title"),
+    [createSlotValidator]
+  );
+  const validateTranslationHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.translationHotkey.title"),
+    [createSlotValidator]
+  );
+  const validatePolishHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.polishHotkey.title"),
+    [createSlotValidator]
+  );
+  const validatePromptEngineerHotkey = useMemo(
+    () => createSlotValidator("settingsPage.general.promptEngineerHotkey.title"),
+    [createSlotValidator]
   );
 
   const {
@@ -4056,6 +4135,46 @@ EOF`,
               </SettingsPanel>
             </div>
 
+            {/* Polish Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.polishHotkey.title")}
+                description={t("settingsPage.general.polishHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={polishKey}
+                    onChange={(list) => commitAgentHotkey(setPolishKey, list)}
+                    onClear={() => commitAgentHotkey(setPolishKey, "")}
+                    validate={validatePolishHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Prompt Engineer Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.promptEngineerHotkey.title")}
+                description={t("settingsPage.general.promptEngineerHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={promptEngineerKey}
+                    onChange={(list) => commitAgentHotkey(setPromptEngineerKey, list)}
+                    onClear={() => commitAgentHotkey(setPromptEngineerKey, "")}
+                    validate={validatePromptEngineerHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
             {/* Meeting Mode Hotkey */}
             <div>
               <SectionHeader
@@ -4971,6 +5090,7 @@ EOF`,
                   }}
                   toast={toast}
                 />
+                <TransformsSection />
                 <div className="border-t border-border/70 pt-6">
                   <SectionHeader
                     title={t("settingsPage.prompts.title")}

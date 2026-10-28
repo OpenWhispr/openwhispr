@@ -331,6 +331,84 @@ test("a busy Assistant blocks its voice hotkey before native side effects", () =
   assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
 });
 
+test("a transform hotkey starts only once the press-time target is known", async () => {
+  const manager = createNormalWindowManager();
+  const rendererMessages = [];
+  const panelShows = [];
+  let resolvePid;
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel, payload) => rendererMessages.push({ channel, payload }) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager.textEditMonitor = {
+    captureTargetPid: () =>
+      new Promise((resolve) => {
+        resolvePid = resolve;
+      }),
+  };
+  let targetCaptures = 0;
+  manager.selectionManager = {
+    captureTarget: ({ force }) => {
+      assert.equal(force, true);
+      targetCaptures += 1;
+    },
+  };
+  manager.showDictationPanel = (options) => panelShows.push(options);
+  manager.sendPrepareDictation = () => {
+    throw new Error("a transform never prepares the mic");
+  };
+
+  manager.sendRunTransform("polish");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // The pill shows and the target is captured at the press, but the renderer
+  // must not read the selection until macOS has named the frontmost app.
+  assert.equal(panelShows.length, 1);
+  assert.equal(targetCaptures, 1);
+  assert.deepEqual(rendererMessages, []);
+
+  resolvePid(4242);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(rendererMessages, [{ channel: "run-transform", payload: { kind: "polish" } }]);
+});
+
+test("a transform hotkey is dropped while a dictation or the assistant is busy", async () => {
+  const manager = createNormalWindowManager();
+  const rendererMessages = [];
+  manager.mainWindow = {
+    isDestroyed: () => false,
+    webContents: { send: (channel) => rendererMessages.push(channel) },
+  };
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    unregisterAll: () => undefined,
+  };
+  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
+  manager.selectionManager = { captureTarget: () => undefined };
+  manager.showDictationPanel = () => undefined;
+
+  manager._isDictatingToggle = true;
+  manager.sendRunTransform("polish");
+  manager._isDictatingToggle = false;
+  manager._assistantPanelOpen = true;
+  manager.sendRunTransform("promptEngineer");
+  // An assistant turn headed for the caret is busy with the panel closed.
+  manager._assistantPanelOpen = false;
+  manager._assistantPanelBusy = true;
+  manager.sendRunTransform("promptEngineer");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(rendererMessages, []);
+
+  manager._assistantPanelBusy = false;
+  manager.sendRunTransform("promptEngineer");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(rendererMessages, ["run-transform"]);
+});
+
 test("push-to-talk dictation follows the companion pill's availability", () => {
   const manager = createNormalWindowManager();
   const rendererChannels = [];

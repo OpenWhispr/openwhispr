@@ -2483,6 +2483,14 @@
       "translationHotkey": {
         "title": "Translation Hotkey",
         "description": "Dictate in any language — the pasted text comes out translated"
+      },
+      "polishHotkey": {
+        "title": "Polish Hotkey",
+        "description": "Select text in any app and press this to rewrite it in place: grammar fixed, filler removed, clearer, and in your Tone & Style tone. Uses your Dictation Cleanup model."
+      },
+      "promptEngineerHotkey": {
+        "title": "Prompt Engineer Hotkey",
+        "description": "Select text in any app and press this to rewrite it in place as a detailed prompt for an AI assistant. Uses your Dictation Cleanup model."
       }
     },
     "permissions": {
@@ -2724,6 +2732,30 @@
       "upgradeCta": "Upgrade now",
       "upgradedTitle": "Upgraded to Enterprise",
       "upgradedDescription": "{{workspace}} is now on Enterprise."
+    },
+    "transforms": {
+      "title": "Polish & Prompt Engineer",
+      "description": "Rewrite text with the Dictation Cleanup model above, even when text cleanup is off. Select text and press the hotkeys set in Settings → Hotkeys, or run one on every dictation.",
+      "autoApply": {
+        "label": "Apply after each dictation",
+        "description": "Rewrites each dictation before it's pasted. Assistant commands and translations are left as they are.",
+        "options": {
+          "off": "Off",
+          "polish": "Polish",
+          "promptEngineer": "Prompt Engineer"
+        }
+      },
+      "polishStrength": {
+        "label": "Polish strength",
+        "options": {
+          "light": "Light",
+          "strong": "Strong"
+        },
+        "descriptions": {
+          "light": "Fixes grammar, filler and punctuation, and keeps your sentences as they are. Safe with small local models.",
+          "strong": "Rewrites like an editor: leads with your point, cuts wordiness and makes lists. Best with a large or hosted model."
+        }
+      }
     }
   },
   "models": {
@@ -5108,5 +5140,28 @@
     "permissionDenied": "Denied",
     "permissionRestricted": "Restricted",
     "permissionNotDetermined": "Not requested"
+  },
+  "transforms": {
+    "names": {
+      "polish": "Polish",
+      "promptEngineer": "Prompt Engineer"
+    },
+    "errors": {
+      "title": "{{name}} didn't run",
+      "notAppliedTitle": "{{name}} not applied",
+      "onClipboard": "The result is on your clipboard.",
+      "noModel": "Set up a Dictation Cleanup model in Settings → Language Models first.",
+      "nothingSelected": "Select some text first, then press the hotkey.",
+      "tooLarge": "The selection is too long. Select 6,000 characters or fewer.",
+      "changed": "The selected text or app changed before OpenWhispr could read it. Nothing was changed.",
+      "unavailable": "OpenWhispr couldn't read the selected text. Check accessibility or input automation permissions and try again.",
+      "failed": "The AI couldn't finish. Your text wasn't changed.",
+      "invalidResponse": "The AI returned an invalid result. Your text wasn't changed.",
+      "emptyResponse": "The AI returned an empty result. Your text wasn't changed.",
+      "truncatedResponse": "The AI stopped before finishing. Your text wasn't changed. Try less text."
+    },
+    "autoApply": {
+      "failedTitle": "{{name}} didn't run on this dictation"
+    }
   }
 }

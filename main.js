@@ -340,6 +340,21 @@ let debugLogger = null;
 let environmentManager = null;
 let windowManager = null;
 let hotkeyManager = null;
+
+// Hotkey slots that rewrite the selected text (Polish, Prompt Engineer). They
+// only ever fire like a tap, from every key path the other slots use.
+const TRANSFORM_SLOTS = ["polish", "promptEngineer"];
+
+// Runs each transform whose hotkey matches; reports whether any did.
+function sendTransformsForKey(matchesSlot) {
+  let fired = false;
+  for (const slot of TRANSFORM_SLOTS) {
+    if (!matchesSlot(slot)) continue;
+    windowManager.sendRunTransform(slot);
+    fired = true;
+  }
+  return fired;
+}
 let databaseManager = null;
 let clipboardManager = null;
 let connectorManager = null;
@@ -1344,6 +1359,33 @@ async function startApp() {
     hotkeyManager.notifyRestoreFailures(savedTranslationKey, result);
   }
 
+  // Polish and Prompt Engineer hotkeys rewrite the selected text in place
+  // (no recording; no default key — the user opts in from Settings → Hotkeys)
+  for (const { slot, getKey, label } of [
+    { slot: "polish", getKey: () => environmentManager.getPolishKey?.(), label: "polish" },
+    {
+      slot: "promptEngineer",
+      getKey: () => environmentManager.getPromptEngineerKey?.(),
+      label: "prompt engineer",
+    },
+  ]) {
+    const isTransformPress = createHotkeyRepeatGate();
+    const transformHotkeyCallback = () => {
+      if (!isTransformPress()) return;
+      windowManager.sendRunTransform(slot);
+    };
+    windowManager._transformHotkeyCallbacks[slot] = transformHotkeyCallback;
+
+    const savedKey = getKey() || "";
+    if (savedKey) {
+      const result = await hotkeyManager.registerSlot(slot, savedKey, transformHotkeyCallback);
+      if (!result.success) {
+        debugLogger.warn(`Failed to restore ${label} hotkey`, { hotkey: savedKey }, "hotkey");
+      }
+      hotkeyManager.notifyRestoreFailures(savedKey, result);
+    }
+  }
+
   // Set up meeting mode hotkey
   const isMeetingPress = createHotkeyRepeatGate();
   const meetingHotkeyCallback = () => {
@@ -1572,7 +1614,15 @@ async function startApp() {
       if (translationUsesGlobe) {
         windowManager.sendToggleTranslation();
       }
-      if (!voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
+      const transformUsesGlobe = sendTransformsForKey((slot) =>
+        hotkeyManager.getSlotHotkeys(slot).some(isGlobeLikeHotkey)
+      );
+      if (
+        !voiceAgentUsesGlobe &&
+        !translationUsesGlobe &&
+        !transformUsesGlobe &&
+        !dictationUsesGlobe
+      ) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1654,6 +1704,7 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("translation", modifier)) {
         windowManager.sendToggleTranslation();
       }
+      sendTransformsForKey((slot) => hotkeyManager.slotHasHotkey(slot, modifier));
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1720,7 +1771,7 @@ async function startApp() {
       }
     });
 
-    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation"];
+    const MAC_NATIVE_HOTKEY_SLOTS = ["dictation", "voiceAgent", "translation", ...TRANSFORM_SLOTS];
     const syncMacNativeHotkeyConfiguration = () => {
       globeKeyManager.setConfiguration(
         hotkeyManager.getMacNativeListenerConfig(MAC_NATIVE_HOTKEY_SLOTS)
@@ -1744,6 +1795,7 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("translation", button)) {
         windowManager.sendToggleTranslation();
       }
+      sendTransformsForKey((slot) => hotkeyManager.slotHasHotkey(slot, button));
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1897,6 +1949,8 @@ async function startApp() {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
         windowManager.startManualMeeting({ activate: false });
+      } else {
+        sendTransformsForKey((slot) => hotkeyManager.slotHasHotkey(slot, key));
       }
     };
 

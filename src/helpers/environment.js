@@ -37,6 +37,8 @@ const PERSISTED_KEYS = [
   "DICTATION_KEY",
   "VOICE_AGENT_KEY",
   "TRANSLATION_KEY",
+  "POLISH_KEY",
+  "PROMPT_ENGINEER_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -413,6 +415,26 @@ class EnvironmentManager {
 
   saveTranslationKey(key) {
     const result = this._saveKey("TRANSLATION_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getPolishKey() {
+    return this._getKey("POLISH_KEY");
+  }
+
+  savePolishKey(key) {
+    const result = this._saveKey("POLISH_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getPromptEngineerKey() {
+    return this._getKey("PROMPT_ENGINEER_KEY");
+  }
+
+  savePromptEngineerKey(key) {
+    const result = this._saveKey("PROMPT_ENGINEER_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

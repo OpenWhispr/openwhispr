@@ -12113,6 +12113,51 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
+    // Polish and Prompt Engineer hotkeys, registered like the translation one.
+    for (const { slot, channel, getKey, saveKey } of [
+      {
+        slot: "polish",
+        channel: "polish",
+        getKey: () => this.environmentManager.getPolishKey?.(),
+        saveKey: (key) => this.environmentManager.savePolishKey?.(key),
+      },
+      {
+        slot: "promptEngineer",
+        channel: "prompt-engineer",
+        getKey: () => this.environmentManager.getPromptEngineerKey?.(),
+        saveKey: (key) => this.environmentManager.savePromptEngineerKey?.(key),
+      },
+    ]) {
+      ipcMain.handle(`update-${channel}-hotkey`, async (_event, hotkey) => {
+        const hotkeyManager = this.windowManager.hotkeyManager;
+        const callback = this.windowManager._transformHotkeyCallbacks?.[slot];
+        if (!callback) {
+          return { success: false };
+        }
+
+        if (!hotkey) {
+          const removed = await hotkeyManager.unregisterSlot(slot);
+          if (removed === false) return { success: false };
+          saveKey("");
+          this.windowManager.reconcileNativeKeyListeners();
+          this._notifyHotkeyChanged("");
+          return { success: true, message: `${slot} hotkey cleared` };
+        }
+
+        const result = await hotkeyManager.registerSlot(slot, hotkey, callback, { atomic: true });
+        this.windowManager.reconcileNativeKeyListeners();
+        if (result.success) {
+          saveKey(hotkey);
+          this._notifyHotkeyChanged(hotkey);
+          return { success: true, message: `${slot} hotkey updated to: ${hotkey}` };
+        }
+
+        return { success: false, message: result.error };
+      });
+
+      ipcMain.handle(`get-${channel}-key`, async () => getKey() || "");
+    }
+
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
       if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
         return { success: false, holder: this._activeRecordingPipeline };
