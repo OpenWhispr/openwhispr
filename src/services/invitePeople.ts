@@ -38,8 +38,9 @@ export interface InvitePeople {
   }): Promise<void>;
 }
 
-// Outcomes that every remaining address would share, so asking again only adds noise. Every
-// per-address refusal is a 409, so a 400 is about the request itself (its teams or spaces).
+// Outcomes that every remaining address would share, so asking again only adds noise. Answers
+// about one address arrive in the 200's results, so a 400 is about the request itself (its teams,
+// spaces or seats).
 function endsTheBatch(kind: InviteErrorKind, error: unknown): boolean {
   return (
     kind === "notAllowed" ||

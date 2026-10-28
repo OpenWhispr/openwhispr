@@ -412,6 +412,18 @@ test("over the ceiling blocks Send with the ceiling copy", async (t) => {
   assert.match(primaryButton(markup), /disabled=""/);
 });
 
+test("over the ceiling shows only the ceiling bar, not the seats warning too", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: 1 } });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "error");
+  assert.match(bar.body, /workspaces\.invite\.ceilingLeft\|/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.seatsLeft/);
+});
+
 test("no room under the ceiling uses the seat limit copy", async (t) => {
   const { render } = await loadView(t);
 

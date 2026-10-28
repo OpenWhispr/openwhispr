@@ -176,7 +176,9 @@ export function InvitePeopleView({
   // Warnings never block Send: the server bills a seat only when an invitation is accepted, and
   // skipped addresses are left out of the send.
   const warningBars: Array<BarContent & { key: string }> = [];
-  if (summary.overSeats) {
+  // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
+  // would name a different number.
+  if (summary.overSeats && !summary.overCeiling) {
     const { available: count, excess } = summary.overSeats;
     const askOwner = !canManageBilling && billingManager;
     warningBars.push({

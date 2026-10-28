@@ -272,9 +272,12 @@ export default function InviteTeammateDialog({
     }
     if (controller.signal.aborted) return;
     if (invited.length > 0) onInvited?.(invited);
-    // The workspace list's seats_used is what the room under the ceiling is worked out from, and
-    // it is behind whoever else invited people meanwhile.
-    if (seatRefused) void useWorkspaceStore.getState().refresh({ fresh: true });
+    // The workspace list's seats_used is what the seats left and the room under the ceiling are
+    // worked out from: it is behind this run's invitations, and after a seat refusal behind
+    // whoever else invited people meanwhile.
+    if (seatRefused || invited.length > 0) {
+      void useWorkspaceStore.getState().refresh({ fresh: true });
+    }
   };
 
   const close = (): void => onOpenChange(false);

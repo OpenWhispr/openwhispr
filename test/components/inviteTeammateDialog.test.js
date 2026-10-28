@@ -282,6 +282,7 @@ test("closing the page mid-send stops the rest of the run", async (t) => {
   release();
   await sending;
   assert.deepEqual(invited, []);
+  assert.equal(globalThis.__refreshCalls, undefined);
 });
 
 const WORKSPACE = { id: "w1", name: "Acme", role: "admin", seats: 20, seat_limit: 500 };
@@ -368,7 +369,16 @@ test("a ceiling refusal refreshes the workspace list so the seats catch up", asy
   assert.equal(latest().state.seats.ceilingLeft, 0);
 });
 
-test("a run without a seat refusal leaves the workspace list alone", async (t) => {
+test("a run that invited someone refreshes the workspace list so the seats count them", async (t) => {
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, { initialEmail: "a@x.com" });
+
+  await React.act(async () => latest().onSend());
+
+  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+});
+
+test("a run that invited nobody and met no seat refusal leaves the workspace list alone", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "requestFailed" };
   const { latest } = await mountWithWorkspace(t, WORKSPACE, { initialEmail: "a@x.com" });
 
   await React.act(async () => latest().onSend());
