@@ -329,6 +329,7 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
@@ -647,6 +648,10 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
+  const managedMeetingPolicy = createManagedMeetingPolicy({
+    platform: process.platform,
+    getUserDefault: (key, type) => systemPreferences.getUserDefault(key, type),
+  });
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -663,7 +668,8 @@ function initializeCoreManagers() {
       () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
-    databaseManager
+    databaseManager,
+    { isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
@@ -714,6 +720,7 @@ function initializeCoreManagers() {
     appleCalendarManager,
     connectorManager,
     meetingDetectionEngine,
+    managedMeetingPolicy,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,

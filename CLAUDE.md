@@ -138,6 +138,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Post-recording cooldown (2.5s) before showing queued notifications
   - Priority-based coalescing (process > audio) — one notification, not three
   - Both detectors start off and only run once the renderer has synced its saved notification preferences (`sync-notification-preferences`); they stop when meeting prompts are disabled and restart when re-enabled. The derivation lives in `meetingDetectionPreferencePolicy.js` (pure, unit-tested in `test/helpers/meetingDetectionPreferencePolicy.test.js`); `ipcHandlers.js` is a thin adapter over it
+- **managedMeetingPolicy.js**: Admin switch for meeting recording on macOS. A configuration profile (Jamf, Kandji, Intune) for `com.gizmolabs.openwhispr` with `DisableMeetingRecording` = true is read through `systemPreferences.getUserDefault` on every check, so a pushed or removed profile applies without a restart. When set, `meetingDetectionEngine.js` keeps both detectors stopped and drops prompts, manual starts and calendar joins; `meeting-transcription-start` refuses with the `policyRestricted` sentinel, and `meetingRecordingStore.startRecording` checks it first so the mic never opens. Dictation is unaffected. Other platforms always read false. Pure, unit-tested in `test/helpers/managedMeetingPolicy.test.js`
 - **meetingProcessDetector.js**: Detects running meeting apps
   - macOS: Event-driven via `systemPreferences.subscribeWorkspaceNotification` (zero CPU)
   - Windows/Linux: Shared `processListCache` polling (30s interval)

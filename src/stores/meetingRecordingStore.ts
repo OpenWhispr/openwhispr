@@ -814,6 +814,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     reportMeetingError("policyRestricted");
     return false;
   }
+  if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
+    logger.warn("Meeting recording disabled by administrator", {}, "meeting");
+    reportMeetingError("policyRestricted");
+    return false;
+  }
 
   const sessionId = createMeetingRecordingSessionId();
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {

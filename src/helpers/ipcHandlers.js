@@ -669,6 +669,7 @@ class IPCHandlers {
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
+    this.managedMeetingPolicy = managers.managedMeetingPolicy;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
@@ -9831,7 +9832,14 @@ class IPCHandlers {
       },
     });
 
+    ipcMain.handle("is-meeting-recording-disabled", () =>
+      this.managedMeetingPolicy.isMeetingRecordingDisabled()
+    );
+
     ipcMain.handle("meeting-transcription-start", (event, options = {}) => {
+      if (this.managedMeetingPolicy.isMeetingRecordingDisabled()) {
+        return { success: false, code: "MANAGED_DISABLED", error: "policyRestricted" };
+      }
       const sessionId =
         typeof options.sessionId === "string" && options.sessionId.length > 0
           ? options.sessionId
