@@ -101,6 +101,7 @@ import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   applyTranscriptSpeakerPatch,
+  isYouSpeakerName,
   lockTranscriptSpeaker,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
@@ -767,9 +768,12 @@ export default function NoteEditor({
 
   const handleConfirmSuggestion = useCallback(
     async (speakerId: string, suggestedName: string, profileId: number, recorderName?: string) => {
-      await handleMapSpeaker(speakerId, suggestedName, null, profileId, recorderName);
+      const displayName = isYouSpeakerName(suggestedName, t("notes.speaker.you"))
+        ? recorderName || recorderLabel
+        : suggestedName;
+      await handleMapSpeaker(speakerId, displayName, null, profileId, recorderName);
     },
-    [handleMapSpeaker]
+    [handleMapSpeaker, recorderLabel, t]
   );
 
   const handleAttachSpeakerEmail = useCallback(

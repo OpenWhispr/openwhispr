@@ -1012,6 +1012,53 @@ test("a teammate's This is me correction saves their identity for display and ge
   await unmount();
 });
 
+for (const [session, recorderName, expectedName] of [
+  ["original", undefined, "Alice Recorder"],
+  ["appended", "Carol Recorder", "Carol Recorder"],
+]) {
+  test(`confirming an inherited ${session} self suggestion preserves its recorder`, async (t) => {
+    globalThis.__noteEditorAuth = {
+      isSignedIn: true,
+      user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+    };
+    t.after(() => delete globalThis.__noteEditorAuth);
+    const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+    const saved = [];
+    globalThis.window.electronAPI.setSpeakerMapping = async () => {};
+    globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+    await render(undefined, {
+      note: {
+        ...NOTE,
+        cloud_id: "shared-note",
+        owner_user_id: "alice",
+        participants: JSON.stringify([
+          { email: "alice@example.com", displayName: "Alice Recorder", self: true },
+        ]),
+        transcript: JSON.stringify([
+          {
+            source: "mic",
+            speaker: "speaker_0",
+            text: "I'll send it.",
+            suggestedName: "You",
+            suggestedProfileId: 7,
+            recorderName,
+          },
+        ]),
+      },
+    });
+    await click("transcript");
+    await React.act(async () => {
+      let chat;
+      walk(latest(), (node) => {
+        if (node.props.onConfirmSuggestion) chat = node;
+      });
+      await chat.props.onConfirmSuggestion("speaker_0", "You", 7, recorderName);
+    });
+    assert.equal(JSON.parse(saved.at(-1).transcript)[0].speakerName, expectedName);
+    await unmount();
+  });
+}
+
 test("the owner can correct a teammate's self row without renaming earlier sessions", async (t) => {
   globalThis.__noteEditorAuth = {
     isSignedIn: true,
