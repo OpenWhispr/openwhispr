@@ -44,6 +44,8 @@ export interface ApprovalEntry {
   destinationLabel?: string;
   /** What a sent action created, as the connector named it ("ENG-124"). */
   resultLabel?: string;
+  /** A reply meant for a thread that Slack posted as a new message. */
+  outsideThread?: true;
   /** Failed, and the tool still waits: Retry prepares the draft for a fresh Send. */
   awaitingRetry?: true;
   /** Send needs the service connected first: the card asks, then connects. */
@@ -570,12 +572,18 @@ async function commitDraft(key: string): Promise<void> {
         ? entry.preview.destinationLabel
         : undefined;
   const destination = reported ? { destinationLabel: reported } : {};
-  // resultLabel names what the send created ("ENG-124"); only a sent commit
-  // ever carries one.
-  const created =
-    result.state === "sent" && typeof result.resultLabel === "string" && result.resultLabel !== ""
+  // What a sent commit reports about the send: what it created ("ENG-124"),
+  // and a reply meant for a thread that went out as a new message.
+  const created = {
+    ...(result.state === "sent" &&
+    typeof result.resultLabel === "string" &&
+    result.resultLabel !== ""
       ? { resultLabel: result.resultLabel }
-      : {};
+      : {}),
+    ...(result.state === "sent" && result.outsideThread === true
+      ? { outsideThread: true as const }
+      : {}),
+  };
   switch (result.state) {
     case "sent":
       settle(

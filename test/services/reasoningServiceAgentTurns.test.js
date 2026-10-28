@@ -147,6 +147,37 @@ test("a failed tool step is flagged as an error, and a cut-short run answers wit
   ]);
 });
 
+// A server that ignores tool_choice "none" (a LAN or custom one) still can't
+// run a tool from the answer at the cap, nor show one running.
+test("a tool call in the answer at the step cap never runs", async (t) => {
+  const { reasoningService, vite } = await loadReasoningService(t, {
+    electronAPI: { getGroqKey: async () => "gsk_test" },
+  });
+  stubFetch(t, [
+    ...Array.from(
+      { length: STEP_CAP + 1 },
+      (_, i) => () => sse(groqToolCall(`c${i}`), groqChunk({}, "tool_calls"))
+    ),
+  ]);
+  let runs = 0;
+  const tools = await groqTools(vite, async () => {
+    runs += 1;
+    return { success: true, data: "ok", displayText: "" };
+  });
+  const chunks = await collect(
+    reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "hi" }],
+      "openai/gpt-oss-120b",
+      "groq",
+      GROQ_CONFIG,
+      tools
+    )
+  );
+  assert.equal(runs, STEP_CAP);
+  assert.equal(chunks.filter((chunk) => chunk.type === "tool_calls").length, STEP_CAP);
+  assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "tool-calls" });
+});
+
 // The answer at the cap is extra: a provider that refuses it, or one that
 // can't take it, ends the turn at the cap as before.
 test("a BYOK answer at the step cap that fails ends the turn at the cap", async (t) => {

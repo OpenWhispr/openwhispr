@@ -4538,7 +4538,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "Antwort im Thread vom {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "An {{destination}} als neue Nachricht gesendet, nicht im Thread."
       },
       "sentLabel": "Gesendet",
       "identityChanged": "Wird jetzt als {{account}} gesendet. Drücke Senden, um es zu senden.",

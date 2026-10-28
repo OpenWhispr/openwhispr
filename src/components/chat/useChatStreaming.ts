@@ -68,6 +68,7 @@ import type {
 } from "./types";
 import {
   connectsFirst,
+  HISTORY_MAX_TOKENS,
   toHistoryMessages,
   withoutEchoedToolTrace,
   type HistoryMessage,
@@ -436,7 +437,10 @@ export function useChatStreaming({
         options?.conversationId != null && claimConversation
           ? await claimConversation(options.conversationId)
           : undefined;
-      if (claim === false) return;
+      if (claim === false) {
+        options?.onReplaceFailed?.();
+        return;
+      }
       if (sendGeneration !== sendGenerationRef.current) {
         await claim?.release();
         return;
@@ -670,13 +674,14 @@ export function useChatStreaming({
           connectorsOffered ? buildNoteAttendeesContext(noteMeetingRef.current) : "",
         ]);
         if (cancelled() || !mountedRef.current) return;
+        // A local or LAN server's context is small: less transcript and history fit.
+        const contextSize =
+          !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted";
         // A transcript too long for the model is read through get_note, except
         // by whole-note actions, which work from the complete source.
         const maxTranscriptTokens =
           registry?.get("get_note") && !options?.requestText
-            ? FULL_TRANSCRIPT_MAX_TOKENS[
-                !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted"
-              ]
+            ? FULL_TRANSCRIPT_MAX_TOKENS[contextSize]
             : Infinity;
         const currentNote: OpenNoteContext =
           typeof openNoteRef.current === "function"
@@ -723,15 +728,23 @@ export function useChatStreaming({
           settings.uiLanguage
         );
 
-        const history: HistoryMessage[] = toHistoryMessages(allMessages, {
-          toolHistory,
-          isOffered: (name) => offeredTools?.some((tool) => tool.name === name) ?? false,
-        });
-
+        // A whole-note action asks with its own text in place of the saved
+        // request; swapped before the history is built, so a note the history
+        // opens the request with (sends it left out) stays.
         const requestText = options?.requestText;
-        if (requestText) {
-          transformLastUserMessage(history, (message) => ({ ...message, content: requestText }));
-        }
+        const requestIndex = allMessages.map((message) => message.role).lastIndexOf("user");
+        const history: HistoryMessage[] = toHistoryMessages(
+          requestText
+            ? allMessages.map((message, i) =>
+                i === requestIndex ? { ...message, content: requestText } : message
+              )
+            : allMessages,
+          {
+            toolHistory,
+            isOffered: (name) => offeredTools?.some((tool) => tool.name === name) ?? false,
+            maxTokens: HISTORY_MAX_TOKENS[contextSize],
+          }
+        );
 
         // A saved user message keeps its selected text, and toHistoryMessages adds it.
         const selectedContext = options?.selectedContext;

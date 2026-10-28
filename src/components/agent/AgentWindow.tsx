@@ -725,6 +725,12 @@ export default function AgentWindow() {
       stopRequest();
       return;
     }
+    // Selected text (and the toolbar on it) goes first: a close starts a new chat.
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      selection.removeAllRanges();
+      return;
+    }
     void close();
   }, [busy, close, dropTake, listening, stopRequest]);
 

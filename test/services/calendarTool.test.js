@@ -60,6 +60,8 @@ test("events map the real DB columns and survive serialization", async (t) => {
 
 test("each event gets its local date, weekday and times, across midnight and a DST change", async (t) => {
   inTimeZone(t, "America/Los_Angeles");
+  // Friday noon: the week runs through Thursday Nov 5.
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-30T19:00:00Z") });
   const { calendarTool } = await load();
   stubEvents([
     // Stored in UTC, as Microsoft and Apple rows are: Friday evening in Los Angeles.
@@ -114,6 +116,44 @@ test("each event gets its local date, weekday and times, across midnight and a D
     },
   ]);
 });
+
+for (const { transition, now, start, end, startTime, endTime, startOffset, endOffset } of [
+  {
+    transition: "fall back",
+    now: "2026-10-30T19:00:00Z",
+    start: "2026-11-01T08:30:00Z",
+    end: "2026-11-01T09:15:00Z",
+    startTime: "1:30 AM",
+    endTime: "1:15 AM",
+    startOffset: "GMT-7",
+    endOffset: "GMT-8",
+  },
+  {
+    transition: "spring forward",
+    now: "2026-03-06T20:00:00Z",
+    start: "2026-03-08T09:30:00Z",
+    end: "2026-03-08T10:15:00Z",
+    startTime: "1:30 AM",
+    endTime: "3:15 AM",
+    startOffset: "GMT-8",
+    endOffset: "GMT-7",
+  },
+]) {
+  test(`an event spanning the ${transition} transition preserves both offsets`, async (t) => {
+    inTimeZone(t, "America/Los_Angeles");
+    t.mock.timers.enable({ apis: ["Date"], now: Date.parse(now) });
+    const { calendarTool } = await load();
+    stubEvents([{ summary: "Maintenance", start_time: start, end_time: end }]);
+
+    const result = await calendarTool.execute({ timeRange: "week" });
+
+    assert.equal(result.success, true);
+    assert.equal(result.data[0].startTime, startTime);
+    assert.equal(result.data[0].endTime, endTime);
+    assert.equal(result.data[0].timeZoneName, startOffset);
+    assert.equal(result.data[0].endTimeZoneName, endOffset);
+  });
+}
 
 test("all-day events are asked for and come back as their days", async (t) => {
   inTimeZone(t, "America/Los_Angeles");
@@ -215,4 +255,50 @@ test("the week range runs to the end of the sixth day after today, like today an
     [minutesTo(22), minutesTo(23), minutesTo(28)]
   );
   assert.deepEqual(calls[2][1], { includeAllDay: true });
+});
+
+test("a meeting at the next midnight belongs to the next day, not today", async (t) => {
+  inTimeZone(t, "America/Los_Angeles");
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-23T17:00:00Z") });
+  const { calendarTool } = await load();
+  stubEvents([
+    {
+      summary: "Late",
+      start_time: "2026-10-23T23:59:00-07:00",
+      end_time: "2026-10-24T00:30:00-07:00",
+    },
+    {
+      summary: "Midnight",
+      start_time: "2026-10-24T00:00:00-07:00",
+      end_time: "2026-10-24T00:30:00-07:00",
+    },
+  ]);
+
+  const { data } = await calendarTool.execute({ timeRange: "today" });
+
+  assert.deepEqual(
+    data.map((event) => event.summary),
+    ["Late"]
+  );
+});
+
+test("an event that doesn't block the user's time says so", async (t) => {
+  inTimeZone(t, "America/Los_Angeles");
+  const { calendarTool } = await load();
+  stubEvents([
+    {
+      summary: "Working from home",
+      start_time: "2026-10-23",
+      end_time: "2026-10-24",
+      is_all_day: 1,
+      availability_status: "free",
+    },
+    { summary: "Out of office", start_time: "2026-10-23", end_time: "2026-10-24", is_all_day: 1 },
+  ]);
+
+  const { data } = await calendarTool.execute({ timeRange: "week" });
+
+  assert.equal(data[0].free, true);
+  assert.equal("free" in data[1], false);
+  assert.match(calendarTool.description, /free marks an event that doesn't block/);
 });

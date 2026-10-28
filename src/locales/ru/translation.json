@@ -4414,7 +4414,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "Ответ в ветке, начатой {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "Отправлено в {{destination}} новым сообщением, а не в ветку."
       },
       "sentLabel": "Отправлено",
       "identityChanged": "Теперь будет отправлено от имени {{account}}. Нажмите «Отправить», чтобы отправить.",

@@ -56,6 +56,8 @@ function normalizeCommitResult(result) {
           destinationLabel: result.destinationLabel,
           resultLabel: result.resultLabel,
         }),
+        // A reply meant for a thread that went out as a new message (Slack).
+        ...(result.outsideThread === true ? { outsideThread: true } : {}),
       };
     case "failed":
       return failedResult(result);

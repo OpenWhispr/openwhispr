@@ -183,15 +183,29 @@ function prepareFailed(errorCode, message) {
   return { status: "failed", errorCode, message };
 }
 
+// Which Slack login a lookup or an opened DM belongs to.
+function loginCacheKey(binding, credential) {
+  return `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
+}
+
 function createSlackConnector({ api, auth, directory, credentials }) {
+  // Whose DM an id is takes im:read, which the app doesn't ask for, and the
+  // card must name who gets the message. So a DM id is known by the person a
+  // Send opened it with, per login, for as long as the app runs.
+  const openedDms = new Map();
+
   // An id names exactly one channel, person or DM. A person's is looked up
   // directly; a channel's must be among the user's channels, which a list
   // cut off at the page cap may not show.
   async function findById(id, token, cacheKey) {
     if (id.startsWith("D")) {
-      // Whose DM it is takes im:read, which the app doesn't ask for. Send
-      // posts there, and Slack refuses a DM the user isn't in.
-      return { candidate: { id, kind: "dm", label: `Direct message (${id})` } };
+      const person = openedDms.get(`${cacheKey}:${id}`);
+      if (person) return { candidate: { id, kind: "dm", label: person.label } };
+      return {
+        clarify: clarify(
+          `Slack doesn't say whose direct message ${id} is. Ask the user who to send it to, by name or email.`
+        ),
+      };
     }
     if (id.startsWith("U") || id.startsWith("W")) {
       const found = await directory.personById(token, id);
@@ -297,7 +311,11 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       return named.unmatched ? findById(parsed.query, token, cacheKey) : named;
     }
     const byId = await findById(parsed.query, token, cacheKey);
-    return byId.clarify ? findByName(asName, token, cacheKey) : byId;
+    if (!byId.clarify) return byId;
+    // A name that matches nothing either: the id's own question says more
+    // (a cut-off list of channels, not "too large to look people up by name").
+    const named = await findByName(asName, token, cacheKey);
+    return named.unmatched ? byId : named;
   }
 
   // Slack refusing a token it just issued means the login itself is gone.
@@ -382,7 +400,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       }
       const { credential } = access;
       const parsed = parseDestination(destination);
-      const cacheKey = `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
+      const cacheKey = loginCacheKey(binding, credential);
       const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
       if (found.clarify) return found.clarify;
       if (found.error) {
@@ -397,7 +415,11 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         id: found.candidate.id,
         label: found.candidate.label,
       };
-      if (thread && !threadFits(target, thread)) {
+      // A person's DM is known only once Send opens it, unless an earlier Send
+      // here opened the thread's DM with someone else: then nothing is opened.
+      const threadDm = thread && openedDms.get(`${cacheKey}:${thread.channelId}`);
+      const otherPersonsDm = target.kind === "user" && threadDm && threadDm.userId !== target.id;
+      if (thread && (!threadFits(target, thread) || otherPersonsDm)) {
         return prepareFailed("thread_mismatch", failureMessage("thread_mismatch", target.label));
       }
       return {
@@ -468,6 +490,10 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           };
         }
         channel = channelId;
+        openedDms.set(`${loginCacheKey(binding, access.credential)}:${channelId}`, {
+          userId: target.id,
+          label: target.label,
+        });
       }
       if (thread && channel !== thread.channelId) {
         return {
@@ -486,16 +512,19 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       const { result } = posted;
       if (result.ok) {
         // The thread Slack says the message went into, if any: one it didn't
-        // thread is linked as the new message it is.
+        // thread is linked as the new message it is, and the card says so,
+        // since it promised a reply in the thread.
         const threadTs = thread ? result.data.message?.thread_ts : undefined;
+        const threaded = MESSAGE_TS.test(threadTs ?? "");
         return {
           state: "sent",
           url: messageUrl(
             posted.access.credential.teamUrl,
             channel,
             result.data.ts,
-            MESSAGE_TS.test(threadTs ?? "") ? threadTs : undefined
+            threaded ? threadTs : undefined
           ),
+          ...(thread && !threaded ? { outsideThread: true } : {}),
         };
       }
       if (result.outcome === "failed") {

@@ -187,8 +187,11 @@ export function approvalOutcomeResult(
           ...userEdits(outcome),
           // What was created ("ENG-124"), so the model can name it.
           ...(outcome.resultLabel !== undefined ? { reference: outcome.resultLabel } : {}),
+          ...(outcome.outsideThread ? { outsideThread: true } : {}),
         },
-        displayText: sentDisplayText(destination, outcome.resultLabel, options.verbKey),
+        displayText: outcome.outsideThread
+          ? i18n.t("connectors.approval.slack.sentOutsideThread", { destination })
+          : sentDisplayText(destination, outcome.resultLabel, options.verbKey),
       };
     case "cancelled":
       return {

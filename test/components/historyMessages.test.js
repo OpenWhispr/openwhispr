@@ -490,10 +490,37 @@ test("a failed reply with nothing in it stays out of the history; one whose tool
   );
   assert.deepEqual(
     history.map((m) => m.content),
-    ["Hi", "[Tools used: slack_send_message (sent)]\n\n"]
+    ["Hi", "[Tools used: slack_send_message (sent)]"]
   );
   // Without the trace there is nothing to send for it either.
   assert.deepEqual(toHistoryMessages([failed, actedThenFailed], { toolHistory: "none" }), []);
+});
+
+// Anthropic refuses an empty assistant message, and Gemini a model turn with no parts.
+test("a reply with nothing left in it stays out, whatever its turn's status", async () => {
+  const { toHistoryMessages } = await load();
+  const cardOnly = assistant("", [
+    call("slack_send_message", { destination: "#eng" }, { metadata: { status: "sent" } }),
+  ]);
+  const stopped = { ...assistant("", undefined), turn: { startedAt: 1, status: "stopped" } };
+  const chat = [user("Post it"), cardOnly, user("Stop"), stopped, user("Thanks")];
+  for (const toolHistory of ["parts", "text", "none"]) {
+    const history = toHistoryMessages(chat, { toolHistory, isOffered: () => false });
+    assert.ok(
+      history.every((m) => m.role !== "assistant" || m.content !== ""),
+      `${toolHistory}: ${JSON.stringify(history)}`
+    );
+    // Some chat templates (Mistral's, Gemma's) refuse two user messages in a row.
+    assert.ok(
+      history.every((m, i) => i === 0 || m.role !== "user" || history[i - 1].role !== "user"),
+      `${toolHistory}: ${JSON.stringify(history)}`
+    );
+  }
+  assert.deepEqual(
+    toHistoryMessages(chat, { toolHistory: "none" }).map((m) => m.content),
+    // A stopped one says so, so the request isn't read as part of the next.
+    ["Post it\n\nStop\n\n(Stopped before a reply.)\n\nThanks"]
+  );
 });
 
 // The same turn with structured history: the model reads each call and its
@@ -765,10 +792,10 @@ test("history always starts with the user, however the cap cuts it", async () =>
   assert.deepEqual(capped, [{ role: "user", content: "Thanks" }]);
 });
 
-test("a call to a tool this turn doesn't offer isn't replayed: a provider would refuse it", async () => {
+test("a call to a tool this turn doesn't offer is a note, never a tool message: a provider may refuse it", async () => {
   const { toHistoryMessages } = await load();
   // A look at an earlier screenshot, web search since turned off, a
-  // disconnected Slack.
+  // disconnected Slack: the send stays known, so it is never denied.
   const chat = [
     user("What's this error?"),
     assistant("It's a refused connection to port 3000.", [
@@ -780,11 +807,29 @@ test("a call to a tool this turn doesn't offer isn't replayed: a provider would 
   ];
   const isOffered = (name) => name === "search_notes";
   for (const toolHistory of ["parts", "text"]) {
-    assert.deepEqual(toHistoryMessages(chat, { toolHistory, isOffered })[1], {
-      role: "assistant",
-      content: "It's a refused connection to port 3000.",
-    });
+    assert.deepEqual(
+      toHistoryMessages(chat, { toolHistory, isOffered }),
+      [
+        user("What's this error?"),
+        {
+          role: "assistant",
+          content:
+            '[Tools used: look_at_screen, web_search ("ECONNREFUSED"), slack_send_message ("#eng") (sent)]\n\nIt\'s a refused connection to port 3000.',
+        },
+        user("Thanks"),
+      ].map(({ role, content }) => ({ role, content }))
+    );
   }
+  // Only the calls it doesn't offer: the rest replay as tool messages.
+  const mixed = toHistoryMessages(chat, {
+    toolHistory: "parts",
+    isOffered: (name) => name === "web_search",
+  });
+  assert.equal(mixed[1].content[0].toolName, "web_search");
+  assert.equal(
+    mixed[3].content,
+    '[Tools used: look_at_screen, slack_send_message ("#eng") (sent)]\n\nIt\'s a refused connection to port 3000.'
+  );
   // Offered again (a new screenshot), it replays like any call.
   const [, look] = toHistoryMessages(chat, {
     toolHistory: "parts",
@@ -852,7 +897,7 @@ test("a send that left the history stays known with its request, call and outcom
   assert.ok(history.length <= 40, String(history.length));
 });
 
-test("a send left out of the history stays known only while its tool is offered", async () => {
+test("a send left out of the history whose tool isn't offered stays known as a note", async () => {
   const { toHistoryMessages } = await load();
   const chat = [
     user("Email Gabe the roadmap and post it in #eng"),
@@ -876,17 +921,72 @@ test("a send left out of the history stays known only while its tool is offered"
     ),
     ["email_draft", "email_draft"]
   );
+  // Slack since disconnected: the send is noted, never a tool message, never gone.
+  assert.deepEqual(history[3], {
+    role: "assistant",
+    content: '[Tools used: slack_send_message ("#eng") (sent)]',
+  });
+  assert.equal(history[4].role, "user");
+});
+
+test("a local or LAN server's history gets the smaller token budget it is given", async () => {
+  const { toHistoryMessages, HISTORY_MAX_TOKENS } = await load();
+  // About 1,700 tokens each: all fit 16,000, two fit 4,000.
+  const chat = Array.from({ length: 6 }, (_, i) => user(`${i}`.repeat(5_000)));
+  assert.equal(toHistoryMessages(chat, { toolHistory: "text" }).length, 6);
+  const small = toHistoryMessages(chat, {
+    toolHistory: "text",
+    maxTokens: HISTORY_MAX_TOKENS.selfHosted,
+  });
+  assert.equal(small.length, 2);
+  assert.equal(small.at(-1).content, "5".repeat(5_000));
 });
 
 test("with a text trace, the sends left out open the first message, never a message of their own", async () => {
   const { toHistoryMessages } = await load();
-  const [first, second] = toHistoryMessages(longChat(), { toolHistory: "text" });
+  const history = toHistoryMessages(longChat(), { toolHistory: "text" });
+  const [first, second] = history;
+  // Riding in that message, they take no entries of their own: all 40 stay.
+  assert.equal(history.length, 40);
   assert.equal(
     first.content,
-    `${LEDGER_NOTE}\n- "Email Gabe the roadmap": [Tools used: email_draft (sent: https://mail.google.com/mail/#sent/gabe)]\n\nm10`
+    `${LEDGER_NOTE}\n- "Email Gabe the roadmap": [Tools used: email_draft (sent: https://mail.google.com/mail/#sent/gabe)]\n\nm0`
   );
-  assert.equal(second.content, "m11");
+  assert.equal(second.content, "m1");
   assert.equal(toHistoryMessages(longChat(), { toolHistory: "none" })[0].content, "m0");
+});
+
+test("sends from one request share its entry, the request said once", async () => {
+  const { toHistoryMessages } = await load();
+  const chat = [
+    user("Email Gabe and Dana the roadmap"),
+    assistant("Sent to Gabe.", [sent("gabe")]),
+    assistant("And to Dana.", [sent("dana")]),
+    ...smallTalk(40),
+  ];
+  const history = toHistoryMessages(chat, { toolHistory: "parts" });
+  const requests = history.filter(
+    (m) => typeof m.content === "string" && m.content.includes("Email Gabe and Dana")
+  );
+  assert.equal(requests.length, 1);
+  assert.deepEqual(
+    history.flatMap((m) =>
+      Array.isArray(m.content) && m.role === "assistant"
+        ? m.content.map((part) => part.toolCallId)
+        : []
+    ),
+    ["gabe", "dana"]
+  );
+});
+
+test("a Slack link as the destination is replayed whole or not at all", async () => {
+  const { toolTrace } = await load();
+  const short = "https://acme.slack.com/archives/C0ENG0001/p1727200000123456";
+  const long = `https://acme.enterprise.slack.com/archives/C0ENG0001/p1727200000123456?thread_ts=1727200000.123456&cid=C0ENG0001&${"x".repeat(200)}`;
+  const posted = (destination) =>
+    call("slack_send_message", { destination }, { metadata: { status: "sent" } });
+  assert.equal(toolTrace([posted(short)]), `[Tools used: slack_send_message ("${short}") (sent)]`);
+  assert.equal(toolTrace([posted(long)]), "[Tools used: slack_send_message (sent)]");
 });
 
 test("a send cut off before its result is kept as one that may have gone out", async () => {

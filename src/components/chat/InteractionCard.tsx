@@ -121,8 +121,14 @@ export function InteractionCard({
   heightRef?: MutableRefObject<number>;
 }): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
+  // The space the card takes, margins included, so the row that replaces it
+  // starts exactly there.
   useLayoutEffect(() => {
-    if (heightRef && rootRef.current) heightRef.current = rootRef.current.offsetHeight;
+    const root = rootRef.current;
+    if (!heightRef || !root) return;
+    const style = root.ownerDocument.defaultView?.getComputedStyle(root);
+    const margins = style ? parseFloat(style.marginTop) + parseFloat(style.marginBottom) : 0;
+    heightRef.current = root.offsetHeight + (Number.isFinite(margins) ? margins : 0);
   });
   useCardFocus(
     rootRef,
@@ -181,9 +187,12 @@ export function InteractionOutcomeRow({
       style={fromHeight > 0 ? ({ "--card-height": `${fromHeight}px` } as CSSProperties) : undefined}
       className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground transition-[height] duration-200 ease-out [interpolate-size:allow-keywords] starting:h-(--card-height) motion-reduce:transition-none agent:text-[13px]"
     >
-      {result && DONE_STATUSES.has(result.status) && (
-        <Check size={13} className="shrink-0 text-success" />
-      )}
+      {result &&
+        DONE_STATUSES.has(result.status) &&
+        // Back from Settings with it still not set up is no success.
+        !(result.status === "done" && result.ready === false) && (
+          <Check size={13} className="shrink-0 text-success" />
+        )}
       <span dir="auto" className="truncate">
         {[interactionOutcome(entry, t), ...answers].join(" · ")}
       </span>

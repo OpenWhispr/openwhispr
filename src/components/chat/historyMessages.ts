@@ -20,9 +20,11 @@ export type ToolHistory = "parts" | "text" | "none";
 // count too: the cloud's Gemma provider takes at most 64 messages a request,
 // the turn's own tool steps included. Each call adds two, so a full history
 // leaves room for about a dozen calls; a turn that makes more goes past it,
-// and the API answers the rest of that turn without Gemma.
+// and the API answers the rest of that turn without Gemma. A local or LAN
+// server's context is small (llama-server starts at 16k, for the system
+// prompt, tools, open note and answer too), so its history gets less.
 const HISTORY_MAX_ENTRIES = 40;
-const HISTORY_MAX_TOKENS = 16_000;
+export const HISTORY_MAX_TOKENS = { hosted: 16_000, selfHosted: 4_000 } as const;
 const TRACE_ARG_MAX_CHARS = 80;
 // Providers differ on call ids, and one may replay to another: Anthropic takes
 // letters, digits, _ and -, OpenAI Chat Completions at most 40 characters.
@@ -80,7 +82,12 @@ function traceArgument(call: ToolCallInfo): string | null {
   } catch {
     return null;
   }
-  return traceText((args as Record<string, unknown> | null)?.[field]);
+  const value = (args as Record<string, unknown> | null)?.[field];
+  // A Slack link as the destination is a link: whole or not at all.
+  if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) {
+    return outcomeUrl(value.trim());
+  }
+  return traceText(value);
 }
 
 // A link is shown whole or not at all: a cut one would point somewhere else.
@@ -189,17 +196,23 @@ export function connectsFirst(call: ToolCallInfo): boolean {
 type IsOffered = (toolName: string) => boolean;
 
 // Older versions stored built-in help evidence as a synthetic tool call. It
-// was never a model tool and must not teach future turns to invoke it. Nor is
-// a call to a tool this turn doesn't offer replayed (a look at an earlier
-// screenshot, a connector since disconnected, web search turned off): a
-// provider refuses a call to a tool it doesn't offer.
+// was never a model tool and must not teach future turns to invoke it.
 const NOT_REPLAYED = new Set(["grounded_product_help"]);
 
-function replayedCalls(
-  toolCalls: ReadonlyArray<ToolCallInfo> | undefined,
-  isOffered: IsOffered = () => true
-): ToolCallInfo[] {
-  return (toolCalls ?? []).filter((call) => !NOT_REPLAYED.has(call.name) && isOffered(call.name));
+function replayedCalls(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): ToolCallInfo[] {
+  return (toolCalls ?? []).filter((call) => !NOT_REPLAYED.has(call.name));
+}
+
+// Only a call to a tool this turn offers replays as tool messages: a provider
+// may refuse a call to one it doesn't (a look at an earlier screenshot, a
+// connector since disconnected, web search turned off). The rest stay as a
+// trace note, so a send whose connector is gone is never forgotten or denied.
+function splitByOffered(
+  calls: ToolCallInfo[],
+  isOffered: IsOffered
+): { asParts: ToolCallInfo[]; noted: ToolCallInfo[] } {
+  const asParts = calls.filter((call) => isOffered(call.name));
+  return { asParts, noted: calls.filter((call) => !asParts.includes(call)) };
 }
 
 // A tool that asked to connect its service first is recorded by what it then did.
@@ -310,14 +323,23 @@ function clipped(text: string): string {
     : chars.join("");
 }
 
-function ledgerTurns(dropped: ReadonlyArray<Message>, isOffered?: IsOffered): LedgerTurn[] {
+function ledgerTurns(dropped: ReadonlyArray<Message>): LedgerTurn[] {
   const turns: LedgerTurn[] = [];
   let request = "";
+  // Replies to one request (a turn and its resumes) share its entry.
+  let current: LedgerTurn | null = null;
   for (const m of dropped) {
-    if (m.role === "user") request = clipped(m.content);
-    const actions =
-      m.role === "assistant" ? replayedCalls(m.toolCalls, isOffered).filter(isLedgerAction) : [];
-    if (actions.length > 0) turns.push({ request, actions });
+    if (m.role === "user") {
+      request = clipped(m.content);
+      current = null;
+    }
+    const actions = m.role === "assistant" ? replayedCalls(m.toolCalls).filter(isLedgerAction) : [];
+    if (actions.length === 0) continue;
+    if (!current) {
+      current = { request, actions: [] };
+      turns.push(current);
+    }
+    current.actions.push(...actions);
   }
   // The newest first, while they fit; the note takes one entry.
   const kept: LedgerTurn[] = [];
@@ -335,12 +357,18 @@ function ledgerTurns(dropped: ReadonlyArray<Message>, isOffered?: IsOffered): Le
 
 // As tool calls, the note opening the first request: some chat templates
 // refuse two user messages in a row.
-function ledgerParts(turns: LedgerTurn[], callIds: Set<string>): HistoryMessage[] {
+function ledgerParts(
+  turns: LedgerTurn[],
+  callIds: Set<string>,
+  isOffered: IsOffered
+): HistoryMessage[] {
   return turns.flatMap(({ request, actions }, i) => {
     const text = i === 0 ? [LEDGER_NOTE, request].filter(Boolean).join("\n\n") : request;
+    const { asParts, noted } = splitByOffered(actions, isOffered);
     return [
       ...(text ? [{ role: "user", content: text }] : []),
-      ...actions.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+      ...asParts.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+      ...(noted.length > 0 ? [{ role: "assistant", content: toolTrace(noted) }] : []),
     ];
   });
 }
@@ -355,15 +383,20 @@ function ledgerText(turns: LedgerTurn[]): string {
 /**
  * The last messages as the model sees them, with earlier tool use on assistant
  * turns (see ToolHistory) and the selected text a request was about kept with
- * it. A failed reply with nothing in it is left out, and so is a reply's empty
- * text after its tool calls: some providers reject an empty assistant message.
- * It starts with a user message: Gemini, Vertex and Bedrock refuse one that
- * starts with a reply or its tool calls, which a cut window can. The sends of
- * the messages it leaves out come first, with the requests that led to them.
+ * it. A reply with nothing left in it is left out (a card-only turn whose tool
+ * isn't offered now, a stopped or failed one): Anthropic refuses an empty
+ * assistant message. It starts with a user message: Gemini, Vertex and
+ * Bedrock refuse one that starts with a reply or its tool calls, which a cut
+ * window can. The sends of the messages it leaves out come first, with the
+ * requests that led to them.
  */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
-  { toolHistory, isOffered }: { toolHistory: ToolHistory; isOffered?: IsOffered }
+  {
+    toolHistory,
+    isOffered = () => true,
+    maxTokens = HISTORY_MAX_TOKENS.hosted,
+  }: { toolHistory: ToolHistory; isOffered?: IsOffered; maxTokens?: number }
 ): HistoryMessage[] {
   // The request, the newest user message, always stays, however long it is.
   let request = messages.length - 1;
@@ -375,20 +408,25 @@ export function toHistoryMessages(
       const replay = replayed(messages[first - 1], toolHistory, new Set(), isOffered);
       entries += replay.length;
       tokens += estimateNoteTokens(JSON.stringify(replay));
-      const full = entries > maxEntries || tokens > HISTORY_MAX_TOKENS;
+      const full = entries > maxEntries || tokens > maxTokens;
       if (full && first - 1 < request) break;
     }
     while (messages[first].role !== "user") first++;
     return first;
   };
   let first = keptFrom(HISTORY_MAX_ENTRIES);
-  const sendsLeftOut =
-    toolHistory !== "none" && ledgerTurns(messages.slice(0, first), isOffered).length > 0;
-  if (sendsLeftOut) first = keptFrom(HISTORY_MAX_ENTRIES - LEDGER_MAX_ENTRIES);
-  const turns = sendsLeftOut ? ledgerTurns(messages.slice(0, first), isOffered) : [];
+  const sendsLeftOut = toolHistory !== "none" && ledgerTurns(messages.slice(0, first)).length > 0;
+  // As tool messages the sends need entries of their own; a text trace rides
+  // in the first kept message.
+  if (sendsLeftOut && toolHistory === "parts") {
+    first = keptFrom(HISTORY_MAX_ENTRIES - LEDGER_MAX_ENTRIES);
+  }
+  const turns = sendsLeftOut ? ledgerTurns(messages.slice(0, first)) : [];
   const callIds = new Set<string>();
-  const ledger = toolHistory === "parts" ? ledgerParts(turns, callIds) : [];
-  const kept = messages.slice(first).flatMap((m) => replayed(m, toolHistory, callIds, isOffered));
+  const ledger = toolHistory === "parts" ? ledgerParts(turns, callIds, isOffered) : [];
+  const kept = withoutEmptyReplies(messages.slice(first), (m) =>
+    replayed(m, toolHistory, callIds, isOffered)
+  );
   if (toolHistory === "text" && turns.length > 0) {
     const [head, ...rest] = kept;
     return [{ ...head, content: `${ledgerText(turns)}\n\n${head.content}` }, ...rest];
@@ -396,12 +434,54 @@ export function toHistoryMessages(
   return [...ledger, ...kept];
 }
 
+// What a request left without a reply came to, between it and the next one.
+const NO_REPLY: Partial<Record<string, string>> = {
+  stopped: "(Stopped before a reply.)",
+  interrupted: "(Stopped before a reply.)",
+  error: "(The reply failed.)",
+};
+
+// A reply with nothing left in it is left out, and the requests on either side
+// of it go as one message, with what became of the first: chat templates that
+// need alternating roles (Mistral's, Gemma's) refuse two user messages in a row.
+function withoutEmptyReplies(
+  messages: ReadonlyArray<Message>,
+  replay: (m: Message) => HistoryMessage[]
+): HistoryMessage[] {
+  const kept: HistoryMessage[] = [];
+  let emptyReply: Message | null = null;
+  for (const m of messages) {
+    const [head, ...rest] = replay(m);
+    if (!head) {
+      emptyReply = m;
+      continue;
+    }
+    const previous = kept.at(-1);
+    if (
+      emptyReply &&
+      previous?.role === "user" &&
+      head.role === "user" &&
+      typeof previous.content === "string" &&
+      typeof head.content === "string"
+    ) {
+      const outcome = NO_REPLY[emptyReply.turn?.status ?? ""];
+      const joined = [previous.content, outcome, head.content].filter(Boolean).join("\n\n");
+      kept[kept.length - 1] = { ...previous, content: joined };
+    } else {
+      kept.push(head);
+    }
+    kept.push(...rest);
+    emptyReply = null;
+  }
+  return kept;
+}
+
 /** One message as the model sees it (see toHistoryMessages). */
 function replayed(
   m: Message,
   toolHistory: ToolHistory,
   callIds: Set<string>,
-  isOffered?: IsOffered
+  isOffered: IsOffered
 ): HistoryMessage[] {
   if (m.role === "user" && m.selectedContext) {
     return [
@@ -415,14 +495,12 @@ function replayed(
       },
     ];
   }
-  const calls = m.role === "assistant" ? replayedCalls(m.toolCalls, isOffered) : [];
-  if (toolHistory === "parts" && calls.length > 0) {
-    return [
-      ...calls.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
-      ...(m.content.trim() ? [{ role: m.role, content: m.content }] : []),
-    ];
-  }
-  const trace = toolHistory === "text" ? toolTrace(calls) : "";
-  const content = trace ? `${trace}\n\n${m.content}` : m.content;
-  return m.turn?.status === "error" && !content.trim() ? [] : [{ role: m.role, content }];
+  const calls = m.role === "assistant" && toolHistory !== "none" ? replayedCalls(m.toolCalls) : [];
+  const { asParts, noted } =
+    toolHistory === "parts" ? splitByOffered(calls, isOffered) : { asParts: [], noted: calls };
+  const content = [toolTrace(noted), m.content].filter((text) => text.trim()).join("\n\n");
+  return [
+    ...asParts.flatMap((call) => toolCallParts(call, replayCallId(call.id, callIds))),
+    ...(content || m.role === "user" ? [{ role: m.role, content }] : []),
+  ];
 }

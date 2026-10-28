@@ -929,7 +929,8 @@
         "destination": "{{workspace}} · {{destination}}",
         "notes": {
           "replyInThread": "رد في سلسلة الرسائل التي بدأت في {{started, datetime(dateStyle: medium; timeStyle: short)}}"
-        }
+        },
+        "sentOutsideThread": "تم الإرسال إلى {{destination}} كرسالة جديدة، وليس في سلسلة الرسائل."
       },
       "sentLabel": "تم الإرسال",
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",

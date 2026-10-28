@@ -5,9 +5,10 @@ import type { ToolCallInfo } from "./types";
 // is worse than a missed claim. English only: a reply in another language
 // never matches, so it is shown as written, never asked again or flagged.
 
-type ClaimKind = "send" | "draft" | "create" | "connect" | "save";
+type ClaimKind = "send" | "email" | "draft" | "create" | "connect" | "save";
 
 const WENT_OUT = new Set(["sent", "unknown", "already_sent"]);
+const MAX_CHECKED_CHARS = 8_000;
 
 function resultStatus(call: ToolCallInfo): string | undefined {
   const data = call.metadata;
@@ -26,10 +27,12 @@ const KINDS: Record<
   { verbs: string; tools: string[]; did: (call: ToolCallInfo) => boolean }
 > = {
   send: {
-    verbs: "sent|emailed|messaged|posted",
+    verbs: "sent|messaged|posted",
     tools: ["email_draft", "slack_send_message", "linear_comment", "github_comment"],
     did: wentOut,
   },
+  // "Emailed" names its channel: a Slack message never backs it.
+  email: { verbs: "emailed", tools: ["email_draft"], did: wentOut },
   draft: {
     verbs: "drafted",
     tools: ["email_draft"],
@@ -89,18 +92,64 @@ const NOT_A_CLAIM = /^\W*(?:if|once|when|after|until|unless|according to)\b|\bau
 // earlier turn's recorded result can back; "I've sent it" says this turn did.
 const EARLIER = /\b(?:earlier|already|previously|before|yesterday|ago)\b/i;
 const PERFECT = /['’]ve\b|\bhave\b/i;
+// "I said I sent it" repeats an earlier claim, usually to correct it.
+const REPORTED_SPEECH = /\b(?:said|claimed|told\s+you|mentioned|wrote|stated)\s+(?:that\s+)?$/i;
+// "Did you send it?" asks about what was done, so the answer reports on it.
+// A question only, and only about something done: "Have a look and send it"
+// or "Is it possible to post this?" asks for a new action.
+const ASKS_IF_DONE =
+  /^\W*(?:(?:and|so)\s+)?(?:(?:did|have|has)\s+(?:you|it|that|this|they)\b|(?:was|were|is)\s+(?:it|that|this|they|the\s+\w+)\s+(?:already\s+|actually\s+|really\s+)?(?:sent|posted|emailed|created|filed|done|saved|connected|drafted)\b)[^\n]*\?\s*$/i;
 
 // What the reply writes for the user isn't its own voice: fenced code,
-// blockquotes, quoted spans, and what follows a colon whose lead-in introduces
-// a draft ("Here's a reply:", "Translation:"). "Here's what I did:" doesn't.
+// blockquotes, quoted spans, a message from its subject line or a greeting on
+// a line of its own ("Subject: …", "Hi Sam,"), and what follows a colon whose
+// lead-in introduces a draft ("Here's a reply:", "Translation:"). "Here's what
+// I did:" doesn't. A greeting that opens a line of text ("Hi team, I've sent
+// …"), or the reply itself, starts a message only when the user asked for one
+// to be written: the reply may greet the user that way too ("Hi Chad, I've
+// sent it", "Hi Chad!" on its own line).
 const FENCED = /```[\s\S]*?(?:```|$)/g;
 const BLOCKQUOTE = /^[ \t]*>.*$/gm;
 const QUOTED = /"[^"\n]*"|“[^”\n]*”|«[^»\n]*»|„[^“”\n]*[“”]/g;
+const GREETING = String.raw`(?:hi|hello|hey|dear|good\s+(?:morning|afternoon|evening))\b[^\n,!.?:]{0,40}[,!]`;
+const DRAFT_START = new RegExp(String.raw`^[ \t]*(?:${GREETING}[ \t]*$|subject\s*:)`, "im");
+const GREETING_START = new RegExp(String.raw`^[ \t]*${GREETING}`, "im");
+const ASKS_TO_WRITE = /\b(?:write|draft|compose|rewrite|reword)\b/i;
 const DRAFT_LEAD_IN =
-  /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|below)\b/i;
+  /\b(?:drafts?|repl(?:y|ies)|messages?|emails?|texts?|notes?|versions?|translations?|rewrites?|below|here\s+you\s+go)\b/i;
 
-function ownWords(text: string): string {
-  const plain = text.replace(FENCED, "\n").replace(BLOCKQUOTE, "").replace(QUOTED, '""');
+// A bare English translation can say "I sent" in the source author's voice.
+// Require an actual translation request, and keep checking combined requests
+// such as "translate this, then send it": those still promise tool actions.
+const TRANSLATE_REQUEST =
+  /^\s*(?:(?:can|could|would)\s+you\s+)?(?:please\s+)?translate\b(?:\s+(?:this|that|the)\s+(?:email|message|post|file|comment|draft)\b)?(?:[^:;.!?,&\n]*?\b(?:to|into)\s+English\b)?/i;
+const TRANSLATION_ACTION =
+  /\b(?:send|email|message|post|create|file|comment|connect|save|draft|delete|forward|tell)\b/i;
+
+function asksOnlyForTranslation(text: string): boolean {
+  const instructions = text.replace(QUOTED, "");
+  const translation = TRANSLATE_REQUEST.exec(instructions);
+  if (!translation) return false;
+  // The directive may name the source ("this email into English"). Anything
+  // else asking for an action keeps the check, regardless of clause wording.
+  return (
+    !/\b(?:and|then|also)\b|&/i.test(translation[0]) &&
+    !TRANSLATION_ACTION.test(instructions.slice(translation[0].length))
+  );
+}
+
+function draftStart(text: string, askedToWrite: boolean): number | null {
+  const ownLine = DRAFT_START.exec(text);
+  if (askedToWrite) return (ownLine ?? GREETING_START.exec(text))?.index ?? null;
+  if (!ownLine) return null;
+  const opensReply = !text.slice(0, ownLine.index).trim();
+  return opensReply && !/^\s*subject/i.test(ownLine[0]) ? null : ownLine.index;
+}
+
+function ownWords(text: string, askedToWrite: boolean): string {
+  const quoted = text.replace(FENCED, "\n").replace(BLOCKQUOTE, "").replace(QUOTED, '""');
+  const draft = draftStart(quoted, askedToWrite);
+  const plain = draft === null ? quoted : quoted.slice(0, draft);
   for (const colon of plain.matchAll(/:[*_]*(?=\s|$)/g)) {
     const leadIn =
       plain
@@ -134,6 +183,8 @@ interface Claim {
 }
 
 const DESTINATION = /\bto\s+(#[\w-]+|[\w.+-]+@[\w-]+(?:\.[\w-]+)+|[A-Z][\w'’-]*)|\bin\s+(#[\w-]+)/;
+// "Posted it to Slack" names where, not whom.
+const SERVICE = /^(?:slack|gmail|outlook|linear|github|email)$/i;
 
 const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
   [FIRST_PERSON, "first"],
@@ -141,9 +192,9 @@ const FORMS: ReadonlyArray<[RegExp, "first" | "report" | "sentTo"]> = [
   [SENT_TO, "sentTo"],
 ];
 
-function claimsIn(text: string): Claim[] {
+function claimsIn(text: string, askedToWrite: boolean): Claim[] {
   const claims: Claim[] = [];
-  for (const sentence of ownWords(text).split(/(?<=[.!?])\s+|\n+/)) {
+  for (const sentence of ownWords(text, askedToWrite).split(/(?<=[.!?])\s+|\n+/)) {
     if (sentence.trim().endsWith("?")) continue;
     for (const [pattern, form] of FORMS) {
       for (const match of sentence.matchAll(pattern)) {
@@ -153,16 +204,18 @@ function claimsIn(text: string): Claim[] {
         const clauseEnd = sentence.slice(end).search(/[,;]/);
         const upToClause = sentence.slice(0, clauseEnd === -1 ? undefined : end + clauseEnd);
         if (!kind || upToClause.split(/[,;]/).some((clause) => NOT_A_CLAIM.test(clause))) continue;
+        if (form === "first" && REPORTED_SPEECH.test(sentence.slice(0, match.index))) continue;
         if (verb === "created" && !CREATED_OBJECT.test(sentence)) continue;
         if (kind === "save" && !SAVED_OBJECT.test(sentence)) continue;
         const after = sentence.slice(end).trim().split(/\s+/);
-        const destination = DESTINATION.exec(sentence);
+        const found = DESTINATION.exec(sentence);
+        const destination = found ? (found[1] ?? found[2]) : null;
         claims.push({
           kind,
           report:
             form === "report" ||
             (form === "first" && (EARLIER.test(sentence) || !PERFECT.test(match[0]))),
-          destination: destination ? (destination[1] ?? destination[2]) : null,
+          destination: destination && !SERVICE.test(destination) ? destination : null,
           phrase: normalize([match[0], ...after.slice(0, 3)].join(" ")),
         });
       }
@@ -187,12 +240,9 @@ function argumentText(call: ToolCallInfo): string[] {
 }
 
 // An earlier result backs a report that names someone only if it went there.
-// A Slack DM sent by its id is labelled without whose it is (slackConnector's
-// "Direct message (D…)"), so it backs a report naming any person.
 function wentTo(call: ToolCallInfo, destination: string | null): boolean {
   const label = call.metadata && !Array.isArray(call.metadata) ? call.metadata.destination : null;
   if (!destination || typeof label !== "string") return true;
-  if (label.startsWith("Direct message (")) return !destination.startsWith("#");
   const [named, sent] = [destination.toLowerCase(), label.toLowerCase()];
   return sent.includes(named) || named.includes(sent);
 }
@@ -211,26 +261,34 @@ export interface ClaimContext {
 /**
  * The final answer claims, in its own voice, an action of a kind a tool here
  * can do, and no result backs it. Any claim is backed by a call of its kind in
- * this turn; a report ("it was sent") also by one recorded for an earlier
- * turn, which went to whoever it names. A claim whose words are the user's
- * (their request or selection) or a tool call's payload is no claim.
+ * this turn; a report ("it was sent", or any claim answering "did you send
+ * it?") also by one recorded for an earlier turn, which went to whoever it
+ * names. A claim whose words are the user's (their request or selection) or a
+ * tool call's payload is no claim.
  */
 export function isUnbackedClaim(
   text: string,
   { turnCalls, earlierCalls, isOffered, request }: ClaimContext
 ): boolean {
+  // Claims sit in short replies, and the matching runs on the renderer's main
+  // thread: a long one is left alone rather than blocking the chat.
+  if (text.length > MAX_CHECKED_CHARS) return false;
+  if (asksOnlyForTranslation(request.text)) return false;
   const theirWords = normalize(
     [request.text, request.selectedText ?? "", ...turnCalls.flatMap(argumentText)].join("\n")
   );
-  return claimsIn(text).some(({ kind, report, destination, phrase }) => {
-    const { tools, did } = KINDS[kind];
-    if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
-    if (turnCalls.some((call) => tools.includes(call.name) && did(call))) return false;
-    return (
-      !report ||
-      !earlierCalls.some(
-        (call) => tools.includes(call.name) && did(call) && wentTo(call, destination)
-      )
-    );
-  });
+  const asksIfDone = ASKS_IF_DONE.test(request.text);
+  return claimsIn(text, ASKS_TO_WRITE.test(request.text)).some(
+    ({ kind, report, destination, phrase }) => {
+      const { tools, did } = KINDS[kind];
+      if (!tools.some(isOffered) || theirWords.includes(phrase)) return false;
+      if (turnCalls.some((call) => tools.includes(call.name) && did(call))) return false;
+      return (
+        !(report || asksIfDone) ||
+        !earlierCalls.some(
+          (call) => tools.includes(call.name) && did(call) && wentTo(call, destination)
+        )
+      );
+    }
+  );
 }

@@ -23,14 +23,12 @@ function askAboutVanishedChannel(result: ToolResult, destination: string): ToolR
   return result;
 }
 
-// Main links a reply in the thread Slack put it in (?thread_ts=), as Slack's
-// own links do, and a message Slack didn't thread as a new one, so the link
-// says which it was.
+// Whether a reply meant for a thread went into it, as Slack's response said.
 function withThreadReply(result: ToolResult, thread: string): ToolResult {
-  const data = result.data as { status?: string; url?: unknown } | null;
+  const data = result.data as { status?: string; outsideThread?: true } | null;
   if (!thread || data?.status !== "sent") return result;
-  const repliedInThread = typeof data.url === "string" && /[?&]thread_ts=/.test(data.url);
-  return { ...result, data: { ...data, repliedInThread } };
+  const { outsideThread, ...sent } = data;
+  return { ...result, data: { ...sent, repliedInThread: !outsideThread } };
 }
 
 export const slackSendMessageTool: ToolDefinition = {
@@ -58,7 +56,7 @@ export const slackSendMessageTool: ToolDefinition = {
   readOnly: false,
   connectorId: "slack",
   promptInstruction:
-    'Use slack_send_message to post to a Slack channel or person as the user; the user approves each message on a card before it is sent. For a person, pass their name, @handle or email address. When the user asks to reply in a thread ("in the same thread", "reply to this"), pass a Slack link to a message in that thread as thread (from the selected text, or the link an earlier slack_send_message returned) and the conversation it is in as destination (the same person or channel, or that link). If there is no such link, ask for one instead of posting a new message.',
+    'Use slack_send_message to post to a Slack channel or person as the user; the user approves each message on a card before it is sent. For a person, pass their name, @handle or email address. When the user asks to reply in a thread ("in the same thread", "reply to this"), pass a Slack link to a message in that thread as thread (from the selected text, or the link an earlier slack_send_message returned) and the conversation it is in as destination (the same person or channel, or that link). If there is no such link, ask for one instead of posting a new message. When a result says repliedInThread is false, Slack posted it as a new message, not in the thread: tell the user so.',
 
   async execute(
     args: Record<string, unknown>,

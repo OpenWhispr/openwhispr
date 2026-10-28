@@ -153,6 +153,121 @@ test("text the reply writes for the user is not its own voice", async () => {
   assert.equal(await unbacked("All done: I've sent the email to Gabe."), true);
 });
 
+test("a requested English translation is not the assistant's own action claim", async () => {
+  const cases = [
+    ["I sent the email.", { text: "Translate this: J’ai envoyé le courriel." }],
+    ["I sent the email.", { text: "Translate this message: J’ai envoyé le courriel." }],
+    ["I sent the email.", { text: "Please translate this email: J’ai envoyé le courriel." }],
+    [
+      "I sent the email.",
+      { text: "Translate to English, output only the translation: J’ai envoyé le courriel." },
+    ],
+    [
+      "I created the note.",
+      {
+        text: "Translate this to English. Output only the translation.",
+        selectedText: "J’ai créé la note.",
+      },
+    ],
+    [
+      "I sent the email.",
+      { text: 'Could you please translate this email into English: "J’ai envoyé le courriel."' },
+    ],
+  ];
+  for (const [reply, request] of cases) {
+    assert.equal(await unbacked(reply, { request }), false, request.text);
+  }
+});
+
+test("translation requests that also ask for actions still need action evidence", async () => {
+  for (const text of [
+    "Translate this to English and send it to Gabe.",
+    "Translate this into English and afterwards send it to Gabe.",
+    "Translate this into English. I also need you to send it to Gabe.",
+    "Translate this into English & send it to Gabe.",
+    "Translate this; send it to English Club.",
+    "Translate this and afterwards send it to Gabe in English.",
+    "Translate this to English, then email it to Gabe.",
+    "Translate this to English. Could you also post it in #eng?",
+    "Translate this to English: Bonjour. Then send it to Gabe.",
+    'Translate "Bonjour" to English and create a note with it.',
+    'Send Gabe an email explaining what "translate" means.',
+  ]) {
+    assert.equal(await unbacked("I've sent the email.", { request: { text } }), true, text);
+    assert.equal(await unbacked("I've created the note.", { request: { text } }), true, text);
+  }
+});
+
+test("a message written for someone, from its greeting or subject on, is not the reply's voice", async () => {
+  const request = { text: "write an email to sam, tell him the revised proposal is with his team" };
+  for (const text of [
+    "Hi Sam,\n\nThanks for your patience. I've sent the revised proposal to your team.\n\nBest,\nChad",
+    "Hi team, I've sent the invoice to the client.",
+    "Subject: Deck\n\nHi Sam, I've sent the deck over.",
+    "Sure, here you go:\n\nI've sent the deck over.",
+    "Hey Sam! Just a heads-up: I've sent the contract over.",
+  ]) {
+    assert.equal(await unbacked(text, { request }), false, text);
+  }
+  // Before the greeting, the reply still speaks for itself.
+  assert.equal(await unbacked("I've sent the email to Sam.\n\nHi Sam, thanks!"), true);
+  // Unasked for, a greeting that opens a line is the reply greeting the user.
+  for (const text of [
+    "Hi Chad, I've sent the email to Gabe.",
+    "Hey! I've posted it in #eng.",
+    "Hello! Done — I've created the issue for you.",
+    "Hi Chad!\nI've sent the email to Gabe.",
+  ]) {
+    assert.equal(await unbacked(text), true, text);
+  }
+});
+
+test("repeating an earlier claim to correct it claims nothing", async () => {
+  for (const text of [
+    "Earlier I said I sent the email to Sam, but that didn't happen — nothing was sent.",
+    "Sorry, I claimed I posted it in #eng, but it was never posted.",
+    "Correction: I said I sent the email, but it wasn't sent.",
+  ]) {
+    assert.equal(await unbacked(text), false, text);
+  }
+});
+
+test("answering whether something was done reports on it, so an earlier result backs it", async () => {
+  const toEng = sent("slack_send_message", { destination: "#eng" });
+  const asked = { request: { text: "Did you post it to #eng?" } };
+  for (const text of ["Yes — I've posted it to #eng.", "Yes, I have posted it to #eng."]) {
+    assert.equal(await unbacked(text, { ...asked, earlierCalls: [toEng] }), false, text);
+    assert.equal(await unbacked(text, asked), true, text);
+  }
+  // Only a question about something done: asking for a new action isn't one.
+  for (const text of [
+    "Have a look at this and send it to Sam",
+    "Is it possible to post this in #eng?",
+    "Has Sam replied yet? Post it to #eng.",
+  ]) {
+    assert.equal(
+      await unbacked("I've posted it to #eng.", { earlierCalls: [toEng], request: { text } }),
+      true,
+      text
+    );
+  }
+  assert.equal(
+    await unbacked("Yes — I've posted it to #eng.", {
+      earlierCalls: [toEng],
+      request: { text: "Was it posted to #eng?" },
+    }),
+    false
+  );
+  // Asked to act again, a claim still needs this turn's result.
+  assert.equal(
+    await unbacked("I've posted it to #eng.", {
+      earlierCalls: [toEng],
+      request: { text: "Post it to #eng again" },
+    }),
+    true
+  );
+});
+
 test("only a claim's own words in the user's text exempt it, never a stray verb", async () => {
   const selectedText = "Thanks, see you Friday.\n\nSent from my iPhone";
   assert.equal(
@@ -213,6 +328,26 @@ test("a claim is backed only by a result of its kind this turn", async () => {
     }),
     false
   );
+  // "Emailed" names its channel: only an email backs it.
+  const slackSend = sent("slack_send_message", { destination: "#eng" });
+  assert.equal(await unbacked("I've emailed Sam.", { turnCalls: [slackSend] }), true);
+  assert.equal(await unbacked("I've emailed Sam.", { turnCalls: [sent("email_draft")] }), false);
+  assert.equal(await unbacked("I've sent it to Sam.", { turnCalls: [slackSend] }), false);
+});
+
+test("a service named as where it went is not a person it went to", async () => {
+  const toEng = sent("slack_send_message", { destination: "#eng" });
+  assert.equal(await unbacked("I posted it to Slack.", { earlierCalls: [toEng] }), false);
+  assert.equal(await unbacked("I posted it to Sam.", { earlierCalls: [toEng] }), true);
+});
+
+test("a very long reply isn't checked, so matching never stalls the chat", async () => {
+  const long = `${"word ".repeat(2_000)} I've sent the email to Gabe.`;
+  assert.equal(await unbacked(long), false);
+  const pathological = "I sent ".repeat(10_000);
+  const started = Date.now();
+  await unbacked(pathological);
+  assert.ok(Date.now() - started < 200);
 });
 
 // Interaction tools also save their result as metadata, as the chat does.
@@ -271,13 +406,14 @@ test("an earlier turn backs only a report of the same kind, to whoever it names"
   assert.equal(await unbacked("Yes, it was sent.", {}), true);
 });
 
-test("a Slack DM sent by its id backs a report that names a person, not a channel", async () => {
-  // Whose DM it is isn't known, so its label names no one.
-  const toDm = sent("slack_send_message", { destination: "Direct message (D0123ABC)" });
+test("a Slack DM sent by its id backs a report naming its person, not anyone else", async () => {
+  // A DM id is labelled with the person whose DM a Send opened.
+  const toDm = sent("slack_send_message", { destination: "Sam Rivera" });
   assert.equal(await unbacked("I sent it to Sam earlier.", { earlierCalls: [toDm] }), false);
   assert.equal(
     await unbacked("Yes, your message to Sam was sent.", { earlierCalls: [toDm] }),
     false
   );
+  assert.equal(await unbacked("I sent it to Alice earlier.", { earlierCalls: [toDm] }), true);
   assert.equal(await unbacked("I posted it in #eng earlier.", { earlierCalls: [toDm] }), true);
 });

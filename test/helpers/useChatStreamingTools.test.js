@@ -871,7 +871,13 @@ test("an earlier turn's tool use reaches the model as its own call and outcome",
     i === sent.length - 1 ? { ...message, content: userTextOf(message.content) } : message
   );
   assert.match(system.content, /Earlier turns keep each tool call with its outcome only/);
-  assert.doesNotMatch(system.content, /Tools used/);
+  // Every call is offered, so none is a note in the history.
+  assert.equal(
+    sent.some(
+      (message) => typeof message.content === "string" && /Tools used/.test(message.content)
+    ),
+    false
+  );
   assert.deepEqual(history, [
     { role: "user", content: "Weather in Lisbon?" },
     {
@@ -901,7 +907,7 @@ test("an earlier turn's tool use reaches the model as its own call and outcome",
   ]);
 });
 
-test("an earlier call to a tool this turn doesn't offer isn't replayed", async (t) => {
+test("an earlier call to a tool this turn doesn't offer is a note, not a tool message", async (t) => {
   const { captured, sentMessages, usePolicyStore } = await renderChatStreaming(t);
   usePolicyStore.setState({
     status: "managed",
@@ -917,7 +923,10 @@ test("an earlier call to a tool this turn doesn't offer isn't replayed", async (
   const [, ...sent] = sentMessages[0];
   assert.deepEqual(sent.slice(0, 2), [
     { role: "user", content: "Weather in Lisbon?" },
-    { role: "assistant", content: "Sunny, 24°C." },
+    {
+      role: "assistant",
+      content: '[Tools used: web_search ("Lisbon weather today")]\n\nSunny, 24°C.',
+    },
   ]);
 });
 

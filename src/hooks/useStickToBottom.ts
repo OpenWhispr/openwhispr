@@ -48,6 +48,13 @@ function isReaderGesture(node: HTMLElement, target: EventTarget | null): boolean
   );
 }
 
+// A clipped box scrolled by scrollIntoView has a scrollTop too, but a wheel
+// over it scrolls the stream.
+function scrollsVertically(el: Element): boolean {
+  const overflowY = el.ownerDocument.defaultView?.getComputedStyle(el).overflowY ?? "";
+  return el.scrollHeight > el.clientHeight && /^(?:auto|scroll)$/.test(overflowY);
+}
+
 // An upward gesture moves the reader up the stream, unless a scroller inside
 // it that can still scroll up (a card's long body) takes it, or it goes on from
 // a gesture such a scroller took (`innerGestureAt` holds when it last did).
@@ -60,7 +67,7 @@ function leavesBottom(
   if (!isReaderGesture(node, target)) return false;
   let inner = at - innerGestureAt.current < INNER_GESTURE_MS;
   for (let el = target as Node | null; !inner && el && el !== node; el = el.parentNode) {
-    inner = el instanceof Element && el.scrollTop > 0;
+    inner = el instanceof Element && el.scrollTop > 0 && scrollsVertically(el);
   }
   if (inner) innerGestureAt.current = at;
   return !inner;

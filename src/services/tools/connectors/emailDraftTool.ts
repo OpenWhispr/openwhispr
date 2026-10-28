@@ -41,12 +41,24 @@ const EMAIL_DRAFT_INSTRUCTION =
 // Both paths send the body as it is written, so Markdown shows up as symbols.
 const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or [text](link)).";
 
-const LINK = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+// Bounded runs: the body is the model's (up to 512 KB) and this runs on the
+// renderer's main thread, so no pattern may rescan a long line from every [.
+const LINK = /\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g;
 const URL_TOKEN = /\bhttps?:\/\/\S+/g;
 // Both pairs of ** need a line edge or a non-word character outside them, so
 // x**2 + y**2 stays as it is.
 const BOLD = /(^|[^\w*])\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*(?=$|[^\w*])/gm;
-const HEADING = /^(#{1,6})[ \t]+(?=\w)(.*?)(?:[ \t]+#+)?[ \t]*$/gm;
+const HEADING = /^(#{1,6})[ \t]+(\S.*)$/gm;
+// In any script: "# Über uns" is a heading too.
+const HEADING_START = /^[\p{L}\p{N}_]/u;
+const LOWERCASE_START = /^\p{Ll}/u;
+
+// A heading's text without its optional closing hashes ("# Title ##").
+function headingText(rest: string): string {
+  const text = rest.trimEnd();
+  const closing = /[ \t]#+$/.exec(text);
+  return closing ? text.slice(0, closing.index).trimEnd() : text;
+}
 
 /**
  * The body with the Markdown models write anyway made plain, before the card
@@ -58,14 +70,24 @@ const HEADING = /^(#{1,6})[ \t]+(?=\w)(.*?)(?:[ \t]+#+)?[ \t]*$/gm;
 function plainTextBody(value: unknown): string {
   if (typeof value !== "string") return "";
   const urls: string[] = [];
-  return value
-    .replace(LINK, (_, text, url) => (text === url ? url : `${text} (${url})`))
-    .replace(URL_TOKEN, (url) => `\u0000${urls.push(url) - 1}\u0000`)
-    .replace(BOLD, "$1$2")
-    .replace(HEADING, (line, hashes: string, text: string) =>
-      hashes.length === 1 && /^[a-z]/.test(text) ? line : text
-    )
-    .replace(/\u0000(\d+)\u0000/g, (_, index) => urls[Number(index)]);
+  return (
+    value
+      // NUL marks a protected link below.
+      .replace(/\u0000/g, "")
+      .replace(LINK, (_, text, url) => (text === url ? url : `${text} (${url})`))
+      // A link's trailing ** is bold around it, not part of it: **https://…**.
+      .replace(URL_TOKEN, (token) => {
+        const url = token.replace(/\*+$/, "");
+        return `\u0000${urls.push(url) - 1}\u0000${token.slice(url.length)}`;
+      })
+      .replace(BOLD, "$1$2")
+      .replace(HEADING, (line, hashes: string, rest: string) => {
+        if (!HEADING_START.test(rest)) return line;
+        const text = headingText(rest);
+        return hashes.length === 1 && LOWERCASE_START.test(text) ? line : text;
+      })
+      .replace(/\u0000(\d+)\u0000/g, (_, index) => urls[Number(index)])
+  );
 }
 
 const EMAIL_PARAMETERS: ToolDefinition["parameters"] = {
