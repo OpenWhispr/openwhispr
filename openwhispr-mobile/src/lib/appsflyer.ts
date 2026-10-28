@@ -33,7 +33,6 @@ const DEV_KEY = process.env.EXPO_PUBLIC_APPSFLYER_DEV_KEY?.trim();
 const IOS_APP_ID = '6763804420';
 const MAX_PENDING_EVENTS = 20;
 const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
-const CONSENT_DECISION_TIMEOUT_MS = 1_000;
 
 let didSetUp = false;
 let didInit = false;
@@ -46,17 +45,18 @@ let trackingAuthorizationStatus: TrackingAuthorizationStatus | null = null;
 let trackingRefreshRevision = 0;
 let pendingEvents: PendingEvent[] = [];
 const attributionListeners = new Set<() => void>();
-const consentWaiters = new Set<() => void>();
 let lastPublishedConsent: AppsFlyerAttributionConsent | undefined;
 let revenueId: string | null = null;
 
-// 'undecided' is an ATT prompt not answered on this device yet; 'pending' is an
-// answer not read yet (preference not hydrated, or the ATT re-check that runs
-// on every foreground). Neither is a withdrawal.
+// 'revoked' is an explicit opt-out on this device (Usage Analytics off, ATT
+// denied). 'undecided' is a device that has not answered the ATT prompt, or a
+// build without AppsFlyer: it can neither link nor opt out. 'pending' is an
+// answer not read yet (preference not hydrated, or the ATT re-check after the
+// app returns from the background).
 export type AppsFlyerAttributionConsent = 'granted' | 'revoked' | 'undecided' | 'pending';
 
 export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
-  if (!DEV_KEY) return 'revoked';
+  if (!DEV_KEY) return 'undecided';
   const enabled = analyticsPreference();
   if (enabled === false) return 'revoked';
   if (enabled === null) return 'pending';
@@ -73,22 +73,6 @@ export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
   }
 }
 
-// Resolves once consent is known, or with 'pending' after a short bound.
-export function waitForAppsFlyerAttributionConsent(): Promise<AppsFlyerAttributionConsent> {
-  if (getAppsFlyerAttributionConsent() !== 'pending') {
-    return Promise.resolve(getAppsFlyerAttributionConsent());
-  }
-  return new Promise((resolve) => {
-    const finish = (): void => {
-      clearTimeout(timeout);
-      consentWaiters.delete(finish);
-      resolve(getAppsFlyerAttributionConsent());
-    };
-    const timeout = setTimeout(finish, CONSENT_DECISION_TIMEOUT_MS);
-    consentWaiters.add(finish);
-  });
-}
-
 export function subscribeAppsFlyerAttribution(listener: () => void): () => void {
   attributionListeners.add(listener);
   return () => {
@@ -100,7 +84,6 @@ export function subscribeAppsFlyerAttribution(listener: () => void): () => void 
 // is when the identifier becomes readable.
 function publishAttributionState(sdkBecameReady = false): void {
   const consent = getAppsFlyerAttributionConsent();
-  if (consent !== 'pending') [...consentWaiters].forEach((finish) => finish());
   const consentChanged = consent !== 'pending' && consent !== lastPublishedConsent;
   if (consentChanged) lastPublishedConsent = consent;
   if (!consentChanged && !sdkBecameReady) return;
@@ -115,17 +98,18 @@ function publishAttributionState(sdkBecameReady = false): void {
 
 // The identifier exists once the SDK is initialized, before its first session
 // starts, so a purchase made right after the ATT prompt can still carry it. It
-// is fixed for the install, so one read serves every later call. A slow native
-// lookup must not hold billing indefinitely. Null means "not available now", not
-// a withdrawal: callers read consent separately.
+// is fixed for the install, so one successful read serves the rest of the app
+// session. The read waits only for a pending stop or resume, never for start(),
+// and a slow native lookup must not hold billing indefinitely. Null means "not
+// available now", not a withdrawal: callers read consent separately.
 export async function getAppsFlyerRevenueId(): Promise<string | null> {
   if (!didInit || !collectionAllowed()) return null;
   if (revenueId) return revenueId;
-  const readiness = sdkReady ?? Promise.resolve(true);
+  const stateChange = sdkStateChange ?? Promise.resolve();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const id = await Promise.race([
-      readiness.then((ready) => (ready ? getAppsFlyer().getAppsFlyerUID() : null)),
+      stateChange.then(() => (collectionAllowed() ? getAppsFlyer().getAppsFlyerUID() : null)),
       new Promise<null>((resolve) => {
         timeout = setTimeout(() => resolve(null), REVENUE_ID_LOOKUP_TIMEOUT_MS);
       }),
@@ -268,8 +252,8 @@ function setSdkStopped(shouldStop: boolean): void {
   });
   sdkReady = readiness;
   readiness.then((ready): void => {
-    // Resuming an already started session (after the foreground ATT re-check, or
-    // a start that re-check superseded) starts nothing new to announce it.
+    // A resume that starts no session of its own (after the ATT re-check, or one
+    // that superseded a pending start) still makes the identifier readable.
     if (ready && sdkReady === readiness) publishAttributionState(true);
   });
 }

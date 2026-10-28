@@ -10,7 +10,6 @@ import {
   getAppsFlyerAttributionConsent,
   getAppsFlyerRevenueId,
   subscribeAppsFlyerAttribution,
-  waitForAppsFlyerAttributionConsent,
 } from '@/lib/appsflyer';
 
 let configured = false;
@@ -68,13 +67,19 @@ function canLinkRevenueAttribution(): boolean {
   );
 }
 
-// A definite opt-out, or a signed-in user who has since left (sign-out or an
-// account switch still queued, or a sign-out the SDK failed to complete).
+// A device that never had consent cannot have linked the account, so leaving
+// the account must not clear a link another device set.
+function mayHaveLinkedRevenueAttribution(): boolean {
+  return linkedRevenueId !== null || getAppsFlyerAttributionConsent() === 'granted';
+}
+
+// An explicit opt-out on this device, or a signed-in user who has since left
+// (sign-out or an account switch still queued, or a sign-out the SDK failed to
+// complete) and whom this device may have linked.
 function revenueAttributionWithdrawn(): boolean {
-  return (
-    getAppsFlyerAttributionConsent() === 'revoked' ||
-    (identifiedUserId !== null && identifiedUserId !== requestedUserId)
-  );
+  if (getAppsFlyerAttributionConsent() === 'revoked') return true;
+  const departed = identifiedUserId !== null && identifiedUserId !== requestedUserId;
+  return departed && mayHaveLinkedRevenueAttribution();
 }
 
 async function linkRevenueAttribution(id: string): Promise<void> {
@@ -116,20 +121,18 @@ async function unlinkRevenueAttribution({ push }: { push: boolean }): Promise<vo
 }
 
 // Must run inside withIdentity: attribute setters target the current SDK user.
+// `$appsflyerId` is the account's link, set by its consenting devices. Only an
+// explicit opt-out here clears it; undecided or unknown consent leaves it alone.
 // A purchase or restore posts its receipt, with the attributes, right after, so
-// it waits for a known decision and links only with consent from this device.
+// it links this device's ID again: another device may have changed the
+// account's link since this session set it.
 async function syncRevenueAttribution({ beforePost = false } = {}): Promise<void> {
   if (Platform.OS !== 'ios') return;
-  const consent = beforePost
-    ? await waitForAppsFlyerAttributionConsent()
-    : getAppsFlyerAttributionConsent();
-  if (revenueAttributionWithdrawn() || (beforePost && consent !== 'granted')) {
+  if (revenueAttributionWithdrawn()) {
     await unlinkRevenueAttribution({ push: !beforePost });
     return;
   }
-  // Undecided consent, or a user this session has not logged in: keep what the
-  // SDK user already has rather than treating "unknown" as a withdrawal.
-  if (!canLinkRevenueAttribution() || linkedRevenueId) return;
+  if (!canLinkRevenueAttribution() || (linkedRevenueId && !beforePost)) return;
   // A null ID is "not readable yet"; the SDK becoming ready notifies again.
   const id = await getAppsFlyerRevenueId();
   if (!id || !canLinkRevenueAttribution()) return;
@@ -143,6 +146,7 @@ async function logInWithAttribution(userId: string): Promise<void> {
   // An anonymous SDK user is never linked, so only a signed-in one needs clearing.
   if (
     Platform.OS === 'ios' &&
+    mayHaveLinkedRevenueAttribution() &&
     (await Purchases.getAppUserID()) !== userId &&
     !(await Purchases.isAnonymous())
   ) {
@@ -159,7 +163,9 @@ async function logOutWithAttribution(): Promise<void> {
   // The SDK rejects logging out an anonymous user; there is no one to sign out.
   if (!(await Purchases.isAnonymous())) {
     // logOut pushes the departing user's attributes before switching.
-    if (Platform.OS === 'ios') await unlinkRevenueAttribution({ push: false });
+    if (Platform.OS === 'ios' && mayHaveLinkedRevenueAttribution()) {
+      await unlinkRevenueAttribution({ push: false });
+    }
     await Purchases.logOut();
   }
   identifiedUserId = null;

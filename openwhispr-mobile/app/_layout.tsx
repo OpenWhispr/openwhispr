@@ -165,15 +165,15 @@ function RootLayout() {
         backgrounded = true;
         return;
       }
-      if (state === 'active') {
+      if (state === 'active' && backgrounded) {
+        backgrounded = false;
         // ATT can change in iOS Settings while the app is backgrounded. Reapply
         // that system decision before allowing any further attribution events.
+        // An inactive flicker (the StoreKit sheet, Face ID) cannot change it, and
+        // the onboarding prompt reports its own result.
         refreshAppsFlyerTrackingAuthorization().catch((error: unknown): void => {
           Sentry.captureException(error);
         });
-      }
-      if (state === 'active' && backgrounded) {
-        backgrounded = false;
         const { resetToHome, refreshUsage } = resolveResumeAction(homeRouteRef.current.onHome);
         if (refreshUsage) {
           const usageStore = useUsageStore.getState();

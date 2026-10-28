@@ -2,15 +2,12 @@ import { Platform } from 'react-native';
 import Purchases from 'react-native-purchases';
 import type { AppsFlyerAttributionConsent } from '@/lib/appsflyer';
 
-const ANONYMOUS = '$RCAnonymousID:device';
 let mockAttributionListener: (() => void) | undefined;
 let mockConsent: AppsFlyerAttributionConsent = 'granted';
 const mockGetRevenueId = jest.fn<Promise<string | null>, []>();
-const mockWaitForConsent = jest.fn<Promise<AppsFlyerAttributionConsent>, []>();
 jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerRevenueId: () => mockGetRevenueId(),
   getAppsFlyerAttributionConsent: () => mockConsent,
-  waitForAppsFlyerAttributionConsent: () => mockWaitForConsent(),
   subscribeAppsFlyerAttribution: (listener: () => void) => {
     mockAttributionListener = listener;
     return () => {};
@@ -40,48 +37,59 @@ jest.mock('react-native-purchases', () => ({
 }));
 jest.mock('@/lib/sentry', () => ({ Sentry: { captureException: jest.fn() } }));
 
-// A small model of the native SDK: setters change a local copy (skipping a value
-// equal to it), and logIn/logOut, receipt posts and an explicit sync push it.
-let mockSdkUser = ANONYMOUS;
-let local: Record<string, { value: string; synced: boolean }> = {};
+// A small model of the native SDK on each device: setters change that device's
+// local copy (skipping a value equal to it), and logIn/logOut, receipt posts and
+// an explicit sync push every pending value to the one server the devices share.
+interface Device {
+  user: string;
+  local: Record<string, { value: string; synced: boolean }>;
+}
+let device: Device;
 let server: Record<string, string> = {};
 let serverHistory: Record<string, string[]> = {};
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 let rc: typeof import('../revenuecat');
 let sdk: jest.Mocked<typeof Purchases>;
 
+function newDevice(): Device {
+  return { user: '$RCAnonymousID:device', local: {} };
+}
+
 function push(): void {
-  const attribute = local[mockSdkUser];
-  if (!attribute || attribute.synced) return;
-  attribute.synced = true;
-  server[mockSdkUser] = attribute.value;
-  (serverHistory[mockSdkUser] ??= []).push(attribute.value);
+  Object.entries(device.local).forEach(([user, attribute]) => {
+    if (attribute.synced) return;
+    attribute.synced = true;
+    server[user] = attribute.value;
+    (serverHistory[user] ??= []).push(attribute.value);
+  });
 }
 
 function storeLocally(value: string | null): void {
-  const current = local[mockSdkUser];
+  const current = device.local[device.user];
   if (!current || current.value !== (value ?? '')) {
-    local[mockSdkUser] = { value: value ?? '', synced: false };
+    device.local[device.user] = { value: value ?? '', synced: false };
   }
 }
 
-// Each call is a new app session: module state resets, the SDK's does not.
-function startSession(): void {
+// Each call is a new app session on `device`: module state resets, the SDK's
+// does not.
+function startSession(on: Device = device): void {
+  device = on;
   jest.resetModules();
   sdk = require('react-native-purchases').default;
-  sdk.getAppUserID.mockImplementation(async () => mockSdkUser);
-  sdk.isAnonymous.mockImplementation(async () => mockSdkUser.startsWith('$RCAnonymousID'));
+  sdk.getAppUserID.mockImplementation(async () => device.user);
+  sdk.isAnonymous.mockImplementation(async () => device.user.startsWith('$RCAnonymousID'));
   sdk.setAttributes.mockImplementation(async (attributes) => {
     storeLocally(attributes.$appsflyerId);
   });
   sdk.logIn.mockImplementation(async (userId: string) => {
     push();
-    mockSdkUser = userId;
+    device.user = userId;
     return {} as never;
   });
   sdk.logOut.mockImplementation(async () => {
     push();
-    mockSdkUser = '$RCAnonymousID:next';
+    device.user = '$RCAnonymousID:next';
     return {} as never;
   });
   sdk.recordPurchase.mockImplementation(async () => {
@@ -99,18 +107,23 @@ function startSession(): void {
   rc = require('../revenuecat');
 }
 
+// A device that already linked billing-a with consent, then closed the app.
+async function linkedDevice(): Promise<Device> {
+  startSession(newDevice());
+  await rc.identifyRevenueCatUser('billing-a');
+  await rc.recordRevenueCatPurchase('pro.monthly');
+  return device;
+}
+
 beforeEach(() => {
   process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = 'appl_test';
   process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY = 'goog_test';
   mockConsent = 'granted';
-  mockSdkUser = ANONYMOUS;
-  local = {};
   server = {};
   serverHistory = {};
   mockAttributionListener = undefined;
   mockGetRevenueId.mockReset().mockResolvedValue('af-device');
-  mockWaitForConsent.mockReset().mockImplementation(async () => mockConsent);
-  startSession();
+  startSession(newDevice());
 });
 
 it('links the consented billing identity before recording the purchase', async () => {
@@ -169,58 +182,82 @@ it('does not report a withdrawal push that only failed to fetch offerings', asyn
   expect(Sentry.captureException).not.toHaveBeenCalled();
 });
 
-it('keeps the link through a foreground ATT re-check', async () => {
+it('keeps the link while consent is being read again', async () => {
   await rc.identifyRevenueCatUser('billing-a');
   mockConsent = 'pending';
   mockAttributionListener?.();
-  await flush();
-  mockConsent = 'granted';
   await rc.recordRevenueCatPurchase('pro.monthly');
+  await rc.reconcileRevenueCatPurchases('billing-a', () => true);
   expect(serverHistory['billing-a']).toEqual(['af-device']);
 });
 
-it.each(['revoked', 'undecided', 'pending'] as const)(
-  'records a purchase without the link when consent is %s at that moment',
+it.each(['undecided', 'pending'] as const)(
+  'leaves the account’s link alone on a device whose consent is %s',
   async (consent) => {
-    server['billing-a'] = 'af-other-device';
-    mockSdkUser = 'billing-a';
-    local['billing-a'] = { value: 'af-other-device', synced: true };
-    mockConsent = 'pending';
-    await rc.identifyRevenueCatUser('billing-a');
-    mockWaitForConsent.mockResolvedValueOnce(consent);
+    const other = await linkedDevice();
+    startSession(newDevice());
     mockConsent = consent;
+    rc.configureRevenueCat();
+    await flush();
+    await rc.identifyRevenueCatUser('billing-a');
+    await rc.reconcileRevenueCatPurchases('billing-a', () => true);
     await rc.recordRevenueCatPurchase('pro.monthly');
-    expect(server['billing-a']).toBe('');
+    // A failed sign-out, then a later consent signal, then a sign-out that
+    // succeeds and a switch away from the account.
+    sdk.logOut.mockRejectedValueOnce(new Error('offline'));
+    await rc.resetRevenueCatUser();
+    mockAttributionListener?.();
+    await flush();
+    await rc.resetRevenueCatUser();
+    await rc.identifyRevenueCatUser('billing-a');
+    await rc.identifyRevenueCatUser('billing-b');
+    expect(serverHistory['billing-a']).toEqual(['af-device']);
+    expect(other.local['billing-a'].value).toBe('af-device');
   },
 );
 
-it('waits for the ATT decision before linking a purchase', async () => {
-  mockConsent = 'pending';
-  await rc.identifyRevenueCatUser('billing-a');
-  mockWaitForConsent.mockImplementationOnce(async () => {
-    mockConsent = 'granted';
-    return 'granted';
-  });
-  await rc.recordRevenueCatPurchase('pro.monthly');
-  expect(serverHistory['billing-a']).toEqual(['af-device']);
-});
-
-it('leaves another device’s link alone before this device answers ATT', async () => {
-  server['billing-a'] = 'af-other-device';
-  mockConsent = 'undecided';
+it('clears the account’s link on an explicit opt-out until a consenting device returns', async () => {
+  const consenting = await linkedDevice();
+  const optedOut = newDevice();
+  startSession(optedOut);
+  mockConsent = 'revoked';
   rc.configureRevenueCat();
   await flush();
   await rc.identifyRevenueCatUser('billing-a');
-  expect(server['billing-a']).toBe('af-other-device');
+  // The restore that runs on launch posts the deletion.
+  await rc.reconcileRevenueCatPurchases('billing-a', () => true);
+  expect(server['billing-a']).toBe('');
+
+  mockConsent = 'granted';
+  startSession(consenting);
+  await rc.identifyRevenueCatUser('billing-a');
+  await rc.recordRevenueCatPurchase('pro.monthly');
+  expect(server['billing-a']).toBe('af-device');
 });
 
-it('relinks after another device cleared the account’s ID', async () => {
+it('links this device’s ID again before a purchase, even within one session', async () => {
+  mockGetRevenueId.mockResolvedValue('af-a');
+  await rc.identifyRevenueCatUser('billing-a');
+  await rc.recordRevenueCatPurchase('pro.monthly');
+  const deviceA = device;
+  // Another device opts out in the meantime.
+  device = newDevice();
+  device.user = 'billing-a';
+  storeLocally(null);
+  push();
+  expect(server['billing-a']).toBe('');
+  device = deviceA;
+  await rc.recordRevenueCatPurchase('pro.monthly');
+  expect(server['billing-a']).toBe('af-a');
+});
+
+it('relinks in a new session after another device cleared the account’s ID', async () => {
   await rc.identifyRevenueCatUser('billing-a');
   await rc.recordRevenueCatPurchase('pro.monthly');
   server['billing-a'] = '';
   startSession();
   await rc.identifyRevenueCatUser('billing-a');
-  await rc.recordRevenueCatPurchase('pro.monthly');
+  await rc.reconcileRevenueCatPurchases('billing-a', () => true);
   expect(server['billing-a']).toBe('af-device');
 });
 
@@ -242,21 +279,13 @@ it('links once the ID becomes readable instead of clearing', async () => {
   mockAttributionListener?.();
   await flush();
   await rc.recordRevenueCatPurchase('pro.monthly');
-  expect(serverHistory['billing-a']).toEqual(['af-device']);
+  expect(serverHistory['billing-a']).not.toContain('');
+  expect(server['billing-a']).toBe('af-device');
 });
 
 it('links before restoring purchases', async () => {
   await expect(rc.reconcileRevenueCatPurchases('billing-a', () => true)).resolves.toBe(true);
-  expect(serverHistory['billing-a']).toEqual(['af-device']);
-});
-
-it('restores without another device’s link when this device has not consented', async () => {
-  server['billing-a'] = 'af-other-device';
-  mockSdkUser = 'billing-a';
-  local['billing-a'] = { value: 'af-other-device', synced: true };
-  mockConsent = 'undecided';
-  await expect(rc.reconcileRevenueCatPurchases('billing-a', () => true)).resolves.toBe(true);
-  expect(server['billing-a']).toBe('');
+  expect(server['billing-a']).toBe('af-device');
 });
 
 it('clears the old billing user before switching accounts', async () => {
@@ -274,13 +303,17 @@ it('clears the departing account when signing out', async () => {
   expect(server['billing-a']).toBe('');
 });
 
-it('does not call logOut for an anonymous user', async () => {
-  const { Sentry } = require('@/lib/sentry');
-  rc.configureRevenueCat();
-  await rc.resetRevenueCatUser();
-  expect(sdk.logOut).not.toHaveBeenCalled();
-  expect(Sentry.captureException).not.toHaveBeenCalled();
-});
+it.each(['ios', 'android'] as const)(
+  'does not call logOut for an anonymous user on %s',
+  async (os) => {
+    (require('react-native').Platform as typeof Platform).OS = os;
+    const { Sentry } = require('@/lib/sentry');
+    rc.configureRevenueCat();
+    await rc.resetRevenueCatUser();
+    expect(sdk.logOut).not.toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  },
+);
 
 it('serializes a sign-out requested while sign-in is pending', async () => {
   let resolveLogin!: () => void;
@@ -288,7 +321,7 @@ it('serializes a sign-out requested while sign-in is pending', async () => {
     (userId: string) =>
       new Promise((resolve) => {
         resolveLogin = () => {
-          mockSdkUser = userId;
+          device.user = userId;
           resolve({} as never);
         };
       }),
@@ -337,14 +370,14 @@ it('leaves Android attribution untouched', async () => {
   expect(mockAttributionListener).toBeUndefined();
 });
 
-it('does not relink an account after a failed sign-out', async () => {
+it('clears an account whose sign-out failed when consent next changes', async () => {
   await rc.identifyRevenueCatUser('billing-a');
   sdk.logOut.mockRejectedValue(new Error('offline'));
   await rc.resetRevenueCatUser();
   sdk.setAttributes.mockClear();
   mockAttributionListener?.();
   await flush();
-  expect(sdk.setAttributes).not.toHaveBeenCalledWith({ $appsflyerId: 'af-device' });
+  expect(sdk.setAttributes.mock.calls).toEqual([[{ $appsflyerId: null }]]);
 });
 
 it('does not link a stale login when another account is already requested', async () => {
@@ -353,7 +386,7 @@ it('does not link a stale login when another account is already requested', asyn
     (userId: string) =>
       new Promise((resolve) => {
         resolveLogin = () => {
-          mockSdkUser = userId;
+          device.user = userId;
           resolve({} as never);
         };
       }),
@@ -369,8 +402,6 @@ it('does not link a stale login when another account is already requested', asyn
 });
 
 it('clears a grant withdrawn while the purchase links it, before recording', async () => {
-  // The ID is not readable at login, so the purchase itself links it.
-  mockGetRevenueId.mockResolvedValueOnce(null);
   await rc.identifyRevenueCatUser('billing-a');
   sdk.setAttributes.mockImplementation(async (attributes) => {
     storeLocally(attributes.$appsflyerId);

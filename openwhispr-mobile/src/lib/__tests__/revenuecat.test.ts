@@ -33,7 +33,6 @@ jest.mock('react-native-purchases', () => ({
 jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerRevenueId: jest.fn().mockResolvedValue(null),
   getAppsFlyerAttributionConsent: () => 'revoked',
-  waitForAppsFlyerAttributionConsent: () => Promise.resolve('revoked'),
   subscribeAppsFlyerAttribution: jest.fn(),
 }));
 jest.mock('@/lib/sentry', () => ({
