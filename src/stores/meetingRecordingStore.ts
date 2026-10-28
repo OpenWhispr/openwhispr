@@ -1,3 +1,4 @@
+import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
@@ -36,6 +37,7 @@ import {
   type PolicyDecisionSnapshot,
 } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
+import { useWorkspaceStore } from "./workspaceStore";
 import {
   lockTranscriptSpeaker,
   normalizeTranscriptSegment,
@@ -163,26 +165,57 @@ const isSegmentWithinIdentificationWindow = (
   );
 };
 
+// MeetingRecordingMount translates the `managedConfig:<key>` sentinel.
+const describeMeetingSetupError = (err: unknown): string => {
+  const { message, messageKey } = (err ?? {}) as { message?: string; messageKey?: unknown };
+  return typeof messageKey === "string" ? `managedConfig:${messageKey}` : String(message);
+};
+
 const getMeetingTranscriptionOptions = () => {
+  const { accountId, authGeneration } = usePolicyStore.getState();
+  const workspaceId = useWorkspaceStore.getState().activeWorkspaceId;
+  const enterpriseIdentity =
+    accountId && workspaceId && authGeneration != null
+      ? { accountId, workspaceId, authGeneration }
+      : undefined;
+  const managed = getManagedTranscriptionResolution("realtime");
+  if (managed?.kind === "error")
+    throw Object.assign(new Error(managed.message), {
+      code: managed.code,
+      messageKey: managed.messageKey,
+    });
+  if (managed?.kind === "managed")
+    return {
+      provider: "enterprise-realtime",
+      mode: "enterprise",
+      model: managed.deployment,
+      managedContext: managed.context,
+      enterpriseIdentity,
+      language: getBaseLanguageCode(getSettings().preferredLanguage),
+    };
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
   const language = getBaseLanguageCode(state.preferredLanguage);
 
-  return resolveMeetingTranscriptionOptions({
-    transcriptionMode: resolved.transcriptionMode,
-    language,
-    localProvider: resolved.localTranscriptionProvider,
-    whisperModel: resolved.whisperModel,
-    parakeetModel: resolved.parakeetModel,
-    cohereModel: resolved.cohereModel,
-    selectedProvider: resolved.cloudTranscriptionProvider,
-    selectedModel: resolved.cloudTranscriptionModel,
-    byokProviders: getMeetingStreamingTranscriptionProviders(),
-    managedProviders: useStreamingProvidersStore.getState().providers,
-    cortiEnvironment: state.cortiEnvironment,
-    cortiTenant: state.cortiTenant,
-    keyterms: (state.customDictionary ?? []).filter(Boolean),
-  });
+  return {
+    ...resolveMeetingTranscriptionOptions({
+      transcriptionMode: resolved.transcriptionMode,
+      language,
+      localProvider: resolved.localTranscriptionProvider,
+      whisperModel: resolved.whisperModel,
+      parakeetModel: resolved.parakeetModel,
+      cohereModel: resolved.cohereModel,
+      selectedProvider: resolved.cloudTranscriptionProvider,
+      selectedModel: resolved.cloudTranscriptionModel,
+      byokProviders: getMeetingStreamingTranscriptionProviders(),
+      managedProviders: useStreamingProvidersStore.getState().providers,
+      cortiEnvironment: state.cortiEnvironment,
+      cortiTenant: state.cortiTenant,
+      keyterms: (state.customDictionary ?? []).filter(Boolean),
+    }),
+    enterpriseIdentity,
+    enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
+  };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {
@@ -501,8 +534,12 @@ const MEETING_POLICY_REFUSALS = new Set([
 ]);
 
 // Main-process errors that mean main has already ended the recording: a policy
-// refusal, or the recording belonging to an account that is no longer signed in.
-const MEETING_MAIN_STOPS = new Set([...MEETING_POLICY_REFUSALS, "accountChanged"]);
+// refusal, or the recording belonging to an account or workspace no longer active.
+const MEETING_MAIN_STOPS = new Set([
+  ...MEETING_POLICY_REFUSALS,
+  "accountChanged",
+  "workspaceChanged",
+]);
 
 // The last session main ended itself, so a policy stop of the same session
 // from this window doesn't explain it a second time.
@@ -861,6 +898,18 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     return false;
   }
 
+  // Resolve the managed route before any capture so a failure never lights the mic indicator.
+  const managed = getManagedTranscriptionResolution("realtime");
+  if (managed?.kind === "error") {
+    logger.warn(
+      "Meeting recording blocked by managed audio setup",
+      { code: managed.code },
+      "meeting"
+    );
+    reportMeetingError(describeMeetingSetupError(managed));
+    return true;
+  }
+
   const sessionId = createMeetingRecordingSessionId();
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
@@ -946,7 +995,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         systemAudioInterruptedNonce: state.systemAudioInterruptedNonce + 1,
       }));
     };
-    let setupMicResult: MediaStream | null = null;
     let setupSystemCaptureResult: { stream: MediaStream | null; error: Error | null } = {
       stream: null,
       error: null,
@@ -959,9 +1007,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
       });
     const teardownStart = async () => {
-      stopMediaStream(setupMicResult);
       stopMediaStream(setupSystemCaptureResult.stream);
-      setupMicResult = null;
       setupSystemCaptureResult = { stream: null, error: null };
       isRecordingFlag = false;
       isStartingFlag = false;
@@ -1000,15 +1046,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         resumedCleanup?.();
       });
 
-      if (preparePromise) {
-        logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
-        await preparePromise;
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-      }
-
       const startTime = performance.now();
       const initialSystemAudioAccess =
         (await (window.electronAPI?.checkSystemAudioAccess?.() ??
@@ -1020,59 +1057,140 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
-      startOperation.markMainStartAttempted();
-      const mainStartPromise = window.electronAPI?.meetingTranscriptionStart?.({
-        ...getMeetingTranscriptionOptions(),
-        noteId: args.noteId ?? null,
-        sessionId,
-        autoEndEligible: args.autoEndEligible,
-        aecEnabled: getSettings().meetingAecEnabled,
-        speakerIndexBase: sessionSpeakerIndexBase,
-      });
-      const micCapturePromise = getMeetingMicConstraints().then(async (constraints) => {
-        if (!isCurrentStart()) return null;
-        try {
-          return await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-          const hasExactDevice =
-            typeof constraints.audio === "object" &&
-            constraints.audio !== null &&
-            "deviceId" in constraints.audio;
-          if (hasExactDevice && isCurrentStart()) {
-            try {
-              const fallbackStream = await navigator.mediaDevices.getUserMedia({
-                audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-              });
-              logger.info(
-                "Meeting mic capture recovered using default device",
-                { error: (err as Error).message },
-                "meeting"
-              );
-              return fallbackStream;
-            } catch (fallbackErr) {
-              logger.error(
-                "Meeting mic capture failed, continuing with system audio only",
-                { error: (fallbackErr as Error).message },
-                "meeting"
-              );
-              return null;
-            }
+      // Held until main connects; capturedAt keeps main's timeline on capture time.
+      const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
+      const pendingSystemChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
+      let socketReady = false;
+
+      const mainStartPromise = (async () => {
+        if (preparePromise) {
+          logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
+          await preparePromise;
+          if (!isCurrentStart()) {
+            return;
           }
-          logger.error(
-            "Meeting mic capture failed, continuing with system audio only",
-            { error: (err as Error).message, constraints },
-            "meeting"
-          );
-          return null;
         }
-      });
+
+        startOperation.markMainStartAttempted();
+        return window.electronAPI?.meetingTranscriptionStart?.({
+          ...getMeetingTranscriptionOptions(),
+          noteId: args.noteId ?? null,
+          sessionId,
+          autoEndEligible: args.autoEndEligible,
+          aecEnabled: getSettings().meetingAecEnabled,
+          speakerIndexBase: sessionSpeakerIndexBase,
+        });
+      })();
+      const micCapturePromise = getMeetingMicConstraints()
+        .then(async (constraints) => {
+          if (!isCurrentStart()) return null;
+          try {
+            return await navigator.mediaDevices.getUserMedia(constraints);
+          } catch (err) {
+            const hasExactDevice =
+              typeof constraints.audio === "object" &&
+              constraints.audio !== null &&
+              "deviceId" in constraints.audio;
+            if (hasExactDevice && isCurrentStart()) {
+              try {
+                const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                  audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+                });
+                logger.info(
+                  "Meeting mic capture recovered using default device",
+                  { error: (err as Error).message },
+                  "meeting"
+                );
+                return fallbackStream;
+              } catch (fallbackErr) {
+                logger.error(
+                  "Meeting mic capture failed, continuing with system audio only",
+                  { error: (fallbackErr as Error).message },
+                  "meeting"
+                );
+                return null;
+              }
+            }
+            logger.error(
+              "Meeting mic capture failed, continuing with system audio only",
+              { error: (err as Error).message, constraints },
+              "meeting"
+            );
+            return null;
+          }
+        })
+        .then(async (micResult) => {
+          if (!micResult) return null;
+          if (!isCurrentStart()) {
+            stopMediaStream(micResult);
+            return null;
+          }
+          micStream = micResult;
+          // A Stop while main is still connecting (up to its connect timeout)
+          // turns the microphone off now; the rest is torn down once start settles.
+          startOperation.onCancel(() => {
+            if (micStream !== micResult) return;
+            stopMediaStream(micResult);
+            micStream = null;
+          });
+          const ctx = new AudioContext({ sampleRate: 24000 });
+          micContext = ctx;
+          await detachFromOutputDevice(ctx);
+          if (!isCurrentStart()) {
+            await teardownStart();
+            return null;
+          }
+
+          await createAudioPipeline({
+            stream: micResult,
+            context: ctx,
+            onChunk: (chunk) => {
+              if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
+              if (socketReady) {
+                window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+                return;
+              }
+              pendingMicChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
+            },
+          }).then(async ({ source, processor }) => {
+            if (!isCurrentStart()) {
+              source.disconnect();
+              await flushAndDisconnectProcessor(processor);
+              return;
+            }
+            micSource = source;
+            micProcessor = processor;
+
+            // AnalyserNode must reach the destination for Chrome's pull-based
+            // renderer to update its internal buffer; route through a muted gain.
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.4;
+            const analyserSink = ctx.createGain();
+            analyserSink.gain.value = 0;
+            source.connect(analyser);
+            analyser.connect(analyserSink);
+            analyserSink.connect(ctx.destination);
+            micAnalyser = analyser;
+
+            const micTrack = micResult.getAudioTracks()[0];
+            logger.info(
+              "Mic capture started for meeting transcription",
+              {
+                label: micTrack?.label,
+                settings: micTrack?.getSettings(),
+              },
+              "meeting"
+            );
+          });
+          return micResult;
+        });
       const [startOutcome, micOutcome, systemCaptureOutcome] = await Promise.allSettled([
         mainStartPromise,
         micCapturePromise,
         systemCapturePromise,
       ] as const);
 
-      if (micOutcome.status === "fulfilled") setupMicResult = micOutcome.value;
       if (systemCaptureOutcome.status === "fulfilled") {
         setupSystemCaptureResult = systemCaptureOutcome.value;
       }
@@ -1081,7 +1199,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       if (systemCaptureOutcome.status === "rejected") throw systemCaptureOutcome.reason;
 
       const startResult = startOutcome.value;
-      const micResult = setupMicResult;
+      const micResult = micOutcome.value;
       const initialSystemCaptureResult = setupSystemCaptureResult;
       let systemCaptureResult = initialSystemCaptureResult;
 
@@ -1105,12 +1223,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             ? "signInRequired"
             : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
               ? startResult.code
-              : startResult?.error || "Failed to start meeting transcription",
+              : describeMeetingSetupError({
+                  message: startResult?.error || "Failed to start meeting transcription",
+                  messageKey: startResult?.messageKey,
+                }),
           { isRecording: false, isTranscribing: false }
         );
-        stopMediaStream(micResult);
         stopMediaStream(systemCaptureResult.stream);
-        setupMicResult = null;
         setupSystemCaptureResult = { stream: null, error: null };
         isRecordingFlag = false;
         isStartingFlag = false;
@@ -1370,68 +1489,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         speakerIdentifications.push(synthetic);
       }
 
-      const pendingMicChunks: ArrayBuffer[] = [];
-      const pendingSystemChunks: ArrayBuffer[] = [];
-      let socketReady = false;
-
-      let micPipelinePromise: Promise<void> | null = null;
       if (micResult) {
-        micStream = micResult;
-        setupMicResult = null;
-        const ctx = new AudioContext({ sampleRate: 24000 });
-        micContext = ctx;
-        await detachFromOutputDevice(ctx);
-        if (!isCurrentStart()) {
-          await teardownStart();
-          return;
-        }
-
-        micPipelinePromise = createAudioPipeline({
-          stream: micResult,
-          context: ctx,
-          onChunk: (chunk) => {
-            if (!isRecordingFlag || activeRecordingSessionId !== sessionId) return;
-            if (socketReady) {
-              window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
-              return;
-            }
-            pendingMicChunks.push(chunk.slice(0));
-          },
-        }).then(async ({ source, processor }) => {
-          if (!isCurrentStart()) {
-            source.disconnect();
-            await flushAndDisconnectProcessor(processor);
-            return;
-          }
-          micSource = source;
-          micProcessor = processor;
-
-          // AnalyserNode must reach the destination for Chrome's pull-based
-          // renderer to update its internal buffer; route through a muted gain.
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 256;
-          analyser.smoothingTimeConstant = 0.4;
-          const analyserSink = ctx.createGain();
-          analyserSink.gain.value = 0;
-          source.connect(analyser);
-          analyser.connect(analyserSink);
-          analyserSink.connect(ctx.destination);
-          micAnalyser = analyser;
-
-          const micTrack = micResult.getAudioTracks()[0];
-          logger.info(
-            "Mic capture started for meeting transcription",
-            {
-              label: micTrack?.label,
-              settings: micTrack?.getSettings(),
-            },
-            "meeting"
-          );
-        });
-      }
-
-      if (micPipelinePromise) {
-        await micPipelinePromise;
         if (!isCurrentStart()) {
           await teardownStart();
           return;
@@ -1502,7 +1560,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
               return;
             }
-            pendingSystemChunks.push(chunk.slice(0));
+            pendingSystemChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
           },
         });
         systemSource = source;
@@ -1627,11 +1685,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       isStartingFlag = false;
       socketReady = true;
 
-      for (const chunk of pendingMicChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+      for (const { chunk, capturedAt } of pendingMicChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
       }
-      for (const chunk of pendingSystemChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+      for (const { chunk, capturedAt } of pendingSystemChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system", capturedAt);
       }
 
       const totalMs = performance.now() - startTime;
@@ -1654,7 +1712,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         { error: (err as Error).message },
         "meeting"
       );
-      reportMeetingError((err as Error).message, { isRecording: false, isTranscribing: false });
+      reportMeetingError(describeMeetingSetupError(err), {
+        isRecording: false,
+        isTranscribing: false,
+      });
       isRecordingFlag = false;
       isStartingFlag = false;
       await teardownStart();

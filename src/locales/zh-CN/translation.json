@@ -214,6 +214,7 @@
     "policyUnresolved": "您所在组织的设置尚未加载完成。请稍后再试。",
     "managedConfigLoading": "正在检查您组织的托管设置。请稍候再试。",
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
+    "managedConfigAmbiguous": "您组织的托管设置不一致。请联系管理员。",
     "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。",
     "resizePanel": "调整面板大小"
   },
@@ -972,6 +973,9 @@
         "managedTranscriptionUnavailable": "托管转录目前不可用。请稍候再试。",
         "managedRouteInvalid": "由于配置不匹配，托管转录无法启动。请重试或联系管理员。",
         "managedAuthRejected": "您组织的托管转录凭证被拒绝。请联系管理员。",
+        "managedRequestRejected": "您组织的转录服务拒绝了此音频（HTTP {{status}}）。请重试或联系管理员。",
+        "managedResponseMalformed": "您组织的转录服务返回了 OpenWhispr 无法读取的响应。请重试或联系管理员。",
+        "managedChunkTooLarge": "无法将此音频拆分得足够小以供您组织的转录服务使用。请联系管理员。",
         "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
         "providerKeyMissing": "尚未为您的转录服务商设置 API 密钥。请在“设置 → 语音转文字”中添加。",
         "cleanupTruncated": "AI 模型的输出长度达到上限，未能完成听写清理。",
@@ -3264,7 +3268,8 @@
       },
       "recordingDisabledByOrg": "您的组织已禁用会议录音。",
       "stoppedAccountChanged": "由于您已退出登录或切换了账号，录音已停止。",
-      "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。"
+      "stoppedPolicyUnresolved": "由于无法检查您的组织设置，录音已停止。",
+      "stoppedWorkspaceChanged": "由于您切换了工作区，录音已停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到录音",
@@ -5344,5 +5349,51 @@
     "permissionDenied": "已拒绝",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未请求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企业音频设置",
+      "description": "在此设备配置凭据并测试组织的音频连接。",
+      "provider": "音频提供商",
+      "gateway": "音频网关",
+      "provisioned": "凭据已配置",
+      "credentialMissing": "需要凭据",
+      "proxyCredentialFormat": "代理凭据请输入包含 username 和 password 的 JSON；音频凭据请输入 API 密钥。",
+      "probeConsent": "我允许发送简短的音频测试请求，这可能产生提供商费用。",
+      "testBatch": "测试文件转写",
+      "testRealtime": "测试会议连接",
+      "testPassed": "连接测试通过，已向管理员报告。",
+      "testFailed": "连接测试失败。",
+      "setupFailed": "设置失败。请检查登录状态、工作区权限和网络设置。",
+      "saved": "凭据已保存在此设备。",
+      "operationUnavailable": "组织尚未配置此音频操作。",
+      "certificateUnavailable": "组织的证书包不可用。",
+      "partialUpload": "{{count}} 个音频片段失败，转写不完整。",
+      "importBootstrap": "导入组织配置",
+      "importedBootstrap": "已导入配置凭据。",
+      "bootstrapNotFound": "未找到配置文件。",
+      "checks": {
+        "authRejected": "音频服务商拒绝了此设备的凭据。请检查已配置的密钥或身份设置。",
+        "tlsFailed": "无法验证安全连接。请检查您组织的证书。",
+        "proxyFailed": "通过您组织的代理连接失败。请检查代理设置和凭据。",
+        "timeout": "音频服务商未及时响应。请检查您的网络或 VPN。",
+        "credentialMissing": "此设备上尚未配置该连接所需的凭据。",
+        "configChanged": "您的组织已更改此音频配置。请重新打开设置后重试。",
+        "protocolFailed": "音频服务商返回了 OpenWhispr 不支持的格式。请检查部署和协议。",
+        "networkFailed": "无法连接音频服务商。请检查您的网络、VPN 和 DNS。",
+        "secureStorageUnavailable": "此设备没有安全的凭据存储。在 Linux 上，请安装并解锁密钥环（如 GNOME Keyring 或 KWallet）后重试。"
+      },
+      "errors": {
+        "ssoRequired": "您的组织要求使用公司 SSO。请通过 SSO 登录后重试。",
+        "enterpriseRequired": "企业音频需要此工作区拥有有效的 Enterprise 方案。",
+        "signInRequired": "您的会话已过期。请重新登录后重试。",
+        "accessDenied": "您的账号无法为此工作区设置音频。请确认您是成员，并已进入正确的工作区。",
+        "rateLimited": "测试请求过多。请等待几分钟后重试。"
+      },
+      "bootstrapNotProtected": "引导文件必须归您所有，且仅您可读取。请让 IT 部门重新下发。",
+      "bootstrapUnreadable": "OpenWhispr 无法读取引导文件。请让 IT 部门为您的账号开放读取权限。",
+      "bootstrapMismatch": "引导文件与您的账号、此工作区或其配置的凭据不匹配。",
+      "testLinkOtherWorkspace": "此测试链接对应的是其他工作区。请切换到该工作区，然后重新打开链接。"
+    }
   }
 }

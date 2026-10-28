@@ -5,6 +5,7 @@ const {
   audioFeatureFailure,
   createAudioFeaturePolicy,
 } = require("../../src/helpers/audioFeaturePolicy");
+const { toPolicyFailure } = require("../../src/helpers/policyResponseError");
 
 const policy = (meetingRecordingEnabled = true, audioUploadEnabled = true, revision = 1) => ({
   success: true,
@@ -446,4 +447,31 @@ test("a credential change always reports the re-resolved meeting verdict", async
   answer({ success: true, managed: false, authGeneration: 2 });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(detectorsOn, true);
+});
+
+test("a managed-setup error reaches the meeting start result with its translation key", async () => {
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => policy() });
+  const error = Object.assign(new Error("Managed audio is unavailable"), {
+    code: "MANAGED_CONFIG_UNAVAILABLE",
+    messageKey: "common.managedConfigUnavailable",
+    messageParams: { region: "eastus" },
+  });
+  // The start handler returns toPolicyFailure(error); anything it throws reaches the guard.
+  for (const handler of [
+    () => toPolicyFailure(error),
+    () => {
+      throw error;
+    },
+  ]) {
+    const { success, code, messageKey, messageParams } = await guard.run({}, "meeting", handler);
+    assert.deepEqual(
+      { success, code, messageKey, messageParams },
+      {
+        success: false,
+        code: "MANAGED_CONFIG_UNAVAILABLE",
+        messageKey: "common.managedConfigUnavailable",
+        messageParams: { region: "eastus" },
+      }
+    );
+  }
 });

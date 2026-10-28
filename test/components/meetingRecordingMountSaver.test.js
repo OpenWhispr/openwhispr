@@ -117,6 +117,7 @@ async function setup(t, { language = "en" } = {}) {
     toasts,
     store,
     streamError,
+    vite,
     setPolicy,
   };
 }
@@ -189,6 +190,44 @@ test("a policy refusal forwarded mid-meeting ends the recording", async (t) => {
 
   assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+});
+
+test("an unavailable managed meeting route appears translated before capture starts", async (t) => {
+  const previousLanguage = i18nMain.language;
+  changeLanguage("es");
+  t.after(() => changeLanguage(previousLanguage));
+  const { start, api, toasts, vite } = await setup(t, { language: "es" });
+  let starts = 0;
+  api.meetingTranscriptionStart = async () => {
+    starts += 1;
+    return { success: false };
+  };
+  const { useEnterpriseIdentityStore } = await vite.ssrLoadModule(
+    "/stores/enterpriseIdentityStore.ts"
+  );
+  useEnterpriseIdentityStore.setState({
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+    status: "ready",
+    config: {
+      generation: 1,
+      providers: [
+        {
+          provider: "openai-compatible",
+          mode: "managed_required",
+          allowManualSetup: false,
+          version: 1,
+          config: { realtime: { defaultDeployment: " " } },
+        },
+      ],
+    },
+  });
+
+  await start();
+
+  assert.equal(starts, 0);
+  assert.equal(toasts.at(-1)?.description, esTranslation.enterprise.audio.operationUnavailable);
 });
 
 const MANAGED_SCOPE = {

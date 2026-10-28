@@ -21,6 +21,7 @@ const EMA_NEXT = 0.5;
 
 // Sentinel errors set by meetingRecordingStore, translated at display time.
 // A sentinel may carry one argument after a colon, e.g. `unsupportedProvider:groq`.
+// `managedConfig:<key>` carries a managed-setup translation key as its argument.
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
@@ -32,6 +33,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
   accountChanged: "notes.meeting.stoppedAccountChanged",
+  // An enterprise recording ended because the active workspace changed.
+  workspaceChanged: "notes.meeting.stoppedWorkspaceChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
@@ -94,7 +97,7 @@ export default function MeetingRecordingMount(): null {
   useEffect(() => {
     if (!error) return;
     const [sentinel, argument] = error.split(":");
-    const errorKey = MEETING_ERROR_KEYS[sentinel];
+    const errorKey = sentinel === "managedConfig" ? argument : MEETING_ERROR_KEYS[sentinel];
     const needsSignIn = sentinel === "signInRequired";
     toast({
       title: t("notes.meeting.title"),

@@ -63,6 +63,7 @@ function harness({
     ALLOWED_MEETING_PROVIDERS: new Set(["local"]),
     LOCAL_MEETING_CHUNK_INTERVAL_MS: 5000,
     credentialGeneration: 0,
+    getEnterpriseAudioRequest: async () => null,
     setInterval: () => "local-timer",
     clearInterval: () => {},
   };

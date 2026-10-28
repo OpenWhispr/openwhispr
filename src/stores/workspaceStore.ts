@@ -107,8 +107,9 @@ export function refreshManagedEnterpriseIdentity(
   workspaceId: string | null = useWorkspaceStore.getState().activeWorkspaceId
 ): void {
   const enterprise = useEnterpriseIdentityStore.getState();
+  const clearOptions = accountId ? { next: { accountId, workspaceId } } : undefined;
   if (!workspaceId || !accountId || authGeneration == null) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
     return;
   }
   if (
@@ -116,7 +117,7 @@ export function refreshManagedEnterpriseIdentity(
     enterprise.accountId !== accountId ||
     enterprise.authGeneration !== authGeneration
   ) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
   }
   void enterprise.refresh(accountId, workspaceId, authGeneration);
 }

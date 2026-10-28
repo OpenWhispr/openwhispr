@@ -5,6 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
+import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
@@ -95,6 +96,8 @@ export interface PolicyFailureMetadata {
   status?: number;
   minAppVersion?: string;
   details?: unknown;
+  messageKey?: string;
+  messageParams?: Record<string, unknown>;
 }
 
 export interface NoteRecordingProviderModel {
@@ -1715,7 +1718,7 @@ declare global {
           remoteTranscriptionModel?: string;
           managed?: {
             kind: "managed";
-            provider: "azure";
+            provider: "azure" | "openai-compatible";
             deployment: string;
             context: ManagedEnterpriseRequestContext;
           };
@@ -2620,6 +2623,7 @@ declare global {
         error?: string;
         enforcementRequired?: boolean;
         enforcedScopes?: string[];
+        enforcedAudioOperations?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -2630,17 +2634,61 @@ declare global {
           code: string | null;
           enforcementRequired?: boolean;
           enforcedScopes?: string[];
+          enforcedAudioOperations?: string[];
         }) => void
       ) => () => void;
-      clearManagedEnterpriseIdentity?: () => Promise<void>;
+      clearManagedEnterpriseIdentity?: (options?: {
+        next?: { accountId: string; workspaceId: string | null };
+      }) => Promise<void>;
+      getPendingEnterpriseAudioTest?: (
+        consume?: boolean
+      ) => Promise<EnterpriseAudioTestLink | null>;
+      claimEnterpriseAudioTest?: () => Promise<EnterpriseAudioTestLink | null>;
+      onEnterpriseAudioTestRequested?: (callback: () => void) => () => void;
+      enterpriseAudioImportBootstrap?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{ success: boolean; imported?: boolean; messageKey?: string }>;
+      enterpriseAudioStatus?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{
+        success: boolean;
+        slots?: { slot: string; present: boolean }[];
+        operations?: ("batch" | "realtime")[];
+        configFingerprint?: string;
+        messageKey?: string;
+      }>;
+      enterpriseAudioSaveCredential?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        slot: string;
+        secret?: string;
+        remove?: boolean;
+      }) => Promise<{ success: boolean; messageKey?: string }>;
+      enterpriseAudioTest?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        operation: "batch" | "realtime";
+        allowInferenceValidation: boolean;
+      }) => Promise<{ success: boolean; passed?: boolean; code?: string; messageKey?: string }>;
       managedTranscribe?: (data: {
         audioBuffer: ArrayBuffer;
         fileName: string;
         mimeType: string;
         language?: string;
         prompt?: string;
-        managed: { provider: "azure"; context: ManagedEnterpriseRequestContext };
-      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
+        managed: {
+          provider: "azure" | "openai-compatible";
+          context: ManagedEnterpriseRequestContext;
+        };
+      }) => Promise<{
+        text?: string;
+        warning?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -2935,7 +2983,7 @@ declare global {
         remoteTranscriptionModel?: string;
         managed?: {
           kind: "managed";
-          provider: "azure";
+          provider: "azure" | "openai-compatible";
           deployment: string;
           context: ManagedEnterpriseRequestContext;
         };
@@ -3379,11 +3427,21 @@ declare global {
 
       // Meeting transcription (streaming, dual-channel)
       meetingTranscriptionPrepare?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
@@ -3403,7 +3461,11 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
-      meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
+      meetingTranscriptionSend?: (
+        buffer: ArrayBuffer,
+        source: "mic" | "system",
+        capturedAt?: number
+      ) => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
