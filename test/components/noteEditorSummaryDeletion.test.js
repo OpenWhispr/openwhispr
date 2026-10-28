@@ -1059,6 +1059,67 @@ for (const [session, recorderName, expectedName] of [
   });
 }
 
+test("confirming the current recorder's self suggestion preserves their global self profile", async (t) => {
+  const { createDb } = require("../helpers/harness/db");
+  const db = createDb(t);
+  assert.ok(db);
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  cleanup = unmount;
+  const embedding = Buffer.from(new Float32Array([1, 0]).buffer);
+  const selfProfile = db.upsertSpeakerProfile("You", null, embedding);
+  const note = db.saveNote("Shared meeting", "", "meeting").note;
+  Object.assign(globalThis.window.electronAPI, {
+    getSpeakerProfiles: async () => db.getSpeakerProfiles(),
+    setSpeakerMapping: async (noteId, speakerId, displayName, email, profileId) => {
+      const profile = db.upsertSpeakerProfile(displayName, email, embedding, profileId);
+      return db.setSpeakerMapping(noteId, speakerId, profile.id, displayName);
+    },
+    updateNote: async (...args) => db.updateNote(...args),
+  });
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      id: note.id,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      created_by_user_id: "alice",
+      transcript: JSON.stringify([
+        {
+          source: "mic",
+          speaker: "speaker_0",
+          text: "I'll send it.",
+          suggestedName: "You",
+          suggestedProfileId: selfProfile.id,
+          recorderName: "Bob Viewer",
+        },
+      ]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onConfirmSuggestion) chat = node;
+    });
+    await chat.props.onConfirmSuggestion("speaker_0", "You", selfProfile.id, "Bob Viewer");
+  });
+  assert.equal(JSON.parse(db.getNote(note.id).transcript)[0].speakerName, "Bob Viewer");
+  assert.equal(
+    db.getSpeakerProfiles().find((profile) => profile.id === selfProfile.id).display_name,
+    "You"
+  );
+  assert.equal(db.getSpeakerMappings(note.id)[0].display_name, "You");
+  await unmount();
+  cleanup = () => {};
+});
+
 test("the owner can correct a teammate's self row without renaming earlier sessions", async (t) => {
   globalThis.__noteEditorAuth = {
     isSignedIn: true,

@@ -698,12 +698,12 @@ export default function NoteEditor({
       displayName: string,
       email?: string | null,
       profileId?: number | null,
-      recorderName?: string
+      recorderName?: string,
+      profileName = displayName
     ) => {
       const segments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
       const hasOtherRecorders = segments.some((segment) => segment.recorderName);
       const scopeSelfSpeaker = speakerId === "you" && hasOtherRecorders;
-      const profileName = displayName;
       displayName = resolveSpeakerAssignmentName(
         displayName,
         user,
@@ -763,7 +763,7 @@ export default function NoteEditor({
       const displayName = isYouSpeakerName(suggestedName, t("notes.speaker.you"))
         ? recorderName || recorderLabel
         : suggestedName;
-      await handleMapSpeaker(speakerId, displayName, null, profileId, recorderName);
+      await handleMapSpeaker(speakerId, displayName, null, profileId, recorderName, suggestedName);
     },
     [handleMapSpeaker, recorderLabel, t]
   );
