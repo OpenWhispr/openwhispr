@@ -116,6 +116,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   // Email addresses are Latin-script identifiers.
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
+  // The row and select-all checkbox: no text to lay out.
+  "src/components/workspace/SelectionBar.tsx": ["inherit"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
 };

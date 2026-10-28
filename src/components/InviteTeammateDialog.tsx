@@ -10,6 +10,7 @@ import {
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
+import { workspaceCan } from "../lib/capabilities";
 import { invitePeople } from "../services/invitePeople";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
@@ -30,6 +31,8 @@ interface Props {
   initialEmail?: string;
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
   knownEmails?: { members: string[]; invited: string[] };
+  /** Opens Plan & Billing from the seats warning; the warning offers no Upgrade without it. */
+  onUpgrade?: () => void;
 }
 
 interface Roster {
@@ -53,6 +56,7 @@ export default function InviteTeammateDialog({
   spaceIds,
   initialEmail,
   knownEmails,
+  onUpgrade,
 }: Props): ReactElement {
   const { t } = useTranslation();
   const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
@@ -68,6 +72,21 @@ export default function InviteTeammateDialog({
   const runController = useRef<AbortController | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const seats = workspace?.seats ?? null;
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  const billingManager = workspace?.billing_manager ?? null;
+
+  // A free workspace's `seats` is a placeholder, so only a subscription has purchased seats left.
+  const workspaceSeatsUsed = workspace?.seats_used;
+  const purchasedLeft =
+    workspace?.has_subscription === true &&
+    typeof workspace.seats === "number" &&
+    typeof workspaceSeatsUsed === "number"
+      ? workspace.seats - workspaceSeatsUsed
+      : null;
+  const ceilingLeft =
+    typeof workspace?.seat_limit === "number" && typeof workspaceSeatsUsed === "number"
+      ? workspace.seat_limit - workspaceSeatsUsed
+      : null;
 
   // A fresh flow on every open, set during render so the first frame never shows the last run.
   if (open !== wasOpen) {
@@ -93,6 +112,12 @@ export default function InviteTeammateDialog({
     latestRoster.current = roster;
     if (open) dispatch({ type: "roster", ...roster });
   }, [open, roster, dispatch]);
+
+  // Re-sent on every open, since a fresh flow starts with nothing known. The reducer drops one
+  // that arrives mid-send; the refresh after a seat refusal brings a newer one.
+  useEffect(() => {
+    if (open) dispatch({ type: "seats", purchasedLeft, ceilingLeft });
+  }, [open, purchasedLeft, ceilingLeft, dispatch]);
 
   useEffect(() => {
     if (!open) return;
@@ -221,6 +246,7 @@ export default function InviteTeammateDialog({
       .filter((recipient) => recipient.state.status === "sending")
       .map((recipient) => recipient.email);
     const invited: string[] = [];
+    let seatRefused = false;
     try {
       await invitePeople.sendInvitations({
         workspaceId,
@@ -232,6 +258,7 @@ export default function InviteTeammateDialog({
         onResult: (email, outcome) => {
           dispatch({ type: "result", email, outcome });
           if (outcome.ok === true) invited.push(email);
+          else if (outcome.kind === "seatLimit") seatRefused = true;
         },
       });
     } finally {
@@ -243,7 +270,11 @@ export default function InviteTeammateDialog({
         dispatch({ type: "roster", ...latestRoster.current });
       }
     }
-    if (!controller.signal.aborted && invited.length > 0) onInvited?.(invited);
+    if (controller.signal.aborted) return;
+    if (invited.length > 0) onInvited?.(invited);
+    // The workspace list's seats_used is what the room under the ceiling is worked out from, and
+    // it is behind whoever else invited people meanwhile.
+    if (seatRefused) void useWorkspaceStore.getState().refresh({ fresh: true });
   };
 
   const close = (): void => onOpenChange(false);
@@ -263,6 +294,9 @@ export default function InviteTeammateDialog({
         suggestions={suggestions}
         seatLine={seatLine}
         seatCostLine={seatCostLine}
+        canManageBilling={canManageBilling}
+        billingManager={billingManager}
+        onUpgrade={onUpgrade}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         onCancel={close}
         onSend={() => void handleSend()}

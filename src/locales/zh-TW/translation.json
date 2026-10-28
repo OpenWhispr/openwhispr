@@ -2479,6 +2479,15 @@
           "resendNotAllowed": "你已無權在 {{workspace}} 中重新傳送邀請。",
           "noLongerPending": "{{email}} 的邀請已不再處於待處理狀態",
           "refreshFailed": "無法重新整理邀請。此清單可能不是最新的。"
+        },
+        "selection": {
+          "count_other": "已選取 {{count}} 項",
+          "clear": "清除",
+          "label": "已選取的人員",
+          "selectAllMembers": "選取所有成員",
+          "selectAllInvitations": "選取所有邀請",
+          "selectRow": "選取 {{name}}",
+          "remove": "移除"
         }
       },
       "role": {
@@ -4821,6 +4830,7 @@
       "emailLabel": "電子郵件地址",
       "emailHint": "以逗號分隔多個電子郵件地址。所有人都會獲得相同的角色。",
       "emailPlaceholder": "搜尋電子郵件",
+      "addMore": "新增更多…",
       "removeRecipient": "移除 {{email}}",
       "suggestions": "建議",
       "roleLabel": "工作區角色",
@@ -4829,13 +4839,19 @@
       "seatCostMany_other": "全部接受後將為你的方案新增 {{count}} 個席位 · 預計按比例收取 {{amount}}。",
       "seatCostManyUnpriced_other": "全部接受後將為你的方案新增 {{count}} 個席位。",
       "submit_other": "傳送 {{count}} 份邀請",
-      "submitting": "正在邀請…",
+      "submitting_other": "正在邀請 {{count}} 人…",
       "sentTitle_other": "邀請已傳送",
       "sentOne": "已邀請 {{email}} 加入 {{workspace}}",
       "sentMany_other": "已邀請 {{count}} 人加入 {{workspace}}",
       "noEmail_other": "已建立 {{count}} 份邀請，但電子郵件無法送達。請在「邀請」中重新傳送。",
-      "someFailed_other": "有 {{count}} 個地址無法邀請。請修正或移除後再試。",
-      "tooMany": "一次最多可邀請 20 人。",
+      "someFailed_other": "{{count}} 份邀請未傳送",
+      "tryResending": "重新傳送",
+      "tooMany": "一次最多可邀請 {{count}} 人。",
+      "seatsLeft_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或升級方案。",
+      "seatsLeftAskOwner_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或請 {{owner}} 新增席次。",
+      "upgrade": "升級",
+      "ceilingLeft_other": "還可邀請 {{count}} 人。請移除 {{excess}} 個以繼續。",
+      "skippedMany_other": "已略過 {{count}} 個地址：已是成員或已受邀。",
       "done": "完成",
       "role": {
         "admin": "工作區管理員",
@@ -4847,13 +4863,14 @@
       },
       "errors": {
         "invalid": "{{email}} 不是有效的電子郵件地址",
-        "alreadyMember": "{{email}} 已是成員",
-        "alreadyInvited": "{{email}} 已有待處理的邀請。請在「邀請」中重新傳送。",
+        "alreadyMember": "{{email}} 已是成員，已略過",
+        "alreadyInvited": "{{email}} 已受邀，已略過。請在「邀請」中重新傳送。",
         "seatLimit": "此工作區已達席次上限。",
         "directoryRequired": "請先在身分識別提供者中指派 {{email}}。",
         "notAllowed": "你已無法再邀請他人加入 {{workspace}}。",
         "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再邀請他人加入 {{workspace}}。",
         "sessionExpired": "無法邀請 {{email}}：你的登入已過期或已變更。請重新登入後再試。",
+        "rateLimited": "目前邀請過多，請稍後再試。",
         "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。",
         "refused": "無法邀請 {{email}}：{{reason}}"
       }

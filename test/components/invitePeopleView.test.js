@@ -58,6 +58,8 @@ async function loadView(t) {
         suggestions: [],
         seatLine: null,
         seatCostLine: null,
+        canManageBilling: false,
+        billingManager: null,
         cancelLabel: "common.cancel",
         onCancel: () => {},
         onSend: () => {},
@@ -69,6 +71,16 @@ async function loadView(t) {
 }
 
 const chip = (email, state = { status: "draft" }) => ({ email, state });
+// Each bar with its tone, text and action button, in order.
+const bars = (markup) =>
+  [...markup.matchAll(/<div[^>]*role="alert"[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/div>/g)].map(
+    ([, className, body]) => ({
+      tone: className.includes("bg-warning") ? "warning" : "error",
+      body,
+      action: body.match(/<button[^>]*>([^<]*)<\/button>/)?.[1] ?? null,
+    })
+  );
+const drafts = (count) => Array.from({ length: count }, (_, index) => chip(`p${index}@x.com`));
 const primaryButton = (markup) =>
   markup.match(
     /<button[^>]*>(?:(?!<\/button>)[\s\S])*workspaces\.invite\.(?:submit|done)[\s\S]*?<\/button>/
@@ -96,7 +108,6 @@ test("chips render with remove buttons", async (t) => {
     markup,
     /aria-label="workspaces\.invite\.removeRecipient\|\{&quot;email&quot;:&quot;a@x\.com&quot;\}"/
   );
-  assert.doesNotMatch(markup, /placeholder=/);
   assert.doesNotMatch(markup, /role="alert"/);
   assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:2\}/);
   assert.doesNotMatch(primaryButton(markup), /disabled=""/);
@@ -124,6 +135,11 @@ test("already invited points to Invitations", async (t) => {
     markup,
     /role="alert"[\s\S]*workspaces\.invite\.errors\.alreadyInvited[^<]*<bdi dir="ltr"[^>]*>b@x\.com<\/bdi>/
   );
+  assert.deepEqual(
+    bars(markup).map((bar) => bar.tone),
+    ["warning"]
+  );
+  // Nothing is left to send, not a block.
   assert.match(primaryButton(markup), /disabled=""/);
 });
 
@@ -150,7 +166,7 @@ test("sending is busy and can't be dismissed", async (t) => {
   });
 
   assert.doesNotMatch(markup, /common\.cancel/);
-  assert.match(primaryButton(markup), /workspaces\.invite\.submitting/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submitting\|\{&quot;count&quot;:1\}/);
   assert.match(primaryButton(markup), /disabled=""/);
   assert.match(primaryButton(markup), /animate-spin/);
 });
@@ -169,7 +185,7 @@ test("some failed counts only the addresses Try again resends", async (t) => {
     markup,
     /role="alert"[\s\S]*workspaces\.invite\.someFailed\|\{&quot;count&quot;:1\}/
   );
-  assert.match(markup, /<button[^>]*>workspaces\.exit\.tryAgain<\/button>/);
+  assert.match(markup, /<button[^>]*>workspaces\.invite\.tryResending<\/button>/);
   assert.match(markup, /title="workspaces\.invite\.errors\.requestFailed/);
 });
 
@@ -185,7 +201,7 @@ test("seat limit has no Try again", async (t) => {
 
   assert.match(markup, /role="alert"[\s\S]*workspaces\.invite\.errors\.seatLimit/);
   assert.doesNotMatch(markup, /someFailed/);
-  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.tryResending/);
 });
 
 test("a refusal shows the server's reason for that address and no Try again", async (t) => {
@@ -207,7 +223,7 @@ test("a refusal shows the server's reason for that address and no Try again", as
   );
   assert.match(markup, /title="workspaces\.invite\.errors\.refused[^"]*Only admins/);
   assert.doesNotMatch(markup, /someFailed/);
-  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.tryResending/);
 });
 
 test("single sign-on required names the workspace and has no Try again", async (t) => {
@@ -221,7 +237,7 @@ test("single sign-on required names the workspace and has no Try again", async (
     markup,
     /role="alert"[\s\S]*workspaces\.invite\.errors\.ssoRequired\|[\s\S]*?&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;/
   );
-  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.tryResending/);
 });
 
 test("a mix of failures retrying can't fix shows the first one's message and no Try again", async (t) => {
@@ -237,7 +253,7 @@ test("a mix of failures retrying can't fix shows the first one's message and no 
 
   assert.match(markup, /role="alert"[\s\S]*workspaces\.invite\.errors\.seatLimit/);
   assert.doesNotMatch(markup, /someFailed/);
-  assert.doesNotMatch(markup, /workspaces\.exit\.tryAgain/);
+  assert.doesNotMatch(markup, /workspaces\.invite\.tryResending/);
 });
 
 test("the workspace name is isolated inside the description", async (t) => {
@@ -335,4 +351,182 @@ test("suggestions render as a listbox while typing", async (t) => {
   assert.match(markup, /<bdi dir="ltr"[^>]*>bob@x\.com<\/bdi>/);
   assert.doesNotMatch(render({ draft: "b" }, { suggestions }), /role="listbox"/);
   assert.doesNotMatch(render({ draft: "bo" }), /role="listbox"/);
+});
+
+test("the seats warning offers Upgrade to billing managers and keeps Send enabled", async (t) => {
+  const { render } = await loadView(t);
+  const upgrades = [];
+  const state = { recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: 490 } };
+
+  const markup = render(state, { canManageBilling: true, onUpgrade: () => upgrades.push(true) });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "warning");
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:1,&quot;excess&quot;:2\}/
+  );
+  assert.equal(bar.action, "workspaces.invite.upgrade");
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:3\}/);
+
+  // A caller with nowhere to send them (no Plan & Billing page) offers no Upgrade.
+  const withoutUpgrade = bars(render(state, { canManageBilling: true }));
+  assert.match(withoutUpgrade[0].body, /workspaces\.invite\.seatsLeft\|/);
+  assert.equal(withoutUpgrade[0].action, null);
+});
+
+test("admins without billing are told to ask the owner", async (t) => {
+  const { render } = await loadView(t);
+  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
+
+  const [bar] = bars(render(state, { billingManager: "Olivia", onUpgrade: () => {} }));
+  assert.equal(bar.tone, "warning");
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.seatsLeftAskOwner\|\{&quot;count&quot;:0,&quot;excess&quot;:3,&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
+  );
+  assert.equal(bar.action, null);
+
+  const [unnamed] = bars(render(state, { billingManager: null, onUpgrade: () => {} }));
+  assert.match(
+    unnamed.body,
+    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:0,&quot;excess&quot;:3\}/
+  );
+  assert.equal(unnamed.action, null);
+});
+
+test("over the ceiling blocks Send with the ceiling copy", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(3), seats: { purchasedLeft: null, ceilingLeft: 1 } });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "error");
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.ceilingLeft\|\{&quot;count&quot;:1,&quot;excess&quot;:2\}/
+  );
+  assert.match(primaryButton(markup), /disabled=""/);
+});
+
+test("no room under the ceiling uses the seat limit copy", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(2), seats: { purchasedLeft: null, ceilingLeft: 0 } });
+
+  const [bar] = bars(markup);
+  assert.equal(bar.tone, "error");
+  assert.match(bar.body, /workspaces\.invite\.errors\.seatLimit/);
+  assert.doesNotMatch(bar.body, /ceilingLeft/);
+  assert.match(primaryButton(markup), /disabled=""/);
+});
+
+test("one skipped member shows the skipped bar and Send stays enabled", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [
+      chip("a@x.com"),
+      chip("nina@x.com", { status: "blocked", reason: "alreadyMember" }),
+    ],
+  });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "warning");
+  assert.match(
+    bar.body,
+    /workspaces\.invite\.errors\.alreadyMember[^<]*<bdi dir="ltr"[^>]*>nina@x\.com<\/bdi>/
+  );
+  assert.equal(bar.action, null);
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:1\}/);
+  // A skipped address is no error in the field.
+  assert.doesNotMatch(markup.match(/<input[^>]*>/)[0], /aria-invalid/);
+});
+
+test("several skipped show the count", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [
+      chip("a@x.com"),
+      chip("b@x.com", { status: "blocked", reason: "alreadyMember" }),
+      chip("c@x.com", { status: "blocked", reason: "alreadyInvited" }),
+    ],
+  });
+
+  const [bar, ...rest] = bars(markup);
+  assert.deepEqual(rest, []);
+  assert.equal(bar.tone, "warning");
+  assert.match(bar.body, /workspaces\.invite\.skippedMany\|\{&quot;count&quot;:2\}/);
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("an invalid address and a skipped one show the error over the warning", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({
+    recipients: [
+      chip("nope", { status: "invalid" }),
+      chip("b@x.com", { status: "blocked", reason: "alreadyMember" }),
+    ],
+  });
+
+  assert.deepEqual(
+    bars(markup).map((bar) => [bar.tone, bar.body.match(/workspaces\.invite\.[\w.]+/)[0]]),
+    [
+      ["error", "workspaces.invite.errors.invalid"],
+      ["warning", "workspaces.invite.errors.alreadyMember"],
+    ]
+  );
+});
+
+test("a rate-limited send offers Try resending", async (t) => {
+  const { render } = await loadView(t);
+  const sends = [];
+
+  const markup = render(
+    {
+      recipients: [
+        chip("a@x.com", { status: "failed", kind: "rateLimited" }),
+        chip("b@x.com", { status: "failed", kind: "rateLimited" }),
+      ],
+    },
+    { onSend: () => sends.push(true) }
+  );
+
+  const [bar] = bars(markup);
+  assert.equal(bar.tone, "error");
+  assert.match(bar.body, /workspaces\.invite\.errors\.rateLimited/);
+  assert.doesNotMatch(bar.body, /someFailed/);
+  assert.equal(bar.action, "workspaces.invite.tryResending");
+  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+});
+
+test("Add more appears once there are chips", async (t) => {
+  const { render } = await loadView(t);
+
+  assert.match(render(), /placeholder="workspaces\.invite\.emailPlaceholder"/);
+  assert.match(
+    render({ recipients: [chip("a@x.com")] }),
+    /placeholder="workspaces\.invite\.addMore"/
+  );
+});
+
+test("the field holds a hundred chips and scrolls", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: drafts(100) });
+
+  assert.match(markup, /class="[^"]*max-h-40[^"]*overflow-y-auto/);
+  assert.equal(bars(markup).length, 0);
+  assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:100\}/);
+  assert.match(
+    render({ recipients: drafts(101) }),
+    /workspaces\.invite\.tooMany\|\{&quot;count&quot;:100\}/
+  );
 });

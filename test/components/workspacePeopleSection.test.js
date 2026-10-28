@@ -163,13 +163,13 @@ function propsOf(node) {
   return key ? node[key] : {};
 }
 
-async function mount(t, WorkspacePeopleSection, workspace) {
+async function mount(t, WorkspacePeopleSection, workspace, props = {}) {
   globalThis.__workspace = workspace;
   const container = installHostDom(t);
   const root = createRoot(container);
   mountedRoots.set(t, root);
   await React.act(async () => {
-    root.render(React.createElement(WorkspacePeopleSection));
+    root.render(React.createElement(WorkspacePeopleSection, props));
   });
   return container;
 }
@@ -336,4 +336,26 @@ test("Add sits beside the tab list, not inside it", async (t) => {
   assert.match(markup, /title="settingsPage\.workspace\.people\.addLabel"/);
   // The visible "Add" is the button's accessible name, as voice control users say it.
   assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
+});
+
+test("Upgrade opens Plan & Billing", async (t) => {
+  const Section = await loadSection(t);
+  const opened = [];
+  const container = await mount(t, Section, ADMIN, {
+    onOpenSection: (section) => opened.push(section),
+  });
+  await openAdd(container);
+  assert.equal(globalThis.__dialogProps.open, true);
+
+  await React.act(async () => globalThis.__dialogProps.onUpgrade());
+
+  assert.deepEqual(opened, ["plansBilling"]);
+  assert.equal(globalThis.__dialogProps.open, false);
+});
+
+test("without a section switcher the invite dialog offers no Upgrade", async (t) => {
+  const Section = await loadSection(t);
+  render(Section, ADMIN);
+
+  assert.equal(globalThis.__dialogProps.onUpgrade, undefined);
 });

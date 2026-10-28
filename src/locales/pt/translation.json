@@ -2459,6 +2459,16 @@
           "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}.",
           "noLongerPending": "O convite para {{email}} não está mais pendente",
           "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada."
+        },
+        "selection": {
+          "count_one": "{{count}} selecionado",
+          "count_other": "{{count}} selecionados",
+          "clear": "Limpar",
+          "label": "Pessoas selecionadas",
+          "selectAllMembers": "Selecionar todos os membros",
+          "selectAllInvitations": "Selecionar todos os convites",
+          "selectRow": "Selecionar {{name}}",
+          "remove": "Remover"
         }
       },
       "role": {
@@ -4823,6 +4833,7 @@
       "emailLabel": "Endereços de e-mail",
       "emailHint": "Separe os e-mails com vírgulas. Todos recebem a mesma função.",
       "emailPlaceholder": "Pesquisar e-mail",
+      "addMore": "Adicionar mais…",
       "removeRecipient": "Remover {{email}}",
       "suggestions": "Sugestões",
       "roleLabel": "Função no espaço de trabalho",
@@ -4834,7 +4845,8 @@
       "seatCostManyUnpriced_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano.",
       "submit_one": "Enviar convite",
       "submit_other": "Enviar {{count}} convites",
-      "submitting": "Convidando…",
+      "submitting_one": "Convidando {{count}} pessoa…",
+      "submitting_other": "Convidando {{count}} pessoas…",
       "sentTitle_one": "Convite enviado",
       "sentTitle_other": "Convites enviados",
       "sentOne": "Você convidou {{email}} para {{workspace}}",
@@ -4842,9 +4854,19 @@
       "sentMany_other": "Você convidou {{count}} pessoas para {{workspace}}",
       "noEmail_one": "{{count}} convite foi criado, mas o e-mail não pôde ser entregue. Reenvie-o em Convites.",
       "noEmail_other": "{{count}} convites foram criados, mas os e-mails não puderam ser entregues. Reenvie-os em Convites.",
-      "someFailed_one": "Não foi possível convidar {{count}} endereço. Corrija-o ou remova-o para tentar novamente.",
-      "someFailed_other": "Não foi possível convidar {{count}} endereços. Corrija-os ou remova-os para tentar novamente.",
-      "tooMany": "Você pode convidar até 20 pessoas de cada vez.",
+      "someFailed_one": "{{count}} convite não foi enviado",
+      "someFailed_other": "{{count}} convites não foram enviados",
+      "tryResending": "Tentar reenviar",
+      "tooMany": "Você pode convidar até {{count}} pessoas de cada vez.",
+      "seatsLeft_one": "Resta apenas {{count}} assento. Remova {{excess}} ou faça upgrade.",
+      "seatsLeft_other": "Restam apenas {{count}} assentos. Remova {{excess}} ou faça upgrade.",
+      "seatsLeftAskOwner_one": "Resta apenas {{count}} assento. Remova {{excess}} ou peça a {{owner}} para adicionar assentos.",
+      "seatsLeftAskOwner_other": "Restam apenas {{count}} assentos. Remova {{excess}} ou peça a {{owner}} para adicionar assentos.",
+      "upgrade": "Fazer upgrade",
+      "ceilingLeft_one": "Você pode convidar mais {{count}} pessoa. Remova {{excess}} para continuar.",
+      "ceilingLeft_other": "Você pode convidar mais {{count}} pessoas. Remova {{excess}} para continuar.",
+      "skippedMany_one": "{{count}} endereço foi ignorado: já é membro ou já foi convidado.",
+      "skippedMany_other": "{{count}} endereços foram ignorados: já são membros ou já foram convidados.",
       "done": "Concluído",
       "role": {
         "admin": "Administrador do espaço de trabalho",
@@ -4855,14 +4877,15 @@
         "member": "Pode ver e editar notas."
       },
       "errors": {
-        "invalid": "{{email}} não é um endereço de e-mail válido",
-        "alreadyMember": "{{email}} já é membro",
-        "alreadyInvited": "{{email}} já tem um convite pendente. Reenvie-o em Convites.",
+        "invalid": "{{email}} não é um e-mail válido",
+        "alreadyMember": "{{email}} já é membro e foi ignorado",
+        "alreadyInvited": "{{email}} já foi convidado e foi ignorado. Reenvie o convite em Convites.",
         "seatLimit": "Este espaço de trabalho atingiu o limite de assentos.",
         "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
         "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
         "ssoRequired": "Entre com o login único (SSO) da sua empresa para convidar pessoas para {{workspace}}.",
         "sessionExpired": "Não foi possível convidar {{email}}: seu login expirou ou mudou. Entre novamente e tente outra vez.",
+        "rateLimited": "Muitos convites no momento. Tente novamente mais tarde.",
         "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente.",
         "refused": "Não foi possível convidar {{email}}: {{reason}}"
       }

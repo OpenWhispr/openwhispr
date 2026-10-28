@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  MAX_INVITE_RECIPIENTS,
   inviteSummary,
   isRetryableFailure,
   type InviteFlowEvent,
@@ -42,6 +43,11 @@ export interface InvitePeopleViewProps {
   suggestions: InviteSuggestion[];
   seatLine: string | null;
   seatCostLine: string | null;
+  canManageBilling: boolean;
+  /** Who to ask for more seats, for admins who can't buy them. */
+  billingManager: string | null;
+  /** Opens Plan & Billing; without it the seats warning offers no Upgrade. */
+  onUpgrade?: () => void;
   cancelLabel: string;
   onCancel: () => void;
   onSend: () => void;
@@ -82,7 +88,7 @@ function recipientErrorKind(recipient: InviteRecipient): InviteErrorKind | null 
   return null;
 }
 
-interface ErrorBarContent {
+interface BarContent {
   message: ReactNode;
   action?: { label: string; onClick: () => void };
 }
@@ -94,6 +100,9 @@ export function InvitePeopleView({
   suggestions,
   seatLine,
   seatCostLine,
+  canManageBilling,
+  billingManager,
+  onUpgrade,
   cancelLabel,
   onCancel,
   onSend,
@@ -130,22 +139,68 @@ export function InvitePeopleView({
     />
   );
 
-  const errorBarContent = (): ErrorBarContent | null => {
-    if (summary.tooMany) return { message: t("workspaces.invite.tooMany") };
-    const refused = summary.invalid[0] ?? summary.skipped[0];
-    if (refused) return { message: recipientMessage(refused) };
+  // At most one error, the first that applies: each blocks Send until it's fixed.
+  const errorBarContent = (): BarContent | null => {
+    if (summary.tooMany) {
+      return { message: t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS }) };
+    }
+    if (summary.invalid[0]) return { message: recipientMessage(summary.invalid[0]) };
+    if (summary.overCeiling) {
+      const { available, excess } = summary.overCeiling;
+      return {
+        message:
+          available === 0
+            ? t("workspaces.invite.errors.seatLimit")
+            : t("workspaces.invite.ceilingLeft", { count: available, excess }),
+      };
+    }
     if (summary.failed.length === 0) return null;
-    // Try again resends exactly these, so the count and the button agree with Send.
+    // Try resending resends exactly these, so the count and the button agree with Send.
     const retryable = summary.failed.filter(
       ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip.kind)
     );
     if (retryable.length === 0) return { message: recipientMessage(summary.failed[0]) };
+    const resend = { label: t("workspaces.invite.tryResending"), onClick: onSend };
+    // A 429 answers for the whole batch, so the server's "try later" says more than a count.
+    const rateLimited = retryable.some(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "rateLimited"
+    );
+    if (rateLimited) return { message: t("workspaces.invite.errors.rateLimited"), action: resend };
     return {
       message: t("workspaces.invite.someFailed", { count: retryable.length }),
-      action: { label: t("workspaces.exit.tryAgain"), onClick: onSend },
+      action: resend,
     };
   };
   const errorBar = errorBarContent();
+
+  // Warnings never block Send: the server bills a seat only when an invitation is accepted, and
+  // skipped addresses are left out of the send.
+  const warningBars: Array<BarContent & { key: string }> = [];
+  if (summary.overSeats) {
+    const { available: count, excess } = summary.overSeats;
+    const askOwner = !canManageBilling && billingManager;
+    warningBars.push({
+      key: "seats",
+      message: askOwner
+        ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
+        : t("workspaces.invite.seatsLeft", { count, excess }),
+      action:
+        canManageBilling && onUpgrade
+          ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
+          : undefined,
+    });
+  }
+  if (summary.skipped.length === 1) {
+    warningBars.push({ key: "skipped", message: recipientMessage(summary.skipped[0]) });
+  } else if (summary.skipped.length > 1) {
+    warningBars.push({
+      key: "skipped",
+      message: t("workspaces.invite.skippedMany", { count: summary.skipped.length }),
+    });
+  }
+  const sendingCount = state.recipients.filter(
+    (recipient) => recipient.state.status === "sending"
+  ).length;
 
   // The field and Send are disabled while sending, which drops focus to the page; a run that
   // leaves chips to fix returns it to the field (the Done screen focuses its own button).
@@ -243,7 +298,7 @@ export function InvitePeopleView({
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-32 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
+                    "flex max-h-40 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
                     "focus-within:border-border focus-within:ring-2 focus-within:ring-ring/40",
                     sending && "opacity-60"
                   )}
@@ -276,7 +331,7 @@ export function InvitePeopleView({
                     placeholder={
                       state.recipients.length === 0
                         ? t("workspaces.invite.emailPlaceholder")
-                        : undefined
+                        : t("workspaces.invite.addMore")
                     }
                     onChange={(event) => changeDraft(event.target.value)}
                     onKeyDown={handleKeyDown}
@@ -386,6 +441,14 @@ export function InvitePeopleView({
                 action={errorBar.action}
               />
             ) : null}
+            {warningBars.map((bar) => (
+              <WorkspaceErrorBar
+                key={bar.key}
+                tone="warning"
+                message={bar.message}
+                action={bar.action}
+              />
+            ))}
           </div>
 
           <div className="flex flex-col gap-3">
@@ -398,10 +461,10 @@ export function InvitePeopleView({
               {sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  {t("workspaces.invite.submitting")}
+                  {t("workspaces.invite.submitting", { count: sendingCount })}
                 </>
               ) : (
-                // The empty field still reads "Send invitation" rather than "Send 0 invitations".
+                // The empty field still reads "Send invite" rather than "Send 0 invites".
                 t("workspaces.invite.submit", { count: Math.max(1, summary.sendable.length) })
               )}
             </button>

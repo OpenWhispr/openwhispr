@@ -2479,6 +2479,15 @@
           "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。",
           "noLongerPending": "{{email}} 的邀请已不再处于待处理状态",
           "refreshFailed": "无法刷新邀请。此列表可能不是最新的。"
+        },
+        "selection": {
+          "count_other": "已选择 {{count}} 项",
+          "clear": "清除",
+          "label": "已选人员",
+          "selectAllMembers": "选择所有成员",
+          "selectAllInvitations": "选择所有邀请",
+          "selectRow": "选择 {{name}}",
+          "remove": "移除"
         }
       },
       "role": {
@@ -4821,6 +4830,7 @@
       "emailLabel": "电子邮件地址",
       "emailHint": "用逗号分隔多个邮箱地址。所有人将获得相同的角色。",
       "emailPlaceholder": "搜索邮箱",
+      "addMore": "添加更多…",
       "removeRecipient": "移除 {{email}}",
       "suggestions": "建议",
       "roleLabel": "工作区角色",
@@ -4829,13 +4839,19 @@
       "seatCostMany_other": "全部接受后将为你的方案增加 {{count}} 个席位 · 预计按比例收取 {{amount}}。",
       "seatCostManyUnpriced_other": "全部接受后将为你的方案增加 {{count}} 个席位。",
       "submit_other": "发送 {{count}} 份邀请",
-      "submitting": "正在邀请…",
+      "submitting_other": "正在邀请 {{count}} 人…",
       "sentTitle_other": "邀请已发送",
       "sentOne": "已邀请 {{email}} 加入 {{workspace}}",
       "sentMany_other": "已邀请 {{count}} 人加入 {{workspace}}",
       "noEmail_other": "已创建 {{count}} 份邀请，但邮件未能送达。请在“邀请”中重新发送。",
-      "someFailed_other": "{{count}} 个地址未能邀请。请修正或移除后重试。",
-      "tooMany": "一次最多可邀请 20 人。",
+      "someFailed_other": "{{count}} 份邀请未发送",
+      "tryResending": "重新发送",
+      "tooMany": "一次最多可邀请 {{count}} 人。",
+      "seatsLeft_other": "仅剩 {{count}} 个席位。请移除 {{excess}} 个，或升级套餐。",
+      "seatsLeftAskOwner_other": "仅剩 {{count}} 个席位。请移除 {{excess}} 个，或请 {{owner}} 添加席位。",
+      "upgrade": "升级",
+      "ceilingLeft_other": "还可邀请 {{count}} 人。请移除 {{excess}} 个以继续。",
+      "skippedMany_other": "已跳过 {{count}} 个地址：已是成员或已被邀请。",
       "done": "完成",
       "role": {
         "admin": "工作区管理员",
@@ -4847,13 +4863,14 @@
       },
       "errors": {
         "invalid": "{{email}} 不是有效的电子邮件地址",
-        "alreadyMember": "{{email}} 已是成员",
-        "alreadyInvited": "{{email}} 已有待处理的邀请。请在“邀请”中重新发送。",
+        "alreadyMember": "{{email}} 已是成员，已跳过",
+        "alreadyInvited": "{{email}} 已被邀请，已跳过。请在“邀请”中重新发送。",
         "seatLimit": "此工作区已达到席位上限。",
         "directoryRequired": "请先在身份提供商中分配 {{email}}。",
         "notAllowed": "你已无法再邀请他人加入 {{workspace}}。",
         "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再邀请他人加入 {{workspace}}。",
         "sessionExpired": "无法邀请 {{email}}：你的登录已过期或已更改。请重新登录后再试。",
+        "rateLimited": "当前邀请过多，请稍后再试。",
         "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。",
         "refused": "无法邀请 {{email}}：{{reason}}"
       }

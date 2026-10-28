@@ -5,6 +5,7 @@ import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../lib/utils";
 import { UserPlus } from "../icons";
 import { workspaceCan } from "../../lib/capabilities";
+import type { SettingsSectionType } from "../../lib/settingsNav";
 import { invitationStatus, rosterFor } from "../../lib/peopleRoster";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace } from "../../types/electron";
@@ -39,6 +40,8 @@ function legacyPeopleTab(): PeopleTab | null {
 
 interface Props {
   initialSubTab?: string;
+  /** Switches Settings to another section; without it the invite dialog offers no Upgrade. */
+  onOpenSection?: (section: SettingsSectionType) => void;
 }
 
 interface BodyProps {
@@ -47,6 +50,7 @@ interface BodyProps {
   onSelectTab: (tab: PeopleTab) => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  onOpenSection?: (section: SettingsSectionType) => void;
 }
 
 function PeopleBody({
@@ -55,6 +59,7 @@ function PeopleBody({
   onSelectTab,
   searchQuery,
   onSearchQueryChange,
+  onOpenSection,
 }: BodyProps): React.ReactElement {
   const { t } = useTranslation();
   const canManage = workspaceCan(workspace, "manage_members");
@@ -100,6 +105,11 @@ function PeopleBody({
     },
     [onSelectTab]
   );
+
+  const handleUpgrade = (): void => {
+    handleInviteOpenChange(false);
+    onOpenSection?.("plansBilling");
+  };
 
   const { reload } = invitations;
   const handleInvited = useCallback(
@@ -183,6 +193,7 @@ function PeopleBody({
           workspaceName={workspace.name}
           onInvited={handleInvited}
           knownEmails={knownEmails}
+          onUpgrade={onOpenSection ? handleUpgrade : undefined}
         />
       )}
     </>
@@ -191,6 +202,7 @@ function PeopleBody({
 
 export default function WorkspacePeopleSection({
   initialSubTab,
+  onOpenSection,
 }: Props): React.ReactElement | null {
   const state = useSettingsWorkspace();
   const [storedTab, setStoredTab] = useLocalStorage<string>(
@@ -219,6 +231,7 @@ export default function WorkspacePeopleSection({
           onSelectTab={setStoredTab}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
+          onOpenSection={onOpenSection}
         />
       )}
     </SettingsWorkspaceFrame>

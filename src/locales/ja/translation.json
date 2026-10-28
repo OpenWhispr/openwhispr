@@ -2479,6 +2479,15 @@
           "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。",
           "noLongerPending": "{{email}} への招待は保留中ではなくなりました",
           "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。"
+        },
+        "selection": {
+          "count_other": "{{count}} 件を選択中",
+          "clear": "クリア",
+          "label": "選択したユーザー",
+          "selectAllMembers": "すべてのメンバーを選択",
+          "selectAllInvitations": "すべての招待を選択",
+          "selectRow": "{{name}} を選択",
+          "remove": "削除"
         }
       },
       "role": {
@@ -4821,6 +4830,7 @@
       "emailLabel": "メールアドレス",
       "emailHint": "メールアドレスはカンマで区切ります。全員に同じロールが付与されます。",
       "emailPlaceholder": "メールを検索",
+      "addMore": "さらに追加…",
       "removeRecipient": "{{email}} を削除",
       "suggestions": "候補",
       "roleLabel": "ワークスペースのロール",
@@ -4829,13 +4839,19 @@
       "seatCostMany_other": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
       "seatCostManyUnpriced_other": "すべて承諾されるとプランに {{count}} 席追加されます。",
       "submit_other": "{{count}} 件の招待を送信",
-      "submitting": "招待しています…",
+      "submitting_other": "{{count}} 人を招待しています…",
       "sentTitle_other": "招待を送信しました",
       "sentOne": "{{email}} を {{workspace}} に招待しました",
       "sentMany_other": "{{count}} 人を {{workspace}} に招待しました",
       "noEmail_other": "{{count}} 件の招待を作成しましたが、メールを配信できませんでした。「招待」から再送信してください。",
-      "someFailed_other": "{{count}} 件のアドレスを招待できませんでした。修正または削除してから、もう一度お試しください。",
-      "tooMany": "一度に招待できるのは 20 人までです。",
+      "someFailed_other": "{{count}} 件の招待を送信できませんでした",
+      "tryResending": "再送信する",
+      "tooMany": "一度に招待できるのは {{count}} 人までです。",
+      "seatsLeft_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、アップグレードしてください。",
+      "seatsLeftAskOwner_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、{{owner}} にシートの追加を依頼してください。",
+      "upgrade": "アップグレード",
+      "ceilingLeft_other": "あと {{count}} 人を招待できます。続けるには {{excess}} 件を削除してください。",
+      "skippedMany_other": "{{count}} 件のアドレスをスキップしました（すでにメンバーか、招待済みです）。",
       "done": "完了",
       "role": {
         "admin": "ワークスペースの管理者",
@@ -4847,13 +4863,14 @@
       },
       "errors": {
         "invalid": "{{email}} は有効なメールアドレスではありません",
-        "alreadyMember": "{{email}} はすでにメンバーです",
-        "alreadyInvited": "{{email}} にはすでに保留中の招待があります。「招待」から再送信してください。",
+        "alreadyMember": "{{email}} はすでにメンバーのため、スキップしました",
+        "alreadyInvited": "{{email}} は招待済みのため、スキップしました。「招待」から再送信してください。",
         "seatLimit": "このワークスペースはシート数の上限に達しました。",
         "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
         "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
         "ssoRequired": "{{workspace}} にユーザーを招待するには、会社のシングルサインオン (SSO) でサインインしてください。",
         "sessionExpired": "{{email}} を招待できませんでした。サインインの有効期限が切れたか、変更されました。もう一度サインインしてから、やり直してください。",
+        "rateLimited": "現在、招待が多すぎます。しばらくしてからもう一度お試しください。",
         "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
         "refused": "{{email}} を招待できませんでした：{{reason}}"
       }

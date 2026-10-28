@@ -2532,6 +2532,16 @@
           "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}.",
           "noLongerPending": "La invitación para {{email}} ya no está pendiente",
           "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día."
+        },
+        "selection": {
+          "count_one": "{{count}} seleccionado",
+          "count_other": "{{count}} seleccionados",
+          "clear": "Borrar",
+          "label": "Personas seleccionadas",
+          "selectAllMembers": "Seleccionar todos los miembros",
+          "selectAllInvitations": "Seleccionar todas las invitaciones",
+          "selectRow": "Seleccionar {{name}}",
+          "remove": "Quitar"
         }
       },
       "role": {
@@ -4823,6 +4833,7 @@
       "emailLabel": "Direcciones de correo",
       "emailHint": "Separa los correos con comas. Todos reciben el mismo rol.",
       "emailPlaceholder": "Buscar correo",
+      "addMore": "Añadir más…",
       "removeRecipient": "Quitar {{email}}",
       "suggestions": "Sugerencias",
       "roleLabel": "Rol en el espacio de trabajo",
@@ -4834,7 +4845,8 @@
       "seatCostManyUnpriced_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan.",
       "submit_one": "Enviar invitación",
       "submit_other": "Enviar {{count}} invitaciones",
-      "submitting": "Invitando…",
+      "submitting_one": "Invitando a {{count}} persona…",
+      "submitting_other": "Invitando a {{count}} personas…",
       "sentTitle_one": "Invitación enviada",
       "sentTitle_other": "Invitaciones enviadas",
       "sentOne": "Invitaste a {{email}} a {{workspace}}",
@@ -4842,9 +4854,19 @@
       "sentMany_other": "Invitaste a {{count}} personas a {{workspace}}",
       "noEmail_one": "Se creó {{count}} invitación, pero no se pudo entregar su correo. Reenvíala desde Invitaciones.",
       "noEmail_other": "Se crearon {{count}} invitaciones, pero no se pudieron entregar sus correos. Reenvíalas desde Invitaciones.",
-      "someFailed_one": "No se pudo invitar a {{count}} dirección. Corrígela o quítala para volver a intentarlo.",
-      "someFailed_other": "No se pudo invitar a {{count}} direcciones. Corrígelas o quítalas para volver a intentarlo.",
-      "tooMany": "Puedes invitar hasta 20 personas a la vez.",
+      "someFailed_one": "{{count}} invitación no se envió",
+      "someFailed_other": "{{count}} invitaciones no se enviaron",
+      "tryResending": "Reintentar el envío",
+      "tooMany": "Puedes invitar hasta {{count}} personas a la vez.",
+      "seatsLeft_one": "Solo queda {{count}} puesto. Quita {{excess}} o mejora tu plan.",
+      "seatsLeft_other": "Solo quedan {{count}} puestos. Quita {{excess}} o mejora tu plan.",
+      "seatsLeftAskOwner_one": "Solo queda {{count}} puesto. Quita {{excess}} o pide a {{owner}} que añada puestos.",
+      "seatsLeftAskOwner_other": "Solo quedan {{count}} puestos. Quita {{excess}} o pide a {{owner}} que añada puestos.",
+      "upgrade": "Mejorar plan",
+      "ceilingLeft_one": "Puedes invitar a {{count}} persona más. Quita {{excess}} para continuar.",
+      "ceilingLeft_other": "Puedes invitar a {{count}} personas más. Quita {{excess}} para continuar.",
+      "skippedMany_one": "Se omitió {{count}} dirección: ya es miembro o ya tiene invitación.",
+      "skippedMany_other": "Se omitieron {{count}} direcciones: ya son miembros o ya tienen invitación.",
       "done": "Listo",
       "role": {
         "admin": "Administrador del espacio de trabajo",
@@ -4855,14 +4877,15 @@
         "member": "Puede ver y editar notas."
       },
       "errors": {
-        "invalid": "{{email}} no es una dirección de correo válida",
-        "alreadyMember": "{{email}} ya es miembro",
-        "alreadyInvited": "{{email}} ya tiene una invitación pendiente. Reenvíala desde Invitaciones.",
+        "invalid": "{{email}} no es un correo válido",
+        "alreadyMember": "{{email}} ya es miembro; se omitió",
+        "alreadyInvited": "{{email}} ya tenía una invitación; se omitió. Reenvíala desde Invitaciones.",
         "seatLimit": "Este espacio de trabajo alcanzó su límite de puestos.",
         "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
         "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
         "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para invitar personas a {{workspace}}.",
         "sessionExpired": "No se pudo invitar a {{email}}: tu sesión caducó o cambió. Vuelve a iniciar sesión e inténtalo de nuevo.",
+        "rateLimited": "Hay demasiadas invitaciones en este momento. Inténtalo de nuevo más tarde.",
         "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
         "refused": "No se pudo invitar a {{email}}: {{reason}}"
       }

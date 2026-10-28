@@ -18,6 +18,9 @@ async function mountDialog(t, props) {
       "__seatPreview",
       "__sendGate",
       "__previewCalls",
+      "__workspaces",
+      "__sendOutcome",
+      "__refreshCalls",
     ]) {
       delete globalThis[key];
     }
@@ -55,12 +58,20 @@ async function mountDialog(t, props) {
           async sendInvitations(input) {
             globalThis.__sendCalls.push(input);
             if (globalThis.__sendGate) await globalThis.__sendGate;
-            for (const email of input.emails) input.onResult(email, { ok: true, emailSent: true });
+            for (const email of input.emails) {
+              input.onResult(email, globalThis.__sendOutcome ?? { ok: true, emailSent: true });
+            }
           },
         };
       `,
       "/stores/workspaceStore": `
-        export const useWorkspaceStore = (selector) => selector({ workspaces: [] });
+        export const useWorkspaceStore = (selector) =>
+          selector({ workspaces: globalThis.__workspaces ?? [] });
+        useWorkspaceStore.getState = () => ({
+          refresh: async (options) => {
+            (globalThis.__refreshCalls ??= []).push(options);
+          },
+        });
       `,
       "/services/WorkspacesService": `
         export const WorkspacesService = {
@@ -271,4 +282,96 @@ test("closing the page mid-send stops the rest of the run", async (t) => {
   release();
   await sending;
   assert.deepEqual(invited, []);
+});
+
+const WORKSPACE = { id: "w1", name: "Acme", role: "admin", seats: 20, seat_limit: 500 };
+
+async function mountWithWorkspace(t, workspace, props = {}) {
+  globalThis.__workspaces = [workspace];
+  return mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    ...props,
+  });
+}
+
+test("seats left come from the workspace list", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats: 20,
+    seats_used: 10,
+    seat_limit: 500,
+  });
+
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
+});
+
+test("a free workspace gets no seat warning", async (t) => {
+  // A free workspace's seats is a placeholder 1, so it says nothing about room left.
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: false,
+    seats: 1,
+    seats_used: 3,
+  });
+
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: 497 });
+});
+
+test("an older API without seat_limit has no ceiling check", async (t) => {
+  const { seat_limit: _omitted, ...older } = WORKSPACE;
+  const { latest } = await mountWithWorkspace(t, {
+    ...older,
+    has_subscription: true,
+    seats_used: 18,
+  });
+
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 2, ceilingLeft: null });
+});
+
+test("the view learns who manages billing and how to upgrade", async (t) => {
+  const onUpgrade = () => {};
+  const { latest } = await mountWithWorkspace(
+    t,
+    { ...WORKSPACE, role: "admin", billing_manager: "Olivia" },
+    { onUpgrade }
+  );
+
+  assert.equal(latest().canManageBilling, false);
+  assert.equal(latest().billingManager, "Olivia");
+  assert.equal(latest().onUpgrade, onUpgrade);
+});
+
+test("an owner can upgrade from the invite dialog", async (t) => {
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, role: "owner" });
+
+  assert.equal(latest().canManageBilling, true);
+  assert.equal(latest().billingManager, null);
+});
+
+test("a ceiling refusal refreshes the workspace list so the seats catch up", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "seatLimit", available: 0 };
+  const { latest } = await mountWithWorkspace(
+    t,
+    { ...WORKSPACE, seats_used: 499 },
+    {
+      initialEmail: "a@x.com",
+    }
+  );
+
+  await React.act(async () => latest().onSend());
+
+  assert.deepEqual(globalThis.__refreshCalls, [{ fresh: true }]);
+  assert.equal(latest().state.seats.ceilingLeft, 0);
+});
+
+test("a run without a seat refusal leaves the workspace list alone", async (t) => {
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, { initialEmail: "a@x.com" });
+
+  await React.act(async () => latest().onSend());
+
+  assert.equal(globalThis.__refreshCalls, undefined);
 });
