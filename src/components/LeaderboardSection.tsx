@@ -661,7 +661,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return <LeaderboardSkeleton />;
-  if (accessError && !access) {
+  if (accessError && (!access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}

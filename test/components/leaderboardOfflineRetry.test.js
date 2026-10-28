@@ -19,7 +19,7 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-leaderboard-retry-",
     mockModules: {
-      "/hooks/useAuth": `
+      "/useAuth": `
         export const useAuth = () => ({
           isLoaded: true,
           isSignedIn: true,
@@ -29,14 +29,10 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
         });
       `,
       "/hooks/useSettings": "export const useSettings = () => ({ dataRetentionEnabled: true });",
-      "/hooks/useLeaderboardParticipation": `
-        export const useLeaderboardParticipation = () => ({
-          enabled: true, ready: true, error: null, updating: false, leavePending: false,
-        });
-      `,
       "/lib/auth": "export const signInWithSSO = async () => ({});",
       "/lib/authRequestContext": `
         export const getValidatedAuthGeneration = () => globalThis.__leaderboardRetry.offline ? null : 1;
+        export const getAuthRequestContextSnapshot = () => ({ sessionUserId: "user-a" });
       `,
       "/stores/workspaceStore": `
         const state = { loaded: true, workspaces: [] };
@@ -47,6 +43,8 @@ test("leaderboard Retry reloads online and confirms offline sessions with or wit
       `,
       "/services/LeaderboardService": `
         export const LeaderboardService = {
+          flushPendingLeave: async () => false,
+          getParticipation: async () => ({ enabled: true, configured: true }),
           getAccess: async () => {
             globalThis.__leaderboardRetry.calls.access += 1;
             return {
