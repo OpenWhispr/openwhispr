@@ -6,6 +6,7 @@ import type { LanguageModel } from "ai";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
+import { openRouterHeaders } from "../../helpers/openRouterHeaders";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -62,7 +63,7 @@ export async function getAIModel(
       return createOpenAI({
         apiKey,
         baseURL,
-        headers: openCodeSessionHeaders(baseURL),
+        headers: { ...openCodeSessionHeaders(baseURL), ...openRouterHeaders(baseURL) },
       }).chat(model);
     case "openrouter": {
       const reasoning = opts?.disableThinking
@@ -74,6 +75,7 @@ export async function getAIModel(
       return createOpenAI({
         apiKey,
         baseURL,
+        headers: openRouterHeaders(baseURL),
         ...(reasoning ? { fetch: withReasoning(reasoning) } : {}),
       }).chat(model);
     }

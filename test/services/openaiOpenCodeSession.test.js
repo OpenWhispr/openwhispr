@@ -129,5 +129,19 @@ test("other custom endpoints do not get the OpenCode header", async (t) => {
   );
   for (const r of posts) {
     assert.equal("x-opencode-session" in r.headers, false, `${r.endpoint} carried the header`);
+    assert.equal("HTTP-Referer" in r.headers, false);
+  }
+});
+
+test("Custom OpenRouter cleanup keeps attribution through endpoint fallback", async (t) => {
+  const requests = [];
+  installFetchRecorder(t, requests);
+  assert.equal(await callWithBase("https://openrouter.ai/api/v1"), "Cleaned");
+  const posts = requests.filter((r) => r.method === "POST");
+  assert.equal(posts.length, 2);
+  for (const request of posts) {
+    assert.equal(request.headers["HTTP-Referer"], "https://openwhispr.com");
+    assert.equal(request.headers["X-OpenRouter-Title"], "OpenWhispr");
+    assert.equal(request.headers.Authorization, "Bearer test-key");
   }
 });

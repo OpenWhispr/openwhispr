@@ -294,6 +294,24 @@ test("retry: plain custom endpoints use Bearer auth at the configured URL", asyn
   assert.equal(result.success, true);
   assert.equal(fetches[0].url, "https://stt.parasail.example.com/v1/audio/transcriptions");
   assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+  assert.equal(fetches[0].init.headers["HTTP-Referer"], undefined);
+  assert.equal(fetches[0].init.headers["X-OpenRouter-Title"], undefined);
+});
+
+test("retry: Custom OpenRouter requests carry app attribution and retain their key", async () => {
+  fetches.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    cloudTranscriptionBaseUrl: "https://openrouter.ai/api/v1",
+    cloudTranscriptionModel: "openai/gpt-4o-mini-transcribe",
+  });
+  assert.equal(result.success, true, result.error);
+  assert.equal(fetches[0].url, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+  assert.equal(fetches[0].init.headers["HTTP-Referer"], "https://openwhispr.com");
+  assert.equal(fetches[0].init.headers["X-OpenRouter-Title"], "OpenWhispr");
 });
 
 const CUSTOM_SETTINGS = {
@@ -778,6 +796,23 @@ test("upload: sentinel custom URL fails closed before any request", async () => 
   assert.equal(result.success, false);
   assert.equal(result.code, "CUSTOM_ENDPOINT_INVALID");
   assert.equal(fetches.length, 0);
+});
+
+test("upload: Custom OpenRouter requests carry app attribution and retain their key", async () => {
+  fetches.length = 0;
+  const result = await invokeUpload({
+    apiKey: "ck-custom",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "openai/gpt-4o-mini-transcribe",
+    provider: "custom",
+    language: "",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, true, result.error);
+  assert.equal(fetches[0].url, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.equal(fetches[0].init.headers.Authorization, "Bearer ck-custom");
+  assert.equal(fetches[0].init.headers["HTTP-Referer"], "https://openwhispr.com");
+  assert.equal(fetches[0].init.headers["X-OpenRouter-Title"], "OpenWhispr");
 });
 
 test("upload: a custom URL on Tinfoil's host is refused in the main process", async () => {
