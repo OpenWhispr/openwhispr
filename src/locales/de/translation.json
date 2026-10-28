@@ -1754,7 +1754,18 @@
           "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
           "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden.",
           "noLongerPending": "Die Einladung an {{email}} ist nicht mehr offen",
-          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet."
+          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
+          "cancelSelected": "Einladungen zurückziehen",
+          "resendSelected": "Einladungen erneut senden",
+          "resendingSelected": "Wird erneut gesendet…",
+          "resentMany_one": "Es wurde {{count}} Einladung erneut gesendet.",
+          "resentMany_other": "Es wurden {{count}} Einladungen erneut gesendet.",
+          "resentPartial_one": "{{count}} Einladung erneut gesendet.",
+          "resentPartial_other": "{{count}} Einladungen erneut gesendet.",
+          "resendFailedSome_one": "Die Einladung an {{email}} ist fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedSome_other": "{{count}} Einladungen sind fehlgeschlagen. Versuchen Sie es erneut über Aktionen.",
+          "resendFailedAll_one": "{{count}} Einladung konnte nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "resendFailedAll_other": "{{count}} Einladungen konnten nicht erneut gesendet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
         },
         "selection": {
           "count_one": "{{count}} ausgewählt",
@@ -3255,6 +3266,17 @@
       "done": "Einladung zurückgezogen",
       "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
       "notAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} zurückzuziehen."
+    },
+    "cancelInvitations": {
+      "title_one": "{{count}} Einladung zurückziehen?",
+      "title_other": "{{count}} Einladungen zurückziehen?",
+      "body": "Die Personen können mit diesen Einladungen nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladungen behalten",
+      "confirm": "Einladungen zurückziehen",
+      "done_one": "{{count}} Einladung zurückgezogen.",
+      "done_other": "{{count}} Einladungen zurückgezogen.",
+      "partial_one": "{{count}} Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "partial_other": "{{count}} Einladungen konnten nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
     },
     "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen in {{workspace}} zu verwalten.",
     "transfer": {

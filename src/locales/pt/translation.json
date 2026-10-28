@@ -2458,7 +2458,18 @@
           "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente.",
           "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}.",
           "noLongerPending": "O convite para {{email}} não está mais pendente",
-          "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada."
+          "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada.",
+          "cancelSelected": "Cancelar convites",
+          "resendSelected": "Reenviar convites",
+          "resendingSelected": "Reenviando…",
+          "resentMany_one": "Foi reenviado {{count}} convite.",
+          "resentMany_other": "Foram reenviados {{count}} convites.",
+          "resentPartial_one": "{{count}} convite reenviado.",
+          "resentPartial_other": "{{count}} convites reenviados.",
+          "resendFailedSome_one": "O convite para {{email}} falhou. Tente novamente em Ações.",
+          "resendFailedSome_other": "{{count}} convites falharam. Tente novamente em Ações.",
+          "resendFailedAll_one": "Não foi possível reenviar {{count}} convite. Verifique sua conexão e tente novamente.",
+          "resendFailedAll_other": "Não foi possível reenviar {{count}} convites. Verifique sua conexão e tente novamente."
         },
         "selection": {
           "count_one": "{{count}} selecionado",
@@ -4995,6 +5006,17 @@
       "done": "Convite cancelado",
       "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente.",
       "notAllowed": "Você não tem mais permissão para cancelar convites em {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Cancelar {{count}} convite?",
+      "title_other": "Cancelar {{count}} convites?",
+      "body": "Essas pessoas não poderão entrar com estes convites. Os membros atuais mantêm o acesso.",
+      "keep": "Manter convites",
+      "confirm": "Cancelar convites",
+      "done_one": "{{count}} convite cancelado.",
+      "done_other": "{{count}} convites cancelados.",
+      "partial_one": "Não foi possível cancelar {{count}} convite. Verifique sua conexão e tente novamente.",
+      "partial_other": "Não foi possível cancelar {{count}} convites. Verifique sua conexão e tente novamente."
     },
     "ssoRequired": "Entre com o login único (SSO) da sua empresa para gerenciar as pessoas de {{workspace}}.",
     "transfer": {

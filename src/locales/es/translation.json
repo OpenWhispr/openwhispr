@@ -2531,7 +2531,18 @@
           "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo.",
           "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}.",
           "noLongerPending": "La invitación para {{email}} ya no está pendiente",
-          "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día."
+          "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día.",
+          "cancelSelected": "Cancelar invitaciones",
+          "resendSelected": "Reenviar invitaciones",
+          "resendingSelected": "Reenviando…",
+          "resentMany_one": "Se reenvió {{count}} invitación.",
+          "resentMany_other": "Se reenviaron {{count}} invitaciones.",
+          "resentPartial_one": "{{count}} invitación reenviada.",
+          "resentPartial_other": "{{count}} invitaciones reenviadas.",
+          "resendFailedSome_one": "La invitación de {{email}} falló. Reintenta desde Acciones.",
+          "resendFailedSome_other": "{{count}} invitaciones fallaron. Reintenta desde Acciones.",
+          "resendFailedAll_one": "No se pudo reenviar {{count}} invitación. Comprueba tu conexión e inténtalo de nuevo.",
+          "resendFailedAll_other": "No se pudieron reenviar {{count}} invitaciones. Comprueba tu conexión e inténtalo de nuevo."
         },
         "selection": {
           "count_one": "{{count}} seleccionado",
@@ -4995,6 +5006,17 @@
       "done": "Invitación cancelada",
       "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo.",
       "notAllowed": "Ya no tienes permiso para cancelar invitaciones en {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "¿Cancelar {{count}} invitación?",
+      "title_other": "¿Cancelar {{count}} invitaciones?",
+      "body": "No podrán unirse con estas invitaciones. Los miembros actuales conservan su acceso.",
+      "keep": "Conservar invitaciones",
+      "confirm": "Cancelar invitaciones",
+      "done_one": "Se canceló {{count}} invitación.",
+      "done_other": "Se cancelaron {{count}} invitaciones.",
+      "partial_one": "No se pudo cancelar {{count}} invitación. Comprueba tu conexión e inténtalo de nuevo.",
+      "partial_other": "No se pudieron cancelar {{count}} invitaciones. Comprueba tu conexión e inténtalo de nuevo."
     },
     "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para gestionar a las personas de {{workspace}}.",
     "transfer": {

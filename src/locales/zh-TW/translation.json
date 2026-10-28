@@ -2478,7 +2478,14 @@
           "resendFailed": "無法向 {{email}} 重新傳送邀請。請取消該邀請，然後重新邀請。",
           "resendNotAllowed": "你已無權在 {{workspace}} 中重新傳送邀請。",
           "noLongerPending": "{{email}} 的邀請已不再處於待處理狀態",
-          "refreshFailed": "無法重新整理邀請。此清單可能不是最新的。"
+          "refreshFailed": "無法重新整理邀請。此清單可能不是最新的。",
+          "cancelSelected": "取消邀請",
+          "resendSelected": "重新傳送邀請",
+          "resendingSelected": "正在重新傳送…",
+          "resentMany_other": "已重新傳送 {{count}} 個邀請。",
+          "resentPartial_other": "{{count}} 個邀請已重新傳送。",
+          "resendFailedSome_other": "{{count}} 個邀請傳送失敗。請在「操作」中重試。",
+          "resendFailedAll_other": "無法重新傳送 {{count}} 個邀請。請檢查網路連線後再試一次。"
         },
         "selection": {
           "count_other": "已選取 {{count}} 項",
@@ -4973,6 +4980,14 @@
       "done": "邀請已取消",
       "failed": "無法取消邀請。請檢查網路連線後再試一次。",
       "notAllowed": "你已無權取消 {{workspace}} 中的邀請。"
+    },
+    "cancelInvitations": {
+      "title_other": "要取消 {{count}} 個邀請嗎？",
+      "body": "對方將無法使用這些邀請加入。現有成員的存取權限不受影響。",
+      "keep": "保留邀請",
+      "confirm": "取消邀請",
+      "done_other": "已取消 {{count}} 個邀請。",
+      "partial_other": "無法取消 {{count}} 個邀請。請檢查網路連線後再試一次。"
     },
     "ssoRequired": "請先使用公司的單一登入 (SSO) 登入，再管理 {{workspace}} 的成員。",
     "transfer": {

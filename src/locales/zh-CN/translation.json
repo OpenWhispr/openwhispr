@@ -2478,7 +2478,14 @@
           "resendFailed": "无法向 {{email}} 重新发送邀请。请取消该邀请，然后重新邀请。",
           "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。",
           "noLongerPending": "{{email}} 的邀请已不再处于待处理状态",
-          "refreshFailed": "无法刷新邀请。此列表可能不是最新的。"
+          "refreshFailed": "无法刷新邀请。此列表可能不是最新的。",
+          "cancelSelected": "取消邀请",
+          "resendSelected": "重新发送邀请",
+          "resendingSelected": "正在重新发送…",
+          "resentMany_other": "已重新发送 {{count}} 个邀请。",
+          "resentPartial_other": "{{count}} 个邀请已重新发送。",
+          "resendFailedSome_other": "{{count}} 个邀请发送失败。请在“操作”中重试。",
+          "resendFailedAll_other": "无法重新发送 {{count}} 个邀请。请检查网络连接后重试。"
         },
         "selection": {
           "count_other": "已选择 {{count}} 项",
@@ -4973,6 +4980,14 @@
       "done": "邀请已取消",
       "failed": "无法取消邀请。请检查网络连接后重试。",
       "notAllowed": "你已无权取消 {{workspace}} 中的邀请。"
+    },
+    "cancelInvitations": {
+      "title_other": "要取消 {{count}} 个邀请吗？",
+      "body": "对方将无法使用这些邀请加入。现有成员的访问权限不受影响。",
+      "keep": "保留邀请",
+      "confirm": "取消邀请",
+      "done_other": "已取消 {{count}} 个邀请。",
+      "partial_other": "无法取消 {{count}} 个邀请。请检查网络连接后重试。"
     },
     "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再管理 {{workspace}} 的成员。",
     "transfer": {

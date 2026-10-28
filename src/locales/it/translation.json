@@ -2479,7 +2479,18 @@
           "resendFailed": "Impossibile reinviare l'invito a {{email}}. Annullalo e invita di nuovo la persona.",
           "resendNotAllowed": "Non hai più l'autorizzazione per reinviare inviti in {{workspace}}.",
           "noLongerPending": "L'invito per {{email}} non è più in sospeso",
-          "refreshFailed": "Impossibile aggiornare gli inviti. Questo elenco potrebbe non essere aggiornato."
+          "refreshFailed": "Impossibile aggiornare gli inviti. Questo elenco potrebbe non essere aggiornato.",
+          "cancelSelected": "Annulla inviti",
+          "resendSelected": "Reinvia inviti",
+          "resendingSelected": "Reinvio in corso…",
+          "resentMany_one": "Reinviato {{count}} invito.",
+          "resentMany_other": "Reinviati {{count}} inviti.",
+          "resentPartial_one": "{{count}} invito reinviato.",
+          "resentPartial_other": "{{count}} inviti reinviati.",
+          "resendFailedSome_one": "L'invito per {{email}} non è riuscito. Riprova da Azioni.",
+          "resendFailedSome_other": "{{count}} inviti non sono riusciti. Riprova da Azioni.",
+          "resendFailedAll_one": "Impossibile reinviare {{count}} invito. Controlla la connessione e riprova.",
+          "resendFailedAll_other": "Impossibile reinviare {{count}} inviti. Controlla la connessione e riprova."
         },
         "selection": {
           "count_one": "{{count}} selezionato",
@@ -4995,6 +5006,17 @@
       "done": "Invito annullato",
       "failed": "Impossibile annullare l'invito. Controlla la connessione e riprova.",
       "notAllowed": "Non hai più l'autorizzazione per annullare gli inviti in {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Annullare {{count}} invito?",
+      "title_other": "Annullare {{count}} inviti?",
+      "body": "Queste persone non potranno unirsi con questi inviti. I membri attuali mantengono l'accesso.",
+      "keep": "Mantieni inviti",
+      "confirm": "Annulla inviti",
+      "done_one": "Annullato {{count}} invito.",
+      "done_other": "Annullati {{count}} inviti.",
+      "partial_one": "Impossibile annullare {{count}} invito. Controlla la connessione e riprova.",
+      "partial_other": "Impossibile annullare {{count}} inviti. Controlla la connessione e riprova."
     },
     "ssoRequired": "Accedi con il Single Sign-On (SSO) della tua azienda per gestire le persone in {{workspace}}.",
     "transfer": {

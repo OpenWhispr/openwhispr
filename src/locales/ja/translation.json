@@ -2478,7 +2478,14 @@
           "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。",
           "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。",
           "noLongerPending": "{{email}} への招待は保留中ではなくなりました",
-          "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。"
+          "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。",
+          "cancelSelected": "招待を取り消す",
+          "resendSelected": "招待を再送信",
+          "resendingSelected": "再送信しています…",
+          "resentMany_other": "{{count}} 件の招待を再送信しました。",
+          "resentPartial_other": "{{count}} 件を再送信しました。",
+          "resendFailedSome_other": "{{count}} 件の招待が失敗しました。「操作」から再試行してください。",
+          "resendFailedAll_other": "{{count}} 件の招待を再送信できませんでした。接続を確認して、もう一度お試しください。"
         },
         "selection": {
           "count_other": "{{count}} 件を選択中",
@@ -4973,6 +4980,14 @@
       "done": "招待を取り消しました",
       "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。",
       "notAllowed": "{{workspace}} の招待を取り消す権限がなくなりました。"
+    },
+    "cancelInvitations": {
+      "title_other": "{{count}} 件の招待を取り消しますか？",
+      "body": "これらの招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
+      "keep": "招待を残す",
+      "confirm": "招待を取り消す",
+      "done_other": "{{count}} 件の招待を取り消しました。",
+      "partial_other": "{{count}} 件の招待を取り消せませんでした。接続を確認して、もう一度お試しください。"
     },
     "ssoRequired": "{{workspace}} のメンバーを管理するには、会社のシングルサインオン (SSO) でサインインしてください。",
     "transfer": {

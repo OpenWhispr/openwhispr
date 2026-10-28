@@ -1754,7 +1754,18 @@
           "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne.",
           "resendNotAllowed": "Vous n'avez plus l'autorisation de renvoyer des invitations dans {{workspace}}.",
           "noLongerPending": "L'invitation pour {{email}} n'est plus en attente",
-          "refreshFailed": "Impossible d'actualiser les invitations. Cette liste n'est peut-être pas à jour."
+          "refreshFailed": "Impossible d'actualiser les invitations. Cette liste n'est peut-être pas à jour.",
+          "cancelSelected": "Annuler les invitations",
+          "resendSelected": "Renvoyer les invitations",
+          "resendingSelected": "Renvoi…",
+          "resentMany_one": "{{count}} invitation a été renvoyée.",
+          "resentMany_other": "{{count}} invitations ont été renvoyées.",
+          "resentPartial_one": "{{count}} invitation renvoyée.",
+          "resentPartial_other": "{{count}} invitations renvoyées.",
+          "resendFailedSome_one": "L'invitation de {{email}} a échoué. Réessayez depuis Actions.",
+          "resendFailedSome_other": "{{count}} invitations ont échoué. Réessayez depuis Actions.",
+          "resendFailedAll_one": "Impossible de renvoyer {{count}} invitation. Vérifiez votre connexion et réessayez.",
+          "resendFailedAll_other": "Impossible de renvoyer {{count}} invitations. Vérifiez votre connexion et réessayez."
         },
         "selection": {
           "count_one": "{{count}} sélectionné",
@@ -3255,6 +3266,17 @@
       "done": "Invitation annulée",
       "failed": "Impossible d'annuler l'invitation. Vérifiez votre connexion et réessayez.",
       "notAllowed": "Vous n'avez plus l'autorisation d'annuler des invitations dans {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Annuler {{count}} invitation ?",
+      "title_other": "Annuler {{count}} invitations ?",
+      "body": "Ces personnes ne pourront pas rejoindre l'espace avec ces invitations. Les membres actuels conservent leur accès.",
+      "keep": "Conserver les invitations",
+      "confirm": "Annuler les invitations",
+      "done_one": "{{count}} invitation annulée.",
+      "done_other": "{{count}} invitations annulées.",
+      "partial_one": "Impossible d'annuler {{count}} invitation. Vérifiez votre connexion et réessayez.",
+      "partial_other": "Impossible d'annuler {{count}} invitations. Vérifiez votre connexion et réessayez."
     },
     "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour gérer les personnes de {{workspace}}.",
     "transfer": {

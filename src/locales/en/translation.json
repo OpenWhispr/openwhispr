@@ -1754,7 +1754,18 @@
           "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
           "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}.",
           "noLongerPending": "The invitation for {{email}} is no longer pending",
-          "refreshFailed": "Couldn't refresh invitations. This list may be out of date."
+          "refreshFailed": "Couldn't refresh invitations. This list may be out of date.",
+          "cancelSelected": "Cancel invites",
+          "resendSelected": "Resend invites",
+          "resendingSelected": "Resending…",
+          "resentMany_one": "Resent {{count}} invitation.",
+          "resentMany_other": "Resent {{count}} invitations.",
+          "resentPartial_one": "{{count}} invite resent.",
+          "resentPartial_other": "{{count}} invites resent.",
+          "resendFailedSome_one": "{{email}}'s invite failed. Retry from Actions.",
+          "resendFailedSome_other": "{{count}} invites failed. Retry from Actions.",
+          "resendFailedAll_one": "Couldn't resend {{count}} invitation. Check your connection and try again.",
+          "resendFailedAll_other": "Couldn't resend {{count}} invitations. Check your connection and try again."
         },
         "selection": {
           "count_one": "{{count}} selected",
@@ -3255,6 +3266,17 @@
       "done": "Invitation canceled",
       "failed": "Couldn't cancel the invitation. Check your connection and try again.",
       "notAllowed": "You no longer have permission to cancel invitations in {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Cancel {{count}} invitation?",
+      "title_other": "Cancel {{count}} invitations?",
+      "body": "They won't be able to join with these invitations. Current members keep their access.",
+      "keep": "Keep invitations",
+      "confirm": "Cancel invites",
+      "done_one": "Canceled {{count}} invitation.",
+      "done_other": "Canceled {{count}} invitations.",
+      "partial_one": "{{count}} invitation couldn't be canceled. Check your connection and try again.",
+      "partial_other": "{{count}} invitations couldn't be canceled. Check your connection and try again."
     },
     "ssoRequired": "Sign in with your company's single sign-on to manage people in {{workspace}}.",
     "transfer": {
