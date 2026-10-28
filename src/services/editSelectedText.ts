@@ -19,13 +19,23 @@ import { getDictionaryHintWords } from "../utils/snippets";
 import { getAgentName } from "../utils/agentName";
 import { usePolicyStore } from "../stores/policyStore";
 import { isScreenContextAllowed } from "../stores/policyRules";
+import { resolveDictationToneStyle, type ToneAppCategory } from "../config/toneStyle";
+import { selectionEditToneSentence } from "../config/prompts/toneStyle";
 import type { ChatImageAttachment } from "../components/chat/types";
 
 /** Null means the instruction asks about the selection; answer it in chat. */
 export async function editSelectedText(
   instruction: string,
   selectedText: string,
-  { attachment, signal }: { attachment?: ChatImageAttachment | null; signal: AbortSignal }
+  {
+    attachment,
+    appCategory,
+    signal,
+  }: {
+    attachment?: ChatImageAttachment | null;
+    appCategory?: ToneAppCategory | null;
+    signal: AbortSignal;
+  }
 ): Promise<string | null> {
   const settings = getSettings();
   const agentName = getAgentName();
@@ -42,18 +52,27 @@ export async function editSelectedText(
   const local = provider === "local";
   const marker = local ? "" : `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
   const dictionary = getDictionaryHintWords(settings);
+  const toneSentence = settings.toneStyleEnabled
+    ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
+    : "";
   const systemPrompt = local
     ? buildLocalSelectionEditSystemPrompt({
         customPrompt: settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName),
         dictionary,
+        toneSentence,
       })
     : buildSelectionEditSystemPrompt(
-        resolvePrompt("dictationAgent", {
-          agentName,
-          language: settings.preferredLanguage,
-          customDictionary: dictionary,
-          uiLanguage: settings.uiLanguage,
-        }),
+        [
+          resolvePrompt("dictationAgent", {
+            agentName,
+            language: settings.preferredLanguage,
+            customDictionary: dictionary,
+            uiLanguage: settings.uiLanguage,
+          }),
+          toneSentence,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
         marker
       );
   const config: ReasoningConfig = {

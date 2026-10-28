@@ -20,6 +20,7 @@ import {
   useConnectorApprovalStore,
 } from "../../stores/connectorApprovalStore";
 import { editSelectedText } from "../../services/editSelectedText";
+import type { ToneAppCategory } from "../../config/toneStyle";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
@@ -62,7 +63,7 @@ interface RequestExtras {
 }
 
 type SelectionEditTarget =
-  | { kind: "external"; sessionId: string; text: string }
+  | { kind: "external"; sessionId: string; text: string; appCategory: ToneAppCategory | null }
   | {
       kind: "approval";
       key: string;
@@ -73,6 +74,7 @@ type SelectionEditTarget =
       start: number;
       end: number;
       text: string;
+      appCategory: ToneAppCategory;
     };
 
 function selectedApprovalField(): SelectionEditTarget | null {
@@ -101,6 +103,7 @@ function selectedApprovalField(): SelectionEditTarget | null {
     start,
     end,
     text: field.value.slice(start, end),
+    appCategory: entry.preview.verbKey === "email" ? "email" : "work",
   };
 }
 
@@ -443,6 +446,7 @@ export default function AgentWindow() {
       try {
         const replacement = await editSelectedText(text, target.text, {
           attachment: extras.attachment,
+          appCategory: target.appCategory,
           signal: controller.signal,
         });
         if (!current()) return;
@@ -554,17 +558,25 @@ export default function AgentWindow() {
       const selection = Promise.resolve(
         external ? window.electronAPI?.captureSelectedText?.() : null
       )
-        .then((capture) => {
+        .then(async (capture) => {
           if (isCurrent() && capture?.status === "selected") {
-            editTargetRef.current = {
+            const target: SelectionEditTarget = {
               kind: "external",
               sessionId: capture.sessionId,
               text: capture.text,
+              appCategory: null,
             };
+            editTargetRef.current = target;
             dispatch({
               type: "setContext",
               context: { text: capture.text, sourceMessageId: "", source: "external" },
             });
+            if (getSettings().toneStyleEnabled) {
+              const category = await window.electronAPI
+                ?.captureDictationAppCategory?.()
+                .catch(() => null);
+              if (isCurrent()) target.appCategory = category ?? null;
+            }
           } else if (isCurrent() && capture && capture.status !== "none") {
             dispatch({
               type: "notice",

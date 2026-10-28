@@ -82,3 +82,26 @@ test("the local editor uses its JSON contract and drops an answer after cancella
     name: "AbortError",
   });
 });
+
+for (const mode of ["providers", "local"]) {
+  test(`the ${mode} selection editor preserves the selected app's Tone & Style`, async (t) => {
+    const { service, editSelectedText } = await editor(t, {
+      dictationAgentMode: mode,
+      toneStyleEnabled: true,
+      toneStyles: { personal: "very_casual", work: "formal", email: "formal", other: "formal" },
+    });
+    let prompt;
+    t.mock.method(service, "processText", async (_text, _model, _name, config) => {
+      prompt = config.systemPrompt;
+      const marker = prompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[\w-]+__/)?.[0] ?? "";
+      return mode === "local" ? '{"replacement":"edited"}' : `edited${marker}`;
+    });
+    await editSelectedText("Rewrite this", "Original", {
+      appCategory: "personal",
+      signal: new AbortController().signal,
+    });
+    assert.match(prompt, /user's personal message style/);
+    assert.match(prompt, /all lowercase/);
+    assert.match(prompt, /code and commands.*never restyled/);
+  });
+}

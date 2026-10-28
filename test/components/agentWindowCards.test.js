@@ -1589,6 +1589,10 @@ for (const verb of ["email", "slackPost"]) {
         globalThis.__voice.callbacks.onTranscript("Change it to landing page", "submit")
       );
       assert.equal(globalThis.__selectionEdits.calls[0].selectedText, "homepage");
+      assert.equal(
+        globalThis.__selectionEdits.calls[0].appCategory,
+        verb === "email" ? "email" : "work"
+      );
       if (stale)
         await React.act(async () =>
           view.approvals.updateApprovalDraft(
@@ -1608,6 +1612,7 @@ for (const verb of ["email", "slackPost"]) {
       assert.equal(entry.actionId, "act-1");
       assert.deepEqual(globalThis.__chat.sent, []);
       assert.equal(globalThis.__chat.cancels, 0);
+      await view.settle();
     });
   }
 }
