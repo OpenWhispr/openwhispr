@@ -89,9 +89,9 @@ async function loadTab(t) {
       `,
       "/services/bulkInvitationActions": `
         export const bulkInvitationActions = {
-          resendInvitations: (workspaceId, ids) => {
+          resendInvitations: (workspaceId, ids, signal) => {
             globalThis.__bulkResendCalls.push([workspaceId, ids]);
-            return globalThis.__bulkResendImpl(ids);
+            return globalThis.__bulkResendImpl(ids, signal);
           },
         };
       `,
@@ -707,6 +707,66 @@ test("resending disables the bar and the row menus", async (t) => {
 
   await React.act(async () => finish());
   assert.ok(rowTriggers(container).every((trigger) => !trigger.hasAttribute("disabled")));
+});
+
+test("resending freezes the checkboxes until it reports", async (t) => {
+  const { Tab } = await loadTab(t);
+  let finish;
+  globalThis.__bulkResendImpl = (ids) =>
+    new Promise((resolve) => (finish = () => resolve({ done: [], noEmail: [], failed: [] })));
+  const container = await mount(t, Tab, ready(twoRows()));
+  await check(container, SELECT_ALL);
+  const checkboxes = () =>
+    [SELECT_ALL, `${SELECT_ROW}${ADA}`].map((label) => checkbox(container, label));
+
+  await React.act(async () => {
+    propsOf(barButton(container, "resendSelected")).onClick();
+  });
+
+  assert.ok(checkboxes().every((box) => box.hasAttribute("disabled")));
+
+  await React.act(async () => finish());
+  assert.ok(checkboxes().every((box) => !box.hasAttribute("disabled")));
+});
+
+test("leaving the tab mid-resend still resends the rest and reports", async (t) => {
+  const { Tab } = await loadTab(t);
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  let finished;
+  const done = new Promise((resolve) => (finished = resolve));
+  // Asks one invitation at a time and stops at an abort, as the real loop does.
+  globalThis.__bulkResendImpl = async (ids, signal) => {
+    const sent = [];
+    for (const id of ids) {
+      if (signal?.aborted) break;
+      await gate;
+      sent.push(id);
+    }
+    finished();
+    return { done: sent, noEmail: [], failed: [] };
+  };
+  let reloads = 0;
+  const container = await mount(
+    t,
+    Tab,
+    ready(twoRows(), async () => {
+      reloads += 1;
+    })
+  );
+  await check(container, SELECT_ALL);
+  await React.act(async () => {
+    propsOf(barButton(container, "resendSelected")).onClick();
+  });
+
+  await React.act(async () => mountedRoots.get(t).unmount());
+  mountedRoots.delete(t);
+  release();
+  await done;
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(reloads, 1);
+  assert.deepEqual(globalThis.__toasts, [{ title: `${INVITATIONS}resentMany#2` }]);
 });
 
 test("a reload that drops an invitation drops it from the selection", async (t) => {

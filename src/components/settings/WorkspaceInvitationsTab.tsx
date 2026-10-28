@@ -69,10 +69,6 @@ export default function WorkspaceInvitationsTab({
   const rowIds = rows.map((invitation) => invitation.id);
   const rowKey = rowIds.join(",");
   const selectedInvitations = rows.filter((invitation) => selection.has(invitation.id));
-  const bulkAbortRef = useRef<AbortController | null>(null);
-
-  // A bulk resend that outlives the tab stops asking for the invitations it hasn't reached.
-  useEffect(() => () => bulkAbortRef.current?.abort(), []);
 
   useEffect(() => {
     setSelection((current) => (current.size === 0 ? current : new Set()));
@@ -157,16 +153,15 @@ export default function WorkspaceInvitationsTab({
     if (bulkResendingRef.current) return;
     bulkResendingRef.current = true;
     setBulkResending(true);
-    const controller = new AbortController();
-    bulkAbortRef.current = controller;
     const emailsById = new Map(selectedInvitations.map(({ id, email }) => [id, email]));
+    // Not stopped when the tab unmounts (every People tab change does): the run finishes and
+    // still reports, since the toast and the invitations list outlive the tab. A sign-in change
+    // ends it through the auth generation.
     try {
       const outcome = await bulkInvitationActions.resendInvitations(
         workspace.id,
-        selectedInvitations.map(({ id }) => id),
-        controller.signal
+        selectedInvitations.map(({ id }) => id)
       );
-      if (controller.signal.aborted) return;
       const listed = await reload();
       // A failure that left the list may be an invitation that was accepted.
       if (
@@ -294,6 +289,7 @@ export default function WorkspaceInvitationsTab({
                   <RowCheckbox
                     label={t("settingsPage.workspace.people.selection.selectAllInvitations")}
                     checked={HEADER_CHECKED[headerCheckState(rowIds, selection)]}
+                    disabled={bulkResending}
                     onChange={(checked) =>
                       setSelection((current) => setRows(current, rowIds, checked))
                     }
@@ -325,6 +321,7 @@ export default function WorkspaceInvitationsTab({
                           name: isolate(invitation.email),
                         })}
                         checked={selection.has(invitation.id)}
+                        disabled={bulkResending}
                         onChange={() =>
                           setSelection((current) => toggleRow(current, invitation.id))
                         }
