@@ -42,7 +42,8 @@ export type LocalSetupLine =
   | { key: "tooSlowAboutMinute"; model: string }
   | { key: "tooSlowCleanupSeconds"; model: string; seconds: number }
   | { key: "tooSlowAssistantSeconds"; model: string; range: [number, number] }
-  | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number };
+  | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
+  | { key: "memoryUnread"; model: string; neededGb: number };
 export interface LocalSetupRow {
   id: LocalSetupRowId;
   modelId: string;
@@ -50,7 +51,7 @@ export interface LocalSetupRow {
   providerIcon: string; // ProviderIcon id: "nvidia" | "oruk" | "openai" | "qwen"
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
-  reason?: "tooSlow" | "memory";
+  reason?: "tooSlow" | "memory" | "memoryUnread";
   line: LocalSetupLine;
 }
 export interface LocalSetupPlan {
@@ -270,14 +271,18 @@ function textRow(
   const neededGb = table.memoryNeededGb[id][profile.platform === "darwin" ? "mac" : "pc"];
 
   let label = entry.label;
-  let reason = label === "unavailable" ? entry.reason : undefined;
+  let reason: LocalSetupRow["reason"] = label === "unavailable" ? entry.reason : undefined;
   if (label !== "unavailable" && !(profile.memoryGb >= neededGb)) {
     label = "unavailable";
     reason = "memory";
   }
+  // Memory that couldn't be read keeps the row off, but the row says so rather than "too little".
+  if (reason === "memory" && !(profile.memoryGb > 0)) reason = "memoryUnread";
 
   let line: LocalSetupLine;
-  if (reason === "memory") {
+  if (reason === "memoryUnread") {
+    line = { key: "memoryUnread", model: model.name, neededGb };
+  } else if (reason === "memory") {
     line = { key: "notEnoughMemory", model: model.name, neededGb, haveGb: profile.memoryGb };
   } else if (label === "unavailable") {
     const [low, high] = range;

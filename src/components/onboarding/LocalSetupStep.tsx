@@ -60,6 +60,11 @@ const ROW_KIND_KEYS: Record<LocalSetupRowId, string> = {
   cleanup: "onboarding.rehaul.localSetup.rows.cleanup",
   assistant: "onboarding.rehaul.localSetup.rows.assistant",
 };
+const UNAVAILABLE_HEADING_KEYS: Record<NonNullable<LocalSetupRow["reason"]>, string> = {
+  tooSlow: "onboarding.rehaul.localSetup.unavailable.tooSlow",
+  memory: "onboarding.rehaul.localSetup.unavailable.notEnoughMemory",
+  memoryUnread: "onboarding.rehaul.localSetup.unavailable.memoryUnread",
+};
 const BADGE_KEYS: Record<NonNullable<LocalSetupRow["label"]>, string> = {
   fast: "onboarding.rehaul.localSetup.badge.fast",
   slower: "onboarding.rehaul.localSetup.badge.slower",
@@ -108,13 +113,16 @@ function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string | 
         seconds: formatLocalSetupSeconds(line.range),
       });
     case "notEnoughMemory": {
-      // Memory that couldn't be read would print "has 0 GB": the heading says enough.
-      if (!(line.haveGb > 0)) return null;
       const values = { model: line.model, needed: line.neededGb, have: line.haveGb };
       return onMac
         ? t("onboarding.rehaul.localSetup.unavailable.memoryMac", values)
         : t("onboarding.rehaul.localSetup.unavailable.memoryComputer", values);
     }
+    case "memoryUnread":
+      return t("onboarding.rehaul.localSetup.unavailable.memoryUnreadLine", {
+        model: line.model,
+        needed: line.neededGb,
+      });
   }
 }
 
@@ -333,11 +341,7 @@ function SetupRow({
         <span className="mt-0.5 flex min-w-0 items-center whitespace-nowrap text-base font-medium leading-6 text-[var(--onboarding-text-primary)]">
           {/* Only the name gives way to a long translation; size and badge stay whole. */}
           <span className="min-w-0 truncate">
-            {unavailable
-              ? row.reason === "memory"
-                ? t("onboarding.rehaul.localSetup.unavailable.notEnoughMemory")
-                : t("onboarding.rehaul.localSetup.unavailable.tooSlow")
-              : row.modelName}
+            {unavailable ? t(UNAVAILABLE_HEADING_KEYS[row.reason ?? "tooSlow"]) : row.modelName}
           </span>
           {!unavailable && (
             <span className="ms-1 shrink-0 text-sm font-normal tabular-nums text-[var(--onboarding-text-secondary)]">

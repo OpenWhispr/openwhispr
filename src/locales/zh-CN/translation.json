@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "太慢",
           "notEnoughMemory": "内存不足",
+          "memoryUnread": "无法检测内存",
           "tooSlowMinutes": "{{model}} 需要超过 {{minutes}} 分钟才能开始回答",
           "tooSlowAboutMinute": "{{model}} 需要约一分钟才能开始回答",
           "tooSlowCleanupSeconds": "{{model}} 整理每次听写需要超过 {{seconds}} 秒",
           "tooSlowAssistantSeconds": "{{model}} 需要约 {{seconds}} 秒才能开始回答",
           "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
-          "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB"
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB",
+          "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 内存。如果这台电脑有这么多内存，可以稍后在设置中开启"
         },
         "button": {
           "download": "下载模型",

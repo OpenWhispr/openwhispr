@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "Demasiado lento",
           "notEnoughMemory": "Memoria insuficiente",
+          "memoryUnread": "No se pudo comprobar la memoria",
           "tooSlowMinutes": "{{model}} tardaría más de {{minutes}} minutos en empezar a responder",
           "tooSlowAboutMinute": "{{model}} tardaría alrededor de un minuto en empezar a responder",
           "tooSlowCleanupSeconds": "{{model}} tardaría más de {{seconds}} s en pulir cada dictado",
           "tooSlowAssistantSeconds": "{{model}} tardaría unos {{seconds}} s en empezar a responder",
           "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
-          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB"
+          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB",
+          "memoryUnreadLine": "{{model}} necesita {{needed}} GB de memoria. Si este equipo tiene esa cantidad, puedes activarlo más tarde en Ajustes"
         },
         "button": {
           "download": "Descargar modelos",

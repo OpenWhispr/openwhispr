@@ -718,11 +718,13 @@ test("an organisation-required speech model shows its line and no speed badge", 
   assert.ok(!row.textContent.includes(`${K}badge.`), row.textContent);
 });
 
-test("memory that couldn't be read leaves only the Not enough memory heading", async (t) => {
+test("memory that couldn't be read says so, never that there is too little", async (t) => {
   const s = await mount(t, { profile: mac({ memoryGb: 0, appleChip: null }) });
   for (const id of ["cleanup", "assistant"]) {
     const text = s.row(id).textContent;
-    assert.ok(text.includes(`${K}unavailable.notEnoughMemory`), id);
+    assert.ok(text.includes(`${K}unavailable.memoryUnread`), id);
+    assert.ok(text.includes(`${K}unavailable.memoryUnreadLine`), id);
+    assert.ok(!text.includes(`${K}unavailable.notEnoughMemory`), `${id} claims too little memory`);
     assert.ok(!text.includes(`${K}unavailable.memoryMac`), `${id} never says it has 0 GB`);
   }
 });

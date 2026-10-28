@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "遅すぎます",
           "notEnoughMemory": "メモリが不足しています",
+          "memoryUnread": "メモリを確認できませんでした",
           "tooSlowMinutes": "{{model}} は回答が始まるまでに {{minutes}} 分以上かかります",
           "tooSlowAboutMinute": "{{model}} は回答が始まるまでに約 1 分かかります",
           "tooSlowCleanupSeconds": "{{model}} はディクテーションごとの整形に {{seconds}} 秒以上かかります",
           "tooSlowAssistantSeconds": "{{model}} は回答が始まるまでに約 {{seconds}} 秒かかります",
           "memoryMac": "{{model}} には {{needed}} GB のメモリが必要です。この Mac は {{have}} GB です",
-          "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です"
+          "memoryComputer": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータは {{have}} GB です",
+          "memoryUnreadLine": "{{model}} には {{needed}} GB のメモリが必要です。このコンピュータにそれだけのメモリがある場合は、あとで設定からオンにしてください"
         },
         "button": {
           "download": "モデルをダウンロード",

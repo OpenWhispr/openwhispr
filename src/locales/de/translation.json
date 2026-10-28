@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "Zu langsam",
           "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "memoryUnread": "Arbeitsspeicher nicht erkannt",
           "tooSlowMinutes": "{{model}} bräuchte über {{minutes}} Minuten, bis die Antwort beginnt",
           "tooSlowAboutMinute": "{{model}} bräuchte etwa eine Minute, bis die Antwort beginnt",
           "tooSlowCleanupSeconds": "{{model}} bräuchte über {{seconds}} s, um jedes Diktat zu überarbeiten",
           "tooSlowAssistantSeconds": "{{model}} bräuchte etwa {{seconds}} s, bis die Antwort beginnt",
           "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
-          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB"
+          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
+          "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"
         },
         "button": {
           "download": "Modelle herunterladen",

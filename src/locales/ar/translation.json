@@ -3352,12 +3352,14 @@
         "unavailable": {
           "tooSlow": "بطيء جدًا",
           "notEnoughMemory": "الذاكرة غير كافية",
+          "memoryUnread": "تعذّر التحقق من الذاكرة",
           "tooSlowMinutes": "سيستغرق {{model}} أكثر من {{minutes}} دقيقة قبل أن يبدأ الرد",
           "tooSlowAboutMinute": "سيستغرق {{model}} نحو دقيقة قبل أن يبدأ الرد",
           "tooSlowCleanupSeconds": "سيستغرق {{model}} أكثر من {{seconds}} ث لتنظيم كل عملية إملاء",
           "tooSlowAssistantSeconds": "سيستغرق {{model}} نحو {{seconds}} ث قبل أن يبدأ الرد",
           "memoryMac": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي جهاز Mac هذا {{have}} غيغابايت",
-          "memoryComputer": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي هذا الحاسوب {{have}} غيغابايت"
+          "memoryComputer": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة، وفي هذا الحاسوب {{have}} غيغابايت",
+          "memoryUnreadLine": "يحتاج {{model}} إلى {{needed}} غيغابايت من الذاكرة. إذا كان في هذا الحاسوب هذا القدر، يمكنك تشغيله لاحقًا من الإعدادات"
         },
         "button": {
           "download": "تنزيل النماذج",

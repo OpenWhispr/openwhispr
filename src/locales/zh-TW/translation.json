@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "太慢",
           "notEnoughMemory": "記憶體不足",
+          "memoryUnread": "無法偵測記憶體",
           "tooSlowMinutes": "{{model}} 需要超過 {{minutes}} 分鐘才能開始回答",
           "tooSlowAboutMinute": "{{model}} 需要約一分鐘才能開始回答",
           "tooSlowCleanupSeconds": "{{model}} 整理每次語音輸入需要超過 {{seconds}} 秒",
           "tooSlowAssistantSeconds": "{{model}} 需要約 {{seconds}} 秒才能開始回答",
           "memoryMac": "{{model}} 需要 {{needed}} GB 記憶體，這台 Mac 只有 {{have}} GB",
-          "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB"
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB",
+          "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 記憶體。如果這台電腦有這麼多記憶體，可以稍後在設定中開啟"
         },
         "button": {
           "download": "下載模型",

@@ -461,12 +461,14 @@
         "unavailable": {
           "tooSlow": "Слишком медленно",
           "notEnoughMemory": "Недостаточно памяти",
+          "memoryUnread": "Не удалось проверить память",
           "tooSlowMinutes": "{{model}} начинал бы отвечать больше чем через {{minutes}} мин",
           "tooSlowAboutMinute": "{{model}} начинал бы отвечать примерно через минуту",
           "tooSlowCleanupSeconds": "{{model}} обрабатывал бы каждую диктовку больше {{seconds}} с",
           "tooSlowAssistantSeconds": "{{model}} начинал бы отвечать примерно через {{seconds}} с",
           "memoryMac": "{{model}} нужно {{needed}} ГБ памяти, а у этого Mac {{have}} ГБ",
-          "memoryComputer": "{{model}} нужно {{needed}} ГБ памяти, а у этого компьютера {{have}} ГБ"
+          "memoryComputer": "{{model}} нужно {{needed}} ГБ памяти, а у этого компьютера {{have}} ГБ",
+          "memoryUnreadLine": "{{model}} нужно {{needed}} ГБ памяти. Если у этого компьютера столько есть, вы сможете включить это позже в настройках"
         },
         "button": {
           "download": "Скачать модели",

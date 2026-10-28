@@ -359,7 +359,12 @@ test("unknown and partial profiles take the cautious row", async () => {
   const blank = pc({ memoryGb: 0, processorName: "", graphicsName: null });
   assert.equal(classifyMachine(blank), "pc-under-16");
   const p = await plan(pc({ memoryGb: 0 }));
-  assert.equal(row(p, "cleanup").reason, "memory");
+  assert.equal(row(p, "cleanup").reason, "memoryUnread");
+  assert.deepEqual(row(p, "cleanup").line, {
+    key: "memoryUnread",
+    model: row(p, "cleanup").modelName,
+    neededGb: 8,
+  });
   assert.equal(row(p, "assistant").reason, "tooSlow");
 });
 
