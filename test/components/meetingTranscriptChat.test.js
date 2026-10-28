@@ -165,6 +165,29 @@ test("a You the viewer set in their own mappings still reads You", async () => {
   assert.ok(!html.includes("Alice Owner"));
 });
 
+test("a local self mapping wins over an unlocked stored self name, but not a locked correction", async () => {
+  const segment = {
+    id: "p1",
+    text: "My commitment",
+    source: "mic",
+    timestamp: 1,
+    speaker: "speaker_0",
+    speakerName: "You",
+    recorderName: "Alice Recorder",
+  };
+  const props = { speakerMappings: { speaker_0: "You" }, recorderLabel: "Original Recorder" };
+  const mapped = await renderChat({ ...props, segments: [segment] });
+  assert.match(mapped, />You</);
+  assert.ok(!mapped.includes("Alice Recorder"));
+
+  const locked = await renderChat({
+    ...props,
+    segments: [{ ...segment, speakerLocked: true }],
+  });
+  assert.ok(locked.includes("Alice Recorder"));
+  assert.doesNotMatch(locked, />You</);
+});
+
 test("a later recorder's mic lines retain their name in the shared transcript", async () => {
   const html = await renderChat({
     recorderLabel: "Alice Owner",

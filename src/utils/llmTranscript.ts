@@ -1,8 +1,8 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import type { CalendarAttendee } from "../types/calendar";
 import {
-  isTranscriptSpeakerLocked,
   isYouSpeakerName,
+  resolveMappedSpeakerName,
   resolveSegmentSpeakerName,
 } from "./transcriptSpeakerState";
 import type { MentionPerson } from "./mentionMarkdown";
@@ -36,12 +36,7 @@ export function resolveLlmSpeakerLabel(
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
   if (resolved) {
     if (!isYouSpeakerName(resolved, t("notes.speaker.you"))) return resolved;
-    const fromMapping =
-      segment.speaker &&
-      !(segment.speakerName && isTranscriptSpeakerLocked(segment)) &&
-      !(segment.speaker === "you" && segment.recorderName) &&
-      speakerMappings[segment.speaker] === resolved;
-    return fromMapping ? viewerLabel : recorderLabel;
+    return resolveMappedSpeakerName(segment, speakerMappings) ? viewerLabel : recorderLabel;
   }
   if (segment.speaker === "you") return recorderLabel;
   if (segment.speaker) {

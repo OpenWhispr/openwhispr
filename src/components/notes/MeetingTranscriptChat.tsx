@@ -12,6 +12,7 @@ import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
   isYouSpeakerName,
+  resolveMappedSpeakerName,
   resolveSegmentSpeakerName,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
@@ -457,6 +458,7 @@ function SpeakerLabel({
   speakerId,
   segment,
   resolvedName,
+  isNameFromMapping,
   speakerProfiles,
   participants,
   colorIdx,
@@ -471,6 +473,7 @@ function SpeakerLabel({
   speakerId: string;
   segment: TranscriptSegment;
   resolvedName?: string;
+  isNameFromMapping: boolean;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
@@ -535,9 +538,7 @@ function SpeakerLabel({
   // A "You" stored on the segment was named where the note was recorded, so it
   // is the recorder; a "You" from this device's own mappings is the viewer.
   const shownName =
-    resolvedName &&
-    resolvedName === segment.speakerName &&
-    isYouSpeakerName(resolvedName, t("notes.speaker.you"))
+    resolvedName && !isNameFromMapping && isYouSpeakerName(resolvedName, t("notes.speaker.you"))
       ? recorderLabel
       : resolvedName;
   const displayLabel =
@@ -681,6 +682,7 @@ interface SegmentRowProps {
   colorIdx: number;
   isSelected: boolean;
   activeName?: string;
+  isNameFromMapping: boolean;
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
@@ -718,6 +720,7 @@ const SegmentRow = memo(function SegmentRow({
   colorIdx,
   isSelected,
   activeName,
+  isNameFromMapping,
   matchedProfile,
   speakerProfiles,
   participants,
@@ -752,6 +755,7 @@ const SegmentRow = memo(function SegmentRow({
         speakerId={segment.speaker!}
         segment={segment}
         resolvedName={activeName}
+        isNameFromMapping={isNameFromMapping}
         speakerProfiles={speakerProfiles}
         participants={participants}
         colorIdx={colorIdx}
@@ -943,6 +947,7 @@ export function MeetingTranscriptChat({
       segments.map((segment) => ({
         key: `${getEffectiveSpeakerKey(segment, speakerMappings)}:${segment.recorderName ?? ""}`,
         activeName: resolveSegmentSpeakerName(segment, speakerMappings),
+        isNameFromMapping: !!resolveMappedSpeakerName(segment, speakerMappings),
         selfSide: isSelfSideSegment(segment, speakerMappings, youLabel),
       })),
     [segments, speakerMappings, youLabel]
@@ -1089,7 +1094,7 @@ export function MeetingTranscriptChat({
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const i = virtualItem.index;
               const segment = segments[i];
-              const { key, activeName, selfSide } = rowMeta[i];
+              const { key, activeName, isNameFromMapping, selfSide } = rowMeta[i];
               const isSystemSpeaker = !!segment.speaker && !selfSide;
               return (
                 <div
@@ -1117,6 +1122,7 @@ export function MeetingTranscriptChat({
                     colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
                     isSelected={selectedSegmentIds?.has(segment.id) ?? false}
                     activeName={activeName}
+                    isNameFromMapping={isNameFromMapping}
                     matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
                     speakerProfiles={speakerProfiles}
                     participants={participants}
