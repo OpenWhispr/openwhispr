@@ -1811,6 +1811,28 @@ describe('Android Cloud meeting ownership', () => {
     mockModeListeners.clear();
   });
 
+  it('declares meeting purpose on a recovered Cloud recording and preserves a policy refusal', async () => {
+    const refusal = Object.assign(
+      new Error('Meeting recording is disabled by your organization.'),
+      {
+        status: 403,
+        code: 'POLICY_MEETING_RECORDING_DISABLED',
+      },
+    );
+    mockCloudTranscribe.mockRejectedValueOnce(refusal);
+    await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(refusal);
+    expect(mockCloudTranscribe).toHaveBeenCalledTimes(1);
+    expect(mockCloudTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purpose: 'meeting',
+        requestContext: 'file',
+        audioUri: 'file:///app/documents/meeting-7.wav',
+      }),
+    );
+    expect(notesRepository.getTranscriptionStatus(7)).toBe('failed');
+    expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])(
     'drops a delayed retry after switching account (return=%s)',
     async (returns) => {

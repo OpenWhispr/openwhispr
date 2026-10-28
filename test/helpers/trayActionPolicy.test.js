@@ -62,3 +62,13 @@ test("an unresolved policy is not reported as an organization restriction", asyn
     TRAY_REFUSAL_KEYS.policyUnresolved
   );
 });
+
+test("a refused meeting start blames the org only when the policy says so", async () => {
+  const { meetingStartRefusalKey, TRAY_REFUSAL_KEYS } = await load();
+
+  assert.equal(
+    meetingStartRefusalKey("POLICY_MEETING_RECORDING_DISABLED"),
+    TRAY_REFUSAL_KEYS.meetingRecordingDisabled
+  );
+  assert.equal(meetingStartRefusalKey("POLICY_UNRESOLVABLE"), TRAY_REFUSAL_KEYS.policyUnresolved);
+});

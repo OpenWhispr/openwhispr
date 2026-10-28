@@ -1,6 +1,7 @@
 const { createAbortError } = require("./abortError");
 const { formatTimestamp } = require("./speakerMerge");
 const { i18nMain } = require("./i18nMain");
+const { AUDIO_POLICY_REFUSAL_CODES } = require("./audioPolicyRefusals");
 
 // Retry/backoff/concurrency policy for the chunked cloud upload path (#1326).
 // Kept free of electron imports so the rules stay unit-testable.
@@ -47,8 +48,9 @@ const CLOUD_CHUNK_MAX_LOSS_RATIO = 0.5;
 const SILENT_CHUNK = Symbol("silent-cloud-chunk");
 
 // Codes that doom the whole job, not just one chunk: retrying the siblings can
-// only burn time and quota.
-const FATAL_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED"]);
+// only burn time and quota. An org policy refusal must also surface with its
+// code so the caller can refresh the policy and show the org's reason.
+const FATAL_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED", ...AUDIO_POLICY_REFUSAL_CODES]);
 
 const NON_RETRYABLE_CHUNK_CODES = new Set([...FATAL_CHUNK_CODES, "NO_SPEECH_DETECTED"]);
 

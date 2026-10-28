@@ -38,6 +38,7 @@ import {
   type LeaderboardWeekStartsCacheEntry,
 } from "../helpers/leaderboard";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { workspaceCan } from "../lib/capabilities";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { InvitationsService } from "../services/InvitationsService";
@@ -47,6 +48,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import type {
   Leaderboard,
   LeaderboardAccess,
+  LeaderboardAccessScope,
   LeaderboardMember,
   LeaderboardMetric,
   LeaderboardRange,
@@ -172,6 +174,7 @@ export default function LeaderboardSection({
   const { toast } = useToast();
   const loaded = useWorkspaceStore((state) => state.loaded);
   const refresh = useWorkspaceStore((state) => state.refresh);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
@@ -208,6 +211,17 @@ export default function LeaderboardSection({
   const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
+  // Scopes carry only the role. The workspace list carries the server's capabilities, so it
+  // decides whenever the workspace is in it.
+  const canInviteToScope = (scope: LeaderboardAccessScope): boolean => {
+    if (scope.kind !== "workspace") return false;
+    const workspace =
+      workspaces.find((candidate) => candidate.id === scope.id) ??
+      (scope.role ? { role: scope.role } : null);
+    return workspaceCan(workspace, "manage_members");
+  };
+  const canListSelectedInvites =
+    selectedScope?.state === "invite" && canInviteToScope(selectedScope);
   const selectedRequestKey = leaderboardRequestKey(
     selectedScope?.key ?? null,
     metric,
@@ -273,11 +287,7 @@ export default function LeaderboardSection({
   );
 
   useEffect(() => {
-    const canListInvites =
-      selectedScope?.kind === "workspace" &&
-      selectedScope.state === "invite" &&
-      (selectedScope.role === "owner" || selectedScope.role === "admin");
-    if (!canListInvites) {
+    if (!selectedScope || !canListSelectedInvites) {
       setPendingInvites([]);
       return;
     }
@@ -304,7 +314,7 @@ export default function LeaderboardSection({
     return () => {
       cancelled = true;
     };
-  }, [pendingInviteRevision, selectedScope]);
+  }, [canListSelectedInvites, pendingInviteRevision, selectedScope]);
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -784,16 +794,11 @@ export default function LeaderboardSection({
   };
   const domainNeedsWorkspace =
     selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
-  const inviteableWorkspace =
-    selectedScope.kind === "workspace" &&
-    (selectedScope.role === "owner" || selectedScope.role === "admin")
-      ? selectedScope
-      : selectedScope.kind === "domain"
-        ? scopes.find(
-            (scope) =>
-              scope.kind === "workspace" && (scope.role === "owner" || scope.role === "admin")
-          )
-        : undefined;
+  const inviteableWorkspace = canInviteToScope(selectedScope)
+    ? selectedScope
+    : selectedScope.kind === "domain"
+      ? scopes.find(canInviteToScope)
+      : undefined;
   const canGrowLeaderboard = domainNeedsWorkspace || Boolean(inviteableWorkspace);
   const openLeaderboardGrowthAction = () => {
     if (domainNeedsWorkspace) {

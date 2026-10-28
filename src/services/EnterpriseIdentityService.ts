@@ -39,6 +39,12 @@ export async function getManagedEnterpriseConfig(
   ) as Promise<ManagedEnterpriseConfigResult>;
 }
 
-export function clearManagedEnterpriseIdentity(): void {
-  void window.electronAPI?.clearManagedEnterpriseIdentity?.();
+// `next` is the scope the renderer is moving to; main ends enterprise audio
+// that belongs to another one.
+export type ClearEnterpriseIdentityOptions = {
+  next?: { accountId: string; workspaceId: string | null };
+};
+
+export function clearManagedEnterpriseIdentity(options?: ClearEnterpriseIdentityOptions): void {
+  void window.electronAPI?.clearManagedEnterpriseIdentity?.(options);
 }

@@ -1962,3 +1962,28 @@ describe('Arabic workflow guidance and diagnostics', () => {
     }
   });
 });
+
+it('lists a legacy model only while it is the saved selection', async () => {
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockActiveMode = 'providers';
+  mockScope = 'cleanup';
+  const saved = (modelId: string): typeof mockConfig => ({
+    defaultMode: 'providers',
+    inference: { cleanup: { mode: 'providers', providerId: 'openai', modelId } },
+  });
+
+  mockConfig = saved('gpt-5-mini');
+  const { unmount } = render(<WorkflowSettingsScreen />);
+  fireEvent.press(screen.getByText('Model'));
+  expect(screen.getAllByText('GPT-5 Mini').length).toBeGreaterThan(0);
+  expect(screen.queryByText('GPT-4.1')).toBeNull();
+  await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+  unmount();
+
+  mockConfig = saved('gpt-6-astra');
+  render(<WorkflowSettingsScreen />);
+  fireEvent.press(screen.getByText('Model'));
+  expect(screen.queryByText('GPT-5 Mini')).toBeNull();
+  expect(screen.getByText('GPT-6 Luna')).toBeTruthy();
+  await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+});

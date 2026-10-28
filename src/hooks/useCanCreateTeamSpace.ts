@@ -1,7 +1,7 @@
 import { useAuth } from "./useAuth";
 import { useTeamSpacesCapability } from "./useTeamSpacesCapability";
 import { useWorkspace } from "./useWorkspace";
-import { canManageWorkspace } from "../lib/spacePermissions";
+import { workspaceCan } from "../lib/capabilities";
 
 /**
  * Whether to offer "new team space". The server 403s team creation for plain
@@ -14,6 +14,6 @@ export function useCanCreateTeamSpace(): boolean {
   return (
     teamSpacesAvailable &&
     loaded &&
-    (workspaces.length === 0 || workspaces.some((w) => canManageWorkspace(w.role)))
+    (workspaces.length === 0 || workspaces.some((w) => workspaceCan(w, "create_spaces")))
   );
 }

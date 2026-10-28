@@ -294,7 +294,7 @@ export async function signInAnonymously(): Promise<AnonymousAuthResult> {
 
 export async function signOut(): Promise<void> {
   try {
-    await client.signOut();
+    await client.signOut({});
   } catch {
     /* empty */
   }

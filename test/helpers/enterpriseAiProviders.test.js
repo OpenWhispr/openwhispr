@@ -321,6 +321,35 @@ test("the pinned Azure SDK requests the deployment below /openai/v1 with bearer 
   assert.equal(request.body.model, "deployment-a");
 });
 
+test("managed Azure text never sends the dated transcription version to the v1 surface", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const urls = [];
+  global.fetch = async (url) => {
+    urls.push(String(url));
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  for (const azureApiVersion of ["2025-03-01-preview", "preview", "v1", ""]) {
+    const model = await getEnterpriseAIModel("azure", "deployment-a", "", {
+      azureEndpoint: "https://example.openai.azure.com",
+      azureApiVersion,
+      managedTokenProvider: async () => "temporary-bearer-token",
+    });
+    await assert.rejects(
+      model.doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }] })
+    );
+  }
+  assert.deepEqual(
+    urls.map((url) => new URL(url).searchParams.get("api-version")),
+    ["preview", "preview", "v1", "v1"]
+  );
+});
+
 test("manual Azure setup preserves legacy endpoints and API-key auth", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {

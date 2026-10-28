@@ -214,6 +214,7 @@
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
+    "managedConfigAmbiguous": "La configuración gestionada de tu organización es incoherente. Contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
     "resizePanel": "Cambiar el tamaño del panel"
   },
@@ -883,6 +884,9 @@
       "modelRetired": "Tinfoil retiró {{from}}. Se cambió a {{to}}.",
       "refreshingModels": "Actualizando modelos…"
     },
+    "openai": {
+      "modelRetired": "OpenAI retiró {{from}}. Se cambió a {{to}}."
+    },
     "corti": {
       "euOnly": "Los modelos de Corti solo están disponibles en la región de la UE."
     }
@@ -969,6 +973,9 @@
         "managedTranscriptionUnavailable": "La transcripción gestionada no está disponible en este momento. Inténtalo de nuevo en un momento.",
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
         "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
+        "managedRequestRejected": "El servicio de transcripción de tu organización rechazó este audio (HTTP {{status}}). Inténtalo de nuevo o contacta a tu administrador.",
+        "managedResponseMalformed": "El servicio de transcripción de tu organización envió una respuesta que OpenWhispr no pudo leer. Inténtalo de nuevo o contacta a tu administrador.",
+        "managedChunkTooLarge": "No se pudo dividir este audio en partes lo bastante pequeñas para el servicio de transcripción de tu organización. Contacta a tu administrador.",
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto.",
         "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
@@ -2465,6 +2472,7 @@
         "description": "Comprueba tu conexión e inténtalo de nuevo.",
         "retry": "Reintentar"
       },
+      "staleList": "No se pudo conectar con OpenWhispr. Se muestran tus espacios de trabajo de la última vez que te conectaste.",
       "tab": {
         "general": "General",
         "members": "Miembros",
@@ -2684,6 +2692,8 @@
   "models": {
     "learnMore": "Más información",
     "noneAvailable": "No hay modelos disponibles",
+    "legacy": "Heredado",
+    "legacyHint": "Ya no se ofrece. Cuando cambies a otro modelo, dejará de aparecer.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "ASR local más preciso (5,42% WER promedio, 14 idiomas). Sin detección automática de idioma"
@@ -2693,7 +2703,8 @@
         "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)",
         "nemotron_speech_streaming_en_0_6b": "ASR en inglés por streaming de NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "ASR multilingüe por streaming de NVIDIA Nemotron con detección automática de idioma (15 idiomas)",
-        "orukeet": "Parakeet ajustado para reconocimiento de voz multilingüe"
+        "orukeet": "Parakeet ajustado para reconocimiento de voz multilingüe",
+        "parakeet_tdt_110m_en": "ASR ligero en inglés con puntuación para equipos modestos"
       },
       "whisper": {
         "tiny": "El más rápido, menor calidad",
@@ -2701,7 +2712,9 @@
         "small": "Mejor calidad, más lento",
         "medium": "Alta calidad",
         "large": "La mejor calidad, el más lento",
-        "turbo": "Rápido con buena calidad"
+        "turbo": "Rápido con buena calidad",
+        "large_q5": "Large con un tercio de la descarga",
+        "turbo_q5": "Turbo con un tercio de la descarga"
       },
       "transcription": {
         "openai_gpt_transcribe": "Transcripción más reciente y precisa",
@@ -2719,7 +2732,10 @@
         "deepgram_nova_3": "El modelo en tiempo real más preciso de Deepgram",
         "assemblyai_universal_streaming_english": "Transcripciones en tiempo real inmutables, en inglés",
         "assemblyai_universal_streaming_multilingual": "Transcripciones en tiempo real inmutables, multilingües",
-        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas"
+        "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas",
+        "assemblyai_universal_3_6_pro": "Máxima precisión en tiempo real, 32 idiomas",
+        "mistral_voxtral_mini_transcribe_3_0": "Transcripción rápida en más de 50 idiomas (vista previa)",
+        "mistral_voxtral_small_transcribe_3_0": "El Voxtral más preciso, más de 50 idiomas (vista previa)"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -2727,7 +2743,6 @@
         "openai_gpt_5_nano": "Ultrarrápido, baja latencia",
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 más pequeño",
-        "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
         "anthropic_claude_fable_5_1": "El modelo más capaz de Anthropic, clase Mythos",
         "anthropic_claude_fable_5": "Modelo insignia anterior de clase Mythos",
         "anthropic_claude_opus_5_5": "El modelo Opus más reciente para razonamiento complejo, contexto de 1M",
@@ -2737,7 +2752,7 @@
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
-        "gemini_gemini_3_5_flash": "Modelo Gemini más reciente, rápido y de alta capacidad",
+        "gemini_gemini_3_5_flash": "Modelo Gemini rápido y de alta capacidad",
         "gemini_gemini_3_5_flash_lite": "El modelo 3.5 más rápido y económico",
         "gemini_gemini_3_1_pro_preview": "Modelo insignia de nueva generación para razonamiento complejo",
         "gemini_gemini_3_1_flash_lite": "Rendimiento de primer nivel a bajo costo",
@@ -2765,18 +2780,29 @@
         "corti_corti_s1_instant": "Modelo sanitario rápido, sin traza de razonamiento",
         "corti_corti_s1": "Modelo clínico más capaz con razonamiento",
         "corti_corti_s1_mini_instant": "Modelo sanitario compacto, el más rápido y económico",
-        "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio"
+        "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio",
+        "openai_gpt_6_1_sol": "Capacidad cercana a Astra para chat y tareas agénticas a menor coste",
+        "openai_gpt_6_luna": "El GPT-6 más rápido y económico",
+        "gemini_gemini_3_6_flash": "Modelo Gemini rápido y de alta capacidad",
+        "gemini_gemini_3_8_flash": "El modelo Flash más capaz",
+        "gemini_gemini_4_argon": "Modelo de razonamiento de vanguardia de Google",
+        "tinfoil_kimi_k3": "Modelo insignia privado de Moonshot con razonamiento nativo y visión, contexto de 256K",
+        "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado y rápido con razonamiento opcional, contexto de 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "El modelo Claude más capaz. Ideal para las tareas de asistente más difíciles.",
-        "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
-        "bedrock_claude_sonnet_5": "Equilibrado. Opción por defecto para las tareas de asistente.",
+        "bedrock_claude_haiku_4_5": "Haiku anterior. Rápido y económico para limpiar texto.",
+        "bedrock_claude_sonnet_5": "Sonnet anterior. Rápido y capaz para las tareas de asistente.",
         "bedrock_claude_opus_4_8": "Máxima inteligencia. Para tareas complejas de asistente.",
         "bedrock_gpt_oss_120b": "Modelo abierto de OpenAI. Gran razonamiento a bajo costo.",
         "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para las tareas de asistente.",
         "bedrock_qwen3_next_80b": "Modelo abierto disperso. Rápido y multilingüe.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "Equilibrado. Opción por defecto para las tareas de asistente.",
+        "bedrock_claude_haiku_5_5": "El modelo Claude más rápido. Ideal para limpiar texto.",
+        "bedrock_claude_opus_5_5": "Máxima inteligencia. Ideal para tareas de asistente complejas.",
+        "vertex_gemini_3_8_flash": "El modelo Flash más capaz a través de Vertex",
+        "vertex_gemini_3_5_flash_lite": "El modelo más rápido y económico a través de Vertex",
+        "vertex_gemini_4_argon": "Modelo de razonamiento de vanguardia de Google a través de Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido potente",
@@ -2813,7 +2839,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE de Liquid AI, alta calidad con solo 1.5B parámetros activos",
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para una limpieza de mayor calidad",
         "liquidai_lfm2_5_350m_q8_0": "Modelo ultraligero para limpieza rápida de dictado",
-        "liquidai_lfm2_5_230m_q8_0": "Modelo diminuto, limpieza instantánea en hardware modesto"
+        "liquidai_lfm2_5_230m_q8_0": "Modelo diminuto, limpieza instantánea en hardware modesto",
+        "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 diminuto para la limpieza más rápida",
+        "qwen_qwen3_8_27b_q4_k_m": "El modelo Qwen más capaz para equipos de 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "Modelo de mezcla de expertos rápido, 3B de parámetros activos",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modelo de 14B de Mistral con uso de herramientas, contexto de 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modelo rápido sin fase de razonamiento para limpieza y herramientas",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Pequeño y rápido para limpiar el dictado",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT oficial de Google, ideal para equipos de 16 GB"
       },
       "diarization": {
         "segmentation": "Detección de límites del habla para la identificación de hablantes",
@@ -3256,7 +3289,8 @@
       "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
       "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde.",
       "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes.",
-      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos."
+      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+      "disabledByOrg": "Tu organización ha desactivado la carga de audio."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -3283,7 +3317,11 @@
       "systemAudioQuiet": {
         "title": "El audio de la reunión se ha quedado en silencio",
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
-      }
+      },
+      "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
+      "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
+      "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
+      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
@@ -4867,6 +4905,7 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir",
+    "joinOnly": "Unirse a la reunión",
     "folders": {
       "choose": "Elegir carpeta de la reunión",
       "search": "Buscar carpetas",
@@ -4899,7 +4938,9 @@
         "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
         "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
         "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
-        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Tu organización ha desactivado la grabación de reuniones.",
+        "POLICY_UNRESOLVABLE": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento."
       }
     }
   },
@@ -5080,5 +5121,51 @@
     "permissionDenied": "Denegado",
     "permissionRestricted": "Restringido",
     "permissionNotDetermined": "No solicitado"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Configuración de audio empresarial",
+      "description": "Configura credenciales en este dispositivo y prueba la conexión de audio de tu organización.",
+      "provider": "Proveedor de audio",
+      "gateway": "Pasarela de audio",
+      "provisioned": "Credencial configurada",
+      "credentialMissing": "Se requiere una credencial",
+      "proxyCredentialFormat": "Para un proxy, introduce JSON con username y password. Para audio, introduce la clave API.",
+      "probeConsent": "Autorizo solicitudes breves de prueba de audio que pueden generar cargos.",
+      "testBatch": "Probar transcripción de archivos",
+      "testRealtime": "Probar conexión de reunión",
+      "testPassed": "La prueba se completó y se informó al administrador.",
+      "testFailed": "Falló la prueba de conexión.",
+      "setupFailed": "Falló la configuración. Revisa la sesión, el acceso al espacio y la red.",
+      "saved": "Credencial guardada en este dispositivo.",
+      "operationUnavailable": "Tu organización no ha configurado esta operación de audio.",
+      "certificateUnavailable": "El conjunto de certificados de la organización no está disponible.",
+      "partialUpload": "Fallaron {{count}} fragmentos de audio; la transcripción está incompleta.",
+      "importBootstrap": "Importar configuración de la organización",
+      "importedBootstrap": "Credenciales de configuración importadas.",
+      "bootstrapNotFound": "No se encontró el archivo de configuración.",
+      "checks": {
+        "authRejected": "El proveedor de audio rechazó las credenciales de este dispositivo. Revisa la clave aprovisionada o la configuración de identidad.",
+        "tlsFailed": "No se pudo verificar la conexión segura. Revisa los certificados de tu organización.",
+        "proxyFailed": "Falló la conexión a través del proxy de tu organización. Revisa la configuración y las credenciales del proxy.",
+        "timeout": "El proveedor de audio no respondió a tiempo. Revisa tu red o VPN.",
+        "credentialMissing": "Una credencial que necesita esta conexión no está aprovisionada en este dispositivo.",
+        "configChanged": "Tu organización cambió esta configuración de audio. Vuelve a abrir la configuración e inténtalo de nuevo.",
+        "protocolFailed": "El proveedor de audio respondió en un formato que OpenWhispr no admite. Revisa la implementación y el protocolo.",
+        "networkFailed": "No se pudo conectar con el proveedor de audio. Revisa tu red, VPN y DNS.",
+        "secureStorageUnavailable": "Este dispositivo no tiene almacenamiento seguro de credenciales. En Linux, instala y desbloquea un llavero (como GNOME Keyring o KWallet) e inténtalo de nuevo."
+      },
+      "errors": {
+        "ssoRequired": "Tu organización exige el SSO de la empresa. Inicia sesión con SSO e inténtalo de nuevo.",
+        "enterpriseRequired": "El audio empresarial requiere un plan Enterprise activo para este espacio de trabajo.",
+        "signInRequired": "Tu sesión caducó. Vuelve a iniciar sesión e inténtalo de nuevo.",
+        "accessDenied": "Tu cuenta no puede configurar el audio de este espacio de trabajo. Comprueba que eres miembro y que estás en el espacio correcto.",
+        "rateLimited": "Demasiadas solicitudes de prueba. Espera unos minutos e inténtalo de nuevo."
+      },
+      "bootstrapNotProtected": "El archivo de arranque debe ser de tu propiedad y solo tú debes poder leerlo. Pide a TI que lo vuelva a enviar.",
+      "bootstrapUnreadable": "OpenWhispr no puede leer el archivo de arranque. Pide a TI que tu cuenta pueda leerlo.",
+      "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
+      "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
+    }
   }
 }

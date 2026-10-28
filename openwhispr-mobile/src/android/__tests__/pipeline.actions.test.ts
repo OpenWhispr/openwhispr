@@ -176,3 +176,35 @@ it('returns raw action input without expanding snippets or reporting cleanup sta
   expect(onStage.mock.calls).toEqual([['transcribing', { fusedCleanup: false }]]);
   expect(onCleanupDone).not.toHaveBeenCalled();
 });
+
+it.each(['dictate', 'translate'] as const)(
+  'declares dictation purpose for the Cloud %s path',
+  async (mode) => {
+    await processAndroidAudio(
+      audio,
+      {
+        route: routes.cloud,
+        mode,
+        target: 'Spanish',
+        selection: '',
+        eventId: 'policy-test',
+        accountScope: 'device',
+        startedAt: '2026-10-28T12:00:00Z',
+        localDate: '2026-10-28',
+      },
+      new AbortController().signal,
+      jest.fn(),
+    );
+    const upload =
+      mode === 'dictate'
+        ? TranscriptionService.transcribeWithCloudCleanup
+        : TranscriptionService.transcribe;
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purpose: 'dictation',
+        requestContext: 'keyboard',
+      }),
+    );
+  },
+);

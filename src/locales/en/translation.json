@@ -214,6 +214,7 @@
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+    "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
     "resizePanel": "Resize panel"
   },
@@ -883,6 +884,9 @@
       "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
       "refreshingModels": "Refreshing models…"
     },
+    "openai": {
+      "modelRetired": "OpenAI retired {{from}}. Switched to {{to}}."
+    },
     "corti": {
       "euOnly": "Corti's models are only available in the EU region."
     }
@@ -969,6 +973,9 @@
         "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
+        "managedRequestRejected": "Your organization's transcription service refused this audio (HTTP {{status}}). Try again or contact your administrator.",
+        "managedResponseMalformed": "Your organization's transcription service sent a response OpenWhispr couldn't read. Try again or contact your administrator.",
+        "managedChunkTooLarge": "This audio couldn't be split small enough for your organization's transcription service. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
         "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
@@ -1688,6 +1695,7 @@
         "description": "Check your connection and try again.",
         "retry": "Retry"
       },
+      "staleList": "Couldn't reach OpenWhispr. Showing your workspaces from the last time you were connected.",
       "tab": {
         "general": "General",
         "members": "Members",
@@ -2726,6 +2734,8 @@
   "models": {
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
+    "legacy": "Legacy",
+    "legacyHint": "No longer offered. Once you switch to another model, it won't be listed again.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "Most accurate local ASR (5.42% avg WER, 14 languages). No auto language detection"
@@ -2735,7 +2745,8 @@
         "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
         "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)",
-        "orukeet": "Parakeet fine-tune for multilingual speech recognition"
+        "orukeet": "Parakeet fine-tune for multilingual speech recognition",
+        "parakeet_tdt_110m_en": "Lightweight English ASR with punctuation for low-end machines"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",
@@ -2747,7 +2758,9 @@
         "small": "Better quality, slower",
         "medium": "High quality",
         "large": "Best quality, slowest",
-        "turbo": "Fast with good quality"
+        "turbo": "Fast with good quality",
+        "large_q5": "Large at a third of the download",
+        "turbo_q5": "Turbo at a third of the download"
       },
       "transcription": {
         "openai_gpt_transcribe": "Newest, most accurate transcription",
@@ -2765,7 +2778,10 @@
         "deepgram_nova_3": "Deepgram's most accurate realtime model",
         "assemblyai_universal_streaming_english": "Immutable realtime transcripts, English",
         "assemblyai_universal_streaming_multilingual": "Immutable realtime transcripts, multilingual",
-        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages"
+        "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
+        "assemblyai_universal_3_6_pro": "Highest accuracy realtime, 32 languages",
+        "mistral_voxtral_mini_transcribe_3_0": "Fast transcription in 50+ languages (preview)",
+        "mistral_voxtral_small_transcribe_3_0": "Most accurate Voxtral, 50+ languages (preview)"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -2773,7 +2789,6 @@
         "openai_gpt_5_nano": "Ultra-fast, low latency",
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
-        "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic's most capable model, Mythos-class",
         "anthropic_claude_fable_5": "Previous Mythos-class flagship",
         "anthropic_claude_opus_5_5": "Latest Opus model for complex reasoning, 1M context",
@@ -2783,7 +2798,7 @@
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
-        "gemini_gemini_3_5_flash": "Latest fast, high-capability Gemini model",
+        "gemini_gemini_3_5_flash": "Fast, high-capability Gemini model",
         "gemini_gemini_3_5_flash_lite": "Fastest, most cost-effective 3.5 model",
         "gemini_gemini_3_1_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_1_flash_lite": "Frontier-class performance at low cost",
@@ -2811,18 +2826,29 @@
         "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
         "corti_corti_s1": "Most capable clinical model with reasoning",
         "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
-        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price",
+        "openai_gpt_6_1_sol": "Near-Astra capability for chat and agentic work at lower cost",
+        "openai_gpt_6_luna": "Fastest, lowest-cost GPT-6",
+        "gemini_gemini_3_6_flash": "Fast, high-capability Gemini model",
+        "gemini_gemini_3_8_flash": "Most capable Flash model",
+        "gemini_gemini_4_argon": "Google's frontier reasoning model",
+        "tinfoil_kimi_k3": "Private Moonshot flagship with native reasoning and vision, 256K context",
+        "tinfoil_deepseek_v4_1_flash": "Private fast DeepSeek model with optional reasoning, 1M context"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Assistant tasks.",
-        "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Assistant tasks.",
+        "bedrock_claude_haiku_4_5": "Previous Haiku. Fast and cheap for text cleanup.",
+        "bedrock_claude_sonnet_5": "Previous Sonnet. Fast and capable for Assistant tasks.",
         "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Assistant tasks.",
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
         "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Assistant tasks.",
         "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "Balanced workhorse. Best default for Assistant tasks.",
+        "bedrock_claude_haiku_5_5": "Fastest Claude model. Great default for text cleanup.",
+        "bedrock_claude_opus_5_5": "Max intelligence. Best for complex Assistant tasks.",
+        "vertex_gemini_3_8_flash": "Most capable Flash model via Vertex",
+        "vertex_gemini_3_5_flash_lite": "Fastest, lowest-cost model via Vertex",
+        "vertex_gemini_4_argon": "Google's frontier reasoning model via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Powerful hybrid model",
@@ -2859,7 +2885,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI's MoE, high quality with only 1.5B active params",
         "liquidai_lfm2_2_6b_q4_k_m": "Balanced LFM2 for higher quality cleanup",
         "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
-        "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware"
+        "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware",
+        "qwen_qwen3_5_0_8b_q4_k_m": "Tiny Qwen3.5 for the fastest cleanup",
+        "qwen_qwen3_8_27b_q4_k_m": "Most capable Qwen model for 32 GB machines",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "Fast mixture-of-experts model, 3B active parameters",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral's 14B model with tool use, 256K context",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Fast non-thinking model for cleanup and tools",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Small and fast for dictation cleanup",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google's official QAT build, best fit for 16 GB machines"
       }
     },
     "errors": {
@@ -3556,7 +3589,8 @@
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
       "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
-      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+      "disabledByOrg": "Audio upload is disabled by your organization."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -3583,7 +3617,11 @@
       "systemAudioQuiet": {
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
-      }
+      },
+      "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
+      "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
+      "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -4867,6 +4905,7 @@
     },
     "start": "Take notes",
     "join": "Join and transcribe",
+    "joinOnly": "Join meeting",
     "folders": {
       "choose": "Choose meeting folder",
       "search": "Search folders",
@@ -4899,7 +4938,9 @@
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
-        "START_FAILED": "Could not finish. Please retry."
+        "START_FAILED": "Could not finish. Please retry.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Meeting recording is disabled by your organization.",
+        "POLICY_UNRESOLVABLE": "Your organization's settings haven't loaded yet. Try again in a moment."
       }
     }
   },
@@ -5080,5 +5121,51 @@
     "permissionDenied": "Denied",
     "permissionRestricted": "Restricted",
     "permissionNotDetermined": "Not requested"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Enterprise audio setup",
+      "description": "Provision credentials on this device and test your organization’s audio connection.",
+      "provider": "Audio provider",
+      "gateway": "Audio gateway",
+      "provisioned": "Credential provisioned",
+      "credentialMissing": "Credential required",
+      "proxyCredentialFormat": "For a proxy slot, enter JSON with username and password. For an audio slot, enter the API key.",
+      "probeConsent": "I allow short audio test requests, which may incur provider charges.",
+      "testBatch": "Test file transcription",
+      "testRealtime": "Test live meeting connection",
+      "testPassed": "Connection test passed and reported to your administrator.",
+      "testFailed": "Connection test failed.",
+      "setupFailed": "Setup failed. Check your sign-in, workspace access and network settings.",
+      "saved": "Credential saved on this device.",
+      "operationUnavailable": "Your organization has not configured this audio operation.",
+      "certificateUnavailable": "The organization’s certificate bundle is unavailable.",
+      "partialUpload": "{{count}} audio chunks failed; this transcript is incomplete.",
+      "importBootstrap": "Import organization bootstrap",
+      "importedBootstrap": "Bootstrap credentials imported.",
+      "bootstrapNotFound": "No bootstrap file was found.",
+      "checks": {
+        "authRejected": "The audio provider rejected this device's credentials. Check the provisioned key or identity setup.",
+        "tlsFailed": "The secure connection couldn't be verified. Check your organization's certificates.",
+        "proxyFailed": "The connection through your organization's proxy failed. Check the proxy settings and credentials.",
+        "timeout": "The audio provider didn't respond in time. Check your network or VPN.",
+        "credentialMissing": "A credential this connection needs isn't provisioned on this device.",
+        "configChanged": "Your organization changed this audio configuration. Reopen setup and try again.",
+        "protocolFailed": "The audio provider answered in a format OpenWhispr doesn't support. Check the deployment and protocol.",
+        "networkFailed": "The audio provider couldn't be reached. Check your network, VPN and DNS.",
+        "secureStorageUnavailable": "This device has no secure credential storage. On Linux, install and unlock a keyring (such as GNOME Keyring or KWallet), then try again."
+      },
+      "errors": {
+        "ssoRequired": "Your organization requires company SSO. Sign in with SSO and try again.",
+        "enterpriseRequired": "Enterprise audio needs an active Enterprise plan for this workspace.",
+        "signInRequired": "Your session expired. Sign in again and retry.",
+        "accessDenied": "Your account can't set up audio for this workspace. Check that you're a member and signed in to the right workspace.",
+        "rateLimited": "Too many test requests. Wait a few minutes and try again."
+      },
+      "bootstrapNotProtected": "The bootstrap file must be owned by you and readable only by you. Ask IT to redeliver it.",
+      "bootstrapUnreadable": "OpenWhispr can't read the bootstrap file. Ask IT to make it readable by your account.",
+      "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
+      "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
+    }
   }
 }

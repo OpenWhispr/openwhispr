@@ -120,6 +120,7 @@ export async function processAndroidAudio(
       language: job.language ?? 'auto',
       mimeType: 'audio/wav',
       requestContext: 'keyboard',
+      purpose: 'dictation',
       keyboardTone: job.tone,
     },
     {
