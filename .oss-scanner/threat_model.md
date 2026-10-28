@@ -68,6 +68,12 @@ anyway), physical access to an unlocked device, and attacks that need the user t
 - **Files and downloads**: audio import and transcription of user-chosen or URL-sourced media, model downloads
   (`scripts/lib/download-utils.js`, `src/helpers/modelManagerBridge.js`, `whisper.js`, `parakeet.js`), temp
   files, auto-update.
+- **Skill uploads** (`src/helpers/skills/`): `.md`, `.zip` and `.skill` files dropped or chosen on Integrations
+  → Skills → Upload skill are read in the main process and written under `userData/skills/<name>/`.
+  `skillArchive.js` checks an archive's listing before reading any entry (claimed entry count, zip64, paths,
+  links, Windows device names, the 25 MB and 500-file caps, entry sizes, entries sharing bytes), then caps the
+  bytes it inflates and checks each entry's CRC-32. A path that leaves the skill's folder, a write outside
+  `userData/skills`, or a crafted file that crashes or stalls the main process matters.
 - **Meeting and calendar data**: Google, Microsoft and Apple calendar sync, attendee lists fed to the assistant
   (`<meeting_attendees>` fence; check that note or invite text can't fake it).
 

@@ -47,11 +47,10 @@ import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
-  canManageSpace,
-  canManageWorkspace,
   canMoveBetweenSpaces,
   canMoveOrDeleteSpaceFolder,
 } from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import {
   canOrganizeNote as canOrganizeSharedNote,
   resolveNotePermission,
@@ -66,7 +65,7 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
-import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
+import type { FolderItem, NoteItem, SpaceItem, Workspace } from "../../types/electron";
 import {
   folderContainerKey,
   spaceContainerKey,
@@ -1192,13 +1191,15 @@ export default function SpacesTree({
   const workspacesPending = isSignedIn && !workspacesLoaded;
 
   const currentUserId = user?.id ?? null;
-  const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>
-    workspaces.find((w) => w.id === space?.workspace_id)?.role ?? null;
+  const workspaceFor = (space: SpaceItem | undefined): Workspace | null =>
+    workspaces.find((w) => w.id === space?.workspace_id) ?? null;
 
   // Local-only spaces (no cloud id) stay fully manageable; cloud spaces
-  // follow space/workspace roles. Cosmetic — the server enforces.
+  // follow space/workspace capabilities. Cosmetic — the server enforces.
   const canManageTeamSpace = (space: SpaceItem): boolean =>
-    !space.cloud_space_id || canManageSpace(space, workspaceRoleFor(space));
+    !space.cloud_space_id ||
+    spaceCan(space, "manage_settings") ||
+    workspaceCan(workspaceFor(space), "manage_settings");
 
   // Note-level ACL for cloud-backed personal notes shared with this user.
   // Without a cache entry (note never opened this session, offline) the
@@ -1224,11 +1225,11 @@ export default function SpacesTree({
   const canDeleteNote = (note: NoteItem): boolean => {
     if (sharedNoteBlocksDelete(sharedNotePermission(note), sharedNoteScope(note))) return false;
     const space = spacesById.get(note.space_id);
-    return canDeleteSpaceNote(note, space, currentUserId, workspaceRoleFor(space));
+    return canDeleteSpaceNote(note, space, currentUserId, workspaceFor(space));
   };
   const canChangeNoteScope = (note: NoteItem): boolean => {
     const space = spacesById.get(note.space_id);
-    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceRoleFor(space));
+    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceFor(space));
   };
   // Any local re-filing (same-space folder moves included): owner-only on
   // shared personal notes — a denied folder_id PATCH would fork an
@@ -1237,7 +1238,7 @@ export default function SpacesTree({
     canOrganizeSharedNote(sharedNotePermission(note), sharedNoteScope(note));
   const canManageFolderDestructive = (folder: FolderItem): boolean => {
     const space = spacesById.get(folder.space_id);
-    return canMoveOrDeleteSpaceFolder(space, workspaceRoleFor(space));
+    return canMoveOrDeleteSpaceFolder(space, workspaceFor(space));
   };
 
   // Cross-space targets require scope-change permission; same-space folder
@@ -2112,7 +2113,7 @@ export default function SpacesTree({
                           >
                             {workspace.name}
                           </span>
-                          {canManageWorkspace(workspace.role) && (
+                          {workspaceCan(workspace, "create_spaces") && (
                             <Button
                               variant="ghost"
                               size="icon"

@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 // The meeting dispatch/start/teardown paths live inside the IPCHandlers
 // registration closure, so — like ipcPolicyHeaderCoverage.test.js — this pins
@@ -156,7 +157,8 @@ test("meeting connects forward the credential mode", () => {
   // as managed (#2140). Scoped by sample rate so an unrelated connectOpts cannot
   // drag the assertion off target.
   const connectOptsBlocks =
-    source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,\s*\};/g) ?? [];
+    source.match(/const connectOpts = \{[^}]*sampleRate: MEETING_STREAM_SAMPLE_RATE,[^}]*\};/g) ??
+    [];
   assert.equal(connectOptsBlocks.length, 2, "initial connect and reconnect each build connectOpts");
   for (const block of connectOptsBlocks) {
     // Anchored: an unanchored match also accepts the key commented out.
@@ -174,5 +176,65 @@ test("a mid-meeting renewal refused for the session reports the sign-in sentinel
   assert.match(
     reconnectCatch,
     /"meeting-transcription-error",\s*isSignInRefusal\(error\) \? "signInExpired" : error\.message/
+  );
+});
+
+test("enterprise renewal cannot restore sockets after policy or configuration refusal", async () => {
+  const start = source.indexOf("const reconnectMeetingStreams =");
+  const end = source.indexOf("const assertMeetingAllowed =", start);
+  assert.ok(start >= 0 && end > start);
+  for (const code of [
+    "PROVIDER_POLICY_CONFLICT",
+    "POLICY_UNRESOLVABLE",
+    "MANAGED_CONFIG_CHANGED",
+    "ECONNRESET",
+  ]) {
+    let disconnected = 0;
+    const streaming = {
+      isConnected: true,
+      disconnect: async () => disconnected++,
+    };
+    const target = { _meetingMicStreaming: streaming, _meetingSystemStreaming: streaming };
+    const reconnect = vm.runInNewContext(
+      `(function () { ${source.slice(start, end)} return reconnectMeetingStreams; }).call(target)`,
+      {
+        target,
+        meetingReconnectPromise: null,
+        meetingLocalMode: false,
+        meetingConnectionOptions: { provider: "enterprise-realtime" },
+        meetingConnectionWin: { isDestroyed: () => false, webContents: { send() {} } },
+        meetingReconnectCount: 0,
+        MAX_MEETING_RECONNECTS: 3,
+        resolveEnterpriseMeetingOptions: async () => {
+          throw Object.assign(new Error("replacement refused"), { code });
+        },
+        debugLogger: { error() {} },
+        resetMeetingReconnectAudio() {},
+        isSignInRefusal: () => false,
+        isAudioPolicyRefusal: () => false,
+      }
+    );
+    const recoverable = code === "ECONNRESET";
+    assert.equal(await reconnect({ restoreOldOnFailure: true }), recoverable, code);
+    assert.equal(disconnected, recoverable ? 0 : 2, code);
+    assert.equal(target._meetingMicStreaming, recoverable ? streaming : null, code);
+    assert.equal(target._meetingSystemStreaming, recoverable ? streaming : null, code);
+  }
+});
+
+test("a reconnect refused under org policy ends the meeting instead of restoring old sockets", () => {
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  // The policy stop clears meetingConnectionOptions, so the stale-options branch
+  // right after it returns before the old sockets can be kept or a fatal error sent.
+  assert.match(
+    reconnectCatch,
+    /if \(isAudioPolicyRefusal\(error\)\) this\._stopMeetingForPolicy\(error\.code\);\s*if \(meetingConnectionOptions !== options\) \{/
+  );
+  assert.match(
+    source,
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
   );
 });

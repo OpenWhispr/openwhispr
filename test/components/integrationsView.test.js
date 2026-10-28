@@ -55,6 +55,13 @@ const MOCKS = {
     import React from "react";
     export function CalendarsPane() { return React.createElement("div", null, "CALENDARS PANE"); }
   `,
+  "/integrations/SkillsPane": `
+    import React from "react";
+    export function SkillsPane({ title, active }) {
+      const state = active ? " shown" : " hidden";
+      return React.createElement("div", null, "SKILLS PANE " + title + state);
+    }
+  `,
   "/ui/select": `
     import React from "react";
     const Pass = ({ children }) => React.createElement("div", null, children);
@@ -204,6 +211,34 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   }
 });
 
+test("Skills has no nav tag on any plan", async (t) => {
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-integrations-skills-meta-test-",
+  });
+  const { sectionMeta } = await vite.ssrLoadModule(
+    "/components/integrations/integrationsSections.ts"
+  );
+  for (const isPaid of [true, false]) {
+    const input = {
+      isPaid,
+      connectors: { isPaid, blockedByOrg: false, ready: 2 },
+      connectedCalendars: 1,
+    };
+    assert.equal(sectionMeta("skills", input), null);
+  }
+});
+
+test("the Skills pane learns when its section is shown", async (t) => {
+  const { container } = await renderView(t, { section: "skills" });
+
+  assert.match(shownText(container), /SKILLS PANE integrations\.nav\.sections\.skills shown/);
+
+  await React.act(async () => click(navButton(container, "connectors")));
+
+  // Still mounted, so a screen or draft in it survives the visit
+  assert.match(container.textContent, /SKILLS PANE integrations\.nav\.sections\.skills hidden/);
+});
+
 test("the nav lists every section and switches the pane it shows", async (t) => {
   const { container } = await renderView(t);
 
@@ -214,7 +249,7 @@ test("the nav lists every section and switches the pane it shows", async (t) => 
     }
     return false;
   });
-  assert.deepEqual(order, ["calendars", "connectors", "api", "mcp", "cli"]);
+  assert.deepEqual(order, ["calendars", "connectors", "skills", "api", "mcp", "cli"]);
   assert.equal(navButton(container, "connectors").getAttribute("aria-current"), "page");
   assert.match(container.textContent, /CONNECTORS SECTION/);
 

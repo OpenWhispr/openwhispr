@@ -455,8 +455,9 @@ export default function NoteEditorScreen({
   const lastEnhancementInputHashRef = useRef('');
   const usesSegmentTranscriptRef = useRef(usesSegmentTranscript);
   usesSegmentTranscriptRef.current = usesSegmentTranscript;
-  // Desktop stores an uploaded file's flat transcript as the note body.
-  const contentIsTranscript = note?.noteType === 'upload';
+  // Desktop used to store an uploaded file's flat transcript as the note body. It now
+  // stores it as the transcript, leaving the body for the user's own notes.
+  const contentIsTranscript = note?.noteType === 'upload' && !hasTranscriptSegments;
   // Notes typed beside a recording, never the transcript itself.
   const hasTypedMeetingNotes = isAudioTranscript && !contentIsTranscript;
   const activeSpeaker =
@@ -490,12 +491,13 @@ export default function NoteEditorScreen({
   const hasEnhancedTab = hasEnhanced || enhancedEditing;
   const bodyTabInput = useMemo(
     () => ({
+      isUpload: note?.noteType === 'upload',
       usesSegmentTranscript,
       transcriptPending,
       contentIsTranscript,
       hasEnhanced: hasEnhancedTab,
     }),
-    [contentIsTranscript, hasEnhancedTab, transcriptPending, usesSegmentTranscript],
+    [contentIsTranscript, hasEnhancedTab, note?.noteType, transcriptPending, usesSegmentTranscript],
   );
   // A private note asks before any AI leaves this iPhone. Local Mode asks too for note chat; note
   // formatting follows its own selection there.

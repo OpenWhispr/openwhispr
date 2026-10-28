@@ -13,6 +13,7 @@ import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { IntegrationsNav } from "./integrations/IntegrationsNav";
 import { IntegrationsPane, UpsellBar } from "./integrations/IntegrationsPane";
 import { CalendarsPane } from "./integrations/CalendarsPane";
+import { SkillsPane } from "./integrations/SkillsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
 import {
@@ -111,6 +112,7 @@ export default function IntegrationsView({
         <ConnectorsSection onUpgrade={onUpgrade} />
       </IntegrationsPane>
     ),
+    skills: <SkillsPane title={titleOf("skills")} active={section === "skills"} />,
     calendars: <CalendarsPane title={titleOf("calendars")} />,
     api: (
       <IntegrationsPane

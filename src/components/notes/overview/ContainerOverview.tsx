@@ -3,7 +3,7 @@ import { Plus, UserPlus } from "../../icons";
 import { useTranslation } from "react-i18next";
 import InviteTeammateDialog from "../../InviteTeammateDialog";
 import { useWorkspaceStore } from "../../../stores/workspaceStore";
-import { canManageSpace } from "../../../lib/spacePermissions";
+import { workspaceCan } from "../../../lib/capabilities";
 import {
   useNotes,
   useNotesByContainer,
@@ -106,11 +106,13 @@ export function ContainerOverview({
   const workspace = space.workspace_id
     ? workspaces.find((w) => w.id === space.workspace_id)
     : undefined;
+  // The invite dialog sends a workspace invitation, which the API refuses
+  // without manage_members, so being a space admin is not enough.
   const canInvite =
     space.kind === "team" &&
     !!space.cloud_space_id &&
     !!workspace &&
-    canManageSpace(space, workspace.role ?? null);
+    workspaceCan(workspace, "manage_members");
 
   const spaceFolders = useMemo(
     () => folders.filter((f) => f.space_id === space.id),

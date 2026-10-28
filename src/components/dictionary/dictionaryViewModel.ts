@@ -7,7 +7,7 @@ import type {
   SharedDictionarySnapshotEntry,
 } from "../../types/sharedDictionary";
 import { hasSharedDictionaryPlan } from "../../lib/workspaceBilling";
-import { canManageWorkspace } from "../../lib/spacePermissions";
+import { workspaceCan } from "../../lib/capabilities";
 import { isTermLikeSharedWord } from "../../utils/sharedDictionaryHints";
 import { dictionaryWordKey } from "../../utils/snippets";
 
@@ -100,7 +100,7 @@ export function resolveSharedAccessState(input: {
   if (status === "noAccess") return "noAccess";
   if (serverPaused === true && hasWords) return "paused";
   if (!hasSharedDictionaryPlan(workspace)) {
-    return canManageWorkspace(workspace.role) ? "upgradeAdmin" : "upgradeMember";
+    return workspaceCan(workspace, "manage_billing") ? "upgradeAdmin" : "upgradeMember";
   }
   return "available";
 }

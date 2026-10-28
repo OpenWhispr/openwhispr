@@ -137,12 +137,30 @@ test("paused workspace with words is paused, without words is an upgrade state",
   assert.equal(resolveSharedAccessState({ ...unpaused, serverPaused: null }), "upgradeAdmin");
 });
 
-test("upgrade state depends on whether the role can manage the workspace", () => {
+test("upgrade state follows workspace billing capabilities with a role fallback", () => {
   const input = { status: "ready", signedIn: true, serverPaused: null, hasWords: false };
   const free = (role) => workspace({ plan: "free", role });
   assert.equal(resolveSharedAccessState({ ...input, workspace: free("owner") }), "upgradeAdmin");
-  assert.equal(resolveSharedAccessState({ ...input, workspace: free("admin") }), "upgradeAdmin");
+  assert.equal(resolveSharedAccessState({ ...input, workspace: free("admin") }), "upgradeMember");
   assert.equal(resolveSharedAccessState({ ...input, workspace: free("member") }), "upgradeMember");
+  assert.equal(
+    resolveSharedAccessState({
+      ...input,
+      workspace: workspace({
+        plan: "free",
+        role: "owner",
+        capabilities: { manage_billing: false },
+      }),
+    }),
+    "upgradeMember"
+  );
+  assert.equal(
+    resolveSharedAccessState({
+      ...input,
+      workspace: workspace({ plan: "free", capabilities: { manage_billing: true } }),
+    }),
+    "upgradeAdmin"
+  );
   assert.equal(
     resolveSharedAccessState({ ...input, workspace: workspace({ status: "past_due" }) }),
     "upgradeMember"

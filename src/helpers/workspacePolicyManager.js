@@ -91,7 +91,9 @@ function createWorkspacePolicyManager({
     const apiOrigin = new URL(apiUrl).origin;
     const accountId = normalizeAccountId(request.accountId);
     const credentialMaterial = JSON.stringify(
-      Object.entries(authHeaders).sort(([left], [right]) => left.localeCompare(right))
+      Object.entries(authHeaders).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0
+      )
     );
     const credentialHash = crypto.createHash("sha256").update(credentialMaterial).digest("hex");
     return {
@@ -239,9 +241,13 @@ function createWorkspacePolicyManager({
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
+        // This manager keeps its own freshness window; a Chromium-cached copy
+        // (the endpoint allows max-age=300) would answer a refresh after a
+        // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
           headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          cache: "no-store",
           signal: controller.signal,
         });
         assertIdentityCurrent(identity);
@@ -338,7 +344,10 @@ function createWorkspacePolicyManager({
     const lastSuccessfulRefresh = successfulRefreshes.get(key);
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;
+    // `refresh` is for a caller the server just refused: the fresh verdict it
+    // holds is the one in question. The attempt throttle below still applies.
     if (
+      !request.refresh &&
       current &&
       !(current.data.managed === false && requiresManagedPolicy(identity)) &&
       successfulRefreshAge !== null &&

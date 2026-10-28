@@ -47,7 +47,7 @@ import { getAgentName } from "../utils/agentName";
 import { parseDictionaryImportText } from "../helpers/dictionaryImport";
 import { dictionaryWordKey, getDictionaryHintTiers } from "../utils/snippets";
 import { formatDictionaryPrompt, WHISPER_DECODER_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
-import { canManageWorkspace } from "../lib/spacePermissions";
+import { workspaceCan } from "../lib/capabilities";
 
 const SORT_STORAGE_KEY = "dictionarySort";
 const ADD_TARGET_STORAGE_KEY = "dictionaryAddTarget";
@@ -226,7 +226,7 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     [userWords, movedPersonal, snapshot, workspaceName, access, t]
   );
 
-  const canManage = workspace ? canManageWorkspace(workspace.role) : false;
+  const canManage = workspaceCan(workspace, "manage_billing");
   // Without the shared dictionary, All words would only repeat Personal, so the
   // page shows Personal alone, with no picker.
   const pickerShown = access !== "unavailable";
