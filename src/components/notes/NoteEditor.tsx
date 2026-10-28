@@ -114,8 +114,8 @@ import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
   MEETING_RECORDING_REFUSAL_KEYS,
   NOTE_META_CHIP_CLASS,
-  defaultFolderDisplayName,
   folderMatchesQuery,
+  folderPathLabel,
   shouldOfferMeetingSummary,
 } from "./shared";
 
@@ -1189,7 +1189,7 @@ export default function NoteEditor({
                         >
                           <FolderOpen size={11} className="text-foreground/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
-                            {defaultFolderDisplayName(folder, t)}
+                            {folderPathLabel(folder, folders, t)}
                           </span>
                           {isCurrent && <Check size={9} className="text-primary shrink-0" />}
                         </DropdownMenuItem>

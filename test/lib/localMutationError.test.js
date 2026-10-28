@@ -18,6 +18,14 @@ test("maps database validation messages to translation keys", async () => {
     localMutationErrorKey("Cannot purge the private space"),
     "notes.mutationErrors.privateSpaceImmutable"
   );
+  assert.equal(
+    localMutationErrorKey("Parent folder not found"),
+    "notes.mutationErrors.folderNotFound"
+  );
+  assert.equal(
+    localMutationErrorKey("Cannot nest default folders"),
+    "notes.mutationErrors.defaultFolderImmutable"
+  );
 });
 
 test("does not expose arbitrary main-process or cloud error text", async () => {

@@ -31,6 +31,7 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.join.memberCount",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
+  "notes.folders.subfolderCount",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",

@@ -2585,7 +2585,7 @@
         "title": "مساحة الفريق",
         "description": "منطقة مشتركة داخل مساحة العمل. أضف أشخاصًا أو مجموعات لمنحهم الوصول."
       },
-      "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات.",
+      "contents": "يمكن أن تحتوي كل مساحة على مجلدات وملاحظات، ويمكن أن يحتوي كل مجلد على مجلدات فرعية.",
       "done": "فهمت",
       "reopen": "تعرف على كيفية تنظيم المساحات"
     },
@@ -2598,12 +2598,20 @@
       "title": "المجلدات",
       "soon": "قريبًا",
       "folderName": "اسم المجلد",
+      "topLevel": "المستوى الأعلى",
       "couldNotCreate": "تعذر إنشاء المجلد",
       "couldNotRename": "تعذر إعادة تسمية المجلد",
       "couldNotDelete": "تعذر حذف المجلد",
       "deleteTitle": "حذف المجلد؟",
       "deleteDescription": "سيؤدي هذا إلى حذف \"{{name}}\" وملاحظاتها البالغ عددها {{count}} بشكل دائم. لا يمكن التراجع عن هذا.",
       "deleteDescriptionEmpty": "سيؤدي هذا إلى حذف \"{{name}}\" بشكل دائم. لا يمكن التراجع عن هذا.",
+      "deleteDescriptionSubfolders": "سيؤدي هذا إلى حذف \"{{name}}\" بشكل دائم، بما في ذلك {{subfolders}} و{{notes}}. لا يمكن التراجع عن هذا.",
+      "subfolderCount_zero": "{{count}} مجلدات فرعية",
+      "subfolderCount_one": "{{count}} مجلد فرعي",
+      "subfolderCount_two": "{{count}} مجلدان فرعيان",
+      "subfolderCount_few": "{{count}} مجلدات فرعية",
+      "subfolderCount_many": "{{count}} مجلدًا فرعيًا",
+      "subfolderCount_other": "{{count}} مجلد فرعي",
       "deleteConfirm": "حذف المجلد والملاحظات"
     },
     "list": {
@@ -2856,6 +2864,7 @@
       "searchFolders": "البحث في المجلدات...",
       "noResults": "لم يتم العثور على مجلدات",
       "newFolder": "مجلد جديد",
+      "newSubfolder": "مجلد فرعي جديد",
       "showInFileManager": "إظهار في {{manager}}"
     },
     "actions": {
@@ -3075,6 +3084,7 @@
         "members_many": "{{count}} عضوًا",
         "members_other": "{{count}} عضو"
       },
+      "subfolders": "المجلدات الفرعية",
       "banner": {
         "title": {
           "team": "مساحة فريقك",

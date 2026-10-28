@@ -78,7 +78,7 @@ function dispatch(element, type, init = {}) {
 
 const settle = () => React.act(async () => new Promise((resolve) => setImmediate(resolve)));
 
-async function renderUploadAudio(t) {
+async function renderUploadAudio(t, { batch = {}, electronAPI = {}, mocks = {} } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -89,6 +89,7 @@ async function renderUploadAudio(t) {
     hasQueue: false,
     queue: [],
     addFiles: (items) => calls.added.push(items),
+    ...batch,
   };
   t.after(() => delete globalThis.__uploadBatch);
   installBrowserGlobals(t, {
@@ -102,6 +103,7 @@ async function renderUploadAudio(t) {
         getDiarizationModelStatus: async () => ({ modelsDownloaded: false }),
         cancelUrlDownload() {},
         deleteTempFile() {},
+        ...electronAPI,
       },
     },
   });
@@ -110,7 +112,7 @@ async function renderUploadAudio(t) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-audio-drop-zone-test-",
     noExternal: ["react-i18next"],
-    mockModules: MOCKS,
+    mockModules: { ...MOCKS, ...mocks },
   });
   const { default: UploadAudioView } = await vite.ssrLoadModule(
     "/components/notes/UploadAudioView.tsx"
@@ -231,4 +233,56 @@ test("the shared upload zone blocks restricted inputs and resumes when policy al
     })
   );
   assert.match(container.textContent, /allowed\.mp3/);
+});
+
+test("the default Meetings folder and its subfolders are listed but take no uploads", async (t) => {
+  const folder = (id, name, is_default = 0, parent_folder_id = null) => ({
+    id,
+    name,
+    is_default,
+    space_id: 1,
+    parent_folder_id,
+  });
+  const { container } = await renderUploadAudio(t, {
+    batch: { hasQueue: true, hasPending: true },
+    electronAPI: {
+      getSpaces: async () => [{ id: 1, kind: "private" }],
+      getFolders: async () => [
+        folder(3, "Client A", 0, 2),
+        folder(1, "Personal", 1),
+        folder(2, "Meetings", 1),
+        folder(4, "Work"),
+        folder(5, "Q1", 0, 4),
+      ],
+    },
+    mocks: {
+      "/ui/select": `
+        import { createElement } from "react";
+        const pass = ({ children }) => children;
+        export const Select = pass;
+        export const SelectTrigger = pass;
+        export const SelectValue = () => null;
+        export const SelectContent = pass;
+        export const SelectSeparator = () => null;
+        export const SelectItem = ({ value, disabled, children }) =>
+          createElement("div", { "data-folder": value, "aria-disabled": String(!!disabled) }, children);
+      `,
+    },
+  });
+  await settle();
+
+  const options = [];
+  findElement(container, (node) => {
+    if (node.getAttribute("data-folder")) {
+      options.push([node.getAttribute("data-folder"), node.getAttribute("aria-disabled")]);
+    }
+    return false;
+  });
+  assert.deepEqual(options, [
+    ["1", "false"],
+    ["2", "true"],
+    ["3", "true"],
+    ["4", "false"],
+    ["5", "false"],
+  ]);
 });

@@ -35,6 +35,8 @@ import type { FolderItem } from "../../types/electron";
 import {
   findDefaultFolder,
   findVideosFolder,
+  folderPathLabel,
+  orderFoldersAsTree,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
   uploadRestrictionKey,
@@ -1782,6 +1784,9 @@ function FolderSelect({
   includeCreateNew,
   className,
 }: FolderSelectProps) {
+  const meetingsFolderId = folders.find(
+    (f) => f.name === MEETINGS_FOLDER_NAME && !!f.is_default
+  )?.id;
   return (
     <div className={cn("flex items-center justify-center gap-2", className)}>
       <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
@@ -1790,8 +1795,11 @@ function FolderSelect({
           <SelectValue placeholder={t("notes.upload.selectFolder")} />
         </SelectTrigger>
         <SelectContent>
-          {folders.map((f) => {
-            const isMeetings = f.name === MEETINGS_FOLDER_NAME && !!f.is_default;
+          {orderFoldersAsTree(folders).map((f) => {
+            // The default Meetings folder takes no uploads yet, and neither do its subfolders.
+            const isMeetings =
+              meetingsFolderId != null &&
+              (f.id === meetingsFolderId || f.parent_folder_id === meetingsFolderId);
             return (
               <SelectItem
                 key={f.id}
@@ -1800,7 +1808,7 @@ function FolderSelect({
                 className="text-sm py-1.5 ps-2.5 pe-7 rounded-md"
               >
                 <span className="flex items-center gap-1.5">
-                  <span dir="auto">{f.name}</span>
+                  <span dir="auto">{folderPathLabel(f, folders, t)}</span>
                   {isMeetings && (
                     <span className="text-[9px] uppercase tracking-wider text-foreground/45 font-medium">
                       {t("notes.folders.soon")}

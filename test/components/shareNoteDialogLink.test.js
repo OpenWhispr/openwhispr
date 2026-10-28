@@ -109,6 +109,7 @@ const MOCK_MODULES = {
     export const persistNoteShareState = async (noteId, updates) => {
       globalThis.__shareTest.persisted.push({ noteId, updates });
     };
+    export const useFolders = () => [];
     export const useSpaces = () => [];
     export const useShareCacheEntry = (id) => (id ? (cache().get(id) ?? null) : null);
   `,

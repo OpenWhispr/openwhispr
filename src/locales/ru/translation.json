@@ -3052,7 +3052,7 @@
         "title": "Командное пространство",
         "description": "Общая область внутри рабочего пространства. Добавьте людей или группы, чтобы дать им доступ."
       },
-      "contents": "В каждом пространстве могут быть папки и заметки.",
+      "contents": "В каждом пространстве могут быть папки и заметки, а в каждой папке — подпапки.",
       "done": "Понятно",
       "reopen": "Как организованы пространства"
     },
@@ -3065,12 +3065,18 @@
       "title": "Папки",
       "soon": "Скоро",
       "folderName": "Название папки",
+      "topLevel": "Верхний уровень",
       "couldNotCreate": "Не удалось создать папку",
       "couldNotRename": "Не удалось переименовать папку",
       "couldNotDelete": "Не удалось удалить папку",
       "deleteTitle": "Удалить папку?",
       "deleteDescription": "Это навсегда удалит «{{name}}» и {{count}} заметок в ней. Это действие нельзя отменить.",
       "deleteDescriptionEmpty": "Это навсегда удалит «{{name}}». Это действие нельзя отменить.",
+      "deleteDescriptionSubfolders": "Это навсегда удалит «{{name}}», в том числе {{subfolders}} и {{notes}}. Это действие нельзя отменить.",
+      "subfolderCount_one": "{{count}} подпапка",
+      "subfolderCount_few": "{{count}} подпапки",
+      "subfolderCount_many": "{{count}} подпапок",
+      "subfolderCount_other": "{{count}} подпапки",
       "deleteConfirm": "Удалить папку и заметки"
     },
     "list": {
@@ -3301,6 +3307,7 @@
       "searchFolders": "Поиск папок...",
       "noResults": "Папки не найдены",
       "newFolder": "Новая папка",
+      "newSubfolder": "Новая подпапка",
       "showInFileManager": "Показать в {{manager}}"
     },
     "actions": {
@@ -3532,6 +3539,7 @@
         "members_many": "{{count}} участников",
         "members_other": "{{count}} участника"
       },
+      "subfolders": "Подпапки",
       "banner": {
         "title": {
           "team": "Ваше командное пространство",

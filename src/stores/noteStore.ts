@@ -227,6 +227,12 @@ export function contextContainerKey(context: ActiveContext): string {
     : spaceContainerKey(context.spaceId);
 }
 
+// Deleting or moving a folder takes its subfolders with it.
+function folderAndSubfolderKeys(folders: FolderItem[], folderId: number): string[] {
+  const subfolderIds = folders.filter((f) => f.parent_folder_id === folderId).map((f) => f.id);
+  return [folderId, ...subfolderIds].map(folderContainerKey);
+}
+
 function noteContainerKey(note: NoteItem): string {
   return note.folder_id != null
     ? folderContainerKey(note.folder_id)
@@ -360,17 +366,20 @@ function ensureIpcListeners() {
     const dispose = window.electronAPI.onFolderDeleted(({ id }) => {
       if (id == null) return;
       const state = useNoteStore.getState();
-      const key = folderContainerKey(id);
-      const teardown = teardownNoteContainers(state, [key]);
+      const keys = folderAndSubfolderKeys(state.folders, id);
+      const teardown = teardownNoteContainers(state, keys);
       persistExpandedContainers(teardown.expandedContainers);
       const extra: Partial<NoteState> = {
         expandedContainers: teardown.expandedContainers,
         activeNoteId: teardown.activeNoteId,
       };
       let fallbackContext: ActiveContext | null = null;
-      if (state.activeContext?.folderId === id) {
-        // The active folder vanished under us — degrade to its space root.
-        fallbackContext = { spaceId: state.activeContext.spaceId, folderId: null };
+      if (state.activeContext && keys.includes(contextContainerKey(state.activeContext))) {
+        // The active folder vanished under us — degrade to the deleted
+        // subfolder's parent, else to the space root.
+        const deleted = state.folders.find((f) => f.id === id);
+        const parent = state.folders.find((f) => f.id === deleted?.parent_folder_id);
+        fallbackContext = { spaceId: state.activeContext.spaceId, folderId: parent?.id ?? null };
         extra.activeContext = fallbackContext;
         extra.notes = teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [];
       }
@@ -556,7 +565,10 @@ export function toggleContainerExpanded(key: string): void {
 /** Expand the containers that make a space/folder (and its notes) visible in the tree. */
 export function revealContainer(spaceId: number, folderId: number | null): void {
   setContainerExpanded(spaceContainerKey(spaceId), true);
-  if (folderId != null) setContainerExpanded(folderContainerKey(folderId), true);
+  if (folderId == null) return;
+  const parentId = useNoteStore.getState().folders.find((f) => f.id === folderId)?.parent_folder_id;
+  if (parentId != null) setContainerExpanded(folderContainerKey(parentId), true);
+  setContainerExpanded(folderContainerKey(folderId), true);
 }
 
 export function setActiveContext(spaceId: number, folderId: number | null): void {
@@ -817,9 +829,10 @@ function handleSpacePurged(spaceId: number): void {
 
 export async function createFolder(
   name: string,
-  spaceId: number
+  spaceId: number,
+  parentFolderId: number | null = null
 ): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
-  const result = await window.electronAPI.createFolder(name, spaceId);
+  const result = await window.electronAPI.createFolder(name, spaceId, parentFolderId);
   if (result.success && result.folder) {
     await loadFolders();
     syncService.debouncedPush("folder", result.folder.id);
@@ -839,14 +852,26 @@ export async function renameFolder(
   return result;
 }
 
+export async function setFolderParent(
+  id: number,
+  parentFolderId: number | null
+): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+  const result = await window.electronAPI.setFolderParent(id, parentFolderId);
+  if (result.success) {
+    await loadFolders();
+    syncService.debouncedPush("folder", id);
+  }
+  return result;
+}
+
 export async function deleteFolder(id: number): Promise<{ success: boolean; error?: string }> {
   const result = await window.electronAPI.deleteFolder(id);
   if (!result.success) return result;
 
   const state = useNoteStore.getState();
   const folder = state.folders.find((f) => f.id === id);
-  const key = folderContainerKey(id);
-  const teardown = teardownNoteContainers(state, [key]);
+  const keys = folderAndSubfolderKeys(state.folders, id);
+  const teardown = teardownNoteContainers(state, keys);
   persistExpandedContainers(teardown.expandedContainers);
   useNoteStore.setState({
     notesByContainer: teardown.notesByContainer,
@@ -855,10 +880,14 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
   });
 
   await loadFolders();
-  if (getActiveFolderIdValue() === id && folder) {
+  const activeFolderId = getActiveFolderIdValue();
+  if (folder && activeFolderId != null && keys.includes(folderContainerKey(activeFolderId))) {
     const { folders } = useNoteStore.getState();
     const spaceFolders = folders.filter((f) => f.space_id === folder.space_id);
-    const fallback = findDefaultFolder(spaceFolders) ?? spaceFolders[0];
+    const fallback =
+      folders.find((f) => f.id === folder.parent_folder_id) ??
+      findDefaultFolder(spaceFolders) ??
+      spaceFolders[0];
     setActiveContext(folder.space_id, fallback?.id ?? null);
     if (getActiveNoteIdValue() == null) {
       const notes = await ensureContainerLoaded(
@@ -879,14 +908,19 @@ export async function moveFolderToSpace(
   if (!result.success) return result;
 
   await loadFolders();
-  const key = folderContainerKey(folderId);
-  if (useNoteStore.getState().notesByContainer[key]) {
-    // Refresh the container so its notes carry the new space_id.
-    await loadContainerNotes(key);
-  }
+  const { folders, notesByContainer } = useNoteStore.getState();
+  const keys = folderAndSubfolderKeys(folders, folderId);
+  // Refresh the loaded containers so their notes carry the new space_id.
+  await Promise.all(
+    keys.filter((key) => notesByContainer[key]).map((key) => loadContainerNotes(key))
+  );
   const { activeContext } = useNoteStore.getState();
-  if (activeContext?.folderId === folderId && activeContext.spaceId !== spaceId) {
-    useNoteStore.setState({ activeContext: { spaceId, folderId } });
+  if (
+    activeContext &&
+    activeContext.spaceId !== spaceId &&
+    keys.includes(contextContainerKey(activeContext))
+  ) {
+    useNoteStore.setState({ activeContext: { spaceId, folderId: activeContext.folderId } });
   }
   syncService.requestSyncAll("manual");
   return result;

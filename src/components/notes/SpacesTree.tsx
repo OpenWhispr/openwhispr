@@ -64,7 +64,14 @@ import { getCachedPlatform } from "../../utils/platform";
 import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
-import { defaultFolderDisplayName } from "./shared";
+import {
+  canHaveSubfolders,
+  canNestFolder,
+  defaultFolderDisplayName,
+  folderPathLabel,
+  folderTree,
+  orderFoldersAsTree,
+} from "./shared";
 import type { FolderItem, NoteItem, SpaceItem, Workspace } from "../../types/electron";
 import {
   folderContainerKey,
@@ -88,6 +95,7 @@ import {
   renameFolder,
   deleteFolder,
   moveFolderToSpace,
+  setFolderParent,
   getNoteFromStore,
   getFoldersValue,
   getSpacesValue,
@@ -127,23 +135,32 @@ const SUB_TRIGGER_CLASS = cn(
 
 type TFn = (key: string, options?: Record<string, unknown>) => string;
 
+export type TreeLevel = 1 | 2 | 3 | 4;
+
+// Inline-start indent by row kind and depth inside its space (0 = directly in
+// the space). A subfolder sits with its parent's notes, and its own rows sit
+// 24px further in. Inline folder inputs take the folder indent.
+const ROW_INDENT: Record<
+  "personal" | "team",
+  Record<"folder" | "note" | "more", Record<number, string>>
+> = {
+  personal: {
+    folder: { 0: "ps-2", 1: "ps-8" },
+    note: { 0: "ps-[30px]", 1: "ps-8", 2: "ps-14" },
+    more: { 1: "ps-8", 2: "ps-14" },
+  },
+  team: {
+    folder: { 0: "ps-[14px]", 1: "ps-10" },
+    note: { 0: "ps-[14px]", 1: "ps-10", 2: "ps-16" },
+    more: { 1: "ps-[42px]", 2: "ps-16" },
+  },
+};
+
 type TreeRow =
-  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: 2 | 3 }
+  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: TreeLevel }
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
-  | {
-      type: "folder";
-      key: string;
-      folder: FolderItem;
-      parentKey?: string;
-      level: 1 | 2;
-    }
-  | {
-      type: "note";
-      key: string;
-      note: NoteItem;
-      parentKey?: string;
-      level: 1 | 2 | 3;
-    };
+  | { type: "folder"; key: string; folder: FolderItem; parentKey?: string; level: TreeLevel }
+  | { type: "note"; key: string; note: NoteItem; parentKey?: string; level: TreeLevel };
 
 interface DropHandlers {
   onDragOver: (e: React.DragEvent) => void;
@@ -547,6 +564,8 @@ function SpaceRow({
 function FolderRow({
   folder,
   level,
+  indentClassName,
+  folders,
   spaces,
   isExpanded,
   isActive,
@@ -560,14 +579,18 @@ function FolderRow({
   onActivate,
   onToggle,
   onNewNote,
+  onNewSubfolder,
   onRename,
+  onMoveToFolder,
   onMoveToSpace,
   onDelete,
   a11y,
   t,
 }: {
   folder: FolderItem;
-  level: 1 | 2;
+  level: TreeLevel;
+  indentClassName: string;
+  folders: FolderItem[];
   spaces: SpaceItem[];
   isExpanded: boolean;
   isActive: boolean;
@@ -581,15 +604,32 @@ function FolderRow({
   onActivate: () => void;
   onToggle: () => void;
   onNewNote: () => void;
+  onNewSubfolder: () => void;
   onRename: () => void;
+  onMoveToFolder: (parentFolderId: number | null) => void;
   onMoveToSpace: (space: SpaceItem) => void;
   onDelete: () => void;
   a11y: RowA11yProps;
   t: TFn;
 }) {
   const [spaceSearch, setSpaceSearch] = useState("");
+  const [folderSearch, setFolderSearch] = useState("");
+  // The new subfolder's input mounts once the menu has closed, so the menu's
+  // focus handling can't take focus back from it.
+  const newSubfolderPicked = useRef(false);
   const displayName = defaultFolderDisplayName(folder, t);
+  const isSubfolder = !canHaveSubfolders(folder);
   const canMoveToSpace = canManageDestructive && !folder.is_default && spaces.length > 1;
+  // A subfolder keeps its current parent listed, as the disabled current row.
+  const parentOptions = useMemo(
+    () =>
+      folders.filter(
+        (f) => f.space_id === folder.space_id && f.id !== folder.id && canHaveSubfolders(f)
+      ),
+    [folder, folders]
+  );
+  const canMoveToFolder =
+    canNestFolder(folder, folders) && (isSubfolder || parentOptions.length > 0);
   const filteredSpaces = useMemo(
     () =>
       spaceSearch
@@ -598,6 +638,15 @@ function FolderRow({
           )
         : spaces,
     [spaces, spaceSearch, t]
+  );
+  const filteredParents = useMemo(
+    () =>
+      folderSearch
+        ? parentOptions.filter((f) =>
+            defaultFolderDisplayName(f, t).toLowerCase().includes(folderSearch.toLowerCase())
+          )
+        : parentOptions,
+    [parentOptions, folderSearch, t]
   );
 
   return (
@@ -620,7 +669,7 @@ function FolderRow({
       className={cn(
         ROW_BASE_CLASS,
         "h-7 pe-2",
-        level === 1 ? "ps-2" : "ps-[14px]",
+        indentClassName,
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -666,104 +715,177 @@ function FolderRow({
         >
           <Plus size={12} />
         </Button>
-        {(!folder.is_default || noteFilesEnabled) && (
-          <DropdownMenu onOpenChange={(open) => !open && setSpaceSearch("")}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t("common.actions")}
-                onClick={(e) => e.stopPropagation()}
-                className={KEBAB_BUTTON_CLASS}
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (!open) {
+              setSpaceSearch("");
+              setFolderSearch("");
+            }
+          }}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("common.actions")}
+              onClick={(e) => e.stopPropagation()}
+              className={KEBAB_BUTTON_CLASS}
+            >
+              <MoreHorizontal size={12} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={4}
+            className="min-w-32"
+            onCloseAutoFocus={(event) => {
+              if (!newSubfolderPicked.current) return;
+              newSubfolderPicked.current = false;
+              event.preventDefault();
+              onNewSubfolder();
+            }}
+          >
+            {!isSubfolder && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  newSubfolderPicked.current = true;
+                }}
+                className={MENU_ITEM_CLASS}
               >
-                <MoreHorizontal size={12} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={4} className="min-w-32">
-              {noteFilesEnabled && (
+                <Plus size={11} className="text-muted-foreground/70" />
+                {t("notes.context.newSubfolder")}
+              </DropdownMenuItem>
+            )}
+            {noteFilesEnabled && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.electronAPI?.showFolderInExplorer?.(folder.id);
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <ExternalLink size={11} className="text-muted-foreground/70" />
+                {t("notes.context.showInFileManager", { manager: fileManagerName })}
+              </DropdownMenuItem>
+            )}
+            {!folder.is_default && (
+              <>
+                {(!isSubfolder || noteFilesEnabled) && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.electronAPI?.showFolderInExplorer?.(folder.id);
+                    onRename();
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/70" />
-                  {t("notes.context.showInFileManager", { manager: fileManagerName })}
+                  <Pencil size={11} className="text-muted-foreground/70" />
+                  {t("notes.context.rename")}
                 </DropdownMenuItem>
-              )}
-              {!folder.is_default && (
-                <>
-                  {noteFilesEnabled && <DropdownMenuSeparator />}
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename();
-                    }}
-                    className={MENU_ITEM_CLASS}
+                {canMoveToFolder && (
+                  <SearchableMoveSubmenu
+                    icon={<FolderOpen size={11} className="text-muted-foreground/70" />}
+                    label={t("notes.context.moveToFolder")}
+                    itemCount={parentOptions.length + (isSubfolder ? 1 : 0)}
+                    search={folderSearch}
+                    onSearchChange={setFolderSearch}
+                    searchPlaceholder={t("notes.context.searchFolders")}
                   >
-                    <Pencil size={11} className="text-muted-foreground/70" />
-                    {t("notes.context.rename")}
-                  </DropdownMenuItem>
-                  {canMoveToSpace && (
-                    <SearchableMoveSubmenu
-                      icon={<Users size={11} className="text-muted-foreground/70" />}
-                      label={t("notes.spaces.moveToSpace")}
-                      itemCount={spaces.length}
-                      search={spaceSearch}
-                      onSearchChange={setSpaceSearch}
-                      searchPlaceholder={t("notes.spaces.searchSpaces")}
-                    >
-                      {filteredSpaces.map((space) => {
-                        const isCurrent = space.id === folder.space_id;
-                        return (
-                          <DropdownMenuItem
-                            key={space.id}
-                            disabled={isCurrent}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onMoveToSpace(space);
-                            }}
-                            className={MENU_ITEM_CLASS}
-                          >
-                            <SpaceMenuIcon space={space} />
-                            <span dir="auto" className="truncate flex-1">
-                              {spaceDisplayName(space, t)}
-                            </span>
-                            {isCurrent && <Check size={9} className="text-primary shrink-0" />}
-                          </DropdownMenuItem>
-                        );
-                      })}
-                      {spaceSearch && filteredSpaces.length === 0 && (
-                        <p className="text-xs text-foreground/50 text-center py-1.5">
-                          {t("notes.spaces.noSpacesFound")}
-                        </p>
-                      )}
-                    </SearchableMoveSubmenu>
-                  )}
-                  {canManageDestructive && (
-                    <>
-                      <DropdownMenuSeparator />
+                    {isSubfolder && (
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDelete();
+                          onMoveToFolder(null);
                         }}
-                        className={cn(
-                          MENU_ITEM_CLASS,
-                          "text-destructive focus:text-destructive focus:bg-destructive/10"
-                        )}
+                        className={MENU_ITEM_CLASS}
                       >
-                        <Trash2 size={11} />
-                        {t("notes.context.delete")}
+                        <span className="truncate flex-1">{t("notes.folders.topLevel")}</span>
                       </DropdownMenuItem>
-                    </>
-                  )}
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                    )}
+                    {filteredParents.map((parent) => {
+                      const isCurrent = parent.id === folder.parent_folder_id;
+                      return (
+                        <DropdownMenuItem
+                          key={parent.id}
+                          disabled={isCurrent}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveToFolder(parent.id);
+                          }}
+                          className={MENU_ITEM_CLASS}
+                        >
+                          <span dir="auto" className="truncate flex-1">
+                            {defaultFolderDisplayName(parent, t)}
+                          </span>
+                          {isCurrent && <Check size={9} className="text-primary shrink-0" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    {folderSearch && filteredParents.length === 0 && (
+                      <p className="text-xs text-foreground/50 text-center py-1.5">
+                        {t("notes.context.noResults")}
+                      </p>
+                    )}
+                  </SearchableMoveSubmenu>
+                )}
+                {canMoveToSpace && (
+                  <SearchableMoveSubmenu
+                    icon={<Users size={11} className="text-muted-foreground/70" />}
+                    label={t("notes.spaces.moveToSpace")}
+                    itemCount={spaces.length}
+                    search={spaceSearch}
+                    onSearchChange={setSpaceSearch}
+                    searchPlaceholder={t("notes.spaces.searchSpaces")}
+                  >
+                    {filteredSpaces.map((space) => {
+                      const isCurrent = space.id === folder.space_id;
+                      return (
+                        <DropdownMenuItem
+                          key={space.id}
+                          disabled={isCurrent}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMoveToSpace(space);
+                          }}
+                          className={MENU_ITEM_CLASS}
+                        >
+                          <SpaceMenuIcon space={space} />
+                          <span dir="auto" className="truncate flex-1">
+                            {spaceDisplayName(space, t)}
+                          </span>
+                          {isCurrent && <Check size={9} className="text-primary shrink-0" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    {spaceSearch && filteredSpaces.length === 0 && (
+                      <p className="text-xs text-foreground/50 text-center py-1.5">
+                        {t("notes.spaces.noSpacesFound")}
+                      </p>
+                    )}
+                  </SearchableMoveSubmenu>
+                )}
+                {canManageDestructive && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      className={cn(
+                        MENU_ITEM_CLASS,
+                        "text-destructive focus:text-destructive focus:bg-destructive/10"
+                      )}
+                    >
+                      <Trash2 size={11} />
+                      {t("notes.context.delete")}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </span>
     </div>
   );
@@ -798,8 +920,8 @@ function NoteLeaf({
   t,
 }: {
   note: NoteItem;
-  level: 1 | 2 | 3;
-  indentClassName?: string;
+  level: TreeLevel;
+  indentClassName: string;
   isActive: boolean;
   isDragging: boolean;
   dragHandlers: {
@@ -828,6 +950,7 @@ function NoteLeaf({
 
   const moveOptions = useMemo<MoveOption[]>(() => {
     const options: MoveOption[] = [];
+    const orderedFolders = orderFoldersAsTree(folders);
     for (const space of spaces) {
       if (space.kind === "team") {
         options.push({
@@ -838,10 +961,10 @@ function NoteLeaf({
           isCurrent: note.folder_id == null && note.space_id === space.id,
         });
       }
-      for (const folder of folders.filter((f) => f.space_id === space.id)) {
+      for (const folder of orderedFolders.filter((f) => f.space_id === space.id)) {
         options.push({
           key: folderContainerKey(folder.id),
-          label: defaultFolderDisplayName(folder, t),
+          label: folderPathLabel(folder, folders, t),
           space,
           target: { spaceId: space.id, folderId: folder.id },
           isCurrent: note.folder_id === folder.id,
@@ -897,7 +1020,7 @@ function NoteLeaf({
       className={cn(
         ROW_BASE_CLASS,
         "h-7 pe-2",
-        indentClassName ?? (level === 3 ? "ps-10" : "ps-[14px]"),
+        indentClassName,
         isActive
           ? "bg-primary/8 dark:bg-primary/10"
           : "hover:bg-foreground/4 dark:hover:bg-white/4",
@@ -1143,7 +1266,10 @@ export default function SpacesTree({
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
 
-  const [creatingFolderSpaceId, setCreatingFolderSpaceId] = useState<number | null>(null);
+  const [creatingFolder, setCreatingFolder] = useState<{
+    spaceId: number;
+    parentFolderId: number | null;
+  } | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -1167,6 +1293,7 @@ export default function SpacesTree({
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
   const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
+  const folderNodes = useMemo(() => folderTree(folders), [folders]);
   // Valid move destinations per source space (the source itself stays listed —
   // menus render it as the disabled "current" row).
   const moveTargetsBySpace = useMemo(() => {
@@ -1259,7 +1386,7 @@ export default function SpacesTree({
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
       const folder = folders.find((f) => f.id === target.folderId);
-      return folder ? defaultFolderDisplayName(folder, t) : "";
+      return folder ? folderPathLabel(folder, folders, t) : "";
     }
     const space = spaces.find((s) => s.id === target.spaceId);
     return space ? spaceDisplayName(space, t) : "";
@@ -1388,10 +1515,9 @@ export default function SpacesTree({
   };
 
   const moveFolderSafely = async (
-    folderId: number,
-    spaceId: number
+    move: () => Promise<{ success: boolean; error?: string }>
   ): Promise<{ success: boolean; error?: string }> => {
-    const result = await moveFolderToSpace(folderId, spaceId).catch((err: unknown) => ({
+    const result = await move().catch((err: unknown) => ({
       success: false,
       error: (err as Error).message,
     }));
@@ -1407,7 +1533,7 @@ export default function SpacesTree({
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
-    const result = await moveFolderSafely(folder.id, space.id);
+    const result = await moveFolderSafely(() => moveFolderToSpace(folder.id, space.id));
     if (!result.success) return;
     revealContainer(space.id, null);
     showUndoToast(folder.name, spaceDisplayName(space, t), () => {
@@ -1418,7 +1544,27 @@ export default function SpacesTree({
         toast({ title: t("notes.spaces.couldNotMove"), variant: "destructive" });
         return;
       }
-      void moveFolderSafely(folder.id, prevSpaceId);
+      void moveFolderSafely(() => moveFolderToSpace(folder.id, prevSpaceId));
+    });
+  };
+
+  const commitMoveFolderToParent = async (
+    folder: FolderItem,
+    parentFolderId: number | null
+  ): Promise<void> => {
+    const prevParentId = folder.parent_folder_id;
+    const result = await moveFolderSafely(() => setFolderParent(folder.id, parentFolderId));
+    if (!result.success) return;
+    revealContainer(folder.space_id, parentFolderId);
+    const parent = folders.find((f) => f.id === parentFolderId);
+    const space = spacesById.get(folder.space_id);
+    const target = parent
+      ? defaultFolderDisplayName(parent, t)
+      : space
+        ? spaceDisplayName(space, t)
+        : "";
+    showUndoToast(folder.name, target, () => {
+      void moveFolderSafely(() => setFolderParent(folder.id, prevParentId));
     });
   };
 
@@ -1453,94 +1599,66 @@ export default function SpacesTree({
 
   const visibleRows = useMemo<TreeRow[]>(() => {
     const rows: TreeRow[] = [];
-    const pushPrivateSpace = (space: SpaceItem) => {
-      const spaceKey = spaceContainerKey(space.id);
-      if (!expanded.has(spaceKey)) return;
-      folders
-        .filter((f) => f.space_id === space.id)
-        .forEach((folder) => {
-          const folderKey = folderContainerKey(folder.id);
-          rows.push({ type: "folder", key: folderKey, folder, level: 1 });
-          if (expanded.has(folderKey)) {
-            const folderNotes = notesByContainer[folderKey] ?? [];
-            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
-              folderNotes,
-              activeNote,
-              folder.id,
-              folderCounts[folder.id] ?? folderNotes.length
-            );
-            shownNotes.forEach((note) => {
-              rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
-                parentKey: folderKey,
-                level: 2,
-              });
-            });
-            if (hiddenCount > 0) {
-              rows.push({
-                type: "more",
-                key: `more:${folder.id}`,
-                folder,
-                parentKey: folderKey,
-                level: 2,
-              });
-            }
-          }
+    const pushFolder = (
+      folder: FolderItem,
+      subfolders: FolderItem[],
+      level: TreeLevel,
+      parentKey?: string
+    ) => {
+      const folderKey = folderContainerKey(folder.id);
+      rows.push({ type: "folder", key: folderKey, folder, parentKey, level });
+      if (!expanded.has(folderKey)) return;
+      const childLevel = (level + 1) as TreeLevel;
+      subfolders.forEach((subfolder) => pushFolder(subfolder, [], childLevel, folderKey));
+      const folderNotes = notesByContainer[folderKey] ?? [];
+      const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+        folderNotes,
+        activeNote,
+        folder.id,
+        folderCounts[folder.id] ?? folderNotes.length
+      );
+      shownNotes.forEach((note) => {
+        rows.push({
+          type: "note",
+          key: `n:${note.id}`,
+          note,
+          parentKey: folderKey,
+          level: childLevel,
         });
-      (notesByContainer[spaceKey] ?? []).forEach((note) => {
-        rows.push({ type: "note", key: `n:${note.id}`, note, level: 1 });
+      });
+      if (hiddenCount > 0) {
+        rows.push({
+          type: "more",
+          key: `more:${folder.id}`,
+          folder,
+          parentKey: folderKey,
+          level: childLevel,
+        });
+      }
+    };
+    const pushSpaceContents = (space: SpaceItem, level: TreeLevel, parentKey?: string) => {
+      folderNodes
+        .filter(({ folder }) => folder.space_id === space.id)
+        .forEach(({ folder, subfolders }) => pushFolder(folder, subfolders, level, parentKey));
+      (notesByContainer[spaceContainerKey(space.id)] ?? []).forEach((note) => {
+        rows.push({ type: "note", key: `n:${note.id}`, note, parentKey, level });
       });
     };
-    const pushSpace = (space: SpaceItem) => {
-      const spaceKey = spaceContainerKey(space.id);
-      rows.push({ type: "space", key: spaceKey, space });
-      if (!expanded.has(spaceKey)) return;
-      folders
-        .filter((f) => f.space_id === space.id)
-        .forEach((folder) => {
-          const folderKey = folderContainerKey(folder.id);
-          rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
-          if (expanded.has(folderKey)) {
-            const folderNotes = notesByContainer[folderKey] ?? [];
-            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
-              folderNotes,
-              activeNote,
-              folder.id,
-              folderCounts[folder.id] ?? folderNotes.length
-            );
-            shownNotes.forEach((note) => {
-              rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
-                parentKey: folderKey,
-                level: 3,
-              });
-            });
-            if (hiddenCount > 0) {
-              rows.push({
-                type: "more",
-                key: `more:${folder.id}`,
-                folder,
-                parentKey: folderKey,
-                level: 3,
-              });
-            }
-          }
-        });
-      (notesByContainer[spaceKey] ?? []).forEach((note) => {
-        rows.push({ type: "note", key: `n:${note.id}`, note, parentKey: spaceKey, level: 2 });
+    privateSpaces.forEach((space) => {
+      if (expanded.has(spaceContainerKey(space.id))) pushSpaceContents(space, 1);
+    });
+    if (teamCapability) {
+      teamSpaces.forEach((space) => {
+        const spaceKey = spaceContainerKey(space.id);
+        rows.push({ type: "space", key: spaceKey, space });
+        if (expanded.has(spaceKey)) pushSpaceContents(space, 2, spaceKey);
       });
-    };
-    privateSpaces.forEach(pushPrivateSpace);
-    if (teamCapability) teamSpaces.forEach(pushSpace);
+    }
     return rows;
   }, [
     privateSpaces,
     teamSpaces,
-    folders,
+    folderNodes,
     notesByContainer,
     expanded,
     teamCapability,
@@ -1594,13 +1712,21 @@ export default function SpacesTree({
 
   const requestDeleteFolder = (folder: FolderItem) => {
     if (!canManageFolderDestructive(folder)) return;
-    const count = folderCounts[folder.id] ?? 0;
+    // Main deletes the subfolders and all their notes along with the folder.
+    const subfolders = folders.filter((f) => f.parent_folder_id === folder.id);
+    const count = [folder, ...subfolders].reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0);
     showConfirmDialog({
       title: t("notes.folders.deleteTitle"),
       description:
-        count > 0
-          ? t("notes.folders.deleteDescription", { name: folder.name, count })
-          : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
+        subfolders.length > 0
+          ? t("notes.folders.deleteDescriptionSubfolders", {
+              name: folder.name,
+              subfolders: t("notes.folders.subfolderCount", { count: subfolders.length }),
+              notes: t("notes.spaces.noteCount", { count }),
+            })
+          : count > 0
+            ? t("notes.folders.deleteDescription", { name: folder.name, count })
+            : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
       confirmText: t("notes.folders.deleteConfirm"),
       variant: "destructive",
       onConfirm: async () => {
@@ -1709,21 +1835,21 @@ export default function SpacesTree({
     onFocus: () => setFocusedKey(key),
   });
 
-  const startCreateFolder = (space: SpaceItem) => {
-    setContainerExpanded(spaceContainerKey(space.id), true);
-    setCreatingFolderSpaceId(space.id);
+  const startCreateFolder = (spaceId: number, parentFolderId: number | null = null) => {
+    revealContainer(spaceId, parentFolderId);
+    setCreatingFolder({ spaceId, parentFolderId });
     setNewFolderName("");
   };
 
   const confirmCreateFolder = async (): Promise<string | null> => {
-    const spaceId = creatingFolderSpaceId;
+    const target = creatingFolder;
     const trimmed = newFolderName.trim();
-    setCreatingFolderSpaceId(null);
+    setCreatingFolder(null);
     setNewFolderName("");
-    if (spaceId == null || !trimmed) return null;
-    const result = await createFolder(trimmed, spaceId);
+    if (!target || !trimmed) return null;
+    const result = await createFolder(trimmed, target.spaceId, target.parentFolderId);
     if (result.success && result.folder) {
-      setActiveContext(spaceId, result.folder.id);
+      setActiveContext(target.spaceId, result.folder.id);
       return folderContainerKey(result.folder.id);
     }
     if (result.error) {
@@ -1754,9 +1880,9 @@ export default function SpacesTree({
 
   const renderNote = (
     note: NoteItem,
-    level: 1 | 2 | 3,
-    parentKey?: string,
-    indentClassName?: string
+    level: TreeLevel,
+    parentKey: string | undefined,
+    indentClassName: string
   ) => (
     <NoteLeaf
       key={note.id}
@@ -1786,8 +1912,41 @@ export default function SpacesTree({
     />
   );
 
-  const renderFolder = (folder: FolderItem, parentKey?: string, level: 1 | 2 = 2) => {
+  const renderNewFolderInput = (indentClassName: string, restoreFocus: () => void) => (
+    <div className={cn(indentClassName, "pe-2")}>
+      <input
+        dir="auto"
+        autoFocus
+        value={newFolderName}
+        onChange={(e) => setNewFolderName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            void confirmCreateFolder().then((key) => key && focusRowSoon(key));
+          }
+          if (e.key === "Escape") {
+            setCreatingFolder(null);
+            setNewFolderName("");
+            restoreFocus();
+          }
+        }}
+        onBlur={confirmCreateFolder}
+        placeholder={t("notes.folders.folderName")}
+        className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/45")}
+      />
+    </div>
+  );
+
+  const renderFolder = (
+    folder: FolderItem,
+    subfolders: FolderItem[],
+    flattened: boolean,
+    depth: 0 | 1,
+    parentKey?: string
+  ) => {
     const folderKey = folderContainerKey(folder.id);
+    const indent = ROW_INDENT[flattened ? "personal" : "team"];
+    const level = (depth + (flattened ? 1 : 2)) as TreeLevel;
+    const childLevel = (level + 1) as TreeLevel;
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
     const folderNotes = notesByContainer[folderKey] ?? [];
@@ -1801,7 +1960,7 @@ export default function SpacesTree({
 
     if (isRenaming) {
       return (
-        <div key={folder.id} role="none" className={cn(level === 1 ? "ps-2" : "ps-[14px]", "pe-2")}>
+        <div key={folder.id} role="none" className={cn(indent.folder[depth], "pe-2")}>
           <input
             dir="auto"
             autoFocus
@@ -1831,6 +1990,8 @@ export default function SpacesTree({
         <FolderRow
           folder={folder}
           level={level}
+          indentClassName={indent.folder[depth]}
+          folders={folders}
           spaces={moveTargetsBySpace.get(folder.space_id) ?? []}
           isExpanded={isExpanded}
           isActive={activeNoteId == null && activeContext?.folderId === folder.id}
@@ -1851,7 +2012,9 @@ export default function SpacesTree({
           }
           onToggle={() => toggleContainerExpanded(folderKey)}
           onNewNote={() => onNewNote(folder.space_id, folder.id)}
+          onNewSubfolder={() => startCreateFolder(folder.space_id, folder.id)}
           onRename={() => startRenameFolder(folder)}
+          onMoveToFolder={(parentFolderId) => void commitMoveFolderToParent(folder, parentFolderId)}
           onMoveToSpace={(space) => requestMoveFolder(folder, space)}
           onDelete={() => requestDeleteFolder(folder)}
           a11y={a11yFor(folderKey)}
@@ -1859,8 +2022,11 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
+            {subfolders.map((subfolder) => renderFolder(subfolder, [], flattened, 1, folderKey))}
+            {creatingFolder?.parentFolderId === folder.id &&
+              renderNewFolderInput(indent.folder[depth + 1], () => focusRowSoon(folderKey))}
             {shownNotes.map((note) =>
-              level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
+              renderNote(note, childLevel, folderKey, indent.note[depth + 1])
             )}
             {hiddenCount > 0 && (
               <FolderNotesPopover
@@ -1868,7 +2034,8 @@ export default function SpacesTree({
                 total={total}
                 hiddenCount={hiddenCount}
                 activeNoteId={activeNoteId}
-                level={level === 1 ? 2 : 3}
+                level={childLevel}
+                indentClassName={indent.more[depth + 1]}
                 open={openFolderId === folder.id}
                 onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
                 a11y={a11yFor(`more:${folder.id}`)}
@@ -1891,47 +2058,30 @@ export default function SpacesTree({
 
   const renderSpaceContents = (space: SpaceItem, flattened = false) => {
     const spaceKey = spaceContainerKey(space.id);
-    const spaceFolders = folders.filter((f) => f.space_id === space.id);
+    const spaceFolderNodes = folderNodes.filter(({ folder }) => folder.space_id === space.id);
     const rootNotes = notesByContainer[spaceKey];
+    const indent = ROW_INDENT[flattened ? "personal" : "team"];
+    const parentKey = flattened ? undefined : spaceKey;
     const showSkeletons =
       space.kind === "team" &&
       space.sync_status === "pending" &&
-      spaceFolders.length === 0 &&
+      spaceFolderNodes.length === 0 &&
       rootNotes === undefined;
     const showEmptySpace =
-      space.kind === "team" && spaceFolders.length === 0 && rootNotes?.length === 0;
+      space.kind === "team" && spaceFolderNodes.length === 0 && rootNotes?.length === 0;
 
     return (
       <div className="space-y-px">
-        {spaceFolders.map((folder) =>
-          flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
+        {spaceFolderNodes.map(({ folder, subfolders }) =>
+          renderFolder(folder, subfolders, flattened, 0, parentKey)
         )}
-        {creatingFolderSpaceId === space.id && (
-          <div className={cn(flattened ? "ps-2" : "ps-[14px]", "pe-2")}>
-            <input
-              dir="auto"
-              autoFocus
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  void confirmCreateFolder().then((key) => key && focusRowSoon(key));
-                }
-                if (e.key === "Escape") {
-                  setCreatingFolderSpaceId(null);
-                  setNewFolderName("");
-                  if (flattened) privateSectionToggleRef.current?.focus();
-                  else focusRowSoon(spaceKey);
-                }
-              }}
-              onBlur={confirmCreateFolder}
-              placeholder={t("notes.folders.folderName")}
-              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/45")}
-            />
-          </div>
-        )}
+        {creatingFolder?.spaceId === space.id &&
+          creatingFolder.parentFolderId == null &&
+          renderNewFolderInput(indent.folder[0], () =>
+            flattened ? privateSectionToggleRef.current?.focus() : focusRowSoon(spaceKey)
+          )}
         {(rootNotes ?? []).map((note) =>
-          flattened ? renderNote(note, 1, undefined, "ps-[30px]") : renderNote(note, 2, spaceKey)
+          renderNote(note, flattened ? 1 : 2, parentKey, indent.note[0])
         )}
         {showSkeletons && <SkeletonRows />}
         {showEmptySpace && (
@@ -1981,7 +2131,7 @@ export default function SpacesTree({
           dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
           onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
           onToggle={() => toggleContainerExpanded(spaceKey)}
-          onNewFolder={() => startCreateFolder(space)}
+          onNewFolder={() => startCreateFolder(space.id)}
           onSettings={() => openSpaceSettings(space)}
           a11y={a11yFor(spaceKey)}
           t={t}
@@ -2035,7 +2185,7 @@ export default function SpacesTree({
                   variant="ghost"
                   size="icon"
                   aria-label={t("notes.context.newFolder")}
-                  onClick={() => startCreateFolder(privateSpace)}
+                  onClick={() => startCreateFolder(privateSpace.id)}
                   className={cn(HOVER_REVEAL_BUTTON_CLASS, "group-hover/section:opacity-100")}
                 >
                   <Plus size={12} />
