@@ -115,7 +115,7 @@ interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
@@ -153,10 +153,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   // Radix auto-focuses the first tabbable — the Cancel button — so Enter used
   // to cancel. Focus Confirm instead, except: destructive dialogs keep Cancel
-  // focused (Enter must never destroy by default), and dialogs with children
-  // keep Radix's choice (a type-to-confirm input owns focus and Enter itself).
+  // focused (Enter must never destroy by default), dialogs with children
+  // keep Radix's choice (a type-to-confirm input owns focus and Enter itself),
+  // and a disabled Confirm can't take focus, which would leave it behind the
+  // dialog.
   const handleOpenAutoFocus = (event: Event) => {
-    if (children != null || variant === "destructive") return;
+    if (children != null || variant === "destructive" || confirmDisabled) return;
     event.preventDefault();
     confirmRef.current?.focus();
   };

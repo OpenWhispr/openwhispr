@@ -12725,6 +12725,43 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("dragon-import-pick-file", async (event) => {
+      try {
+        const { dialog } = require("electron");
+        // Parent the dialog so it opens as a sheet on the panel window —
+        // a parentless panel can land invisible on another display/Space.
+        const parentWindow = BrowserWindow.fromWebContents(event.sender);
+        const dialogOptions = {
+          properties: ["openFile"],
+          filters: [{ name: "Dragon word list", extensions: ["txt", "xml"] }],
+        };
+        const result = parentWindow
+          ? await dialog.showOpenDialog(parentWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+        if (result.canceled || !result.filePaths.length) {
+          return { canceled: true };
+        }
+        const [filePath] = result.filePaths;
+        // A twenty-year Dragon vocabulary is well under 1 MB; anything near
+        // this bound is not a word list.
+        const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+        if (fs.statSync(filePath).size > MAX_IMPORT_BYTES) {
+          return { canceled: false, success: false, error: "FILE_TOO_LARGE" };
+        }
+        // The renderer parses the bytes and applies the words, so a large or
+        // malformed file never holds up hotkeys and dictation here.
+        return {
+          canceled: false,
+          success: true,
+          fileName: path.basename(filePath),
+          bytes: fs.readFileSync(filePath),
+        };
+      } catch (error) {
+        debugLogger.error("Dragon import failed", { error: error.message }, "dragon-import");
+        return { canceled: false, success: false, error: "READ_FAILED" };
+      }
+    });
+
     ipcMain.handle("get-speaker-mappings", async (_event, noteId) => {
       return this.databaseManager.getSpeakerMappings(noteId);
     });
