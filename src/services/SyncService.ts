@@ -42,6 +42,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { WORKSPACE_LIST_CACHE_KEY } from "../stores/workspaceStore";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -417,6 +418,8 @@ export class SyncService {
     // Both hold account-scoped/local numeric ids that collide across accounts.
     localStorage.removeItem("activeWorkspaceId");
     localStorage.removeItem("notesTree.expanded");
+    // Sign-out can happen offline, before the auth reconcile that resets the workspace store.
+    localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and

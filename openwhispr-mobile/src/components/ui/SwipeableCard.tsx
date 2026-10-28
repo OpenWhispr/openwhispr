@@ -13,9 +13,16 @@ import Animated, {
 import { Trash2, FolderInput } from 'lucide-react-native';
 import { iosColor } from '@/config/colors';
 
+/** Slides the row back to rest; call it when the user backs out of a delete. */
+export type RestoreRow = () => void;
+
 interface SwipeableCardProps {
   children: React.ReactNode;
-  onDelete: () => void;
+  /**
+   * Runs once the row has slid off screen. A caller that asks for confirmation
+   * must call `restore` if the user cancels, or the row stays hidden.
+   */
+  onDelete: (restore: RestoreRow) => void;
   /** Optional secondary action shown to the left of Delete on swipe. */
   onMove?: () => void;
   /**
@@ -80,12 +87,24 @@ export function SwipeableCard({
       }
     });
 
+  const restoreRow: RestoreRow = () => {
+    translateX.value = withTiming(0, {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+    });
+    setIsRevealed(false);
+  };
+
+  const requestDelete = () => {
+    onDelete(restoreRow);
+  };
+
   const handleDeletePress = () => {
     translateX.value = withTiming(
       -SCREEN_WIDTH,
       { duration: 250, easing: Easing.in(Easing.cubic) },
       () => {
-        runOnJS(onDelete)();
+        runOnJS(requestDelete)();
       },
     );
   };
@@ -141,6 +160,8 @@ export function SwipeableCard({
         {onMove && (
           <Pressable
             onPress={handleMovePress}
+            accessibilityRole="button"
+            accessibilityLabel="Move"
             onPressIn={pressIn(moveScale)}
             onPressOut={pressOut(moveScale)}
             style={styles.action}
@@ -153,6 +174,8 @@ export function SwipeableCard({
         )}
         <Pressable
           onPress={handleDeletePress}
+          accessibilityRole="button"
+          accessibilityLabel="Delete"
           onPressIn={pressIn(deleteScale)}
           onPressOut={pressOut(deleteScale)}
           style={styles.action}

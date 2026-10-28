@@ -89,6 +89,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Integrates with GnomeShortcutManager for GNOME Wayland support
   - Integrates with HyprlandShortcutManager for Hyprland Wayland support
   - Integrates with KDEShortcutManager for KDE Wayland support
+  - Each press and release of a bound hotkey writes a debug-level `Hotkey event` line (`logHotkeyEvent`: source, action, key, owning slots, activation mode; key names only). Unbound keys and hotkey capture are skipped, since the macOS listener reports every right modifier and side mouse button. Every `globalShortcut` registration goes through `registerGlobalShortcut`, which logs a held key once and leaves keys the Windows/Linux listener watches to that listener; GNOME, KDE and Hyprland report through their `onHotkeyEvent` hook, and `handleMacPushModifierUp` logs the release of a macOS compound hold
 - **gnomeShortcut.js**: GNOME Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands
   - Registers shortcuts via gsettings (visible in GNOME Settings → Keyboard → Shortcuts)
@@ -277,6 +278,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **Available Models**:
   - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
   - `parakeet-unified-en-0.6b`: English-only, ~631MB, state-of-the-art EN accuracy (5.91% avg WER on Open ASR Leaderboard)
+  - `parakeet-tdt-110m-en`: English-only, ~136MB, lightweight TDT transducer with punctuation for low-end machines
   - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
   - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
   - `cohere-transcribe-03-2026`: Multilingual (14 languages, NO auto detection — one language per server start), ~1.7GB download / ~2.7GB on disk, Conformer encoder-decoder (`"modelType": "cohere-transcribe"`), most accurate local model (5.42% avg WER). Exposed as the `"cohere"` local provider in settings/UI but served by the same ParakeetManager/sherpa-onnx offline WS server; the dictation language is part of the server identity, so changing it restarts the server. Segments long audio at 30s (model max ~35s)
@@ -378,6 +380,7 @@ Models stored in `~/.cache/openwhispr/whisper-models/`:
 - medium: ~1.5GB (high quality)
 - large: ~3GB (best quality)
 - turbo: ~1.6GB (fast with good quality)
+- large-q5 / turbo-q5: ~1.1GB / ~574MB (the same models quantized to q5_0)
 
 ### 4. Database Schema
 
@@ -417,6 +420,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 - `LOCAL_TRANSCRIPTION_PROVIDER`: Transcription engine (`nvidia` for Parakeet)
 - `PARAKEET_MODEL`: Selected Parakeet model name (e.g., `parakeet-tdt-0.6b-v3`)
+- `OPENWHISPR_LOG_LEVEL`: Log level written by the Settings debug toggle (`set-debug-logging`): `debug` when on, `info` when off
 
 ### 6. Language Support
 
@@ -437,12 +441,12 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-6 Astra (`gpt-6-astra`) - Most capable OpenAI model for coding, computer use, and research, 1M context
+    - GPT-6.1 Sol (`gpt-6.1-sol`) - Near-Astra capability at lower cost, 1M context
+    - GPT-6 Luna (`gpt-6-luna`) - Fastest, lowest-cost GPT-6, 1M context
     - GPT-5.6 Series (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) - Flagship, balanced, and fastest tiers
     - GPT-5.5 (`gpt-5.5`) - Frontier model for complex reasoning, 1M context
     - GPT-5.2 (`gpt-5.2`) - Strong reasoning model
-    - GPT-5 Mini (`gpt-5-mini`) - Fast and cost-efficient
-    - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
-    - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
+    - GPT-5 Mini (`gpt-5-mini`), GPT-5 Nano (`gpt-5-nano`), GPT-4.1 and GPT-4.1 Mini (`gpt-4.1`, `gpt-4.1-mini`) - legacy. GPT-4.1 Nano was shut down on 2026-10-23; `retiredCloudModels.ts` moves it to GPT-6 Luna
     - GPT-5 and newer reject `temperature`, so their registry entries carry `supportsTemperature: false`
   - **Anthropic** (Via IPC bridge to avoid CORS):
     - Claude Fable 5.1 (`claude-fable-5-1`) - Most capable Claude model, Mythos-class, 1M context
@@ -457,13 +461,17 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Opus 4.8 (`claude-opus-4-8`) - Powerful Opus model tuned for honesty and reliability, 1M context
     - Claude Opus 4.7 (`claude-opus-4-7`) - Powerful Opus model, 1M context
     - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
-    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
+    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation (legacy)
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
     - Models from Opus 4.7 onward (including the 5.5 generation) reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
   - **Google Gemini** (Direct API integration):
-    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.6 Flash (`gemini-3.6-flash`) - Fast, high-capability Gemini model
+    - Gemini 3.8 Flash (`gemini-3.8-flash`) - Most capable Flash model
+    - Gemini 4 Argon (`gemini-4-argon`) - Google's frontier reasoning model
+    - Gemini 3.5 Flash (`gemini-3.5-flash`) - legacy; Google now routes it to 3.6 Flash
     - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
-    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Next-gen flagship model for complex reasoning
+    - 3.8 Flash, 4 Argon and 3.1 Pro reject the `minimal` thinking level, so suppressed thinking sends `low` (`gemini-no-minimal` in `modelFamilyConstraints.ts`, plus the native provider's per-model table)
     - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost. It thinks, and requests that aren't streamed pin it to `minimal` unless a reasoning effort is picked; it has no `supportsThinking` flag, so Settings shows the effort picker rather than the thinking toggle
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
@@ -489,7 +497,16 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
   `defaultModel` on the provider, the first model in the array is the default
-- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model
+- `src/models/legacyModels.ts` - `isListedModel()`: an entry marked `"legacy": true` stays in the
+  registry so an existing selection keeps working, but pickers list it only while it is selected
+  (muted, marked Legacy and disabled) or, for a local model, while its file is still downloaded so
+  it can be deleted. A local tab left with nothing to list opens on the first provider that has
+  models. While a provider still has a current model, never put a legacy entry first or name it
+  as a `defaultModel`. Speech-to-text pickers don't read the flag yet, so no Whisper or Parakeet
+  entry may carry it (`test/helpers/legacyModels.test.js`). Legacy is only for models that still
+  work: once a provider shuts one down, remove it and add it to `retiredCloudModels.ts`
+- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model. Mobile keeps
+  its own copy of the table (`openwhispr-mobile/src/lib/retiredModels.ts`)
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 
 **Local model features:**
@@ -798,7 +815,7 @@ Rows in the `actions` table (built-ins seeded from `src/helpers/builtinActions.j
 
 - **Templates** (`kind: 'template'`) write a note's AI summary (`enhanced_content`) from its notes, meeting context, and transcript, never from the summary they replace. A template is a context (`prompt`) plus ordered `sections` (`{heading, instruction}`); `compileTemplatePrompt` wraps sections in the shared notes rules. A template without sections keeps the request it always had after the `SOURCE_FIDELITY_RULE` prefix (the generic system prompt, or the material preamble for a standalone key). The note records the template in `enhancement_template_id` (its `client_id`), which syncs with the note, and `enhancement_prompt` the compiled system prompt
 - **Actions** (`kind: 'action'`) work from the AI summary when the note has one, and from its notes and transcript otherwise (`buildNoteRunInput`). Only the built-in Make notes shorter (`shorten`) and Make notes longer (`lengthen`) actions edit that summary, selected by fixed built-in identity (`toActionItem`), never an editable name or stored `output`. A summary edit requires complete output, never splits into parts, and writes only `enhanced_content`; with no summary yet it writes one from the transcript and applies the action to it, run like a template (split into parts on a local model, the material hash recorded); every other built-in and custom action, including Write TL;DR (`addTldr`), runs in the note chat via `SendToAIOptions.requestText` (the chat shows a built-in's call to action where it has one, otherwise the action's name, and the preamble points the model at the summary or the transcript and has it answer in the chat as text in the note's language, using a tool to draft, send or post only when the action's instructions explicitly ask to send, post or file something, and leaving the note unchanged, with an asked-for edit written in the chat instead; its turn is never offered `update_note` (`keepNotesUnchanged`), so it can't change a note whatever the model decides; the note chat's other tools and attendee block otherwise apply as usual, and its transcript context names speakers only on notes known to be the user's own (`ownsNote`), never listing the unfiltered invitees)
-- **The material picks the wrapper** (`runNoteAction`): speaker segments make a meeting (`isMeetingNote`: `MEETING_SYSTEM_PROMPT` or `MEETING_INPUT_PREAMBLE`, the `## Meeting Context` block and `Speaker: text` lines); a transcript in plain text (a recording that captured no segments, one made before 1.6.6, or an upload's text when its provider returned no segments, which is saved as the note's content) is its own case (`hasPlainTranscript`: `PLAIN_TRANSCRIPT_SYSTEM_PROMPT` or `PLAIN_TRANSCRIPT_INPUT_PREAMBLE`, #2666), with no Meeting Context since nothing shows who is speaking, a part prompt without speaker labels when a local model splits it, and action items as `- [ ] Action — Owner` lines with an owner or deadline only when the transcript or the user's notes state it, never a placeholder, and never a table unless the instructions ask for one; no transcript is a personal note (`BASE_SYSTEM_PROMPT` or `NOTE_INPUT_PREAMBLE`). Both transcript cases get the custom dictionary, and their known people (the user, the invitees, and a meeting's named speakers) turn matching owners into mentions (`tagActionItemOwners`)
+- **The material picks the wrapper** (`runNoteAction`): speaker segments make a meeting (`isMeetingNote`: `MEETING_SYSTEM_PROMPT` or `MEETING_INPUT_PREAMBLE`, the `## Meeting Context` block and `Speaker: text` lines); a transcript in plain text (a recording that captured no segments, one made before 1.6.6, or an upload whose provider named no speakers: its text is stored as segments with no speaker or source (`speakerlessTranscriptText`; one untimed segment when it returned no segments), or as the note's content on uploads saved before the transcript held it) is its own case (`hasPlainTranscript`: `PLAIN_TRANSCRIPT_SYSTEM_PROMPT` or `PLAIN_TRANSCRIPT_INPUT_PREAMBLE`, #2666), with no Meeting Context since nothing shows who is speaking, a part prompt without speaker labels when a local model splits it, and action items as `- [ ] Action — Owner` lines with an owner or deadline only when the transcript or the user's notes state it, never a placeholder, and never a table unless the instructions ask for one; no transcript is a personal note (`BASE_SYSTEM_PROMPT` or `NOTE_INPUT_PREAMBLE`). Both transcript cases get the custom dictionary, and their known people (the user, the invitees, and a meeting's named speakers) turn matching owners into mentions (`tagActionItemOwners`)
 - The default template is the built-in AI Summary (the Detailed Notes sections, stored under the old Generate Notes key `generateNotes`), listed first (launch re-applies the built-in order). Launch retires a stock Detailed Notes row (`LEGACY_DETAILED_NOTES`) unless AI Summary was customized; an edited one is kept and listed second, and saved template ids are never rewritten. Invariant: AI Summary, compiled from its sections, equals the flat 1.10.2 Detailed Notes prompt it replaced after the `SOURCE_FIDELITY_RULE` prefix used by templates and summary actions (`sourceFidelity.js`), but for the closing rule on material with nothing to summarize (`test/helpers/templatePrompts.test.js`); a built-in's `previousPrompts` only upgrades rows that are still flat. Chat actions get the rule once, from the chat system prompt (`getAgentSystemPrompt`), and the Cloud request leaves out the leading system message that repeats `systemPrompt`, which the API prepends itself
 - For material with nothing substantive (only greetings, filler or recording checks), sectioned templates, AI Summary and a summary action writing a first summary ask the model to answer `NOTHING_TO_SUMMARIZE`; custom context-only templates and flat built-ins edited before this rule keep their own rules. A reply that is the marker (bare, fenced, emphasised or after a short sentence) outside a thinking block writes nothing; a summary that merely contains it is saved, and the runner shows `notes.actions.errors.nothingToSummarize` as a neutral notice (`notice` on the error event) instead of saving a placeholder summary
 - UI: `TemplatePicker` opens from the chevron in the AI Summary tab, which names the note's template; the "Generate AI Summary" callout (runs the note's template, else the default), `ActionPicker` in the collapsed ask bar (runs the last action picked from it, in place of the send button), `ActionChips` once the in-view chat opens and in the docked chat (the first five actions in docked chat; the centered row omits Make notes longer without backfilling another chip; each has its action's icon, and All actions keeps every action; hovering a chip shows its icon, title and description without a destination badge; the in-view chat pins All actions at the end, and the docked chat shows them as filled pills in one tray with its composer: All actions, then the actions, scrolling together), a `/` menu in the note composers (`slashCommands` on `ChatInput`, each row with its action's icon, or a "/" for an icon this build doesn't know; it fills the chat above the composer until a command runs, the "/" is deleted, nothing matches or the composer loses focus), and `ActionManagerDialog` (Templates | Actions). The notes list and the docked chat widen or narrow from their edge facing the note (`useResizableWidth`, `PanelResizeHandle`), and keep their width across launches (localStorage `notesSidebarWidth`, `noteChatWidth`). Anything the ask bar sends (a message, or a chat action from the picker, a chip or the `/` menu) starts a new conversation in the docked chat, which holds the conversation and its history; the in-view chat is only the chips and the composer. Destinations are fixed and described in the editor; saving never asks a model to choose one. Legacy custom summary destinations read as chat (`toActionItem`), keeping the existing IPC fields, IDs and prompts. Summary generation stays in the AI Summary tab and callout. A run that writes the summary is undoable for 6 s instead of asking first: the runner queues the fields it overwrote (`appliedEvents`) and `BackgroundActionToastListener` shows the Undo toast

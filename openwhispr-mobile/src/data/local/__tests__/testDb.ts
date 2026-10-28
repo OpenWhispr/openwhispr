@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@/db/schema';
 import { randomUUID } from '@/lib/uuid';
+import { LocalChatRepository } from '../chatRepository';
 import { LocalNotesRepository } from '../notesRepository';
 
 export type TestDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -261,6 +262,27 @@ export const createMemoryRepository = (): { repo: LocalNotesRepository; db: Test
   return {
     repo: new LocalNotesRepository(
       db as unknown as ConstructorParameters<typeof LocalNotesRepository>[0],
+    ),
+    db,
+  };
+};
+
+export const createMemoryChatRepository = (): { repo: LocalChatRepository; db: TestDb } => {
+  const rawDb = new Database(':memory:');
+  rawDb.exec(`
+    CREATE TABLE chat_conversations (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+    CREATE TABLE chat_messages (
+      id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL, text TEXT NOT NULL,
+      steps_json TEXT, sources_json TEXT, created_at INTEGER NOT NULL);
+    CREATE INDEX idx_chat_messages_conversation ON chat_messages(conversation_id, created_at);
+  `);
+  const db = drizzle(rawDb, { schema });
+  return {
+    repo: new LocalChatRepository(
+      db as unknown as ConstructorParameters<typeof LocalChatRepository>[0],
     ),
     db,
   };
