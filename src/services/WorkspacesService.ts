@@ -83,7 +83,10 @@ async function removeMembers(
 ): Promise<MemberRemovalResult> {
   const res = await cloudPost<DataWrap<MemberRemovalResult>>(
     `/api/workspaces/${workspaceId}/members/remove`,
-    { user_ids: input.userIds, transfer_to: input.transferTo }
+    {
+      user_ids: input.userIds,
+      ...(input.transferTo ? { transfer_to: input.transferTo } : {}),
+    }
   );
   return res.data;
 }

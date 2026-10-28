@@ -115,7 +115,9 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
 
   // People already gone come back in `already_removed`, so any failure means nothing changed and
   // the roster is left alone. Removals free seats, so the workspace list is read again too, and
-  // content moved to a new owner reaches this device through a sync.
+  // content moved to a new owner reaches this device through a sync. That sync follows any run
+  // that named a new owner: a retry after a lost answer reports no transfer although the first
+  // attempt moved the content.
   async function removeMembers(
     workspaceId: string,
     input: { userIds: string[]; transferTo?: string }
@@ -123,7 +125,7 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
     const result = await deps.api.removeMembers(workspaceId, input);
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
     await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
-    if (result.transferred) deps.sync.requestSyncAll("manual");
+    if (input.transferTo) deps.sync.requestSyncAll("manual");
     return result;
   }
 

@@ -88,3 +88,33 @@ test("InvitationsService.sendBatch forwards space_ids and accept surfaces the gr
   assert.equal(requests[1].path, "/api/invitations/tok%20en/accept");
   assert.deepEqual(accepted.space_ids, ["space-1"]);
 });
+
+test("WorkspacesService previews and runs a removal with the API's field names", async (t) => {
+  const requests = installCloudCapture(t, {
+    members: [],
+    already_removed: [],
+    transfer_required: false,
+  });
+  const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
+
+  await WorkspacesService.previewMemberRemoval("ws-1", ["user-2", "user-3"]);
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-2"], transferTo: "user-1" });
+  await WorkspacesService.removeMembers("ws-1", { userIds: ["user-3"] });
+
+  assert.deepEqual(
+    requests.map(({ method, path, body }) => [method, path, body]),
+    [
+      [
+        "POST",
+        "/api/workspaces/ws-1/members/remove",
+        { user_ids: ["user-2", "user-3"], preview: true },
+      ],
+      [
+        "POST",
+        "/api/workspaces/ws-1/members/remove",
+        { user_ids: ["user-2"], transfer_to: "user-1" },
+      ],
+      ["POST", "/api/workspaces/ws-1/members/remove", { user_ids: ["user-3"] }],
+    ]
+  );
+});

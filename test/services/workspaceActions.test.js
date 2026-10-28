@@ -259,6 +259,18 @@ test("a transfer also syncs", async () => {
   ]);
 });
 
+test("a transfer whose answer comes back empty still syncs", async () => {
+  // A retry after a lost answer finds the content already moved, so it reports no transfer.
+  const { createWorkspaceActions } = await load();
+  const removal = { removed: [], already_removed: ["user-2"], transferred: null };
+  const { calls, deps } = makeHarness({ removal });
+  const input = { userIds: ["user-2"], transferTo: "user-1" };
+
+  await createWorkspaceActions(deps).removeMembers("ws-1", input);
+
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+});
+
 test("a refused removal changes nothing locally", async () => {
   const { createWorkspaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
