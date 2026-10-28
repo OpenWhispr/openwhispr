@@ -3182,6 +3182,14 @@ export function selectPolicyEffectiveSettings(
         selection.mode === "openwhispr" ? "openwhispr" : "byok";
     }
 
+    // A local scope with no model is switched off on this device (onboarding's
+    // local setup, a deleted model); a default would name a model nobody downloaded.
+    if (selection.mode === "local" && config.mode === "local" && !config.model) {
+      writable[definition.storeKeys.provider] = config.provider;
+      writable[definition.storeKeys.model] = "";
+      continue;
+    }
+
     let provider = selection.provider;
     if (selection.mode === "openwhispr") provider = "openwhispr";
     if (selection.mode === "self-hosted") provider = "lan";
