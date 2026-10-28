@@ -66,6 +66,7 @@ import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import {
   defaultFolderDisplayName,
+  folderMatchesQuery,
   folderPathLabel,
   folderTree,
   orderFoldersAsTree,
@@ -641,9 +642,7 @@ function FolderRow({
   const filteredParents = useMemo(
     () =>
       folderSearch
-        ? parentOptions.filter((f) =>
-            defaultFolderDisplayName(f, t).toLowerCase().includes(folderSearch.toLowerCase())
-          )
+        ? parentOptions.filter((f) => folderMatchesQuery(f, t, folderSearch))
         : parentOptions,
     [parentOptions, folderSearch, t]
   );
