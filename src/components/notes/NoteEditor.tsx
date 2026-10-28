@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Users,
+  AlertTriangle,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
 import { reconcileLocalShareState } from "./shareNoteRules";
@@ -1377,10 +1378,16 @@ export default function NoteEditor({
 
         {/* Only the org's meeting switch earns a banner; other restrictions just disable recording. */}
         {canEditNote && !recordingAllowed && recordingRefusal === "disabled" && (
-          <div className="h-8 mt-2 shrink-0 border-y border-border/60 bg-foreground/[0.02] dark:border-white/10">
+          <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
-              <span className="w-1 h-1 rounded-full bg-foreground/30 shrink-0" />
-              <p role="status" className="text-[11px] text-foreground/50 flex-1 truncate">
+              <AlertTriangle
+                aria-hidden="true"
+                className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
+              />
+              <p
+                role="status"
+                className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
+              >
                 {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
               </p>
             </div>

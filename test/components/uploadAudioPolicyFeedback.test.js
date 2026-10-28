@@ -13,7 +13,10 @@ function statusMessages(node) {
   if (Array.isArray(node)) return node.flatMap(statusMessages);
   if (!node.props) return [];
   return [
-    ...(node.props.role === "status" ? [node.props.children] : []),
+    // The banner's text sits beside its icon.
+    ...(node.props.role === "status"
+      ? [node.props.children].flat().filter((child) => typeof child === "string")
+      : []),
     ...statusMessages(node.props.children),
   ];
 }
