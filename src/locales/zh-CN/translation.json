@@ -453,7 +453,8 @@
           "assistantSeconds": "约 {{seconds}} 秒后开始回答",
           "requiredByOrganization": "你的组织要求使用",
           "off": "已关闭。之后可以在设置中开启",
-          "offToFit": "已关闭，以适应这台电脑的可用空间"
+          "offToFit": "已关闭，以适应这台电脑的可用空间",
+          "failed": "无法下载。请检查网络连接后重试"
         },
         "unavailable": {
           "tooSlow": "太慢",
@@ -476,6 +477,8 @@
         "downloaded": "已下载",
         "foot": {
           "default": "这些设置之后都可以在设置中更改。",
+          "finishesInBackground": "其余内容会在你继续后接着下载，准备好后自动开启。",
+          "failedStaysOff": "未能下载的项目将保持关闭。之后可以在设置中添加。",
           "needsMac": "需要 {{needed}} GB，这台 Mac 有 {{free}} GB 可用空间。",
           "needsComputer": "需要 {{needed}} GB，这台电脑有 {{free}} GB 可用空间。",
           "noSpaceMac": "听写需要 {{needed}} GB 可用空间，这台 Mac 只有 {{free}} GB。请释放一些空间后继续。",

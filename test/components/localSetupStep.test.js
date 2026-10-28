@@ -109,9 +109,7 @@ function makeApi({
     listWhisperModels: () => inventory.promise.then(() => listed(onDisk.whisper)),
     listParakeetModels: () => inventory.promise.then(() => listed(onDisk.parakeet)),
     modelGetAll: () =>
-      inventory.promise.then(() =>
-        (onDisk.llm ?? []).map((id) => ({ id, isDownloaded: true }))
-      ),
+      inventory.promise.then(() => (onDisk.llm ?? []).map((id) => ({ id, isDownloaded: true }))),
     getLlamaVulkanStatus: async () => ({ supported: true, downloaded: !!onDisk.pack }),
     getLocalSetupSpace: async () => ({ availableBytes, factors: FACTORS }),
     downloadWhisperModel: start("whisper"),
@@ -207,14 +205,20 @@ async function mount(
       requiredSpeechModelId,
     })
   );
+  // What Proceed handed over, and its hand-offs to continue in the background.
   const proceeded = [];
+  const handOffs = [];
 
   root = createRoot(container);
   await React.act(async () =>
     root.render(
       React.createElement(LocalSetupStep, {
         plan,
-        onProceed: (switches) => proceeded.push(switches),
+        onProceed: (handOff) => {
+          const taken = handOff();
+          handOffs.push(taken);
+          proceeded.push({ ready: taken.ready, pending: taken.pending });
+        },
       })
     )
   );
@@ -278,7 +282,9 @@ async function mount(
     onDisk,
     releaseInventory,
     calls,
+    pending,
     proceeded,
+    handOffs,
     row,
     switchOf,
     button,
@@ -364,9 +370,7 @@ test("rows keep one fixed height class from idle to finished", async (t) => {
   assert.deepEqual(heights(), fixed, "finished");
 });
 
-test("Windows 16 GB shows the assistant as Too slow with Cloud recommended and no switch", async (
-  t
-) => {
+test("Windows 16 GB shows the assistant as Too slow with Cloud recommended and no switch", async (t) => {
   const s = await mount(t, { profile: pc() });
   const assistant = s.row("assistant").textContent;
   assert.ok(assistant.includes(`${K}unavailable.tooSlow`));
@@ -430,37 +434,80 @@ test("downloading greys the button and locks the switches", async (t) => {
   for (const id of ["dictation", "cleanup", "assistant"]) {
     assert.equal(pieRings(s.row(id)).length, 1, `${id} shows the pie ring`);
     assert.ok(
-      elements(s.row(id), (n) => n.attributes["data-provider"] && /opacity-30/.test(cls(n)))
-        .length,
+      elements(s.row(id), (n) => n.attributes["data-provider"] && /opacity-30/.test(cls(n))).length,
       `${id} icon fades under the pie`
     );
   }
 });
 
-test("Proceed only after every switched-on row is done", async (t) => {
+test("Proceed opens once dictation is done; every row done hands nothing on", async (t) => {
   const s = await mount(t);
   await s.click(s.button());
+  assert.match(s.button().textContent, /button\.downloading/);
+  assert.ok(isDisabled(s.button()), "dictation still downloading");
   await s.finish(DICTATION);
-  assert.match(s.button().textContent, /button\.downloading/);
   assert.equal(ticks(s.row("dictation")).length, 1, "dictation shows its tick");
-  await s.finish(CLEANUP);
-  assert.match(s.button().textContent, /button\.downloading/);
-  assert.ok(isDisabled(s.button()));
-  await s.finish(ASSISTANT);
   assert.match(s.button().textContent, /button\.proceed$/);
-  assert.equal(isDisabled(s.button()), false);
+  assert.equal(isDisabled(s.button()), false, "the rest can finish in the background");
+  assert.equal(s.foot(), `${K}foot.finishesInBackground`);
+  await s.finish(CLEANUP);
+  await s.finish(ASSISTANT);
   assert.equal(ticks(s.container).length, 3);
   assert.equal(pieRings(s.container).length, 0);
+  assert.equal(s.foot(), `${K}foot.default`);
 
   await s.click(s.button());
-  assert.deepEqual(s.proceeded, [BOTH_ON]);
+  assert.deepEqual(s.proceeded, [{ ready: BOTH_ON, pending: [] }]);
 });
 
-test("a failed row shows Retry and Proceed stays locked", async (t) => {
+test("Proceed mid-download hands the rest to the background, which finishes it", async (t) => {
   const s = await mount(t);
   await s.click(s.button());
   await s.finish(DICTATION);
-  await s.finish(CLEANUP, { success: false, error: "network down", code: "NETWORK" });
+  assert.deepEqual(s.calls.llm, [CLEANUP], "cleanup is downloading");
+
+  await s.click(s.button());
+  assert.deepEqual(s.proceeded, [
+    { ready: { cleanup: false, assistant: false }, pending: ["cleanup", "assistant"] },
+  ]);
+  const ready = [];
+  await React.act(async () => s.handOffs[0].continueInBackground((item) => ready.push(item.id)));
+  assert.equal(
+    s.claims.isLocalSetupDownload("llm", CLEANUP, Date.now() + 60_000),
+    false,
+    "the tray shows it"
+  );
+
+  // Onboarding finishes: the transfer in flight is not cancelled.
+  await s.unmount();
+  assert.deepEqual(s.calls.cancelLlm, []);
+  await React.act(async () => s.pending[CLEANUP].resolve({ success: true }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ready, [CLEANUP], "cleanup turns on as it lands");
+  assert.deepEqual(s.calls.llm, [CLEANUP, ASSISTANT], "then the assistant downloads, over IPC");
+  await React.act(async () => s.pending[ASSISTANT].resolve({ success: true }));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ready, [CLEANUP, ASSISTANT]);
+});
+
+test("a model on disk is ready at Proceed even while its graphics pack downloads", async (t) => {
+  const profile = pc({ formFactor: "desktop", memoryGb: 32, nvidia: rtx });
+  const s = await mount(t, { profile, onDisk: { parakeet: [DICTATION] } });
+  await s.click(s.button());
+  await s.finish(CLEANUP);
+  assert.equal(s.calls.vulkan, 1, "the pack follows cleanup's model");
+
+  await s.click(s.button());
+  assert.deepEqual(s.proceeded, [
+    { ready: { cleanup: true, assistant: false }, pending: ["assistant"] },
+  ]);
+});
+
+test("a failed optional row says why, offers Retry, and stays off at Proceed", async (t) => {
+  const s = await mount(t);
+  await s.click(s.button());
+  await s.finish(DICTATION);
+  await s.finish(CLEANUP, { success: false, error: "getaddrinfo ENOTFOUND", code: "ENOTFOUND" });
   await s.finish(ASSISTANT);
 
   const [retry] = elements(
@@ -469,16 +516,50 @@ test("a failed row shows Retry and Proceed stays locked", async (t) => {
   );
   assert.ok(retry, "the failed row offers Retry");
   assert.ok(!s.row("cleanup").textContent.includes(`${K}badge.fast`), "Retry takes the badge slot");
-  assert.match(s.button().textContent, /button\.proceed$/, "the button still reads Proceed");
-  assert.ok(cls(s.button()).includes("--onboarding-surface-secondary"), "greyed");
-  assert.ok(isDisabled(s.button()), "Proceed stays locked");
-  await s.click(s.button());
-  assert.deepEqual(s.proceeded, []);
+  assert.ok(
+    s.row("cleanup").textContent.includes("hooks.modelDownload.errors.notFound"),
+    "the row says why it failed"
+  );
+  assert.equal(s.foot(), `${K}foot.failedStaysOff`);
+  assert.match(s.button().textContent, /button\.proceed$/);
+  assert.equal(isDisabled(s.button()), false, "a failed optional row never locks Proceed");
 
   await s.click(retry);
   assert.deepEqual(s.calls.llm, [CLEANUP, ASSISTANT, CLEANUP]);
   await s.finish(CLEANUP);
-  assert.match(s.button().textContent, /button\.proceed$/);
+  await s.click(s.button());
+  assert.deepEqual(s.proceeded, [{ ready: BOTH_ON, pending: [] }]);
+});
+
+test("a failed dictation keeps Proceed locked and says why", async (t) => {
+  const s = await mount(t);
+  await s.click(s.button());
+  await s.finish(DICTATION, { success: false, code: "EXTRACTION_FAILED", error: "bad archive" });
+
+  assert.ok(s.row("dictation").textContent.includes("hooks.modelDownload.errors.extractionFailed"));
+  assert.match(s.button().textContent, /button\.proceed$/, "the button still reads Proceed");
+  assert.ok(cls(s.button()).includes("--onboarding-surface-secondary"), "greyed");
+  assert.ok(isDisabled(s.button()));
+  await s.click(s.button());
+  assert.deepEqual(s.proceeded, []);
+});
+
+test("a failure the download gave no reason for reads as a generic line", async (t) => {
+  const s = await mount(t);
+  await s.click(s.button());
+  await s.finish(DICTATION);
+  await s.finish(CLEANUP, { success: false, code: "DOWNLOAD_CANCELLED" });
+  assert.ok(s.row("cleanup").textContent.includes(`${K}line.failed`));
+});
+
+test("Download waits for the free-space read and the inventory", async (t) => {
+  const s = await mount(t, { holdInventory: true });
+  assert.match(s.button().textContent, /button\.download$/);
+  assert.ok(isDisabled(s.button()), "nothing to fit against yet");
+  await s.click(s.button());
+  assert.deepEqual(s.calls.parakeet, []);
+
+  await s.releaseInventory();
   assert.equal(isDisabled(s.button()), false);
 });
 
@@ -549,7 +630,7 @@ test("models already on disk show ticks and Proceed straight away", async (t) =>
   assert.equal(isDisabled(s.button()), false);
   assert.equal(ticks(s.container).length, 3);
   await s.click(s.button());
-  assert.deepEqual(s.proceeded, [BOTH_ON]);
+  assert.deepEqual(s.proceeded, [{ ready: BOTH_ON, pending: [] }]);
   assert.deepEqual([s.calls.parakeet, s.calls.llm], [[], []]);
 });
 
@@ -582,7 +663,7 @@ test("returning with cleanup on disk and little space keeps cleanup on", async (
   assert.ok(s.row("assistant").textContent.includes(`${K}line.offToFit`));
   assert.match(s.button().textContent, /button\.proceed$/);
   await s.click(s.button());
-  assert.deepEqual(s.proceeded, [{ cleanup: true, assistant: false }]);
+  assert.deepEqual(s.proceeded, [{ ready: { cleanup: true, assistant: false }, pending: [] }]);
 });
 
 test("unmount cancels the active item and starts nothing else", async (t) => {
@@ -723,9 +804,7 @@ test("NVIDIA cleanup row size includes the graphics pack, which is never named",
   // Cleanup off: the pack moves to the assistant row, with its size.
   await s.click(s.switchOf("cleanup"));
   assert.ok(
-    s.row("assistant").textContent.includes(
-      s.setup.rowSizeLabel(assistant, s.plan.graphicsPack)
-    )
+    s.row("assistant").textContent.includes(s.setup.rowSizeLabel(assistant, s.plan.graphicsPack))
   );
   assert.ok(s.row("cleanup").textContent.includes(s.setup.rowSizeLabel(cleanup, null)));
 });
@@ -733,8 +812,8 @@ test("NVIDIA cleanup row size includes the graphics pack, which is never named",
 test("the placeholder holds the card's frame and can say the policy didn't load", async (t) => {
   const s = await mount(t);
   const rowHeights = new Set(
-    elements(s.container, (n) => n.attributes["data-local-setup-row"] != null).map((n) =>
-      cls(n).match(/\bh-\d+\b/)?.[0]
+    elements(s.container, (n) => n.attributes["data-local-setup-row"] != null).map(
+      (n) => cls(n).match(/\bh-\d+\b/)?.[0]
     )
   );
   assert.deepEqual([...rowHeights], ["h-24"], "the real rows are h-24");

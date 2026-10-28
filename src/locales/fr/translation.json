@@ -453,7 +453,8 @@
           "assistantSeconds": "Environ {{seconds}} s avant qu’il commence à répondre",
           "requiredByOrganization": "Imposé par votre organisation",
           "off": "Désactivé. Vous pourrez l’activer plus tard dans les Paramètres",
-          "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur"
+          "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur",
+          "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
         },
         "unavailable": {
           "tooSlow": "Trop lent",
@@ -476,6 +477,8 @@
         "downloaded": "Téléchargé",
         "foot": {
           "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
+          "finishesInBackground": "Le reste continue de se télécharger une fois que vous continuez et s’active dès qu’il est prêt.",
+          "failedStaysOff": "Ce qui n’a pas pu être téléchargé reste désactivé. Vous pourrez l’ajouter plus tard dans les Paramètres.",
           "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",
           "needsComputer": "Il faut {{needed}} Go, et cet ordinateur a {{free}} Go d’espace libre.",
           "noSpaceMac": "La dictée nécessite {{needed}} Go d’espace libre et ce Mac en a {{free}} Go. Libérez de l’espace pour continuer.",

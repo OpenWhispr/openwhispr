@@ -2,12 +2,27 @@
 // Proceed. A row that is switched off, unavailable on this computer or hidden by
 // policy is written off on this device with no model, never left on the Cloud
 // default: a signed-in profile's untouched scopes otherwise answer on OpenWhispr
-// Cloud (note formatting and chat have no on/off switch of their own).
+// Cloud (note formatting and chat have no on/off switch of their own). A row
+// still downloading at Proceed is written off the same way and switched on when
+// its model lands, unless Settings changed it meanwhile.
 import type { InferenceScope } from "../../config/inferenceScopes";
-import type { LocalSetupPlan, LocalSetupRow, LocalSetupSwitches } from "../../config/localSetup";
+import type {
+  LocalSetupPlan,
+  LocalSetupRow,
+  LocalSetupRowId,
+  LocalSetupSwitches,
+} from "../../config/localSetup";
 import { modelRegistry } from "../../models/ModelRegistry";
-import { setResolvedLLMConfig, useSettingsStore } from "../../stores/settingsStore";
-import { discardPendingLocalSetup } from "./pendingLocalModels";
+import {
+  selectResolvedLLMConfig,
+  setResolvedLLMConfig,
+  useSettingsStore,
+} from "../../stores/settingsStore";
+import {
+  consumePendingLocalModel,
+  discardPendingLocalSetup,
+  rememberPendingLocalModel,
+} from "./pendingLocalModels";
 
 const CLEANUP_SCOPES: InferenceScope[] = [
   "dictationCleanup",
@@ -82,5 +97,37 @@ export function applyLocalSetupSettings(plan: LocalSetupPlan, switches: LocalSet
   } else {
     writeScopes(ASSISTANT_SCOPES, null);
     s.setUseDictationAgent(false);
+  }
+}
+
+type OptionalRowId = Exclude<LocalSetupRowId, "dictation">;
+
+/** Rows switched on at Proceed whose models are still downloading. */
+export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: OptionalRowId[]): void {
+  for (const id of rowIds) {
+    const row = plan.rows.find((r) => r.id === id);
+    const provider = row && modelRegistry.getModel(row.modelId)?.provider.id;
+    if (row && provider) rememberPendingLocalModel(id, { provider, modelId: row.modelId });
+  }
+}
+
+/**
+ * A pending row's model is on disk: its scopes still off with no model (as
+ * Proceed left them) get it, and the row's switch turns on if its main scope did.
+ * A scope the user has since pointed elsewhere keeps their choice.
+ */
+export function activatePendingLocalSetupModel(modelId: string): void {
+  for (const id of ["cleanup", "assistant"] as const) {
+    if (!consumePendingLocalModel(id, modelId)) continue;
+    const scopes = id === "cleanup" ? CLEANUP_SCOPES : ASSISTANT_SCOPES;
+    const state = useSettingsStore.getState();
+    const untouched = scopes.filter((scope) => {
+      const config = selectResolvedLLMConfig(state, scope);
+      return config.mode === "local" && !config.model;
+    });
+    writeScopes(untouched, modelId);
+    if (!untouched.includes(scopes[0])) continue;
+    if (id === "cleanup") state.setUseCleanupModel(true);
+    else state.setUseDictationAgent(true);
   }
 }

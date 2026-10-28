@@ -1,9 +1,10 @@
 // "We recommend these settings": the local setup card. It shows what the app
 // read about this computer, the three picks (dictation, cleanup, assistant) with
-// how fast each will feel, and one button that downloads them in turn. The page
-// title and subtitle belong to OnboardingFlow, which names the computer and the
-// languages with the same helpers (localSetupLabels.ts). Settings are only
-// written by onProceed.
+// how fast each will feel, and one button that downloads them in turn. Proceed
+// opens once dictation is on disk; cleanup and the assistant can finish in the
+// background. The page title and subtitle belong to OnboardingFlow, which names
+// the computer and the languages with the same helpers (localSetupLabels.ts).
+// Settings are only written by onProceed.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
@@ -29,7 +30,11 @@ import {
 } from "../../config/localSetup";
 import type { ComputerProfile } from "../../types/electron";
 import { isQueued, localSetupItemKey } from "./localSetupDownloadState";
-import { useLocalSetupDownloads, type LocalSetupRowProgress } from "./useLocalSetupDownloads";
+import {
+  useLocalSetupDownloads,
+  type LocalSetupHandOff,
+  type LocalSetupRowProgress,
+} from "./useLocalSetupDownloads";
 import { useLocalSetupSpace } from "./useLocalSetupSpace";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -370,10 +375,11 @@ export function LocalSetupStep({
   onProceed,
 }: {
   plan: LocalSetupPlan;
-  onProceed: (switches: LocalSetupSwitches) => void;
+  /** handOff is taken once onboarding can finish, so a failed finish leaves the downloads here. */
+  onProceed: (handOff: () => LocalSetupHandOff) => void;
 }) {
   const { t } = useTranslation();
-  const space = useLocalSetupSpace();
+  const { space, settled: spaceSettled } = useLocalSetupSpace();
   // Switches the user set. Empty until the first flip, so the space fit may turn
   // rows off; after a flip it holds both, so the fit never overrides the user.
   const [requested, setRequested] = useState<Partial<LocalSetupSwitches>>({});
@@ -414,16 +420,25 @@ export function LocalSetupStep({
   const offToFit = [...fit.autoOff, ...keptOffToFit].filter(
     (id) => id !== "dictation" && !switches[id]
   );
-  const busy = queue.some(({ rowId }) => isQueued(downloads.rows[rowId].status));
-  const phase: "proceed" | "download" | "downloading" | "failed" | "noSpace" = downloads.allDone
-    ? "proceed"
-    : downloads.started
-      ? busy
-        ? "downloading"
-        : "failed"
-      : fit.state === "noSpace" || fit.state === "overflow"
-        ? "noSpace"
-        : "download";
+  const dictationStatus = downloads.rows.dictation.status;
+  const optionalStatuses = queue
+    .filter(({ rowId }) => rowId !== "dictation")
+    .map(({ rowId }) => downloads.rows[rowId].status);
+  // Download waits for the free-space read and the inventory, or it would freeze a
+  // fit that hasn't seen either.
+  const readsLanded = spaceSettled && inventoryLoaded;
+  const phase: "proceed" | "download" | "downloading" | "failed" | "noSpace" | "reading" =
+    downloads.allDone || (downloads.started && dictationStatus === "done")
+      ? "proceed"
+      : downloads.started
+        ? isQueued(dictationStatus)
+          ? "downloading"
+          : "failed"
+        : !readsLanded
+          ? "reading"
+          : fit.state === "noSpace" || fit.state === "overflow"
+            ? "noSpace"
+            : "download";
 
   const toggle = (id: keyof LocalSetupSwitches) => {
     if (downloads.started) return;
@@ -433,7 +448,7 @@ export function LocalSetupStep({
 
   const press = () => {
     if (phase === "proceed") {
-      onProceed(switches);
+      onProceed(downloads.handOff);
     } else if (phase === "download") {
       setFrozenFit(liveFit);
       downloads.start();
@@ -441,7 +456,11 @@ export function LocalSetupStep({
   };
 
   let foot = t("onboarding.rehaul.localSetup.foot.default");
-  if (space && !downloads.started && !downloads.allDone) {
+  if (phase === "proceed" && optionalStatuses.some(isQueued)) {
+    foot = t("onboarding.rehaul.localSetup.foot.finishesInBackground");
+  } else if (phase === "proceed" && optionalStatuses.includes("failed")) {
+    foot = t("onboarding.rehaul.localSetup.foot.failedStaysOff");
+  } else if (space && !downloads.started && !downloads.allDone) {
     const values = { needed: formatGb(fit.requiredBytes), free: formatGb(space.availableBytes) };
     if (fit.state === "noSpace") {
       foot = onMac
@@ -455,6 +474,10 @@ export function LocalSetupStep({
   }
 
   const describe = (row: LocalSetupRow, on: boolean): string | null => {
+    const progress = downloads.rows[row.id];
+    if (on && row.label !== "unavailable" && progress.status === "failed") {
+      return progress.error ?? t("onboarding.rehaul.localSetup.line.failed");
+    }
     if (row.label !== "unavailable" && !on) {
       return offToFit.includes(row.id)
         ? t("onboarding.rehaul.localSetup.line.offToFit")

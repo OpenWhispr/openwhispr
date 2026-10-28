@@ -453,7 +453,8 @@
           "assistantSeconds": "Etwa {{seconds}} s, bis die Antwort beginnt",
           "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
           "off": "Aus. Sie können es später in den Einstellungen einschalten",
-          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt"
+          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
+          "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
         },
         "unavailable": {
           "tooSlow": "Zu langsam",
@@ -476,6 +477,8 @@
         "downloaded": "Heruntergeladen",
         "foot": {
           "default": "Sie können all das später in den Einstellungen ändern.",
+          "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
+          "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
           "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
           "needsComputer": "Dafür werden {{needed}} GB benötigt, und auf diesem Computer sind {{free}} GB frei.",
           "noSpaceMac": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Mac hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren.",

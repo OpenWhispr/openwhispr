@@ -453,7 +453,8 @@
           "assistantSeconds": "回答が始まるまで約 {{seconds}} 秒",
           "requiredByOrganization": "組織によって必須に設定されています",
           "off": "オフ。あとで設定からオンにできます",
-          "offToFit": "このコンピュータの空き容量に収めるためオフにしています"
+          "offToFit": "このコンピュータの空き容量に収めるためオフにしています",
+          "failed": "ダウンロードできませんでした。接続を確認して再試行してください"
         },
         "unavailable": {
           "tooSlow": "遅すぎます",
@@ -476,6 +477,8 @@
         "downloaded": "ダウンロード済み",
         "foot": {
           "default": "これらはあとで設定からいつでも変更できます。",
+          "finishesInBackground": "残りは続行後もダウンロードを続け、準備ができるとオンになります。",
+          "failedStaysOff": "ダウンロードできなかったものはオフのままです。あとで設定から追加できます。",
           "needsMac": "{{needed}} GB が必要です。この Mac の空き容量は {{free}} GB です。",
           "needsComputer": "{{needed}} GB が必要です。このコンピュータの空き容量は {{free}} GB です。",
           "noSpaceMac": "ディクテーションには {{needed}} GB の空き容量が必要ですが、この Mac は {{free}} GB です。続けるには空き容量を増やしてください。",

@@ -42,8 +42,9 @@ import { useSettingsStore } from "../stores/settingsStore";
 import {
   enabledDownloads,
   localSetupRequiredBytes,
-  type LocalSetupSwitches,
+  type LocalSetupPlan,
 } from "../config/localSetup";
+import type { LocalSetupHandOff } from "./onboarding/useLocalSetupDownloads";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
   DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
@@ -332,7 +333,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // The local setup's picks; null until the computer read and the policy have
   // resolved (see planLocalSetup), and the step shows its empty frame meanwhile.
   const policy = usePolicySnapshot();
-  const localSetupPlan = useMemo(
+  const computedLocalSetupPlan = useMemo(
     () =>
       planLocalSetup({
         profile: computerProfile,
@@ -343,6 +344,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       }),
     [computerProfile, policy, requiredModels.required, session.authPath, settings.spokenLanguages]
   );
+  // A policy refresh that is loading or failed must not take a built plan away:
+  // the step would unmount and cancel its downloads. The last plan stands until a
+  // resolved policy builds the next one.
+  const [latchedLocalSetupPlan, setLatchedLocalSetupPlan] = useState<LocalSetupPlan | null>(null);
+  if (computedLocalSetupPlan && computedLocalSetupPlan !== latchedLocalSetupPlan) {
+    setLatchedLocalSetupPlan(computedLocalSetupPlan);
+  }
+  const localSetupPlan = computedLocalSetupPlan ?? latchedLocalSetupPlan;
 
   const route = useMemo(
     () =>
@@ -367,7 +376,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // reserves to unpack. Undefined until both reads land; the card has a default.
   // Read once as onboarding opens, so the card's figure is ready when it shows; it
   // is read again on focus only around the choice, not on every onboarding step.
-  const localSetupSpace = useLocalSetupSpace(
+  const { space: localSetupSpace } = useLocalSetupSpace(
     currentStepId === "setup-choice" || currentStepId === "local-setup"
   );
   const localSpaceGb = useMemo(() => {
@@ -654,7 +663,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ]);
 
   const finalizeOnboarding = useCallback(
-    async (mode: OnboardingCompletionMode) => {
+    // beforeComplete runs once nothing else can stop the finish, so its writes never
+    // outlive a failed one.
+    async (mode: OnboardingCompletionMode, beforeComplete?: () => void) => {
       if (isFinishing) return;
       setIsFinishing(true);
       setFatalError(null);
@@ -677,9 +688,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.markBundleMigrated?.();
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
 
-        // No route hands a pending local pick to the tray: the local route has
-        // already written the user's switches, and every other route uses none.
+        // An older build's pending pick never reaches the tray; the local route
+        // remembers its own rows still downloading in beforeComplete.
         discardPendingLocalSetup();
+        beforeComplete?.();
 
         const skippedAuth = session.authPath === "guest";
         localStorage.setItem("authenticationSkipped", String(skippedAuth));
@@ -747,12 +759,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     [settingsStore]
   );
 
-  // The local setup step owns its forward action: its Proceed writes the
-  // settings for the switches the user left on, then finishes onboarding.
+  // The local setup step owns its forward action: its Proceed finishes onboarding,
+  // writing the settings for the switches the user left on as it does.
   const proceedLocalSetup = useCallback(
-    async (switches: LocalSetupSwitches) => {
+    async (handOff: () => LocalSetupHandOff) => {
       if (!localSetupPlan) return;
-      await proceedWithLocalSetup(localSetupPlan, switches, () => finalizeOnboarding("local"));
+      await proceedWithLocalSetup(localSetupPlan, handOff, (beforeComplete) =>
+        finalizeOnboarding("local", beforeComplete)
+      );
     },
     [finalizeOnboarding, localSetupPlan]
   );
@@ -1290,7 +1304,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {localSetupPlan ? (
               <LocalSetupStep
                 plan={localSetupPlan}
-                onProceed={(switches) => void proceedLocalSetup(switches)}
+                onProceed={(handOff) => void proceedLocalSetup(handOff)}
               />
             ) : (
               <LocalSetupStepPlaceholder

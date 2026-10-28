@@ -432,7 +432,8 @@
           "assistantSeconds": "Cerca de {{seconds}} s até começar a responder",
           "requiredByOrganization": "Exigido pela sua organização",
           "off": "Desativado. Você pode ativar depois em Configurações",
-          "offToFit": "Desativado para caber no espaço livre deste computador"
+          "offToFit": "Desativado para caber no espaço livre deste computador",
+          "failed": "Não foi possível baixar. Verifique sua conexão e tente novamente"
         },
         "unavailable": {
           "tooSlow": "Lento demais",
@@ -455,6 +456,8 @@
         "downloaded": "Baixado",
         "foot": {
           "default": "Você pode mudar qualquer uma dessas opções depois em Configurações.",
+          "finishesInBackground": "O restante continua sendo baixado depois que você prosseguir e é ativado quando estiver pronto.",
+          "failedStaysOff": "O que não foi baixado fica desativado. Você pode adicionar depois em Configurações.",
           "needsMac": "São necessários {{needed}} GB, e este Mac tem {{free}} GB livres.",
           "needsComputer": "São necessários {{needed}} GB, e este computador tem {{free}} GB livres.",
           "noSpaceMac": "O ditado precisa de {{needed}} GB livres e este Mac tem {{free}} GB. Libere espaço para continuar.",

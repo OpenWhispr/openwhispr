@@ -10,7 +10,7 @@ const {
 
 const SPACE = { availableBytes: 50e9, factors: { whisper: 1.2, parakeet: 2.5, llm: 1.2 } };
 
-async function setup(t) {
+async function setup(t, { fail = false } = {}) {
   let root = null;
   // Registered first so it runs before the globals are taken down
   t.after(async () => {
@@ -23,6 +23,7 @@ async function setup(t) {
       electronAPI: {
         async getLocalSetupSpace() {
           reads++;
+          if (fail) throw new Error("no answer");
           return SPACE;
         },
       },
@@ -54,12 +55,13 @@ test("free space is read once on mount; only an enabled step re-reads on focus",
   // Onboarding mounts on an earlier step: one read, so the figure is ready later.
   await s.render(false);
   assert.equal(s.reads(), 1);
-  assert.equal(s.value().availableBytes, SPACE.availableBytes);
+  assert.equal(s.value().settled, true);
+  assert.equal(s.value().space.availableBytes, SPACE.availableBytes);
   assert.equal(s.focusListeners.size, 0, "focus outside the two steps does not re-read");
 
   // Entering setup-choice: the first render already has the value, with no new read.
   await s.render(true);
-  assert.equal(s.value().availableBytes, SPACE.availableBytes);
+  assert.equal(s.value().space.availableBytes, SPACE.availableBytes);
   assert.equal(s.reads(), 1);
   assert.equal(s.focusListeners.size, 1);
   await React.act(async () => {
@@ -70,5 +72,12 @@ test("free space is read once on mount; only an enabled step re-reads on focus",
   // Leaving the steps that need it stops the focus reads and keeps the last reading.
   await s.render(false);
   assert.equal(s.focusListeners.size, 0);
-  assert.equal(s.value().availableBytes, SPACE.availableBytes);
+  assert.equal(s.value().space.availableBytes, SPACE.availableBytes);
+});
+
+test("a read that fails still settles, so nothing waits on it for ever", async (t) => {
+  const s = await setup(t, { fail: true });
+  await s.render(false);
+  assert.equal(s.value().space, null);
+  assert.equal(s.value().settled, true);
 });

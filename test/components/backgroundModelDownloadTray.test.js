@@ -78,9 +78,7 @@ async function createTrayHarness(t) {
   const { default: BackgroundModelDownloadTray } = await vite.ssrLoadModule(
     "/components/onboarding/BackgroundModelDownloadTray.tsx"
   );
-  const registry = await vite.ssrLoadModule(
-    "/components/onboarding/localSetupDownloadClaims.ts"
-  );
+  const registry = await vite.ssrLoadModule("/components/onboarding/localSetupDownloadClaims.ts");
   let tree;
   function Harness() {
     tree = BackgroundModelDownloadTray({ placement: "onboarding" });
@@ -98,6 +96,7 @@ async function createTrayHarness(t) {
     });
   };
   return {
+    vite,
     registry,
     emit,
     llm: (modelId, type, progress = 0) => emit("llm", { modelId, type, progress }),
@@ -180,4 +179,24 @@ test("an extracting row says so while another model is still downloading", async
   assert.match(textContent(tray.row(`llm:${LLM}`)), /40%/);
   // Not every row has reached extraction, so the strip stays on downloading.
   assert.equal(tray.header(), "onboarding.rehaul.local.downloadInProgress");
+});
+
+test("a model local setup left downloading turns its row on when it lands", async (t) => {
+  const tray = await createTrayHarness(t);
+  const store = await tray.vite.ssrLoadModule("/stores/settingsStore.ts");
+  const pending = await tray.vite.ssrLoadModule("/components/onboarding/pendingLocalModels.ts");
+  saveSession("notes");
+  for (const scope of ["dictationAgent", "chatIntelligence"]) {
+    store.setResolvedLLMConfig(scope, { mode: "local", provider: "", model: "" });
+  }
+  pending.rememberPendingLocalModel("assistant", { provider: "qwen", modelId: LLM });
+
+  await tray.llm(LLM, "progress", 50);
+  assert.ok(tray.row(`llm:${LLM}`), "the tray shows the background download");
+  await tray.llm(LLM, "complete", 100);
+
+  const state = store.useSettingsStore.getState();
+  assert.equal(store.selectResolvedLLMConfig(state, "chatIntelligence").model, LLM);
+  assert.equal(state.useDictationAgent, true);
+  assert.equal(pending.hasPendingLocalModels(), false);
 });

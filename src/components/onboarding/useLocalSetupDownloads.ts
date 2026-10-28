@@ -4,7 +4,9 @@
 // pack (a failure is only logged: nothing on screen names the pack, and its row
 // goes on without it). localSetupDownloadState decides what runs next; this hook
 // only starts the item it names and reports back. Unmounting (Back) cancels the
-// item in flight and starts nothing else; models that already finished stay on disk.
+// item in flight and starts nothing else; models that already finished stay on
+// disk. Proceed instead hands what is left over (handOff), and it finishes in the
+// background with the tray showing its progress.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   enabledDownloads,
@@ -19,6 +21,8 @@ import {
   activeItem,
   allEnabledDone,
   createLocalSetupDownloadState,
+  failedItem,
+  isQueued,
   localSetupItemKey,
   reduce,
   rowPercent,
@@ -30,13 +34,29 @@ import { claimLocalSetupDownload, releaseLocalSetupDownload } from "./localSetup
 export interface LocalSetupRowProgress {
   status: RowStatus;
   percent: number;
+  /** Why a failed row's download failed, when the download said. */
+  error?: string;
+}
+
+type OptionalRowId = Exclude<LocalSetupRowId, "dictation">;
+
+export interface LocalSetupHandOff {
+  /** Switched on, with the model on disk: written on at Proceed. */
+  ready: LocalSetupSwitches;
+  /** Switched on, with the model still on its way: turned on once it lands. */
+  pending: OptionalRowId[];
+  /**
+   * Keeps the transfer in flight and the rest of the queue going after the step
+   * is gone; onModelReady runs as each model lands.
+   */
+  continueInBackground: (onModelReady: (item: LocalSetupDownload) => void) => void;
 }
 
 const ROW_IDS: LocalSetupRowId[] = ["dictation", "cleanup", "assistant"];
 
 type ModelDownloader = Pick<
   ReturnType<typeof useModelDownload>,
-  "downloadModel" | "cancelDownload" | "downloads"
+  "downloadModel" | "cancelDownload" | "downloads" | "downloadErrors"
 >;
 type Downloaders = Record<Exclude<LocalSetupDownload["kind"], "llamaVulkan">, ModelDownloader>;
 
@@ -67,20 +87,56 @@ export async function readLocalSetupInventory(
   return keys;
 }
 
+function warnPackFailed(error: string | undefined): void {
+  logger.warn(
+    "Graphics pack download failed; text models run on the processor",
+    { error: error ?? "no result" },
+    "onboarding"
+  );
+}
+
 async function downloadItem(item: LocalSetupDownload, downloaders: Downloaders): Promise<boolean> {
   if (item.kind === "llamaVulkan") {
     const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
     if (result?.success === true) return true;
-    if (!result?.cancelled) {
-      logger.warn(
-        "Graphics pack download failed; text models run on the processor",
-        { error: result?.error ?? "no result" },
-        "onboarding"
-      );
-    }
+    if (!result?.cancelled) warnPackFailed(result?.error);
     return false;
   }
   return downloaders[item.kind].downloadModel(item.id);
+}
+
+// After Proceed the step is gone, so its useModelDownload instances are too: a
+// model downloads straight over IPC, and the tray shows its progress and errors.
+async function downloadInBackground(item: LocalSetupDownload): Promise<boolean> {
+  const api = window.electronAPI;
+  if (item.kind === "llamaVulkan") {
+    const result = await api?.downloadLlamaVulkanBinary?.();
+    if (result?.success !== true) warnPackFailed(result?.error);
+    return result?.success === true;
+  }
+  const result =
+    item.kind === "whisper"
+      ? await api?.downloadWhisperModel?.(item.id)
+      : item.kind === "parakeet"
+        ? await api?.downloadParakeetModel?.(item.id)
+        : await api?.modelDownload?.(item.id);
+  if (result?.success === true) return true;
+  logger.warn(
+    "Local setup background download failed",
+    { kind: item.kind, id: item.id, error: result?.error ?? "no result" },
+    "onboarding"
+  );
+  return false;
+}
+
+async function finishInBackground(
+  steps: Array<{ item: LocalSetupDownload; result?: Promise<boolean> }>,
+  onModelReady: (item: LocalSetupDownload) => void
+): Promise<void> {
+  for (const { item, result } of steps) {
+    const ok = await (result ?? downloadInBackground(item)).catch(() => false);
+    if (ok && item.kind !== "llamaVulkan") onModelReady(item);
+  }
 }
 
 export function useLocalSetupDownloads(
@@ -96,6 +152,7 @@ export function useLocalSetupDownloads(
   inventoryLoaded: boolean;
   start: () => void;
   retry: (rowId: LocalSetupRowId) => void;
+  handOff: () => LocalSetupHandOff;
 } {
   const whisper = useModelDownload({ modelType: "whisper", showErrorDialog: false });
   const parakeet = useModelDownload({ modelType: "parakeet", showErrorDialog: false });
@@ -129,9 +186,20 @@ export function useLocalSetupDownloads(
     };
   }, [packId]);
 
-  // The item in flight. Cleared on unmount, so a result that lands after Back is dropped.
-  const runningRef = useRef<{ item: LocalSetupDownload; run: number } | null>(null);
+  // The item in flight, with its request. Cleared on unmount, so a result that
+  // lands after Back is dropped.
+  const runningRef = useRef<{
+    item: LocalSetupDownload;
+    run: number;
+    result: Promise<boolean>;
+  } | null>(null);
   const cancelledRef = useRef(false);
+  // Proceed took the downloads over: unmounting leaves them running.
+  const handedOffRef = useRef(false);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
   // A model request that came back false: the run whose outcome waits on the next
   // render (state, and a ref for unmount), and the run found joined to a transfer
   // of the same model already under way.
@@ -148,7 +216,7 @@ export function useLocalSetupDownloads(
       cancelledRef.current = true;
       const running = runningRef.current;
       runningRef.current = null;
-      if (!running) return;
+      if (!running || handedOffRef.current) return;
       // A request that already came back has nothing left to settle and release it.
       if (unsettledRunRef.current === running.run) releaseLocalSetupDownload(running.item);
       if (running.item.kind === "llamaVulkan") {
@@ -165,33 +233,32 @@ export function useLocalSetupDownloads(
     if (run === null || !current || runningRef.current?.run === run) return;
     if (cancelledRef.current) return;
     const item: LocalSetupDownload = { kind: current.kind, id: current.id, bytes: current.bytes };
-    runningRef.current = { item, run };
     claimLocalSetupDownload(item);
-    void downloadItem(item, downloadersRef.current)
-      .catch((error) => {
-        logger.warn(
-          "Local setup download failed",
-          { kind: item.kind, id: item.id, error },
-          "onboarding"
-        );
-        return false;
-      })
-      .then((ok) => {
-        if (cancelledRef.current || runningRef.current?.run !== run) {
-          releaseLocalSetupDownload(item);
-          return;
-        }
-        if (ok || item.kind === "llamaVulkan") {
-          releaseLocalSetupDownload(item);
-          runningRef.current = null;
-          dispatch({ type: ok ? "complete" : "fail", run });
-          return;
-        }
-        // Failed, or refused because this model is already downloading: the next
-        // render shows which (see the effect below).
-        unsettledRunRef.current = run;
-        setUnsettledRun(run);
-      });
+    const result = downloadItem(item, downloadersRef.current).catch((error) => {
+      logger.warn(
+        "Local setup download failed",
+        { kind: item.kind, id: item.id, error },
+        "onboarding"
+      );
+      return false;
+    });
+    runningRef.current = { item, run, result };
+    void result.then((ok) => {
+      if (cancelledRef.current || runningRef.current?.run !== run) {
+        releaseLocalSetupDownload(item);
+        return;
+      }
+      if (ok || item.kind === "llamaVulkan") {
+        releaseLocalSetupDownload(item);
+        runningRef.current = null;
+        dispatch({ type: ok ? "complete" : "fail", run });
+        return;
+      }
+      // Failed, or refused because this model is already downloading: the next
+      // render shows which (see the effect below).
+      unsettledRunRef.current = run;
+      setUnsettledRun(run);
+    });
   }, [current, run]);
 
   // Progress for a model comes from its useModelDownload instance.
@@ -250,11 +317,21 @@ export function useLocalSetupDownloads(
     return () => dispose?.();
   }, []);
 
+  const whisperErrors = whisper.downloadErrors;
+  const parakeetErrors = parakeet.downloadErrors;
+  const llmErrors = llm.downloadErrors;
   const rows = useMemo(() => {
+    const errors = { whisper: whisperErrors, parakeet: parakeetErrors, llm: llmErrors };
     const out = {} as Record<LocalSetupRowId, LocalSetupRowProgress>;
     for (const rowId of ROW_IDS) {
       if (state.rows.some((row) => row.rowId === rowId)) {
-        out[rowId] = { status: rowStatus(state, rowId), percent: rowPercent(state, rowId) };
+        const failed = failedItem(state, rowId);
+        out[rowId] = {
+          status: rowStatus(state, rowId),
+          percent: rowPercent(state, rowId),
+          error:
+            failed && failed.kind !== "llamaVulkan" ? errors[failed.kind][failed.id] : undefined,
+        };
         continue;
       }
       // Switched off, unavailable or hidden: never queued, but its model may be on disk.
@@ -263,10 +340,52 @@ export function useLocalSetupDownloads(
       out[rowId] = { status: onDisk ? "done" : "waiting", percent: onDisk ? 100 : 0 };
     }
     return out;
-  }, [plan, state]);
+  }, [llmErrors, parakeetErrors, plan, state, whisperErrors]);
 
   const start = useCallback(() => dispatch({ type: "start" }), []);
   const retry = useCallback((rowId: LocalSetupRowId) => dispatch({ type: "retry", rowId }), []);
+
+  const handOff = useCallback((): LocalSetupHandOff => {
+    const current = stateRef.current;
+    // A row's state is its model's: a graphics pack still on its way doesn't hold
+    // back a model already on disk.
+    const modelOf = (rowId: OptionalRowId) =>
+      current.rows
+        .find((row) => row.rowId === rowId)
+        ?.items.find((item) => item.kind !== "llamaVulkan");
+    const ready = { cleanup: false, assistant: false };
+    const pending: OptionalRowId[] = [];
+    for (const rowId of ["cleanup", "assistant"] as const) {
+      const status = modelOf(rowId)?.status;
+      if (status === "done") ready[rowId] = true;
+      else if (status && isQueued(status)) pending.push(rowId);
+    }
+
+    const continueInBackground = (onModelReady: (item: LocalSetupDownload) => void) => {
+      cancelledRef.current = true;
+      handedOffRef.current = true;
+      const running = runningRef.current;
+      runningRef.current = null;
+      const steps: Array<{ item: LocalSetupDownload; result?: Promise<boolean> }> = [];
+      if (running) {
+        // The tray shows it from here on.
+        releaseLocalSetupDownload(running.item);
+        steps.push({ item: running.item, result: running.result });
+      }
+      // What hasn't started yet, in queue order; a failed row stays as it is.
+      for (const row of current.rows) {
+        if (failedItem(current, row.rowId)) continue;
+        for (const item of row.items) {
+          if (item.status === "waiting") {
+            steps.push({ item: { kind: item.kind, id: item.id, bytes: item.bytes } });
+          }
+        }
+      }
+      void finishInBackground(steps, onModelReady);
+    };
+
+    return { ready, pending, continueInBackground };
+  }, []);
 
   return {
     rows,
@@ -276,5 +395,6 @@ export function useLocalSetupDownloads(
     inventoryLoaded,
     start,
     retry,
+    handOff,
   };
 }

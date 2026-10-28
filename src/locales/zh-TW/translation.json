@@ -453,7 +453,8 @@
           "assistantSeconds": "約 {{seconds}} 秒後開始回答",
           "requiredByOrganization": "你的組織要求使用",
           "off": "已關閉。之後可以在設定中開啟",
-          "offToFit": "已關閉，以符合這台電腦的可用空間"
+          "offToFit": "已關閉，以符合這台電腦的可用空間",
+          "failed": "無法下載。請檢查網路連線後重試"
         },
         "unavailable": {
           "tooSlow": "太慢",
@@ -476,6 +477,8 @@
         "downloaded": "已下載",
         "foot": {
           "default": "這些設定之後都可以在設定中變更。",
+          "finishesInBackground": "其餘項目會在你繼續後接著下載，準備好後自動開啟。",
+          "failedStaysOff": "未能下載的項目將保持關閉。之後可以在設定中新增。",
           "needsMac": "需要 {{needed}} GB，這台 Mac 有 {{free}} GB 可用空間。",
           "needsComputer": "需要 {{needed}} GB，這台電腦有 {{free}} GB 可用空間。",
           "noSpaceMac": "語音輸入需要 {{needed}} GB 可用空間，這台 Mac 只有 {{free}} GB。請釋放一些空間後繼續。",

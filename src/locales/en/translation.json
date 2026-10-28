@@ -453,7 +453,8 @@
           "assistantSeconds": "About {{seconds}} s before it starts answering",
           "requiredByOrganization": "Required by your organization",
           "off": "Off. You can turn it on later in Settings",
-          "offToFit": "Off to fit the free space on this computer"
+          "offToFit": "Off to fit the free space on this computer",
+          "failed": "Couldn't download. Check your connection and retry"
         },
         "unavailable": {
           "tooSlow": "Too slow",
@@ -476,6 +477,8 @@
         "downloaded": "Downloaded",
         "foot": {
           "default": "You can change any of these later in Settings.",
+          "finishesInBackground": "The rest keeps downloading after you proceed and turns on when it's ready.",
+          "failedStaysOff": "What didn't download stays off. You can add it later in Settings.",
           "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",
           "needsComputer": "This needs {{needed}} GB, and this computer has {{free}} GB free.",
           "noSpaceMac": "Dictation needs {{needed}} GB free and this Mac has {{free}} GB. Free up some space to continue.",

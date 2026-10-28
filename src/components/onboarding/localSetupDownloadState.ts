@@ -226,6 +226,14 @@ export function rowPercent(state: LocalSetupDownloadState, rowId: LocalSetupRowI
   return Math.floor((done / total) * 100);
 }
 
+/** The item that failed its row: its model (a failed graphics pack never fails a row). */
+export function failedItem(
+  state: LocalSetupDownloadState,
+  rowId: LocalSetupRowId
+): LocalSetupItemState | null {
+  return state.rows.find((r) => r.rowId === rowId)?.items.find(blocksRow) ?? null;
+}
+
 export function allEnabledDone(state: LocalSetupDownloadState): boolean {
   return state.rows.every((row) => row.items.every(isSettled));
 }

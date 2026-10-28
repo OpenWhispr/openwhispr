@@ -56,26 +56,61 @@ test("the first required speech model replaces the pick", async () => {
   assert.equal(dictation.line.key, "requiredByOrganization");
 });
 
-test("Proceed writes the settings, then finishes onboarding", async () => {
+test("Proceed writes the settings only once the finish can't fail, then hands off", async () => {
   const { planLocalSetup, proceedWithLocalSetup } = await load();
   const plan = planLocalSetup(input());
-  const switches = { cleanup: true, assistant: false };
   const order = [];
-  let finished = false;
+  let onModelReady;
+  const handOff = () => {
+    order.push("handOff");
+    return {
+      ready: { cleanup: true, assistant: false },
+      pending: ["assistant"],
+      continueInBackground: (callback) => {
+        order.push("continue");
+        onModelReady = callback;
+      },
+    };
+  };
   await proceedWithLocalSetup(
     plan,
-    switches,
-    async () => {
-      order.push("finish");
+    handOff,
+    async (beforeComplete) => {
+      order.push("checks");
       await Promise.resolve();
-      finished = true;
+      beforeComplete();
+      order.push("complete");
     },
-    (appliedPlan, appliedSwitches) => {
-      assert.equal(appliedPlan, plan);
-      assert.deepEqual(appliedSwitches, switches);
-      order.push("apply");
+    {
+      apply: (appliedPlan, ready) => {
+        assert.equal(appliedPlan, plan);
+        assert.deepEqual(ready, { cleanup: true, assistant: false });
+        order.push("apply");
+      },
+      remember: (rememberedPlan, pending) => {
+        assert.equal(rememberedPlan, plan);
+        assert.deepEqual(pending, ["assistant"]);
+        order.push("remember");
+      },
+      activate: (modelId) => order.push(`activate ${modelId}`),
     }
   );
-  assert.deepEqual(order, ["apply", "finish"]);
-  assert.equal(finished, true, "Proceed waits for the finish");
+  assert.deepEqual(order, ["checks", "handOff", "apply", "remember", "continue", "complete"]);
+
+  onModelReady({ kind: "llm", id: "qwen3.5-4b-q4_k_m", bytes: 1 });
+  assert.equal(order.at(-1), "activate qwen3.5-4b-q4_k_m");
+});
+
+test("a finish that fails before its last step writes nothing", async () => {
+  const { planLocalSetup, proceedWithLocalSetup } = await load();
+  let tookOver = false;
+  await proceedWithLocalSetup(
+    planLocalSetup(input()),
+    () => {
+      tookOver = true;
+      throw new Error("never taken");
+    },
+    async () => {}
+  );
+  assert.equal(tookOver, false, "the downloads stay on the step");
 });

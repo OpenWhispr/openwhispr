@@ -68,9 +68,8 @@ async function setup(t) {
   });
   const store = await loadStore(vite);
   store.useSettingsStore.getState().setIsSignedIn(true);
-  const { applyLocalSetupSettings } = await vite.ssrLoadModule(
-    "/components/onboarding/localSetupSettings.ts"
-  );
+  const { applyLocalSetupSettings, rememberPendingLocalSetupRows, activatePendingLocalSetupModel } =
+    await vite.ssrLoadModule("/components/onboarding/localSetupSettings.ts");
   const { buildLocalSetupPlan } = await vite.ssrLoadModule("/config/localSetup.ts");
   const plan = (profile, { languages = ["en-US"], policy = UNMANAGED, required } = {}) =>
     buildLocalSetupPlan({
@@ -79,7 +78,15 @@ async function setup(t) {
       policy,
       requiredSpeechModelId: required,
     });
-  return { storage, vite, store, applyLocalSetupSettings, plan };
+  return {
+    storage,
+    vite,
+    store,
+    applyLocalSetupSettings,
+    rememberPendingLocalSetupRows,
+    activatePendingLocalSetupModel,
+    plan,
+  };
 }
 
 function assertNoCloud(store, label) {
@@ -251,4 +258,64 @@ test("the vision override stays inactive", async (t) => {
   for (const key of ["dictationAgentVisionMode", "dictationAgentVisionModel"]) {
     assert.equal(storage.getItem(key), null, key);
   }
+});
+
+test("a row still downloading at Proceed is off until its model lands, then on", async (t) => {
+  const {
+    storage,
+    store,
+    applyLocalSetupSettings,
+    rememberPendingLocalSetupRows,
+    activatePendingLocalSetupModel,
+    plan,
+  } = await setup(t);
+  const p = plan(mac({}));
+  // Cleanup on disk at Proceed; the assistant still downloading.
+  applyLocalSetupSettings(p, { cleanup: true, assistant: false });
+  rememberPendingLocalSetupRows(p, ["assistant"]);
+
+  assertNoCloud(store, "pending assistant");
+  assertRow(store, ASSISTANT_SCOPES, false, "", "pending assistant");
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, false);
+  assert.equal(storage.getItem("localSetupPending"), "true", "the tray may apply it");
+
+  // Another model landing changes nothing.
+  activatePendingLocalSetupModel(table.models.cleanup);
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, false);
+
+  activatePendingLocalSetupModel(table.models.assistant);
+  assertNoCloud(store, "assistant landed");
+  assertRow(store, ASSISTANT_SCOPES, true, table.models.assistant, "assistant landed");
+  assertRow(store, CLEANUP_SCOPES, true, table.models.cleanup, "cleanup unchanged");
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, true);
+  assert.equal(storage.getItem("pendingLocalModelSelectionsV1"), null, "consumed");
+});
+
+test("a pending row never overrides what the user chose in Settings meanwhile", async (t) => {
+  const {
+    store,
+    applyLocalSetupSettings,
+    rememberPendingLocalSetupRows,
+    activatePendingLocalSetupModel,
+    plan,
+  } = await setup(t);
+  const p = plan(mac({}));
+  applyLocalSetupSettings(p, { cleanup: false, assistant: false });
+  rememberPendingLocalSetupRows(p, ["cleanup"]);
+  // The user picks their own cleanup model before the download finishes.
+  store.setResolvedLLMConfig("dictationCleanup", {
+    mode: "local",
+    provider: "qwen",
+    model: "qwen3.5-0.8b-q4_k_m",
+  });
+
+  activatePendingLocalSetupModel(table.models.cleanup);
+
+  const state = store.useSettingsStore.getState();
+  assert.equal(
+    store.selectResolvedLLMConfig(state, "dictationCleanup").model,
+    "qwen3.5-0.8b-q4_k_m",
+    "their pick stands"
+  );
+  assert.equal(state.useCleanupModel, false, "their switch stays as it was");
 });

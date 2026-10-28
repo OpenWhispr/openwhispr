@@ -69,7 +69,10 @@ test("the local setup step is wired through its helpers", () => {
   const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
   // Plan inputs and Proceed live in localSetupFlow.ts, where they are tested.
   assert.match(source, /planLocalSetup\(\{/);
-  assert.match(source, /proceedWithLocalSetup\(localSetupPlan, switches,/);
+  assert.match(source, /proceedWithLocalSetup\(localSetupPlan, handOff, \(beforeComplete\) =>/);
+  assert.match(source, /finalizeOnboarding\("local", beforeComplete\)/);
+  // A policy refresh that is loading or failed keeps the plan the step is using.
+  assert.match(source, /const localSetupPlan = computedLocalSetupPlan \?\? latchedLocalSetupPlan;/);
   assert.doesNotMatch(source, /buildLocalSetupPlan|applyLocalSetupSettings/);
   // The space read runs only around the choice.
   const steps = String.raw`currentStepId === "setup-choice" \|\| currentStepId === "local-setup"`;

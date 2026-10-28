@@ -453,7 +453,8 @@
           "assistantSeconds": "Circa {{seconds}} s prima che inizi a rispondere",
           "requiredByOrganization": "Richiesto dalla tua organizzazione",
           "off": "Disattivato. Puoi attivarlo più tardi nelle Impostazioni",
-          "offToFit": "Disattivato per rientrare nello spazio libero di questo computer"
+          "offToFit": "Disattivato per rientrare nello spazio libero di questo computer",
+          "failed": "Download non riuscito. Controlla la connessione e riprova"
         },
         "unavailable": {
           "tooSlow": "Troppo lento",
@@ -476,6 +477,8 @@
         "downloaded": "Scaricato",
         "foot": {
           "default": "Puoi modificare tutto questo più tardi nelle Impostazioni.",
+          "finishesInBackground": "Il resto continua a scaricarsi dopo che prosegui e si attiva quando è pronto.",
+          "failedStaysOff": "Ciò che non è stato scaricato resta disattivato. Puoi aggiungerlo più tardi nelle Impostazioni.",
           "needsMac": "Servono {{needed}} GB e questo Mac ha {{free}} GB liberi.",
           "needsComputer": "Servono {{needed}} GB e questo computer ha {{free}} GB liberi.",
           "noSpaceMac": "La dettatura richiede {{needed}} GB liberi e questo Mac ne ha {{free}} GB. Libera spazio per continuare.",

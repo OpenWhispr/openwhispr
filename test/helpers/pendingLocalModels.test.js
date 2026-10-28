@@ -91,3 +91,20 @@ test("pending local model availability distinguishes active, installed, and orph
   );
   assert.equal(getPendingLocalModelAvailability("dictation", dictation, {}), "unknown");
 });
+
+test("local setup remembers a row still downloading and lets the tray apply it", async () => {
+  global.localStorage = createStorage();
+  const pending = await import("../../src/components/onboarding/pendingLocalModels.ts");
+  const cleanup = { provider: "qwen", modelId: "qwen3.5-2b-q4_k_m" };
+
+  pending.rememberPendingLocalModel("cleanup", cleanup);
+
+  assert.deepEqual(pending.readPendingLocalModels(), { cleanup });
+  assert.equal(localStorage.getItem("localSetupPending"), "true");
+  assert.equal(
+    pending.getPendingLocalModelAvailability("cleanup", cleanup, {
+      llm: [{ id: cleanup.modelId, isDownloaded: true }],
+    }),
+    "downloaded"
+  );
+});

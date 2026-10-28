@@ -18,6 +18,7 @@ import {
   type PendingLocalModelKind,
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
+import { activatePendingLocalSetupModel } from "./localSetupSettings";
 import type {
   LocalLLMDownloadProgressEvent,
   ParakeetDownloadProgressData,
@@ -69,34 +70,24 @@ function downloadDisplay(download: ActiveDownload) {
   };
 }
 
-function activatePendingLocalModel(kind: PendingLocalModelKind, modelId: string) {
+function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
   if (localStorage.getItem("localSetupPending") !== "true") return;
-  const selection = consumePendingLocalModel(kind, modelId);
-  if (!selection) return;
-
-  const store = useSettingsStore.getState();
-  if (kind === "dictation") {
-    if (selection.provider === "nvidia") {
-      store.setLocalTranscriptionProvider("nvidia");
-      store.setParakeetModel(selection.modelId);
-    } else {
-      store.setLocalTranscriptionProvider("whisper");
-      store.setWhisperModel(selection.modelId);
-    }
-    store.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
+  if (family === "llm") {
+    activatePendingLocalSetupModel(modelId);
     return;
   }
-
-  store.setChatAgentMode("local");
-  store.setChatAgentProvider(selection.provider);
-  store.setChatAgentModel(selection.modelId);
-  store.setCloudReasoningForAllScopes({
-    cleanupCloudMode: "local",
-    cleanupProvider: selection.provider,
-    cleanupModel: selection.modelId,
-    useCleanupModel: true,
-    useDictationAgent: true,
-  });
+  // Only an older build's picker leaves a dictation model pending.
+  const selection = consumePendingLocalModel("dictation", modelId);
+  if (!selection) return;
+  const store = useSettingsStore.getState();
+  if (selection.provider === "nvidia") {
+    store.setLocalTranscriptionProvider("nvidia");
+    store.setParakeetModel(selection.modelId);
+  } else {
+    store.setLocalTranscriptionProvider("whisper");
+    store.setWhisperModel(selection.modelId);
+  }
+  store.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
 }
 
 // The X on each row (Figma "Frame 25"), inlined rather than drawn with the icon set so
@@ -207,7 +198,7 @@ export default function BackgroundModelDownloadTray({
       ][]) {
         const availability = getPendingLocalModelAvailability(kind, selection, inventory);
         if (availability === "downloaded" && canActivate) {
-          activatePendingLocalModel(kind, selection.modelId);
+          activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
         } else if (availability === "downloaded" || availability === "missing") {
           forgetPendingLocalModel(kind, selection.modelId);
         }
@@ -268,7 +259,7 @@ export default function BackgroundModelDownloadTray({
       if (event.type === "complete") {
         if (hydrationInProgress.current) removedDuringHydration.current.add(key);
         cancelledKeys.current.delete(key);
-        activatePendingLocalModel(event.kind === "llm" ? "assistant" : "dictation", event.id);
+        activatePendingLocalModel(event.kind === "llm" ? "llm" : "speech", event.id);
       }
       setDownloads((current) => {
         if (event.type === "complete") {
@@ -327,7 +318,13 @@ export default function BackgroundModelDownloadTray({
 
   const cancelDownload = useCallback(async (download: ActiveDownload) => {
     const key = downloadKey(download.kind, download.id);
-    const pendingKind = download.kind === "llm" ? "assistant" : "dictation";
+    const forgetPending = () => {
+      for (const kind of download.kind === "llm"
+        ? (["cleanup", "assistant"] as const)
+        : (["dictation"] as const)) {
+        forgetPendingLocalModel(kind, download.id);
+      }
+    };
 
     // An error row represents a transfer that has already stopped. Its X is a
     // dismiss action, so no cancellation IPC is needed (and would be refused).
@@ -337,7 +334,7 @@ export default function BackgroundModelDownloadTray({
         delete next[key];
         return next;
       });
-      forgetPendingLocalModel(pendingKind, download.id);
+      forgetPending();
       return;
     }
 
@@ -376,7 +373,7 @@ export default function BackgroundModelDownloadTray({
     // Only discard the intended selection once the transfer actually stopped.
     // If cancellation is refused, keeping it lets a finishing installation
     // activate the exact model the user originally chose.
-    forgetPendingLocalModel(pendingKind, download.id);
+    forgetPending();
   }, []);
 
   const activeDownloads = useMemo(() => Object.values(downloads), [downloads]);
