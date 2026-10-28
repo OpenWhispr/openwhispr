@@ -81,6 +81,10 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
+    this.getMeetingRecordingRefusal = () => null;
+    // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
+    this.resolveMeetingRecordingRefusal = async () => null;
     // Set by main.js: an app started to the tray creates no control panel.
     this.startedMinimized = false;
     this.notificationWindow = null;
@@ -855,6 +859,7 @@ class WindowManager {
 
     this.macCompoundPushState = {
       active: true,
+      hotkey,
       downTime,
       isRecording: false,
       requiredModifiers,
@@ -881,6 +886,9 @@ class WindowManager {
     if (!this.macCompoundPushState.requiredModifiers.has(modifier)) {
       return;
     }
+
+    // The press came through globalShortcut, which can't see the release.
+    this.hotkeyManager.logHotkeyEvent("macos-native", "up", this.macCompoundPushState.hotkey);
 
     if (this.macCompoundPushState.safetyTimeoutId) {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
@@ -1216,6 +1224,13 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The pill explains a refused meeting start the way it explains a refused
+  // tray action: the start may have come from a hotkey with nothing else shown.
+  sendMeetingStartRefused(code) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("meeting-start-refused", code);
   }
 
   // The tray's Ask assistant. Only the renderer can open the panel, and only it

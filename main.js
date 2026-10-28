@@ -1668,6 +1668,7 @@ async function startApp() {
     let rightModActiveKey = null;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "down", modifier);
       // Check voice agent slot for right-modifier
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
@@ -1704,6 +1705,7 @@ async function startApp() {
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "up", modifier);
       if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
@@ -1756,6 +1758,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-down", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "down", button);
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
@@ -1795,6 +1798,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-up", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "up", button);
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1899,6 +1903,7 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "down", key);
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1919,6 +1924,7 @@ async function startApp() {
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "up", key);
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);

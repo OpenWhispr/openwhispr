@@ -105,3 +105,104 @@ test("owner loss and account changes cancel a pending policy lookup before side 
     assert.equal(sender.listenerCount("destroyed"), 0);
   }
 });
+
+test("dictation is never refused, even before the policy loads", async () => {
+  for (const snapshot of [null, { success: false }, policy(false, false)]) {
+    assert.equal(audioFeatureFailure(snapshot, "dictation"), null);
+  }
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => ({ success: false }) });
+  assert.deepEqual(await guard.run({}, "dictation", () => ({ success: true })), { success: true });
+});
+
+test("dictation never waits on a policy lookup or lets a failed one stop a meeting", async () => {
+  let lookups = 0;
+  const blocked = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => {
+      lookups++;
+      return { success: false };
+    },
+    onBlocked: (purpose) => blocked.push(purpose),
+  });
+  guard.update(policy());
+  assert.deepEqual(await guard.run({}, "dictation", () => ({ success: true })), { success: true });
+  assert.equal(lookups, 0);
+  assert.deepEqual(blocked, []);
+  assert.equal(guard.failure("meeting"), null);
+});
+
+test("a main-process start fetches a policy that has not loaded instead of refusing on it", async () => {
+  let lookups = 0;
+  let next = policy(true);
+  const blocked = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => {
+      lookups++;
+      return next;
+    },
+    onBlocked: (purpose) => blocked.push(purpose),
+  });
+  assert.equal(await guard.resolve("meeting"), null);
+  assert.equal(lookups, 1);
+
+  // A loaded snapshot is answered without another lookup.
+  next = policy(false);
+  assert.equal(await guard.resolve("meeting"), null);
+  assert.equal(lookups, 1);
+
+  // Offline with nothing cached still fails closed, without reporting a block.
+  guard.cancelAll();
+  next = { success: false };
+  assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
+  assert.deepEqual(blocked, []);
+});
+
+test("a refusal names the control that is switched off", () => {
+  assert.equal(
+    audioFeatureFailure(policy(false, true), "meeting").error,
+    "Meeting recording is disabled by your organization."
+  );
+  assert.equal(
+    audioFeatureFailure(policy(true, false), "upload").error,
+    "Audio upload is disabled by your organization."
+  );
+});
+
+test("a newly blocked purpose is reported with its refusal code", () => {
+  const blocked = [];
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async () => policy(),
+    onBlocked: (...args) => blocked.push(args),
+  });
+  guard.update(policy());
+  guard.update(policy(false, true, 2));
+  assert.deepEqual(blocked, [["meeting", "POLICY_MEETING_RECORDING_DISABLED"]]);
+});
+
+test("only a server refusal refreshes the policy, bypassing its freshness window", async () => {
+  const requests = [];
+  const refreshed = deferred();
+  const guard = createAudioFeaturePolicy({
+    getPolicy: async (_event, options) => {
+      requests.push(options);
+      if (!options?.refresh) return policy(true, true, 1);
+      refreshed.resolve();
+      return policy(true, false, 2);
+    },
+  });
+  guard.update(policy(true, true, 1));
+  const serverRefusal = { success: false, code: "POLICY_AUDIO_UPLOAD_DISABLED", status: 403 };
+
+  // A local refusal was decided from the snapshot, and other failures say
+  // nothing about the policy.
+  guard.refreshOnRefusal({}, { code: "POLICY_AUDIO_UPLOAD_DISABLED" });
+  guard.refreshOnRefusal({}, { code: "NETWORK_ERROR", status: 503 });
+  assert.deepEqual(requests, []);
+
+  const result = await guard.run({}, "upload", () => serverRefusal);
+  assert.equal(result, serverRefusal);
+  await refreshed.promise;
+  assert.deepEqual(requests, [undefined, { refresh: true }]);
+  await new Promise(setImmediate);
+  assert.equal(guard.failure("upload").code, "POLICY_AUDIO_UPLOAD_DISABLED");
+});

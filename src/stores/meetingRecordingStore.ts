@@ -519,6 +519,18 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
 
+// Org-policy refusals: the main process's own sentinel and the refusal codes it
+// forwards. Each ends the recording; MeetingRecordingMount explains it.
+const MEETING_POLICY_REFUSALS = new Set([
+  "policyRestricted",
+  "POLICY_MEETING_RECORDING_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+]);
+
+// Main-process stops that end the recording without being a policy refusal.
+const MEETING_MAIN_STOPS = new Set([...MEETING_POLICY_REFUSALS, "accountChanged"]);
+
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
   useMeetingRecordingStore.setState((state) => ({
     ...extra,
@@ -1163,7 +1175,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         reportMeetingError(
           needsSignIn
             ? "signInRequired"
-            : startResult?.error || "Failed to start meeting transcription",
+            : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
+              ? startResult.code
+              : startResult?.error || "Failed to start meeting transcription",
           { isRecording: false, isTranscribing: false }
         );
         stopMediaStream(systemCaptureResult.stream);
@@ -1367,7 +1381,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         if (activeRecordingSessionId !== sessionId) return;
         reportMeetingError(err);
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
-        if (err === "policyRestricted" && isRecordingFlag) void stopRecording(sessionId);
+        if (MEETING_MAIN_STOPS.has(err) && isRecordingFlag) void stopRecording(sessionId);
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 

@@ -211,6 +211,7 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
         debugLogger: { error() {} },
         resetMeetingReconnectAudio() {},
         isSignInRefusal: () => false,
+        isAudioPolicyRefusal: () => false,
       }
     );
     const recoverable = code === "ECONNRESET";
@@ -219,4 +220,21 @@ test("enterprise renewal cannot restore sockets after policy or configuration re
     assert.equal(target._meetingMicStreaming, recoverable ? streaming : null, code);
     assert.equal(target._meetingSystemStreaming, recoverable ? streaming : null, code);
   }
+});
+
+test("a reconnect refused under org policy ends the meeting instead of restoring old sockets", () => {
+  const reconnectCatch = source.slice(
+    source.indexOf('debugLogger.error("Meeting stream reconnect failed"'),
+    source.indexOf("return canRestoreOld;")
+  );
+  // The policy stop clears meetingConnectionOptions, so the stale-options branch
+  // right after it returns before the old sockets can be kept or a fatal error sent.
+  assert.match(
+    reconnectCatch,
+    /if \(isAudioPolicyRefusal\(error\)\) this\._stopMeetingForPolicy\(error\.code\);\s*if \(meetingConnectionOptions !== options\) \{/
+  );
+  assert.match(
+    source,
+    /this\._stopMeetingForPolicy = \(reason = "policyRestricted"\) => \{[\s\S]{0,900}?meetingConnectionOptions = null;[\s\S]{0,900}?broadcastToWindows\("meeting-transcription-error", reason\)/
+  );
 });

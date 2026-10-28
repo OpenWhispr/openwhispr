@@ -24,6 +24,12 @@ const EMA_NEXT = 0.5;
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
+  // Org-policy refusal codes, from the main process or the server.
+  POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
+  POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  // The main process ended the recording because it belonged to the previous account.
+  accountChanged: "notes.meeting.stoppedAccountChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",

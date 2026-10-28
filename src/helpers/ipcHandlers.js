@@ -860,7 +860,7 @@ class IPCHandlers {
 
   _handleAuthTokenChange({ generation, token }) {
     this._audioFeaturePolicy?.cancelAll();
-    if (!token) this._stopMeetingForPolicy?.();
+    if (!token) this._stopMeetingForPolicy?.("accountChanged");
     this.windowManager.retireMeetingNotificationScope();
     this._retireEnterpriseAudio?.();
     this._enterpriseAudioBinding = null;
@@ -2300,7 +2300,17 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-save-note",
-      async (event, title, content, noteType, sourceFile, audioDuration, folderId, spaceId) => {
+      async (
+        event,
+        title,
+        content,
+        noteType,
+        sourceFile,
+        audioDuration,
+        folderId,
+        spaceId,
+        transcript
+      ) => {
         const result = this.databaseManager.saveNote(
           title,
           content,
@@ -2308,7 +2318,8 @@ class IPCHandlers {
           sourceFile,
           audioDuration,
           folderId,
-          spaceId
+          spaceId,
+          transcript
         );
         if (result?.success && result?.note) {
           setImmediate(() => broadcastToWindows("note-added", result.note));
@@ -2533,7 +2544,7 @@ class IPCHandlers {
         (accountId !== null && previousScope?.accountId !== accountId)
       ) {
         this._audioFeaturePolicy?.cancelAll();
-        this._stopMeetingForPolicy?.();
+        this._stopMeetingForPolicy?.("accountChanged");
         this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
@@ -4267,7 +4278,7 @@ class IPCHandlers {
           end: typeof s.end === "number" && isFinite(s.end) ? s.end : 0,
         }));
         const merged = mergeSpeakersWithText(sanitizedSegments, text, duration);
-        return { success: true, text: formatSpeakerTranscript(merged) };
+        return { success: true, text: formatSpeakerTranscript(merged), segments: merged };
       } catch (error) {
         debugLogger.error("Speaker merge error", { error: error.message });
         return { success: false, error: error.message };
@@ -4655,7 +4666,7 @@ class IPCHandlers {
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
               const callback = this.windowManager.createHotkeyCallback();
-              const registered = globalShortcut.register(accelerator, () => callback(hk));
+              const registered = hotkeyManager.registerGlobalShortcut(accelerator, hk, callback);
               if (!registered) {
                 debugLogger.warn(
                   `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
@@ -6649,9 +6660,9 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
-    const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
+    const { createAudioFeaturePolicy, isAudioPolicyRefusal } = require("./audioFeaturePolicy");
     this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: async (event) => {
+      getPolicy: async (event, { refresh = false } = {}) => {
         const generation = tokenStore.getState().generation;
         const authHeaders = event.sender
           ? await getAuthHeader(event)
@@ -6670,14 +6681,23 @@ class IPCHandlers {
           accountId: this.databaseManager.activeAccountId,
           expectedAuthGeneration: generation,
           authHeaders,
+          refresh,
         });
       },
-      onBlocked: (purpose) => {
-        if (purpose === "meeting") this._stopMeetingForPolicy?.();
+      onBlocked: (purpose, code) => {
+        if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
     });
+    this.windowManager.getMeetingRecordingRefusal = () =>
+      this._audioFeaturePolicy.failure("meeting");
+    this.windowManager.resolveMeetingRecordingRefusal = () =>
+      this._audioFeaturePolicy.resolve("meeting");
 
+    // Signed in, load the policy now (from cache when offline): an app started
+    // to the tray has no control panel to fetch it, and the tray item, the
+    // meeting hotkey, and calendar reminders all read this snapshot.
     if (!tokenStore.get()) this._audioFeaturePolicy.update({ success: true, managed: false });
+    else void this._audioFeaturePolicy.resolve("meeting");
 
     registerProductHelpIpc({
       ipcMain,
@@ -8209,6 +8229,9 @@ class IPCHandlers {
           });
           newMic?.disconnect().catch(() => {});
           newSystem?.disconnect().catch(() => {});
+          // An org refusal ends the recording instead of keeping the old
+          // sockets; the stop clears the connection options checked next.
+          if (isAudioPolicyRefusal(error)) this._stopMeetingForPolicy(error.code);
           if (meetingConnectionOptions !== options) {
             oldMic?.disconnect().catch(() => {});
             oldSystem?.disconnect().catch(() => {});
@@ -8360,7 +8383,10 @@ class IPCHandlers {
         },
         options,
         { streams }
-      );
+      ).catch((error) => {
+        this._audioFeaturePolicy.refreshOnRefusal(event, error);
+        throw error;
+      });
       if (options.purpose === "meeting") assertMeetingAllowed(event);
       return token;
     };
@@ -9626,6 +9652,7 @@ class IPCHandlers {
           const apiKey = await fetchRealtimeToken(event, {
             mode: options.mode,
             provider,
+            purpose: "dictation",
             // Cloud sessions are configured server-side when the secret is minted;
             // the server also owns the managed model, so only the language is sent.
             language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
@@ -10168,7 +10195,7 @@ class IPCHandlers {
       sendMeetingAudio(buffer, source);
     });
 
-    this._stopMeetingForPolicy = () => {
+    this._stopMeetingForPolicy = (reason = "policyRestricted") => {
       const wasActive =
         meetingConnectionOptions ||
         meetingLocalMode ||
@@ -10185,7 +10212,7 @@ class IPCHandlers {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
       }
-      if (wasActive) broadcastToWindows("meeting-transcription-error", "policyRestricted");
+      if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession();
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
@@ -11585,6 +11612,12 @@ class IPCHandlers {
                 );
               }
               const segments = timestamps ? mapVerboseSegments(data.data) : null;
+              if (timestamps && !segments) {
+                debugLogger.debug("BYOK transcription returned no usable segment timing", {
+                  provider: route.provider,
+                  hasSegments: Array.isArray(data.data?.segments),
+                });
+              }
               return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
             } catch (rawError) {
               if (signal.aborted) {
@@ -11752,48 +11785,8 @@ class IPCHandlers {
 
     ipcMain.handle("set-debug-logging", async (event, enabled) => {
       try {
-        const path = require("path");
-        const fs = require("fs");
-        const envPath = path.join(app.getPath("userData"), ".env");
+        await this.environmentManager.saveDebugLogging(enabled);
 
-        // Read current .env content
-        let envContent = "";
-        if (fs.existsSync(envPath)) {
-          envContent = fs.readFileSync(envPath, "utf8");
-        }
-
-        // Parse lines
-        const lines = envContent.split("\n");
-        const logLevelIndex = lines.findIndex((line) =>
-          line.trim().startsWith("OPENWHISPR_LOG_LEVEL=")
-        );
-
-        if (enabled) {
-          // Set to debug
-          if (logLevelIndex !== -1) {
-            lines[logLevelIndex] = "OPENWHISPR_LOG_LEVEL=debug";
-          } else {
-            // Add new line
-            if (lines.length > 0 && lines[lines.length - 1] !== "") {
-              lines.push("");
-            }
-            lines.push("# Debug logging setting");
-            lines.push("OPENWHISPR_LOG_LEVEL=debug");
-          }
-        } else {
-          // Remove or set to info
-          if (logLevelIndex !== -1) {
-            lines[logLevelIndex] = "OPENWHISPR_LOG_LEVEL=info";
-          }
-        }
-
-        // Write back
-        fs.writeFileSync(envPath, lines.join("\n"), "utf8");
-
-        // Update environment variable
-        process.env.OPENWHISPR_LOG_LEVEL = enabled ? "debug" : "info";
-
-        // Refresh logger state
         debugLogger.refreshLogLevel();
 
         return {
@@ -12448,7 +12441,11 @@ class IPCHandlers {
         const streaming = ensureGeminiStreaming(event);
         // byok resolves to the raw API key, managed to a single-use ephemeral
         // token; the client picks its Live method from `mode` accordingly.
-        const tokenOptions = { mode: options.mode, provider: "gemini-realtime" };
+        const tokenOptions = {
+          mode: options.mode,
+          provider: "gemini-realtime",
+          purpose: "dictation",
+        };
         // Buffer before the token fetch (a real network round trip) so
         // gemini-streaming-send has somewhere to put the first frames.
         streaming.beginConnecting();
@@ -12997,6 +12994,8 @@ class IPCHandlers {
           meetingRecordingEnabled: !this._audioFeaturePolicy.failure("meeting"),
         })
       );
+      // The tray's meeting item follows the same policy.
+      this.getTrayManager?.()?.updateTrayMenu?.();
     };
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
@@ -13101,9 +13100,11 @@ class IPCHandlers {
         return { success: false, code: "STALE_NOTIFICATION" };
       const respond = () =>
         this.meetingDetectionEngine.handleNotificationResponse(detectionId, action, options, owner);
-      return action === "dismiss"
-        ? respond()
-        : this._audioFeaturePolicy.run(event, "meeting", respond);
+      if (action === "dismiss" || action === "open") return respond();
+      // Join opens the meeting even when the org refuses to let it be recorded;
+      // only the recording is subject to the policy.
+      if (action === "join") this.meetingDetectionEngine.openNotificationJoinUrl(owner);
+      return this._audioFeaturePolicy.run(event, "meeting", respond);
     });
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
@@ -13113,10 +13114,12 @@ class IPCHandlers {
       try {
         // Sent from the open panel, which may have just opened the meeting
         // link: leave the meeting in front rather than pulling the panel back.
-        await this.meetingDetectionEngine.joinCalendarMeeting(eventId, "calendar-join", {
-          activate: false,
-        });
-        return { success: true };
+        const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
+          eventId,
+          "calendar-join",
+          { activate: false }
+        );
+        return refusal ?? { success: true };
       } catch (error) {
         return { success: false, error: error.message };
       }

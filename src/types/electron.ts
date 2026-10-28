@@ -171,6 +171,11 @@ export interface MeetingNotificationData {
   event: { summary?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
+  /** Set while the org refuses meeting recording: the card can only join. */
+  recordingRefusal?: Extract<
+    MeetingError,
+    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+  >;
 }
 
 export interface MeetingFolderRef {
@@ -213,7 +218,9 @@ export type MeetingError =
   | "CREATE_FAILED"
   | "LINKED_NOTE_CHANGED"
   | "NOTE_UNAVAILABLE"
-  | "START_FAILED";
+  | "START_FAILED"
+  | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
   | { success: true; value: T }
@@ -1463,6 +1470,7 @@ declare global {
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
       onOpenAssistantPanel?: (callback: () => void) => () => void;
+      onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (
@@ -1708,7 +1716,8 @@ declare global {
         sourceFile?: string | null,
         audioDuration?: number | null,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        transcript?: string | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
@@ -3421,7 +3430,12 @@ declare global {
         segments: Array<{ start: number; end: number; speaker: string }>,
         text: string,
         duration: number
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        segments?: Array<{ text: string; start: number; end: number; speaker: string }>;
+        error?: string;
+      }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number; requestId?: string }
@@ -3633,8 +3647,11 @@ declare global {
         navigationId: string,
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
-      joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      startManualMeeting?: () => Promise<void>;
+      joinCalendarMeeting?: (
+        eventId: string
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Resolves with nothing once started, or with why it could not start.
+      startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
         spaceId?: number;

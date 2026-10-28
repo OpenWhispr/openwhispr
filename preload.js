@@ -106,6 +106,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
+  onMeetingStartRefused: registerListener(
+    "meeting-start-refused",
+    (callback) => (_event, code) => callback(code)
+  ),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
@@ -220,7 +224,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId, transcript) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -229,7 +233,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       sourceFile,
       audioDuration,
       folderId,
-      spaceId
+      spaceId,
+      transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
   getNotes: (noteType, limit, folderId, spaceId) =>

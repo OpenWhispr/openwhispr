@@ -70,7 +70,7 @@ async function setup(t, { language = "en" } = {}) {
     onMeetingSpeakerIdentified: noop,
     onMeetingSpeakersMerged: noop,
     onMeetingSessionSpeakerConfigUpdated: noop,
-    onMeetingTranscriptionError: noop,
+    onMeetingTranscriptionError: capture("transcriptionError"),
     onMeetingTranscriptionFatalError: noop,
     onMeetingSystemAudioSilent: noop,
     onMeetingAutoEndRequested: noop,
@@ -102,7 +102,20 @@ async function setup(t, { language = "en" } = {}) {
   const deleteNote = (id) => listeners.noteDeleted?.({ id });
   const tick = (ms) => React.act(async () => t.mock.timers.tick(ms));
   const savedTranscripts = () => writes.filter(([, patch]) => typeof patch.transcript === "string");
-  return { start, say, deleteNote, tick, writes, savedTranscripts, api, toasts, vite };
+  const streamError = (error) => React.act(async () => listeners.transcriptionError?.(error));
+  return {
+    start,
+    say,
+    deleteNote,
+    tick,
+    writes,
+    savedTranscripts,
+    api,
+    toasts,
+    store,
+    streamError,
+    vite,
+  };
 }
 
 test("the 30-second save writes the live transcript while a recording runs", async (t) => {
@@ -144,7 +157,35 @@ test("a main policy refusal appears in a Spanish meeting-start toast", async (t)
 
   await start();
 
-  assert.equal(toasts.at(-1)?.description, esTranslation.notes.meeting.restrictedByOrg);
+  assert.equal(toasts.at(-1)?.description, esTranslation.notes.meeting.recordingDisabledByOrg);
+});
+
+test("a server refusal at start is explained by its code, not the API's message", async (t) => {
+  const { start, api, toasts } = await setup(t);
+  for (const [code, expected] of [
+    ["POLICY_MEETING_RECORDING_DISABLED", "Meeting recording is disabled by your organization."],
+    ["AUDIO_PURPOSE_REQUIRED", "Meeting transcription is restricted by your organization."],
+  ]) {
+    api.meetingTranscriptionStart = async () => ({
+      success: false,
+      code,
+      status: 403,
+      error: "raw server text",
+    });
+    await start();
+    assert.equal(toasts.at(-1)?.description, expected, code);
+  }
+});
+
+test("a policy refusal forwarded mid-meeting ends the recording", async (t) => {
+  const { start, store, streamError, toasts } = await setup(t);
+  await start();
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+
+  await streamError("POLICY_MEETING_RECORDING_DISABLED");
+
+  assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
 });
 
 test("an unavailable managed meeting route appears translated before capture starts", async (t) => {

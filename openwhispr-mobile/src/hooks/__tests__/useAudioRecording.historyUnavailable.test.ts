@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
+import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { useAudioRecording } from '../useAudioRecording';
 
 jest.mock('expo-file-system/legacy', () => ({
@@ -86,6 +87,10 @@ it('still delivers the transcript when history cannot be saved', async () => {
     await result.current.stopRecording().catch(() => undefined);
   });
   expect(onComplete).toHaveBeenCalledWith('Hello there.');
+  expect(transcribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ requestContext: 'recording', purpose: 'dictation' }),
+    expect.anything(),
+  );
   expect(onError).toHaveBeenCalledWith(
     expect.objectContaining({ message: expect.stringContaining('could not be saved') }),
   );

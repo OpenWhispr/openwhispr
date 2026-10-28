@@ -3233,7 +3233,8 @@
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       },
-      "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização."
+      "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
+      "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
@@ -4869,6 +4870,7 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever",
+    "joinOnly": "Entrar na reunião",
     "folders": {
       "choose": "Escolher pasta da reunião",
       "search": "Pesquisar pastas",
@@ -4901,7 +4903,9 @@
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
-        "START_FAILED": "Não foi possível concluir. Tente novamente."
+        "START_FAILED": "Não foi possível concluir. Tente novamente.",
+        "POLICY_MEETING_RECORDING_DISABLED": "A gravação de reuniões foi desativada pela sua organização.",
+        "POLICY_UNRESOLVABLE": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes."
       }
     }
   },

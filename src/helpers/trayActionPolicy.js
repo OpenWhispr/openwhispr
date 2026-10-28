@@ -1,10 +1,11 @@
 // The pill's command menu hides Ask assistant when it cannot run; the tray always
 // shows it, and only this renderer can open the panel. This decides what it does
 // with the request, and the message it explains a refusal with. Keys resolve
-// through i18n in the renderer. The meeting entry needs none of this: it starts
-// in the main process, and the recording itself is policy-gated where it begins.
+// through i18n in the renderer. The meeting entry starts in the main process,
+// which decides its refusal and only hands the code here to explain.
 export const TRAY_REFUSAL_KEYS = Object.freeze({
   agentRestricted: "common.policyAgentRestricted",
+  meetingRecordingDisabled: "notes.meeting.recordingDisabledByOrg",
   policyUnresolved: "common.policyUnresolved",
   busy: "app.commandMenu.busyRecording",
 });
@@ -17,6 +18,12 @@ const refuse = (messageKey) => Object.freeze({ action: "refuse", messageKey });
 // nothing. `policyResolved` is required: defaulting it would hide a miswiring.
 const policyRefusal = (policyResolved, restrictedKey) =>
   refuse(policyResolved ? restrictedKey : TRAY_REFUSAL_KEYS.policyUnresolved);
+
+/** A meeting start the main process refused under policy, by its refusal code. */
+export const meetingStartRefusalKey = (code) =>
+  code === "POLICY_UNRESOLVABLE"
+    ? TRAY_REFUSAL_KEYS.policyUnresolved
+    : TRAY_REFUSAL_KEYS.meetingRecordingDisabled;
 
 /** The pill menu hides Ask Assistant without the agent, and while a panel owns the pill. */
 export function resolveTrayAssistantAction({

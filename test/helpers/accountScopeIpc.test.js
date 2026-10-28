@@ -238,6 +238,21 @@ test("meeting prompt retirement precedes scope mutation and skips a true no-op",
   fakeThis.windowManager = originalManager;
 });
 
+test("a sign-out or account switch stops the meeting as an account change, not a policy refusal", async (t) => {
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const reasons = [];
+  fakeThis._stopMeetingForPolicy = (reason) => reasons.push(reason);
+  t.after(() => {
+    fakeThis._stopMeetingForPolicy = originalStop;
+  });
+  tokenState = { token: "switch-token", generation: 40 };
+  databaseManager.activeAccountId = "first-account";
+  await setScope("second-account", 40);
+  handleAuthTokenChange({ token: "rotated", generation: 41 });
+  handleAuthTokenChange({ token: null, generation: 42 });
+  assert.deepEqual(reasons, ["accountChanged", "accountChanged"]);
+});
+
 test("activation storage failure cannot prevent clearing the local bearer", async () => {
   const manager = fakeThis.metaActivation;
   fakeThis.metaActivation = {

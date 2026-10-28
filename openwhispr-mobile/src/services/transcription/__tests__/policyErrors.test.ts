@@ -1,6 +1,10 @@
 import {
+  AUDIO_PURPOSE_REQUIRED_MESSAGE,
+  AUDIO_UPLOAD_DISABLED_MESSAGE,
+  MEETING_RECORDING_DISABLED_MESSAGE,
   POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE,
   UPGRADE_REQUIRED_MESSAGE,
+  transcriptionPolicyErrorFromApiError,
   transcriptionPolicyErrorFromResponse,
 } from '../policyErrors';
 
@@ -15,6 +19,25 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE).toBe(
       "Your organization's policy doesn't allow OpenWhispr cloud transcription.",
     );
+  });
+
+  it.each([
+    ['POLICY_MEETING_RECORDING_DISABLED', MEETING_RECORDING_DISABLED_MESSAGE],
+    ['POLICY_AUDIO_UPLOAD_DISABLED', AUDIO_UPLOAD_DISABLED_MESSAGE],
+    ['AUDIO_PURPOSE_REQUIRED', AUDIO_PURPOSE_REQUIRED_MESSAGE],
+  ])('maps 403 + %s to its own message, never the raw server text', (code, message) => {
+    const error = transcriptionPolicyErrorFromResponse(
+      403,
+      JSON.stringify({ error: 'raw server text', code }),
+    );
+    expect(error?.message).toBe(message);
+  });
+
+  it('names the disabled control in the audio refusal messages', () => {
+    expect(MEETING_RECORDING_DISABLED_MESSAGE).toBe(
+      'Meeting recording is disabled by your organization.',
+    );
+    expect(AUDIO_UPLOAD_DISABLED_MESSAGE).toBe('Audio upload is disabled by your organization.');
   });
 
   it('leaves an ordinary 403 (no POLICY_MODE_BLOCKED code) unmapped', () => {
@@ -56,5 +79,34 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(transcriptionPolicyErrorFromResponse(401, '{}')).toBeUndefined();
     expect(transcriptionPolicyErrorFromResponse(429, '{}')).toBeUndefined();
     expect(transcriptionPolicyErrorFromResponse(500, '{}')).toBeUndefined();
+  });
+});
+
+describe('transcriptionPolicyErrorFromApiError', () => {
+  const apiError = (status: number, code?: string): Error =>
+    Object.assign(new Error('raw server text'), { status, code });
+
+  it.each([
+    ['POLICY_MEETING_RECORDING_DISABLED', MEETING_RECORDING_DISABLED_MESSAGE],
+    ['POLICY_MODE_BLOCKED', POLICY_MODE_BLOCKED_TRANSCRIPTION_MESSAGE],
+  ])('maps 403 + %s to its message, keeping status and code', (code, message) => {
+    const error = transcriptionPolicyErrorFromApiError(apiError(403, code));
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ message, status: 403, code });
+  });
+
+  it('maps 426 to the upgrade message', () => {
+    expect(transcriptionPolicyErrorFromApiError(apiError(426))?.message).toBe(
+      UPGRADE_REQUIRED_MESSAGE,
+    );
+  });
+
+  it('leaves unrelated codes, other statuses, and status-less errors unmapped', () => {
+    expect(transcriptionPolicyErrorFromApiError(apiError(403, 'SOME_OTHER_CODE'))).toBeUndefined();
+    expect(
+      transcriptionPolicyErrorFromApiError(apiError(400, 'INVALID_AUDIO_PURPOSE')),
+    ).toBeUndefined();
+    expect(transcriptionPolicyErrorFromApiError(new Error('network down'))).toBeUndefined();
+    expect(transcriptionPolicyErrorFromApiError('nope')).toBeUndefined();
   });
 });

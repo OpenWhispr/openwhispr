@@ -303,3 +303,31 @@ test("SQLite UTC note timestamps are parsed as UTC before local formatting", () 
 
   assert.equal(parsed.toISOString(), "2026-08-04T13:02:00.000Z");
 });
+
+// An upload whose provider returned no segments stores its text untimed; a
+// "[00:00:00] Unknown speaker" heading or a 3-second cue would be invented.
+test("untimed upload text exports without invented times or speakers", () => {
+  const note = {
+    title: "Lecture",
+    created_at: "2026-01-01T00:00:00Z",
+    audio_duration_seconds: 125.4,
+  };
+  const segments = [{ text: "The whole lecture." }];
+
+  const txt = formatTxt(note, segments, {});
+  assert.ok(txt.endsWith("──────────────────────────────────\n\nThe whole lecture.\n"));
+  assert.doesNotMatch(txt, /\[00:00:00\]/);
+
+  const md = formatMd(note, segments, {});
+  assert.ok(md.endsWith("---\n\nThe whole lecture.\n"));
+  assert.doesNotMatch(md, /00:00:00|Unknown/);
+
+  assert.equal(
+    formatSrt(segments, {}, note),
+    "1\n00:00:00,000 --> 00:02:05,400\nThe whole lecture.\n"
+  );
+  const json = JSON.parse(formatJson(note, segments, {}));
+  assert.equal(json.metadata.duration_seconds, 125);
+  assert.deepEqual(json.speakers, []);
+  assert.equal(json.segments[0].speaker, null);
+});

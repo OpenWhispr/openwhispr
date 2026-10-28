@@ -338,7 +338,10 @@ function createWorkspacePolicyManager({
     const lastSuccessfulRefresh = successfulRefreshes.get(key);
     const successfulRefreshAge =
       lastSuccessfulRefresh === undefined ? null : now() - lastSuccessfulRefresh;
+    // `refresh` is for a caller the server just refused: the fresh verdict it
+    // holds is the one in question. The attempt throttle below still applies.
     if (
+      !request.refresh &&
       current &&
       !(current.data.managed === false && requiresManagedPolicy(identity)) &&
       successfulRefreshAge !== null &&

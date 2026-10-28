@@ -3585,7 +3585,8 @@
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
       },
-      "recordingDisabledByOrg": "Meeting recording is disabled by your organization."
+      "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
+      "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -4869,6 +4870,7 @@
     },
     "start": "Take notes",
     "join": "Join and transcribe",
+    "joinOnly": "Join meeting",
     "folders": {
       "choose": "Choose meeting folder",
       "search": "Search folders",
@@ -4901,7 +4903,9 @@
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
-        "START_FAILED": "Could not finish. Please retry."
+        "START_FAILED": "Could not finish. Please retry.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Meeting recording is disabled by your organization.",
+        "POLICY_UNRESOLVABLE": "Your organization's settings haven't loaded yet. Try again in a moment."
       }
     }
   },

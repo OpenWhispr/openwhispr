@@ -157,3 +157,49 @@ test("disabled audio features refuse direct IPC calls before native, network or 
     );
   }
 });
+
+test("a refused notification Join still opens the meeting and refuses only the recording", async () => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  target._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({
+      success: true,
+      managed: true,
+      policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: true } },
+    }),
+  });
+  const owner = { prompt: { detectionId: "calendar:event" } };
+  const calls = [];
+  target.windowManager.captureMeetingNotificationOwner = () => owner;
+  target.meetingDetectionEngine = {
+    setPreferences: (prefs) => applied.push(prefs),
+    openNotificationJoinUrl: (joined) => calls.push(["open", joined]),
+    handleNotificationResponse: (_id, action) => {
+      calls.push([action]);
+      return { success: true, value: null };
+    },
+  };
+  const respond = (action) =>
+    handlers.get("meeting-notification-respond")({ sender: {} }, "calendar:event", action, {});
+
+  const joined = await respond("join");
+  assert.equal(joined.code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.deepEqual(calls, [["open", owner]]);
+
+  // A join-only card's Join records nothing, so the policy has no say in it.
+  calls.length = 0;
+  assert.equal((await respond("open")).success, true);
+  assert.deepEqual(calls, [["open"]]);
+});
+
+test("a refused calendar Join reports the refusal to the panel that asked", async () => {
+  const refusal = { success: false, code: "POLICY_MEETING_RECORDING_DISABLED", error: "off" };
+  let next = refusal;
+  target.meetingDetectionEngine = {
+    setPreferences: (prefs) => applied.push(prefs),
+    joinCalendarMeeting: async () => next,
+  };
+  const join = () => handlers.get("join-calendar-meeting")({ sender: {} }, "event-1");
+  assert.deepEqual(await join(), refusal);
+  next = undefined;
+  assert.deepEqual(await join(), { success: true });
+});
