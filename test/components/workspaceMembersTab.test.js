@@ -81,7 +81,12 @@ async function loadMembersTab(
           }
         : {}),
       "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
-      "/RemoveMembersDialog": "export const RemoveMembersDialog = () => null;",
+      "/RemoveMembersDialog": `
+        export function RemoveMembersDialog(props) {
+          globalThis.__removeDialog = props;
+          return null;
+        }
+      `,
       "/MemberAvatar": "export default function Mock() { return null; }",
       "/ui/dropdown-menu": `
         import React from "react";
@@ -111,6 +116,7 @@ async function loadMembersTab(
     delete globalThis.__updateMemberRole;
     delete globalThis.__toasts;
     delete globalThis.__roleMenus;
+    delete globalThis.__removeDialog;
   });
   globalThis.__workspaceMembers = members;
   globalThis.__membersWorkspaceId = membersWorkspaceId;
@@ -547,4 +553,175 @@ test("a role change refused for single sign-on says to sign in with it", async (
   );
   assert.equal(toast.description, "workspaces.ssoRequired");
   assert.equal(reloads, 0);
+});
+
+const PEOPLE = [
+  ...MEMBERS,
+  { user_id: "u-oliver", name: "Oliver Quinn", email: "rowan@example.com", role: "member" },
+  { user_id: "u-mason", name: "Mason Reed", email: "mason@example.com", role: "member" },
+];
+const ADMIN_WORKSPACE = { ...WORKSPACE, role: "admin" };
+
+function findAll(node, predicate, found = []) {
+  if (node.nodeType === 1 && predicate(node)) found.push(node);
+  for (const child of node.childNodes ?? []) findAll(child, predicate, found);
+  return found;
+}
+
+// The host DOM keeps `type` as a property, so the row checkboxes are told apart by their labels.
+const checkboxes = (container) =>
+  findAll(container, (node) =>
+    /people\.selection\.(selectRow|selectAllMembers)$/.test(node.getAttribute("aria-label") ?? "")
+  );
+
+// The table's body rows, in order (the header row is left out).
+const bodyRows = (container) => findAll(container, (node) => node.localName === "tr").slice(1);
+
+const checkboxLabeled = (container, label) =>
+  checkboxes(container).find((node) => node.getAttribute("aria-label") === label);
+
+async function setChecked(container, label, checked) {
+  const box = checkboxLabeled(container, label);
+  assert.ok(box, `checkbox ${label}`);
+  await React.act(async () => propsOf(box).onChange({ target: { checked } }));
+}
+
+const SELECT_ROW = "settingsPage.workspace.people.selection.selectRow";
+const SELECT_ALL = "settingsPage.workspace.people.selection.selectAllMembers";
+const barText = (container) => textOf(container);
+
+async function mountPeople(t, search) {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
+  globalThis.__authUser = { id: "u-admin" };
+  const container = await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE, search);
+  return { WorkspaceMembersTab, container };
+}
+
+test("admins get checkboxes except on the owner and their own row", async (t) => {
+  const { container } = await mountPeople(t);
+  const labels = checkboxes(container).map((node) => node.getAttribute("aria-label"));
+
+  // Select all, then Mia, Oliver and Mason; not Olivia (owner) or Adam (you).
+  assert.deepEqual(labels, [SELECT_ALL, SELECT_ROW, SELECT_ROW, SELECT_ROW]);
+  const rows = bodyRows(container);
+  assert.equal(rows.length, PEOPLE.length);
+  assert.equal(checkboxes(rows[0]).length, 0);
+  assert.equal(checkboxes(rows[1]).length, 0);
+  assert.equal(checkboxes(rows[2]).length, 1);
+});
+
+test("members get no checkboxes and no bar", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
+  globalThis.__authUser = { id: "u-member" };
+  const container = await mount(t, WorkspaceMembersTab, { ...WORKSPACE, role: "member" });
+
+  assert.equal(checkboxes(container).length, 0);
+  assert.doesNotMatch(textOf(container), /selection\.count/);
+  assert.equal(findAll(container, (node) => node.localName === "th").length, 2);
+});
+
+test("selecting two rows shows 2 selected with Remove", async (t) => {
+  const { container } = await mountPeople(t);
+  assert.doesNotMatch(barText(container), /selection\.count/);
+
+  const boxes = checkboxes(container).slice(1);
+  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+
+  const text = barText(container);
+  assert.match(text, /settingsPage\.workspace\.people\.selection\.count#2/);
+  assert.match(text, /settingsPage\.workspace\.people\.selection\.remove/);
+});
+
+test("select all picks only visible selectable rows", async (t) => {
+  const { container } = await mountPeople(t, { searchQuery: "m" });
+  // "m" keeps the owner, you (Adam) and some members, so select all has rows to skip.
+  const visible = bodyRows(container).length;
+  assert.ok(visible > 0);
+  await setChecked(container, SELECT_ALL, true);
+
+  const selectable = checkboxes(container).length - 1;
+  assert.match(barText(container), new RegExp(`selection\\.count#${selectable}(?!\\d)`));
+  assert.ok(selectable < visible, "the owner and your own row stay unselected");
+  assert.ok(checkboxes(container).every((node) => node.checked));
+});
+
+test("a search drops selected rows it hides", async (t) => {
+  const { WorkspaceMembersTab, container } = await mountPeople(t);
+  const boxes = checkboxes(container).slice(1);
+  const names = PEOPLE.filter((m) => m.role === "member");
+  assert.equal(boxes.length, names.length);
+  // Mia, Oliver, Mason in order: select Oliver and Mason.
+  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[2]).onChange({ target: { checked: true } }));
+  assert.match(barText(container), /selection\.count#2/);
+
+  await React.act(async () =>
+    mountedRoots
+      .get(t)
+      .render(tabElement(WorkspaceMembersTab, ADMIN_WORKSPACE, { searchQuery: "rowan" }))
+  );
+  assert.match(barText(container), /selection\.count#1/);
+});
+
+test("changing workspace clears the selection", async (t) => {
+  const { WorkspaceMembersTab, container } = await mountPeople(t);
+  await React.act(async () =>
+    propsOf(checkboxes(container)[1]).onChange({ target: { checked: true } })
+  );
+  assert.match(barText(container), /selection\.count#1/);
+
+  await React.act(async () =>
+    mountedRoots.get(t).render(tabElement(WorkspaceMembersTab, { ...ADMIN_WORKSPACE, id: "w2" }))
+  );
+  assert.doesNotMatch(barText(container), /selection\.count/);
+});
+
+test("Remove from the bar opens the dialog with the selection", async (t) => {
+  const { container } = await mountPeople(t);
+  const boxes = checkboxes(container).slice(1);
+  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[2]).onChange({ target: { checked: true } }));
+
+  const remove = findNode(
+    container,
+    (node) =>
+      node.localName === "button" &&
+      textOf(node).includes("settingsPage.workspace.people.selection.remove")
+  );
+  await React.act(async () => propsOf(remove).onClick());
+
+  const { state } = globalThis.__removeDialog;
+  assert.equal(state.kind, "checking");
+  assert.deepEqual(
+    state.subjects.map((member) => member.user_id),
+    ["u-member", "u-mason"]
+  );
+  assert.equal(state.defaultOwnerId, "u-admin");
+});
+
+test("a removal drops the removed people from the selection", async (t) => {
+  const { container } = await mountPeople(t);
+  const boxes = checkboxes(container).slice(1);
+  await React.act(async () => propsOf(boxes[0]).onChange({ target: { checked: true } }));
+  await React.act(async () => propsOf(boxes[1]).onChange({ target: { checked: true } }));
+
+  await React.act(async () => globalThis.__removeDialog.onRemoved(["u-member"]));
+  assert.match(barText(container), /selection\.count#1/);
+});
+
+test("the row menu's Remove opens the same dialog with one member", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE, captureRoleMenus: true });
+  globalThis.__authUser = { id: "u-admin" };
+  await mount(t, WorkspaceMembersTab, ADMIN_WORKSPACE);
+
+  await React.act(async () => globalThis.__roleMenus["u-mason"].onRemove());
+
+  const { state } = globalThis.__removeDialog;
+  assert.equal(state.kind, "checking");
+  assert.deepEqual(
+    state.subjects.map((member) => member.user_id),
+    ["u-mason"]
+  );
+  assert.equal(state.defaultOwnerId, "u-admin");
 });
