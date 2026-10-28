@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, Check, Code2, Copy, FileText, Trash2 } from "../icons";
+import { AlertTriangle, Check, Code2, Copy, FileText, MessageSquare, Trash2 } from "../icons";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
@@ -69,6 +69,8 @@ interface SkillDetailDialogProps {
   initialConfirmUninstall?: boolean;
   /** Where focus goes when the control that opened the pop-up is gone, as after an uninstall. */
   focusFallback?: () => void;
+  /** Opens a new chat with this skill; absent where the assistant isn't allowed. */
+  onTryNow?: (skill: { name: string; displayName: string }) => void;
 }
 
 /** The one pop-up of the Skills page: a skill's instructions, files and switch. */
@@ -78,6 +80,7 @@ export function SkillDetailDialog({
   onOpenChange,
   initialConfirmUninstall = false,
   focusFallback,
+  onTryNow,
 }: SkillDetailDialogProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -289,6 +292,17 @@ export function SkillDetailDialog({
                   <Trash2 className="h-3.5 w-3.5" />
                   {t("skills.detail.uninstall")}
                 </Button>
+                {/* A chat can't use a skill that is off or needs fixing. */}
+                {onTryNow && skill.enabled && skill.valid && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onTryNow({ name, displayName: skill.displayName })}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {t("skills.detail.tryNow")}
+                  </Button>
+                )}
               </div>
             )}
           </>

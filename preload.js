@@ -226,6 +226,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   skillsDiscardUploads: (tokens) => ipcRenderer.invoke("skills-discard-uploads", tokens),
   skillsCreate: (input) => ipcRenderer.invoke("skills-create", input),
   skillsAddRecommended: (id, copy) => ipcRenderer.invoke("skills-add-recommended", id, copy),
+  skillsReadForModel: (ref) => ipcRenderer.invoke("skills-read-for-model", ref),
+  skillsCheckProposal: (request) => ipcRenderer.invoke("skills-check-proposal", request),
+  skillsSaveProposal: (proposal) => ipcRenderer.invoke("skills-save-proposal", proposal),
+  skillsApplyUpdate: (update) => ipcRenderer.invoke("skills-apply-update", update),
+  skillsMarkUsed: (name) => ipcRenderer.invoke("skills-mark-used", name),
+  skillsUndo: (name, versionId) => ipcRenderer.invoke("skills-undo", name, versionId),
   onSkillsChanged: (callback) => {
     const listener = () => callback?.();
     ipcRenderer.on("skills-changed", listener);
@@ -603,6 +609,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resizeDictationErrorWindowToContent: (surfaceHeight) =>
     ipcRenderer.invoke("resize-dictation-error-window-to-content", surfaceHeight),
   setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
+  assistantPasteTarget: (action) => ipcRenderer.invoke("assistant-paste-target", action),
   setAssistantPanelBusy: (busy) => ipcRenderer.invoke("set-assistant-panel-busy", busy),
 
   // Update functions

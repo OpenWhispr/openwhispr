@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, FileText, Plus, X } from "../icons";
+import { AlertTriangle, FileText, Plus, Sparkles, X } from "../icons";
 import { Button } from "../ui/button";
 import { Breadcrumb } from "../ui/Breadcrumb";
 import { Input, INPUT_CLASS } from "../ui/input";
@@ -16,7 +16,7 @@ import {
   useSkillsStore,
   type SkillCreateDraft,
 } from "../../stores/skillsStore";
-import type { SkillProblemCode } from "../../types/skills";
+import type { SkillChatDraft, SkillProblemCode } from "../../types/skills";
 import { MAX_SKILL_BYTES, problemKey, writeFailedToast } from "./skillCopy";
 
 type Field = "name" | "description" | "instructions";
@@ -47,9 +47,16 @@ function fieldFor(code: SkillProblemCode): Field | null {
 interface CreateSkillScreenProps {
   onCreated: (name: string) => void;
   onBack: () => void;
+  /** Hands what the form holds to the skill creator chat, or nothing for an empty form; the
+   *  draft stays here. */
+  onDraftWithAssistant?: (draft?: SkillChatDraft) => void;
 }
 
-export function CreateSkillScreen({ onCreated, onBack }: CreateSkillScreenProps): ReactElement {
+export function CreateSkillScreen({
+  onCreated,
+  onBack,
+  onDraftWithAssistant,
+}: CreateSkillScreenProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   const draft = useSkillsStore((state) => state.createDraft) ?? EMPTY_DRAFT;
@@ -359,6 +366,28 @@ export function CreateSkillScreen({ onCreated, onBack }: CreateSkillScreenProps)
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
+            {onDraftWithAssistant && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  onDraftWithAssistant(
+                    hasContent(draft)
+                      ? {
+                          title: draft.title.trim(),
+                          description: draft.description.trim(),
+                          instructions: draft.instructions.trim(),
+                          fileNames: draft.files.map((file) => file.fileName),
+                        }
+                      : undefined
+                  )
+                }
+                className="-ms-2"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {t("skills.create.draftWithAssistant")}
+              </Button>
+            )}
             <div className="flex-1" />
             <Button variant="ghost" size="sm" onClick={requestLeave}>
               {t("common.cancel")}

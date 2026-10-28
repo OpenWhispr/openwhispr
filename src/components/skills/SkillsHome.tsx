@@ -8,6 +8,7 @@ import {
   Plus,
   Settings,
   SkillStack,
+  Sparkles,
   Upload,
 } from "../icons";
 import { Button } from "../ui/button";
@@ -40,6 +41,8 @@ interface SkillsHomeProps {
   onManage: (from: SkillsHomeControl) => void;
   onCreate: () => void;
   onUpload: () => void;
+  /** Opens a chat with the skill creator; absent where the assistant isn't allowed. */
+  onCreateWithAssistant?: () => void;
 }
 
 export function SkillsHome({
@@ -50,6 +53,7 @@ export function SkillsHome({
   onManage,
   onCreate,
   onUpload,
+  onCreateWithAssistant,
 }: SkillsHomeProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -175,6 +179,12 @@ export function SkillsHome({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6} className="min-w-52">
+        {onCreateWithAssistant && (
+          <DropdownMenuItem onSelect={onCreateWithAssistant} className="gap-2.5">
+            <Sparkles className="h-4 w-4" />
+            {t("skills.pane.addMenu.createWithAssistant")}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={onCreate} className="gap-2.5">
           <Pencil className="h-4 w-4" />
           {t("skills.pane.addMenu.create")}
@@ -227,10 +237,24 @@ export function SkillsHome({
             <EmptyStateCard
               icon={SkillStack}
               title={t("skills.pane.empty.title")}
-              description={t("skills.pane.empty.description")}
+              description={t(
+                onCreateWithAssistant
+                  ? "skills.pane.empty.description"
+                  : "skills.pane.empty.descriptionNoAssistant"
+              )}
               headingLevel={3}
             >
-              <Button size="sm" onClick={onUpload}>
+              {onCreateWithAssistant && (
+                <Button size="sm" onClick={onCreateWithAssistant}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("skills.pane.addMenu.createWithAssistant")}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant={onCreateWithAssistant ? "ghost" : "default"}
+                onClick={onUpload}
+              >
                 <Upload className="h-3.5 w-3.5" />
                 {t("skills.pane.addMenu.upload")}
               </Button>

@@ -1,3 +1,4 @@
+const debugLogger = require("../debugLogger");
 const { isSkillFolderName, writeErrorCode } = require("./skillLibrary");
 
 const INVALID = { ok: false, error: "invalid" };
@@ -19,6 +20,47 @@ function isCreateInput(input) {
   );
 }
 
+const isOptional = (value, type) => value === undefined || typeof value === type;
+
+function isModelRef(ref) {
+  return (
+    Boolean(ref) &&
+    isSkillFolderName(ref.name) &&
+    isOptional(ref.builtin, "boolean") &&
+    isOptional(ref.file, "string") &&
+    isOptional(ref.withFiles, "boolean")
+  );
+}
+
+const isProposalFiles = (files) =>
+  Array.isArray(files) &&
+  files.every((file) => typeof file?.path === "string" && typeof file?.content === "string");
+
+function isProposal(proposal) {
+  return (
+    Boolean(proposal) &&
+    ["title", "description", "instructions"].every((key) => typeof proposal[key] === "string") &&
+    isOptional(proposal.baseHash, "string") &&
+    isProposalFiles(proposal.files)
+  );
+}
+
+function isUpdate(update) {
+  return (
+    Boolean(update) &&
+    isSkillFolderName(update.name) &&
+    isOptional(update.description, "string") &&
+    isOptional(update.instructions, "string") &&
+    isOptional(update.baseHash, "string") &&
+    isProposalFiles(update.files)
+  );
+}
+
+function isProposalRequest(request) {
+  if (request?.kind === "create") return isProposal(request.proposal);
+  return request?.kind === "update" && isUpdate(request.update);
+}
+
 // Every handler checks its arguments before the library runs, and every write tells each
 // window to reload its list.
 function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
@@ -27,8 +69,9 @@ function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
   const saved = (result) => {
     if (!result) return INVALID;
     if (result.problems) return { ok: false, problems: result.problems };
+    if (result.changed) return { ok: false, error: "changed" };
     changed();
-    return { ok: true, name: result.name };
+    return { ok: true, ...result };
   };
 
   // A window's previewed uploads are let go when it closes, crashes or reloads, since the
@@ -146,6 +189,74 @@ function registerSkillsIpc({ ipcMain, library, shell, broadcast }) {
       );
     } catch (error) {
       return { ok: false, error: writeErrorCode(error) };
+    }
+  });
+
+  // A read or check the library can't finish answers as one that found nothing, so the chat
+  // says the skill couldn't be read or checked rather than showing Electron's error text.
+  ipcMain.handle("skills-read-for-model", (_event, ref) => {
+    if (!isModelRef(ref)) return null;
+    try {
+      return library.readForModel(ref);
+    } catch (error) {
+      debugLogger.warn(
+        "Could not read a skill for the assistant",
+        { error: error.message },
+        "skills"
+      );
+      return null;
+    }
+  });
+
+  ipcMain.handle("skills-check-proposal", (_event, request) => {
+    if (!isProposalRequest(request)) return INVALID;
+    try {
+      return library.checkProposal(request) ?? INVALID;
+    } catch (error) {
+      debugLogger.warn("Could not check a skill proposal", { error: error.message }, "skills");
+      return INVALID;
+    }
+  });
+
+  ipcMain.handle("skills-save-proposal", (_event, proposal) => {
+    if (!isProposal(proposal)) return INVALID;
+    try {
+      return saved(library.saveProposal(proposal));
+    } catch (error) {
+      return { ok: false, error: writeErrorCode(error) };
+    }
+  });
+
+  ipcMain.handle("skills-apply-update", (_event, update) => {
+    if (!isUpdate(update)) return INVALID;
+    try {
+      return saved(library.applyUpdate(update));
+    } catch (error) {
+      return { ok: false, error: writeErrorCode(error) };
+    }
+  });
+
+  ipcMain.handle("skills-undo", (_event, name, versionId) => {
+    if (!isSkillFolderName(name) || typeof versionId !== "string" || !/^\d+$/.test(versionId)) {
+      return INVALID;
+    }
+    try {
+      if (!library.undo(name, versionId)) return INVALID;
+    } catch (error) {
+      return { ok: false, error: writeErrorCode(error) };
+    }
+    changed();
+    return { ok: true };
+  });
+
+  // Bookkeeping, not a change to any skill, so the windows aren't told. Last use only orders
+  // the skills offered to the assistant, so a stamp that can't be saved is let go.
+  ipcMain.handle("skills-mark-used", (_event, name) => {
+    if (!isSkillFolderName(name)) return;
+    try {
+      library.markUsed(name);
+    } catch (error) {
+      debugLogger.warn("Could not stamp a skill's last use", { error: error.message }, "skills");
     }
   });
 }

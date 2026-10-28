@@ -4274,6 +4274,9 @@
       "get_noteStatus": "Reading note...",
       "create_noteStatus": "Creating note...",
       "update_noteStatus": "Updating note...",
+      "load_skillStatus": "Loading skill…",
+      "propose_skillStatus": "Preparing the skill…",
+      "update_skillStatus": "Preparing the change…",
       "copiedToClipboard": "Copied to your clipboard",
       "openNote": "Open note",
       "unknownTool": "Unknown tool: {{name}}",
@@ -4281,6 +4284,9 @@
       "search_openwhispr_helpName": "Search OpenWhispr help",
       "read_openwhispr_helpName": "Read OpenWhispr help",
       "get_openwhispr_contextName": "Read OpenWhispr settings",
+      "load_skillName": "Load skill",
+      "propose_skillName": "Propose skill",
+      "update_skillName": "Update skill",
       "search_openwhispr_helpStatus": "Searching OpenWhispr help...",
       "read_openwhispr_helpStatus": "Reading OpenWhispr help...",
       "get_openwhispr_contextStatus": "Reading OpenWhispr settings..."
@@ -4883,6 +4889,7 @@
       "manage": "Manage skills",
       "add": "Add",
       "addMenu": {
+        "createWithAssistant": "Create with assistant",
         "create": "Create skill",
         "upload": "Upload skill"
       },
@@ -4902,7 +4909,8 @@
       "addRecommended": "Add {{name}}",
       "empty": {
         "title": "No skills yet",
-        "description": "Make one with the assistant, or upload one you already have."
+        "description": "Make one with the assistant, or upload one you already have.",
+        "descriptionNoAssistant": "Upload one you already have, or create your own."
       }
     },
     "breadcrumb": {
@@ -4918,7 +4926,8 @@
       "neverRun": "OpenWhispr never runs scripts",
       "uninstall": "Uninstall",
       "uninstallConfirm": "Uninstall {{name}}? It's removed from this computer.",
-      "problem": "This skill can't be used until it's fixed: {{reason}}"
+      "problem": "This skill can't be used until it's fixed: {{reason}}",
+      "tryNow": "Try now"
     },
     "menu": {
       "copyMarkdown": "Copy markdown",
@@ -4989,7 +4998,8 @@
       "submit": "Create",
       "unsaved": "You have unsaved changes",
       "keepEditing": "Keep editing",
-      "discard": "Discard"
+      "discard": "Discard",
+      "draftWithAssistant": "Draft with assistant"
     },
     "problems": {
       "missingName": "Needs a name at the top",
@@ -5040,6 +5050,57 @@
         "title": "Meeting decisions",
         "description": "Finds the decisions in my meeting notes, with the date and meeting of each. Use when I ask what we decided."
       }
+    },
+    "chat": {
+      "chipRemove": "Remove {{name}} from this chat",
+      "placeholderWith": "Ask anything — this chat uses {{name}}",
+      "usingSkill": "Using skill · {{name}}",
+      "usingSkillFailed": "Couldn't use skill · {{name}}",
+      "creatorName": "Skill creator",
+      "creatorOpening": "What do you do over and over? Talk me through the last time, or pick a note to start from.",
+      "draftPrompt": "Help me finish this skill.\nName: {{name}}\nDescription: {{description}}",
+      "draftInstructions": "Instructions so far:\n{{instructions}}",
+      "draftFiles": "Files I added: {{files}}",
+      "noneYet": "(none yet)"
+    },
+    "approval": {
+      "createHeader": "Create skill",
+      "newSkill": "New skill",
+      "replacesExisting": "You already have this skill. Saving updates it.",
+      "replacesExistingTurnsOn": "You already have this skill. Saving updates it and turns it on.",
+      "nameLabel": "Skill name",
+      "descriptionLabel": "When it's used",
+      "seeFull": "See full skill",
+      "save": "Save skill",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "openSkill": "Open skill",
+      "skippedCreate": "Skipped. Nothing was saved.",
+      "updated": "Updated",
+      "undo": "Undo",
+      "undone": "Undone. The skill is back as it was.",
+      "undoStale": "Couldn't undo. The skill has changed since.",
+      "outdated": "Not saved. The skill changed after this card was made.",
+      "unchangedLines_one": "⋯ {{count}} unchanged line",
+      "unchangedLines_other": "⋯ {{count}} unchanged lines",
+      "undoFailed": "Couldn't undo. Try again.",
+      "failed": "Couldn't save the skill.",
+      "notSaved": "Nothing was saved.",
+      "updateHeader": "Update skill",
+      "removes": "Removes:",
+      "learnedFrom": "Learned from: {{title}} · {{date}}",
+      "today": "Today",
+      "seeChanges": "See exact changes",
+      "added": "Added:",
+      "removed": "Removed:",
+      "update": "Update skill",
+      "skippedUpdate": "Skipped. The skill wasn't changed."
+    },
+    "code": {
+      "paste": "Paste into app",
+      "pasteNote": "Pastes without pressing Enter, so you choose when to run it.",
+      "pasted": "Pasted",
+      "pasteFailed": "Couldn't paste. The text is on your clipboard."
     }
   },
   "notesView": {

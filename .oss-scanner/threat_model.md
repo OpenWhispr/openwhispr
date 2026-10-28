@@ -74,6 +74,12 @@ anyway), physical access to an unlocked device, and attacks that need the user t
   links, Windows device names, the 25 MB and 500-file caps, entry sizes, entries sharing bytes), then caps the
   bytes it inflates and checks each entry's CRC-32. A path that leaves the skill's folder, a write outside
   `userData/skills`, or a crafted file that crashes or stalls the main process matters.
+- **Skill text in the assistant's prompt** (`src/utils/skillContext.ts`, `src/services/tools/skillTools.ts`): a
+  skill's `SKILL.md` and text files, often uploaded from elsewhere, reach the model when it loads the skill or
+  the user attaches it, and each skill's description reaches the system prompt's skill list. Both are fenced
+  as data (`<skill_content>`, `<skill_catalog>`), and anything they lead the assistant to do still goes through
+  the approval cards. Skill text that gets the assistant to act without approval, to read outside the
+  skill's folder, or to change a skill without the user's Save matters.
 - **Meeting and calendar data**: Google, Microsoft and Apple calendar sync, attendee lists fed to the assistant
   (`<meeting_attendees>` fence; check that note or invite text can't fake it).
 

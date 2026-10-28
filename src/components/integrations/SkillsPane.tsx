@@ -7,6 +7,7 @@ import { ManageSkillsScreen } from "../skills/ManageSkillsScreen";
 import { SkillDetailDialog } from "../skills/SkillDetailDialog";
 import { SkillsHome, type SkillsHomeControl } from "../skills/SkillsHome";
 import { UploadSkillsScreen } from "../skills/UploadSkillsScreen";
+import type { SkillChatStart, SkillOpenRequest } from "../../types/skills";
 
 type SkillsScreen = "home" | "manage" | "upload" | "create";
 
@@ -14,6 +15,11 @@ interface SkillsPaneProps {
   title: string;
   /** The pane stays mounted while another section is open. */
   active: boolean;
+  /** Try now, Create with assistant and Draft with assistant; absent hides them. */
+  onStartSkillChat?: (start: SkillChatStart) => void;
+  /** A new id goes home and opens that skill. */
+  openSkillRequest?: SkillOpenRequest | null;
+  onOpenSkillRequestHandled?: () => void;
 }
 
 // Keys pressed in the pop-up or a menu are theirs. Both are portalled, but React still
@@ -27,7 +33,13 @@ function isInsidePopup(target: EventTarget | null): boolean {
 }
 
 /** Skills home, with Manage, Upload and Create opening in place of it. */
-export function SkillsPane({ title, active }: SkillsPaneProps): ReactElement {
+export function SkillsPane({
+  title,
+  active,
+  onStartSkillChat,
+  openSkillRequest = null,
+  onOpenSkillRequestHandled,
+}: SkillsPaneProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [screen, setScreen] = useState<SkillsScreen>("home");
@@ -49,6 +61,16 @@ export function SkillsPane({ title, active }: SkillsPaneProps): ReactElement {
     });
     return refreshSkillsOnFocus();
   }, [active, t, toast]);
+
+  // Open skill from a chat; the request stays set until the parent clears it.
+  const handledOpenRequest = useRef<number | null>(null);
+  useEffect(() => {
+    if (!openSkillRequest || handledOpenRequest.current === openSkillRequest.id) return;
+    handledOpenRequest.current = openSkillRequest.id;
+    setScreen("home");
+    setDetail({ name: openSkillRequest.name, confirmUninstall: false });
+    onOpenSkillRequestHandled?.();
+  }, [openSkillRequest, onOpenSkillRequestHandled]);
 
   // The control that opened a screen is gone with home, so the screen's heading takes focus
   // and the keyboard starts there; home restores its own focus.
@@ -87,12 +109,20 @@ export function SkillsPane({ title, active }: SkillsPaneProps): ReactElement {
           onManage={(from) => open("manage", from)}
           onCreate={() => open("create", "add")}
           onUpload={() => open("upload", "add")}
+          onCreateWithAssistant={onStartSkillChat && (() => onStartSkillChat({ kind: "create" }))}
         />
       )}
       {screen === "manage" && <ManageSkillsScreen onOpenSkill={openSkill} onBack={goHome} />}
       {screen === "upload" && <UploadSkillsScreen onDone={arriveHome} onBack={goHome} />}
       {screen === "create" && (
-        <CreateSkillScreen onCreated={(name) => arriveHome([name])} onBack={goHome} />
+        <CreateSkillScreen
+          onCreated={(name) => arriveHome([name])}
+          onBack={goHome}
+          onDraftWithAssistant={
+            onStartSkillChat &&
+            ((draft) => onStartSkillChat({ kind: "create", ...(draft ? { draft } : {}) }))
+          }
+        />
       )}
       {/* When the card or row that opened the pop-up is gone, the heading takes focus. */}
       <SkillDetailDialog
@@ -103,6 +133,13 @@ export function SkillsPane({ title, active }: SkillsPaneProps): ReactElement {
           if (!next) setDetail(null);
         }}
         focusFallback={() => root.current?.querySelector("h2")?.focus()}
+        onTryNow={
+          onStartSkillChat &&
+          ((skill) => {
+            setDetail(null);
+            onStartSkillChat({ kind: "try", ...skill });
+          })
+        }
       />
     </div>
   );

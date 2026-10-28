@@ -100,6 +100,7 @@ import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
+import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 
 const platform = getCachedPlatform();
 
@@ -173,6 +174,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number | null;
     event: any;
   } | null>(null);
+  // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
+  const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
+  const [openSkillRequest, setOpenSkillRequest] = useState<SkillOpenRequest | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -546,6 +550,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => setMeetingRecordingRequest(null),
     []
   );
+
+  const startSkillChat = useCallback((start: SkillChatStart) => {
+    setSkillChatRequest({ ...start, id: Date.now() });
+    setActiveView("chat");
+  }, []);
+  const handleSkillChatRequestHandled = useCallback(() => setSkillChatRequest(null), []);
+  const openSkill = useCallback((name: string) => {
+    setIntegrationsSection("skills");
+    setOpenSkillRequest({ id: Date.now(), name });
+    setActiveView("integrations");
+  }, []);
+  const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.
@@ -1285,7 +1301,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "chat" && agentAllowedByPolicy && (
                 <Suspense fallback={null}>
-                  <ChatView />
+                  <ChatView
+                    skillRequest={skillChatRequest}
+                    onSkillRequestHandled={handleSkillChatRequestHandled}
+                    onOpenSkill={openSkill}
+                  />
                 </Suspense>
               )}
               {activeView === "personal-notes" && (
@@ -1337,6 +1357,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     }}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
+                    onStartSkillChat={agentAllowedByPolicy ? startSkillChat : undefined}
+                    openSkillRequest={openSkillRequest}
+                    onOpenSkillRequestHandled={handleOpenSkillRequestHandled}
                   />
                 </Suspense>
               )}

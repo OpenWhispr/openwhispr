@@ -743,6 +743,14 @@ class DatabaseManager {
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
+      // The private space is shared by every account on the device, so its
+      // root chats need an owner the way private notes and folders do; note
+      // and folder chats are owned through their parent row.
+      try {
+        this.db.exec("ALTER TABLE agent_conversations ADD COLUMN account_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       const builtinKeys = [
         ...BUILTIN_ACTIONS.map((action) => action.translationKey),
@@ -4486,8 +4494,10 @@ class DatabaseManager {
     const notePlaceholders = deletedNoteIds.map(() => "?").join(", ");
     const folderPlaceholders = deletedFolderIds.map(() => "?").join(", ");
     const deleteRows = () => {
-      const conversationConditions = [];
-      const conversationParams = [];
+      // Only private-space root chats carry an account_id; note and folder
+      // chats go with their parent rows below.
+      const conversationConditions = ["account_id = ?"];
+      const conversationParams = [accountId];
       if (deletedNoteIds.length > 0) {
         conversationConditions.push(`note_id IN (${notePlaceholders})`);
         conversationParams.push(...deletedNoteIds);
@@ -4496,24 +4506,20 @@ class DatabaseManager {
         conversationConditions.push(`folder_id IN (${folderPlaceholders})`);
         conversationParams.push(...deletedFolderIds);
       }
-      if (conversationConditions.length > 0) {
-        const conversationIds = this.db
+      const conversationIds = this.db
+        .prepare(`SELECT id FROM agent_conversations WHERE ${conversationConditions.join(" OR ")}`)
+        .all(...conversationParams)
+        .map((row) => row.id);
+      if (conversationIds.length > 0) {
+        const conversationPlaceholders = conversationIds.map(() => "?").join(", ");
+        this.db
           .prepare(
-            `SELECT id FROM agent_conversations WHERE ${conversationConditions.join(" OR ")}`
+            `DELETE FROM agent_messages WHERE conversation_id IN (${conversationPlaceholders})`
           )
-          .all(...conversationParams)
-          .map((row) => row.id);
-        if (conversationIds.length > 0) {
-          const conversationPlaceholders = conversationIds.map(() => "?").join(", ");
-          this.db
-            .prepare(
-              `DELETE FROM agent_messages WHERE conversation_id IN (${conversationPlaceholders})`
-            )
-            .run(...conversationIds);
-          this.db
-            .prepare(`DELETE FROM agent_conversations WHERE id IN (${conversationPlaceholders})`)
-            .run(...conversationIds);
-        }
+          .run(...conversationIds);
+        this.db
+          .prepare(`DELETE FROM agent_conversations WHERE id IN (${conversationPlaceholders})`)
+          .run(...conversationIds);
       }
 
       if (deletedNoteIds.length > 0) {
@@ -5481,11 +5487,15 @@ class DatabaseManager {
         if (note && folderId != null && note.folder_id !== folderId) return null;
 
         const clientConversationId = randomUUID();
+        const accountId =
+          spaceId != null && folderId == null && noteId == null
+            ? this._accountIdForSpace(spaceId)
+            : null;
         const result = this.db
           .prepare(
-            "INSERT INTO agent_conversations (title, note_id, space_id, folder_id, client_conversation_id) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO agent_conversations (title, note_id, space_id, folder_id, client_conversation_id, account_id) VALUES (?, ?, ?, ?, ?, ?)"
           )
-          .run(title, noteId, spaceId, folderId, clientConversationId);
+          .run(title, noteId, spaceId, folderId, clientConversationId, accountId);
         return this.db
           .prepare("SELECT * FROM agent_conversations WHERE id = ?")
           .get(result.lastInsertRowid);
@@ -5533,9 +5543,13 @@ class DatabaseManager {
       } else if (!this.getSpace(spaceId)) {
         return [];
       }
+      // A root chat with no owner is device-owned (a guest's, or one from
+      // before root chats carried an account) and stays visible to everyone.
       const scopeFilter =
-        folderId != null ? "c.folder_id = ?" : "c.space_id = ? AND c.folder_id IS NULL";
-      const params = folderId != null ? [folderId, limit] : [spaceId, limit];
+        folderId != null
+          ? "c.folder_id = ?"
+          : "c.space_id = ? AND c.folder_id IS NULL AND (c.account_id IS NULL OR c.account_id = ?)";
+      const params = folderId != null ? [folderId, limit] : [spaceId, this.activeAccountId, limit];
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at,

@@ -1254,6 +1254,7 @@
       "manage": "إدارة المهارات",
       "add": "إضافة",
       "addMenu": {
+        "createWithAssistant": "إنشاء مع المساعد",
         "create": "إنشاء مهارة",
         "upload": "رفع مهارة"
       },
@@ -1277,7 +1278,8 @@
       "addRecommended": "إضافة {{name}}",
       "empty": {
         "title": "لا توجد مهارات بعد",
-        "description": "أنشئ مهارة مع المساعد، أو ارفع مهارة لديك بالفعل."
+        "description": "أنشئ مهارة مع المساعد، أو ارفع مهارة لديك بالفعل.",
+        "descriptionNoAssistant": "ارفع مهارة لديك بالفعل، أو أنشئ مهارتك الخاصة."
       }
     },
     "breadcrumb": {
@@ -1293,7 +1295,8 @@
       "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
       "uninstall": "إلغاء التثبيت",
       "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
-      "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}"
+      "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}",
+      "tryNow": "جرّبها الآن"
     },
     "menu": {
       "copyMarkdown": "نسخ Markdown",
@@ -1376,7 +1379,8 @@
       "submit": "إنشاء",
       "unsaved": "لديك تغييرات غير محفوظة",
       "keepEditing": "متابعة التعديل",
-      "discard": "تجاهل"
+      "discard": "تجاهل",
+      "draftWithAssistant": "صياغة مع المساعد"
     },
     "problems": {
       "missingName": "تحتاج إلى اسم في الأعلى",
@@ -1427,6 +1431,61 @@
         "title": "قرارات الاجتماعات",
         "description": "تجد القرارات في ملاحظات اجتماعاتي، مع تاريخ كل قرار واجتماعه. استخدمها عندما أسأل عمّا قررناه."
       }
+    },
+    "chat": {
+      "chipRemove": "إزالة {{name}} من هذه المحادثة",
+      "placeholderWith": "اسأل عن أي شيء — تستخدم هذه المحادثة {{name}}",
+      "usingSkill": "يتم استخدام المهارة · {{name}}",
+      "usingSkillFailed": "تعذّر استخدام المهارة · {{name}}",
+      "creatorName": "منشئ المهارات",
+      "creatorOpening": "ما الذي تفعله مرارًا وتكرارًا؟ احكِ لي عن آخر مرة، أو اختر ملاحظة لتبدأ منها.",
+      "draftPrompt": "ساعدني في إكمال هذه المهارة.\nالاسم: {{name}}\nالوصف: {{description}}",
+      "draftInstructions": "التعليمات حتى الآن:\n{{instructions}}",
+      "draftFiles": "الملفات التي أضفتها: {{files}}",
+      "noneYet": "(لا شيء بعد)"
+    },
+    "approval": {
+      "createHeader": "إنشاء مهارة",
+      "newSkill": "مهارة جديدة",
+      "replacesExisting": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها.",
+      "replacesExistingTurnsOn": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها ويفعّلها.",
+      "nameLabel": "اسم المهارة",
+      "descriptionLabel": "متى تُستخدم",
+      "seeFull": "عرض المهارة كاملة",
+      "save": "حفظ المهارة",
+      "saving": "جاري الحفظ…",
+      "saved": "تم الحفظ",
+      "openSkill": "فتح المهارة",
+      "skippedCreate": "تم التخطي. لم يُحفظ أي شيء.",
+      "updated": "تم التحديث",
+      "undo": "تراجع",
+      "undone": "تم التراجع. عادت المهارة كما كانت.",
+      "undoStale": "تعذّر التراجع. تغيّرت المهارة منذ ذلك الحين.",
+      "outdated": "لم يُحفظ. تغيّرت المهارة بعد إنشاء هذه البطاقة.",
+      "unchangedLines_zero": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_one": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_two": "⋯ {{count}} سطران دون تغيير",
+      "unchangedLines_few": "⋯ {{count}} أسطر دون تغيير",
+      "unchangedLines_many": "⋯ {{count}} سطرًا دون تغيير",
+      "unchangedLines_other": "⋯ {{count}} سطر دون تغيير",
+      "undoFailed": "تعذّر التراجع. حاول مرة أخرى.",
+      "failed": "تعذّر حفظ المهارة.",
+      "notSaved": "لم يُحفظ أي شيء.",
+      "updateHeader": "تحديث المهارة",
+      "removes": "سيُزال:",
+      "learnedFrom": "مستفادة من: {{title}} · {{date}}",
+      "today": "اليوم",
+      "seeChanges": "عرض التغييرات بالتفصيل",
+      "added": "أُضيف:",
+      "removed": "أُزيل:",
+      "update": "تحديث المهارة",
+      "skippedUpdate": "تم التخطي. لم تتغير المهارة."
+    },
+    "code": {
+      "paste": "لصق في التطبيق",
+      "pasteNote": "يلصق دون الضغط على Enter، لتختار أنت متى تشغّله.",
+      "pasted": "تم اللصق",
+      "pasteFailed": "تعذّر اللصق. النص موجود في الحافظة."
     }
   },
   "auth": {
@@ -2190,6 +2249,9 @@
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",
+      "load_skillStatus": "جاري تحميل المهارة…",
+      "propose_skillStatus": "جاري تجهيز المهارة…",
+      "update_skillStatus": "جاري تجهيز التغيير…",
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
@@ -2197,6 +2259,9 @@
       "search_openwhispr_helpName": "البحث في مساعدة OpenWhispr",
       "read_openwhispr_helpName": "قراءة مساعدة OpenWhispr",
       "get_openwhispr_contextName": "قراءة إعدادات OpenWhispr",
+      "load_skillName": "تحميل مهارة",
+      "propose_skillName": "اقتراح مهارة",
+      "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
       "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."

@@ -41,9 +41,14 @@ import type {
   SkillCommitResult,
   SkillCreateInput,
   SkillDetail,
+  SkillForModel,
   SkillInvalidRequest,
+  SkillProposal,
+  SkillProposalCheck,
+  SkillRef,
   SkillSaveResult,
   SkillSummary,
+  SkillUpdate,
   SkillUploadItem,
   SkillUploadPreview,
   SkillWriteError,
@@ -1445,6 +1450,10 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          /** Paste exactly this text: no smart spacing, no AutoLearn. */
+          raw?: boolean;
+          /** Paste only into the app the assistant panel's voice command was spoken over. */
+          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -1458,6 +1467,8 @@ declare global {
             code: "ACCESSIBILITY_PERMISSION_REQUIRED";
             clipboardCopied: true;
           }
+        /** assistantTarget: no app to paste into, so nothing was pasted or copied. */
+        | { success: false; pasted: false; reason: "no-target" }
       >;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
@@ -1784,6 +1795,22 @@ declare global {
         id: string,
         copy: { title: string; description: string }
       ) => Promise<SkillSaveResult>;
+      /** The built-in creator, or a skill that is on and valid; null for anything else. */
+      skillsReadForModel?: (
+        ref: SkillRef & { file?: string; withFiles?: boolean }
+      ) => Promise<SkillForModel | null>;
+      skillsCheckProposal?: (
+        request:
+          { kind: "create"; proposal: SkillProposal } | { kind: "update"; update: SkillUpdate }
+      ) => Promise<SkillProposalCheck | SkillInvalidRequest>;
+      skillsSaveProposal?: (proposal: SkillProposal) => Promise<SkillSaveResult>;
+      skillsApplyUpdate?: (update: SkillUpdate) => Promise<SkillSaveResult>;
+      skillsMarkUsed?: (name: string) => Promise<void>;
+      /** Puts back the copy a save or update kept, then forgets it. */
+      skillsUndo?: (
+        name: string,
+        versionId: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
       onSkillsChanged?: (callback: () => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
@@ -2386,6 +2413,8 @@ declare global {
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+      /** Adopt the app the panel's voice command was spoken over, or forget it; true if usable. */
+      assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
       setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
