@@ -11,6 +11,7 @@ const originalLoad = Module._load;
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+let policySnapshot = { success: true, managed: false };
 let fetchResponse = () => ({
   ok: true,
   status: 200,
@@ -116,7 +117,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async () => ({ success: true, managed: false }),
+          getPolicy: async () => policySnapshot,
         }),
       };
     if (request === "./tokenStore") {
@@ -1146,4 +1147,128 @@ test("cancelling during policy lookup prevents every upload handler's later side
   assert.equal(local.mock.callCount(), 0);
   assert.equal(download.mock.callCount(), 0);
   assert.equal(diarization.mock.callCount(), 0);
+});
+
+test("enterprise credential retirement preserves an actionable string code through IPC serialization", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const credential = deferred();
+  const activeMeeting = fakeThis._activeEnterpriseAudioMeeting;
+  fakeThis._activeEnterpriseAudioMeeting = false;
+  t.after(() => {
+    fakeThis._activeEnterpriseAudioMeeting = activeMeeting;
+    credential.resolve("rotated-key");
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => ({
+    managed: true,
+    provider: "openai-compatible",
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+    },
+  }));
+  const read = t.mock.method(fakeThis.enterpriseAudioCredentials, "read", () => credential.promise);
+  const request = t.mock.method(fakeThis.enterpriseAudioTransport, "request", async () => {
+    throw new Error("Retired audio must not be sent");
+  });
+  const profile = await fakeThis.enterpriseAudioRuntime.resolve({});
+  const pending = profile.request({});
+  await new Promise(setImmediate);
+  assert.equal(read.mock.callCount(), 1);
+  fakeThis._retireEnterpriseAudio();
+  await assert.rejects(pending, (error) => {
+    const result = ipcErrorFields(error);
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+    assert.equal(result.messageKey, "common.managedConfigUnavailable");
+    assert.equal(result.error, "Enterprise audio configuration changed");
+    return true;
+  });
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("main enterprise audio resolution honors provider and mode policy before HTTP or socket creation", async (t) => {
+  t.after(() => {
+    policySnapshot = { success: true, managed: false };
+  });
+  const resolved = {
+    managed: true,
+    provider: "openai-compatible",
+    mode: "managed_default",
+    allowManualSetup: true,
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+      realtime: {
+        endpoint: "wss://gateway.test/realtime",
+        defaultDeployment: "speech",
+        protocol: "openai-transcription-ga",
+        authentication: { type: "bearer", credentialSlot: "socket" },
+      },
+    },
+  };
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => resolved);
+  t.mock.method(fakeThis.enterpriseAudioCredentials, "read", async () => "device-key");
+  const request = t.mock.method(
+    fakeThis.enterpriseAudioTransport,
+    "request",
+    async () => new Response('{"text":"allowed"}')
+  );
+  const socket = t.mock.method(fakeThis.enterpriseAudioTransport, "createSocket", async () => ({}));
+  for (const transcription of [
+    { allowedModes: ["local"], allowedEnterpriseProviders: [] },
+    { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
+  ]) {
+    policySnapshot = { success: true, managed: true, policy: { transcription } };
+    for (const operation of ["batch", "realtime"]) {
+      resolved.mode = "managed_default";
+      resolved.allowManualSetup = true;
+      assert.equal(await fakeThis.enterpriseAudioRuntime.resolve({}, operation), null);
+      for (const [mode, allowManualSetup] of [
+        ["managed_required", true],
+        ["managed_default", false],
+      ]) {
+        Object.assign(resolved, { mode, allowManualSetup });
+        await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, operation), {
+          code: "PROVIDER_POLICY_CONFLICT",
+          messageKey: "common.managedPolicyConflict",
+        });
+      }
+    }
+  }
+  assert.equal(request.mock.callCount(), 0);
+  assert.equal(socket.mock.callCount(), 0);
+
+  Object.assign(resolved, { mode: "managed_default", allowManualSetup: true });
+  policySnapshot = { success: true, managed: false };
+  const batch = await fakeThis.enterpriseAudioRuntime.resolve({}, "batch");
+  const realtime = await fakeThis.enterpriseAudioRuntime.resolve({}, "realtime");
+  await batch.request({});
+  await realtime.createSocket();
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = {
+    success: true,
+    managed: true,
+    policy: { transcription: { allowedModes: ["local"], allowedEnterpriseProviders: [] } },
+  };
+  await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
+  await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = { success: false };
+  await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
 });

@@ -51,6 +51,7 @@ import {
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
+  enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
@@ -332,15 +333,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
   );
-  const managedActive =
-    useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode).kind === "managed";
+  const managed = useManagedScopeResolution("transcription", enterpriseTranscriptionSetupMode);
+  const managedActive = managed.kind === "managed";
 
   const isOpenWhisprCloud =
-    isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
+    !managedActive && isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
 
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  // Managed audio never reaches the saved personal provider, so its diarize notes don't apply.
+  const byokDiarizeProvider =
+    isByok && !managedActive && !isSelfHosted ? cloudTranscriptionProvider : null;
 
   // Mode-aware file size validation
   // Local: no limits at all
@@ -356,8 +360,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   let isLargeFile = false;
 
   if (file) {
-    if (useLocalWhisper) {
-      // Local transcription: no file size restrictions
+    if (managedActive || useLocalWhisper) {
+      // Managed audio is prepared/chunked to its endpoint cap; local decoding has no size limit.
     } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
       // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
     } else if (isByok) {
@@ -376,6 +380,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     return () => {
       if (progressRef.current) clearInterval(progressRef.current);
+      progressCleanupRef.current?.();
     };
   }, []);
 
@@ -500,6 +505,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   ]);
 
   const getActiveModelLabel = (): string => {
+    if (managed.kind === "managed")
+      return `${enterpriseProviderName(managed.provider)} · ${managed.model}`;
     if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
@@ -541,6 +548,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
+    if (managedActive) return null;
     if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
     if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
@@ -700,20 +708,23 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setDiarizationWarning(false);
 
-    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    const useChunkProgress = managedActive || (isOpenWhisprCloud && isLargeFile);
 
     if (useChunkProgress) {
       progressCleanupRef.current =
         window.electronAPI.onUploadTranscriptionProgress?.((data) => {
-          if (data.chunksTotal > 0) {
-            setChunkProgress({
-              chunksTotal: data.chunksTotal,
-              chunksCompleted: data.chunksCompleted,
-            });
-            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
-          }
+          // A managed upload under the endpoint cap is one request with no
+          // intermediate progress, so the simulated bar keeps covering it.
+          if (data.chunksTotal === 0 || (managedActive && data.chunksTotal === 1)) return;
+          if (progressRef.current) clearInterval(progressRef.current);
+          setChunkProgress({
+            chunksTotal: data.chunksTotal,
+            chunksCompleted: data.chunksCompleted,
+          });
+          setProgress((prev) => Math.max(prev, (data.chunksCompleted / data.chunksTotal) * 90));
         }) ?? null;
-    } else {
+    }
+    if (!useChunkProgress || managedActive) {
       progressRef.current = setInterval(() => {
         setProgress((prev) => {
           if (prev >= 90) {
@@ -987,6 +998,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const getTranscribingLabel = (): string => {
+    if (managed.kind === "managed")
+      return t("notes.upload.transcribingProvider", {
+        provider: enterpriseProviderName(managed.provider),
+      });
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
     if (isSelfHosted) {
@@ -1296,33 +1311,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     {t("notes.upload.speakerDetectionDescription")}
                   </p>
 
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "openai" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.openaiDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "mistral" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.mistralDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "groq" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-warning">
-                        {t("notes.upload.groqDiarizeNote")}
-                      </p>
-                    )}
+                  {diarizationEnabled && byokDiarizeProvider === "openai" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.openaiDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "mistral" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.mistralDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "groq" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                      {t("notes.upload.groqDiarizeNote")}
+                    </p>
+                  )}
 
                   {diarizationDownloading && (
                     <p className="mt-1.5 text-xs leading-relaxed text-primary">
@@ -1330,7 +1333,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     </p>
                   )}
 
-                  {diarizationEnabled && isOpenWhisprCloud && (
+                  {diarizationEnabled && (isOpenWhisprCloud || managedActive) && (
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       {t("notes.upload.diarizationRunsLocally")}
                     </p>

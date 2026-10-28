@@ -188,6 +188,11 @@ function createAudioFeaturePolicy({
             success: false,
             error: error.message,
             code: typeof error.code === "string" ? error.code : "AUDIO_OPERATION_FAILED",
+            // Main-side enterprise errors are translated by the renderer.
+            ...(error.messageKey && {
+              messageKey: error.messageKey,
+              messageParams: error.messageParams,
+            }),
           }
         );
       } finally {

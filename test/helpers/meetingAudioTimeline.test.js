@@ -14,9 +14,13 @@ const source = fs.readFileSync(ipcPath, "utf8");
 function section(from, to) {
   return source.slice(source.indexOf(from), source.indexOf(to));
 }
+const MEETING_STARTUP_AUDIO_MAX_AGE_MS = Number(
+  /MEETING_STARTUP_AUDIO_MAX_AGE_MS = ([\d_]+);/.exec(source)[1].replace(/_/g, "")
+);
 function harness({ native = true, local = false } = {}) {
   let now = 0;
   let onChunk;
+  const ipc = {};
   const pcm = [];
   const live = [];
   const streamed = [];
@@ -60,7 +64,10 @@ function harness({ native = true, local = false } = {}) {
     },
     meetingSystemAudioWatchdog: watchdog,
     meetingSystemAudioHandover: createMeetingSystemAudioHandover(),
-    meetingEchoLeakDetector: { recordSystemChunk: (buffer) => echo.push(buffer) },
+    meetingEchoLeakDetector: {
+      recordSystemChunk: (buffer) => echo.push(buffer),
+      isSystemSpeaking: () => false,
+    },
     meetingAecEnabled: true,
     flushPendingMeetingMicChunks() {},
     meetingLiveSpeakerActive: true,
@@ -81,6 +88,11 @@ function harness({ native = true, local = false } = {}) {
     meetingReconnectAudioBytes: { mic: 0, system: 0 },
     meetingReconnectReplaySources: new Set(),
     MEETING_RECONNECT_BUFFER_MAX_BYTES: 24000 * 2 * 30,
+    MEETING_MIC_BLEED_LOOKBACK_MS: 0,
+    meetingMicStatsLogCount: 0,
+    MEETING_MIC_STATS_LOG_LIMIT: 0,
+    MEETING_STARTUP_AUDIO_MAX_AGE_MS,
+    ipcMain: { on: (channel, handler) => (ipc[channel] = handler) },
     capture,
   };
   vm.createContext(context);
@@ -90,6 +102,9 @@ function harness({ native = true, local = false } = {}) {
     ${section("const dispatchMeetingAudioBuffer =", "const stopMeetingAec =")}
     ${section("const sendMeetingAudio =", "// The Windows helper reports capture_silent")}
     ${section("const startManagedMeetingSystemAudio =", "const fallBackToMicOnly =")}
+    ${section('ipcMain.on("meeting-transcription-send"', "this._stopMeetingForPolicy =")}
+    globalThis.dispatchMicAudio = (buffer, capturedAt) =>
+      dispatchMeetingAudioBuffer(buffer, "mic", false, capturedAt);
     globalThis.startCapture = () => startManagedMeetingSystemAudio({ sender: {} }, capture, "warning");
     globalThis.replaySystemAudio = (streaming) => replayMeetingReconnectAudio("system", streaming);
   `,
@@ -109,6 +124,8 @@ function harness({ native = true, local = false } = {}) {
       now = value;
     },
     start: context.startCapture,
+    rendererSend: (buffer, source, capturedAt) =>
+      ipc["meeting-transcription-send"]({}, buffer, source, capturedAt),
     chunk: (durationMs = 100, silent = false) =>
       onChunk(Buffer.alloc(durationMs * 48, silent ? 0 : 1)),
     restart: async () => {
@@ -227,6 +244,26 @@ for (const provider of ["deepgram", "corti"]) {
     recovered.finalizeSpeech();
     assert.deepEqual(recovered.timestamps, [10000]);
     run.watchdog.stop();
+  });
+}
+
+for (const provider of ["deepgram", "corti"]) {
+  test(`${provider} places renderer audio held through the connect at its capture time, mic and system alike`, () => {
+    const run = harness({ native: false });
+    const mic = createTimestampedStream(provider, 9000);
+    const system = createTimestampedStream(provider, 9000);
+    run.context._meetingMicStreaming = mic.streaming;
+    run.context._meetingSystemStreaming = system.streaming;
+    run.at(9000);
+    // Both channels were captured from 6000 while main connected, then flushed at once.
+    run.context.dispatchMicAudio(Buffer.alloc(4800, 1), 6000);
+    run.rendererSend(Buffer.alloc(4800, 1), "system", 6000);
+    mic.finalizeSpeech();
+    system.finalizeSpeech();
+    assert.deepEqual(mic.timestamps, [6000]);
+    assert.deepEqual(system.timestamps, [6000]);
+    assert.equal(run.context.meetingDiarizationStartedAt, 6000);
+    assert.equal(run.context.meetingLiveSpeakerStartedAt, 6000);
   });
 }
 

@@ -16,7 +16,7 @@ const TRANSCRIPTION_MODES = new Set([
 ]);
 const LLM_MODES = TRANSCRIPTION_MODES;
 // Enterprise clouds with a managed transcription implementation (Azure only for now).
-const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure"]);
+const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure", "openai-compatible"]);
 const ENTERPRISE_PROVIDERS = new Set(
   modelRegistryData.enterpriseProviders.map((provider) => provider.id)
 );

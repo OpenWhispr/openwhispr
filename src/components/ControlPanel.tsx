@@ -35,6 +35,8 @@ import {
   useSettingsStore,
 } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   isAgentAllowed,
@@ -206,6 +208,38 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setShowSettings(true);
   }, []);
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
+  const workspacesLoaded = useWorkspaceStore((state) => state.loaded);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const [audioTestLink, setAudioTestLink] = useState<EnterpriseAudioTestLink | null>(null);
+  useEffect(() => {
+    const claim = (): void => {
+      void window.electronAPI?.claimEnterpriseAudioTest?.().then((link) => {
+        if (link) setAudioTestLink(link);
+      });
+    };
+    claim();
+    return window.electronAPI?.onEnterpriseAudioTestRequested?.(claim);
+  }, []);
+  // Settings consumes a link for the active workspace; any other one is dropped here.
+  useEffect(() => {
+    if (!audioTestLink || !authLoaded || (isSignedIn && !workspacesLoaded)) return;
+    setAudioTestLink(null);
+    if (isSignedIn && audioTestLink.workspaceId === activeWorkspaceId) {
+      openTranscriptionSettings();
+      return;
+    }
+    void window.electronAPI?.getPendingEnterpriseAudioTest?.(true);
+    toast({ description: t("enterprise.audio.testLinkOtherWorkspace") });
+  }, [
+    audioTestLink,
+    authLoaded,
+    isSignedIn,
+    workspacesLoaded,
+    activeWorkspaceId,
+    openTranscriptionSettings,
+    toast,
+    t,
+  ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();

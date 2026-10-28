@@ -193,6 +193,7 @@
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
+    "managedConfigAmbiguous": "A configuração gerenciada da sua organização está inconsistente. Entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
     "resizePanel": "Redimensionar painel"
   },
@@ -951,6 +952,9 @@
         "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
         "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
         "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador.",
+        "managedRequestRejected": "O serviço de transcrição da sua organização recusou este áudio (HTTP {{status}}). Tente novamente ou entre em contato com o administrador.",
+        "managedResponseMalformed": "O serviço de transcrição da sua organização enviou uma resposta que o OpenWhispr não conseguiu ler. Tente novamente ou entre em contato com o administrador.",
+        "managedChunkTooLarge": "Não foi possível dividir este áudio em partes pequenas o suficiente para o serviço de transcrição da sua organização. Entre em contato com o administrador.",
         "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
         "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
@@ -3264,7 +3268,8 @@
       },
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
       "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
-      "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização."
+      "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
+      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
@@ -5283,5 +5288,51 @@
     "permissionDenied": "Negada",
     "permissionRestricted": "Restrita",
     "permissionNotDetermined": "Não solicitada"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Configuração de áudio empresarial",
+      "description": "Configure as credenciais neste dispositivo e teste a ligação de áudio da organização.",
+      "provider": "Fornecedor de áudio",
+      "gateway": "Gateway de áudio",
+      "provisioned": "Credencial configurada",
+      "credentialMissing": "Credencial necessária",
+      "proxyCredentialFormat": "Para um proxy, introduza JSON com username e password. Para áudio, introduza a chave API.",
+      "probeConsent": "Autorizo testes curtos de áudio que podem gerar custos do fornecedor.",
+      "testBatch": "Testar transcrição de ficheiro",
+      "testRealtime": "Testar ligação de reunião",
+      "testPassed": "Teste concluído e comunicado ao administrador.",
+      "testFailed": "Falha no teste de ligação.",
+      "setupFailed": "Falha na configuração. Verifique a sessão, as permissões e a rede.",
+      "saved": "Credencial guardada neste dispositivo.",
+      "operationUnavailable": "A organização não configurou esta operação de áudio.",
+      "certificateUnavailable": "O conjunto de certificados da organização está indisponível.",
+      "partialUpload": "Falharam {{count}} segmentos de áudio; a transcrição está incompleta.",
+      "importBootstrap": "Importar configuração da organização",
+      "importedBootstrap": "Credenciais de configuração importadas.",
+      "bootstrapNotFound": "Ficheiro de configuração não encontrado.",
+      "checks": {
+        "authRejected": "O provedor de áudio recusou as credenciais deste dispositivo. Verifique a chave provisionada ou a configuração de identidade.",
+        "tlsFailed": "Não foi possível verificar a conexão segura. Verifique os certificados da sua organização.",
+        "proxyFailed": "A conexão pelo proxy da sua organização falhou. Verifique as configurações e as credenciais do proxy.",
+        "timeout": "O provedor de áudio não respondeu a tempo. Verifique sua rede ou VPN.",
+        "credentialMissing": "Uma credencial necessária para esta conexão não está provisionada neste dispositivo.",
+        "configChanged": "Sua organização alterou esta configuração de áudio. Abra a configuração novamente e tente outra vez.",
+        "protocolFailed": "O provedor de áudio respondeu em um formato que o OpenWhispr não suporta. Verifique a implantação e o protocolo.",
+        "networkFailed": "Não foi possível acessar o provedor de áudio. Verifique sua rede, VPN e DNS.",
+        "secureStorageUnavailable": "Este dispositivo não tem armazenamento seguro de credenciais. No Linux, instale e desbloqueie um chaveiro (como GNOME Keyring ou KWallet) e tente novamente."
+      },
+      "errors": {
+        "ssoRequired": "Sua organização exige o SSO da empresa. Entre com SSO e tente novamente.",
+        "enterpriseRequired": "O áudio corporativo requer um plano Enterprise ativo para este espaço de trabalho.",
+        "signInRequired": "Sua sessão expirou. Entre novamente e tente outra vez.",
+        "accessDenied": "Sua conta não pode configurar o áudio deste espaço de trabalho. Verifique se você é membro e está no espaço certo.",
+        "rateLimited": "Muitas solicitações de teste. Aguarde alguns minutos e tente novamente."
+      },
+      "bootstrapNotProtected": "O arquivo de inicialização deve pertencer a você e só você deve poder lê-lo. Peça à TI para enviá-lo novamente.",
+      "bootstrapUnreadable": "O OpenWhispr não consegue ler o arquivo de inicialização. Peça à TI para torná-lo legível pela sua conta.",
+      "bootstrapMismatch": "O arquivo de inicialização não corresponde à sua conta, a este espaço de trabalho ou às credenciais configuradas.",
+      "testLinkOtherWorkspace": "Este link de teste é de outro espaço de trabalho. Mude para esse espaço de trabalho e abra o link novamente."
+    }
   }
 }

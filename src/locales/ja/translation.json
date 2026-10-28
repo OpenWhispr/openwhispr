@@ -214,6 +214,7 @@
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
+    "managedConfigAmbiguous": "組織のマネージド設定に矛盾があります。管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
     "resizePanel": "パネルのサイズを変更"
   },
@@ -972,6 +973,9 @@
         "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
+        "managedRequestRejected": "組織の文字起こしサービスがこの音声を拒否しました（HTTP {{status}}）。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedResponseMalformed": "組織の文字起こしサービスから OpenWhispr が読み取れない応答が返されました。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedChunkTooLarge": "この音声を組織の文字起こしサービスに送れるほど小さく分割できませんでした。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
@@ -3340,7 +3344,8 @@
       },
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
       "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
-      "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。"
+      "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
+      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -5283,5 +5288,51 @@
     "permissionDenied": "拒否",
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業向け音声の設定",
+      "description": "この端末に認証情報を設定し、組織の音声接続をテストします。",
+      "provider": "音声プロバイダー",
+      "gateway": "音声ゲートウェイ",
+      "provisioned": "認証情報を設定済み",
+      "credentialMissing": "認証情報が必要です",
+      "proxyCredentialFormat": "プロキシには username と password を含む JSON、音声には API キーを入力してください。",
+      "probeConsent": "プロバイダーの料金が発生する可能性がある短い音声テストを許可します。",
+      "testBatch": "ファイル文字起こしをテスト",
+      "testRealtime": "会議の接続をテスト",
+      "testPassed": "接続テストに成功し、管理者に報告しました。",
+      "testFailed": "接続テストに失敗しました。",
+      "setupFailed": "設定に失敗しました。サインイン、アクセス権、ネットワークを確認してください。",
+      "saved": "認証情報をこの端末に保存しました。",
+      "operationUnavailable": "組織がこの音声処理を設定していません。",
+      "certificateUnavailable": "組織の証明書バンドルを利用できません。",
+      "partialUpload": "音声の {{count}} 区間で失敗しました。文字起こしは不完全です。",
+      "importBootstrap": "組織の設定をインポート",
+      "importedBootstrap": "設定の認証情報をインポートしました。",
+      "bootstrapNotFound": "設定ファイルが見つかりません。",
+      "checks": {
+        "authRejected": "音声プロバイダーがこのデバイスの認証情報を拒否しました。登録済みのキーまたは ID 設定を確認してください。",
+        "tlsFailed": "安全な接続を検証できませんでした。組織の証明書を確認してください。",
+        "proxyFailed": "組織のプロキシ経由の接続に失敗しました。プロキシの設定と認証情報を確認してください。",
+        "timeout": "音声プロバイダーが時間内に応答しませんでした。ネットワークまたは VPN を確認してください。",
+        "credentialMissing": "この接続に必要な認証情報がこのデバイスに登録されていません。",
+        "configChanged": "組織がこの音声設定を変更しました。セットアップを開き直して、もう一度お試しください。",
+        "protocolFailed": "音声プロバイダーが OpenWhispr で対応していない形式で応答しました。デプロイとプロトコルを確認してください。",
+        "networkFailed": "音声プロバイダーに接続できませんでした。ネットワーク、VPN、DNS を確認してください。",
+        "secureStorageUnavailable": "このデバイスには安全な認証情報ストレージがありません。Linux ではキーリング（GNOME Keyring や KWallet など）をインストールしてロックを解除し、もう一度お試しください。"
+      },
+      "errors": {
+        "ssoRequired": "組織で会社の SSO が必須になっています。SSO でサインインして、もう一度お試しください。",
+        "enterpriseRequired": "エンタープライズ音声を使うには、このワークスペースで有効な Enterprise プランが必要です。",
+        "signInRequired": "セッションの有効期限が切れました。もう一度サインインしてやり直してください。",
+        "accessDenied": "このアカウントではこのワークスペースの音声を設定できません。メンバーであること、正しいワークスペースにサインインしていることを確認してください。",
+        "rateLimited": "テストのリクエストが多すぎます。数分待ってからもう一度お試しください。"
+      },
+      "bootstrapNotProtected": "ブートストラップファイルはあなたが所有し、あなただけが読み取れる必要があります。IT 部門に再配布を依頼してください。",
+      "bootstrapUnreadable": "OpenWhispr がブートストラップファイルを読み取れません。あなたのアカウントで読み取れるよう IT 部門に依頼してください。",
+      "bootstrapMismatch": "ブートストラップファイルがあなたのアカウント、このワークスペース、またはその設定済み認証情報と一致しません。",
+      "testLinkOtherWorkspace": "このテストリンクは別のワークスペース用です。そのワークスペースに切り替えてから、もう一度リンクを開いてください。"
+    }
   }
 }

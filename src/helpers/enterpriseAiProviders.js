@@ -74,13 +74,24 @@ async function createBedrockModel(model, enterprise) {
   })(model);
 }
 
+// Managed text runs on the /openai/v1 surface, which rejects the dated versions
+// the deployments transcription route requires (400 "API version not supported").
+// The workspace has one apiVersion for both, so translate it here as the API
+// validator does: aliases pass through and a dated version becomes "preview".
+function managedAzureTextApiVersion(apiVersion) {
+  if (!apiVersion) return "v1";
+  return apiVersion === "v1" || apiVersion === "preview" ? apiVersion : "preview";
+}
+
 function createAzureModel(model, apiKey, enterprise) {
   const { createAzure } = require("@ai-sdk/azure");
   const managed = Boolean(enterprise?.managedTokenProvider);
   return createAzure({
     ...(managed ? { tokenProvider: enterprise.managedTokenProvider } : { apiKey }),
     baseURL: managed ? toAzureOpenAIBaseUrl(enterprise?.azureEndpoint) : enterprise?.azureEndpoint,
-    apiVersion: enterprise?.azureApiVersion || (managed ? "v1" : "2024-10-21"),
+    apiVersion: managed
+      ? managedAzureTextApiVersion(enterprise?.azureApiVersion)
+      : enterprise?.azureApiVersion || "2024-10-21",
   })(model);
 }
 

@@ -91,7 +91,9 @@ function createWorkspacePolicyManager({
     const apiOrigin = new URL(apiUrl).origin;
     const accountId = normalizeAccountId(request.accountId);
     const credentialMaterial = JSON.stringify(
-      Object.entries(authHeaders).sort(([left], [right]) => left.localeCompare(right))
+      Object.entries(authHeaders).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0
+      )
     );
     const credentialHash = crypto.createHash("sha256").update(credentialMaterial).digest("hex");
     return {

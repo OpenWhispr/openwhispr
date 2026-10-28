@@ -62,6 +62,120 @@ function captureLogs(t) {
   return entries;
 }
 
+test("managed realtime diagnostics are private while personal diagnostics remain available", async (t) => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const entries = captureLogs(t);
+  const marker = "injected-sensitive-realtime-diagnostic";
+  for (const mode of ["enterprise", "byok"]) {
+    entries.length = 0;
+    const streaming = new OpenAIRealtimeStreaming();
+    const socket = makeFakeSocket(WS.CONNECTING);
+    const errors = [];
+    const expired = [];
+    streaming.onError = (error) => errors.push(error.message);
+    streaming.onConnectionLost = (error) => errors.push(error.message);
+    streaming.onSessionExpired = (event) => expired.push(event);
+    await connectByok(streaming, socket, { mode });
+    socket.emit(
+      "message",
+      JSON.stringify({ type: "error", error: { code: marker, message: marker } })
+    );
+    socket.emit(
+      "message",
+      JSON.stringify({
+        type: "conversation.item.input_audio_transcription.failed",
+        error: { message: marker },
+      })
+    );
+    socket.emit("message", marker);
+    socket.emit(
+      "message",
+      JSON.stringify({ type: "error", error: { code: "session_expired", message: marker } })
+    );
+    assert.deepEqual(expired, [{ proactive: false }]);
+    socket.emit("error", new Error(marker));
+    socket.emit("close", 1000, Buffer.from(marker));
+    assert.equal(errors.length, 2);
+    assert.equal(JSON.stringify({ entries, errors }).includes(marker), mode === "byok");
+    if (mode === "enterprise") assert.ok(errors.every((message) => !message.includes(marker)));
+    await streaming.disconnect();
+  }
+});
+
+test(
+  "managed empty commits still settle stop without exposing the provider message",
+  { timeout: 1000 },
+  async (t) => {
+    const OpenAIRealtimeStreaming = (await load()).default;
+    const entries = captureLogs(t);
+    const streaming = new OpenAIRealtimeStreaming();
+    const socket = makeFakeSocket(WS.CONNECTING);
+    await connectByok(streaming, socket, { mode: "enterprise" });
+    streaming.sendAudio(Buffer.from([1, 2]));
+    const errors = [];
+    streaming.onError = (error) => errors.push(error);
+    const send = socket.send;
+    socket.send = (data) => {
+      send(data);
+      if (JSON.parse(data).type === "input_audio_buffer.commit")
+        socket.emit(
+          "message",
+          JSON.stringify({
+            type: "error",
+            error: {
+              code: "input_audio_buffer_commit_empty",
+              message: "sensitive-empty-commit-diagnostic",
+            },
+          })
+        );
+    };
+    await streaming.disconnect();
+    assert.deepEqual(errors, []);
+    assert.equal(JSON.stringify(entries).includes("sensitive-empty-commit-diagnostic"), false);
+  }
+);
+
+test("managed socket setup redacts raw failures and retains keyed application refusals", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  for (const keyed of [false, true]) {
+    const streaming = new OpenAIRealtimeStreaming();
+    const failure = Object.assign(
+      new Error(keyed ? "Configuration changed" : "sensitive-setup-diagnostic"),
+      keyed ? { code: "MANAGED_CONFIG_CHANGED", messageKey: "common.managedConfigUnavailable" } : {}
+    );
+    await assert.rejects(
+      streaming.connect({
+        mode: "enterprise",
+        createSocket: async () => {
+          throw failure;
+        },
+      }),
+      (error) => {
+        if (keyed) assert.equal(error, failure);
+        else assert.equal(error.message.includes("sensitive-setup-diagnostic"), false);
+        return true;
+      }
+    );
+  }
+});
+
+test("managed handshake authentication failures retain the safe setup classification", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const { safeCheckCode } = require("../../src/helpers/enterpriseAudioSetup");
+  for (const status of [401, 403]) {
+    const streaming = new OpenAIRealtimeStreaming();
+    const socket = makeFakeSocket(WS.CONNECTING);
+    const pending = streaming.connect({ mode: "enterprise", createSocket: async () => socket });
+    await new Promise(setImmediate);
+    socket.emit("error", new Error(`Unexpected server response: ${status}`));
+    await assert.rejects(pending, (error) => {
+      assert.equal(error.code, "MANAGED_AUTH_REJECTED");
+      assert.equal(safeCheckCode(error), "AUTH_REJECTED");
+      return true;
+    });
+  }
+});
+
 test("sendAudio buffers frames arriving before the socket exists (token-fetch window)", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();

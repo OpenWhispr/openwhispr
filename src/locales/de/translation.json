@@ -214,6 +214,7 @@
     "policyUnresolved": "Die Einstellungen Ihrer Organisation wurden noch nicht geladen. Versuchen Sie es gleich noch einmal.",
     "managedConfigLoading": "Die verwaltete Einrichtung Ihrer Organisation wird überprüft. Versuchen Sie es gleich noch einmal.",
     "managedConfigUnavailable": "Der verwaltete Unternehmenszugriff ist nicht verfügbar. Melden Sie sich erneut an oder wenden Sie sich an Ihren Administrator.",
+    "managedConfigAmbiguous": "Die verwaltete Einrichtung Ihrer Organisation ist widersprüchlich. Wenden Sie sich an Ihren Administrator.",
     "managedPolicyConflict": "Der verwaltete Zugriff wird durch Ihre Workspace-Richtlinie blockiert. Wenden Sie sich an Ihren Administrator.",
     "resizePanel": "Bereichsgröße ändern"
   },
@@ -972,6 +973,9 @@
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
+        "managedRequestRejected": "Der Transkriptionsdienst Ihrer Organisation hat diese Audiodatei abgelehnt (HTTP {{status}}). Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
+        "managedResponseMalformed": "Der Transkriptionsdienst Ihrer Organisation hat eine Antwort gesendet, die OpenWhispr nicht lesen konnte. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
+        "managedChunkTooLarge": "Diese Audiodatei konnte nicht klein genug für den Transkriptionsdienst Ihrer Organisation aufgeteilt werden. Wenden Sie sich an Ihren Administrator.",
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
         "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu.",
         "cleanupTruncated": "Dem KI-Modell ging der Platz aus, bevor es dein Diktat fertig bereinigt hatte.",
@@ -3616,7 +3620,8 @@
       },
       "recordingDisabledByOrg": "Die Aufzeichnung von Besprechungen wurde von Ihrer Organisation deaktiviert.",
       "stoppedAccountChanged": "Die Aufnahme wurde beendet, weil Sie sich abgemeldet oder das Konto gewechselt haben.",
-      "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten."
+      "stoppedPolicyUnresolved": "Die Aufnahme wurde beendet, weil die Einstellungen Ihrer Organisation nicht geprüft werden konnten.",
+      "stoppedWorkspaceChanged": "Die Aufnahme wurde beendet, weil Sie den Workspace gewechselt haben."
     },
     "meetingPill": {
       "returnToNote": "Zurück zur Aufnahme",
@@ -5283,5 +5288,51 @@
     "permissionDenied": "Verweigert",
     "permissionRestricted": "Eingeschränkt",
     "permissionNotDetermined": "Nicht angefragt"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Enterprise-Audio einrichten",
+      "description": "Zugangsdaten auf diesem Gerät einrichten und die Audioverbindung der Organisation testen.",
+      "provider": "Audioanbieter",
+      "gateway": "Audio-Gateway",
+      "provisioned": "Zugangsdaten eingerichtet",
+      "credentialMissing": "Zugangsdaten erforderlich",
+      "proxyCredentialFormat": "Für einen Proxy JSON mit username und password eingeben. Für Audio den API-Schlüssel eingeben.",
+      "probeConsent": "Ich erlaube kurze Audiotests, die Anbieterkosten verursachen können.",
+      "testBatch": "Dateitranskription testen",
+      "testRealtime": "Besprechungsverbindung testen",
+      "testPassed": "Verbindungstest bestanden und an die Administration gemeldet.",
+      "testFailed": "Verbindungstest fehlgeschlagen.",
+      "setupFailed": "Einrichtung fehlgeschlagen. Anmeldung, Zugriffsrechte und Netzwerk prüfen.",
+      "saved": "Zugangsdaten auf diesem Gerät gespeichert.",
+      "operationUnavailable": "Die Organisation hat diesen Audiovorgang nicht eingerichtet.",
+      "certificateUnavailable": "Das Zertifikatspaket der Organisation ist nicht verfügbar.",
+      "partialUpload": "{{count}} Audioabschnitte fehlgeschlagen; das Transkript ist unvollständig.",
+      "importBootstrap": "Organisationskonfiguration importieren",
+      "importedBootstrap": "Zugangsdaten aus der Konfiguration importiert.",
+      "bootstrapNotFound": "Keine Konfigurationsdatei gefunden.",
+      "checks": {
+        "authRejected": "Der Audioanbieter hat die Anmeldedaten dieses Geräts abgelehnt. Prüfen Sie den bereitgestellten Schlüssel oder die Identitätseinrichtung.",
+        "tlsFailed": "Die sichere Verbindung konnte nicht überprüft werden. Prüfen Sie die Zertifikate Ihrer Organisation.",
+        "proxyFailed": "Die Verbindung über den Proxy Ihrer Organisation ist fehlgeschlagen. Prüfen Sie die Proxy-Einstellungen und -Anmeldedaten.",
+        "timeout": "Der Audioanbieter hat nicht rechtzeitig geantwortet. Prüfen Sie Ihr Netzwerk oder VPN.",
+        "credentialMissing": "Ein für diese Verbindung benötigter Zugangsschlüssel ist auf diesem Gerät nicht hinterlegt.",
+        "configChanged": "Ihre Organisation hat diese Audiokonfiguration geändert. Öffnen Sie die Einrichtung erneut und versuchen Sie es noch einmal.",
+        "protocolFailed": "Der Audioanbieter hat in einem Format geantwortet, das OpenWhispr nicht unterstützt. Prüfen Sie Bereitstellung und Protokoll.",
+        "networkFailed": "Der Audioanbieter ist nicht erreichbar. Prüfen Sie Netzwerk, VPN und DNS.",
+        "secureStorageUnavailable": "Auf diesem Gerät ist kein sicherer Speicher für Zugangsdaten verfügbar. Installieren und entsperren Sie unter Linux einen Schlüsselbund (etwa GNOME Keyring oder KWallet) und versuchen Sie es erneut."
+      },
+      "errors": {
+        "ssoRequired": "Ihre Organisation verlangt die Anmeldung per Unternehmens-SSO. Melden Sie sich per SSO an und versuchen Sie es erneut.",
+        "enterpriseRequired": "Enterprise-Audio erfordert einen aktiven Enterprise-Tarif für diesen Workspace.",
+        "signInRequired": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "accessDenied": "Ihr Konto kann Audio für diesen Workspace nicht einrichten. Prüfen Sie, ob Sie Mitglied sind und im richtigen Workspace angemeldet sind.",
+        "rateLimited": "Zu viele Testanfragen. Warten Sie einige Minuten und versuchen Sie es erneut."
+      },
+      "bootstrapNotProtected": "Die Bootstrap-Datei muss Ihnen gehören und darf nur für Sie lesbar sein. Bitten Sie die IT, sie erneut bereitzustellen.",
+      "bootstrapUnreadable": "OpenWhispr kann die Bootstrap-Datei nicht lesen. Bitten Sie die IT, sie für Ihr Konto lesbar zu machen.",
+      "bootstrapMismatch": "Die Bootstrap-Datei passt nicht zu Ihrem Konto, diesem Workspace oder seinen konfigurierten Zugangsdaten.",
+      "testLinkOtherWorkspace": "Dieser Testlink gilt für einen anderen Workspace. Wechseln Sie zu diesem Workspace und öffnen Sie den Link erneut."
+    }
   }
 }
