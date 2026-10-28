@@ -11,7 +11,7 @@ export const WORKFLOW_LABELS: Record<MobileInferenceScope, string> = {
   upload: 'Uploads',
   cleanup: 'Text Cleanup',
   notes: 'Note Formatting & Titles',
-  noteChat: 'Note Chat',
+  noteChat: 'Chat',
   agent: 'Voice Assistant',
 };
 
@@ -30,13 +30,13 @@ export const ON_DEVICE_CLEANUP_UNSUPPORTED_NOTE =
 // Dictation owns Local Mode: On-Device dictation turns it on, and the other modes turn it off. Note
 // formatting and the voice assistant keep their own choices; notes made in Local Mode are private.
 export const LOCAL_MODE_DICTATION_NOTES = {
-  on: 'Local Mode is on: dictation stays on this iPhone, notes you make stay private, and note chat asks before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.',
-  off: 'On-Device turns on Local Mode: dictation stays on this iPhone, notes you make stay private, and note chat asks before leaving it.',
+  on: 'Local Mode is on: dictation stays on this iPhone, notes you make stay private, and chat asks before leaving it. Choose OpenWhispr Cloud or Bring Your Own Key to turn it off.',
+  off: 'On-Device turns on Local Mode: dictation stays on this iPhone, notes you make stay private, and chat asks before leaving it.',
 };
 
-// What Local Mode means for note chat.
+// What Local Mode means for chat.
 export const ON_DEVICE_MODE_NOTES: Partial<Record<MobileInferenceScope, string>> = {
-  noteChat: 'In Local Mode note chat asks before sending a note off this iPhone.',
+  noteChat: 'In Local Mode chat asks before sending notes off this iPhone.',
 };
 
 // Outside Cloud dictation, cleaning with OpenWhispr Cloud is a separate Cloud pass, which needs a

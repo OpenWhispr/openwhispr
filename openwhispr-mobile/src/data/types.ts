@@ -149,6 +149,27 @@ export interface ConflictedNote {
   conflictServerNote: RemoteNote | null;
 }
 
+/** The notes picked to answer a chat question, and how many matched before the cap. */
+export interface ChatCandidateNotes {
+  notes: Note[];
+  total: number;
+  /** The returned notes whose transcript matches a term, so their matching lines can be sent. */
+  transcriptMatchIds?: number[];
+}
+
+/** A period a chat question names: the notes created from `start` up to (not including) `end`. */
+export interface ChatNoteWindow {
+  start: Date;
+  end: Date;
+  meetingsOnly: boolean;
+}
+
+export interface ChatCandidateOptions {
+  includePrivate: boolean;
+  limit: number;
+  window?: ChatNoteWindow;
+}
+
 export interface NotesRepository {
   // Existing methods
   getFolders(): Folder[];
@@ -215,6 +236,14 @@ export interface NotesRepository {
    */
   moveNoteToSpace(noteId: number, spaceId: number): void;
   searchNotes(query: string, folderId?: number): Note[];
+  /**
+   * Notes for answering a chat question: a term matches title, content, AI summary or transcript,
+   * and a term held by fewer of the notes searched weighs more. Only notes scoring at least half
+   * as well as the best one count, the best first, then the newest. With a window, only notes
+   * created in it are searched. With no terms, the most recent notes. Capped at `limit`; `total`
+   * counts them all before the cap.
+   */
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes;
   getActions(): Action[];
   getActionById(id: number): Action | null;
   createAction(name: string, description: string, prompt: string): Action;

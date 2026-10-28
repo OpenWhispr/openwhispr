@@ -8,7 +8,7 @@ const {
   installHookDom,
 } = require("../lib/rendererTestHarness");
 
-// canManageWorkspace stays real: the rule under test is which roles it lets through.
+// The capabilities module stays real: the rule under test is which workspaces it lets through.
 test("team space creation is offered to workspace managers and to users with none yet", async (t) => {
   let root = null;
   t.after(async () => {
@@ -68,6 +68,19 @@ test("team space creation is offered to workspace managers and to users with non
         { id: "w1", role: "member" },
         { id: "w2", role: "owner" },
       ],
+    }),
+    true
+  );
+  // Server capabilities win over the role.
+  assert.equal(
+    await canCreate({
+      workspaces: [{ id: "w1", role: "admin", capabilities: { create_spaces: false } }],
+    }),
+    false
+  );
+  assert.equal(
+    await canCreate({
+      workspaces: [{ id: "w1", role: "member", capabilities: { create_spaces: true } }],
     }),
     true
   );

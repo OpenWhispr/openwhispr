@@ -35,6 +35,63 @@ function writeActiveWorkspaceId(id: string | null): void {
   else localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
 }
 
+// Last successful workspace list, shown when a signed-in session can't load the list (the API
+// is unreachable or the request fails). It is only read for the account that wrote it, and only
+// while it is recent: the server still decides every action, but a list this old is likely wrong.
+export const WORKSPACE_LIST_CACHE_KEY = "workspaceListCache";
+const WORKSPACE_LIST_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function writeWorkspaceListCache(accountId: string | null, workspaces: Workspace[]): void {
+  if (typeof window === "undefined" || !accountId) return;
+  try {
+    localStorage.setItem(
+      WORKSPACE_LIST_CACHE_KEY,
+      JSON.stringify({ accountId, fetchedAt: Date.now(), workspaces })
+    );
+  } catch {
+    // Storage can be full or blocked; the cache is only a convenience.
+  }
+}
+
+function readWorkspaceListCache(accountId: string | null): Workspace[] | null {
+  if (typeof window === "undefined" || !accountId) return null;
+  try {
+    const raw = localStorage.getItem(WORKSPACE_LIST_CACHE_KEY);
+    if (!raw) return null;
+    const cached: unknown = JSON.parse(raw);
+    if (!cached || typeof cached !== "object") return null;
+    const {
+      accountId: cachedAccountId,
+      fetchedAt,
+      workspaces,
+    } = cached as {
+      accountId?: unknown;
+      fetchedAt?: unknown;
+      workspaces?: unknown;
+    };
+    if (cachedAccountId !== accountId || !Array.isArray(workspaces)) return null;
+    if (typeof fetchedAt !== "number" || Date.now() - fetchedAt > WORKSPACE_LIST_CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    // A malformed entry would throw in later `.find(w => w.id …)` calls.
+    const wellFormed = workspaces.every(
+      (entry) => entry && typeof entry === "object" && typeof entry.id === "string"
+    );
+    return wellFormed ? (workspaces as Workspace[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearWorkspaceListCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
+  } catch {
+    // Nothing to clear if storage is unreachable.
+  }
+}
+
 let refreshPromise: Promise<void> | null = null;
 let membersRequestSeq = 0;
 let accountGeneration = 0;
@@ -93,6 +150,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
     writeActiveWorkspaceId(null);
+    clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
     set({
       workspaces: [],
@@ -124,6 +182,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           activeWorkspaceId: resolvedActiveId,
         });
         if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
+        writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
         if (generation !== accountGeneration) return;
@@ -132,7 +191,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           { error: (error as Error).message },
           "workspaces"
         );
-        set({ loading: false, loaded: true, error: true });
+        // Nothing in memory: show the last list this account saw. `error` stays true so the
+        // reconnect retry replaces it with the server's answer and the UI marks it out of date.
+        const cached =
+          get().workspaces.length === 0
+            ? readWorkspaceListCache(usePolicyStore.getState().accountId)
+            : null;
+        set({
+          ...(cached ? { workspaces: cached } : {}),
+          loading: false,
+          loaded: true,
+          error: true,
+        });
       } finally {
         if (refreshPromise === request) refreshPromise = null;
       }

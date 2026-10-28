@@ -192,6 +192,14 @@ const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
   WHERE r.folder_id = folders.id AND r.entity_type = 'folder'
 ))`;
 
+// A space's container chats: its root chats, plus every chat in a folder it
+// holds now. Folder chats match only through their folder, because a folder
+// moved to another space (locally before its chats followed it, or by a pull)
+// leaves a stale space_id on them, and container chats never sync, so
+// retiring one by that stale space deletes it for good. Binds the space twice.
+const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NULL)
+  OR folder_id IN (SELECT id FROM folders WHERE space_id = ?))`;
+
 // A meeting synced by both a REST provider (Google/Microsoft) and Apple
 // (Calendar.app mirrors the same accounts) would double-fire reminders and
 // duplicate UI rows; suppress the Apple copy when a REST row occupies the same
@@ -1484,6 +1492,14 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        // JSON object of server-computed capabilities (edit_notes, manage_members,
+        // manage_settings, leave) mirrored from GET /api/me/spaces; NULL from
+        // an older API, so callers fall back to the role.
+        this.db.exec("ALTER TABLE spaces ADD COLUMN capabilities TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
       );
@@ -1511,7 +1527,8 @@ class DatabaseManager {
       }
 
       // Rebuild folders to drop the table-level UNIQUE(name); per-space name
-      // uniqueness is enforced by idx_folders_space_name below.
+      // uniqueness is enforced by idx_folders_space_legacy_name and
+      // idx_folders_space_account_name below.
       // better-sqlite3 enables foreign_keys by default, so DROP TABLE folders
       // would fail while notes.folder_id rows reference it; the pragma is a
       // no-op inside a transaction, so toggle it around the rebuild.
@@ -1555,10 +1572,6 @@ class DatabaseManager {
           if (foreignKeysWereOn) this.db.pragma("foreign_keys = ON");
         }
       }
-      this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_name ON folders(space_id, name) WHERE deleted_at IS NULL"
-      );
-
       const privateSpace = this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get();
       this.db
         .prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL")
@@ -1589,6 +1602,9 @@ class DatabaseManager {
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_account_id ON notes(account_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_account_id ON folders(account_id)");
+      // Builds before per-account folders kept names unique per space alone,
+      // which fails once two accounts' default folders share a space; never
+      // re-create it, or launch fails on such a database.
       this.db.exec("DROP INDEX IF EXISTS idx_folders_space_name");
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_legacy_name ON folders(space_id, name) WHERE deleted_at IS NULL AND account_id IS NULL"
@@ -3330,7 +3346,8 @@ class DatabaseManager {
     sourceFile = null,
     audioDuration = null,
     folderId = null,
-    spaceId = null
+    spaceId = null,
+    transcript = null
   ) {
     try {
       if (!this.db) {
@@ -3357,7 +3374,7 @@ class DatabaseManager {
       const clientNoteId = randomUUID();
       const accountId = this._accountIdForSpace(spaceId);
       const stmt = this.db.prepare(
-        "INSERT INTO notes (title, content, content_sync_operation, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO notes (title, content, content_sync_operation, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id, transcript) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         title,
@@ -3369,7 +3386,8 @@ class DatabaseManager {
         folderId,
         spaceId,
         clientNoteId,
-        accountId
+        accountId,
+        transcript
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
@@ -4153,6 +4171,9 @@ class DatabaseManager {
             "UPDATE notes SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = (CASE WHEN ? = 1 AND cloud_id IS NOT NULL THEN 1 ELSE 0 END) WHERE folder_id = ? AND deleted_at IS NULL"
           )
           .run(spaceId, nextAccountId, leftTeam, id);
+        this.db
+          .prepare("UPDATE agent_conversations SET space_id = ? WHERE folder_id = ?")
+          .run(spaceId, id);
         return this.db
           .prepare("SELECT * FROM notes WHERE folder_id = ? AND deleted_at IS NULL")
           .all(id);
@@ -4195,7 +4216,8 @@ class DatabaseManager {
     }
   }
 
-  // Parses the teams JSON mirror so renderer consumers only ever see an array.
+  // Parses the teams and capabilities JSON mirrors so renderer consumers only
+  // ever see an array and an object-or-null.
   _spaceRow(row) {
     if (!row) return row;
     let teams = [];
@@ -4206,7 +4228,18 @@ class DatabaseManager {
         teams = [];
       }
     }
-    return { ...row, teams };
+    let capabilities = null;
+    if (row.capabilities) {
+      try {
+        const parsed = JSON.parse(row.capabilities);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          capabilities = parsed;
+        }
+      } catch {
+        capabilities = null;
+      }
+    }
+    return { ...row, teams, capabilities };
   }
 
   getSpaces() {
@@ -4325,6 +4358,7 @@ class DatabaseManager {
       const updatedAt = space.updated_at || space.created_at || new Date().toISOString();
       const teams = Array.isArray(space.teams) ? space.teams : [];
       const teamsJson = JSON.stringify(teams);
+      const capabilitiesJson = space.capabilities ? JSON.stringify(space.capabilities) : null;
       let existing = this.db.prepare("SELECT * FROM spaces WHERE cloud_space_id = ?").get(space.id);
       if (!existing && teams.length === 1) {
         // Adopt a pre-spaces row: the server backfilled one space per legacy
@@ -4338,7 +4372,8 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE spaces SET cloud_space_id = ?, workspace_id = ?, name = ?, emoji = ?, my_role = ?,
-               my_direct_role = ?, member_count = ?, teams = ?, deleted_at = NULL, updated_at = ?
+               my_direct_role = ?, member_count = ?, teams = ?, capabilities = ?, deleted_at = NULL,
+               updated_at = ?
              WHERE id = ?`
           )
           .run(
@@ -4350,6 +4385,7 @@ class DatabaseManager {
             space.my_direct_role ?? null,
             space.member_count ?? null,
             teamsJson,
+            capabilitiesJson,
             updatedAt,
             existing.id
           );
@@ -4367,9 +4403,9 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `INSERT INTO spaces (client_space_id, cloud_space_id, workspace_id, kind, name, emoji,
-             sort_order, my_role, my_direct_role, member_count, teams, sync_status, created_at,
-             updated_at)
-           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+             sort_order, my_role, my_direct_role, member_count, teams, capabilities, sync_status,
+             created_at, updated_at)
+           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
         )
         .run(
           randomUUID(),
@@ -4382,6 +4418,7 @@ class DatabaseManager {
           space.my_direct_role ?? null,
           space.member_count ?? null,
           teamsJson,
+          capabilitiesJson,
           space.created_at || updatedAt,
           updatedAt
         );
@@ -4539,8 +4576,7 @@ class DatabaseManager {
           // container scope before deleting their parent rows.
           this._hardDeleteConversationsWhere(
             `note_id IN (SELECT id FROM notes WHERE space_id = ?)
-             OR space_id = ?
-             OR folder_id IN (SELECT id FROM folders WHERE space_id = ?)`,
+             OR ${SPACE_CONTAINER_CONVERSATION_FILTER}`,
             [localSpaceId, localSpaceId, localSpaceId]
           );
           this.db
@@ -4568,7 +4604,7 @@ class DatabaseManager {
           .run(localSpaceId, localSpaceId);
         if (!destructive) {
           this._retireConversationsWhere(
-            "space_id = ? OR folder_id IN (SELECT id FROM folders WHERE space_id = ?)",
+            SPACE_CONTAINER_CONVERSATION_FILTER,
             [localSpaceId, localSpaceId],
             { scrubSyncedMessages: true }
           );
@@ -7809,10 +7845,11 @@ class DatabaseManager {
           updatedAt
         );
       } catch (err) {
-        // A live same-named folder already exists in this space (partial unique
-        // index idx_folders_space_name is a different conflict target than the
-        // client_folder_id upsert). Converge on the existing folder by adopting
-        // the cloud row's identity instead of wedging the pull.
+        // A live same-named folder of the same owner already exists in this
+        // space (the partial unique name indexes are a different conflict
+        // target than the client_folder_id upsert). Converge on the existing
+        // folder by adopting the cloud row's identity instead of wedging the
+        // pull.
         // Match the error code, not the message text (which SQLite could
         // reformat); the column check keeps client_folder_id collisions on
         // the rethrow path.
@@ -7846,9 +7883,19 @@ class DatabaseManager {
             );
         })();
       }
-      return this.db
+      const folder = this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
+      // A move made on another device arrives as a new space_id; the folder's
+      // chats follow it, as they do in moveFolderToSpace.
+      if (folder) {
+        this.db
+          .prepare(
+            "UPDATE agent_conversations SET space_id = ? WHERE folder_id = ? AND space_id IS NOT ?"
+          )
+          .run(folder.space_id, folder.id, folder.space_id);
+      }
+      return folder;
     } catch (error) {
       debugLogger.error("Error upserting folder from cloud", { error: error.message }, "database");
       throw error;

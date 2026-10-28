@@ -73,6 +73,10 @@ jest.mock('@/data', () => ({
   },
 }));
 jest.mock('@/data/remote/usageApi', () => ({ fetchUsage: jest.fn() }));
+const mockClearChatHistory = jest.fn();
+jest.mock('@/lib/chat/chatHistory', () => ({
+  clearChatHistory: () => mockClearChatHistory(),
+}));
 // The spaces pass runs ahead of the identity reconciliation under test; a
 // backend without team spaces keeps the run on the personal path.
 const mockSyncSpaces = jest.fn();
@@ -169,6 +173,7 @@ describe('syncEngine identity transitions', () => {
     await flush();
 
     expect(mockRepo.wipeAllSyncableData).not.toHaveBeenCalled();
+    expect(mockClearChatHistory).not.toHaveBeenCalled();
     expect(mockBackfill).toHaveBeenCalledWith('real-user', expect.any(Function));
     expect(state['sync.user_id']).toBe('real-user');
     // The link is consumed: a later switch away from this account must wipe.
@@ -183,6 +188,8 @@ describe('syncEngine identity transitions', () => {
     await flush();
 
     expect(mockRepo.wipeAllSyncableData).toHaveBeenCalledTimes(1);
+    // The previous account's chats quote its notes, so they go too.
+    expect(mockClearChatHistory).toHaveBeenCalledTimes(1);
     expect(mockRepo.dropRemoteIdsForAccountLink).not.toHaveBeenCalled();
   });
 

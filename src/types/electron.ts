@@ -686,6 +686,9 @@ export interface SpaceItem {
   // Direct space_members grant, null when access comes only via teams or the
   // workspace role. Absent on mirrors written before the API shipped it.
   my_direct_role?: TeamRole | null;
+  // Server-computed permissions for the caller. Absent on mirrors written
+  // before the API shipped it; read through spaceCan() so the role fallback applies.
+  capabilities?: SpaceCapabilities | null;
   // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
@@ -721,6 +724,25 @@ export interface SnippetEntryItem {
 
 export type WorkspaceRole = "owner" | "admin" | "member";
 
+// Server-computed permissions, snake_case as sent by the API.
+export interface WorkspaceCapabilities {
+  manage_members: boolean;
+  manage_teams: boolean;
+  create_spaces: boolean;
+  manage_settings: boolean;
+  manage_billing: boolean;
+  delete_workspace: boolean;
+  transfer_ownership: boolean;
+  leave: boolean;
+}
+
+export interface SpaceCapabilities {
+  edit_notes: boolean;
+  manage_members: boolean;
+  manage_settings: boolean;
+  leave: boolean;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -741,6 +763,9 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent on API responses that predate capabilities; read through workspaceCan().
+  capabilities?: WorkspaceCapabilities;
+  has_subscription?: boolean;
 }
 
 export interface WorkspaceMember {
@@ -914,6 +939,8 @@ export interface CudaWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -930,6 +957,8 @@ export interface VulkanWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -1741,7 +1770,8 @@ declare global {
         sourceFile?: string | null,
         audioDuration?: number | null,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        transcript?: string | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
@@ -3405,7 +3435,12 @@ declare global {
         segments: Array<{ start: number; end: number; speaker: string }>,
         text: string,
         duration: number
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        segments?: Array<{ text: string; start: number; end: number; speaker: string }>;
+        error?: string;
+      }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number; requestId?: string }
