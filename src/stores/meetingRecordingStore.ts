@@ -29,7 +29,12 @@ import {
   MAX_SPEAKER_COUNT,
 } from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
-import { isTranscriptionContextAllowed } from "./policyRules";
+import {
+  isAudioFeatureAllowed,
+  isTranscriptionContextAllowed,
+  meetingRecordingRefusal,
+  type PolicyDecisionSnapshot,
+} from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 import {
   lockTranscriptSpeaker,
@@ -486,6 +491,42 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
 
+// Org-policy refusals: the main process's own sentinel and the refusal codes it
+// forwards. Each ends the recording; MeetingRecordingMount explains it.
+const MEETING_POLICY_REFUSALS = new Set([
+  "policyRestricted",
+  "POLICY_MEETING_RECORDING_DISABLED",
+  "AUDIO_PURPOSE_REQUIRED",
+  "POLICY_UNRESOLVABLE",
+]);
+
+// Main-process errors that mean main has already ended the recording: a policy
+// refusal, or the recording belonging to an account that is no longer signed in.
+const MEETING_MAIN_STOPS = new Set([...MEETING_POLICY_REFUSALS, "accountChanged"]);
+
+// The last session main ended itself, so a policy stop of the same session
+// from this window doesn't explain it a second time.
+let mainStoppedSessionId: string | null = null;
+
+// A recording ended because the policy could not be checked. Unlike
+// POLICY_UNRESOLVABLE at start, there is nothing to try again in a moment.
+const POLICY_UNRESOLVED_STOP = "policyUnresolvedStop";
+
+// The sentinel explaining a meeting policy refuses, for a start or a stop.
+function meetingPolicyRefusalError(
+  policy: PolicyDecisionSnapshot,
+  phase: "start" | "stop"
+): string {
+  switch (meetingRecordingRefusal(policy)) {
+    case "unresolved":
+      return phase === "stop" ? POLICY_UNRESOLVED_STOP : "POLICY_UNRESOLVABLE";
+    case "disabled":
+      return "POLICY_MEETING_RECORDING_DISABLED";
+    default:
+      return "policyRestricted";
+  }
+}
+
 function reportMeetingError(error: string, extra: Partial<MeetingRecordingState> = {}): void {
   useMeetingRecordingStore.setState((state) => ({
     ...extra,
@@ -809,9 +850,14 @@ export interface StartRecordingArgs {
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
-  if (!isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting")) {
+  const policy = usePolicyStore.getState();
+  if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError("policyRestricted");
+    reportMeetingError(
+      isAudioFeatureAllowed(policy, "meeting")
+        ? "policyRestricted"
+        : meetingPolicyRefusalError(policy, "start")
+    );
     return false;
   }
 
@@ -824,7 +870,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
     const isCurrentStart = () =>
-      startOperation.isCurrent() && activeRecordingSessionId === sessionId;
+      startOperation.isCurrent() &&
+      activeRecordingSessionId === sessionId &&
+      isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "meeting");
 
     const initialEnabled =
       args.diarizationEnabled ??
@@ -1055,7 +1103,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         reportMeetingError(
           needsSignIn
             ? "signInRequired"
-            : startResult?.error || "Failed to start meeting transcription",
+            : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
+              ? startResult.code
+              : startResult?.error || "Failed to start meeting transcription",
           { isRecording: false, isTranscribing: false }
         );
         stopMediaStream(micResult);
@@ -1259,8 +1309,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const errorCleanup = window.electronAPI?.onMeetingTranscriptionError?.((err) => {
         if (activeRecordingSessionId !== sessionId) return;
-        reportMeetingError(err);
+        reportMeetingError(err === "POLICY_UNRESOLVABLE" ? POLICY_UNRESOLVED_STOP : err);
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
+        if (!MEETING_MAIN_STOPS.has(err)) return;
+        mainStoppedSessionId = sessionId;
+        if (isRecordingFlag) void stopRecording(sessionId);
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 
@@ -1646,6 +1699,8 @@ export interface StopRecordingResult {
   // True only when this call ended a live recording — false for a no-op stop
   // (nothing recording, or a scoped stop for a session that is not active).
   stopped: boolean;
+  // True when this call cancelled a start that was still in progress.
+  cancelledStart?: boolean;
 }
 
 export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
@@ -1665,7 +1720,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
       currentMicLevel: 0,
       recordingStartedAt: null,
     });
-    return { diarizationSessionId: null, stopped: false };
+    return { diarizationSessionId: null, stopped: false, cancelledStart: true };
   }
 
   await meetingRecordingStopBarrier.waitForPendingStop();
@@ -1794,6 +1849,20 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
+/**
+ * Ends a recording this window's policy now refuses, which main may still allow
+ * (an unresolved policy, a minimum app version). Says why only when this call
+ * ended it, so not for a stop the user or main already had under way.
+ */
+export async function stopRecordingForPolicy(): Promise<void> {
+  const sessionId = activeRecordingSessionId;
+  const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
+  const { stopped, cancelledStart } = await stopRecording();
+  if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
+    reportMeetingError(reason);
+  }
+}
+
 export function lockSpeaker(speakerId: string, displayName: string): void {
   if (!speakerId || !displayName) return;
   speakerLocks.set(speakerId, displayName);
@@ -1835,6 +1904,7 @@ if (typeof window !== "undefined") {
   const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
     enqueueDiarizationCompletion(async () => {
+      await meetingRecordingStopBarrier.waitForPendingStop();
       const {
         diarizationSessionId,
         isRecording,

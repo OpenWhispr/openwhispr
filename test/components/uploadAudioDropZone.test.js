@@ -40,11 +40,6 @@ const MOCKS = {
   `,
   "/stores/batchQueueStore": `export const useBatchQueue = () => globalThis.__uploadBatch;`,
   "/BatchQueueView": `export default function BatchQueueView() { return null; }`,
-  "/hooks/usePolicy": `
-    export const usePolicySnapshot = () => ({});
-    export const useTranscriptionContextAllowed = () => true;
-  `,
-  "/stores/policyStore": `export const usePolicyStore = (selector) => selector({});`,
   "/stores/enterpriseIdentityStore": `
     export const useManagedScopeResolution = () => ({ kind: "managed" });
   `,
@@ -120,6 +115,8 @@ async function renderUploadAudio(t) {
   const { default: UploadAudioView } = await vite.ssrLoadModule(
     "/components/notes/UploadAudioView.tsx"
   );
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({ status: "unmanaged", policy: null });
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(UploadAudioView, {})));
   await settle();
@@ -128,7 +125,7 @@ async function renderUploadAudio(t) {
       container,
       (node) => node.getAttribute("aria-label") === "notes.upload.dropOrBrowse"
     );
-  return { container, calls, zone };
+  return { container, calls, zone, usePolicyStore };
 }
 
 test("the upload drop zone is a keyboard button that browses on Enter and Space", async (t) => {
@@ -161,22 +158,19 @@ test("dragging over shows Drop to upload and the pulse, and leaving clears it", 
   assert.equal(container.contains(target), true);
 });
 
-test(
-  "a drop keeps supported files, names the skipped ones, and opens one file or queues several",
-  async (t) => {
-    const { container, calls, zone } = await renderUploadAudio(t);
-    const files = (...entries) => entries.map(([name, size]) => ({ name, size }));
+test("a drop keeps supported files, names the skipped ones, and opens one file or queues several", async (t) => {
+  const { container, calls, zone } = await renderUploadAudio(t);
+  const files = (...entries) => entries.map(([name, size]) => ({ name, size }));
 
-    const dropped = files(["talk.mp3", 2048], ["notes.txt", 5]);
-    await React.act(async () => dispatch(zone(), "drop", { dataTransfer: { files: dropped } }));
+  const dropped = files(["talk.mp3", 2048], ["notes.txt", 5]);
+  await React.act(async () => dispatch(zone(), "drop", { dataTransfer: { files: dropped } }));
 
-    assert.match(container.textContent, /notes\.upload\.unsupportedFiles\{"names":"notes\.txt"\}/);
-    // One supported file opens it rather than starting a queue
-    assert.match(container.textContent, /talk\.mp3/);
-    assert.equal(zone(), null);
-    assert.deepEqual(calls.added, []);
-  }
-);
+  assert.match(container.textContent, /notes\.upload\.unsupportedFiles\{"names":"notes\.txt"\}/);
+  // One supported file opens it rather than starting a queue
+  assert.match(container.textContent, /talk\.mp3/);
+  assert.equal(zone(), null);
+  assert.deepEqual(calls.added, []);
+});
 
 test("several supported files go to the queue", async (t) => {
   const { container, calls, zone } = await renderUploadAudio(t);
@@ -194,4 +188,47 @@ test("several supported files go to the queue", async (t) => {
     ],
   ]);
   assert.doesNotMatch(container.textContent, /notes\.upload\.unsupportedFiles/);
+});
+
+test("the shared upload zone blocks restricted inputs and resumes when policy allows upload", async (t) => {
+  const { container, calls, zone, usePolicyStore } = await renderUploadAudio(t);
+  await React.act(async () => dispatch(zone(), "dragover"));
+  assert.match(zone().textContent, /notes\.upload\.dropToUpload/);
+
+  for (const policy of [
+    { status: "managed", policy: { features: { audioUploadEnabled: false } } },
+    { status: "loading", policy: null },
+  ]) {
+    await React.act(async () => usePolicyStore.setState(policy));
+    assert.equal(zone().getAttribute("aria-disabled"), "true");
+    const banner = findElement(container, (node) => node.getAttribute("role") === "status");
+    assert.ok(banner);
+    assert.equal(zone().getAttribute("aria-describedby"), banner.getAttribute("id"));
+    assert.ok(!zone().style.animation);
+    for (const [type, init] of [
+      ["click", {}],
+      ["keydown", { key: "Enter" }],
+      ["keydown", { key: " " }],
+      ["dragover", {}],
+      ["drop", { dataTransfer: { files: [{ name: "blocked.mp3", size: 10 }] } }],
+    ]) {
+      await React.act(async () => dispatch(zone(), type, init));
+    }
+    assert.equal(calls.browses.length, 0);
+    assert.deepEqual(calls.added, []);
+    assert.doesNotMatch(container.textContent, /blocked\.mp3/);
+    assert.doesNotMatch(zone().textContent, /notes\.upload\.dropToUpload/);
+  }
+
+  await React.act(async () => usePolicyStore.setState({ status: "unmanaged", policy: null }));
+  assert.equal(zone().getAttribute("aria-disabled"), null);
+  assert.equal(zone().getAttribute("aria-describedby"), null);
+  await React.act(async () => dispatch(zone(), "keydown", { key: "Enter" }));
+  assert.equal(calls.browses.length, 1);
+  await React.act(async () =>
+    dispatch(zone(), "drop", {
+      dataTransfer: { files: [{ name: "allowed.mp3", size: 10 }] },
+    })
+  );
+  assert.match(container.textContent, /allowed\.mp3/);
 });

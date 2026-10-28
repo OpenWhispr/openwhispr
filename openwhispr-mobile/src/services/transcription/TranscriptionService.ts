@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { TranscriptionRequest, TranscriptionResponse } from '../../types';
+import { AudioPurpose, TranscriptionRequest, TranscriptionResponse } from '../../types';
 import {
   API_ENDPOINTS,
   CLOUD_CHUNK_CONCURRENCY,
@@ -452,6 +452,7 @@ export class TranscriptionService {
       extraHeaders?: Record<string, string>;
       timeoutSeconds?: number;
       requestContext?: TranscriptionRequest['requestContext'];
+      purpose?: AudioPurpose;
       clientTranscriptionId?: string;
       fusedCleanup?: boolean;
     } = {},
@@ -499,6 +500,9 @@ export class TranscriptionService {
     }
     if (options.requestContext) {
       parameters.requestContext = options.requestContext;
+    }
+    if (options.purpose) {
+      parameters.purpose = options.purpose;
     }
     if (options.requestContext === 'keyboard') {
       parameters.normalizeAudio = '1';
@@ -916,6 +920,7 @@ export class TranscriptionService {
           extraParameters,
           timeoutSeconds: candidate.timeoutSeconds ?? FUSED_CLEANUP_TIMEOUT_SECONDS,
           requestContext: candidate.requestContext,
+          purpose: candidate.purpose,
           clientTranscriptionId: candidate.clientTranscriptionId,
           fusedCleanup: true,
           extraHeaders: {
@@ -956,6 +961,7 @@ export class TranscriptionService {
         candidate.jobId,
         {
           requestContext: candidate.requestContext,
+          purpose: candidate.purpose,
           clientTranscriptionId: candidate.clientTranscriptionId,
           timeoutSeconds: candidate.timeoutSeconds,
         },

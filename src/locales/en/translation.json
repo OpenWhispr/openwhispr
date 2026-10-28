@@ -3585,7 +3585,8 @@
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
       "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
-      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+      "disabledByOrg": "Audio upload is disabled by your organization."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -3612,7 +3613,10 @@
       "systemAudioQuiet": {
         "title": "Meeting audio has gone quiet",
         "description": "No one has been heard for a few minutes. If the call is still going, check your sound output device."
-      }
+      },
+      "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
+      "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
+      "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -5063,6 +5067,7 @@
     },
     "start": "Take notes",
     "join": "Join and transcribe",
+    "joinOnly": "Join meeting",
     "folders": {
       "choose": "Choose meeting folder",
       "search": "Search folders",
@@ -5095,7 +5100,9 @@
         "CREATE_FAILED": "Could not finish. Please retry.",
         "LINKED_NOTE_CHANGED": "Review the destination, then join again.",
         "NOTE_UNAVAILABLE": "This note is unavailable. Retry without creating a replacement.",
-        "START_FAILED": "Could not finish. Please retry."
+        "START_FAILED": "Could not finish. Please retry.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Meeting recording is disabled by your organization.",
+        "POLICY_UNRESOLVABLE": "Your organization's settings haven't loaded yet. Try again in a moment."
       }
     }
   },

@@ -3585,7 +3585,8 @@
       "urlFileTooLarge": "Le fichier est trop volumineux pour être téléchargé. La taille maximale est de 500 Mo.",
       "urlYoutubeBlocked": "YouTube bloque temporairement les téléchargements depuis votre réseau. Réessayez dans un moment.",
       "customEndpointInvalid": "Le point de terminaison de transcription personnalisé n'est pas configuré ou est invalide. Mettez-le à jour dans les réglages.",
-      "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives."
+      "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
+      "disabledByOrg": "L’importation de fichiers audio est désactivée par votre organisation."
     },
     "meeting": {
       "title": "Notes de réunion",
@@ -3612,7 +3613,10 @@
       "systemAudioQuiet": {
         "title": "L'audio de la réunion est devenu silencieux",
         "description": "Personne n'a été entendu depuis quelques minutes. Si l'appel est toujours en cours, vérifiez votre périphérique de sortie audio."
-      }
+      },
+      "recordingDisabledByOrg": "L’enregistrement des réunions est désactivé par votre organisation.",
+      "stoppedAccountChanged": "L’enregistrement s’est arrêté, car vous vous êtes déconnecté ou avez changé de compte.",
+      "stoppedPolicyUnresolved": "L’enregistrement s’est arrêté, car les paramètres de votre organisation n’ont pas pu être vérifiés."
     },
     "meetingPill": {
       "returnToNote": "Revenir à l'enregistrement",
@@ -5063,6 +5067,7 @@
     },
     "start": "Prendre des notes",
     "join": "Rejoindre et transcrire",
+    "joinOnly": "Rejoindre la réunion",
     "folders": {
       "choose": "Choisir le dossier de réunion",
       "search": "Rechercher des dossiers",
@@ -5095,7 +5100,9 @@
         "CREATE_FAILED": "Impossible de terminer. Réessayez.",
         "LINKED_NOTE_CHANGED": "Vérifiez la destination, puis rejoignez à nouveau.",
         "NOTE_UNAVAILABLE": "Cette note est indisponible. Réessayez sans en créer une autre.",
-        "START_FAILED": "Impossible de terminer. Réessayez."
+        "START_FAILED": "Impossible de terminer. Réessayez.",
+        "POLICY_MEETING_RECORDING_DISABLED": "L’enregistrement des réunions est désactivé par votre organisation.",
+        "POLICY_UNRESOLVABLE": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant."
       }
     }
   },
