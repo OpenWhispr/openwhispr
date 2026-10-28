@@ -53,7 +53,7 @@ it('checks the storefront, billing identity and actual monthly product before of
   expect(await loadAffiliateOffer()).toEqual(offer);
   expect(api.post).toHaveBeenCalledWith(
     '/api/affiliate/apple-offer',
-    { country: 'USA' },
+    { country: 'USA', priceTiers: true },
     expect.objectContaining({ authenticated: false, headers: { Cookie: 'session' } }),
   );
 });
@@ -111,24 +111,31 @@ it('uses the currency precision for zero- and three-decimal storefronts', () => 
 });
 
 it.each([
-  ['DKK', 89, 71, true],
-  ['DKK', 89, 72, false],
-  ['USD', 11.99, 9.59, true],
-  ['USD', 11.99, 9.6, false],
-  ['JPY', 1500, 1190, true],
-  ['JPY', 1500, 1201, false],
-  ['KWD', 3.499, 2.75, true],
-  ['KWD', 3.499, 2.8, false],
-  ['DKK', 89, 0, false],
-  ['DKK', 89, -71, false],
-  ['DKK', 89, 70.999, false],
-  ['DKK', 89, Infinity, false],
+  ['DNK', 'DKK', 89, 71, true],
+  ['DNK', 'DKK', 89, 71.2, true],
+  ['DNK', 'DKK', 89, 71.21, false],
+  ['DNK', 'DKK', 89, 72, false],
+  ['DNK', 'DKK', 89, 62.3, true],
+  ['DNK', 'DKK', 89, 62.29, false],
+  ['DNK', 'DKK', 89, 7.1, false],
+  ['DNK', 'DKK', 89, 1e-9, false],
+  ['DNK', 'DKK', 89, 70.999, false],
+  ['DNK', 'DKK', 89, 0, false],
+  ['DNK', 'DKK', 89, -71, false],
+  ['DNK', 'DKK', 89, Infinity, false],
+  ['USA', 'USD', 11.99, 9.59, true],
+  ['USA', 'USD', 11.99, 9.6, false],
+  ['USA', 'USD', 1.97, 1.58, false],
+  ['JPN', 'JPY', 1500, 1190, true],
+  ['JPN', 'JPY', 1500, 1201, false],
+  ['KWT', 'KWD', 3.499, 2.75, true],
+  ['KWT', 'KWD', 3.499, 2.8, false],
 ])(
-  'validates Apple tier %s %s -> %s (accepted: %s)',
-  (currency, regularPrice, offerPrice, accepted) => {
-    expect(validAffiliateOffer({ ...offer, currency, regularPrice, offerPrice }, 'USA')).toBe(
-      accepted,
-    );
+  'validates Apple tier %s %s %s -> %s (accepted: %s)',
+  (country, currency, regularPrice, offerPrice, accepted) => {
+    expect(
+      validAffiliateOffer({ ...offer, country, currency, regularPrice, offerPrice }, country),
+    ).toBe(accepted);
   },
 );
 
