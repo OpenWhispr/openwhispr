@@ -21,8 +21,9 @@ export function getMeetingCalendarEventSuggestions(
   repo: Pick<CalendarRepository, 'getUpcomingEvents'>,
   now = new Date(),
   limit = MAX_CALENDAR_EVENT_SUGGESTIONS,
+  lookbackMs = CALENDAR_EVENT_LOOKBACK_MS,
 ): GoogleCalendarEvent[] {
-  const fromIso = new Date(now.getTime() - CALENDAR_EVENT_LOOKBACK_MS).toISOString();
+  const fromIso = new Date(now.getTime() - lookbackMs).toISOString();
   const toIso = new Date(now.getTime() + CALENDAR_EVENT_LOOKAHEAD_MS).toISOString();
   return accounts
     .filter((account) => account.status === 'connected')

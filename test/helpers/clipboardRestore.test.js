@@ -598,6 +598,44 @@ test("Hyprland prefers wtype over sendshortcut when installed", async () => {
   );
 });
 
+for (const windowClass of ["org.omarchy.agent", "org.omarchy.btop", "TUI.float"]) {
+  test(`Hyprland pastes text with Shift+Insert into ${windowClass}`, async () => {
+    const spawnCalls = [];
+    const Manager = loadClipboardManager({ spawn: createSpawn(spawnCalls, [0]) });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
+    manager.resolveLinuxFastPasteBinary = () => null;
+    manager._detectHyprlandWindowClass = () => windowClass;
+
+    await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+
+    assert.deepEqual(spawnCalls, [
+      { command: "wtype", args: ["-M", "shift", "-k", "Insert", "-m", "shift"] },
+    ]);
+  });
+}
+
+test("Hyprland keeps the Omarchy text paste shortcut when wtype fails", async () => {
+  const spawnCalls = [];
+  const Manager = loadClipboardManager({
+    spawn: createSpawn(spawnCalls, [1, 0], { stdout: ["", "ok\n"] }),
+  });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "hyprctl" || command === "wtype";
+  manager.resolveLinuxFastPasteBinary = () => null;
+  manager._detectHyprlandWindowClass = () => "org.omarchy.agent";
+
+  await withWaylandEnvironment("Hyprland", () => manager.pasteLinux(null));
+
+  assert.deepEqual(spawnCalls[1], {
+    command: "hyprctl",
+    args: [
+      "dispatch",
+      'hl.dsp.send_shortcut({ mods = "SHIFT", key = "Insert", window = "activewindow" })',
+    ],
+  });
+});
+
 test("failed wtype on Hyprland continues to sendshortcut", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({

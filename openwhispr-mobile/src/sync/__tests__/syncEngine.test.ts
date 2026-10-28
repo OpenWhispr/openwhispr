@@ -74,6 +74,7 @@ jest.mock('@/data', () => ({
 }));
 
 const mockFetchUsage = jest.fn();
+jest.mock('@/lib/chat/chatHistory', () => ({ clearChatHistory: jest.fn() }));
 jest.mock('@/data/remote/usageApi', () => ({
   fetchUsage: (...args: unknown[]) => mockFetchUsage(...args),
 }));

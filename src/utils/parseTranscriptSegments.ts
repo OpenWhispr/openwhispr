@@ -39,6 +39,21 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
   }
 }
 
+/**
+ * The text of a transcript none of whose segments says who speaks (no speaker,
+ * speaker name or source), joined with blank lines; null otherwise. Uploads
+ * whose provider returned no speakers store their text this way, so note
+ * actions run it as a plain transcript (#2666), not a meeting where every line
+ * would be "Them". transcriptFormatter.js's `isSpeakerless` makes the same call
+ * for exports.
+ */
+export function speakerlessTranscriptText(segments: TranscriptSegment[]): string | null {
+  const speakerless =
+    segments.length > 0 &&
+    segments.every((segment) => !segment.source && !segment.speaker && !segment.speakerName);
+  return speakerless ? segments.map((segment) => segment.text).join("\n\n") : null;
+}
+
 const isJsonArray = (raw: string): boolean => {
   try {
     return Array.isArray(JSON.parse(raw));

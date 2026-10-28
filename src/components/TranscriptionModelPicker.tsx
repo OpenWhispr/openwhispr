@@ -1228,6 +1228,7 @@ export default function TranscriptionModelPicker({
         : m.description,
       icon,
       invertInDark,
+      legacy: m.legacy,
     }));
   }, [currentCloudProvider, displayedCloudProvider, t]);
 

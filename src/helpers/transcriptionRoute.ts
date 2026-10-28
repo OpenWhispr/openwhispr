@@ -203,7 +203,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "elevenlabs") return "scribe_v2";
   if (provider === "deepgram") return "nova-3";
-  if (provider === "assemblyai") return "universal-3-5-pro";
+  if (provider === "assemblyai") return "universal-3-6-pro";
   return "gpt-transcribe";
 }
 

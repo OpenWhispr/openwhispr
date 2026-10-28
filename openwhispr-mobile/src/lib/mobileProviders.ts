@@ -20,6 +20,8 @@ export interface InferenceSelection {
 export interface ProviderModel {
   id: string;
   name: string;
+  // Superseded: offered only while it is the selection, so a saved one keeps working.
+  legacy?: boolean;
 }
 export interface ProviderDefinition {
   id: string;
