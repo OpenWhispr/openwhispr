@@ -129,12 +129,9 @@ export function useAuth() {
     !cloudContextReady;
   // A reconciled session whose refetch failed transiently keeps its binding but
   // loses its validated lease. Keep presenting it (read-only) instead of
-  // flashing to guest; sync stays fenced until the server answers again.
+  // flashing to guest until reconciliation validates the next server answer.
   const transientlyAuthenticated =
-    sessionRefetchFailed &&
-    rawIsSignedIn &&
-    !requiresReconciliation &&
-    !accountScopeHasMandatoryReconciliation();
+    !cloudContextReady && !requiresReconciliation && !accountScopeHasMandatoryReconciliation();
   const accountScopePresentable = !accountScopeBlocked || transientlyAuthenticated;
   // With no session answer (an offline launch, or the auth server down), main's
   // binding vouches for the bearer on disk, so the last validated account is
@@ -157,8 +154,7 @@ export function useAuth() {
   // (presented as a guest). Resolution failure must not hold windows hostage —
   // dictation works without an account, and sync stays fenced by
   // hasValidatedAuthContext either way.
-  const isLoaded =
-    offlineAccount != null || (!isPending && (sessionResolutionFailed || !accountScopeBlocked));
+  const isLoaded = isSignedIn || (!isPending && (sessionResolutionFailed || !accountScopeBlocked));
 
   useEffect(() => {
     if (!gracePeriodActive) return;

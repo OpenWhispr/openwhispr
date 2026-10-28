@@ -52,6 +52,7 @@ async function mountUseAuth(t, { initialStorage }) {
       location: { origin: "https://desktop.openwhispr.test", search: "?panel=true" },
       electronAPI: {
         authGetTokenState: async () => ({ ...token }),
+        cloudUsage: async () => ({ success: true, plan: "pro", isSubscribed: true }),
         getActiveAccountScope: async () =>
           token.token === binding.token
             ? { accountId: binding.accountId, authGeneration: token.generation }
@@ -79,6 +80,7 @@ async function mountUseAuth(t, { initialStorage }) {
         };
         export const isWithinGracePeriod = () => false;
         export const getGracePeriodRemainingMs = () => 0;
+        export const withSessionRefresh = (operation) => operation();
       `,
       "/utils/logger": "export default { debug() {}, error() {}, warn() {}, info() {} };",
       "/stores/settingsStore": `
@@ -120,6 +122,7 @@ async function mountUseAuth(t, { initialStorage }) {
     },
   });
   const { useAuth } = await vite.ssrLoadModule("/hooks/useAuth.ts");
+  const { useUsage } = await vite.ssrLoadModule("/hooks/useUsage.ts");
   const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
   authContext.resetAuthRequestContextForTests();
 
@@ -127,7 +130,12 @@ async function mountUseAuth(t, { initialStorage }) {
   const history = [];
   function Harness() {
     result = useAuth();
-    history.push({ isSignedIn: result.isSignedIn, isLoaded: result.isLoaded });
+    const usage = useUsage();
+    history.push({
+      isSignedIn: result.isSignedIn,
+      isLoaded: result.isLoaded,
+      hasPaidAccess: usage?.hasPaidAccess,
+    });
     return null;
   }
   root = createRoot(container);
@@ -350,6 +358,8 @@ test("losing the network mid-session shows the account read-only until the serve
   await auth.answer(USER_A);
   const scopeCalls = auth.calls.setActiveAccountScope.length;
   auth.storage.setItem(PROFILE_KEY, JSON.stringify({ ...USER_A, validatedAt: stale }));
+  assert.equal(auth.storage.getItem("isSubscribed"), "true");
+  auth.history.length = 0;
 
   await auth.loseNetwork();
   assert.equal(auth.result().isSignedIn, true);
@@ -369,4 +379,9 @@ test("losing the network mid-session shows the account read-only until the serve
   assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
   assert.equal(auth.result().isOfflineAccount, false);
   assert.ok(JSON.parse(auth.storage.getItem(PROFILE_KEY)).validatedAt > stale);
+  assert.deepEqual(
+    auth.history.filter((state) => !state.isSignedIn || !state.isLoaded || !state.hasPaidAccess),
+    []
+  );
+  assert.equal(auth.storage.getItem("isSubscribed"), "true");
 });
