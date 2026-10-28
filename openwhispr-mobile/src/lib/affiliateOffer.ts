@@ -28,6 +28,7 @@ export function validAffiliateOffer(value: unknown, country: string): value is A
     const digits =
       new Intl.NumberFormat('en', { style: 'currency', currency: v.currency }).resolvedOptions()
         .maximumFractionDigits ?? 2;
+    const offerMinor = v.offerPrice * 10 ** digits;
     return (
       typeof v.campaign === 'string' &&
       typeof v.productId === 'string' &&
@@ -37,8 +38,9 @@ export function validAffiliateOffer(value: unknown, country: string): value is A
       Number.isFinite(v.regularPrice) &&
       v.regularPrice > 0 &&
       Number.isFinite(v.offerPrice) &&
-      Math.abs(v.offerPrice * 10 ** digits - Math.round(v.regularPrice * 10 ** digits * 0.8)) <
-        0.000001 &&
+      v.offerPrice > 0 &&
+      Math.abs(offerMinor - Math.round(offerMinor)) < 0.000001 &&
+      offerMinor <= Math.round(v.regularPrice * 10 ** digits * 0.8) + 0.000001 &&
       Date.parse(v.expiresAt) > Date.now() &&
       url.protocol === 'https:' &&
       url.hostname === 'apps.apple.com' &&

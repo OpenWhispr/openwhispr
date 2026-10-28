@@ -110,6 +110,28 @@ it('uses the currency precision for zero- and three-decimal storefronts', () => 
   ).toBe(true);
 });
 
+it.each([
+  ['DKK', 89, 71, true],
+  ['DKK', 89, 72, false],
+  ['USD', 11.99, 9.59, true],
+  ['USD', 11.99, 9.6, false],
+  ['JPY', 1500, 1190, true],
+  ['JPY', 1500, 1201, false],
+  ['KWD', 3.499, 2.75, true],
+  ['KWD', 3.499, 2.8, false],
+  ['DKK', 89, 0, false],
+  ['DKK', 89, -71, false],
+  ['DKK', 89, 70.999, false],
+  ['DKK', 89, Infinity, false],
+])(
+  'validates Apple tier %s %s -> %s (accepted: %s)',
+  (currency, regularPrice, offerPrice, accepted) => {
+    expect(validAffiliateOffer({ ...offer, currency, regularPrice, offerPrice }, 'USA')).toBe(
+      accepted,
+    );
+  },
+);
+
 it('does not allocate stock after the presenting caller leaves during storefront lookup', async () => {
   let current = true;
   jest.mocked(getAppStorefrontCountryCode).mockImplementation(async () => {
