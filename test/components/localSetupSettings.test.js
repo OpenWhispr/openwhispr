@@ -319,3 +319,37 @@ test("a pending row never overrides what the user chose in Settings meanwhile", 
   );
   assert.equal(state.useCleanupModel, false, "their switch stays as it was");
 });
+
+test("note formatting left off never borrows a cleanup model from another mode", async (t) => {
+  const { store, applyLocalSetupSettings, plan } = await setup(t);
+  applyLocalSetupSettings(plan(mac({})), { cleanup: false, assistant: false });
+  const noteFormatting = () =>
+    store.selectResolvedLLMConfig(store.useSettingsStore.getState(), "noteFormatting");
+
+  // Later, in Settings, cleanup moves to a BYOK provider: llama could never run its model.
+  store.setResolvedLLMConfig("dictationCleanup", {
+    mode: "providers",
+    provider: "openai",
+    model: "gpt-6-luna",
+  });
+  assert.deepEqual(
+    {
+      mode: noteFormatting().mode,
+      provider: noteFormatting().provider,
+      model: noteFormatting().model,
+    },
+    { mode: "local", provider: "", model: "" }
+  );
+
+  store.setResolvedLLMConfig("dictationCleanup", { mode: "openwhispr", provider: "", model: "" });
+  assert.equal(noteFormatting().model, "");
+  assert.equal(store.selectIsCloudNoteFormattingMode(store.useSettingsStore.getState()), false);
+
+  // A local cleanup model is one note formatting can run, so it still inherits it.
+  store.setResolvedLLMConfig("dictationCleanup", {
+    mode: "local",
+    provider: "qwen",
+    model: table.models.cleanup,
+  });
+  assert.equal(noteFormatting().model, table.models.cleanup);
+});
