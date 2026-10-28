@@ -9,16 +9,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Meet – abc-defg-hij",
@@ -35,20 +25,8 @@
             "frame": [913, 238, 876, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [913, 238, 876, 863]
           },
           {
@@ -80,12 +58,6 @@
           {
             "depth": 15,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 128]
-          },
-          {
-            "depth": 15,
-            "role": "AXGroup",
             "frame": [913, 1021, 876, 80]
           },
           {
@@ -96,19 +68,7 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 663]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 663]
           },
           {
             "depth": 16,
@@ -119,12 +79,6 @@
             "depth": 16,
             "role": "AXGroup",
             "frame": [913, 286, 376, 687]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
           },
           {
             "depth": 16,
@@ -142,19 +96,7 @@
           {
             "depth": 17,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [933, 530, 127, 431]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
             "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 663]
           },
           {
             "depth": 17,
@@ -163,12 +105,6 @@
             "title": "Left side panel",
             "description": "Left side panel",
             "frame": [913, 302, 1, 663]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
           },
           {
             "depth": 17,
@@ -198,24 +134,12 @@
           {
             "depth": 18,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
             "frame": [1165, 302, 373, 664]
           },
           {
             "depth": 18,
             "role": "AXGroup",
             "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 663]
           },
           {
             "depth": 18,
@@ -238,36 +162,6 @@
             "title": "Meeting details",
             "description": "Meeting details",
             "frame": [1107, 256, 29, 29]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
           },
           {
             "depth": 19,
@@ -305,60 +199,6 @@
           },
           {
             "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 20,
             "role": "AXPopUpButton",
             "title": "Skin tone. Unspecified skin tone selected.",
             "description": "Skin tone. Unspecified skin tone selected.",
@@ -375,36 +215,6 @@
             "role": "AXPopUpButton",
             "title": "People",
             "frame": [1714, 252, 59, 36]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1165, 302, 373, 663]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 817, 235, 132]
           },
           {
             "depth": 21,
@@ -537,16 +347,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Meet – abc-defg-hij",
@@ -563,12 +363,6 @@
             "frame": [913, 238, 876, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
             "frame": [913, 238, 876, 863]
@@ -578,12 +372,6 @@
             "role": "AXStaticText",
             "frame": [913, 238, 1, 1],
             "value": "Live captions are on"
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
           },
           {
             "depth": 12,
@@ -619,12 +407,6 @@
           {
             "depth": 15,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 128]
-          },
-          {
-            "depth": 15,
-            "role": "AXGroup",
             "frame": [913, 1021, 876, 80]
           },
           {
@@ -635,19 +417,7 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 16,
@@ -667,12 +437,6 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "subrole": "AXLandmarkRegion",
             "title": "Call controls",
             "description": "Call controls",
@@ -686,19 +450,7 @@
           {
             "depth": 17,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [933, 454, 127, 291]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 17,
@@ -712,12 +464,6 @@
             "title": "Left side panel",
             "description": "Left side panel",
             "frame": [913, 302, 1, 663]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
           },
           {
             "depth": 17,
@@ -747,24 +493,12 @@
           {
             "depth": 18,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
             "frame": [1226, 302, 251, 448]
           },
           {
             "depth": 18,
             "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 18,
@@ -792,36 +526,6 @@
             "title": "Meeting details",
             "description": "Meeting details",
             "frame": [1107, 256, 30, 29]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 19,
@@ -875,54 +579,6 @@
           {
             "depth": 20,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
           },
           {
@@ -962,36 +618,6 @@
             "role": "AXPopUpButton",
             "title": "People",
             "frame": [1714, 252, 59, 36]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1226, 302, 251, 447]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 21,
@@ -1177,16 +803,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Meet – abc-defg-hij",
@@ -1203,20 +819,8 @@
             "frame": [913, 238, 876, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [913, 238, 876, 863]
           },
           {
@@ -1253,12 +857,6 @@
           {
             "depth": 15,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 128]
-          },
-          {
-            "depth": 15,
-            "role": "AXGroup",
             "frame": [913, 1021, 876, 80]
           },
           {
@@ -1269,19 +867,7 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 16,
@@ -1301,12 +887,6 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "subrole": "AXLandmarkRegion",
             "title": "Call controls",
             "description": "Call controls",
@@ -1320,19 +900,7 @@
           {
             "depth": 17,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [933, 454, 127, 291]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 17,
@@ -1346,12 +914,6 @@
             "title": "Left side panel",
             "description": "Left side panel",
             "frame": [913, 302, 1, 663]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
           },
           {
             "depth": 17,
@@ -1381,24 +943,12 @@
           {
             "depth": 18,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
             "frame": [929, 302, 844, 448]
           },
           {
             "depth": 18,
             "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
           },
           {
             "depth": 18,
@@ -1426,42 +976,6 @@
             "title": "Meeting details",
             "description": "Meeting details",
             "frame": [1107, 256, 29, 29]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 19,
@@ -1514,60 +1028,6 @@
           },
           {
             "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 302, 844, 447]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
             "role": "AXPopUpButton",
             "title": "Font size",
             "description": "Font size",
@@ -1603,30 +1063,6 @@
             "role": "AXPopUpButton",
             "title": "People",
             "frame": [1714, 252, 59, 36]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 21,
@@ -1851,11 +1287,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 182, 876, 919]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Meet – abc-defg-hij",
@@ -1910,12 +1341,6 @@
           {
             "depth": 15,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 182, 876, 128]
-          },
-          {
-            "depth": 15,
-            "role": "AXGroup",
             "frame": [913, 1021, 876, 80]
           },
           {
@@ -1926,19 +1351,7 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
           },
           {
             "depth": 16,
@@ -1958,12 +1371,6 @@
           {
             "depth": 16,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
-          },
-          {
-            "depth": 16,
-            "role": "AXGroup",
             "subrole": "AXLandmarkRegion",
             "title": "Call controls",
             "description": "Call controls",
@@ -1977,19 +1384,7 @@
           {
             "depth": 17,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [933, 418, 127, 327]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
           },
           {
             "depth": 17,
@@ -2003,12 +1398,6 @@
             "title": "Left side panel",
             "description": "Left side panel",
             "frame": [913, 246, 1, 719]
-          },
-          {
-            "depth": 17,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 823, 388, 252]
           },
           {
             "depth": 17,
@@ -2038,24 +1427,12 @@
           {
             "depth": 18,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
             "frame": [929, 246, 844, 504]
           },
           {
             "depth": 18,
             "role": "AXGroup",
             "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 18,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
           },
           {
             "depth": 18,
@@ -2083,36 +1460,6 @@
             "title": "Meeting details",
             "description": "Meeting details",
             "frame": [1110, 200, 29, 29]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 19,
@@ -2165,54 +1512,6 @@
           },
           {
             "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1193, 246, 315, 503]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [929, 246, 844, 503]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 20,
             "role": "AXPopUpButton",
             "title": "Font size",
             "description": "Font size",
@@ -2248,36 +1547,6 @@
             "role": "AXPopUpButton",
             "title": "People",
             "frame": [1714, 196, 59, 36]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1193, 246, 315, 503]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
-          },
-          {
-            "depth": 21,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1522, 601, 235, 132]
           },
           {
             "depth": 21,

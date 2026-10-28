@@ -145,8 +145,11 @@ const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("./meetingSystemAudioHandover");
 const MeetingSpeakerListener = require("./meetingSpeakerListener");
-const { MEETING_SPEAKER_STATE_LAG_MS } = MeetingSpeakerListener;
+const { MEETING_SPEAKER_STATE_LAG_MS, shouldReadMeetingApp } = MeetingSpeakerListener;
 const { createMeetingSpeakerFusion } = require("./meetingSpeakerFusion");
+// A helper that exits mid-meeting is started again once, after a pause.
+const MEETING_SPEAKER_LISTENER_MAX_RESTARTS = 1;
+const MEETING_SPEAKER_LISTENER_RESTART_DELAY_MS = 2_000;
 const {
   partitionPendingMicFinals,
   isRiskyMicDuplicateProfile,
@@ -8834,7 +8837,7 @@ class IPCHandlers {
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
     let meetingReclusterTimer = null;
-    let meetingAppSpeakerFusion = null;
+    let meetingAppSpeakerSession = null;
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
@@ -9112,60 +9115,147 @@ class IPCHandlers {
       return false;
     };
 
-    // Opt-in: names voices from the meeting app's own speaking indicator. The
-    // helper's startup isn't awaited (speaker labels must never hold up or fail
-    // the recording), and its states only reach the fusion made for this
-    // session, so a helper that starts late can't feed the next one.
-    const startMeetingAppSpeakerLabels = () => {
-      meetingAppSpeakerFusion = null;
-      if (
-        meetingConnectionOptions?.appSpeakerLabelsEnabled !== true ||
-        !meetingSpeakerListener.isAvailable()
-      ) {
-        return;
+    // Opt-in: names voices from the meeting app's own speaking indicator. One
+    // session per recording: its fusion outlives a pause (speaker detection
+    // switched off and back on), and its restart and notice budgets last the
+    // whole meeting. The helper's startup isn't awaited (speaker labels must
+    // never hold up or fail the recording), and its states only reach this
+    // session's fusion, so a helper that starts late can't feed the next one.
+    const stopReadingMeetingApp = (session) => {
+      session.reading = false;
+      session.readAttempt = null;
+      // Nothing reports speaking any more; end whatever was still lit, or it
+      // would lend its name to every voice heard until reading resumes.
+      session.fusion.recordAppState({ at: Date.now(), participants: [], speakingIds: [] });
+      if (session.restartTimer) {
+        clearTimeout(session.restartTimer);
+        session.restartTimer = null;
       }
+      // Not waited on: a helper mid-poll would hold up the meeting's stop.
+      void meetingSpeakerListener.stop().catch(() => {});
+    };
 
-      const fusion = createMeetingSpeakerFusion({ lagMs: MEETING_SPEAKER_STATE_LAG_MS });
-      meetingAppSpeakerFusion = fusion;
+    // Told once per meeting: the user turned the labels on and would
+    // otherwise see voices stay numbered with no reason given.
+    const giveUpReadingMeetingApp = (session, code) => {
+      session.gaveUp = true;
+      stopReadingMeetingApp(session);
+      if (session.notified) return;
+      session.notified = true;
+      broadcastToWindows("meeting-app-speaker-labels-unavailable", {
+        reason: code === "accessibility_denied" ? "accessibility" : "unreadable",
+      });
+    };
+
+    const readMeetingApp = (session) => {
+      session.reading = true;
+      // A pause and resume can leave an older attempt's start settling late;
+      // only the latest attempt speaks for the session.
+      const attempt = {};
+      session.readAttempt = attempt;
+      const current = () => meetingAppSpeakerSession === session && session.readAttempt === attempt;
       meetingSpeakerListener
         .start({
-          onState: (state) => fusion.recordAppState(state),
+          onState: (state) => {
+            if (current()) session.fusion.recordAppState(state);
+          },
           onError: (error) => {
             debugLogger.warn(
               "Meeting app speaker listener stopped",
-              { error: error.message },
+              { error: error.message, code: error.code },
               "speaker"
             );
+            if (!current()) return;
+            // One restart covers a crash on an odd tree; a second failure
+            // means the app keeps doing it.
+            if (session.restarts < MEETING_SPEAKER_LISTENER_MAX_RESTARTS) {
+              session.restarts += 1;
+              session.restartTimer = setTimeout(() => {
+                session.restartTimer = null;
+                if (current()) readMeetingApp(session);
+              }, MEETING_SPEAKER_LISTENER_RESTART_DELAY_MS);
+            } else {
+              giveUpReadingMeetingApp(session, error.code);
+            }
           },
         })
         .then(() => {
-          debugLogger.info("Meeting app speaker labels started", {}, "speaker");
+          debugLogger.info(
+            "Meeting app speaker labels started",
+            { restarts: session.restarts },
+            "speaker"
+          );
         })
         .catch((error) => {
-          if (meetingAppSpeakerFusion !== fusion) return;
-          meetingAppSpeakerFusion = null;
+          if (!current()) return;
           debugLogger.warn(
             "Meeting app speaker labels unavailable",
             { error: error.message, code: error.code },
             "speaker"
           );
+          giveUpReadingMeetingApp(session, error.code);
         });
     };
 
-    const stopMeetingAppSpeakerLabels = async () => {
-      const fusion = meetingAppSpeakerFusion;
-      meetingAppSpeakerFusion = null;
-      if (fusion) {
-        debugLogger.info("Meeting app speaker labels stopped", fusion.summarize(), "speaker");
+    const startMeetingAppSpeakerLabels = () => {
+      meetingAppSpeakerSession = null;
+      if (
+        !shouldReadMeetingApp({
+          options: meetingConnectionOptions,
+          oneOnOneAttendee: meetingOneOnOneAttendee,
+          available: meetingSpeakerListener.isAvailable(),
+        })
+      ) {
+        return;
       }
-      await meetingSpeakerListener.stop().catch(() => {});
+
+      const session = {
+        fusion: createMeetingSpeakerFusion({ lagMs: MEETING_SPEAKER_STATE_LAG_MS }),
+        reading: false,
+        readAttempt: null,
+        restarts: 0,
+        restartTimer: null,
+        gaveUp: false,
+        notified: false,
+      };
+      meetingAppSpeakerSession = session;
+      // Speaker detection already off for this meeting: wait for it.
+      if (this.activeMeetingSpeakerConfig?.enabled !== false) readMeetingApp(session);
+    };
+
+    const stopMeetingAppSpeakerLabels = () => {
+      const session = meetingAppSpeakerSession;
+      meetingAppSpeakerSession = null;
+      if (!session) return;
+      debugLogger.info("Meeting app speaker labels stopped", session.fusion.summarize(), "speaker");
+      stopReadingMeetingApp(session);
+    };
+
+    // Speaker detection switched off mid-meeting: nothing will be named, so
+    // the meeting app stops being read; switched back on, it's read again,
+    // unless this meeting already gave up on it.
+    this._setMeetingAppSpeakerLabelsActive = (enabled) => {
+      const session = meetingAppSpeakerSession;
+      if (!session || session.gaveUp || session.reading === enabled) return;
+      if (enabled) readMeetingApp(session);
+      else stopReadingMeetingApp(session);
+    };
+
+    // The user named a voice of this meeting: the meeting app never renames
+    // it, and the participant it held can name another voice at once.
+    this._releaseMeetingAppSpeaker = (noteId, speakerId) => {
+      if (noteId != null && noteId === meetingNoteId) {
+        meetingAppSpeakerSession?.fusion.release(speakerId);
+      }
     };
 
     // The meeting app named a voice the identifier could only number. Segments
     // already confirmed for that voice don't take later identifications, so
     // they're renamed here; the identifier carries the name from now on.
     const applyMeetingAppSpeakerName = (win, { speakerId, displayName }) => {
-      liveSpeakerIdentifier.mapSpeaker(speakerId, null, displayName);
+      liveSpeakerIdentifier.mapSpeaker(speakerId, null, displayName, undefined, {
+        fromMeetingApp: true,
+      });
       for (const seg of meetingDiarizationSegments) {
         if (seg.source === "system" && seg.speaker === speakerId) {
           applyConfirmedSpeaker(seg, { speakerName: displayName });
@@ -9185,10 +9275,14 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerActive = false;
-      meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
-      // After the identifier: its stop flushes the last utterance, which the
-      // fusion can still name before the saved state is read.
-      await stopMeetingAppSpeakerLabels();
+      try {
+        meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
+      } finally {
+        // After the identifier: its stop flushes the last utterance, which the
+        // fusion can still name before the saved state is read. Stopped even
+        // if the identifier's stop throws, so the helper never outlives it.
+        stopMeetingAppSpeakerLabels();
+      }
       return meetingLiveSpeakerState;
     };
 
@@ -9231,9 +9325,17 @@ class IPCHandlers {
               startTime,
               meetingLiveSpeakerStartedAt + identification.endTime * 1000
             );
-            const appSpeakerName = meetingAppSpeakerFusion?.observeIdentification({
+            // The voice's name as it stands now, not the one held for this
+            // utterance, and whether the meeting app gave it: a rename by the
+            // user mid-utterance must reach the fusion before it names the
+            // voice again. (A 1:1 meeting never reads the meeting app.)
+            const readingSession = meetingAppSpeakerSession?.reading
+              ? meetingAppSpeakerSession
+              : null;
+            const appSpeakerName = readingSession?.fusion.observeIdentification({
               speakerId: identification.speakerId,
-              displayName,
+              displayName: liveSpeakerIdentifier.getDisplayName(identification.speakerId),
+              nameFromMeetingApp: liveSpeakerIdentifier.isMeetingAppNamed(identification.speakerId),
               startTime,
               endTime,
             });
@@ -9293,7 +9395,7 @@ class IPCHandlers {
 
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
-          meetingAppSpeakerFusion?.applyMerges(merges);
+          meetingAppSpeakerSession?.fusion.applyMerges(merges);
 
           for (const { keep, remove, displayName } of merges) {
             for (const seg of meetingDiarizationSegments) {
@@ -10020,7 +10122,8 @@ class IPCHandlers {
     };
 
     // Settings hides the meeting-app speaker labels toggle in builds without
-    // the helper (it isn't part of compile:native yet) and off macOS.
+    // the helper (it isn't part of compile:native yet), off macOS and on Intel
+    // Macs.
     ipcMain.handle("meeting-app-speaker-labels-available", () =>
       meetingSpeakerListener.isAvailable()
     );
@@ -13430,6 +13533,7 @@ class IPCHandlers {
           explicit: payload?.countIsExplicit === true,
         };
         liveSpeakerIdentifier.setEnabled(enabled);
+        this._setMeetingAppSpeakerLabelsActive?.(enabled);
         // Live identification only labels other speakers (the mic track is "you"),
         // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
         liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
@@ -13750,6 +13854,7 @@ class IPCHandlers {
 
         this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
         liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        this._releaseMeetingAppSpeaker?.(noteId, speakerId);
         return { success: true, profileId: resolvedProfileId };
       }
     );
@@ -13954,13 +14059,17 @@ class IPCHandlers {
     }
   }
 
+  // Returns the diarized speakers a live voice settled, and those whose live
+  // name is only a meeting app's display name: voice-profile matching still
+  // runs for those, since a profile is the stronger identity.
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
+    const reconciledSpeakers = new Set();
+    const meetingAppNamed = new Set();
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return new Set();
+      return { reconciledSpeakers, meetingAppNamed };
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
-    const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
 
@@ -13968,6 +14077,7 @@ class IPCHandlers {
       .map(([speakerId, data]) => ({
         speakerId,
         displayName: data?.displayName || null,
+        nameFromMeetingApp: data?.nameFromMeetingApp === true,
         profileId: data?.profileId ?? null,
         noteId: data?.noteId ?? null,
         embedding: Array.isArray(data?.embedding) ? new Float32Array(data.embedding) : null,
@@ -14005,7 +14115,11 @@ class IPCHandlers {
       }
 
       usedLiveSpeakers.add(bestEntry.speakerId);
-      reconciledSpeakers.add(mappedId);
+      if (bestEntry.nameFromMeetingApp && bestEntry.profileId == null) {
+        meetingAppNamed.add(mappedId);
+      } else {
+        reconciledSpeakers.add(mappedId);
+      }
 
       let displayName = bestEntry.displayName;
       let profileId = bestEntry.profileId;
@@ -14041,7 +14155,7 @@ class IPCHandlers {
       this._applySpeakerName(enrichedSegments, mappedId, displayName);
     }
 
-    return reconciledSpeakers;
+    return { reconciledSpeakers, meetingAppNamed };
   }
 
   // The renderer's base covers the transcript it resumes; mappings and embeddings
@@ -14273,7 +14387,7 @@ class IPCHandlers {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
-        const reconciledSpeakers = this._reconcileLiveSpeakerState(
+        const { reconciledSpeakers, meetingAppNamed } = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
           enrichedSegments
@@ -14285,9 +14399,11 @@ class IPCHandlers {
 
             if (profiles.length > 0) {
               for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                const alreadyMapped = enrichedSegments.some(
-                  (segment) => segment.speaker === mappedId && segment.speakerName
-                );
+                const alreadyMapped =
+                  !meetingAppNamed.has(mappedId) &&
+                  enrichedSegments.some(
+                    (segment) => segment.speaker === mappedId && segment.speakerName
+                  );
                 if (reconciledSpeakers.has(mappedId) || alreadyMapped) {
                   continue;
                 }

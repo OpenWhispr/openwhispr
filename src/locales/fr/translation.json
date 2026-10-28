@@ -4177,6 +4177,12 @@
         "title": "Autorisations d'accessibilité requises",
         "description": "OpenWhispr a besoin des autorisations d'accessibilité pour détecter votre raccourci et coller du texte. Veuillez les activer dans le Panneau de configuration."
       },
+      "meetingAppSpeakerLabels": {
+        "title": "Impossible de nommer les intervenants depuis votre app de réunion",
+        "accessibility": "OpenWhispr a besoin de l'autorisation Accessibilité pour lire votre app de réunion. Les voix pas encore nommées restent numérotées pour cette réunion.",
+        "unreadable": "OpenWhispr n'a pas pu lire votre app de réunion. Les voix pas encore nommées restent numérotées pour cette réunion.",
+        "openSettings": "Ouvrir les réglages"
+      },
       "gpuFallback": {
         "title": "Accélération GPU indisponible",
         "description": "OpenWhispr est passé à la transcription par CPU.",

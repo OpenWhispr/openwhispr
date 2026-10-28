@@ -24,14 +24,18 @@ const MIN_BIND_EVIDENCE_MS = 4_000;
 const MIN_BIND_SHARE = 0.7;
 // Identifier windows only look back seconds; older intervals just cost memory.
 const INTERVAL_RETENTION_MS = 10 * 60_000;
+// Captions name a speaker once their words are transcribed, well after the
+// voice started. An estimate until a live call measures it.
+const CAPTION_LAG_MS = 1_500;
 
 const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
   // participantId -> { name, isSelf }; cumulative, since gallery pages and
   // speaker view only show part of the roster at a time.
   const participants = new Map();
-  // participantId -> [{ start, end }], end null while still speaking.
+  // participantId -> [{ start, end, lag }], end null while still speaking.
   const intervals = new Map();
   let speaking = new Set();
+  let currentLag = lagMs;
   let lastStateAt = -Infinity;
   // speakerId -> Map(participantId -> agreeing ms)
   const votes = new Map();
@@ -44,9 +48,9 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
   // source's.
   const bindings = new Map();
 
-  const openInterval = (participantId, at) => {
+  const openInterval = (participantId, at, lag) => {
     const list = intervals.get(participantId) || [];
-    list.push({ start: at, end: null });
+    list.push({ start: at, end: null, lag });
     intervals.set(participantId, list);
   };
 
@@ -65,17 +69,19 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
     }
   };
 
-  // The app highlights a speaker after it hears them (its own debounce plus the
-  // helper's poll interval), so intervals are moved back by lagMs to line up
-  // with the audio they describe.
+  // The app shows a speaker after it hears them (its own debounce, a caption's
+  // transcription, plus the helper's poll interval), so intervals are moved
+  // back by their lag to line up with the audio they describe. A participant
+  // carried from a layout to captions has two intervals that overlap once
+  // shifted, so the total is capped at the window: speech counts once.
   const overlapMs = (participantId, start, end) => {
     let total = 0;
     for (const interval of intervals.get(participantId) || []) {
-      const intervalStart = interval.start - lagMs;
-      const intervalEnd = (interval.end ?? Infinity) - lagMs;
+      const intervalStart = interval.start - interval.lag;
+      const intervalEnd = (interval.end ?? Infinity) - interval.lag;
       total += Math.max(0, Math.min(end, intervalEnd) - Math.max(start, intervalStart));
     }
-    return total;
+    return Math.min(total, end - start);
   };
 
   const castVote = (speakerId, start, end) => {
@@ -84,6 +90,8 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
     let bestMs = 0;
     let runnerUpMs = 0;
     for (const participantId of intervals.keys()) {
+      // Marked as the user after their intervals opened: still never a vote.
+      if (participants.get(participantId)?.isSelf) continue;
       const ms = overlapMs(participantId, start, end);
       if (ms > bestMs) {
         runnerUpMs = bestMs;
@@ -124,13 +132,13 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
     return { participantId: best, ms: bestMs, share: bestMs / total };
   };
 
-  const resolveNaming = (speakerId, currentName) => {
+  const resolveNaming = (speakerId, currentName, nameFromMeetingApp) => {
     const binding = bindings.get(speakerId);
-    // Another source named this voice (a voice profile, the user, the 1:1
-    // attendee). The fusion only fills names in, never replaces one: a curated
-    // name beats a meeting display name like "iPhone", and a voice on someone
-    // else's tile (two people in one room) is still told apart by the profile.
-    if (currentName && !binding?.givenNames.has(currentName)) {
+    // The fusion only fills names in, never replaces one: a curated name beats
+    // a meeting display name like "iPhone". The caller passes the voice's name
+    // as it stands now, and whether that name is one the meeting app gave, so
+    // a rename by the user (even to the app's own wording) releases the voice.
+    if (currentName && (nameFromMeetingApp === false || !binding?.givenNames.has(currentName))) {
       bindings.delete(speakerId);
       return null;
     }
@@ -138,6 +146,13 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
     const leader = leadingParticipant(speakerId);
     if (!leader || leader.ms < MIN_BIND_EVIDENCE_MS || leader.share < MIN_BIND_SHARE) {
       return null;
+    }
+    // One name per voice. A highlight that lags or sticks (a pinned video,
+    // captions still showing the last speaker) lends its votes to whoever
+    // talks under it; the participant's own voice holds the name, and the
+    // other stays unnamed rather than wrong.
+    for (const [otherId, other] of bindings) {
+      if (otherId !== speakerId && other.participantId === leader.participantId) return null;
     }
 
     const displayName = participants.get(leader.participantId)?.name;
@@ -152,9 +167,10 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
   };
 
   return {
-    // state: { at, participants: [{ id, name, isSelf }], speakingIds: [id] }.
-    // An empty state (app closed, meeting window gone) ends every interval.
-    recordAppState: ({ at, participants: roster = [], speakingIds = [] } = {}) => {
+    // state: { at, participants: [{ id, name, isSelf }], speakingIds: [id],
+    // strategy }. An empty state (app closed, meeting window gone) ends every
+    // interval.
+    recordAppState: ({ at, participants: roster = [], speakingIds = [], strategy } = {}) => {
       if (!Number.isFinite(at)) return;
       // Wall clocks can step backwards (NTP); intervals must not.
       const stamp = Math.max(at, lastStateAt);
@@ -163,6 +179,14 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
       for (const { id, name, isSelf } of roster) {
         if (!id) continue;
         const known = participants.get(id);
+        // Newly marked as the user: the votes they collected meanwhile go, and
+        // so does a voice the fusion named after them (it can't be the user's).
+        if (isSelf && known && !known.isSelf) {
+          for (const tally of votes.values()) tally.delete(id);
+          for (const [speakerId, binding] of bindings) {
+            if (binding.participantId === id) bindings.delete(speakerId);
+          }
+        }
         participants.set(id, {
           name: name || known?.name || null,
           // Sticky: the signal that marks the user (Zoom's home window) can
@@ -179,17 +203,32 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
       for (const id of speaking) {
         if (!next.has(id)) closeInterval(id, stamp);
       }
+      const lag = strategy === "captions" ? lagMs + CAPTION_LAG_MS : lagMs;
+      // Captions and layouts lag differently: a speaker carried from one to
+      // the other starts a new interval at the new lag.
+      if (lag !== currentLag) {
+        for (const id of speaking) closeInterval(id, stamp);
+        speaking = new Set();
+        currentLag = lag;
+      }
       for (const id of next) {
-        if (!speaking.has(id)) openInterval(id, stamp);
+        if (!speaking.has(id)) openInterval(id, stamp, lag);
       }
       speaking = next;
       prune(stamp);
     },
 
-    // identification: { speakerId, displayName, startTime, endTime } as sent to
-    // the renderer. Returns { speakerId, participantId, displayName } when the
-    // cluster should be (re)named, otherwise null.
-    observeIdentification: ({ speakerId, displayName = null, startTime, endTime } = {}) => {
+    // identification: { speakerId, displayName, nameFromMeetingApp, startTime,
+    // endTime }, displayName being the voice's current name. Returns
+    // { speakerId, participantId, displayName } when the cluster should be
+    // (re)named, otherwise null.
+    observeIdentification: ({
+      speakerId,
+      displayName = null,
+      nameFromMeetingApp,
+      startTime,
+      endTime,
+    } = {}) => {
       if (!speakerId || !Number.isFinite(startTime) || !Number.isFinite(endTime)) return null;
 
       // An ongoing utterance is re-identified about once a second with a
@@ -200,7 +239,14 @@ const createMeetingSpeakerFusion = ({ lagMs = 0 } = {}) => {
       if (previousEnd == null || endTime > previousEnd) countedUntil.set(speakerId, endTime);
       if (endTime - start >= MIN_VOTE_WINDOW_MS) castVote(speakerId, start, endTime);
 
-      return resolveNaming(speakerId, displayName);
+      return resolveNaming(speakerId, displayName, nameFromMeetingApp);
+    },
+
+    // The user named this voice: the participant it held can name another
+    // voice straight away, without waiting for this one to speak again (its
+    // next identification, carrying the user's name, keeps it theirs).
+    release: (speakerId) => {
+      bindings.delete(speakerId);
     },
 
     // Mirrors liveSpeakerIdentifier.recluster(): votes move to the kept
@@ -251,5 +297,6 @@ module.exports = {
   MIN_BIND_EVIDENCE_MS,
   MIN_BIND_SHARE,
   INTERVAL_RETENTION_MS,
+  CAPTION_LAG_MS,
   createMeetingSpeakerFusion,
 };

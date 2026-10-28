@@ -1,8 +1,8 @@
 const { spawn } = require("child_process");
-const fs = require("fs");
-const path = require("path");
 const debugLogger = require("./debugLogger");
+const { resolveBundledBinary } = require("./binaryResolver");
 const {
+  EMPTY_SPEAKER_STATE,
   MEETING_APP_SPEAKER_TARGETS,
   interpretMeetingAppSnapshot,
 } = require("./meetingAppSpeakerAdapters");
@@ -18,16 +18,20 @@ const STOP_TIMEOUT_MS = 2000;
 // A snapshot is a few KB; a line this long means the helper is misbehaving.
 const MAX_LINE_LENGTH = 2 * 1024 * 1024;
 
-const EMPTY_STATE = Object.freeze({ participants: [], speakingIds: [], strategy: "none" });
-
 // Runs resources/macos-meeting-speaker-listener.swift for the length of a
 // meeting and turns its accessibility snapshots into speaking states for
 // meetingSpeakerFusion.js. Helper output carries participant names, so it is
 // never logged — only counts and strategies.
 class MeetingSpeakerListener {
-  constructor({ spawnProcess = spawn, platform = process.platform, binaryPath = null } = {}) {
+  constructor({
+    spawnProcess = spawn,
+    platform = process.platform,
+    arch = process.arch,
+    binaryPath = null,
+  } = {}) {
     this.spawnProcess = spawnProcess;
     this.platform = platform;
+    this.arch = arch;
     this.binaryPathOverride = binaryPath;
     this.process = null;
     this.stdoutBuffer = "";
@@ -35,10 +39,20 @@ class MeetingSpeakerListener {
     this.onState = null;
     this.onError = null;
     this.lastStrategy = null;
+    // Everyone seen this session, so a caption from someone whose tile is off
+    // screen still matches a name, and who the session knows is the user.
+    this.knownParticipants = new Map();
+    this.knownSelfIds = new Set();
+    this.lastTruncatedWindows = 0;
+    // The start in progress; a stop clears it, so a start still waiting on an
+    // older helper's exit knows it was cancelled meanwhile.
+    this.pendingStart = null;
   }
 
+  // The labels name voices live speaker identification finds, which needs
+  // onnxruntime-node: it has no Intel Mac binding (#1500).
   isSupported() {
-    return this.platform === "darwin";
+    return this.platform === "darwin" && this.arch !== "x64";
   }
 
   isAvailable() {
@@ -46,31 +60,7 @@ class MeetingSpeakerListener {
   }
 
   resolveBinary() {
-    if (this.binaryPathOverride) {
-      return this.binaryPathOverride;
-    }
-
-    const candidates = new Set([
-      path.join(__dirname, "..", "..", "resources", "bin", BINARY_NAME),
-      path.join(__dirname, "..", "..", "resources", BINARY_NAME),
-    ]);
-
-    if (process.resourcesPath) {
-      candidates.add(path.join(process.resourcesPath, BINARY_NAME));
-      candidates.add(path.join(process.resourcesPath, "bin", BINARY_NAME));
-      candidates.add(path.join(process.resourcesPath, "resources", "bin", BINARY_NAME));
-      candidates.add(
-        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", BINARY_NAME)
-      );
-    }
-
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        return candidate;
-      }
-    }
-
-    return null;
+    return this.binaryPathOverride || resolveBundledBinary(BINARY_NAME, "meeting", { quiet: true });
   }
 
   // onState receives { at, participants, speakingIds, strategy } whenever the
@@ -78,10 +68,15 @@ class MeetingSpeakerListener {
   // window or the helper goes away.
   async start({ onState, onError } = {}) {
     if (!this.isSupported()) {
-      throw new Error("Meeting app speaker labels need macOS.");
+      throw new Error("Meeting app speaker labels need a Mac with Apple silicon.");
     }
+    const pendingStart = {};
+    this.pendingStart = pendingStart;
     if (this.process) {
-      await this.stop();
+      await this._stopProcess();
+    }
+    if (this.pendingStart !== pendingStart) {
+      throw new Error("Meeting speaker listener start was cancelled.");
     }
 
     const binaryPath = this.resolveBinary();
@@ -90,23 +85,34 @@ class MeetingSpeakerListener {
         "Meeting speaker listener binary not found. Run `npm run compile:meeting-speaker-listener`."
       );
     }
-    this._ensureExecutable(binaryPath);
 
     this.onState = onState || null;
     this.onError = onError || null;
     this.isStopping = false;
     this.stdoutBuffer = "";
     this.lastStrategy = null;
+    this.knownParticipants = new Map();
+    this.knownSelfIds = new Set();
+    this.lastTruncatedWindows = 0;
 
     const args = [
-      ...MEETING_APP_SPEAKER_TARGETS.flatMap(({ bundleId, pageTitle }) =>
-        pageTitle ? ["--bundle-id", bundleId, "--page-title", pageTitle] : ["--bundle-id", bundleId]
-      ),
+      ...MEETING_APP_SPEAKER_TARGETS.flatMap(({ bundleId, pages }) => [
+        "--bundle-id",
+        bundleId,
+        ...pages.flatMap(({ pageTitle, pageMarker }) => [
+          "--page-title",
+          pageTitle,
+          "--page-marker",
+          pageMarker,
+        ]),
+      ]),
       "--interval-ms",
       String(POLL_INTERVAL_MS),
     ];
     const child = this.spawnProcess(binaryPath, args, { stdio: ["ignore", "pipe", "pipe"] });
     this.process = child;
+    // Decoded as a stream: a name's multibyte character can straddle two reads.
+    child.stdout.setEncoding("utf8");
 
     await new Promise((resolve, reject) => {
       let settled = false;
@@ -188,7 +194,7 @@ class MeetingSpeakerListener {
 
         if (!wasStopping) {
           // Nothing reports speaking any more; end whatever was still open.
-          this._emitState(Date.now(), EMPTY_STATE);
+          this._emitState(Date.now(), EMPTY_SPEAKER_STATE);
           this.onError?.(
             new Error(
               `Meeting speaker listener exited unexpectedly (code ${code ?? "null"}, signal ${signal ?? "null"}).`
@@ -200,7 +206,14 @@ class MeetingSpeakerListener {
   }
 
   async stop() {
+    this.pendingStart = null;
+    return this._stopProcess();
+  }
+
+  async _stopProcess() {
     if (!this.process) {
+      this.onState = null;
+      this.onError = null;
       return;
     }
 
@@ -239,21 +252,66 @@ class MeetingSpeakerListener {
   }
 
   _handleMessage(message) {
+    // A line the helper wrote just before it was told to stop must not reopen
+    // a speaker the stop has just closed.
+    if (this.isStopping) return;
     if (message.type === "status") {
       debugLogger.debug(
         "[MeetingSpeakerListener] status",
-        { state: message.state, bundleIds: message.bundleIds, axError: message.axError },
+        {
+          state: message.state,
+          bundleIds: message.bundleIds,
+          unreadable: message.unreadable,
+          busy: message.busy,
+        },
         "meeting"
       );
       if (message.state !== "tracking") {
-        this._emitState(Date.now(), EMPTY_STATE);
+        this._emitState(Date.now(), EMPTY_SPEAKER_STATE);
       }
       return;
     }
 
     if (message.type === "snapshot") {
       const at = Number.isFinite(message.at) ? message.at : Date.now();
-      this._emitState(at, interpretMeetingAppSnapshot(message));
+      const truncatedWindows = Array.isArray(message.windows)
+        ? message.windows.filter((window) => window?.truncated).length
+        : 0;
+      if (truncatedWindows !== this.lastTruncatedWindows) {
+        // A cut-off window names no one; worth seeing in the log of a large call.
+        this.lastTruncatedWindows = truncatedWindows;
+        debugLogger.debug(
+          "[MeetingSpeakerListener] snapshot cut off",
+          { truncatedWindows },
+          "meeting"
+        );
+      }
+      let state;
+      try {
+        state = interpretMeetingAppSnapshot(message, {
+          knownParticipants: this.knownParticipants,
+          knownSelfIds: this.knownSelfIds,
+        });
+      } catch (error) {
+        // An app's new layout must cost its labels, never the main process.
+        debugLogger.warn(
+          "[MeetingSpeakerListener] Could not read snapshot",
+          { error: error.name },
+          "meeting"
+        );
+        state = EMPTY_SPEAKER_STATE;
+      }
+      for (const participant of state.participants) {
+        if (participant.isSelf) {
+          // Marked as the user later than first seen (Zoom's home window, a
+          // Teams self tile): never a remote name again this session.
+          this.knownSelfIds.add(participant.id);
+          this.knownParticipants.delete(participant.id);
+        } else if (!this.knownSelfIds.has(participant.id)) {
+          this.knownParticipants.set(participant.id, participant);
+        }
+      }
+      this._emitState(at, state);
     }
   }
 
@@ -273,20 +331,8 @@ class MeetingSpeakerListener {
     this.onState?.({ at, ...state });
   }
 
-  _ensureExecutable(binaryPath) {
-    try {
-      fs.accessSync(binaryPath, fs.constants.X_OK);
-    } catch {
-      try {
-        fs.chmodSync(binaryPath, 0o755);
-      } catch {
-        // spawn reports whatever is still wrong with the binary.
-      }
-    }
-  }
-
   _consumeStdout(chunk, onMessage) {
-    this.stdoutBuffer += chunk.toString();
+    this.stdoutBuffer += chunk;
     let newlineIndex = this.stdoutBuffer.indexOf("\n");
 
     while (newlineIndex !== -1) {
@@ -329,5 +375,13 @@ class MeetingSpeakerListener {
   }
 }
 
+// Main reads the meeting app only for a recording that asked for it, in a
+// meeting that isn't 1:1 (its one remote voice is already named after the
+// attendee), with the helper present.
+function shouldReadMeetingApp({ options, oneOnOneAttendee, available }) {
+  return options?.appSpeakerLabelsEnabled === true && !oneOnOneAttendee && available;
+}
+
 module.exports = MeetingSpeakerListener;
+module.exports.shouldReadMeetingApp = shouldReadMeetingApp;
 module.exports.MEETING_SPEAKER_STATE_LAG_MS = MEETING_SPEAKER_STATE_LAG_MS;

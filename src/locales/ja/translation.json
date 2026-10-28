@@ -3988,6 +3988,12 @@
         "title": "アクセシビリティの許可が必要です",
         "description": "OpenWhispr がホットキーの検出とテキストの貼り付けを行うには、アクセシビリティの許可が必要です。コントロールパネルで有効にしてください。"
       },
+      "meetingAppSpeakerLabels": {
+        "title": "会議アプリから話者名を付けられません",
+        "accessibility": "会議アプリを読み取るには、OpenWhispr にアクセシビリティの許可が必要です。この会議でまだ名前のない声は番号のままになります。",
+        "unreadable": "OpenWhispr は会議アプリを読み取れませんでした。この会議でまだ名前のない声は番号のままになります。",
+        "openSettings": "設定を開く"
+      },
       "gpuFallback": {
         "title": "GPU アクセラレーションを利用できません",
         "description": "OpenWhispr は CPU 文字起こしに切り替えました。",

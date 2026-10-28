@@ -3529,6 +3529,9 @@ declare global {
       onMeetingSpeakerNamed?: (
         callback: (data: { speakerId: string; displayName: string }) => void
       ) => () => void;
+      onMeetingAppSpeakerLabelsUnavailable?: (
+        callback: (data: { reason: "accessibility" | "unreadable" }) => void
+      ) => () => void;
       onMeetingSessionSpeakerConfigUpdated?: (
         callback: (config: { enabled: boolean; expectedCount: number }) => void
       ) => () => void;

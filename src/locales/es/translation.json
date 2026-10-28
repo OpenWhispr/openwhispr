@@ -4057,6 +4057,12 @@
         "title": "Se requieren permisos de accesibilidad",
         "description": "OpenWhispr necesita permisos de accesibilidad para detectar tu atajo y pegar texto. Actívalos en el Panel de Control."
       },
+      "meetingAppSpeakerLabels": {
+        "title": "No se pueden nombrar los participantes desde tu app de reuniones",
+        "accessibility": "OpenWhispr necesita el permiso de Accesibilidad para leer tu app de reuniones. Las voces que aún no tienen nombre seguirán numeradas en esta reunión.",
+        "unreadable": "OpenWhispr no pudo leer tu app de reuniones. Las voces que aún no tienen nombre seguirán numeradas en esta reunión.",
+        "openSettings": "Abrir Ajustes"
+      },
       "gpuFallback": {
         "title": "Aceleración GPU no disponible",
         "description": "OpenWhispr cambió a la transcripción por CPU.",

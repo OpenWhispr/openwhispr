@@ -996,6 +996,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-speaker-named",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingAppSpeakerLabelsUnavailable: registerListener(
+    "meeting-app-speaker-labels-unavailable",
+    (callback) => (_event, data) => callback(data)
+  ),
   onMeetingSessionSpeakerConfigUpdated: registerListener(
     "meeting-session-speaker-config-updated",
     (callback) => (_event, data) => callback(data)

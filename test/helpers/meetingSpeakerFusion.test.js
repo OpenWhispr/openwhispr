@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { createMeetingSpeakerFusion } = require("../../src/helpers/meetingSpeakerFusion");
+const {
+  CAPTION_LAG_MS,
+  createMeetingSpeakerFusion,
+} = require("../../src/helpers/meetingSpeakerFusion");
 
 const T0 = 1_700_000_000_000;
 const JANE = { id: "jane", name: "Jane Doe" };
@@ -140,9 +143,90 @@ test("a highlight that trails the audio lines up once its lag is compensated", (
   };
 
   assert.deepEqual(run(1_500), ["Jane Doe"]);
-  // Uncompensated, the late highlight splits the votes and nothing is named:
-  // the failure mode is a missing label, never Omar's name on Jane's voice.
+  // Uncompensated, the late highlight splits Jane's long turns' votes and
+  // nothing is named. Short turns can still lean on the wrong tile; the
+  // one-name-per-voice rule below keeps that from naming her Omar.
   assert.deepEqual(run(0), []);
+});
+
+test("one name per voice: a highlight that lingers lends nobody its name", () => {
+  // Omar's tile stays lit through his monologue while Jane says "yeah" now
+  // and then: her votes all land on Omar.
+  const fusion = createMeetingSpeakerFusion();
+  highlight(fusion, [[["omar"], 0, 60_000]]);
+
+  assert.equal(identify(fusion, "speaker_0", 0, 2_500), null);
+  assert.equal(identify(fusion, "speaker_0", 2_500, 5_000)?.displayName, "Omar Haddad");
+  for (let at = 6_000; at < 50_000; at += 4_000) {
+    assert.equal(identify(fusion, "speaker_1", at, at + 1_000), null);
+  }
+});
+
+test("the user's tile stops counting once marked, even for late windows", () => {
+  const fusion = createMeetingSpeakerFusion();
+  // The user's tile was lit for 6 s before anything marked it as theirs.
+  highlight(fusion, [[["me"], 0, 6_000]], [{ id: "me", name: "Gabe" }, JANE]);
+  identify(fusion, "speaker_0", 0, 1_500);
+  fusion.recordAppState({ at: T0 + 6_500, participants: [ME, JANE], speakingIds: [] });
+  // A window arriving late, over the time the tile was lit, adds nothing...
+  assert.equal(identify(fusion, "speaker_0", 1_500, 6_000), null);
+  // ...so Jane's speech holds the majority it would have had.
+  highlight(fusion, [[["jane"], 7_000, 12_000]], [ME, JANE]);
+  let naming = null;
+  for (let at = 7_000; at < 12_000 && !naming; at += 1_500) {
+    naming = identify(fusion, "speaker_0", at, at + 1_500);
+  }
+  assert.equal(naming?.displayName, "Jane Doe");
+});
+
+test("a voice the user names frees its participant at once", () => {
+  const fusion = createMeetingSpeakerFusion();
+  highlight(fusion, [[["jane"], 0, 30_000]]);
+  assert.equal(identify(fusion, "speaker_0", 0, 4_500)?.displayName, "Jane Doe");
+  fusion.release("speaker_0");
+
+  // Jane's real voice takes her name before the renamed one speaks again...
+  assert.equal(identify(fusion, "speaker_1", 10_000, 14_500)?.displayName, "Jane Doe");
+  // ...and the user's own name for the first is never replaced.
+  assert.equal(identify(fusion, "speaker_0", 15_000, 19_000, "Janet"), null);
+});
+
+test("a name the user confirms in the app's own wording still releases the voice", () => {
+  const fusion = createMeetingSpeakerFusion();
+  highlight(fusion, [
+    [["jane"], 0, 6_000],
+    [["omar"], 10_000, 60_000],
+  ]);
+  assert.equal(identify(fusion, "speaker_0", 0, 4_500)?.displayName, "Jane Doe");
+  for (let at = 10_000; at < 60_000; at += 1_500) {
+    const naming = fusion.observeIdentification({
+      speakerId: "speaker_0",
+      displayName: "Jane Doe",
+      nameFromMeetingApp: false,
+      startTime: T0 + at,
+      endTime: T0 + at + 1_500,
+    });
+    assert.equal(naming, null);
+  }
+});
+
+test("caption intervals are moved back by the caption lag", () => {
+  // Captions show Jane from 1.5 s after she starts until 1.5 s after she stops.
+  const fusion = createMeetingSpeakerFusion();
+  fusion.recordAppState({
+    at: T0 + CAPTION_LAG_MS,
+    participants: [JANE, OMAR],
+    speakingIds: ["jane"],
+    strategy: "captions",
+  });
+  fusion.recordAppState({
+    at: T0 + 5_000 + CAPTION_LAG_MS,
+    participants: [JANE, OMAR],
+    speakingIds: [],
+    strategy: "captions",
+  });
+  assert.equal(identify(fusion, "speaker_0", 0, 2_000), null);
+  assert.equal(identify(fusion, "speaker_0", 2_000, 4_500)?.displayName, "Jane Doe");
 });
 
 test("moving a name to another participant needs a majority of the history", () => {
@@ -201,7 +285,11 @@ test("a merge keeps the meeting app's name on the kept voice", () => {
 
   fusion.applyMerges([{ keep: "speaker_0", remove: "speaker_1", displayName: "Jane Doe" }]);
   assert.equal(identify(fusion, "speaker_0", 5_000, 6_500, "Jane Doe"), null);
-  assert.deepEqual(fusion.summarize(), { participants: 2, votingClusters: 1, namedClusters: 1 });
+  assert.deepEqual(fusion.summarize(), {
+    participants: 2,
+    votingClusters: 1,
+    namedClusters: 1,
+  });
 });
 
 test("ignores malformed states and windows", () => {
@@ -211,4 +299,53 @@ test("ignores malformed states and windows", () => {
   assert.equal(fusion.observeIdentification({}), null);
   assert.equal(fusion.observeIdentification(), null);
   assert.equal(identify(fusion, "speaker_0", 0, 4_500), null);
+});
+
+test("a merge never hands a voice the user's name from votes cast before marking", () => {
+  const fusion = createMeetingSpeakerFusion();
+  highlight(fusion, [[["me"], 0, 6_000]], [{ id: "me", name: "Gabe" }, JANE]);
+  identify(fusion, "speaker_0", 0, 3_000);
+  identify(fusion, "speaker_1", 3_000, 6_000);
+  fusion.recordAppState({ at: T0 + 6_500, participants: [ME, JANE], speakingIds: [] });
+  fusion.applyMerges([{ keep: "speaker_0", remove: "speaker_1", displayName: null }]);
+  assert.equal(identify(fusion, "speaker_0", 7_000, 7_500), null);
+});
+
+test("a speaker carried from captions to a layout takes the layout's lag", () => {
+  const fusion = createMeetingSpeakerFusion();
+  const state = (at, speakingIds, strategy) =>
+    fusion.recordAppState({ at: T0 + at, participants: [JANE, OMAR], speakingIds, strategy });
+  // Jane talks 0–10 s: captions name her from 1.5 s, then the caption bar
+  // closes and Spotlight keeps her until 10 s.
+  state(CAPTION_LAG_MS, ["jane"], "captions");
+  state(5_000, ["jane"], "speaker-view");
+  state(10_000, [], "speaker-view");
+  // Speech 8.6–10 s lines up with the layout interval, not one shifted by 1.5 s.
+  let naming = null;
+  for (let at = 5_000; at < 10_000 && !naming; at += 1_400) {
+    naming = identify(fusion, "speaker_0", at, at + 1_400);
+  }
+  assert.equal(naming?.displayName, "Jane Doe");
+});
+
+test("speech counts once when a layout interval and a caption interval overlap", () => {
+  const fusion = createMeetingSpeakerFusion();
+  const state = (at, speakingIds, strategy) =>
+    fusion.recordAppState({ at: T0 + at, participants: [JANE, OMAR], speakingIds, strategy });
+  // Speaker view shows Jane from 0, captions take over at 4 s: once shifted,
+  // the two intervals overlap for 1.5 s.
+  state(0, ["jane"], "speaker-view");
+  state(4_000, ["jane"], "captions");
+  assert.equal(identify(fusion, "speaker_0", 2_500, 4_000), null);
+  assert.equal(identify(fusion, "speaker_0", 4_000, 4_600), null);
+  // 2.6 s of speech so far: under the 4 s it takes to name a voice.
+  assert.equal(identify(fusion, "speaker_0", 4_600, 5_100), null);
+});
+
+test("a voice named after someone later marked as the user is let go", () => {
+  const fusion = createMeetingSpeakerFusion();
+  highlight(fusion, [[["me"], 0, 5_000]], [{ id: "me", name: "Gabe" }, JANE]);
+  assert.equal(identify(fusion, "speaker_0", 0, 4_500)?.displayName, "Gabe");
+  fusion.recordAppState({ at: T0 + 5_500, participants: [ME, JANE], speakingIds: [] });
+  assert.equal(fusion.summarize().namedClusters, 0);
 });

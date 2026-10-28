@@ -5,7 +5,8 @@ import type { ToastContextType } from "../components/ui/useToast";
 
 /**
  * Surfaces main-process notifications (hotkey fallback/failure, GPU fallback,
- * learned dictionary corrections) as toasts in the dictation window.
+ * meeting-app speaker labels failing, learned dictionary corrections) as
+ * toasts in the dictation window.
  */
 export function useMainProcessNotifications({
   toast,
@@ -65,6 +66,33 @@ export function useMainProcessNotifications({
     const unsubscribeGpuFallback =
       window.electronAPI?.onGpuFallbackNotification?.(showGpuFallbackToast);
 
+    // Only shown once per meeting: main reports the first failure it gives up on.
+    const unsubscribeSpeakerLabels = window.electronAPI?.onMeetingAppSpeakerLabelsUnavailable?.(
+      ({ reason }) => {
+        const needsAccessibility = reason === "accessibility";
+        // The pill hides while idle, which is how it sits during a meeting.
+        void window.electronAPI?.showDictationPanel?.();
+        toast({
+          title: t("app.toasts.meetingAppSpeakerLabels.title"),
+          description: t(
+            needsAccessibility
+              ? "app.toasts.meetingAppSpeakerLabels.accessibility"
+              : "app.toasts.meetingAppSpeakerLabels.unreadable"
+          ),
+          duration: 10000,
+          action: needsAccessibility ? (
+            <ToastActionButton
+              onClick={() => {
+                void window.electronAPI?.openAccessibilitySettings?.();
+              }}
+            >
+              {t("app.toasts.meetingAppSpeakerLabels.openSettings")}
+            </ToastActionButton>
+          ) : undefined,
+        });
+      }
+    );
+
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `“${w}”`).join(", ");
@@ -103,6 +131,7 @@ export function useMainProcessNotifications({
       unsubscribeFailed?.();
       unsubscribeCudaFallback?.();
       unsubscribeGpuFallback?.();
+      unsubscribeSpeakerLabels?.();
       unsubscribeCorrections?.();
     };
   }, [toast, dismiss, t]);

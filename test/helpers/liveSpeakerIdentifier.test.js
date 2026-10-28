@@ -207,6 +207,105 @@ test("an unidentified cluster still merges into an identified one", () => {
   assert.equal(merges[0].displayName, "Alice");
 });
 
+// Two clusters of what is clearly one voice (~0.95 similar).
+function seedHalvesOfOneVoice(identifier) {
+  seedSimilarIdentifiedPair(identifier);
+  identifier.transientEmbeddings.set("speaker_1", unit([0.95, 0.3, 0]));
+}
+
+test("names a meeting app gave never keep two halves of one voice apart", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedHalvesOfOneVoice(identifier);
+  // A lagging highlight lent the second half of the voice another name.
+  identifier.mapSpeaker("speaker_0", null, "Alice", undefined, { fromMeetingApp: true });
+  identifier.mapSpeaker("speaker_1", null, "Bob", undefined, { fromMeetingApp: true });
+
+  const merges = identifier._performRecluster();
+  assert.equal(merges.length, 1);
+  assert.equal(identifier.getTransientState()[merges[0].keep].nameFromMeetingApp, true);
+});
+
+test("a recluster pass never compares a speaker it already merged away", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  // Three halves of one voice: the first merges into the second, and the
+  // pass must not go on comparing the first's discarded embedding.
+  seedHalvesOfOneVoice(identifier);
+  identifier.transientEmbeddings.set("speaker_2", unit([0.97, 0.2, 0]));
+  identifier.transientCounts.set("speaker_0", 1);
+  identifier.transientCounts.set("speaker_1", 5);
+  identifier.transientCounts.set("speaker_2", 1);
+
+  assert.doesNotThrow(() => identifier._performRecluster());
+});
+
+test("two similar voices the meeting app named apart stay apart", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedSimilarIdentifiedPair(identifier);
+  identifier.mapSpeaker("speaker_0", null, "Bob", undefined, { fromMeetingApp: true });
+  identifier.mapSpeaker("speaker_1", null, "Carol", undefined, { fromMeetingApp: true });
+
+  assert.deepEqual(identifier._performRecluster(), []);
+});
+
+test("mapping a voice to a profile clears the meeting app's mark on its name", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedSimilarIdentifiedPair(identifier);
+  identifier.mapSpeaker("speaker_0", null, "Alice", undefined, { fromMeetingApp: true });
+  identifier.mapSpeaker("speaker_0", 3, "Alice Smith", null);
+  assert.equal(identifier.isMeetingAppNamed("speaker_0"), false);
+});
+
+test("a name the user gives outranks a meeting app's in a merge", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedHalvesOfOneVoice(identifier);
+  identifier.mapSpeaker("speaker_0", null, "Alice (iPhone)", undefined, { fromMeetingApp: true });
+  identifier.mapSpeaker("speaker_1", null, "Alice", null);
+
+  const merges = identifier._performRecluster();
+  assert.equal(merges.length, 1);
+  assert.equal(merges[0].displayName, "Alice");
+  const kept = identifier.getTransientState()[merges[0].keep];
+  assert.equal(kept.nameFromMeetingApp, false);
+});
+
+test("a meeting-app name keeps its cluster in a merge with an unnamed one", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedSimilarIdentifiedPair(identifier);
+  // The unnamed half has more audio, but the named half's rows carry the name.
+  identifier.transientCounts.set("speaker_0", 1);
+  identifier.transientCounts.set("speaker_1", 9);
+  identifier.mapSpeaker("speaker_0", null, "Alice", undefined, { fromMeetingApp: true });
+
+  const [merge] = identifier._performRecluster();
+  assert.equal(merge.keep, "speaker_0");
+  assert.equal(merge.displayName, "Alice");
+  assert.equal(identifier.isMeetingAppNamed("speaker_0"), true);
+});
+
+test("renaming a meeting-app name by hand makes it the user's", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+
+  seedSimilarIdentifiedPair(identifier);
+  identifier.mapSpeaker("speaker_0", null, "Alice", undefined, { fromMeetingApp: true });
+  assert.equal(identifier.getTransientState().speaker_0.nameFromMeetingApp, true);
+  identifier.mapSpeaker("speaker_0", null, "Alicia", 7);
+  assert.equal(identifier.getDisplayName("speaker_0"), "Alicia");
+  assert.equal(identifier.getTransientState().speaker_0.nameFromMeetingApp, false);
+});
+
 test("a voice force-merged at the cap becomes its own speaker once the cap rises", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();

@@ -1430,6 +1430,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       // The meeting app named a voice after its first segments were confirmed,
       // which applySpeakerIdentification leaves alone, so rename them here.
+      // Only the voice's confirmed call-audio rows: a provisional row carrying
+      // its id isn't that voice yet. It takes the name if a later
+      // identification confirms it, otherwise at post-meeting diarization.
       const namedCleanup = window.electronAPI?.onMeetingSpeakerNamed?.(
         ({ speakerId, displayName }) => {
           if (activeRecordingSessionId !== sessionId || speakerLocks.has(speakerId)) return;
@@ -1437,7 +1440,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           const next = useMeetingRecordingStore
             .getState()
             .segments.map((segment) =>
-              segment.speaker === speakerId && !segment.speakerLocked
+              segment.source === "system" &&
+              segment.speaker === speakerId &&
+              !segment.speakerLocked &&
+              !segment.speakerIsPlaceholder &&
+              segment.speakerStatus !== "provisional"
                 ? normalizeTranscriptSegment({ ...segment, speakerName: displayName })
                 : segment
             );

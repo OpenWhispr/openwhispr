@@ -47,6 +47,8 @@ const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
 const MATCH_THRESHOLD = 0.65;
+// Two voices the meeting app named differently merge only above this.
+const MEETING_APP_NAMED_MERGE_THRESHOLD = 0.75;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 // The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
@@ -166,6 +168,10 @@ class LiveSpeakerIdentifier {
     this.transientEmbeddings = new Map();
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
+    // Speakers whose name is a meeting app's display name: weaker than one
+    // from the user or a voice profile, so it doesn't keep a split voice apart
+    // or skip voice-profile matching after the meeting.
+    this.meetingAppNamedSpeakers = new Set();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
     this.nextLiveIndex = 0;
@@ -196,12 +202,17 @@ class LiveSpeakerIdentifier {
       state[speakerId] = {
         embedding: Array.from(embedding),
         displayName: this.transientDisplayNames.get(speakerId) || null,
+        nameFromMeetingApp: this.meetingAppNamedSpeakers.has(speakerId),
         profileId: this.transientProfileIds.get(speakerId) ?? null,
         noteId: this.transientNoteIds.get(speakerId) ?? null,
       };
     }
 
     return state;
+  }
+
+  getDisplayName(speakerId) {
+    return this.transientDisplayNames.get(speakerId) || null;
   }
 
   getSpeakerEmbedding(speakerId) {
@@ -280,6 +291,8 @@ class LiveSpeakerIdentifier {
     for (let i = 0; i < speakers.length; i += 1) {
       if (removed.has(speakers[i][0])) continue;
       for (let j = i + 1; j < speakers.length; j += 1) {
+        // Merged into an earlier speaker of this pass: its old embedding is gone.
+        if (removed.has(speakers[i][0])) break;
         if (removed.has(speakers[j][0])) continue;
 
         const similarity = speakerEmbeddings.cosineSimilarity(speakers[i][1], speakers[j][1]);
@@ -290,16 +303,31 @@ class LiveSpeakerIdentifier {
         const profileI = this.transientProfileIds.get(speakers[i][0]);
         const profileJ = this.transientProfileIds.get(speakers[j][0]);
         if (profileI != null && profileJ != null && profileI !== profileJ) continue;
-        const nameI = this.transientDisplayNames.get(speakers[i][0]);
-        const nameJ = this.transientDisplayNames.get(speakers[j][0]);
+        // A meeting app's name can be one a lagging highlight lent the voice,
+        // so it doesn't keep two halves of one voice apart outright; but two
+        // differently named voices merge only when they sound clearly alike,
+        // since two people with similar voices are named apart too.
+        const nameI = this._confirmedName(speakers[i][0]);
+        const nameJ = this._confirmedName(speakers[j][0]);
         if (nameI && nameJ && nameI !== nameJ) continue;
+        const shownI = this.transientDisplayNames.get(speakers[i][0]);
+        const shownJ = this.transientDisplayNames.get(speakers[j][0]);
+        if (
+          shownI &&
+          shownJ &&
+          shownI !== shownJ &&
+          similarity < MEETING_APP_NAMED_MERGE_THRESHOLD
+        ) {
+          continue;
+        }
 
         const countI = this.transientCounts.get(speakers[i][0]) || 1;
         const countJ = this.transientCounts.get(speakers[j][0]) || 1;
-        const hasNameI = !!this.transientDisplayNames.get(speakers[i][0]);
-        const hasNameJ = !!this.transientDisplayNames.get(speakers[j][0]);
-        const keepFirst =
-          hasNameI && !hasNameJ ? true : hasNameJ && !hasNameI ? false : countI >= countJ;
+        // The better-named side is kept, so the voice's rows under that id keep
+        // their name: the user's or a profile's, then a meeting app's, then none.
+        const rankI = this._nameRank(speakers[i][0]);
+        const rankJ = this._nameRank(speakers[j][0]);
+        const keepFirst = rankI !== rankJ ? rankI > rankJ : countI >= countJ;
         const [keepId, removeId] = keepFirst
           ? [speakers[i][0], speakers[j][0]]
           : [speakers[j][0], speakers[i][0]];
@@ -321,8 +349,10 @@ class LiveSpeakerIdentifier {
 
         if (!this.transientDisplayNames.get(keepId) && this.transientDisplayNames.get(removeId)) {
           this.transientDisplayNames.set(keepId, this.transientDisplayNames.get(removeId));
+          if (this.meetingAppNamedSpeakers.has(removeId)) this.meetingAppNamedSpeakers.add(keepId);
         }
         this.transientDisplayNames.delete(removeId);
+        this.meetingAppNamedSpeakers.delete(removeId);
 
         if (!this.transientProfileIds.get(keepId) && this.transientProfileIds.get(removeId)) {
           this.transientProfileIds.set(keepId, this.transientProfileIds.get(removeId));
@@ -381,7 +411,24 @@ class LiveSpeakerIdentifier {
     this.enabled = enabled !== false;
   }
 
-  mapSpeaker(liveId, profileId, displayName, noteId) {
+  _confirmedName(speakerId) {
+    return this.meetingAppNamedSpeakers.has(speakerId)
+      ? null
+      : this.transientDisplayNames.get(speakerId) || null;
+  }
+
+  _nameRank(speakerId) {
+    if (!this.transientDisplayNames.get(speakerId)) return 0;
+    return this.meetingAppNamedSpeakers.has(speakerId) ? 1 : 2;
+  }
+
+  isMeetingAppNamed(speakerId) {
+    return this.meetingAppNamedSpeakers.has(speakerId);
+  }
+
+  // fromMeetingApp marks a name read from the meeting app's display names
+  // (meetingSpeakerFusion), as opposed to the user's or a voice profile's.
+  mapSpeaker(liveId, profileId, displayName, noteId, { fromMeetingApp = false } = {}) {
     if (!liveId || !this.transientEmbeddings.has(liveId)) {
       // Labeling a speaker in a past note routes here with no live session, so
       // only an active session losing a mapping is worth flagging.
@@ -401,6 +448,8 @@ class LiveSpeakerIdentifier {
 
     if (displayName) {
       this.transientDisplayNames.set(liveId, displayName);
+      if (fromMeetingApp) this.meetingAppNamedSpeakers.add(liveId);
+      else this.meetingAppNamedSpeakers.delete(liveId);
     }
 
     if (noteId != null) {
@@ -442,6 +491,7 @@ class LiveSpeakerIdentifier {
     this.transientEmbeddings = new Map();
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
+    this.meetingAppNamedSpeakers = new Set();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
     this.nextLiveIndex = 0;
@@ -790,6 +840,7 @@ class LiveSpeakerIdentifier {
 
       this.transientProfileIds.set(speakerId, matchedProfile.id);
       this.transientDisplayNames.set(speakerId, matchedProfile.display_name);
+      this.meetingAppNamedSpeakers.delete(speakerId);
       return {
         speakerId,
         displayName: matchedProfile.display_name,

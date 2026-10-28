@@ -4005,6 +4005,12 @@
         "title": "Autorizzazioni di accessibilità richieste",
         "description": "OpenWhispr necessita delle autorizzazioni di accessibilità per rilevare il tasto di scelta rapida e incollare il testo. Abilitale nel Pannello di controllo."
       },
+      "meetingAppSpeakerLabels": {
+        "title": "Impossibile dare un nome ai partecipanti dall'app di riunione",
+        "accessibility": "OpenWhispr ha bisogno del permesso Accessibilità per leggere l'app di riunione. Le voci non ancora identificate restano numerate in questa riunione.",
+        "unreadable": "OpenWhispr non è riuscito a leggere l'app di riunione. Le voci non ancora identificate restano numerate in questa riunione.",
+        "openSettings": "Apri Impostazioni"
+      },
       "gpuFallback": {
         "title": "Accelerazione GPU non disponibile",
         "description": "OpenWhispr sta usando la trascrizione CPU.",

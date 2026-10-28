@@ -1,9 +1,9 @@
 {
   "type": "snapshot",
   "at": 1792509729760,
-  "bundleId": "us.zoom.xos",
   "windows": [
     {
+      "bundleId": "us.zoom.xos",
       "title": "Zoom Meeting",
       "frame": [261, 183, 1466, 730],
       "nodes": [
@@ -123,6 +123,7 @@
       ]
     },
     {
+      "bundleId": "us.zoom.xos",
       "title": "You now have limited access to Zoom AI every month",
       "frame": [1070, 182, 400, 148],
       "nodes": [
@@ -155,6 +156,7 @@
       ]
     },
     {
+      "bundleId": "us.zoom.xos",
       "title": "Zoom Workplace",
       "frame": [210, 78, 1280, 960],
       "nodes": [

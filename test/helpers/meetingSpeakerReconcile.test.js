@@ -133,6 +133,40 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
   assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
 });
 
+test("a meeting app's name labels the voice but leaves voice-profile matching open", () => {
+  const { IPCHandlers } = loadHandlers();
+  const { calls, databaseManager } = createMappingRecorder([]);
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  const segments = [
+    { speaker: "speaker_0", text: "hi" },
+    { speaker: "speaker_1", text: "yo" },
+  ];
+
+  const { reconciledSpeakers, meetingAppNamed } =
+    IPCHandlers.prototype._reconcileLiveSpeakerState.call(
+      fakeThis,
+      {
+        live_a: { displayName: "Jane D. iPhone", nameFromMeetingApp: true, embedding },
+        live_b: {
+          displayName: "Omar",
+          profileId: 7,
+          embedding: Array.from({ length: 8 }, (_, i) => (i === 1 ? 1 : 0)),
+        },
+      },
+      {
+        speaker_0: embedding,
+        speaker_1: Array.from({ length: 8 }, (_, i) => (i === 1 ? 1 : 0)),
+      },
+      segments
+    );
+
+  assert.deepEqual([...meetingAppNamed], ["speaker_0"]);
+  assert.deepEqual([...reconciledSpeakers], ["speaker_1"]);
+  assert.equal(segments[0].speakerName, "Jane D. iPhone");
+  // No mapping is written for a meeting display name: it isn't the user's.
+  assert.equal(calls.set.length, 0);
+});
+
 const THREE_ATTENDEES = [
   { email: "one@example.com" },
   { email: "two@example.com" },

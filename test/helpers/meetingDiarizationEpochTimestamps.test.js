@@ -79,7 +79,10 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       speakerDiarizationEnabled: true,
       _diarizationSpeakerReservations: new Map(),
       _resolveSpeakerExpectation: () => ({ numSpeakers: 0, cap: null }),
-      _reconcileLiveSpeakerState: () => new Map(),
+      _reconcileLiveSpeakerState: () => ({
+        reconciledSpeakers: new Set(),
+        meetingAppNamed: new Set(),
+      }),
     });
     const win = {
       isDestroyed: () => false,

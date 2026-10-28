@@ -3988,6 +3988,12 @@
         "title": "需要辅助功能权限",
         "description": "OpenWhispr 需要辅助功能权限来检测快捷键和粘贴文本。请在控制面板中启用。"
       },
+      "meetingAppSpeakerLabels": {
+        "title": "无法从会议应用识别发言者姓名",
+        "accessibility": "OpenWhispr 需要辅助功能权限才能读取你的会议应用。本次会议中尚未命名的声音将保持编号。",
+        "unreadable": "OpenWhispr 无法读取你的会议应用。本次会议中尚未命名的声音将保持编号。",
+        "openSettings": "打开设置"
+      },
       "gpuFallback": {
         "title": "GPU 加速不可用",
         "description": "OpenWhispr 已切换为 CPU 转录。",

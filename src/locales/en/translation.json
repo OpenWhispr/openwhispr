@@ -4160,6 +4160,12 @@
         "title": "Accessibility permissions required",
         "description": "OpenWhispr needs accessibility permissions to detect your hotkey and paste text. Please enable them in the Control Panel."
       },
+      "meetingAppSpeakerLabels": {
+        "title": "Can't name speakers from your meeting app",
+        "accessibility": "OpenWhispr needs Accessibility permission to read your meeting app. Voices not named yet stay numbered in this meeting.",
+        "unreadable": "OpenWhispr couldn't read your meeting app. Voices not named yet stay numbered in this meeting.",
+        "openSettings": "Open Settings"
+      },
       "gpuFallback": {
         "title": "GPU acceleration unavailable",
         "description": "OpenWhispr switched to CPU transcription.",

@@ -9,16 +9,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Microsoft Teams meeting | Microsoft Teams",
@@ -36,26 +26,8 @@
             "frame": [913, 238, 876, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [913, 238, 876, 863]
           },
           {
@@ -260,12 +232,6 @@
           },
           {
             "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1187, 386, 274, 707]
-          },
-          {
-            "depth": 19,
             "role": "AXHeading",
             "title": "Participants",
             "frame": [1482, 407, 94, 22]
@@ -331,12 +297,6 @@
             "title": "More options",
             "description": "More options",
             "frame": [1743, 332, 24, 48]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [916, 389, 542, 701]
           },
           {
             "depth": 20,
@@ -602,56 +562,14 @@
             "frame": [981, 391, 412, 230]
           },
           {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 625, 412, 230]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 858, 412, 230]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 858, 412, 230]
-          },
-          {
             "depth": 27,
             "role": "AXGroup",
             "frame": [981, 391, 412, 230]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 391, 412, 230]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 858, 412, 230]
           },
           {
             "depth": 28,
             "role": "AXGroup",
             "frame": [982, 392, 410, 228]
-          },
-          {
-            "depth": 28,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [981, 858, 412, 230]
-          },
-          {
-            "depth": 29,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [992, 402, 400, 218]
           },
           {
             "depth": 30,
@@ -685,11 +603,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 182, 876, 919]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Microsoft Teams meeting | Microsoft Teams",
@@ -704,12 +617,6 @@
           {
             "depth": 10,
             "role": "AXGroup",
-            "frame": [913, 182, 876, 919]
-          },
-          {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [913, 182, 876, 919]
           },
           {
@@ -919,12 +826,6 @@
           },
           {
             "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1187, 330, 274, 763]
-          },
-          {
-            "depth": 19,
             "role": "AXHeading",
             "title": "Participants",
             "frame": [1482, 351, 94, 22]
@@ -990,12 +891,6 @@
             "title": "More options",
             "description": "More options",
             "frame": [1743, 276, 24, 48]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [916, 333, 542, 757]
           },
           {
             "depth": 20,
@@ -1261,62 +1156,14 @@
             "frame": [965, 335, 445, 249]
           },
           {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 587, 445, 249]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 587, 445, 249]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 840, 445, 248]
-          },
-          {
             "depth": 27,
             "role": "AXGroup",
             "frame": [965, 335, 445, 249]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 335, 445, 249]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 840, 445, 248]
           },
           {
             "depth": 28,
             "role": "AXGroup",
             "frame": [966, 336, 443, 247]
-          },
-          {
-            "depth": 28,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [965, 840, 445, 248]
-          },
-          {
-            "depth": 29,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1125, 398, 124, 123]
-          },
-          {
-            "depth": 29,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [976, 346, 433, 237]
           },
           {
             "depth": 30,
@@ -1350,16 +1197,6 @@
         "frame": [913, 61, 876, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Microsoft Teams meeting | Microsoft Teams",
@@ -1377,26 +1214,8 @@
             "frame": [913, 238, 876, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
-            "frame": [913, 238, 876, 863]
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [913, 238, 876, 863]
           },
           {
@@ -1601,12 +1420,6 @@
           },
           {
             "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1187, 386, 274, 707]
-          },
-          {
-            "depth": 19,
             "role": "AXHeading",
             "title": "Participants",
             "frame": [1482, 407, 94, 22]
@@ -1672,12 +1485,6 @@
             "title": "More options",
             "description": "More options",
             "frame": [1743, 332, 24, 48]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [916, 389, 542, 701]
           },
           {
             "depth": 20,
@@ -1783,12 +1590,6 @@
           {
             "depth": 22,
             "role": "AXGroup",
-            "frame": [916, 479, 542, 611]
-          },
-          {
-            "depth": 22,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [916, 479, 542, 611]
           },
           {
@@ -1985,52 +1786,10 @@
           },
           {
             "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [918, 634, 538, 301]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [928, 644, 530, 293]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [918, 634, 538, 301]
-          },
-          {
-            "depth": 26,
             "role": "AXMenuItem",
             "title": "Jane Doe (Guest), video is on, muted, Context menu is available",
             "description": "Jane Doe (Guest), video is on, muted, Context menu is available",
             "frame": [1027, 389, 160, 90]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1029, 391, 156, 86]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1035, 397, 152, 82]
-          },
-          {
-            "depth": 28,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1029, 391, 156, 86]
-          },
-          {
-            "depth": 29,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1029, 391, 156, 86]
           },
           {
             "depth": 30,
@@ -2052,11 +1811,6 @@
         "frame": [712, 61, 1077, 1040],
         "nodes": [
           {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [712, 182, 1077, 919]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Microsoft Teams meeting | Microsoft Teams",
@@ -2071,12 +1825,6 @@
           {
             "depth": 10,
             "role": "AXGroup",
-            "frame": [712, 182, 1077, 919]
-          },
-          {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [712, 182, 1077, 919]
           },
           {
@@ -2286,12 +2034,6 @@
           },
           {
             "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1067, 330, 354, 763]
-          },
-          {
-            "depth": 19,
             "role": "AXHeading",
             "title": "Participants",
             "frame": [1442, 351, 94, 22]
@@ -2357,12 +2099,6 @@
             "title": "More options",
             "description": "More options",
             "frame": [1743, 276, 24, 48]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [715, 333, 703, 757]
           },
           {
             "depth": 20,
@@ -2468,12 +2204,6 @@
           {
             "depth": 22,
             "role": "AXGroup",
-            "frame": [715, 423, 703, 667]
-          },
-          {
-            "depth": 22,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [715, 423, 703, 667]
           },
           {
@@ -2670,52 +2400,10 @@
           },
           {
             "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 561, 699, 392]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [727, 571, 691, 384]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 561, 699, 392]
-          },
-          {
-            "depth": 26,
             "role": "AXMenuItem",
             "title": "Omar Haddad (Guest), muted, Context menu is available",
             "description": "Omar Haddad (Guest), muted, Context menu is available",
             "frame": [907, 333, 160, 90]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 561, 699, 392]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [909, 335, 156, 86]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [915, 341, 152, 82]
-          },
-          {
-            "depth": 28,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 561, 699, 392]
           },
           {
             "depth": 30,
@@ -2737,16 +2425,6 @@
         "frame": [712, 61, 1077, 1040],
         "nodes": [
           {
-            "depth": 5,
-            "role": "AXGroup",
-            "frame": [712, 238, 1077, 863]
-          },
-          {
-            "depth": 6,
-            "role": "AXGroup",
-            "frame": [712, 238, 1077, 863]
-          },
-          {
             "depth": 8,
             "role": "AXWebArea",
             "title": "Microsoft Teams meeting | Microsoft Teams",
@@ -2764,26 +2442,8 @@
             "frame": [712, 238, 1077, 863]
           },
           {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [712, 238, 1077, 863]
-          },
-          {
-            "depth": 10,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [712, 238, 1077, 863]
-          },
-          {
             "depth": 11,
             "role": "AXGroup",
-            "frame": [712, 238, 1077, 863]
-          },
-          {
-            "depth": 11,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
             "frame": [712, 238, 1077, 863]
           },
           {
@@ -2995,12 +2655,6 @@
           },
           {
             "depth": 19,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1067, 386, 354, 707]
-          },
-          {
-            "depth": 19,
             "role": "AXHeading",
             "title": "Participants",
             "frame": [1442, 407, 94, 22]
@@ -3066,12 +2720,6 @@
             "title": "More options",
             "description": "More options",
             "frame": [1743, 332, 24, 48]
-          },
-          {
-            "depth": 20,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [715, 389, 703, 486]
           },
           {
             "depth": 20,
@@ -3206,12 +2854,6 @@
           {
             "depth": 22,
             "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [715, 389, 543, 486]
-          },
-          {
-            "depth": 22,
-            "role": "AXGroup",
             "frame": [1258, 389, 160, 486]
           },
           {
@@ -3291,12 +2933,6 @@
             "title": "Myself video, Priya Shah, Muted, Has context menu",
             "description": "Myself video, Priya Shah, Muted, Has context menu",
             "frame": [1260, 634, 156, 86]
-          },
-          {
-            "depth": 23,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [719, 878, 606, 211]
           },
           {
             "depth": 23,
@@ -3438,52 +3074,10 @@
           },
           {
             "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 481, 539, 302]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [727, 491, 531, 294]
-          },
-          {
-            "depth": 26,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 481, 539, 302]
-          },
-          {
-            "depth": 26,
             "role": "AXMenuItem",
             "title": "Omar Haddad (Guest), muted, Context menu is available",
             "description": "Omar Haddad (Guest), muted, Context menu is available",
             "frame": [1258, 542, 160, 90]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 481, 539, 302]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1260, 544, 156, 86]
-          },
-          {
-            "depth": 27,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [1266, 550, 152, 82]
-          },
-          {
-            "depth": 28,
-            "role": "AXGroup",
-            "subrole": "AXEmptyGroup",
-            "frame": [717, 481, 539, 302]
           },
           {
             "depth": 29,

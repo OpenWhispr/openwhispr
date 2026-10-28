@@ -2,9 +2,9 @@
   "speakerViewTalking": {
     "type": "snapshot",
     "at": 1792510975547,
-    "bundleId": "us.zoom.xos",
     "windows": [
       {
+        "bundleId": "us.zoom.xos",
         "title": "Zoom Meeting",
         "frame": [61, 242, 1095, 730],
         "nodes": [
@@ -39,9 +39,9 @@
   "galleryTalking": {
     "type": "snapshot",
     "at": 1792511098762,
-    "bundleId": "us.zoom.xos",
     "windows": [
       {
+        "bundleId": "us.zoom.xos",
         "title": "Zoom Meeting",
         "frame": [61, 242, 1095, 730],
         "nodes": [
@@ -78,9 +78,9 @@
   "gallerySilent": {
     "type": "snapshot",
     "at": 1792511142742,
-    "bundleId": "us.zoom.xos",
     "windows": [
       {
+        "bundleId": "us.zoom.xos",
         "title": "Zoom Meeting",
         "frame": [61, 242, 1095, 730],
         "nodes": [
@@ -117,9 +117,9 @@
   "sharingFloatingGallery": {
     "type": "snapshot",
     "at": 1792511207374,
-    "bundleId": "us.zoom.xos",
     "windows": [
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom share statusbar window",
         "frame": [733, 39, 334, 22],
         "nodes": [
@@ -145,6 +145,7 @@
         ]
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom annotation entrypoint",
         "frame": [10, 1103, 56, 56],
         "nodes": [
@@ -157,11 +158,13 @@
         ]
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "Annotation - Zoom",
         "frame": [0, 0, 1800, 1169],
         "nodes": []
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom floating video window",
         "frame": [1518, 50, 252, 318],
         "nodes": [
@@ -196,9 +199,9 @@
   "sharingFloatingActiveSpeaker": {
     "type": "snapshot",
     "at": 1792511287887,
-    "bundleId": "us.zoom.xos",
     "windows": [
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom share statusbar window",
         "frame": [733, 39, 334, 22],
         "nodes": [
@@ -224,6 +227,7 @@
         ]
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom annotation entrypoint",
         "frame": [10, 1103, 56, 56],
         "nodes": [
@@ -236,11 +240,13 @@
         ]
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "Annotation - Zoom",
         "frame": [0, 0, 1800, 1169],
         "nodes": []
       },
       {
+        "bundleId": "us.zoom.xos",
         "title": "zoom floating video window",
         "frame": [1518, 50, 252, 177],
         "nodes": [

@@ -3,6 +3,7 @@ import { ShieldCheck } from "../icons";
 import { EnterpriseAudioSettings } from "./EnterpriseAudioSettings";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getCachedPlatform } from "../../utils/platform";
 import { Cloud, Key, Cpu, Network } from "../icons";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { usePolicyModeOptions, usePolicySnapshot } from "../../hooks/usePolicy";
@@ -38,8 +39,9 @@ export function MeetingSpeakerDetectionRow() {
   );
 }
 
-// Hidden off macOS and in builds without the meeting-app helper. It names the
-// voices speaker detection finds, so it does nothing while that's off.
+// Hidden off macOS, on Intel Macs and in builds without the meeting-app helper
+// (main decides). It names the voices speaker detection finds, so it does
+// nothing while that's off.
 function MeetingAppSpeakerLabelsRow() {
   const { t } = useTranslation();
   const speakerDiarizationEnabled = useSettingsStore((s) => s.speakerDiarizationEnabled);
@@ -50,6 +52,7 @@ function MeetingAppSpeakerLabelsRow() {
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
+    if (getCachedPlatform() !== "darwin") return;
     let cancelled = false;
     window.electronAPI
       ?.isMeetingAppSpeakerLabelsAvailable?.()

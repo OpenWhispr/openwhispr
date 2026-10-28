@@ -4160,6 +4160,12 @@
         "title": "Bedienungshilfen-Berechtigungen erforderlich",
         "description": "OpenWhispr benötigt Bedienungshilfen-Berechtigungen, um Ihren Hotkey zu erkennen und Text einzufügen. Bitte aktivieren Sie diese in der Systemsteuerung."
       },
+      "meetingAppSpeakerLabels": {
+        "title": "Sprecher können nicht aus deiner Meeting-App benannt werden",
+        "accessibility": "OpenWhispr braucht die Bedienungshilfen-Berechtigung, um deine Meeting-App zu lesen. Noch unbenannte Stimmen bleiben in diesem Meeting nummeriert.",
+        "unreadable": "OpenWhispr konnte deine Meeting-App nicht lesen. Noch unbenannte Stimmen bleiben in diesem Meeting nummeriert.",
+        "openSettings": "Einstellungen öffnen"
+      },
       "gpuFallback": {
         "title": "GPU-Beschleunigung nicht verfügbar",
         "description": "OpenWhispr verwendet die CPU-Transkription.",
