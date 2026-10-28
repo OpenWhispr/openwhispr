@@ -11,26 +11,24 @@ if !AXIsProcessTrusted() {
 let copyMode = CommandLine.arguments.contains("--copy")
 let shortcutCharacter = copyMode ? "c" : "v"
 
-// `--await-paste <ms> --paste-length <n>` watches the frontmost app's focused
-// field so the caller restores the user's clipboard only once the target has
-// read the pasteboard; a target that dequeues ⌘V after the restore pastes the
-// old clipboard. The budget covers waiting for a target still busy with earlier
-// work (it could not take the paste sooner anyway) and watching after the post.
-// Prints PASTE_CONSUMED <ms> when the field shows the pasted text in place of
-// the selection, caret right after it, PASTE_TIMEOUT when the budget runs out, or
-// PASTE_UNVERIFIED when the field cannot be read (Chromium apps keep their tree
-// dormant), focus moved, or it changed some other way (terminal output, typing).
-func intArgument(after flag: String) -> Int? {
+func argument(after flag: String) -> String? {
     guard let index = CommandLine.arguments.firstIndex(of: flag),
           index + 1 < CommandLine.arguments.count else { return nil }
-    return Int(CommandLine.arguments[index + 1])
+    return CommandLine.arguments[index + 1]
 }
-let awaitPaste: (budgetMs: Int, length: Int)? = {
+
+// `--await-read <ms> --session <id>` pastes the transcript given on stdin and
+// reports when the target reads it, so the caller restores the user's clipboard
+// after the paste has landed instead of on a timer that a late reader outlasts
+// (#1740). Prints PASTE_POSTED once ⌘V is out, then PASTE_READ <ms after ⌘V>,
+// PASTE_REPLACED (something else was copied first) or PASTE_NOT_READ.
+let awaitRead: (budgetMs: Int, session: String)? = {
     guard !copyMode,
-          let budgetMs = intArgument(after: "--await-paste"),
-          let length = intArgument(after: "--paste-length") else { return nil }
-    return (budgetMs, length)
+          let budgetMs = argument(after: "--await-read").flatMap({ Int($0) }),
+          let session = argument(after: "--session") else { return nil }
+    return (budgetMs, session)
 }()
+
 let commandModifierState = UInt32(cmdKey) >> 8
 
 func keyboardLayoutData(from inputSource: TISInputSource?) -> Data? {
@@ -87,56 +85,68 @@ guard let virtualKey = lookupVirtualKey(for: shortcutCharacter) else {
     exit(3)
 }
 
-struct FieldSnapshot: Equatable {
-    let characters: Int
-    let selectionLocation: Int
-    let selectionLength: Int
-}
+// Keep in sync with PASTE_SESSION_TYPE in src/helpers/clipboard.js.
+let pasteSessionType = NSPasteboard.PasteboardType("com.openwhispr.paste-session")
+let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
 
-func focusedField(of app: AXUIElement) -> (element: AXUIElement?, error: AXError) {
-    var value: AnyObject?
-    let error = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &value)
-    guard error == .success, let element = value else { return (nil, error) }
-    return ((element as! AXUIElement), error)
-}
+// Hands the transcript over only when a reader asks for it, which is how the
+// paste is seen to land in every app, Chromium and terminals included. Marked
+// transient (nspasteboard.org) so clipboard managers neither record nor read it,
+// and kept off Universal Clipboard. The session tag lets the caller tell its own
+// item from a later copy without reading, and so requesting, the transcript.
+final class TranscriptPromise: NSObject, NSPasteboardItemDataProvider {
+    let pasteboard: NSPasteboard
+    let transcript: String
+    let session: String
+    let item = NSPasteboardItem()
+    private var changeCount = 0
+    private var readAt: TimeInterval?
 
-func snapshot(of field: AXUIElement) -> FieldSnapshot? {
-    var countValue: AnyObject?
-    var rangeValue: AnyObject?
-    var range = CFRange()
-    guard AXUIElementCopyAttributeValue(field, kAXNumberOfCharactersAttribute as CFString, &countValue) == .success,
-          let characters = countValue as? Int,
-          AXUIElementCopyAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
-          let rangeRef = rangeValue, CFGetTypeID(rangeRef) == AXValueGetTypeID(),
-          AXValueGetValue(rangeRef as! AXValue, .cfRange, &range) else { return nil }
-    return FieldSnapshot(characters: characters, selectionLocation: range.location, selectionLength: range.length)
+    init(pasteboard: NSPasteboard, transcript: String, session: String) {
+        self.pasteboard = pasteboard
+        self.transcript = transcript
+        self.session = session
+    }
+
+    func write() -> Bool {
+        changeCount = pasteboard.prepareForNewContents(with: .currentHostOnly)
+        item.setData(Data(), forType: transientType)
+        item.setData(Data(session.utf8), forType: pasteSessionType)
+        item.setDataProvider(self, forTypes: [.string])
+        return pasteboard.writeObjects([item])
+    }
+
+    func pasteboard(_ pasteboard: NSPasteboard?, item: NSPasteboardItem, provideDataForType type: NSPasteboard.PasteboardType) {
+        item.setString(transcript, forType: type)
+        if readAt == nil {
+            readAt = ProcessInfo.processInfo.systemUptime
+        }
+    }
+
+    // Read requests arrive through the run loop, so it runs until one does.
+    func waitForRead(postedAt: TimeInterval, budgetMs: Int) -> String {
+        let deadline = postedAt + Double(budgetMs) / 1000
+        while readAt == nil, pasteboard.changeCount == changeCount,
+              ProcessInfo.processInfo.systemUptime < deadline {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
+        }
+        if let readAt = readAt {
+            return "PASTE_READ \(Int(max(0, readAt - postedAt) * 1000))"
+        }
+        if pasteboard.changeCount != changeCount {
+            return "PASTE_REPLACED"
+        }
+        // A promise dies with this process, so leave the transcript itself.
+        item.setString(transcript, forType: .string)
+        return "PASTE_NOT_READ"
+    }
 }
+// End of TranscriptPromise.
 
 // Resolved before the keystroke is posted: this is the app that will receive it.
-let target = (copyMode || awaitPaste != nil) ? NSWorkspace.shared.frontmostApplication : nil
+let target = copyMode ? NSWorkspace.shared.frontmostApplication : nil
 if copyMode && target == nil {
     exit(1)
-}
-
-let watchStart = Date()
-func watchElapsedMs() -> Int { Int(Date().timeIntervalSince(watchStart) * 1000) }
-
-var watch: (app: AXUIElement, field: AXUIElement, baseline: FieldSnapshot)? = nil
-if let awaitPaste = awaitPaste, let target = target {
-    // A stalled target must answer late, not never: the watch has its own deadline.
-    AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.25)
-    let app = AXUIElementCreateApplication(target.processIdentifier)
-    while true {
-        let (field, error) = focusedField(of: app)
-        if let field = field, let baseline = snapshot(of: field) {
-            watch = (app, field, baseline)
-            break
-        }
-        // Only a target that is busy (not one that cannot be read at all) is worth
-        // waiting for; it will take the paste once it drains anyway.
-        if error != .cannotComplete || watchElapsedMs() >= awaitPaste.budgetMs { break }
-        usleep(15000)
-    }
 }
 
 guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, keyDown: true),
@@ -144,43 +154,35 @@ guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, ke
     exit(1)
 }
 
+// Written right before ⌘V, so nothing else lands on the pasteboard in between.
+let promise = awaitRead.map {
+    TranscriptPromise(
+        pasteboard: .general,
+        transcript: String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self),
+        session: $0.session
+    )
+}
+if let promise = promise, !promise.write() {
+    exit(1)
+}
+
 keyDown.flags = .maskCommand
 keyUp.flags = .maskCommand
 keyDown.post(tap: .cgSessionEventTap)
+let postedAt = ProcessInfo.processInfo.systemUptime
+if promise != nil {
+    // The caller must never paste again once this is out, whatever happens next.
+    print("PASTE_POSTED")
+    fflush(stdout)
+}
 usleep(8000)
 keyUp.post(tap: .cgSessionEventTap)
 usleep(20000)
 
-if copyMode, let target = target {
+if let target = target {
     print("COPY_OK \(target.processIdentifier) \(target.localizedName ?? "")")
 }
 
-if let awaitPaste = awaitPaste {
-    guard let watch = watch else {
-        // A target busy for the whole budget timed out; any other miss is an unreadable field.
-        print(watchElapsedMs() >= awaitPaste.budgetMs ? "PASTE_TIMEOUT" : "PASTE_UNVERIFIED")
-        exit(0)
-    }
-    // Only the pasted text replacing the selection, caret after it, proves the
-    // pasteboard was read; any other change (output, typing, a click) does not.
-    let pasted = FieldSnapshot(
-        characters: watch.baseline.characters + awaitPaste.length - watch.baseline.selectionLength,
-        selectionLocation: watch.baseline.selectionLocation + awaitPaste.length,
-        selectionLength: 0
-    )
-    while watchElapsedMs() < awaitPaste.budgetMs {
-        if let current = focusedField(of: watch.app).element {
-            // Focus moved: the field we measured is no longer the paste target.
-            if !CFEqual(current, watch.field) {
-                print("PASTE_UNVERIFIED")
-                exit(0)
-            }
-            if let now = snapshot(of: current), now != watch.baseline {
-                print(now == pasted ? "PASTE_CONSUMED \(watchElapsedMs())" : "PASTE_UNVERIFIED")
-                exit(0)
-            }
-        }
-        usleep(15000)
-    }
-    print("PASTE_TIMEOUT")
+if let awaitRead = awaitRead, let promise = promise {
+    print(promise.waitForRead(postedAt: postedAt, budgetMs: awaitRead.budgetMs))
 }
