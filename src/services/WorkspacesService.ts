@@ -1,6 +1,8 @@
 import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
 import type {
   JoinableWorkspace,
+  MemberRemovalPreview,
+  MemberRemovalResult,
   Workspace,
   WorkspaceJoinRequest,
   WorkspaceMember,
@@ -60,6 +62,30 @@ async function updateMemberRole(
 
 async function removeMember(workspaceId: string, userId: string): Promise<void> {
   await cloudDelete(`/api/workspaces/${workspaceId}/members/${userId}`);
+}
+
+// The server answers a preview with the same ownership counts a refused removal would, without
+// removing anyone.
+async function previewMemberRemoval(
+  workspaceId: string,
+  userIds: string[]
+): Promise<MemberRemovalPreview> {
+  const res = await cloudPost<DataWrap<MemberRemovalPreview>>(
+    `/api/workspaces/${workspaceId}/members/remove`,
+    { user_ids: userIds, preview: true }
+  );
+  return res.data;
+}
+
+async function removeMembers(
+  workspaceId: string,
+  input: { userIds: string[]; transferTo?: string }
+): Promise<MemberRemovalResult> {
+  const res = await cloudPost<DataWrap<MemberRemovalResult>>(
+    `/api/workspaces/${workspaceId}/members/remove`,
+    { user_ids: input.userIds, transfer_to: input.transferTo }
+  );
+  return res.data;
 }
 
 async function billingCheckout(
@@ -164,6 +190,8 @@ export const WorkspacesService = {
   listMembers,
   updateMemberRole,
   removeMember,
+  previewMemberRemoval,
+  removeMembers,
   billingCheckout,
   billingPortal,
   previewSeats,

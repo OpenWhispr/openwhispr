@@ -1,4 +1,5 @@
 import { CloudApiError, serverRefusalMessage } from "../services/cloudApi";
+import type { OwnedMemberContent } from "../types/electron";
 
 export type InviteErrorKind =
   | "invalid"
@@ -9,18 +10,22 @@ export type InviteErrorKind =
   | "notAllowed"
   | "ssoRequired"
   | "sessionExpired"
+  | "rateLimited"
   | "refused"
   | "requestFailed";
 
 /** A failed invitation: `refused` carries the server's own reason, every other kind its copy. */
 export type InviteFailure =
-  { kind: Exclude<InviteErrorKind, "refused"> } | { kind: "refused"; message: string };
+  | { kind: Exclude<InviteErrorKind, "refused" | "seatLimit"> }
+  | { kind: "refused"; message: string }
+  // `available` is how many addresses fit, when the server said.
+  | { kind: "seatLimit"; available?: number };
 
-const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused">> = {
+const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused" | "seatLimit">> = {
   invalid_email: "invalid",
   already_member: "alreadyMember",
   already_invited: "alreadyInvited",
-  seat_limit_reached: "seatLimit",
+  rate_limited: "rateLimited",
   DIRECTORY_ASSIGNMENT_REQUIRED: "directoryRequired",
   SSO_REQUIRED: "ssoRequired",
   // Main's codes for a session that expired or was replaced by another account's.
@@ -28,6 +33,12 @@ const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused">> = 
   AUTH_CONTEXT_CHANGED: "sessionExpired",
   AUTH_CONTEXT_UNVALIDATED: "sessionExpired",
 };
+
+function detailsRecord(details: unknown): Record<string, unknown> | null {
+  return typeof details === "object" && details !== null
+    ? (details as Record<string, unknown>)
+    : null;
+}
 
 /**
  * Maps an invitation failure to what the dialog says about it. Codes come first; the message
@@ -37,6 +48,10 @@ export function classifyInviteError(error: unknown): InviteFailure {
   if (!(error instanceof CloudApiError)) return { kind: "requestFailed" };
   const { code, status, message } = error;
 
+  if (code === "seat_limit_reached") {
+    const available = detailsRecord(error.details)?.available;
+    return typeof available === "number" ? { kind: "seatLimit", available } : { kind: "seatLimit" };
+  }
   const byCode = code ? INVITE_ERROR_CODES[code] : undefined;
   if (byCode) return { kind: byCode };
 
@@ -78,4 +93,30 @@ export function classifyRowActionError(error: unknown): RowActionError {
   }
   const message = serverRefusalMessage(error);
   return message ? { kind: "refused", message } : { kind: "failed" };
+}
+
+export type RemovalError =
+  | { kind: "transferRequired"; owners: OwnedMemberContent[] }
+  | { kind: "invalidTransferTarget" }
+  | { kind: "cannotRemove"; reason: "owner" | "self" }
+  | RowActionError;
+
+/** Maps a failed bulk removal; codes come first, then the row action kinds. */
+export function classifyRemovalError(error: unknown): RemovalError {
+  if (error instanceof CloudApiError) {
+    switch (error.code) {
+      case "transfer_required": {
+        // Without a readable list the dialog still has to ask who takes over.
+        const members = detailsRecord(error.details)?.members;
+        return { kind: "transferRequired", owners: Array.isArray(members) ? members : [] };
+      }
+      case "invalid_transfer_target":
+        return { kind: "invalidTransferTarget" };
+      case "cannot_remove_owner":
+        return { kind: "cannotRemove", reason: "owner" };
+      case "cannot_remove_self":
+        return { kind: "cannotRemove", reason: "self" };
+    }
+  }
+  return classifyRowActionError(error);
 }

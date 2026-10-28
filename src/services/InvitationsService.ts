@@ -6,7 +6,11 @@ import {
   cloudDelete,
   type DataWrap,
 } from "./cloudApi.js";
-import type { WorkspaceInvitation, InvitationPreview } from "../types/electron";
+import type {
+  InvitationBatchResult,
+  InvitationPreview,
+  WorkspaceInvitation,
+} from "../types/electron";
 
 // email_sent is separate because the invite row is created even when the email fails.
 type InvitationSendResult = WorkspaceInvitation & { email_sent: boolean };
@@ -30,6 +34,23 @@ async function send(
     authGeneration === undefined
       ? await cloudPost<DataWrap<InvitationSendResult>>(path, input)
       : await cloudPostForAuthGeneration<DataWrap<InvitationSendResult>>(
+          path,
+          input,
+          authGeneration
+        );
+  return res.data;
+}
+
+async function sendBatch(
+  workspaceId: string,
+  input: { emails: string[]; role: "admin" | "member"; team_ids?: string[]; space_ids?: string[] },
+  authGeneration?: number
+): Promise<InvitationBatchResult> {
+  const path = `/api/workspaces/${workspaceId}/invitations/batch`;
+  const res =
+    authGeneration === undefined
+      ? await cloudPost<DataWrap<InvitationBatchResult>>(path, input)
+      : await cloudPostForAuthGeneration<DataWrap<InvitationBatchResult>>(
           path,
           input,
           authGeneration
@@ -75,6 +96,7 @@ async function accept(token: string): Promise<InvitationAcceptResult> {
 export const InvitationsService = {
   list,
   send,
+  sendBatch,
   revoke,
   resend,
   preview,

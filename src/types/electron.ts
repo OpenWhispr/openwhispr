@@ -747,6 +747,8 @@ export interface Workspace {
   seats: number;
   // Optional: absent from API responses that predate unified billing.
   seats_used?: number;
+  // Absent before API release 4.
+  seat_limit?: number;
   created_at: string;
   updated_at: string;
   role: WorkspaceRole;
@@ -755,6 +757,33 @@ export interface Workspace {
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
+}
+
+export interface OwnedMemberContent {
+  user_id: string;
+  owned_notes: number;
+  owned_spaces: number;
+}
+
+export interface MemberRemovalPreview {
+  members: OwnedMemberContent[];
+  already_removed: string[];
+  transfer_required: boolean;
+}
+
+export interface MemberRemovalResult {
+  removed: string[];
+  already_removed: string[];
+  transferred: { to: string; notes: number; spaces: number } | null;
+}
+
+export type InvitationBatchStatus =
+  "invited" | "invalid_email" | "already_member" | "already_invited" | "directory_required";
+
+export interface InvitationBatchResult {
+  results: Array<{ email: string; status: InvitationBatchStatus; email_sent?: boolean }>;
+  seats_used: number;
+  seat_limit: number;
 }
 
 export interface MemberTeamRef {
