@@ -1834,7 +1834,7 @@ describe('Android Cloud meeting ownership', () => {
   });
 
   it.each([false, true])(
-    'drops a delayed retry after switching account (return=%s)',
+    'aborts a delayed retry upload and drops its result after switching account (return=%s)',
     async (returns) => {
       let finish!: (value: { text: string; duration: number }) => void;
       let started!: () => void;
@@ -1850,6 +1850,8 @@ describe('Android Cloud meeting ownership', () => {
       const pending = useNotesStore.getState().retryMeetingTranscription(7);
       const rejected = pending.catch((error: unknown) => error);
       await ready;
+      const uploadSignal = mockCloudTranscribe.mock.calls[0][0].signal as AbortSignal | undefined;
+      const wasAbortedBeforeSwitch = uploadSignal?.aborted;
       mockAuthState.user = { ...signedInUser, id: 'other-account' };
       mockAuthListeners.forEach((fn) => fn());
       if (returns) {
@@ -1859,6 +1861,8 @@ describe('Android Cloud meeting ownership', () => {
       (notesRepository.setTranscriptionStatus as jest.Mock).mockClear();
       finish({ text: 'Late private transcript', duration: 4 });
       expect(await rejected).toBeInstanceOf(Error);
+      expect(wasAbortedBeforeSwitch).toBe(false);
+      expect(uploadSignal?.aborted).toBe(true);
       expect(notesRepository.replaceSegments).not.toHaveBeenCalled();
       expect(notesRepository.setTranscriptionStatus).not.toHaveBeenCalled();
       expect(notesRepository.updateNote).not.toHaveBeenCalled();

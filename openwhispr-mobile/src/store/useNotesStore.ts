@@ -901,6 +901,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           provider: 'cloud',
           requestContext: 'file',
           purpose: 'meeting',
+          signal: context?.signal,
           fileName: `meeting-${noteId}.wav`,
           mimeType: 'audio/wav',
           language: getPreferredTranscriptionLanguage(),
