@@ -4945,6 +4945,26 @@
       "notAllowed": "你已無權從 {{workspace}} 中移除成員。",
       "alreadyRemoved": "{{name}} 已被移除"
     },
+    "removeMembers": {
+      "title_other": "要將 {{count}} 名成員從 {{workspace}} 移除嗎？",
+      "confirm_other": "移除 {{count}} 名成員",
+      "checking": "正在檢查…",
+      "failed_other": "無法移除 {{count}} 名成員。他們的工作區存取權限未變。請檢查網路連線後再試一次。",
+      "ownerOne": "{{name}} 在此工作區中擁有筆記或團隊空間。",
+      "owners_other": "其中 {{count}} 人擁有筆記或團隊空間。",
+      "transferLabel": "轉讓給",
+      "transferBody": "他們的筆記和團隊空間將轉給新擁有者。他們將失去此工作區的存取權限。",
+      "you": "{{name}}（你）",
+      "transferConfirm": "轉讓並移除",
+      "transferring": "正在轉讓…",
+      "transferFailed": "無法轉讓擁有權。未移除任何成員。請再試一次。",
+      "invalidTarget": "{{name}} 已無法接收擁有權。請選擇其他人。",
+      "cannotRemoveOwner": "無法移除工作區擁有者。",
+      "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
+      "done_other": "已移除 {{count}} 名成員",
+      "transferDone_other": "已將擁有權轉讓給 {{name}}，並移除了 {{count}} 名成員。",
+      "alreadyRemoved_other": "{{count}} 名成員已被移除"
+    },
     "cancelInvitation": {
       "title": "取消寄給 {{email}} 的邀請？",
       "body": "對方將無法透過此邀請加入。現有成員仍保有存取權。",

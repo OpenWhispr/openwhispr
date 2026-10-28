@@ -81,7 +81,7 @@ async function loadMembersTab(
           }
         : {}),
       "/TransferOwnershipDialog": "export const TransferOwnershipDialog = () => null;",
-      "/RemoveMemberDialog": "export const RemoveMemberDialog = () => null;",
+      "/RemoveMembersDialog": "export const RemoveMembersDialog = () => null;",
       "/MemberAvatar": "export default function Mock() { return null; }",
       "/ui/dropdown-menu": `
         import React from "react";

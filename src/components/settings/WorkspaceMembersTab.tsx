@@ -15,11 +15,11 @@ import MemberAvatar from "../MemberAvatar";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { workspaceCan } from "../../lib/capabilities";
-import { confirmActionReducer } from "../../lib/confirmActionFlow";
+import { memberRemovalReducer } from "../../lib/memberRemovalFlow";
 import { membersView, rosterFor, rosterHasTeams, teamSummary } from "../../lib/peopleRoster";
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
-import { RemoveMemberDialog } from "../workspace/RemoveMemberDialog";
+import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
 
@@ -53,9 +53,7 @@ export default function WorkspaceMembersTab({
     }))
   );
   const [transferState, dispatchTransfer] = useReducer(transferReducer, { kind: "closed" });
-  const [removeState, dispatchRemove] = useReducer(confirmActionReducer<WorkspaceMember>, {
-    kind: "closed",
-  });
+  const [removeState, dispatchRemove] = useReducer(memberRemovalReducer, { kind: "closed" });
   const [joinRequests, setJoinRequests] = useState<WorkspaceJoinRequest[]>([]);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   // The roster loads on mount, so an empty one starts out loading rather than as a table with no rows.
@@ -431,7 +429,13 @@ export default function WorkspaceMembersTab({
                         onTransfer={() =>
                           dispatchTransfer({ type: "open", candidateId: member.user_id })
                         }
-                        onRemove={() => dispatchRemove({ type: "open", subject: member })}
+                        onRemove={() =>
+                          dispatchRemove({
+                            type: "open",
+                            subjects: [member],
+                            defaultOwnerId: user?.id ?? "",
+                          })
+                        }
                       />
                     </td>
                   </tr>
@@ -450,11 +454,13 @@ export default function WorkspaceMembersTab({
         onTransferred={() => {}}
       />
 
-      <RemoveMemberDialog
-        workspaceId={workspace.id}
-        workspaceName={workspace.name}
+      <RemoveMembersDialog
+        workspace={workspace}
+        roster={members}
         state={removeState}
         dispatch={dispatchRemove}
+        // The roster refreshes after a removal, and nothing here is selected yet.
+        onRemoved={() => {}}
       />
     </div>
   );

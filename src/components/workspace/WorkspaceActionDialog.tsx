@@ -1,5 +1,5 @@
 import { useRef, type ReactElement, type ReactNode } from "react";
-import { Info, Trash2 } from "../icons";
+import { Info, Loader2, Trash2 } from "../icons";
 import { cn } from "../lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 
@@ -17,6 +17,8 @@ export interface WorkspaceActionDialogProps {
     onClick: () => void;
     tone: "primary" | "destructive";
     disabled?: boolean;
+    /** Shows a spinner before the label, for a step the dialog waits on before it can act. */
+    pending?: boolean;
   };
   /** Omitted: no Cancel button. */
   cancelLabel?: string;
@@ -97,6 +99,9 @@ export function WorkspaceActionDialog({
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
             )}
           >
+            {primary.pending ? (
+              <Loader2 className="me-1.5 size-3.5 animate-spin" aria-hidden="true" />
+            ) : null}
             {primary.label}
           </button>
           {showCancel ? (

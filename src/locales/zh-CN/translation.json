@@ -4945,6 +4945,26 @@
       "notAllowed": "你已无权从 {{workspace}} 中移除成员。",
       "alreadyRemoved": "{{name}} 已被移除"
     },
+    "removeMembers": {
+      "title_other": "要将 {{count}} 名成员从 {{workspace}} 移除吗？",
+      "confirm_other": "移除 {{count}} 名成员",
+      "checking": "正在检查…",
+      "failed_other": "无法移除 {{count}} 名成员。他们的工作区访问权限未变。请检查网络连接后重试。",
+      "ownerOne": "{{name}} 在此工作区中拥有笔记或团队空间。",
+      "owners_other": "其中 {{count}} 人拥有笔记或团队空间。",
+      "transferLabel": "转让给",
+      "transferBody": "他们的笔记和团队空间将转给新所有者。他们将失去此工作区的访问权限。",
+      "you": "{{name}}（你）",
+      "transferConfirm": "转让并移除",
+      "transferring": "正在转让…",
+      "transferFailed": "无法转让所有权。未移除任何成员。请重试。",
+      "invalidTarget": "{{name}} 已无法接收所有权。请选择其他人。",
+      "cannotRemoveOwner": "无法移除工作区所有者。",
+      "cannotRemoveSelf": "你不能移除自己。请在“常规”中退出工作区。",
+      "done_other": "已移除 {{count}} 名成员",
+      "transferDone_other": "已将所有权转让给 {{name}}，并移除了 {{count}} 名成员。",
+      "alreadyRemoved_other": "{{count}} 名成员已被移除"
+    },
     "cancelInvitation": {
       "title": "取消发给 {{email}} 的邀请？",
       "body": "对方将无法通过此邀请加入。现有成员仍保留访问权限。",

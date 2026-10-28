@@ -135,3 +135,16 @@ test("a destructive dialog moves initial focus off the primary", async (t) => {
   render({ primary: destructive, busy: true });
   assert.equal(globalThis.__onOpenAutoFocus, undefined);
 });
+
+test("a pending primary shows a spinner before its label", async (t) => {
+  const { render } = await loadDialog(t);
+  const primary = { label: "Leave workspace", onClick: () => {}, tone: "primary" };
+
+  const pending = render({ primary: { ...primary, pending: true } });
+
+  assert.match(
+    pending,
+    /<button[^>]*><svg[^>]*animate-spin[\s\S]*?<\/svg>Leave workspace<\/button>/
+  );
+  assert.doesNotMatch(render({ primary }), /animate-spin/);
+});

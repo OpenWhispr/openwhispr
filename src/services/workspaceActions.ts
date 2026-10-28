@@ -4,7 +4,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import { createWorkspaceActions } from "./workspaceActionsCore";
 import { rosterFor } from "../lib/peopleRoster";
 
-// Single path for leaving, deleting and transferring a workspace, and removing a member: server call
+// Single path for leaving, deleting and transferring a workspace, and removing members: server call
 // → workspace store refresh → sync request. The orchestration lives in an
 // injectable core so ordering and failure behavior stay testable.
 const actions = createWorkspaceActions({
@@ -26,4 +26,4 @@ const actions = createWorkspaceActions({
   notifyUsageChanged: () => window.dispatchEvent(new Event("usage-changed")),
 });
 
-export const { leaveWorkspace, deleteWorkspace, transferOwnership, removeMember } = actions;
+export const { leaveWorkspace, deleteWorkspace, transferOwnership, removeMembers } = actions;

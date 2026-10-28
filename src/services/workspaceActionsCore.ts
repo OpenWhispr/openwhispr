@@ -1,10 +1,13 @@
 import logger from "../utils/logger";
-import { classifyRowActionError } from "../lib/workspaceErrors";
-import type { WorkspaceMember } from "../types/electron";
+import type { MemberRemovalResult, WorkspaceMember } from "../types/electron";
 
 export interface WorkspaceActionsDependencies {
   api: {
     removeMember(workspaceId: string, userId: string): Promise<void>;
+    removeMembers(
+      workspaceId: string,
+      input: { userIds: string[]; transferTo?: string }
+    ): Promise<MemberRemovalResult>;
     remove(workspaceId: string): Promise<void>;
     updateMemberRole(workspaceId: string, userId: string, role: "owner"): Promise<unknown>;
   };
@@ -26,7 +29,10 @@ export interface WorkspaceActions {
   leaveWorkspace(workspaceId: string, userId: string): Promise<void>;
   deleteWorkspace(workspaceId: string): Promise<void>;
   transferOwnership(workspaceId: string, newOwnerId: string): Promise<void>;
-  removeMember(workspaceId: string, userId: string): Promise<"removed" | "alreadyRemoved">;
+  removeMembers(
+    workspaceId: string,
+    input: { userIds: string[]; transferTo?: string }
+  ): Promise<MemberRemovalResult>;
 }
 
 export function createWorkspaceActions(deps: WorkspaceActionsDependencies): WorkspaceActions {
@@ -107,22 +113,19 @@ export function createWorkspaceActions(deps: WorkspaceActionsDependencies): Work
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
   }
 
-  // A 404 means the member is already gone, which is what the caller wanted. Any other failure
-  // leaves the roster alone: nothing changed, and the dialog offers a retry.
-  async function removeMember(
+  // People already gone come back in `already_removed`, so any failure means nothing changed and
+  // the roster is left alone. Removals free seats, so the workspace list is read again too, and
+  // content moved to a new owner reaches this device through a sync.
+  async function removeMembers(
     workspaceId: string,
-    userId: string
-  ): Promise<"removed" | "alreadyRemoved"> {
-    let outcome: "removed" | "alreadyRemoved" = "removed";
-    try {
-      await deps.api.removeMember(workspaceId, userId);
-    } catch (err) {
-      if (classifyRowActionError(err).kind !== "gone") throw err;
-      outcome = "alreadyRemoved";
-    }
+    input: { userIds: string[]; transferTo?: string }
+  ): Promise<MemberRemovalResult> {
+    const result = await deps.api.removeMembers(workspaceId, input);
     await refreshQuietly("members", () => deps.store.refreshMembers(workspaceId));
-    return outcome;
+    await refreshQuietly("list", () => deps.store.refresh({ fresh: true }));
+    if (result.transferred) deps.sync.requestSyncAll("manual");
+    return result;
   }
 
-  return { leaveWorkspace, deleteWorkspace, transferOwnership, removeMember };
+  return { leaveWorkspace, deleteWorkspace, transferOwnership, removeMembers };
 }

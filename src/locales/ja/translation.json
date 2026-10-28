@@ -4945,6 +4945,26 @@
       "notAllowed": "{{workspace}} からユーザーを削除する権限がなくなりました。",
       "alreadyRemoved": "{{name}} はすでに削除されています"
     },
+    "removeMembers": {
+      "title_other": "{{count}} 人のメンバーを {{workspace}} から削除しますか？",
+      "confirm_other": "{{count}} 人のメンバーを削除",
+      "checking": "確認中…",
+      "failed_other": "{{count}} 人のメンバーを削除できませんでした。ワークスペースへのアクセスは変更されていません。接続を確認して、もう一度お試しください。",
+      "ownerOne": "{{name}} はこのワークスペースでノートまたはチームスペースを所有しています。",
+      "owners_other": "そのうち {{count}} 人がノートまたはチームスペースを所有しています。",
+      "transferLabel": "譲渡先",
+      "transferBody": "ノートとチームスペースは新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "you": "{{name}}（あなた）",
+      "transferConfirm": "譲渡して削除",
+      "transferring": "譲渡中…",
+      "transferFailed": "オーナー権限を譲渡できませんでした。メンバーは削除されていません。もう一度お試しください。",
+      "invalidTarget": "{{name}} はオーナー権限を受け取れなくなりました。別の人を選択してください。",
+      "cannotRemoveOwner": "ワークスペースのオーナーは削除できません。",
+      "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
+      "done_other": "{{count}} 人のメンバーを削除しました",
+      "transferDone_other": "オーナー権限を {{name}} に譲渡し、{{count}} 人のメンバーを削除しました。",
+      "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています"
+    },
     "cancelInvitation": {
       "title": "{{email}} への招待を取り消しますか？",
       "body": "この招待では参加できなくなります。現在のメンバーのアクセスは維持されます。",
