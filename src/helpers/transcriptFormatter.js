@@ -87,6 +87,19 @@ function mergeSegments(segments) {
   return merged;
 }
 
+// An upload whose provider returned no segments stores its text as segments
+// with no timing, speaker or source: a "00:00:00" or "Unknown speaker" heading
+// on them would be invented. parseTranscriptSegments.ts's
+// speakerlessTranscriptText makes the matching call for note actions.
+function isUntimed(segments) {
+  return (
+    segments.length > 0 &&
+    segments.every(
+      (seg) => seg.timestamp == null && !seg.speaker && !seg.speakerName && !seg.source
+    )
+  );
+}
+
 function formatTimestamp(seconds) {
   const s = Math.floor(seconds);
   const h = Math.floor(s / 3600);
@@ -130,8 +143,11 @@ function formatTxt(note, segments, speakerMappings) {
   if (participants.length)
     lines.push(`${i18nMain.t("notes.editor.participants")}: ${participants.join(", ")}`);
   lines.push("", "──────────────────────────────────", "");
+  const untimed = isUntimed(segments);
   for (const seg of merged) {
-    lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
+    if (!untimed) {
+      lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
+    }
     lines.push(seg.text);
     lines.push("");
   }
@@ -144,10 +160,14 @@ function formatSrt(segments, speakerMappings, note = {}) {
   // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
   // segments always serialize a source, so they keep their labels.
   const hasSpeakerIdentity = merged.some((seg) => seg.speaker || seg.speakerName || seg.source);
+  // Untimed text has one cue at 0; it spans the recording when its length is known.
+  const lastEnd =
+    isUntimed(segments) && note.audio_duration_seconds > 0 ? note.audio_duration_seconds : null;
   const entries = [];
   for (let i = 0; i < merged.length; i++) {
     const seg = merged[i];
-    const nextTs = i + 1 < merged.length ? merged[i + 1].timestamp : seg.endTimestamp + 3;
+    const nextTs =
+      i + 1 < merged.length ? merged[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
     entries.push(
@@ -162,8 +182,11 @@ function formatJson(note, segments, speakerMappings) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr } = extractMetadata(note);
 
+  const untimed = isUntimed(segments);
   const speakersSet = new Set();
-  for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
+  if (!untimed) {
+    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
+  }
   const lastSeg = merged[merged.length - 1];
 
   return JSON.stringify(
@@ -171,13 +194,18 @@ function formatJson(note, segments, speakerMappings) {
       metadata: {
         title,
         date: dateStr,
-        duration_seconds: lastSeg ? Math.round(lastSeg.endTimestamp) : 0,
+        duration_seconds:
+          untimed && note.audio_duration_seconds > 0
+            ? Math.round(note.audio_duration_seconds)
+            : lastSeg
+              ? Math.round(lastSeg.endTimestamp)
+              : 0,
         speaker_count: speakersSet.size,
         segment_count: merged.length,
       },
       speakers: [...speakersSet],
       segments: merged.map((seg) => ({
-        speaker: resolveSpeaker(seg, speakerMappings),
+        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings),
         timestamp: seg.timestamp,
         text: seg.text,
       })),
@@ -195,8 +223,13 @@ function formatMd(note, segments, speakerMappings) {
   if (participants.length)
     lines.push(`**${i18nMain.t("notes.editor.participants")}:** ${participants.join(", ")}`);
   lines.push("", "---", "");
+  const untimed = isUntimed(segments);
   for (const seg of merged) {
-    lines.push(`**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``);
+    if (!untimed) {
+      lines.push(
+        `**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``
+      );
+    }
     lines.push(`${seg.text}`, "");
   }
   return lines.join("\n");

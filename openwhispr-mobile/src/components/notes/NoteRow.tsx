@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { CloudOff } from 'lucide-react-native';
 import { GroupedList } from './GroupedList';
-import { SwipeableCard } from '@/components/ui/SwipeableCard';
+import { SwipeableCard, type RestoreRow } from '@/components/ui/SwipeableCard';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { iosColor, BRAND } from '@/config/colors';
 import { formatNoteRowTime } from '@/lib/formatNoteRowTime';
@@ -14,7 +14,7 @@ type NoteRowProps = {
   bucket: DateBucketKey;
   onPress: () => void;
   onLongPress?: () => void;
-  onDelete: () => void;
+  onDelete: (restore: RestoreRow) => void;
   onMove?: () => void;
   /** Match the parent GroupedList's tinted background. */
   tinted?: boolean;

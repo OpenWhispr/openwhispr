@@ -17,6 +17,8 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  /** Superseded: kept so existing selections keep working; see isListedModel. */
+  legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
   draftHfRepo?: string;
   draftFileName?: string;
@@ -49,6 +51,7 @@ export interface CloudModelDefinition {
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
   reasoningEffort?: ReasoningEffortCapability;
+  legacy?: boolean;
 }
 
 export interface ReasoningEffortCapability {
@@ -76,6 +79,7 @@ export interface TranscriptionModelDefinition {
   streaming?: boolean;
   /** Streams only in Note Recording; dictation, onboarding and upload never offer it. */
   noteRecordingOnly?: boolean;
+  legacy?: boolean;
 }
 
 export interface TranscriptionProviderData {
@@ -236,6 +240,7 @@ export interface ReasoningModel {
   label: string;
   description: string;
   descriptionKey?: string;
+  legacy?: boolean;
 }
 
 export interface ReasoningProvider {
@@ -261,6 +266,7 @@ export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
     label: m.name,
     description: m.description,
     descriptionKey: m.descriptionKey,
+    legacy: m.legacy,
   };
 }
 
@@ -294,12 +300,7 @@ function buildReasoningProviders(): ReasoningProviders {
   for (const ep of modelRegistry.getEnterpriseProviders()) {
     providers[ep.id] = {
       name: ep.name,
-      models: ep.models.map((m) => ({
-        value: m.id,
-        label: m.name,
-        description: m.description,
-        descriptionKey: m.descriptionKey,
-      })),
+      models: ep.models.map(toReasoningModel),
     };
   }
 
