@@ -32,6 +32,7 @@ const DEV_KEY = process.env.EXPO_PUBLIC_APPSFLYER_DEV_KEY?.trim();
 // ignored on Android.
 const IOS_APP_ID = '6763804420';
 const MAX_PENDING_EVENTS = 20;
+const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
 
 let didSetUp = false;
 let didInit = false;
@@ -43,16 +44,23 @@ let sdkStateChange: Promise<void> | null = null;
 let trackingAuthorizationStatus: TrackingAuthorizationStatus | null = null;
 let trackingRefreshRevision = 0;
 let pendingEvents: PendingEvent[] = [];
-let attributionRevision = 0;
+let resolvedTrackingStatus: TrackingAuthorizationStatus | null = null;
 const attributionListeners = new Set<() => void>();
-let lastNotifiedCollectionAllowed: boolean | undefined;
+let lastPublishedConsent: AppsFlyerAttributionConsent | undefined;
 
-function notifyAttributionChanged(sessionStarted = false): void {
-  const allowed = collectionAllowed();
-  if (!sessionStarted && allowed === lastNotifiedCollectionAllowed) return;
-  lastNotifiedCollectionAllowed = allowed;
-  attributionRevision += 1;
-  attributionListeners.forEach((listener) => listener());
+// 'pending' means a decision is not known yet (preference not hydrated, or no
+// ATT result read). It is neither a grant nor a withdrawal.
+export type AppsFlyerAttributionConsent = 'granted' | 'revoked' | 'pending';
+
+export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
+  if (!DEV_KEY) return 'revoked';
+  const enabled = analyticsPreference();
+  if (enabled === false) return 'revoked';
+  // Every foreground re-reads ATT and clears the status meanwhile; that re-check
+  // must not read as a withdrawal, so fall back to the last result read.
+  const status = trackingAuthorizationStatus ?? resolvedTrackingStatus;
+  if (enabled === null || status === null) return 'pending';
+  return status === 'authorized' || status === 'notSupported' ? 'granted' : 'revoked';
 }
 
 export function subscribeAppsFlyerAttribution(listener: () => void): () => void {
@@ -62,27 +70,38 @@ export function subscribeAppsFlyerAttribution(listener: () => void): () => void 
   };
 }
 
-export function isAppsFlyerAttributionAllowed(): boolean {
-  return collectionAllowed();
+// Listeners hear about consent changes, and about a started session, which is
+// when the identifier becomes readable.
+function publishAttributionState(sessionStarted = false): void {
+  const consent = getAppsFlyerAttributionConsent();
+  const consentChanged = consent !== 'pending' && consent !== lastPublishedConsent;
+  if (consentChanged) lastPublishedConsent = consent;
+  if (!consentChanged && !sessionStarted) return;
+  attributionListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      warn('attribution listener failed')(error);
+    }
+  });
 }
 
 // Only expose an identifier from a started, consented session. A slow native
-// lookup must neither hold billing indefinitely nor outlive a consent change.
+// lookup must neither hold billing indefinitely nor outlive an SDK restart,
+// which every consent change causes. Null means "not available now", not a
+// withdrawal: callers read consent separately.
 export async function getAppsFlyerRevenueId(): Promise<string | null> {
   const readiness = sdkReady;
-  const revision = attributionRevision;
   if (!didStartCurrentSession || !readiness || !collectionAllowed()) return null;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const id = await Promise.race([
       readiness.then((ready) => (ready ? getAppsFlyer().getAppsFlyerUID() : null)),
       new Promise<null>((resolve) => {
-        timeout = setTimeout(() => resolve(null), 2000);
+        timeout = setTimeout(() => resolve(null), REVENUE_ID_LOOKUP_TIMEOUT_MS);
       }),
     ]);
-    return revision === attributionRevision && readiness === sdkReady && collectionAllowed()
-      ? id?.trim() || null
-      : null;
+    return readiness === sdkReady && collectionAllowed() ? id?.trim() || null : null;
   } catch (error) {
     warn('revenue identifier lookup failed')(error);
     return null;
@@ -138,7 +157,7 @@ function startSessionIfAllowed(): void {
     .then((): boolean => {
       if (sdkReady === startOperation) {
         flushPendingEvents();
-        notifyAttributionChanged(true);
+        publishAttributionState(true);
       }
       return true;
     })
@@ -215,13 +234,17 @@ function setSdkStopped(shouldStop: boolean): void {
     if (!updated || stopped) return false;
     startSessionIfAllowed();
     flushPendingEvents();
-    notifyAttributionChanged(true);
     return true;
   });
 }
 
 function applyAttributionPolicy(devKey: string): void {
-  notifyAttributionChanged();
+  applyCollectionPolicy(devKey);
+  // After the SDK state matches the policy, so listeners read the result.
+  publishAttributionState();
+}
+
+function applyCollectionPolicy(devKey: string): void {
   const enabled = analyticsPreference();
   if (enabled === null) return;
 
@@ -247,6 +270,7 @@ function applyAttributionPolicy(devKey: string): void {
 
 function applyTrackingAuthorizationStatus(status: TrackingAuthorizationStatus): void {
   trackingAuthorizationStatus = status;
+  resolvedTrackingStatus = status;
   if (didSetUp && DEV_KEY) applyAttributionPolicy(DEV_KEY);
 }
 

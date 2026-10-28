@@ -13,8 +13,11 @@ jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
+    collectDeviceIdentifiers: jest.fn(),
     setAppsflyerID: jest.fn(),
     syncAttributesAndOfferingsIfNeeded: jest.fn(),
+    getAppUserID: jest.fn(),
+    isAnonymous: jest.fn().mockResolvedValue(false),
     logIn: jest.fn(),
     logOut: jest.fn(),
     syncPurchasesForResult: jest.fn(),
@@ -29,7 +32,7 @@ jest.mock('react-native-purchases', () => ({
 }));
 jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerRevenueId: jest.fn().mockResolvedValue(null),
-  isAppsFlyerAttributionAllowed: () => false,
+  getAppsFlyerAttributionConsent: () => 'revoked',
   subscribeAppsFlyerAttribution: jest.fn(),
 }));
 jest.mock('@/lib/sentry', () => ({

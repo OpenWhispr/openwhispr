@@ -11,6 +11,9 @@ export function useRevenueCatIdentity(): void {
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
   const billingUserId = useUsageStore((state) => state.usage?.billingUserId ?? null);
+  // Requested is what sign-out must undo, even while a login is pending or after
+  // it failed (the native call may still land). Identified gates a retry.
+  const requestedUserIdRef = useRef<string | null>(null);
   const identifiedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -27,22 +30,18 @@ export function useRevenueCatIdentity(): void {
       // exact moment a purchase is being attributed. Mirrors the same guard in
       // SuperwallEntitlementBridge.
       if (!billingUserId) return;
+      requestedUserIdRef.current = billingUserId;
       if (identifiedUserIdRef.current === billingUserId) return;
-      // Remember the requested identity immediately so sign-out also queues a
-      // reset while the native login is still pending.
-      identifiedUserIdRef.current = billingUserId;
-      let cancelled = false;
       identifyRevenueCatUser(billingUserId).then((identified) => {
-        if (!identified && !cancelled && identifiedUserIdRef.current === billingUserId) {
-          identifiedUserIdRef.current = null;
+        if (identified && requestedUserIdRef.current === billingUserId) {
+          identifiedUserIdRef.current = billingUserId;
         }
       });
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    if (identifiedUserIdRef.current) {
+    if (requestedUserIdRef.current) {
+      requestedUserIdRef.current = null;
       identifiedUserIdRef.current = null;
       resetRevenueCatUser();
     }

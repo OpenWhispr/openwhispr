@@ -6,14 +6,18 @@ import Purchases, {
 } from 'react-native-purchases';
 import { Sentry } from '@/lib/sentry';
 import {
+  getAppsFlyerAttributionConsent,
   getAppsFlyerRevenueId,
-  isAppsFlyerAttributionAllowed,
   subscribeAppsFlyerAttribution,
 } from '@/lib/appsflyer';
 
 let configured = false;
+// The billing user this session logged the SDK in as, and the one the app
+// currently wants. They differ while a sign-out or account switch is pending.
 let identifiedUserId: string | null = null;
 let requestedUserId: string | null = null;
+// The identifier this session attached to identifiedUserId, if any.
+let linkedRevenueId: string | null = null;
 let identityQueue: Promise<unknown> = Promise.resolve();
 
 const IDENTITY_CALL_TIMEOUT_MS = 10_000;
@@ -49,42 +53,94 @@ function withIdentity<T>(
   });
 }
 
-async function setRevenueAttributionId(id: string | null): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+function canLinkRevenueAttribution(): boolean {
+  return (
+    identifiedUserId !== null &&
+    identifiedUserId === requestedUserId &&
+    getAppsFlyerAttributionConsent() === 'granted'
+  );
+}
+
+// A definite opt-out, or a signed-in user who has since left (sign-out or an
+// account switch still queued, or a sign-out the SDK failed to complete).
+function revenueAttributionWithdrawn(): boolean {
+  return (
+    getAppsFlyerAttributionConsent() === 'revoked' ||
+    (identifiedUserId !== null && identifiedUserId !== requestedUserId)
+  );
+}
+
+async function linkRevenueAttribution(id: string): Promise<void> {
+  if (linkedRevenueId === id) return;
   try {
+    // Device identifiers are collected only here, with consent; automatic
+    // collection is off so clearing the ID never sends them.
+    await Purchases.collectDeviceIdentifiers();
     await Purchases.setAppsflyerID(id);
-    // Setters only update local attributes. Request a push for opt-outs too.
-    // This SDK method can be rate limited without rejecting: do not cache its
-    // result as delivery proof. Retry on future session/policy/purchase signals.
-    await Purchases.syncAttributesAndOfferingsIfNeeded();
+    linkedRevenueId = id;
   } catch (error) {
     reportRevenueCatError('sync-attribution', error);
   }
 }
 
-async function syncRevenueAttribution(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
-  const id =
-    identifiedUserId && identifiedUserId === requestedUserId && isAppsFlyerAttributionAllowed()
-      ? await getAppsFlyerRevenueId()
-      : null;
-  // Consent may have changed during the native ID lookup.
-  await setRevenueAttributionId(
-    identifiedUserId === requestedUserId && isAppsFlyerAttributionAllowed() ? id : null,
-  );
-  // A grant can be revoked while the attribute push is in flight. Clear it
-  // before the queued purchase/restore continues, not only in a later callback.
-  if (id && (identifiedUserId !== requestedUserId || !isAppsFlyerAttributionAllowed())) {
-    await setRevenueAttributionId(null);
+// Setters only change local attributes. logIn, logOut and every receipt post
+// push them, so only a withdrawal of a linked ID asks for an immediate push.
+// That push can be rate limited without rejecting, so it is not delivery proof.
+async function unlinkRevenueAttribution({ push }: { push: boolean }): Promise<void> {
+  const wasLinked = linkedRevenueId !== null;
+  try {
+    await Purchases.setAppsflyerID(null);
+    linkedRevenueId = null;
+    if (push && wasLinked) await Purchases.syncAttributesAndOfferingsIfNeeded();
+  } catch (error) {
+    reportRevenueCatError('sync-attribution', error);
   }
 }
 
 // Must run inside withIdentity: attribute setters target the current SDK user.
+async function syncRevenueAttribution(): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  if (revenueAttributionWithdrawn()) {
+    await unlinkRevenueAttribution({ push: true });
+    return;
+  }
+  // Undecided consent, or a user this session has not logged in: keep what the
+  // SDK user already has rather than treating "unknown" as a withdrawal.
+  if (!canLinkRevenueAttribution() || linkedRevenueId) return;
+  // A null ID is "not readable yet"; a started session notifies again.
+  const id = await getAppsFlyerRevenueId();
+  if (!id || !canLinkRevenueAttribution()) return;
+  await linkRevenueAttribution(id);
+  // Consent can be withdrawn while the setters cross the bridge. Clear it
+  // before a queued purchase or restore posts, not only in a later callback.
+  if (revenueAttributionWithdrawn()) await unlinkRevenueAttribution({ push: true });
+}
+
+// An anonymous SDK user is never linked, so only a signed-in one needs clearing.
+async function isSignedInSdkUserOtherThan(userId: string | null): Promise<boolean> {
+  return (await Purchases.getAppUserID()) !== userId && !(await Purchases.isAnonymous());
+}
+
 async function logInWithAttribution(userId: string): Promise<void> {
-  if (identifiedUserId !== userId) await setRevenueAttributionId(null);
+  if (Platform.OS === 'ios' && (await isSignedInSdkUserOtherThan(userId))) {
+    // logIn pushes the departing user's attributes before switching.
+    await unlinkRevenueAttribution({ push: false });
+  }
   await Purchases.logIn(userId);
+  if (identifiedUserId !== userId) linkedRevenueId = null;
   identifiedUserId = userId;
   await syncRevenueAttribution();
+}
+
+async function logOutWithAttribution(): Promise<void> {
+  // The SDK rejects logging out an anonymous user; there is no one to sign out.
+  if (await isSignedInSdkUserOtherThan(null)) {
+    // logOut pushes the departing user's attributes before switching.
+    if (Platform.OS === 'ios') await unlinkRevenueAttribution({ push: false });
+    await Purchases.logOut();
+  }
+  identifiedUserId = null;
+  linkedRevenueId = null;
 }
 
 function getRevenueCatApiKey(): string | undefined {
@@ -116,6 +172,7 @@ export function configureRevenueCat(): void {
         type: PURCHASES_ARE_COMPLETED_BY_TYPE.MY_APP,
         storeKitVersion: STOREKIT_VERSION.STOREKIT_2,
       },
+      automaticDeviceIdentifierCollectionEnabled: false,
     });
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
     configured = true;
@@ -150,12 +207,7 @@ export async function resetRevenueCatUser(): Promise<void> {
   requestedUserId = null;
   if (!configured) return;
   try {
-    await withIdentity(async () => {
-      await setRevenueAttributionId(null);
-      await Purchases.logOut();
-      identifiedUserId = null;
-      await syncRevenueAttribution();
-    });
+    await withIdentity(logOutWithAttribution);
   } catch (error) {
     reportRevenueCatError('reset', error);
   }
