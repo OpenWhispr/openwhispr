@@ -614,3 +614,33 @@ test("a subfolder the cloud refuses to nest goes top-level without stranding its
   assert.equal(synced.sync_status, "synced");
   assert.equal(cloud.folder(synced.cloud_id).parent_folder_id, null);
 });
+
+test("a pass with backup off leaves the nesting of personal folders alone", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1").folder;
+  const cloudParent = cloud.seedFolder({
+    client_folder_id: parent.client_folder_id,
+    name: "Client A",
+    is_default: false,
+    sort_order: 1,
+  });
+  const cloudQuarter = cloud.seedFolder({
+    client_folder_id: quarter.client_folder_id,
+    name: "Q1",
+    is_default: false,
+    sort_order: 2,
+    parent_folder_id: cloudParent.id,
+  });
+  db.markFolderSynced(parent.id, cloudParent.id);
+  db.markFolderSynced(quarter.id, cloudQuarter.id);
+
+  browserLocalStorage.removeItem("cloudBackupEnabled");
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.ok(cloud.logFor("/api/folders/list").length > 0, "the team-only pass pulled folders");
+  assert.equal(folderByName(db, "Q1").parent_folder_id, null);
+});

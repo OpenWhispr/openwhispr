@@ -1930,14 +1930,6 @@ export class SyncService {
             continue;
           }
 
-          // An API without subfolders sends no parent; the local one stands.
-          if (!cloudFolder.deleted_at && cloudFolder.parent_folder_id !== undefined) {
-            parentLinks.push({
-              cloudId: cloudFolder.id,
-              parentCloudId: cloudFolder.parent_folder_id,
-            });
-          }
-
           if (teamOnly && !cloudFolder.space_id) {
             // A personal row whose local copy still sits in a team space
             // announces a team→personal transition — apply it, or a later
@@ -1972,6 +1964,14 @@ export class SyncService {
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             }
             continue;
+          }
+
+          // An API without subfolders sends no parent; the local one stands.
+          if (cloudFolder.parent_folder_id !== undefined) {
+            parentLinks.push({
+              cloudId: cloudFolder.id,
+              parentCloudId: cloudFolder.parent_folder_id,
+            });
           }
 
           const space = await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);

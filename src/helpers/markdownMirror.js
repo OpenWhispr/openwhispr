@@ -256,7 +256,16 @@ class MarkdownMirror {
       if (!oldPath) return;
       const newPath = this._folderCandidatePath(newName);
       if (!newPath || oldPath === newPath) return;
-      if (fs.existsSync(newPath)) this._resolveExistingFolderPath(newPath);
+      const existingPath = fs.existsSync(newPath) ? this._resolveExistingFolderPath(newPath) : null;
+      // A same-named folder in another space shares the directory, so move in
+      // beside it; a case-only rename finds the folder itself there.
+      if (existingPath && fs.statSync(existingPath).ino !== fs.statSync(oldPath).ino) {
+        for (const entry of fs.readdirSync(oldPath)) {
+          fs.renameSync(path.join(oldPath, entry), path.join(existingPath, entry));
+        }
+        fs.rmdirSync(oldPath);
+        return;
+      }
       fs.mkdirSync(path.dirname(newPath), { recursive: true });
       fs.renameSync(oldPath, newPath);
     } catch (err) {

@@ -3128,9 +3128,13 @@ class IPCHandlers {
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-apply-cloud-folder-parents", (_, links) => {
+      const previousMirrorFolders = this._noteFilesEnabled ? this._buildFolderMap() : {};
       const changed = this.databaseManager.applyCloudFolderParents(links);
       setImmediate(() => {
-        for (const folder of changed) broadcastToWindows("folder-synced", folder);
+        for (const folder of changed) {
+          broadcastToWindows("folder-synced", folder);
+          this._mirrorMoveFolder(previousMirrorFolders[folder.id], folder.id);
+        }
       });
     });
     ipcMain.handle("db-get-pending-folder-deletes", () =>

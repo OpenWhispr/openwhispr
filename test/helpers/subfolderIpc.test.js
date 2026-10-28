@@ -99,6 +99,7 @@ test.before(() => {
   };
   for (const method of [
     "createFolderWithEffects",
+    "_buildFolderMap",
     "_getMirrorFolder",
     "_mirrorMoveFolder",
     "_mirrorDeleteFolderIfUnshared",
@@ -190,12 +191,37 @@ test("hard-deleting a parent moves its surviving subfolder's files to the top le
   const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
   await settle();
   fs.writeFileSync(path.join(basePath, "Client A", "Q1", "1-plan.md"), "---\nid: 1\n---\n");
+  // Another space's top-level "Q1" already has the directory.
+  fs.mkdirSync(path.join(basePath, "Q1"));
+  fs.writeFileSync(path.join(basePath, "Q1", "2-roadmap.md"), "---\nid: 2\n---\n");
 
   assert.ok((await handlers.get("db-hard-delete-folder")(null, parent.id)).success);
   await settle();
   assert.equal(ctx.db.getFolders().find((f) => f.id === child.id).parent_folder_id, null);
   assert.ok(fs.existsSync(path.join(basePath, "Q1", "1-plan.md")));
+  assert.ok(fs.existsSync(path.join(basePath, "Q1", "2-roadmap.md")));
   assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
+});
+
+test("a pulled un-nest moves the subfolder's directory out of its old parent's", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
+  await settle();
+  db.markFolderSynced(parent.id, "c-parent");
+  db.markFolderSynced(child.id, "c-child");
+  fs.writeFileSync(path.join(basePath, "Client A", "Q1", "1-plan.md"), "---\nid: 1\n---\n");
+
+  await handlers.get("db-apply-cloud-folder-parents")(null, [
+    { cloudId: "c-child", parentCloudId: null },
+  ]);
+  await settle();
+  await handlers.get("db-hard-delete-folder")(null, parent.id);
+  await settle();
+  assert.ok(fs.existsSync(path.join(basePath, "Q1", "1-plan.md")));
 });
 
 test("a subfolder's directory survives while another space's folder shares its path", async (t) => {
