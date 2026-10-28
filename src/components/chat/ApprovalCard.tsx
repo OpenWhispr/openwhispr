@@ -62,6 +62,7 @@ function BodyField({
 }): ReactElement {
   return editing ? (
     <textarea
+      data-approval-field="body"
       aria-label={label}
       {...(invalidBecause ? { "aria-invalid": true, "aria-describedby": invalidBecause } : {})}
       dir="auto"

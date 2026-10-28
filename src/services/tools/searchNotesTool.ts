@@ -87,7 +87,10 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
 
       for (let i = 0; i < strategies.length; i++) {
         try {
-          return await strategies[i]();
+          const result = await strategies[i]();
+          if (Array.isArray(result.data) && result.data.length === 0 && i < strategies.length - 1)
+            continue;
+          return result;
         } catch (error) {
           if (i === strategies.length - 1) {
             return {

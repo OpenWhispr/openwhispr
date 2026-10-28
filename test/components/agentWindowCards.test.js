@@ -8,6 +8,12 @@ const { createRendererServer, installHappyDom } = require("../lib/rendererTestHa
 // interaction store, the cards and the layouts are the real ones, and the
 // settings store brings the app's i18n, so labels are in English.
 const MOCKS = {
+  "/services/editSelectedText": `
+    export async function editSelectedText(instruction, selectedText, options) {
+      globalThis.__selectionEdits.calls.push({ instruction, selectedText, ...options });
+      return globalThis.__selectionEdits.result;
+    }
+  `,
   "/useAgentChat": `
     import { useSyncExternalStore } from "react";
     const listeners = new Set();
@@ -86,6 +92,7 @@ const MOCKS = {
 };
 
 async function mountWindow(t, { platform } = {}) {
+  globalThis.__selectionEdits = { calls: [], result: null };
   let root = null;
   t.after(() => root && React.act(async () => root.unmount()));
   // Ends the turn's waits (and their timers) while the DOM still exists. The
@@ -710,14 +717,10 @@ test("the modal's glow is full on an empty chat, faint while speaking or working
   assert.equal(glow(), "soft", "speaking a follow-up in the chat");
 });
 
-for (const [platform, blurs] of [
-  ["darwin", true],
-  ["win32", false],
-  ["linux", false],
-]) {
-  test(`the window ${blurs ? "blurs" : "doesn't blur"} behind its translucent surfaces on ${platform}`, async (t) => {
+for (const platform of ["darwin", "win32", "linux"]) {
+  test(`the window's opaque surfaces need no backdrop blur on ${platform}`, async (t) => {
     const view = await mountWindow(t, { platform });
-    assert.equal(view.host.querySelector(".agent-window").hasAttribute("data-blur"), blurs);
+    assert.equal(view.host.querySelector(".agent-window").hasAttribute("data-blur"), false);
   });
 }
 
@@ -1417,7 +1420,9 @@ test("late press capture cannot enter the next request", async (t) => {
   const selection = defer(),
     screen = defer();
   view.happyWindow.electronAPI.captureSelectedText = () => selection.promise;
-  view.happyWindow.electronAPI.captureScreenContext = () => screen.promise;
+  let screenCaptures = 0;
+  view.happyWindow.electronAPI.captureScreenContext = () =>
+    ++screenCaptures === 1 ? screen.promise : Promise.resolve(null);
   await React.act(async () => view.main.handlers.hotkey({ external: true }));
   await view.wait(20);
   await React.act(async () =>
@@ -1435,6 +1440,170 @@ test("late press capture cannot enter the next request", async (t) => {
   await write(view, "second unrelated request");
   assert.equal(globalThis.__chat.sentOptions[1].selectedContext, undefined);
   assert.equal(globalThis.__chat.sentOptions[1].attachment, undefined);
+});
+
+for (const result of ["A fuller introduction.", null]) {
+  test(`selected-text voice ${result === null ? "questions stay in chat" : "edits replace the selection"}`, async (t) => {
+    const view = await mountWindow(t);
+    const replacements = [];
+    view.happyWindow.electronAPI.captureSelectedText = async () => ({
+      status: "selected",
+      sessionId: "selection-1",
+      text: "Short introduction.",
+      characterCount: 19,
+    });
+    view.happyWindow.electronAPI.replaceSelectedText = async (...args) => {
+      replacements.push(args);
+      return { success: true };
+    };
+    globalThis.__selectionEdits.result = result;
+    await React.act(async () => view.main.handlers.hotkey({ external: true }));
+    const instruction = result === null ? "What does this mean?" : "Elaborate this introduction";
+    await React.act(async () => globalThis.__voice.callbacks.onTranscript(instruction, "submit"));
+    if (result === null) {
+      assert.deepEqual(replacements, []);
+      assert.deepEqual(globalThis.__chat.sent, [instruction]);
+      assert.equal(globalThis.__chat.sentOptions[0].selectedContext.text, "Short introduction.");
+      assert.equal("sessionId" in globalThis.__chat.sentOptions[0].selectedContext, false);
+    } else {
+      assert.deepEqual(replacements, [
+        ["selection-1", result, { restoreClipboard: true, allowClipboardFallback: false }],
+      ]);
+      assert.deepEqual(globalThis.__chat.sent, []);
+    }
+  });
+}
+
+test("a changed native selection keeps the replacement available without an unguarded paste", async (t) => {
+  const view = await mountWindow(t);
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "stale",
+    text: "Original",
+  });
+  const calls = [];
+  view.happyWindow.electronAPI.replaceSelectedText = async (...args) => {
+    calls.push(args);
+    return { success: false, code: "selection_changed" };
+  };
+  globalThis.__selectionEdits.result = "Rewritten";
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  assert.equal(calls.length, 1);
+  assert.deepEqual(globalThis.__chat.sent, []);
+  assert.equal(view.host.querySelector("textarea").value, "Rewritten");
+});
+
+test("closing during a selection edit aborts it and cannot replace text later", async (t) => {
+  const view = await mountWindow(t);
+  const edit = defer();
+  globalThis.__selectionEdits.result = edit.promise;
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "s1",
+    text: "Original",
+  });
+  const replacements = [];
+  view.happyWindow.electronAPI.replaceSelectedText = async (...args) => {
+    replacements.push(args);
+    return { success: true };
+  };
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  await React.act(async () => view.main.handlers.dismiss());
+  assert.equal(globalThis.__selectionEdits.calls[0].signal.aborted, true);
+  await React.act(async () => edit.resolve("Late replacement"));
+  assert.deepEqual(replacements, []);
+  assert.deepEqual(globalThis.__chat.sent, []);
+});
+
+for (const verb of ["email", "slackPost"]) {
+  for (const stale of [false, true]) {
+    test(`voice edits a selected ${verb} card line${stale ? " only while its draft is unchanged" : " without sending it"}`, async (t) => {
+      const view = await mountWindow(t);
+      await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+      await view.chat({ busy: true, messages: [user, reply([slackCall])] });
+      await view.askApproval("c5");
+      const key = "a1::c5";
+      if (verb === "email") {
+        await React.act(async () =>
+          view.approvals.useConnectorApprovalStore.setState(({ entries }) => ({
+            entries: {
+              ...entries,
+              [key]: {
+                ...entries[key],
+                preview: { ...entries[key].preview, verbKey: "email" },
+                draft: {
+                  ...entries[key].draft,
+                  fields: {
+                    to: ["qa@example.test"],
+                    cc: [],
+                    subject: "Draft",
+                    body: SLACK_PREVIEW.body,
+                  },
+                },
+              },
+            },
+          }))
+        );
+      }
+      await view.settle();
+      const field = view.host.querySelector("[data-approval-card] textarea");
+      field.focus();
+      field.setSelectionRange(4, 12); // homepage
+      const edit = defer();
+      globalThis.__selectionEdits.result = edit.promise;
+      globalThis.__voice.events.length = 0;
+      await React.act(async () => view.main.handlers.hotkey({ external: false }));
+      assert.ok(
+        globalThis.__voice.events.includes("start"),
+        "the approval wait allows this selected field's take"
+      );
+      await React.act(async () =>
+        globalThis.__voice.callbacks.onTranscript("Change it to landing page", "submit")
+      );
+      assert.equal(globalThis.__selectionEdits.calls[0].selectedText, "homepage");
+      if (stale)
+        await React.act(async () =>
+          view.approvals.updateApprovalDraft(
+            key,
+            verb === "email"
+              ? { fields: { body: "Newer typed draft" } }
+              : { body: "Newer typed draft" }
+          )
+        );
+      await React.act(async () => edit.resolve("landing page"));
+      const entry = view.approvals.useConnectorApprovalStore.getState().entries[key];
+      assert.equal(
+        entry.draft.fields?.body ?? entry.draft.body,
+        stale ? "Newer typed draft" : "The landing page draft is ready."
+      );
+      assert.equal(entry.state, "pending");
+      assert.equal(entry.actionId, "act-1");
+      assert.deepEqual(globalThis.__chat.sent, []);
+      assert.equal(globalThis.__chat.cancels, 0);
+    });
+  }
+}
+
+test("each assistant request gets a fresh screenshot, including a spoken follow-up inside the window", async (t) => {
+  const view = await mountWindow(t);
+  const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  settings.useSettingsStore.setState({ voiceAgentScreenContext: true });
+  let captures = 0;
+  view.happyWindow.electronAPI.captureScreenContext = async () => ({
+    data: `screen-${++captures}`,
+    mediaType: "image/jpeg",
+  });
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await React.act(async () =>
+    globalThis.__voice.callbacks.onTranscript("Translate this email", "submit")
+  );
+  assert.equal(globalThis.__chat.sentOptions[0].attachment?.image, "screen-1");
+  await React.act(async () => view.main.handlers.open({ layout: "typing" }));
+  await view.settle();
+  await write(view, "What else is on screen?");
+  assert.equal(globalThis.__chat.sentOptions[1].attachment?.image, "screen-2");
 });
 test("New chat drops the previous press capture", async (t) => {
   const view = await mountWindow(t);

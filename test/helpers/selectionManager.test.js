@@ -85,6 +85,30 @@ test("captures an exact selection in an opaque session", async () => {
   assert.ok(result.sessionId);
 });
 
+test("macOS selection capture waits for the press-time PID lookup", async () => {
+  const { manager } = makeHarness();
+  let resolvePid;
+  const monitor = manager.textEditMonitor;
+  monitor.lastTargetPid = null;
+  monitor._captureTargetPromise = new Promise((resolve) => {
+    resolvePid = resolve;
+  });
+  let settled = false;
+  const capture = manager.captureSelectedText().then((result) => {
+    settled = true;
+    return result;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, "a pending target is not reported as unavailable");
+  monitor.lastTargetPid = 42;
+  monitor._captureTargetPromise = null;
+  resolvePid(42);
+  const result = await capture;
+  assert.equal(result.status, "selected");
+  assert.equal(result.text, "original");
+  assert.ok(result.sessionId);
+});
+
 // Answers keyed by the command line; anything else fails like a missing tool.
 function loadWithExecFile(outputs) {
   return loadSelectionManager({

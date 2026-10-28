@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
-import { blurBehindAgentSurfaces } from "../ui/overlayBlur";
 import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import AssistantNoteUndoListener from "../notes/AssistantNoteUndoListener";
 import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
@@ -15,7 +14,12 @@ import {
   answerWithText,
   useAgentInteractionStore,
 } from "../../stores/agentInteractionStore";
-import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import {
+  approvalKey,
+  updateApprovalDraft,
+  useConnectorApprovalStore,
+} from "../../stores/connectorApprovalStore";
+import { editSelectedText } from "../../services/editSelectedText";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
@@ -57,6 +61,63 @@ interface RequestExtras {
   attachment?: ChatImageAttachment | null;
 }
 
+type SelectionEditTarget =
+  | { kind: "external"; sessionId: string; text: string }
+  | {
+      kind: "approval";
+      key: string;
+      actionId: string;
+      field: "body" | "subject";
+      draftValue: string;
+      value: string;
+      start: number;
+      end: number;
+      text: string;
+    };
+
+function selectedApprovalField(): SelectionEditTarget | null {
+  const field = document.activeElement;
+  if (!(field instanceof window.HTMLTextAreaElement || field instanceof window.HTMLInputElement))
+    return null;
+  const name = field.getAttribute("data-approval-field");
+  if (name !== "body" && name !== "subject") return null;
+  const key = field.closest("[data-approval-card]")?.getAttribute("data-approval-card");
+  if (!key) return null;
+  const entry = useConnectorApprovalStore.getState().entries[key];
+  if (!entry || entry.reconnect || (entry.state !== "pending" && !entry.awaitingRetry)) return null;
+  if (entry.preview.verbKey !== "email" && entry.preview.verbKey !== "slackPost") return null;
+  const start = field.selectionStart ?? 0;
+  const end = field.selectionEnd ?? start;
+  if (start === end) return null;
+  const draftValue = entry.draft.fields?.[name] ?? (name === "body" ? entry.draft.body : undefined);
+  if (typeof draftValue !== "string") return null;
+  return {
+    kind: "approval",
+    key,
+    actionId: entry.actionId,
+    field: name,
+    draftValue,
+    value: field.value,
+    start,
+    end,
+    text: field.value.slice(start, end),
+  };
+}
+
+async function captureRequestScreen(): Promise<ChatImageAttachment | null> {
+  if (!getSettings().voiceAgentScreenContext || !isScreenContextAllowed(usePolicyStore.getState()))
+    return null;
+  try {
+    const image = await Promise.race([
+      window.electronAPI?.captureScreenContext?.(),
+      delay(PRESS_CAPTURE_WAIT_MS).then(() => null),
+    ]);
+    return image ? { image: image.data, mediaType: image.mediaType } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The agent window's root (`?agent=true`): the pill, the composer above it and
  * the modal, over one running chat. Recording, the turn, the draft and the
@@ -87,7 +148,7 @@ export default function AgentWindow() {
   );
   const chat = useAgentChat({ onRegenerateFailed });
   const {
-    busy,
+    busy: chatBusy,
     cancel: cancelTurn,
     conversationId,
     fork,
@@ -97,6 +158,20 @@ export default function AgentWindow() {
     regenerate: regenerateReply,
     switchChat: openChat,
   } = chat;
+  const [editingSelection, setEditingSelection] = useState(false);
+  const busy = chatBusy || editingSelection;
+  const chatBusyRef = useRef(chatBusy);
+  chatBusyRef.current = chatBusy;
+  const editTargetRef = useRef<SelectionEditTarget | null>(null);
+  const selectionEditRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      pressRef.current += 1;
+      selectionEditRef.current?.abort();
+      selectionEditRef.current = null;
+    },
+    []
+  );
   // A new function every render; read through a ref so callbacks stay stable.
   const sendRef = useRef(chat.send);
   sendRef.current = chat.send;
@@ -318,14 +393,17 @@ export default function AgentWindow() {
         }
         dispatch({ type: "notice", notice: "chat.sendNotStarted" });
       };
-      void sendRef
-        .current(text, {
+      void (async () => {
+        const image =
+          typed || !extras ? ((await captureRequestScreen()) ?? attachment) : attachment;
+        if (press !== pressRef.current) return true;
+        return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
-          ...(attachment ? { attachment } : {}),
-        })
-        .then((sent) => {
-          if (!sent) restoreUnsent();
-        }, restoreUnsent);
+          ...(image ? { attachment: image } : {}),
+        });
+      })().then((sent) => {
+        if (!sent) restoreUnsent();
+      }, restoreUnsent);
     },
     [dispatch, refuseIfRestricted, stopReading]
   );
@@ -346,7 +424,92 @@ export default function AgentWindow() {
       if (pending) await Promise.race([pending, delay(PRESS_CAPTURE_WAIT_MS)]);
       if (press === pressRef.current) pressRef.current += 1;
       if (dropped()) return;
-      submit(text, false);
+      const target = editTargetRef.current;
+      editTargetRef.current = null;
+      const extras = {
+        selectedContext: stateRef.current.selectedContext,
+        attachment: stateRef.current.attachment,
+      };
+      if (!target || (target.kind === "external" && extras.selectedContext?.text !== target.text)) {
+        submit(text, false, extras);
+        return;
+      }
+      const controller = new AbortController();
+      selectionEditRef.current?.abort();
+      selectionEditRef.current = controller;
+      busyRef.current = true;
+      setEditingSelection(true);
+      const current = () => !controller.signal.aborted && !dropped();
+      try {
+        const replacement = await editSelectedText(text, target.text, {
+          attachment: extras.attachment,
+          signal: controller.signal,
+        });
+        if (!current()) return;
+        if (replacement === null) {
+          busyRef.current = chatBusyRef.current;
+          submit(text, false, {
+            ...extras,
+            selectedContext: extras.selectedContext ?? { text: target.text, sourceMessageId: "" },
+          });
+          return;
+        }
+        if (target.kind === "approval") {
+          const entry = useConnectorApprovalStore.getState().entries[target.key];
+          const value =
+            entry?.draft.fields?.[target.field] ??
+            (target.field === "body" ? entry?.draft.body : undefined);
+          if (
+            !entry ||
+            entry.actionId !== target.actionId ||
+            entry.reconnect ||
+            (entry.state !== "pending" && !entry.awaitingRetry) ||
+            value !== target.draftValue
+          ) {
+            dispatch({ type: "notice", notice: "hooks.audioRecording.selectionEditing.changed" });
+            return;
+          }
+          const edited =
+            target.value.slice(0, target.start) + replacement + target.value.slice(target.end);
+          const fieldValue = target.field === "subject" ? edited.replace(/[\r\n]+/g, " ") : edited;
+          updateApprovalDraft(
+            target.key,
+            entry.draft.fields ? { fields: { [target.field]: fieldValue } } : { body: fieldValue }
+          );
+        } else {
+          const result = await window.electronAPI?.replaceSelectedText?.(
+            target.sessionId,
+            replacement,
+            {
+              restoreClipboard: true,
+              allowClipboardFallback: false,
+            }
+          );
+          if (!current()) return;
+          if (!result?.success) {
+            dispatch({ type: "held", text: replacement, context: null, attachment: null });
+            dispatch({
+              type: "notice",
+              notice: "hooks.audioRecording.selectionEditing.notAppliedTitle",
+            });
+            return;
+          }
+        }
+        dispatch({ type: "setContext", context: null });
+        dispatch({ type: "setAttachment", attachment: null });
+      } catch {
+        if (current())
+          dispatch({
+            type: "notice",
+            notice: "hooks.audioRecording.selectionEditing.reasoningFailed",
+          });
+      } finally {
+        if (selectionEditRef.current === controller) {
+          selectionEditRef.current = null;
+          busyRef.current = chatBusyRef.current;
+          setEditingSelection(false);
+        }
+      }
     },
     [dispatch, submit]
   );
@@ -381,55 +544,82 @@ export default function AgentWindow() {
 
   // Another app's selection and a screenshot, read at the press, ride with
   // the request it starts.
-  const capturePressContext = useCallback(() => {
-    const press = ++pressRef.current;
-    const isCurrent = () => press === pressRef.current;
-    const selection = Promise.resolve(window.electronAPI?.captureSelectedText?.())
-      .then((capture) => {
-        if (isCurrent() && capture?.status === "selected") {
-          dispatch({
-            type: "setContext",
-            context: { text: capture.text, sourceMessageId: "", source: "external" },
-          });
-        }
-      })
-      .catch(() => {});
-    const screenshot =
-      getSettings().voiceAgentScreenContext && isScreenContextAllowed(usePolicyStore.getState())
-        ? Promise.resolve(window.electronAPI?.captureScreenContext?.())
-            .then((image) => {
-              if (isCurrent() && image) {
-                dispatch({
-                  type: "setAttachment",
-                  attachment: { image: image.data, mediaType: image.mediaType },
-                });
-              }
-            })
-            .catch(() => {})
-        : null;
-    pressCaptureRef.current = Promise.all([selection, screenshot]);
-  }, [dispatch]);
+  const capturePressContext = useCallback(
+    (external: boolean, card: SelectionEditTarget | null) => {
+      const press = ++pressRef.current;
+      const isCurrent = () => press === pressRef.current;
+      editTargetRef.current = card;
+      if (external) dispatch({ type: "setContext", context: null });
+      dispatch({ type: "setAttachment", attachment: null });
+      const selection = Promise.resolve(
+        external ? window.electronAPI?.captureSelectedText?.() : null
+      )
+        .then((capture) => {
+          if (isCurrent() && capture?.status === "selected") {
+            editTargetRef.current = {
+              kind: "external",
+              sessionId: capture.sessionId,
+              text: capture.text,
+            };
+            dispatch({
+              type: "setContext",
+              context: { text: capture.text, sourceMessageId: "", source: "external" },
+            });
+          } else if (isCurrent() && capture && capture.status !== "none") {
+            dispatch({
+              type: "notice",
+              notice:
+                capture.status === "too_large"
+                  ? "hooks.audioRecording.selectionEditing.tooLarge"
+                  : "hooks.audioRecording.selectionEditing.unavailable",
+            });
+          }
+        })
+        .catch(() => {
+          if (isCurrent())
+            dispatch({
+              type: "notice",
+              notice: "hooks.audioRecording.selectionEditing.unavailable",
+            });
+        });
+      const screenshot = captureRequestScreen().then((attachment) => {
+        if (isCurrent() && attachment) dispatch({ type: "setAttachment", attachment });
+      });
+      pressCaptureRef.current = Promise.all([selection, screenshot]);
+    },
+    [dispatch]
+  );
 
-  const startListening = useCallback(async () => {
-    if (refuseIfRestricted()) return;
-    // One take at a time, and none over a reply.
-    if (busy || voice.status !== "idle" || voice.opening) return;
-    if (voice.streamingOnlyProvider) {
-      // A realtime-only provider can't transcribe a take: type instead.
-      dispatch({ type: "useKeyboard" });
-      return;
-    }
-    stopReading();
-    takeRef.current += 1;
-    dispatch({ type: "useVoice" });
-    if ((await voice.start()) === "refused") {
-      dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
-    }
-  }, [busy, dispatch, refuseIfRestricted, stopReading, voice]);
+  const startListening = useCallback(
+    async ({ external = false } = {}) => {
+      if (refuseIfRestricted()) return;
+      const card = external ? null : selectedApprovalField();
+      // Only a selected draft field can be edited while its turn waits on Send.
+      if ((busy && !card) || editingSelection || voice.status !== "idle" || voice.opening) return;
+      if (voice.streamingOnlyProvider) {
+        // A realtime-only provider can't transcribe a take: type instead.
+        dispatch({ type: "useKeyboard" });
+        return;
+      }
+      stopReading();
+      capturePressContext(external, card);
+      takeRef.current += 1;
+      dispatch({ type: "useVoice" });
+      if ((await voice.start()) === "refused") {
+        dispatch({ type: "notice", notice: "agentWindow.notices.dictationActive" });
+      }
+    },
+    [busy, capturePressContext, dispatch, editingSelection, refuseIfRestricted, stopReading, voice]
+  );
 
   const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
+    selectionEditRef.current?.abort();
+    selectionEditRef.current = null;
+    editTargetRef.current = null;
+    setEditingSelection(false);
+    busyRef.current = chatBusyRef.current;
     droppedTakeRef.current = takeRef.current;
     pressRef.current += 1;
     pressCaptureRef.current = null;
@@ -481,7 +671,7 @@ export default function AgentWindow() {
       }
       const current = stateRef.current;
       // A reply is running: show it, but don't listen over it.
-      if (busy) {
+      if (busy && (editingSelection || external || !selectedApprovalField())) {
         if (!current.visible) dispatch({ type: "show", layout: "modal", input: "voice" });
         return;
       }
@@ -494,13 +684,16 @@ export default function AgentWindow() {
         openedByTakeRef.current = true;
         dispatch({ type: "show", layout: "pill", input: "voice" });
       }
-      if (external) capturePressContext();
-      void startListening();
+      void startListening({ external });
     },
-    [busy, capturePressContext, dispatch, listening, refuseIfRestricted, startListening, voice]
+    [busy, dispatch, editingSelection, listening, refuseIfRestricted, startListening, voice]
   );
 
   const handleEscape = useCallback(() => {
+    if (selectionEditRef.current) {
+      dropTake();
+      return;
+    }
     if (listening) {
       dropTake();
       if (openedByTakeRef.current && stateRef.current.layout === "pill") void close();
@@ -695,7 +888,8 @@ export default function AgentWindow() {
         dispatch({ type: "useKeyboard", pending: Boolean(pendingCard) });
         return;
       case "stop":
-        cancelTurn();
+        if (selectionEditRef.current) dropTake();
+        else cancelTurn();
         return;
       case "close":
         void close();
@@ -712,15 +906,17 @@ export default function AgentWindow() {
       ? "listening"
       : transcribing
         ? "transcribing"
-        : pendingCard && (placement !== "modal" || pendingCard.interaction !== null)
-          ? "waiting"
-          : cardHolds
-            ? "idle"
-            : busy && !answerStarted
-              ? "thinking"
-              : busy
-                ? "streaming"
-                : "idle";
+        : editingSelection
+          ? "thinking"
+          : pendingCard && (placement !== "modal" || pendingCard.interaction !== null)
+            ? "waiting"
+            : cardHolds
+              ? "idle"
+              : busy && !answerStarted
+                ? "thinking"
+                : busy
+                  ? "streaming"
+                  : "idle";
   // Full on an empty chat, while the user speaks into it too (modal-empty);
   // faint while a draft is typed into it, or while listening or working in a
   // chat; none at rest or while a card waits on the user.
@@ -741,7 +937,10 @@ export default function AgentWindow() {
       <SelectedContextBlock
         text={state.selectedContext.text}
         source={state.selectedContext.source}
-        onRemove={() => dispatch({ type: "setContext", context: null })}
+        onRemove={() => {
+          editTargetRef.current = null;
+          dispatch({ type: "setContext", context: null });
+        }}
         compact={compact}
       />
     );
@@ -838,7 +1037,7 @@ export default function AgentWindow() {
   ) : null;
 
   return (
-    <div className="agent-window" data-blur={blurBehindAgentSurfaces || undefined}>
+    <div className="agent-window">
       <div
         className={cn(
           "agent-window-content flex h-full w-full flex-col items-center justify-end",

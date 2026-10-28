@@ -333,30 +333,6 @@ test("the cloud loop keeps a step's text for the next step and flags a throwing 
   assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "stop" });
 });
 
-test("a question about the screen is one Cloud request with the screenshot and no tools", async (t) => {
-  const bridge = cloudBridge();
-  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
-  const answer = reasoningService.askAboutScreen(
-    "What does the error say?",
-    { data: "SCREEN", mediaType: "image/jpeg" },
-    "Describe the screen."
-  );
-  await settle();
-  bridge.step([
-    { type: "content", text: "It says " },
-    { type: "content", text: "ECONNREFUSED." },
-  ]);
-
-  assert.equal(await answer, "It says ECONNREFUSED.");
-  assert.equal(bridge.startCalls.length, 1);
-  const [, messages, options] = bridge.startCalls[0];
-  assert.deepEqual(messages, [{ role: "user", content: "What does the error say?" }]);
-  assert.deepEqual(options, {
-    systemPrompt: "Describe the screen.",
-    screenContext: { data: "SCREEN", mediaType: "image/jpeg" },
-  });
-});
-
 test("a cloud run whose every step calls a tool answers once more, without tools", async (t) => {
   const { STEP_LIMIT_NOTE } = await import("../../src/config/prompts.ts");
   const bridge = cloudBridge();

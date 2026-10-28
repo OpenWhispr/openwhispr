@@ -233,6 +233,11 @@ class SelectionManager {
       while (this._captureTargetPromise) {
         await this._captureTargetPromise;
       }
+      if (this.platform === "darwin") {
+        while (this.textEditMonitor?._captureTargetPromise) {
+          await this.textEditMonitor._captureTargetPromise;
+        }
+      }
       this._pruneSessions();
       const expectedTarget =
         this.platform === "darwin" && this.textEditMonitor?.lastTargetPid

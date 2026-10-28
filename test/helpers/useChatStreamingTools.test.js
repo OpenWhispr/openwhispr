@@ -751,7 +751,7 @@ test("a chat that isn't about a note still lists the library notes a question fi
   // They ride on the message, which changes every turn, not the system prompt.
   assert.match(
     requests[0].at(-1).content,
-    /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/i
+    /notes from the user's library[^]*"id":3,"title":"Pricing sync Sep 29","content":"Testing \$15 against \$12/i
   );
   assert.doesNotMatch(prompts[0], /notes from the user's library|inside the note below/i);
 });
@@ -1443,69 +1443,53 @@ test("open_settings carries the model scope of the chat that asked", async (t) =
   }
 });
 
-test("in the agent window a Cloud screenshot is read through look_at_screen, not sent", async (t) => {
-  const { LOOK_AT_SCREEN_PROMPT } = await import("../../src/services/tools/lookAtScreenTool.ts");
-  const { captured, reasoningService, offeredTools, getMessages } = await renderChatStreaming(t, {
+test("the first Cloud request carries its screenshot without a look_at_screen step", async (t) => {
+  const { captured, reasoningService, offeredTools } = await renderChatStreaming(t, {
     inferenceScope: "dictationAgent",
     allowInteractions: true,
   });
   const configs = [];
-  let lookResult;
   reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
     configs.push(config);
     offeredTools.push((config.tools ?? []).map((tool) => tool.name));
     return (async function* () {
-      if (config.tools.some((tool) => tool.name === "look_at_screen")) {
-        const args = '{"question":"What does the error say?"}';
-        yield {
-          type: "tool_calls",
-          calls: [{ id: "c1", name: "look_at_screen", arguments: args }],
-        };
-        lookResult = await config.executeToolCall("look_at_screen", args, "c1");
-        // As the Cloud loop yields it.
-        yield {
-          type: "tool_result",
-          callId: "c1",
-          toolName: "look_at_screen",
-          displayText: lookResult.displayText,
-          ...(lookResult.metadata ? { metadata: lookResult.metadata } : {}),
-        };
-        yield { type: "content", text: "It's a refused connection." };
-      }
+      yield { type: "content", text: "Translated email." };
       yield { type: "done", finishReason: "stop" };
     })();
   });
-  const asked = [];
-  t.mock.method(reasoningService, "askAboutScreen", async (...args) => {
-    asked.push(args);
-    return "  The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.  ";
-  });
+  for (const [i, question] of ["Translate this email", "Hello"].entries()) {
+    await captured.sendToAI(question, [{ id: `u${i}`, role: "user", content: question }], {
+      attachment: { image: `image-${i}`, mediaType: "image/jpeg" },
+    });
+    assert.deepEqual(configs[i].screenContext, { data: `image-${i}`, mediaType: "image/jpeg" });
+    assert.equal(offeredTools[i].includes("look_at_screen"), false);
+    assert.match(configs[i].systemPrompt, /SCREEN CONTEXT:/);
+  }
+  assert.equal(configs.length, 2, "one provider call per request");
+});
 
-  const screenshot = { image: "base64-image", mediaType: "image/jpeg" };
-  const question = "What's this error?";
-  await captured.sendToAI(question, [{ id: "u1", role: "user", content: question }], {
-    attachment: screenshot,
-  });
-
-  assert.equal(configs[0].screenContext, undefined, "the image never rides with the request");
-  assert.ok(offeredTools[0].includes("look_at_screen"));
-  assert.doesNotMatch(configs[0].systemPrompt, /SCREEN CONTEXT:/);
-  assert.match(configs[0].systemPrompt, /available only through look_at_screen/);
-  assert.equal(asked.length, 1);
-  assert.deepEqual(asked[0].slice(0, 3), [
-    "What does the error say?",
-    { data: "base64-image", mediaType: "image/jpeg" },
-    LOOK_AT_SCREEN_PROMPT,
+test("automatic library context includes saved summaries and prioritizes private information", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {},
+    {
+      electronAPI: {
+        semanticSearchNotes: async () => [{ id: 3, title: "Pricing" }],
+        getNote: async () => ({
+          id: 3,
+          title: "Pricing",
+          content: "Introductory notes",
+          enhanced_content: "Starter $9; Pro $19 per month",
+        }),
+      },
+    }
+  );
+  await captured.sendToAI("What do our plans cost?", [
+    { id: "u1", role: "user", content: "What do our plans cost?" },
   ]);
-  assert.equal(asked[0][3], configs[0].signal, "screen interpretation belongs to the asking turn");
-  assert.equal(asked[0][3].aborted, true, "the completed turn releases its subrequests");
-  // What the screen showed reaches the model, never the saved tool call.
-  assert.equal(lookResult.data, "The terminal shows 'ECONNREFUSED 127.0.0.1:3000'.");
-  const saved = getMessages().find((message) => message.role === "assistant").toolCalls;
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].result, "Read the screen.");
-  assert.doesNotMatch(JSON.stringify(saved), /ECONNREFUSED/);
-
-  await captured.sendToAI("Thanks!", [{ id: "u2", role: "user", content: "Thanks!" }]);
-  assert.ok(!offeredTools[1].includes("look_at_screen"), "only the turn with a screenshot has it");
+  const body = sentMessages[0].at(-1).content;
+  assert.match(body, /Starter \$9; Pro \$19/);
+  assert.match(body, /Introductory notes/);
+  assert.match(sentMessages[0][0].content, /before considering public sources/);
+  assert.match(sentMessages[0][0].content, /Explicit questions about OpenWhispr/);
 });

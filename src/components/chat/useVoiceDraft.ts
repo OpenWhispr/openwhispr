@@ -150,6 +150,10 @@ export function useVoiceDraft({
   const readLevel = useCallback(() => {
     const analyser = analyserRef.current;
     if (!analyser) return 0;
+    if (contextRef.current?.state === "suspended") {
+      void contextRef.current.resume().catch(() => {});
+      return 0;
+    }
     return analyserRms(analyser, levelBufRef);
   }, []);
 
@@ -221,7 +225,7 @@ export function useVoiceDraft({
       const context = new AudioContext();
       const source = context.createMediaStreamSource(stream);
       const analyser = context.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 2048;
       // Chrome's pull-based renderer only fills the analyser when the graph
       // reaches the destination; route through a muted gain.
       const sink = context.createGain();

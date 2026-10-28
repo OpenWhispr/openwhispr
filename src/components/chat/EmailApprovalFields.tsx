@@ -117,6 +117,7 @@ function EmailFieldsEditor({
       <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
         <input
           aria-label={t("connectors.approval.email.subjectLabel")}
+          data-approval-field="subject"
           {...validity(invalid.subject)}
           type="text"
           className={cn(INLINE_FIELD, "font-medium")}

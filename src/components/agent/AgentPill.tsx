@@ -77,8 +77,7 @@ export function AgentPill({
           getLevel={readLevel}
           active={recording}
           bars={4}
-          maxBarPx={14}
-          className="ms-2 h-6 gap-1 text-foreground"
+          className="ms-2 h-6 text-foreground"
         />
       ) : null}
       {!controls.thinking && (
