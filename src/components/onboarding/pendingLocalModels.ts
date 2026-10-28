@@ -13,6 +13,8 @@ export type PendingLocalModelKind = "dictation" | "cleanup" | "assistant";
 export interface PendingLocalModelSelection {
   provider: string;
   modelId: string;
+  /** Left by local setup, whose download the tray resumes after a quit; an older build's pick isn't. */
+  resumable?: boolean;
 }
 
 export type PendingLocalModelSelections = Partial<

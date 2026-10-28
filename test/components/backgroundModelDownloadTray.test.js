@@ -43,7 +43,7 @@ function saveSession(currentStepId) {
   );
 }
 
-async function createTrayHarness(t) {
+async function createTrayHarness(t, { api = {}, storage = {} } = {}) {
   let unmount = async () => {};
   t.after(() => unmount());
   const listeners = { whisper: new Set(), parakeet: new Set(), llm: new Set() };
@@ -58,9 +58,11 @@ async function createTrayHarness(t) {
         onWhisperDownloadProgress: subscribe("whisper"),
         onParakeetDownloadProgress: subscribe("parakeet"),
         onModelDownloadProgress: subscribe("llm"),
+        ...api,
       },
     },
   });
+  for (const [key, value] of Object.entries(storage)) localStorage.setItem(key, value);
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-download-tray-test-",
@@ -199,4 +201,64 @@ test("a model local setup left downloading turns its row on when it lands", asyn
   assert.equal(store.selectResolvedLLMConfig(state, "chatIntelligence").model, LLM);
   assert.equal(state.useDictationAgent, true);
   assert.equal(pending.hasPendingLocalModels(), false);
+});
+
+// Local setup quit (or reloaded) with its queue still going: main has no transfer
+// for the queued row, so the tray finds it missing on the next launch.
+async function relaunchWithPending(t, selections, { downloaded = [] } = {}) {
+  const requested = [];
+  const tray = await createTrayHarness(t, {
+    storage: {
+      pendingLocalModelSelectionsV1: JSON.stringify(selections),
+      localSetupPending: "true",
+    },
+    api: {
+      listWhisperModels: async () => ({ models: [] }),
+      listParakeetModels: async () => ({ models: [] }),
+      modelGetAll: async () =>
+        [LLM, CLEANUP_LLM].map((id) => ({
+          id,
+          isDownloaded: downloaded.includes(id),
+          isDownloading: false,
+        })),
+      modelDownload: async (id) => {
+        requested.push(id);
+        return { success: true };
+      },
+    },
+  });
+  await React.act(async () => {});
+  const pending = await tray.vite.ssrLoadModule("/components/onboarding/pendingLocalModels.ts");
+  return { tray, requested, pending };
+}
+
+const CLEANUP_LLM = "qwen3.5-2b-q4_k_m";
+
+test("after a quit, local setup's queued rows download again, one after another", async (t) => {
+  const { requested, pending } = await relaunchWithPending(t, {
+    cleanup: { provider: "qwen", modelId: CLEANUP_LLM, resumable: true },
+    assistant: { provider: "qwen", modelId: LLM, resumable: true },
+  });
+  assert.deepEqual(requested, [CLEANUP_LLM, LLM]);
+  assert.deepEqual(Object.keys(pending.readPendingLocalModels()), ["cleanup", "assistant"]);
+});
+
+test("an older build's missing pick is forgotten, not downloaded", async (t) => {
+  const { requested, pending } = await relaunchWithPending(t, {
+    assistant: { provider: "qwen", modelId: LLM },
+  });
+  assert.deepEqual(requested, []);
+  assert.equal(pending.hasPendingLocalModels(), false);
+});
+
+test("a queued row that finished before the quit turns on instead of downloading", async (t) => {
+  const { tray, requested, pending } = await relaunchWithPending(
+    t,
+    { assistant: { provider: "qwen", modelId: LLM, resumable: true } },
+    { downloaded: [LLM] }
+  );
+  assert.deepEqual(requested, []);
+  assert.equal(pending.hasPendingLocalModels(), false);
+  const store = await tray.vite.ssrLoadModule("/stores/settingsStore.ts");
+  assert.equal(store.useSettingsStore.getState().useDictationAgent, true);
 });

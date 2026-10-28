@@ -19,6 +19,7 @@ import {
   type PendingLocalModelSelection,
 } from "./pendingLocalModels";
 import { activatePendingLocalSetupModel } from "./localSetupSettings";
+import { downloadInBackground } from "./useLocalSetupDownloads";
 import type {
   LocalLLMDownloadProgressEvent,
   ParakeetDownloadProgressData,
@@ -192,6 +193,7 @@ export default function BackgroundModelDownloadTray({
         llm,
       };
       const canActivate = localStorage.getItem("localSetupPending") === "true";
+      const resume: string[] = [];
       for (const [kind, selection] of Object.entries(readPendingLocalModels()) as [
         PendingLocalModelKind,
         PendingLocalModelSelection,
@@ -199,10 +201,17 @@ export default function BackgroundModelDownloadTray({
         const availability = getPendingLocalModelAvailability(kind, selection, inventory);
         if (availability === "downloaded" && canActivate) {
           activatePendingLocalModel(kind === "dictation" ? "speech" : "llm", selection.modelId);
+        } else if (availability === "missing" && canActivate && selection.resumable) {
+          // Local setup's queue lived in the window that closed (a quit or a reload):
+          // carry on with the row the user switched on. Its X still forgets it.
+          resume.push(selection.modelId);
         } else if (availability === "downloaded" || availability === "missing") {
           forgetPendingLocalModel(kind, selection.modelId);
         }
       }
+      void (async () => {
+        for (const id of resume) await downloadInBackground({ kind: "llm", id });
+      })();
 
       setDownloads((current) =>
         mergeHydratedDownloads(active, current, removedDuringHydration.current)

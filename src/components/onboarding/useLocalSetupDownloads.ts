@@ -107,7 +107,9 @@ async function downloadItem(item: LocalSetupDownload, downloaders: Downloaders):
 
 // After Proceed the step is gone, so its useModelDownload instances are too: a
 // model downloads straight over IPC, and the tray shows its progress and errors.
-async function downloadInBackground(item: LocalSetupDownload): Promise<boolean> {
+export async function downloadInBackground(
+  item: Pick<LocalSetupDownload, "kind" | "id">
+): Promise<boolean> {
   const api = window.electronAPI;
   if (item.kind === "llamaVulkan") {
     const result = await api?.downloadLlamaVulkanBinary?.();

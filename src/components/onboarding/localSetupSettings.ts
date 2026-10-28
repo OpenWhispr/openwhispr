@@ -107,7 +107,9 @@ export function rememberPendingLocalSetupRows(plan: LocalSetupPlan, rowIds: Opti
   for (const id of rowIds) {
     const row = plan.rows.find((r) => r.id === id);
     const provider = row && modelRegistry.getModel(row.modelId)?.provider.id;
-    if (row && provider) rememberPendingLocalModel(id, { provider, modelId: row.modelId });
+    if (row && provider) {
+      rememberPendingLocalModel(id, { provider, modelId: row.modelId, resumable: true });
+    }
   }
 }
 
