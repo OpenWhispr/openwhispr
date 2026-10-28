@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil hat {{from}} eingestellt. Zu {{to}} gewechselt.",
       "refreshingModels": "Modelle werden aktualisiert…"
     },
+    "openai": {
+      "modelRetired": "OpenAI hat {{from}} eingestellt. Zu {{to}} gewechselt."
+    },
     "corti": {
       "euOnly": "Corti-Modelle sind nur in der EU-Region verfügbar."
     }
@@ -2726,6 +2729,8 @@
   "models": {
     "learnMore": "Mehr erfahren",
     "noneAvailable": "Keine Modelle verfügbar",
+    "legacy": "Veraltet",
+    "legacyHint": "Wird nicht mehr angeboten. Nach einem Wechsel zu einem anderen Modell wird es nicht mehr angezeigt.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "Präzisestes lokales ASR (5,42 % durchschnittliche WER, 14 Sprachen). Keine automatische Spracherkennung"
@@ -2735,7 +2740,8 @@
         "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)",
         "nemotron_speech_streaming_en_0_6b": "Englische Streaming-ASR von NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "Mehrsprachige Streaming-ASR von NVIDIA Nemotron mit automatischer Spracherkennung (15 Sprachen)",
-        "orukeet": "Feinabgestimmtes Parakeet für mehrsprachige Spracherkennung"
+        "orukeet": "Feinabgestimmtes Parakeet für mehrsprachige Spracherkennung",
+        "parakeet_tdt_110m_en": "Schlanke englische ASR mit Zeichensetzung für leistungsschwache Rechner"
       },
       "diarization": {
         "segmentation": "Sprachgrenzerkennung für die Sprecherzuordnung",
@@ -2747,7 +2753,9 @@
         "small": "Bessere Qualität, langsamer",
         "medium": "Hohe Qualität",
         "large": "Beste Qualität, am langsamsten",
-        "turbo": "Schnell mit guter Qualität"
+        "turbo": "Schnell mit guter Qualität",
+        "large_q5": "Large mit einem Drittel der Downloadgröße",
+        "turbo_q5": "Turbo mit einem Drittel der Downloadgröße"
       },
       "transcription": {
         "openai_gpt_transcribe": "Neueste, genaueste Transkription",
@@ -2765,7 +2773,10 @@
         "deepgram_nova_3": "Deepgrams genauestes Echtzeitmodell",
         "assemblyai_universal_streaming_english": "Unveränderliche Echtzeit-Transkripte, Englisch",
         "assemblyai_universal_streaming_multilingual": "Unveränderliche Echtzeit-Transkripte, mehrsprachig",
-        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen"
+        "assemblyai_universal_3_5_pro": "Höchste Genauigkeit in Echtzeit, 18 Sprachen",
+        "assemblyai_universal_3_6_pro": "Höchste Genauigkeit in Echtzeit, 32 Sprachen",
+        "mistral_voxtral_mini_transcribe_3_0": "Schnelle Transkription in über 50 Sprachen (Vorschau)",
+        "mistral_voxtral_small_transcribe_3_0": "Genauestes Voxtral, über 50 Sprachen (Vorschau)"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -2773,7 +2784,6 @@
         "openai_gpt_5_nano": "Ultraschnell, niedrige Latenz",
         "openai_gpt_4_1": "Starke Basis, 1M Kontext",
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
-        "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
         "anthropic_claude_fable_5_1": "Leistungsstärkstes Modell von Anthropic, Mythos-Klasse",
         "anthropic_claude_fable_5": "Vorheriges Flaggschiff der Mythos-Klasse",
         "anthropic_claude_opus_5_5": "Neuestes Opus-Modell für komplexes Reasoning, 1M Kontext",
@@ -2783,7 +2793,7 @@
         "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
         "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
-        "gemini_gemini_3_5_flash": "Neuestes schnelles, leistungsstarkes Gemini-Modell",
+        "gemini_gemini_3_5_flash": "Schnelles, leistungsstarkes Gemini-Modell",
         "gemini_gemini_3_5_flash_lite": "Schnellstes, kostengünstigstes 3.5-Modell",
         "gemini_gemini_3_1_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
         "gemini_gemini_3_1_flash_lite": "Leistung auf Frontier-Niveau zu geringen Kosten",
@@ -2811,18 +2821,29 @@
         "corti_corti_s1_instant": "Schnelles Gesundheitsmodell, ohne Reasoning-Spur",
         "corti_corti_s1": "Leistungsfähigstes klinisches Modell mit Reasoning",
         "corti_corti_s1_mini_instant": "Kompaktes Gesundheitsmodell, am schnellsten und günstigsten",
-        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis"
+        "corti_corti_s1_mini": "Kompaktes klinisches Modell mit Reasoning zum halben Preis",
+        "openai_gpt_6_1_sol": "Fast Astra-Niveau für Chat und agentische Aufgaben zu geringeren Kosten",
+        "openai_gpt_6_luna": "Schnellstes und günstigstes GPT-6",
+        "gemini_gemini_3_6_flash": "Schnelles, leistungsstarkes Gemini-Modell",
+        "gemini_gemini_3_8_flash": "Leistungsstärkstes Flash-Modell",
+        "gemini_gemini_4_argon": "Googles Spitzenmodell für Reasoning",
+        "tinfoil_kimi_k3": "Privates Moonshot-Spitzenmodell mit nativem Reasoning und Bildverständnis, 256K Kontext",
+        "tinfoil_deepseek_v4_1_flash": "Privates schnelles DeepSeek-Modell mit optionalem Reasoning, 1M Kontext"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "Leistungsstärkstes Claude-Modell. Ideal für die schwierigsten Assistenten-Aufgaben.",
-        "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
-        "bedrock_claude_sonnet_5": "Ausgewogen. Empfohlener Standard für Assistenten-Aufgaben.",
+        "bedrock_claude_haiku_4_5": "Vorheriges Haiku. Schnell und günstig zum Bereinigen von Text.",
+        "bedrock_claude_sonnet_5": "Vorheriges Sonnet. Schnell und leistungsfähig für Assistenten-Aufgaben.",
         "bedrock_claude_opus_4_8": "Höchste Intelligenz. Für komplexe Assistenten-Aufgaben.",
         "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
         "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für Assistenten-Aufgaben.",
         "bedrock_qwen3_next_80b": "Sparsames offenes Modell. Schnell und mehrsprachig.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "Ausgewogen. Empfohlener Standard für Assistenten-Aufgaben.",
+        "bedrock_claude_haiku_5_5": "Schnellstes Claude-Modell. Ideal zum Bereinigen von Text.",
+        "bedrock_claude_opus_5_5": "Höchste Intelligenz. Für komplexe Assistenten-Aufgaben.",
+        "vertex_gemini_3_8_flash": "Leistungsstärkstes Flash-Modell über Vertex",
+        "vertex_gemini_3_5_flash_lite": "Schnellstes und günstigstes Modell über Vertex",
+        "vertex_gemini_4_argon": "Googles Spitzenmodell für Reasoning über Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Leistungsstarkes Hybridmodell",
@@ -2859,7 +2880,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE von Liquid AI, hohe Qualität mit nur 1,5B aktiven Parametern",
         "liquidai_lfm2_2_6b_q4_k_m": "Ausgewogenes LFM2 für hochwertigere Bereinigung",
         "liquidai_lfm2_5_350m_q8_0": "Ultraleichtes Modell für schnelle Diktatbereinigung",
-        "liquidai_lfm2_5_230m_q8_0": "Winziges Modell, sofortige Bereinigung auf bescheidener Hardware"
+        "liquidai_lfm2_5_230m_q8_0": "Winziges Modell, sofortige Bereinigung auf bescheidener Hardware",
+        "qwen_qwen3_5_0_8b_q4_k_m": "Winziges Qwen3.5 für die schnellste Bereinigung",
+        "qwen_qwen3_8_27b_q4_k_m": "Leistungsstärkstes Qwen-Modell für Rechner mit 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "Schnelles Mixture-of-Experts-Modell, 3B aktive Parameter",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistrals 14B-Modell mit Tool-Nutzung, 256K Kontext",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Schnelles Modell ohne Denkphase für Bereinigung und Tools",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Klein und schnell für die Diktatbereinigung",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Offizieller QAT-Build von Google, ideal für Rechner mit 16 GB"
       }
     },
     "errors": {

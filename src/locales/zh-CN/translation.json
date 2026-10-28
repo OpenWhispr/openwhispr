@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
       "refreshingModels": "正在刷新模型…"
     },
+    "openai": {
+      "modelRetired": "OpenAI 已停用 {{from}}，已切换至 {{to}}。"
+    },
     "corti": {
       "euOnly": "Corti 模型仅在欧盟地区可用。"
     }
@@ -2632,6 +2635,8 @@
   "models": {
     "learnMore": "了解更多",
     "noneAvailable": "没有可用的模型",
+    "legacy": "旧版",
+    "legacyHint": "已不再提供。切换到其他模型后将不再显示。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最准确的本地语音识别(平均 WER 5.42%,支持 14 种语言)。不支持自动语言检测"
@@ -2641,7 +2646,8 @@
         "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英语流式语音识别",
         "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多语言流式语音识别，自动语言检测（15 种语言）",
-        "orukeet": "针对多语言语音识别微调的 Parakeet"
+        "orukeet": "针对多语言语音识别微调的 Parakeet",
+        "parakeet_tdt_110m_en": "适用于低配设备的轻量英语 ASR，带标点"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",
@@ -2649,7 +2655,9 @@
         "small": "更好质量，较慢速度",
         "medium": "高质量",
         "large": "最佳质量，最慢速度",
-        "turbo": "快速且质量良好"
+        "turbo": "快速且质量良好",
+        "large_q5": "下载大小仅为三分之一的 Large",
+        "turbo_q5": "下载大小仅为三分之一的 Turbo"
       },
       "transcription": {
         "openai_gpt_transcribe": "最新、最准确的转录",
@@ -2667,7 +2675,10 @@
         "deepgram_nova_3": "Deepgram 最精准的实时模型",
         "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",
         "assemblyai_universal_streaming_multilingual": "不会变动的实时转录（多语言）",
-        "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言"
+        "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言",
+        "assemblyai_universal_3_6_pro": "最高精度实时转录，支持 32 种语言",
+        "mistral_voxtral_mini_transcribe_3_0": "支持 50 多种语言的快速转录（预览版）",
+        "mistral_voxtral_small_transcribe_3_0": "最准确的 Voxtral，支持 50 多种语言（预览版）"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -2675,7 +2686,6 @@
         "openai_gpt_5_nano": "超快速、低延迟",
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
-        "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic 最强大的模型，Mythos 级",
         "anthropic_claude_fable_5": "上一代 Mythos 级旗舰模型",
         "anthropic_claude_opus_5_5": "最新 Opus 模型，适合复杂推理，1M 上下文",
@@ -2685,7 +2695,7 @@
         "anthropic_claude_sonnet_4_6": "均衡性能",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
-        "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_5_flash": "快速且高能力的 Gemini 模型",
         "gemini_gemini_3_5_flash_lite": "最快、最经济的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
         "gemini_gemini_3_1_flash_lite": "前沿级性能，成本更低",
@@ -2713,18 +2723,29 @@
         "corti_corti_s1_instant": "快速医疗模型，无推理过程",
         "corti_corti_s1": "功能最强的临床模型，带推理",
         "corti_corti_s1_mini_instant": "紧凑型医疗模型，最快且成本最低",
-        "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理"
+        "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理",
+        "openai_gpt_6_1_sol": "以更低成本提供接近 Astra 的能力，适用于聊天与智能体任务",
+        "openai_gpt_6_luna": "速度最快、成本最低的 GPT-6",
+        "gemini_gemini_3_6_flash": "快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_8_flash": "最强 Flash 模型",
+        "gemini_gemini_4_argon": "Google 前沿推理模型",
+        "tinfoil_kimi_k3": "私密的 Moonshot 旗舰模型，原生推理与视觉能力，256K 上下文",
+        "tinfoil_deepseek_v4_1_flash": "私密的快速 DeepSeek 模型，可选推理，1M 上下文"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最强大的 Claude 模型。最适合最具挑战性的助手任务。",
-        "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_5": "均衡性能。推荐用作助手任务的默认模型。",
+        "bedrock_claude_haiku_4_5": "上一代 Haiku。快速且低成本，适合文本清理。",
+        "bedrock_claude_sonnet_5": "上一代 Sonnet。快速强大，适合助手任务。",
         "bedrock_claude_opus_4_8": "最高智能。适用于复杂的助手任务。",
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。助手任务的高性价比之选。",
         "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
-        "vertex_gemini_2_5_flash": "通过 Vertex 提供的快速多模态模型",
-        "vertex_gemini_2_5_pro": "通过 Vertex 提供的高级推理模型"
+        "bedrock_claude_sonnet_5_5": "均衡性能。推荐用作助手任务的默认模型。",
+        "bedrock_claude_haiku_5_5": "速度最快的 Claude 模型。适合文本清理。",
+        "bedrock_claude_opus_5_5": "最高智能。最适合复杂的助手任务。",
+        "vertex_gemini_3_8_flash": "通过 Vertex 提供的最强 Flash 模型",
+        "vertex_gemini_3_5_flash_lite": "通过 Vertex 提供的速度最快、成本最低的模型",
+        "vertex_gemini_4_argon": "通过 Vertex 提供的 Google 前沿推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
@@ -2761,7 +2782,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI 的 MoE 模型，仅 1.5B 激活参数即可实现高质量",
         "liquidai_lfm2_2_6b_q4_k_m": "更高质量清理的均衡 LFM2 模型",
         "liquidai_lfm2_5_350m_q8_0": "超轻量模型，快速清理听写文本",
-        "liquidai_lfm2_5_230m_q8_0": "微型模型，低配硬件也能即时清理"
+        "liquidai_lfm2_5_230m_q8_0": "微型模型，低配硬件也能即时清理",
+        "qwen_qwen3_5_0_8b_q4_k_m": "超小型 Qwen3.5，清理速度最快",
+        "qwen_qwen3_8_27b_q4_k_m": "适用于 32 GB 设备的最强 Qwen 模型",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "快速的混合专家模型，3B 激活参数",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral 的 14B 模型，支持工具调用，256K 上下文",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "无思考过程的快速模型，适用于清理与工具调用",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "小巧快速，适合听写文本清理",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 官方 QAT 构建，最适合 16 GB 设备"
       },
       "diarization": {
         "segmentation": "用于说话人分离的语音边界检测",

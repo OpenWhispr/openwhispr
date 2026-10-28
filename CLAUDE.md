@@ -267,6 +267,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **Available Models**:
   - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
   - `parakeet-unified-en-0.6b`: English-only, ~631MB, state-of-the-art EN accuracy (5.91% avg WER on Open ASR Leaderboard)
+  - `parakeet-tdt-110m-en`: English-only, ~136MB, lightweight TDT transducer with punctuation for low-end machines
   - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
   - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
   - `cohere-transcribe-03-2026`: Multilingual (14 languages, NO auto detection — one language per server start), ~1.7GB download / ~2.7GB on disk, Conformer encoder-decoder (`"modelType": "cohere-transcribe"`), most accurate local model (5.42% avg WER). Exposed as the `"cohere"` local provider in settings/UI but served by the same ParakeetManager/sherpa-onnx offline WS server; the dictation language is part of the server identity, so changing it restarts the server. Segments long audio at 30s (model max ~35s)
@@ -368,6 +369,7 @@ Models stored in `~/.cache/openwhispr/whisper-models/`:
 - medium: ~1.5GB (high quality)
 - large: ~3GB (best quality)
 - turbo: ~1.6GB (fast with good quality)
+- large-q5 / turbo-q5: ~1.1GB / ~574MB (the same models quantized to q5_0)
 
 ### 4. Database Schema
 
@@ -428,12 +430,12 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
     - GPT-6 Astra (`gpt-6-astra`) - Most capable OpenAI model for coding, computer use, and research, 1M context
+    - GPT-6.1 Sol (`gpt-6.1-sol`) - Near-Astra capability at lower cost, 1M context
+    - GPT-6 Luna (`gpt-6-luna`) - Fastest, lowest-cost GPT-6, 1M context
     - GPT-5.6 Series (`gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) - Flagship, balanced, and fastest tiers
     - GPT-5.5 (`gpt-5.5`) - Frontier model for complex reasoning, 1M context
     - GPT-5.2 (`gpt-5.2`) - Strong reasoning model
-    - GPT-5 Mini (`gpt-5-mini`) - Fast and cost-efficient
-    - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
-    - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
+    - GPT-5 Mini (`gpt-5-mini`), GPT-5 Nano (`gpt-5-nano`), GPT-4.1 and GPT-4.1 Mini (`gpt-4.1`, `gpt-4.1-mini`) - legacy. GPT-4.1 Nano was shut down on 2026-10-23; `retiredCloudModels.ts` moves it to GPT-6 Luna
     - GPT-5 and newer reject `temperature`, so their registry entries carry `supportsTemperature: false`
   - **Anthropic** (Via IPC bridge to avoid CORS):
     - Claude Fable 5.1 (`claude-fable-5-1`) - Most capable Claude model, Mythos-class, 1M context
@@ -448,13 +450,17 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Opus 4.8 (`claude-opus-4-8`) - Powerful Opus model tuned for honesty and reliability, 1M context
     - Claude Opus 4.7 (`claude-opus-4-7`) - Powerful Opus model, 1M context
     - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
-    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
+    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation (legacy)
     - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
     - Models from Opus 4.7 onward (including the 5.5 generation) reject `temperature` (`supportsTemperature: false`); the Anthropic IPC bridge sends no thinking parameters, so no Anthropic entry carries `supportsThinking`
   - **Google Gemini** (Direct API integration):
-    - Gemini 3.5 Flash (`gemini-3.5-flash`) - Latest fast, high-capability Gemini model
+    - Gemini 3.6 Flash (`gemini-3.6-flash`) - Fast, high-capability Gemini model
+    - Gemini 3.8 Flash (`gemini-3.8-flash`) - Most capable Flash model
+    - Gemini 4 Argon (`gemini-4-argon`) - Google's frontier reasoning model
+    - Gemini 3.5 Flash (`gemini-3.5-flash`) - legacy; Google now routes it to 3.6 Flash
     - Gemini 3.5 Flash Lite (`gemini-3.5-flash-lite`) - Fastest, most cost-effective 3.5 model
-    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Next-gen flagship model for complex reasoning
+    - 3.8 Flash, 4 Argon and 3.1 Pro reject the `minimal` thinking level, so suppressed thinking sends `low` (`gemini-no-minimal` in `modelFamilyConstraints.ts`, plus the native provider's per-model table)
     - Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) - Frontier-class performance at low cost. It thinks, and requests that aren't streamed pin it to `minimal` unless a reasoning effort is picked; it has no `supportsThinking` flag, so Settings shows the effort picker rather than the thinking toggle
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
@@ -480,7 +486,16 @@ All desktop AI model definitions are centralized in `src/models/modelRegistryDat
   `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
 - `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`; with no
   `defaultModel` on the provider, the first model in the array is the default
-- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model
+- `src/models/legacyModels.ts` - `isListedModel()`: an entry marked `"legacy": true` stays in the
+  registry so an existing selection keeps working, but pickers list it only while it is selected
+  (muted, marked Legacy and disabled) or, for a local model, while its file is still downloaded so
+  it can be deleted. A local tab left with nothing to list opens on the first provider that has
+  models. While a provider still has a current model, never put a legacy entry first or name it
+  as a `defaultModel`. Speech-to-text pickers don't read the flag yet, so no Whisper or Parakeet
+  entry may carry it (`test/helpers/legacyModels.test.js`). Legacy is only for models that still
+  work: once a provider shuts one down, remove it and add it to `retiredCloudModels.ts`
+- `src/config/retiredCloudModels.ts` - Remaps selections pinned to a retired model. Mobile keeps
+  its own copy of the table (`openwhispr-mobile/src/lib/retiredModels.ts`)
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 
 **Local model features:**

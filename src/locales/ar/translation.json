@@ -232,6 +232,8 @@
   "models": {
     "learnMore": "اعرف المزيد",
     "noneAvailable": "لا توجد نماذج متاحة",
+    "legacy": "قديم",
+    "legacyHint": "لم يعد متاحًا. بعد التبديل إلى نموذج آخر لن يظهر مرة أخرى.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "أدق نموذج محلي للتعرف على الكلام (متوسط معدل خطأ الكلمة 5.42%، 14 لغة). بدون اكتشاف تلقائي للغة"
@@ -241,7 +243,8 @@
         "parakeet_unified_en_0_6b": "تعرف على الكلام باللغة الإنجليزية فقط بدقة رائدة (5.91% متوسط معدل خطأ الكلمة)",
         "nemotron_speech_streaming_en_0_6b": "تعرف على الكلام المتدفق باللغة الإنجليزية من NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "تعرف على الكلام المتدفق متعدد اللغات من NVIDIA Nemotron مع اكتشاف تلقائي للغة (15 لغة)",
-        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات"
+        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات",
+        "parakeet_tdt_110m_en": "تعرف خفيف على الكلام الإنجليزي مع علامات الترقيم للأجهزة محدودة القدرات"
       },
       "diarization": {
         "segmentation": "اكتشاف حدود الكلام للتعرف على المتحدثين",
@@ -253,7 +256,9 @@
         "small": "جودة أفضل، أبطأ",
         "medium": "جودة عالية",
         "large": "أفضل جودة، الأبطأ",
-        "turbo": "سريع بجودة جيدة"
+        "turbo": "سريع بجودة جيدة",
+        "large_q5": "Large بثلث حجم التنزيل",
+        "turbo_q5": "Turbo بثلث حجم التنزيل"
       },
       "transcription": {
         "openai_gpt_transcribe": "الأحدث والأكثر دقة في التفريغ",
@@ -271,7 +276,10 @@
         "deepgram_nova_3": "نموذج Deepgram الأكثر دقة في الوقت الفعلي",
         "assemblyai_universal_streaming_english": "نصوص مفرَّغة ثابتة في الوقت الفعلي، الإنجليزية",
         "assemblyai_universal_streaming_multilingual": "نصوص مفرَّغة ثابتة في الوقت الفعلي، متعددة اللغات",
-        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة"
+        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
+        "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
+        "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -279,7 +287,6 @@
         "openai_gpt_5_nano": "فائق السرعة، زمن انتقال منخفض",
         "openai_gpt_4_1": "أساس قوي، سياق 1 مليون",
         "openai_gpt_4_1_mini": "نموذج GPT-4.1 أصغر",
-        "openai_gpt_4_1_nano": "GPT-4.1 بأقل زمن انتقال",
         "anthropic_claude_fable_5_1": "نموذج Anthropic الأكثر قدرة، فئة Mythos",
         "anthropic_claude_fable_5": "الرائد السابق من فئة Mythos",
         "anthropic_claude_opus_5_5": "أحدث نموذج Opus للاستنتاج المعقد، سياق 1 مليون",
@@ -289,7 +296,7 @@
         "anthropic_claude_sonnet_4_6": "أداء متوازن",
         "anthropic_claude_sonnet_4_5": "جيل Sonnet السابق",
         "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من مستوى النماذج الرائدة",
-        "gemini_gemini_3_5_flash": "أحدث نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_5_flash": "نموذج Gemini سريع وعالي القدرة",
         "gemini_gemini_3_5_flash_lite": "نموذج 3.5 الأسرع والأكثر فعالية من حيث التكلفة",
         "gemini_gemini_3_1_pro_preview": "نموذج رائد من الجيل التالي للاستنتاج المعقد",
         "gemini_gemini_3_1_flash_lite": "أداء من الدرجة الأولى بتكلفة منخفضة",
@@ -317,18 +324,29 @@
         "corti_corti_s1": "النموذج السريري الأكثر قدرة مع الاستنتاج",
         "corti_corti_s1_mini_instant": "نموذج رعاية صحية مدمج، الأسرع والأقل تكلفة",
         "corti_corti_s1_mini": "نموذج سريري مدمج مع استنتاج بنصف السعر",
-        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M"
+        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M",
+        "openai_gpt_6_1_sol": "قدرة قريبة من Astra للمحادثة والمهام الوكيلة بتكلفة أقل",
+        "openai_gpt_6_luna": "GPT-6 الأسرع والأقل تكلفة",
+        "gemini_gemini_3_6_flash": "نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
+        "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
+        "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
+        "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "نموذج Claude الأكثر قدرة. الأفضل لأصعب مهام المساعد.",
-        "bedrock_claude_haiku_4_5": "سريع ورخيص. خيار افتراضي رائع لتنظيف النص.",
-        "bedrock_claude_sonnet_5": "نموذج موثوق متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_4_5": "إصدار Haiku السابق. سريع ورخيص لتنظيف النص.",
+        "bedrock_claude_sonnet_5": "إصدار Sonnet السابق. سريع وقادر لمهام المساعد.",
         "bedrock_claude_opus_4_8": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لمهام المساعد.",
         "bedrock_qwen3_next_80b": "نموذج متناثر مفتوح الوزن. سريع ومتعدد اللغات.",
-        "vertex_gemini_2_5_flash": "نموذج متعدد الوسائط سريع عبر Vertex",
-        "vertex_gemini_2_5_pro": "استنتاج متقدم عبر Vertex"
+        "bedrock_claude_sonnet_5_5": "نموذج متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_5_5": "أسرع نموذج Claude. خيار افتراضي رائع لتنظيف النص.",
+        "bedrock_claude_opus_5_5": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
+        "vertex_gemini_3_8_flash": "نموذج Flash الأكثر قدرة عبر Vertex",
+        "vertex_gemini_3_5_flash_lite": "النموذج الأسرع والأقل تكلفة عبر Vertex",
+        "vertex_gemini_4_argon": "نموذج الاستنتاج الرائد من Google عبر Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "نموذج هجين قوي",
@@ -365,7 +383,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "نموذج MoE من Liquid AI، جودة عالية مع معلمات نشطة 1.5B فقط",
         "liquidai_lfm2_2_6b_q4_k_m": "نموذج LFM2 متوازن لتنظيف بجودة أعلى",
         "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
-        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة"
+        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة",
+        "qwen_qwen3_5_0_8b_q4_k_m": "نموذج Qwen3.5 صغير جدًا لأسرع تنظيف",
+        "qwen_qwen3_8_27b_q4_k_m": "نموذج Qwen الأكثر قدرة للأجهزة بذاكرة 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "نموذج مزيج خبراء سريع، 3B معاملات نشطة",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "نموذج Mistral بحجم 14B مع استخدام الأدوات، سياق 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
+        "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
       }
     },
     "errors": {
@@ -519,6 +544,9 @@
     "tinfoil": {
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
       "refreshingModels": "جاري تحديث النماذج..."
+    },
+    "openai": {
+      "modelRetired": "قامت OpenAI بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },
     "corti": {
       "euOnly": "نماذج Corti متوفرة فقط في منطقة الاتحاد الأوروبي."

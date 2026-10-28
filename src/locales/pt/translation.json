@@ -862,6 +862,9 @@
       "modelRetired": "A Tinfoil descontinuou {{from}}. Alterado para {{to}}.",
       "refreshingModels": "A atualizar modelos…"
     },
+    "openai": {
+      "modelRetired": "A OpenAI descontinuou {{from}}. Alterado para {{to}}."
+    },
     "corti": {
       "euOnly": "Os modelos da Corti estão disponíveis apenas na região da UE."
     }
@@ -2611,6 +2614,8 @@
   "models": {
     "learnMore": "Saiba mais",
     "noneAvailable": "Nenhum modelo disponível",
+    "legacy": "Legado",
+    "legacyHint": "Não é mais oferecido. Depois de trocar para outro modelo, ele não aparecerá novamente.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "ASR local mais preciso (5,42% WER médio, 14 idiomas). Sem detecção automática de idioma"
@@ -2620,7 +2625,8 @@
         "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)",
         "nemotron_speech_streaming_en_0_6b": "ASR em inglês por streaming da NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "ASR multilíngue por streaming da NVIDIA Nemotron com detecção automática de idioma (15 idiomas)",
-        "orukeet": "Parakeet ajustado para reconhecimento de fala multilíngue"
+        "orukeet": "Parakeet ajustado para reconhecimento de fala multilíngue",
+        "parakeet_tdt_110m_en": "ASR leve em inglês com pontuação para computadores mais simples"
       },
       "whisper": {
         "tiny": "Mais rápido, qualidade inferior",
@@ -2628,7 +2634,9 @@
         "small": "Melhor qualidade, mais lento",
         "medium": "Alta qualidade",
         "large": "Melhor qualidade, o mais lento",
-        "turbo": "Rápido com boa qualidade"
+        "turbo": "Rápido com boa qualidade",
+        "large_q5": "Large com um terço do download",
+        "turbo_q5": "Turbo com um terço do download"
       },
       "transcription": {
         "openai_gpt_transcribe": "Transcrição mais recente e precisa",
@@ -2646,7 +2654,10 @@
         "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
         "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
         "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues",
-        "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas"
+        "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas",
+        "assemblyai_universal_3_6_pro": "Máxima precisão em tempo real, 32 idiomas",
+        "mistral_voxtral_mini_transcribe_3_0": "Transcrição rápida em mais de 50 idiomas (prévia)",
+        "mistral_voxtral_small_transcribe_3_0": "O Voxtral mais preciso, mais de 50 idiomas (prévia)"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",
@@ -2654,7 +2665,6 @@
         "openai_gpt_5_nano": "Ultrarápido, baixa latência",
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 menor",
-        "openai_gpt_4_1_nano": "GPT-4.1 com menor latência",
         "anthropic_claude_fable_5_1": "O modelo mais capaz da Anthropic, classe Mythos",
         "anthropic_claude_fable_5": "Modelo principal anterior da classe Mythos",
         "anthropic_claude_opus_5_5": "Modelo Opus mais recente para raciocínio complexo, contexto de 1M",
@@ -2664,7 +2674,7 @@
         "anthropic_claude_sonnet_4_6": "Desempenho equilibrado",
         "anthropic_claude_sonnet_4_5": "Geração anterior do Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
-        "gemini_gemini_3_5_flash": "Modelo Gemini mais recente, rápido e de alta capacidade",
+        "gemini_gemini_3_5_flash": "Modelo Gemini rápido e de alta capacidade",
         "gemini_gemini_3_5_flash_lite": "O modelo 3.5 mais rápido e econômico",
         "gemini_gemini_3_1_pro_preview": "Modelo principal de nova geração para raciocínio complexo",
         "gemini_gemini_3_1_flash_lite": "Desempenho de ponta a baixo custo",
@@ -2692,18 +2702,29 @@
         "corti_corti_s1_instant": "Modelo de saúde rápido, sem rastro de raciocínio",
         "corti_corti_s1": "Modelo clínico mais capaz com raciocínio",
         "corti_corti_s1_mini_instant": "Modelo de saúde compacto, o mais rápido e econômico",
-        "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço"
+        "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço",
+        "openai_gpt_6_1_sol": "Capacidade próxima do Astra para chat e tarefas agênticas a menor custo",
+        "openai_gpt_6_luna": "O GPT-6 mais rápido e econômico",
+        "gemini_gemini_3_6_flash": "Modelo Gemini rápido e de alta capacidade",
+        "gemini_gemini_3_8_flash": "O modelo Flash mais capaz",
+        "gemini_gemini_4_argon": "O modelo de raciocínio de ponta do Google",
+        "tinfoil_kimi_k3": "Modelo principal privado da Moonshot com raciocínio nativo e visão, contexto de 256K",
+        "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado e rápido com raciocínio opcional, contexto de 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "O modelo Claude mais capaz. Ideal para as tarefas de assistente mais difíceis.",
-        "bedrock_claude_haiku_4_5": "Rápido e barato. Ótimo para limpar texto.",
-        "bedrock_claude_sonnet_5": "Equilibrado. Padrão recomendado para tarefas de assistente.",
+        "bedrock_claude_haiku_4_5": "Haiku anterior. Rápido e barato para limpar texto.",
+        "bedrock_claude_sonnet_5": "Sonnet anterior. Rápido e capaz para tarefas de assistente.",
         "bedrock_claude_opus_4_8": "Máxima inteligência. Para tarefas complexas de assistente.",
         "bedrock_gpt_oss_120b": "Modelo aberto da OpenAI. Ótimo raciocínio a baixo custo.",
         "bedrock_deepseek_v3_2": "Modelo de fronteira de pesos abertos. Ótimo custo-benefício para tarefas de assistente.",
         "bedrock_qwen3_next_80b": "Modelo aberto esparso. Rápido e multilíngue.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "Equilibrado. Padrão recomendado para tarefas de assistente.",
+        "bedrock_claude_haiku_5_5": "O modelo Claude mais rápido. Ótimo para limpar texto.",
+        "bedrock_claude_opus_5_5": "Inteligência máxima. Ideal para tarefas de assistente complexas.",
+        "vertex_gemini_3_8_flash": "O modelo Flash mais capaz via Vertex",
+        "vertex_gemini_3_5_flash_lite": "O modelo mais rápido e econômico via Vertex",
+        "vertex_gemini_4_argon": "O modelo de raciocínio de ponta do Google via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido poderoso",
@@ -2740,7 +2761,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE da Liquid AI, alta qualidade com apenas 1,5B parâmetros ativos",
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para limpeza de maior qualidade",
         "liquidai_lfm2_5_350m_q8_0": "Modelo ultraleve para limpeza rápida de ditado",
-        "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto"
+        "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto",
+        "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 minúsculo para a limpeza mais rápida",
+        "qwen_qwen3_8_27b_q4_k_m": "O modelo Qwen mais capaz para computadores de 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "Modelo de mistura de especialistas rápido, 3B de parâmetros ativos",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modelo de 14B da Mistral com uso de ferramentas, contexto de 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modelo rápido sem etapa de raciocínio para limpeza e ferramentas",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Pequeno e rápido para limpeza de ditado",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT oficial do Google, ideal para computadores de 16 GB"
       },
       "diarization": {
         "segmentation": "Detecção de limites de fala para identificação de falantes",

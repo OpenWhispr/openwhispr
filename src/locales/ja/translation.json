@@ -883,6 +883,9 @@
       "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
       "refreshingModels": "モデルを更新しています…"
     },
+    "openai": {
+      "modelRetired": "OpenAI は {{from}} を提供終了しました。{{to}} に切り替えました。"
+    },
     "corti": {
       "euOnly": "Corti のモデルは EU リージョンでのみ利用できます。"
     }
@@ -2632,6 +2635,8 @@
   "models": {
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
+    "legacy": "旧モデル",
+    "legacyHint": "提供は終了しました。別のモデルに切り替えると、今後は表示されません。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
@@ -2641,7 +2646,8 @@
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
         "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）",
-        "orukeet": "多言語音声認識向けに調整したParakeet"
+        "orukeet": "多言語音声認識向けに調整したParakeet",
+        "parakeet_tdt_110m_en": "低スペックマシン向けの句読点付き軽量英語 ASR"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -2649,7 +2655,9 @@
         "small": "より高品質、やや低速",
         "medium": "高品質",
         "large": "最高品質、最も低速",
-        "turbo": "高速で高品質"
+        "turbo": "高速で高品質",
+        "large_q5": "ダウンロードサイズ 3 分の 1 の Large",
+        "turbo_q5": "ダウンロードサイズ 3 分の 1 の Turbo"
       },
       "transcription": {
         "openai_gpt_transcribe": "最新かつ最も正確な文字起こし",
@@ -2667,7 +2675,10 @@
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
         "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
-        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語"
+        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
+        "assemblyai_universal_3_6_pro": "最高精度のリアルタイム、32言語",
+        "mistral_voxtral_mini_transcribe_3_0": "50 以上の言語に対応した高速文字起こし（プレビュー）",
+        "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -2675,7 +2686,6 @@
         "openai_gpt_5_nano": "超高速、低レイテンシー",
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
-        "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic の最も高性能なモデル、Mythos クラス",
         "anthropic_claude_fable_5": "前世代の Mythos クラスのフラッグシップ",
         "anthropic_claude_opus_5_5": "複雑な推論向けの最新 Opus モデル、100 万トークンコンテキスト",
@@ -2685,7 +2695,7 @@
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_5_flash": "高速で高性能な Gemini モデル",
         "gemini_gemini_3_5_flash_lite": "最速かつ最も低コストの 3.5 モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_1_flash_lite": "フロンティア級の性能を低コストで",
@@ -2713,18 +2723,29 @@
         "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
         "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
         "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
-        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で",
+        "openai_gpt_6_1_sol": "Astra に迫る性能をより低コストで、チャットとエージェント作業向け",
+        "openai_gpt_6_luna": "最速かつ最も低コストの GPT-6",
+        "gemini_gemini_3_6_flash": "高速で高性能な Gemini モデル",
+        "gemini_gemini_3_8_flash": "最も高性能な Flash モデル",
+        "gemini_gemini_4_argon": "Google の最先端推論モデル",
+        "tinfoil_kimi_k3": "ネイティブ推論と画像理解に対応したプライベートな Moonshot フラッグシップ、256K コンテキスト",
+        "tinfoil_deepseek_v4_1_flash": "推論を任意で使えるプライベートで高速な DeepSeek モデル、1M コンテキスト"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいアシスタントタスクに最適です。",
-        "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_haiku_4_5": "前世代の Haiku。テキスト整形向けの高速で低コストなモデルです。",
+        "bedrock_claude_sonnet_5": "前世代の Sonnet。アシスタントタスク向けの高速で有能なモデルです。",
         "bedrock_claude_opus_4_8": "最高性能。複雑なアシスタントタスクに最適です。",
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。アシスタントタスクに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_haiku_5_5": "最速の Claude モデル。テキスト整形に最適です。",
+        "bedrock_claude_opus_5_5": "最高性能。複雑なアシスタントタスクに最適です。",
+        "vertex_gemini_3_8_flash": "Vertex 経由で最も高性能な Flash モデル",
+        "vertex_gemini_3_5_flash_lite": "Vertex 経由で最速かつ最も低コストのモデル",
+        "vertex_gemini_4_argon": "Vertex 経由の Google 最先端推論モデル"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強力なハイブリッドモデル",
@@ -2761,7 +2782,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AIのMoE、わずか1.5Bのアクティブパラメータで高品質",
         "liquidai_lfm2_2_6b_q4_k_m": "より高品質なクリーンアップ向けのバランス型LFM2",
         "liquidai_lfm2_5_350m_q8_0": "高速な口述クリーンアップ向けの超軽量モデル",
-        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ"
+        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ",
+        "qwen_qwen3_5_0_8b_q4_k_m": "最速の整形向け超小型 Qwen3.5",
+        "qwen_qwen3_8_27b_q4_k_m": "32 GB マシン向けで最も高性能な Qwen モデル",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "高速な Mixture-of-Experts モデル、アクティブパラメータ 3B",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "ツール使用に対応した Mistral の 14B モデル、256K コンテキスト",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "整形とツール向けの思考なし高速モデル",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "口述の整形向けの小型で高速なモデル",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 公式の QAT ビルド、16 GB マシンに最適"
       },
       "diarization": {
         "segmentation": "話者分離のための発話区間検出",
