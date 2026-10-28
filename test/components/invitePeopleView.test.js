@@ -270,9 +270,14 @@ test("the role trigger is named by its label and its current role", async (t) =>
   assert.ok(label, "role label with an id");
   const trigger = markup.match(/<button[^>]*aria-labelledby="([^"]+)"[^>]*>/);
   assert.ok(trigger, "trigger with aria-labelledby");
-  const [labelledLabel, triggerId] = trigger[1].split(" ");
+  const [labelledLabel, valueId] = trigger[1].split(" ");
   assert.equal(labelledLabel, label[1]);
-  assert.match(trigger[0], new RegExp(`id="${triggerId}"`));
+  assert.match(
+    markup,
+    new RegExp(`<span id="${valueId}"[^>]*>workspaces\\.invite\\.role\\.member<`)
+  );
+  // Radix's own trigger id is what labels the open menu, so it isn't overridden.
+  assert.doesNotMatch(trigger[0], / id="/);
 });
 
 test("done shows the sent count and Done", async (t) => {

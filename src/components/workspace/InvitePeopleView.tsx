@@ -111,7 +111,7 @@ export function InvitePeopleView({
   const hintId = useId();
   const listId = useId();
   const roleLabelId = useId();
-  const roleTriggerId = useId();
+  const roleValueId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [listDismissed, setListDismissed] = useState(false);
@@ -330,13 +330,15 @@ export function InvitePeopleView({
               </span>
               <DropdownMenu>
                 <DropdownMenuTrigger
-                  id={roleTriggerId}
                   // The label names the field and the trigger's own text says the current role.
-                  aria-labelledby={`${roleLabelId} ${roleTriggerId}`}
+                  // Radix owns the trigger's id, which its menu is labelled by.
+                  aria-labelledby={`${roleLabelId} ${roleValueId}`}
                   disabled={sending}
                   className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface-1 px-3 text-sm text-foreground outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span className="truncate">{t(`workspaces.invite.role.${state.role}`)}</span>
+                  <span id={roleValueId} className="truncate">
+                    {t(`workspaces.invite.role.${state.role}`)}
+                  </span>
                   <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
