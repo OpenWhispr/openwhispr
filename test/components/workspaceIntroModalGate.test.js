@@ -9,7 +9,7 @@ const {
 } = require("../lib/rendererTestHarness");
 
 // The workspace intro must wait while another modal that opens on its own is up (the notes
-// structure intro after an accepted invitation, Join your team, the post-migration permissions),
+// structure intro after an accepted invitation, Join your team, Tone & Style, migration),
 // and show once that modal closes.
 
 const DIALOG_MOCK = `
@@ -59,6 +59,15 @@ const MOCKS = {
   "/stores/policyStore": `
     export const usePolicyStore = (selector) => selector({ accountId: "user-1" });
   `,
+  "/stores/settingsStore": `
+    import { DEFAULT_TONE_STYLES } from "/config/toneStyle";
+    const read = () => ({ useCleanupModel: true, toneStyles: DEFAULT_TONE_STYLES });
+    export const useSettingsStore = Object.assign((selector) => selector(read()), {
+      getState: read,
+    });
+    export const getEffectiveCleanupModel = () => null;
+    export const isCloudCleanupMode = () => true;
+  `,
   "/workspace/WorkspaceIntroDialog": `
     export function WorkspaceIntroDialog({ open }) {
       globalThis.__intro = { open };
@@ -103,6 +112,7 @@ async function setup(t) {
     structureIntro: await load("/components/notes/NotesStructureIntroDialog.tsx"),
     joinYourTeam: await load("/components/JoinYourTeamModal.tsx"),
     postMigration: await load("/components/PostMigrationOnboarding.tsx"),
+    toneStyle: await load("/components/toneStyle/ToneStyleSetupDialog.tsx"),
   };
   const { useModalGateStore, useModalGate } = await vite.ssrLoadModule("/stores/modalGateStore.ts");
   const { useJoinableWorkspaces } = await vite.ssrLoadModule("/hooks/useJoinableWorkspaces.ts");
@@ -172,6 +182,11 @@ for (const [name, open, closed] of [
     "the post-migration permissions",
     (m) => React.createElement(m.postMigration, { open: true, onOpenChange() {}, onDone() {} }),
     (m) => React.createElement(m.postMigration, { open: false, onOpenChange() {}, onDone() {} }),
+  ],
+  [
+    "Tone & Style setup",
+    (m) => React.createElement(m.toneStyle, { open: true, onOpenChange() {}, onOpenSettings() {} }),
+    (m) => React.createElement(m.toneStyle, { open: false, onOpenChange() {}, onOpenSettings() {} }),
   ],
 ]) {
   test(`the workspace intro waits while ${name} is open`, async (t) => {
