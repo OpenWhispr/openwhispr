@@ -37,8 +37,12 @@ interface GeminiGenerationConfig {
   };
 }
 
-// Thinking controls differ by model: Pro cannot use minimal, and 2.5 uses budgets.
+// Thinking controls differ by model: Pro, 3.8 Flash and 4 Argon cannot use
+// minimal, and 2.5 uses budgets.
 const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> = {
+  "gemini-3.6-flash": { thinkingLevel: "minimal", includeThoughts: false },
+  "gemini-3.8-flash": { thinkingLevel: "low", includeThoughts: false },
+  "gemini-4-argon": { thinkingLevel: "low", includeThoughts: false },
   "gemini-3.5-flash": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.5-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
   "gemini-3.1-flash-lite": { thinkingLevel: "minimal", includeThoughts: false },
