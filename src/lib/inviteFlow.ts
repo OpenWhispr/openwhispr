@@ -3,7 +3,7 @@ import type { InviteOutcome } from "../services/invitePeople";
 import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
 
-export const MAX_INVITE_RECIPIENTS = 20;
+export const MAX_INVITE_RECIPIENTS = 100;
 
 export type RecipientState =
   | { status: "draft" }
@@ -197,7 +197,7 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
  * answer for this address or this workspace, so its chip waits to be removed.
  */
 export function isRetryableFailure(kind: InviteErrorKind): boolean {
-  return kind === "requestFailed" || kind === "sessionExpired";
+  return kind === "requestFailed" || kind === "sessionExpired" || kind === "rateLimited";
 }
 
 export function inviteSummary(state: InviteFlowState): InviteSummary {

@@ -114,7 +114,7 @@ test("the roster arriving later flags chips already added", () => {
   assert.deepEqual(state.memberEmails, ["sam@acme.test"]);
 });
 
-test("more than 20 recipients blocks sending", () => {
+test("more than the cap in recipients blocks sending", () => {
   const many = Array.from({ length: MAX_INVITE_RECIPIENTS + 1 }, (_, index) => `p${index}@x.com`);
   const state = commitText(fresh(), many.join(" "));
   const summary = inviteSummary(state);
@@ -123,16 +123,23 @@ test("more than 20 recipients blocks sending", () => {
   assert.equal(run(state, { type: "send" }).phase, "editing");
 });
 
-test("a valid address typed after 20 chips counts toward the cap", () => {
-  const twenty = Array.from({ length: MAX_INVITE_RECIPIENTS }, (_, index) => `p${index}@x.com`);
-  const state = run(commitText(fresh(), twenty.join(" ")), { type: "draft", text: "extra@x.com" });
+test("a valid address typed after a full set of chips counts toward the cap", () => {
+  const full = Array.from({ length: MAX_INVITE_RECIPIENTS }, (_, index) => `p${index}@x.com`);
+  const state = run(commitText(fresh(), full.join(" ")), { type: "draft", text: "extra@x.com" });
   const summary = inviteSummary(state);
   assert.equal(summary.tooMany, true);
   assert.equal(summary.canSend, false);
 });
 
 test("only failures that sending again could fix are sent again", () => {
-  const kinds = ["seatLimit", "notAllowed", "directoryRequired", "sessionExpired", "requestFailed"];
+  const kinds = [
+    "seatLimit",
+    "notAllowed",
+    "directoryRequired",
+    "sessionExpired",
+    "requestFailed",
+    "rateLimited",
+  ];
   const addresses = kinds.map((kind) => `${kind.toLowerCase()}@x.com`);
   let state = run(commitText(fresh(), addresses.join(" ")), { type: "send" });
   state = run(
@@ -144,7 +151,11 @@ test("only failures that sending again could fix are sent again", () => {
     })),
     { type: "finished" }
   );
-  assert.deepEqual(inviteSummary(state).sendable, ["sessionexpired@x.com", "requestfailed@x.com"]);
+  assert.deepEqual(inviteSummary(state).sendable, [
+    "sessionexpired@x.com",
+    "requestfailed@x.com",
+    "ratelimited@x.com",
+  ]);
 });
 
 test("removing a chip clears tooMany when back under the cap", () => {

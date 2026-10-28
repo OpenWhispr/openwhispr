@@ -63,7 +63,7 @@ test("SpacesService direct-member calls hit the members routes with the API's fi
   assert.deepEqual(removal, { removed: true, still_via_teams: stillViaTeams });
 });
 
-test("InvitationsService.send forwards space_ids and accept surfaces the granted space ids", async (t) => {
+test("InvitationsService.sendBatch forwards space_ids and accept surfaces the granted space ids", async (t) => {
   const requests = installCloudCapture(t, {
     workspace_id: "ws-1",
     role: "member",
@@ -72,11 +72,19 @@ test("InvitationsService.send forwards space_ids and accept surfaces the granted
   });
   const { InvitationsService } = require("../../src/services/InvitationsService.ts");
 
-  await InvitationsService.send("ws-1", { email: "new@example.com", space_ids: ["space-1"] });
+  await InvitationsService.sendBatch("ws-1", {
+    emails: ["new@example.com"],
+    role: "member",
+    space_ids: ["space-1"],
+  });
   const accepted = await InvitationsService.accept("tok en");
 
-  assert.equal(requests[0].path, "/api/workspaces/ws-1/invitations");
-  assert.deepEqual(requests[0].body, { email: "new@example.com", space_ids: ["space-1"] });
+  assert.equal(requests[0].path, "/api/workspaces/ws-1/invitations/batch");
+  assert.deepEqual(requests[0].body, {
+    emails: ["new@example.com"],
+    role: "member",
+    space_ids: ["space-1"],
+  });
   assert.equal(requests[1].path, "/api/invitations/tok%20en/accept");
   assert.deepEqual(accepted.space_ids, ["space-1"]);
 });
