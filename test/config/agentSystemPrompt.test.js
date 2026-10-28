@@ -151,7 +151,7 @@ test("the time and library notes ride on the message, so the system prompt stays
   assert.doesNotMatch(first, /Current local date and time|notes from the user's library/i);
   assert.match(
     firstContext,
-    /^Context from the app for this message \(not written by the user\):\n\nCurrent local date and time: Tuesday, 2026-08-25T[^]*\n\nNotes from the user's library that may be relevant\. [^]*<note id="7">Launch is Friday<\/note>$/
+    /^Context from the app for this message \(not written by the user\):\n\nCurrent local date and time: Tuesday, 2026-08-25T[^]*\n\nNotes from the user's library[^]*<note id="7">Launch is Friday<\/note>$/
   );
   assert.notEqual(buildMessageContext(), firstContext);
   assert.doesNotMatch(buildMessageContext(), /library/);

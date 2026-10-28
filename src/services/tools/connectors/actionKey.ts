@@ -1,15 +1,19 @@
 import { bareEmailAddress } from "../../../helpers/connectors/emailCompose";
 import type { ConnectorEdits, ConnectorPreview } from "../../../types/connectors";
 
-// Whitespace, letter case and recipient order don't make a send a new one.
-function normalize(value: unknown): unknown {
-  if (typeof value === "string") return value.replace(/\s+/g, " ").trim().toLowerCase();
-  if (Array.isArray(value)) return value.map(normalize).sort();
+// Destinations and recipient order can be canonicalized; message text and
+// code retain their case, whitespace and line breaks.
+const DESTINATION_FIELDS = new Set(["to", "cc", "destination", "repo", "target", "team", "issue"]);
+function normalize(value: unknown, field = ""): unknown {
+  if (typeof value === "string") {
+    return DESTINATION_FIELDS.has(field) ? value.replace(/\s+/g, " ").trim().toLowerCase() : value;
+  }
+  if (Array.isArray(value)) return value.map((item) => normalize(item, field)).sort();
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.keys(value)
         .sort()
-        .map((name) => [name, normalize((value as Record<string, unknown>)[name])])
+        .map((name) => [name, normalize((value as Record<string, unknown>)[name], name)])
     );
   }
   return value;

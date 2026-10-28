@@ -1517,6 +1517,32 @@ test("closing during a selection edit aborts it and cannot replace text later", 
   assert.deepEqual(globalThis.__chat.sent, []);
 });
 
+test("composer Stop cancels a selection edit after switching to the keyboard", async (t) => {
+  const view = await mountWindow(t);
+  const edit = defer();
+  globalThis.__selectionEdits.result = edit.promise;
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "s1",
+    text: "Original",
+  });
+  const replacements = [];
+  view.happyWindow.electronAPI.replaceSelectedText = async (...args) => {
+    replacements.push(args);
+    return { success: true };
+  };
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  await React.act(async () => view.button("Type").click());
+  await view.settle();
+  await React.act(async () => view.button("Stop").click());
+  const aborted = globalThis.__selectionEdits.calls[0].signal.aborted;
+  await React.act(async () => edit.resolve("Late replacement"));
+  assert.equal(aborted, true);
+  assert.deepEqual(replacements, []);
+  assert.equal(globalThis.__chat.cancels, 0, "only the selection edit is cancelled");
+});
+
 for (const verb of ["email", "slackPost"]) {
   for (const stale of [false, true]) {
     test(`voice edits a selected ${verb} card line${stale ? " only while its draft is unchanged" : " without sending it"}`, async (t) => {

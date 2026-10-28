@@ -627,6 +627,10 @@ export default function AgentWindow() {
     dispatch({ type: "setContext", context: null });
     cancelTake();
   }, [cancelTake, dispatch]);
+  const stopRequest = useCallback(() => {
+    if (selectionEditRef.current) dropTake();
+    else cancelTurn();
+  }, [cancelTurn, dropTake]);
   useEffect(
     () =>
       subscribeAuthBoundary(() => {
@@ -700,11 +704,11 @@ export default function AgentWindow() {
       return;
     }
     if (busy) {
-      cancelTurn();
+      stopRequest();
       return;
     }
     void close();
-  }, [busy, cancelTurn, close, dropTake, listening]);
+  }, [busy, close, dropTake, listening, stopRequest]);
 
   // Main's messages, read through a ref so each listener is registered once.
   const handlersRef = useRef({
@@ -888,8 +892,7 @@ export default function AgentWindow() {
         dispatch({ type: "useKeyboard", pending: Boolean(pendingCard) });
         return;
       case "stop":
-        if (selectionEditRef.current) dropTake();
-        else cancelTurn();
+        stopRequest();
         return;
       case "close":
         void close();
@@ -1002,7 +1005,7 @@ export default function AgentWindow() {
         }
         busy={busy}
         answering={answering}
-        onStop={offersStop ? cancelTurn : undefined}
+        onStop={editingSelection || offersStop ? stopRequest : undefined}
         onClose={inModal ? () => void close() : undefined}
         onMic={inModal ? () => void startListening() : undefined}
         micDisabled={busy || transcribing}
