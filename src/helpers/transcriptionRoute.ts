@@ -81,7 +81,7 @@ export interface TranscriptionRouteSettings {
 export type ManagedTranscriptionResolution =
   | {
       kind: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
     }
@@ -136,7 +136,7 @@ export type TranscriptionRoute =
       // Workspace-managed Azure STT. Executed only in the main process, which
       // re-validates the context and holds the Entra token.
       transport: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
       sizeCapBytes: number;

@@ -107,6 +107,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
+  onMeetingStartRefused: registerListener(
+    "meeting-start-refused",
+    (callback) => (_event, code) => callback(code)
+  ),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
@@ -728,8 +732,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "managed-enterprise-config-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
-  clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  clearManagedEnterpriseIdentity: (options) =>
+    ipcRenderer.invoke("clear-managed-enterprise-identity", options),
   managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
+  getPendingEnterpriseAudioTest: (consume = false) =>
+    ipcRenderer.invoke("get-pending-enterprise-audio-test", consume),
+  claimEnterpriseAudioTest: () => ipcRenderer.invoke("claim-enterprise-audio-test"),
+  onEnterpriseAudioTestRequested: registerListener(
+    "enterprise-audio-test-requested",
+    (callback) => () => callback()
+  ),
+  enterpriseAudioImportBootstrap: (data) =>
+    ipcRenderer.invoke("enterprise-audio-import-bootstrap", data),
+  enterpriseAudioStatus: (data) => ipcRenderer.invoke("enterprise-audio-status", data),
+  enterpriseAudioSaveCredential: (data) =>
+    ipcRenderer.invoke("enterprise-audio-save-credential", data),
+  enterpriseAudioTest: (data) => ipcRenderer.invoke("enterprise-audio-test", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -933,8 +951,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
-  meetingTranscriptionSend: (buffer, source) =>
-    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionSend: (buffer, source, capturedAt) =>
+    ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>

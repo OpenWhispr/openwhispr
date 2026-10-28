@@ -271,3 +271,18 @@ test("accepts null or canonical minAppVersion, rejects malformed versions", () =
   delete noVersion.minAppVersion;
   assert.equal(isValidPolicyShape(noVersion), false);
 });
+
+test("meeting and upload controls are optional booleans for backward compatibility", () => {
+  for (const key of ["meetingRecordingEnabled", "audioUploadEnabled"]) {
+    for (const value of [true, false]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), true);
+    }
+    for (const value of ["false", 0, null]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), false);
+    }
+  }
+});

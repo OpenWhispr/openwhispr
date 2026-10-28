@@ -39,7 +39,7 @@ function sanitizeKeyterms(keyterms) {
 }
 
 async function transcribeWithElevenLabs(
-  { audioBuffer, model, fileName, contentType, language, keyterms, apiKey },
+  { audioBuffer, model, fileName, contentType, language, keyterms, apiKey, signal },
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
@@ -76,6 +76,7 @@ async function transcribeWithElevenLabs(
     method: "POST",
     headers: { "xi-api-key": apiKey },
     body: formData,
+    ...(signal ? { signal } : {}),
   });
 
   if (!response.ok) {

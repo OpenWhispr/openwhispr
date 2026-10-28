@@ -42,8 +42,10 @@ for (const source of ["file", "url"]) {
         mockModules: {
           "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
           "./settingsStore": "export const getSettings = () => ({});",
-          "./policyStore": "export const usePolicyStore = { getState: () => ({}) };",
-          "./policyRules": "export const isTranscriptionContextAllowed = () => true;",
+          "./policyStore":
+            "export const usePolicyStore = { getState: () => ({}), subscribe: () => () => {} };",
+          "./policyRules":
+            "export const isTranscriptionContextAllowed = () => true; export const isAudioFeatureAllowed = () => true;",
         },
       });
       const queue = await vite.ssrLoadModule("/stores/batchQueueStore.ts");

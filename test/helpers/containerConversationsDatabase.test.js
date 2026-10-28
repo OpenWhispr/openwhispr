@@ -983,6 +983,91 @@ test("failed and unchanged folder moves preserve chat ownership and history", (t
   assert.deepEqual(db.getAgentMessages(chat.id), messages);
 });
 
+function createMovedFolderChat(db) {
+  const source = createTestTeamSpace(db, { name: "Source" }).space;
+  const destination = createTestTeamSpace(db, { name: "Destination" }).space;
+  const folder = db.createFolder("Moved", source.id).folder;
+  db.markFolderSynced(folder.id, "cloud-folder-moved");
+  const chat = db.createAgentConversation("Moved chat", null, source.id, folder.id);
+  db.addAgentMessage(chat.id, "user", "Keep this history");
+  const sourceRootChat = db.createAgentConversation("Source chat", null, source.id);
+  return { source, destination, folder, chat, sourceRootChat };
+}
+
+test("a folder moved by a pull keeps its chats when the old space is purged", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.close());
+  const { source, destination, folder, chat, sourceRootChat } = createMovedFolderChat(db);
+  const messages = db.getAgentMessages(chat.id);
+
+  db.upsertFolderFromCloud(
+    {
+      id: "cloud-folder-moved",
+      client_folder_id: folder.client_folder_id,
+      name: folder.name,
+      created_at: folder.created_at,
+      updated_at: new Date().toISOString(),
+    },
+    destination.id
+  );
+  assert.equal(db.getAgentConversation(chat.id).space_id, destination.id);
+
+  assert.equal(db.purgeSpace(source.id).success, true);
+  assert.deepEqual(db.getAgentMessages(chat.id), messages);
+  assert.deepEqual(
+    db.getConversationsForContainer(destination.id, folder.id).map((row) => row.id),
+    [chat.id]
+  );
+  assert.equal(db.getAgentConversation(sourceRootChat.id), null);
+
+  assert.equal(db.purgeSpace(destination.id).success, true);
+  assert.equal(db.getAgentConversation(chat.id), null);
+  assert.deepEqual(db.getAgentMessages(chat.id), []);
+});
+
+for (const mode of ["preserve-dirty", "destructive"]) {
+  test(`${mode} purge matches folder chats through their folder, not a stale space_id`, (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    t.after(() => db.db.close());
+    const { source, destination, folder, chat, sourceRootChat } = createMovedFolderChat(db);
+    const sourceNote = db.saveNote(
+      "Source note",
+      "body",
+      "personal",
+      null,
+      null,
+      null,
+      source.id
+    ).note;
+    db.markNoteSynced(sourceNote.id, "cloud-source-note");
+    const sourceNoteChat = db.createAgentConversation("Source note chat", sourceNote.id);
+    assert.equal(db.moveFolderToSpace(folder.id, destination.id).success, true);
+    // Folders moved before chats followed them still carry the old space.
+    db.db
+      .prepare("UPDATE agent_conversations SET space_id = ? WHERE id = ?")
+      .run(source.id, chat.id);
+    const messages = db.getAgentMessages(chat.id);
+
+    assert.equal(db.purgeSpace(source.id, { mode }).success, true);
+    assert.deepEqual(db.getAgentMessages(chat.id), messages);
+    assert.deepEqual(
+      db.getConversationsForContainer(destination.id, folder.id).map((row) => row.id),
+      [chat.id]
+    );
+    assert.equal(db.getAgentConversation(sourceRootChat.id), null);
+    assert.equal(db.getAgentConversation(sourceNoteChat.id), null);
+
+    assert.equal(db.purgeSpace(destination.id, { mode }).success, true);
+    assert.equal(
+      db.db.prepare("SELECT COUNT(*) AS n FROM agent_conversations WHERE id = ?").get(chat.id).n,
+      0
+    );
+    assert.deepEqual(db.getAgentMessages(chat.id), []);
+  });
+}
+
 test("relocateRevokedFolder moves or retires the folder's conversations", (t) => {
   const db = createDb(t);
   if (!db) return;

@@ -1,8 +1,8 @@
 import type { Workspace } from "../types/electron";
-import { canManageWorkspace } from "./spacePermissions.ts";
+import { workspaceCan } from "./capabilities.ts";
 
 export function manageableWorkspaces(workspaces: Workspace[]): Workspace[] {
-  return workspaces.filter((workspace) => canManageWorkspace(workspace.role));
+  return workspaces.filter((workspace) => workspaceCan(workspace, "create_spaces"));
 }
 
 export interface TeamSpaceGroup<S> {
@@ -19,9 +19,9 @@ export function groupTeamSpacesByWorkspace<S extends { workspace_id?: string | n
       workspace,
       spaces: teamSpaces.filter((space) => space.workspace_id === workspace.id),
     }))
-    // Empty groups stay visible for owners/admins so the per-workspace
-    // create button always has a row to live on.
-    .filter((group) => group.spaces.length > 0 || canManageWorkspace(group.workspace.role));
+    // Empty groups stay visible to whoever can create spaces in them, so the
+    // per-workspace create button always has a row to live on.
+    .filter((group) => group.spaces.length > 0 || workspaceCan(group.workspace, "create_spaces"));
   const workspaceIds = new Set(workspaces.map((workspace) => workspace.id));
   const ungrouped = teamSpaces.filter(
     (space) => space.workspace_id == null || !workspaceIds.has(space.workspace_id)
