@@ -402,6 +402,7 @@
       "localSetup": {
         "title": "Recomendamos estas configurações",
         "subtitle": "Escolhidas para o seu {{computer}} e para {{language}}. Tudo roda neste dispositivo.",
+        "subtitleOrganizationText": "Escolhidas para o seu {{computer}} e para {{language}}. O ditado roda neste dispositivo; o chat e as notas com IA usam o serviço escolhido pela sua organização.",
         "computer": {
           "chip": "Chip",
           "processor": "Processador",

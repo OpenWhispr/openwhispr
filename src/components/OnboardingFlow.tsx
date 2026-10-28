@@ -1289,10 +1289,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               wideTitle
               description={
                 localSetupPlan ? (
-                  t("onboarding.rehaul.localSetup.subtitle", {
-                    computer: localSetupComputerName(localSetupPlan.profile, t),
-                    language: localSetupLanguageLabel(localSetupPlan.languages, i18n.language),
-                  })
+                  t(
+                    localSetupPlan.organizationRunsText
+                      ? "onboarding.rehaul.localSetup.subtitleOrganizationText"
+                      : "onboarding.rehaul.localSetup.subtitle",
+                    {
+                      computer: localSetupComputerName(localSetupPlan.profile, t),
+                      language: localSetupLanguageLabel(localSetupPlan.languages, i18n.language),
+                    }
+                  )
                 ) : (
                   <LocalSetupSubtitlePlaceholder />
                 )

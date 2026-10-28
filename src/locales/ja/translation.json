@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "おすすめの設定",
         "subtitle": "お使いの {{computer}} と {{language}} に合わせて選びました。すべてこのデバイス上で動作します。",
+        "subtitleOrganizationText": "お使いの {{computer}} と {{language}} に合わせて選びました。音声入力はこのデバイス上で動作し、チャットと AI ノートは組織が選んだサービスを使います。",
         "computer": {
           "chip": "チップ",
           "processor": "プロセッサ",

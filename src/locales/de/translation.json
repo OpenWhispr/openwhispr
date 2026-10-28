@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "Wir empfehlen diese Einstellungen",
         "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Alles läuft auf diesem Gerät.",
+        "subtitleOrganizationText": "Passend zu {{computer}} und {{language}} ausgewählt. Das Diktieren läuft auf diesem Gerät; Chat und KI-Notizen nutzen den Dienst, den Ihre Organisation gewählt hat.",
         "computer": {
           "chip": "Chip",
           "processor": "Prozessor",

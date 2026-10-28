@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "我们推荐以下设置",
         "subtitle": "根据你的 {{computer}} 和 {{language}} 挑选。一切都在这台设备上运行。",
+        "subtitleOrganizationText": "根据你的 {{computer}} 和 {{language}} 挑选。听写在这台设备上运行；聊天和 AI 笔记使用你的组织选择的服务。",
         "computer": {
           "chip": "芯片",
           "processor": "处理器",

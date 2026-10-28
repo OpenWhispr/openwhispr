@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "Ti consigliamo queste impostazioni",
         "subtitle": "Scelte per il tuo {{computer}} e per {{language}}. Tutto funziona su questo dispositivo.",
+        "subtitleOrganizationText": "Scelte per il tuo {{computer}} e per {{language}}. La dettatura funziona su questo dispositivo; chat e note con IA usano il servizio scelto dalla tua organizzazione.",
         "computer": {
           "chip": "Chip",
           "processor": "Processore",

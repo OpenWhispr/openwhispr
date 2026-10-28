@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "Te recomendamos esta configuración",
         "subtitle": "Elegida para tu {{computer}} y {{language}}. Todo se ejecuta en este dispositivo.",
+        "subtitleOrganizationText": "Elegida para tu {{computer}} y {{language}}. El dictado se ejecuta en este dispositivo; el chat y las notas con IA usan el servicio que eligió tu organización.",
         "computer": {
           "chip": "Chip",
           "processor": "Procesador",

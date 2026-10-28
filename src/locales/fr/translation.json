@@ -423,6 +423,7 @@
       "localSetup": {
         "title": "Nous vous recommandons ces réglages",
         "subtitle": "Choisis pour votre {{computer}} et {{language}}. Tout s’exécute sur cet appareil.",
+        "subtitleOrganizationText": "Choisis pour votre {{computer}} et {{language}}. La dictée s’exécute sur cet appareil ; le chat et les notes IA utilisent le service choisi par votre organisation.",
         "computer": {
           "chip": "Puce",
           "processor": "Processeur",

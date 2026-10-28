@@ -1,7 +1,12 @@
 // Onboarding's "We recommend these settings" pick: which local models suit this
 // computer and these languages, and how fast each will feel. Every number and
 // label comes from localSetupTable.json; this module only looks them up.
-import type { ComputerProfile, LocalSetupDownloadKind, LocalSetupSpace } from "../types/electron";
+import type {
+  ComputerProfile,
+  InferenceMode,
+  LocalSetupDownloadKind,
+  LocalSetupSpace,
+} from "../types/electron";
 import { isAgentAllowed, isModeAllowedByPolicy } from "../stores/policyRules";
 import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
@@ -54,6 +59,8 @@ export interface LocalSetupPlan {
   languages: string[]; // base codes the pick was made for
   rows: LocalSetupRow[]; // policy-hidden rows are absent; order dictation, cleanup, assistant
   graphicsPack: LocalSetupDownload | null;
+  /** The organization keeps AI models off this device, so chat and notes run where it chose. */
+  organizationRunsText: boolean;
 }
 export type LocalSetupSwitches = { cleanup: boolean; assistant: boolean };
 
@@ -304,6 +311,13 @@ function textRow(
   };
 }
 
+const TEXT_MODES_OFF_DEVICE: InferenceMode[] = [
+  "openwhispr",
+  "providers",
+  "self-hosted",
+  "enterprise",
+];
+
 export function buildLocalSetupPlan(input: {
   profile: ComputerProfile;
   spokenLanguages: string[]; // settings.spokenLanguages; [] for guests
@@ -320,7 +334,8 @@ export function buildLocalSetupPlan(input: {
   if (isModeAllowedByPolicy(policy, "transcription", "local")) {
     rows.push(dictationRow(profile, machine, languages, requiredSpeechModelId));
   }
-  if (isModeAllowedByPolicy(policy, "llm", "local")) {
+  const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
+  if (localTextAllowed) {
     rows.push(textRow("cleanup", profile, machine));
     if (isAgentAllowed(policy)) rows.push(textRow("assistant", profile, machine));
   }
@@ -331,7 +346,11 @@ export function buildLocalSetupPlan(input: {
       ? { kind: "llamaVulkan", id: "llama-vulkan", bytes: packBytes }
       : null;
 
-  return { machineType, profile, languages, rows, graphicsPack };
+  const organizationRunsText =
+    !localTextAllowed &&
+    TEXT_MODES_OFF_DEVICE.some((mode) => isModeAllowedByPolicy(policy, "llm", mode));
+
+  return { machineType, profile, languages, rows, graphicsPack, organizationRunsText };
 }
 
 /**

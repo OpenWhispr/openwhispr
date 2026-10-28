@@ -317,6 +317,21 @@ test("policy hides rows", async () => {
   );
 });
 
+test("a policy that keeps AI models off the device says chat and notes run where it chose", async () => {
+  // Policy clamps a local chat or notes scope to its allowed mode, Cloud here.
+  assert.equal(
+    (await plan(mac({}), { policy: managed({ llmModes: ["openwhispr"] }) })).organizationRunsText,
+    true
+  );
+  assert.equal((await plan(mac({}), { policy: managed() })).organizationRunsText, false);
+  assert.equal((await plan(mac({}))).organizationRunsText, false);
+  // Nothing allowed at all: no AI runs anywhere, so there is nothing to point at.
+  assert.equal(
+    (await plan(mac({}), { policy: managed({ llmModes: [] }) })).organizationRunsText,
+    false
+  );
+});
+
 test("an organisation-required speech model replaces the pick", async () => {
   const p = await plan(mac({}), { requiredSpeechModelId: "parakeet-tdt-0.6b-v3" });
   const dictation = row(p, "dictation");
