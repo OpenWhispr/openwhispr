@@ -91,16 +91,12 @@ test("path labels name the parent and localize default folder segments", async (
   assert.equal(folderPathLabel(orphan, folders, t), "Q1");
 });
 
-test("only plain leaf folders nest", async () => {
-  const { canNestFolder } = await load();
+test("URL downloads only route to a top-level Videos folder", async () => {
+  const { findVideosFolder } = await load();
   const meetings = folder(1, { name: "Meetings", is_default: 1 });
-  const parent = folder(2);
-  const child = folder(3, { parent_folder_id: 2 });
-  const plain = folder(4);
-  const folders = [meetings, parent, child, plain];
+  const nested = folder(2, { name: "Videos", parent_folder_id: 1 });
+  const topLevel = folder(3, { name: "Videos" });
 
-  assert.equal(canNestFolder(meetings, folders), false);
-  assert.equal(canNestFolder(parent, folders), false);
-  assert.equal(canNestFolder(child, folders), true);
-  assert.equal(canNestFolder(plain, folders), true);
+  assert.equal(findVideosFolder([meetings, nested]), undefined);
+  assert.equal(findVideosFolder([meetings, nested, topLevel]), topLevel);
 });

@@ -76,19 +76,15 @@ export function folderPathLabel(
   return parent ? `${defaultFolderDisplayName(parent, t)} / ${name}` : name;
 }
 
-// Menu gate mirroring main's nesting rules, which main enforces itself.
-export function canNestFolder(folder: FolderItem, folders: FolderItem[]): boolean {
-  return !folder.is_default && !folders.some((f) => f.parent_folder_id === folder.id);
-}
-
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
-// that name is used as-is (the migration never promotes or replaces it).
+// that name is used as-is (the migration never promotes or replaces it), but only
+// at the top level, so a "Videos" subfolder of Meetings never takes uploads.
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME && f.parent_folder_id == null);
 }
 
 // URL-download error codes → notes.upload.* i18n keys.

@@ -65,7 +65,6 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import {
-  canNestFolder,
   defaultFolderDisplayName,
   folderPathLabel,
   folderTree,
@@ -628,7 +627,8 @@ function FolderRow({
     [folder, folders]
   );
   const canMoveToFolder =
-    canNestFolder(folder, folders) && (isSubfolder || parentOptions.length > 0);
+    !folders.some((f) => f.parent_folder_id === folder.id) &&
+    (isSubfolder || parentOptions.length > 0);
   const filteredSpaces = useMemo(
     () =>
       spaceSearch
