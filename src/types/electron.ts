@@ -2546,8 +2546,7 @@ declare global {
         }) => void
       ) => () => void;
       clearManagedEnterpriseIdentity?: (options?: {
-        reresolving?: boolean;
-        reason?: "accountChanged" | "workspaceChanged";
+        next?: { accountId: string; workspaceId: string | null };
       }) => Promise<void>;
       getPendingEnterpriseAudioTest?: (
         consume?: boolean

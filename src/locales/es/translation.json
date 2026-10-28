@@ -5164,7 +5164,7 @@
       "bootstrapNotProtected": "El archivo de arranque debe ser de tu propiedad y solo tú debes poder leerlo. Pide a TI que lo vuelva a enviar.",
       "bootstrapUnreadable": "OpenWhispr no puede leer el archivo de arranque. Pide a TI que tu cuenta pueda leerlo.",
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
-      "testLinkOtherWorkspace": "Este enlace de prueba es para un espacio de trabajo en el que no has iniciado sesión."
+      "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
     }
   }
 }

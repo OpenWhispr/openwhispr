@@ -5164,7 +5164,7 @@
       "bootstrapNotProtected": "Die Bootstrap-Datei muss Ihnen gehören und darf nur für Sie lesbar sein. Bitten Sie die IT, sie erneut bereitzustellen.",
       "bootstrapUnreadable": "OpenWhispr kann die Bootstrap-Datei nicht lesen. Bitten Sie die IT, sie für Ihr Konto lesbar zu machen.",
       "bootstrapMismatch": "Die Bootstrap-Datei passt nicht zu Ihrem Konto, diesem Workspace oder seinen konfigurierten Zugangsdaten.",
-      "testLinkOtherWorkspace": "Dieser Testlink gilt für einen Workspace, bei dem Sie nicht angemeldet sind."
+      "testLinkOtherWorkspace": "Dieser Testlink gilt für einen anderen Workspace. Wechseln Sie zu diesem Workspace und öffnen Sie den Link erneut."
     }
   }
 }

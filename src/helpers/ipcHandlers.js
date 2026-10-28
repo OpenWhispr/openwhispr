@@ -2639,10 +2639,18 @@ class IPCHandlers {
           });
           const result = this.databaseManager.deleteAccountData(accountId);
           this.metaActivation?.purge(accountId);
-          await this.enterpriseAudioCredentials?.removeAccount(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
+          }
+          // The account's rows are already gone, so a vault that won't delete
+          // must not report the deletion as failed; a later deletion retries it.
+          try {
+            await this.enterpriseAudioCredentials?.removeAccount(accountId);
+          } catch (error) {
+            debugLogger.warn("Enterprise audio credential removal failed", {
+              error: error.message,
+            });
           }
           return { success: true, ...result };
         } catch (error) {
@@ -8876,8 +8884,10 @@ class IPCHandlers {
           : MEETING_MIC_REFERENCE_ALIGNMENT_MS[meetingSystemAudioStrategy];
       while (meetingPendingMicChunks.length > 0) {
         const next = meetingPendingMicChunks[0];
-        // Buffered startup audio is judged at its capture time, whose system
-        // reference has long arrived, never against the audio playing now.
+        // Buffered startup audio is timed by its capture: it isn't held for a
+        // reference that would have arrived long ago, and its analysis is
+        // recorded at that time. The detector still correlates it against the
+        // latest system audio it holds, not the audio of its own moment.
         const capturedAt = next.capturedAt ?? null;
         if (holdMs && now - (capturedAt ?? next.queuedAt) < holdMs) {
           break;
@@ -10026,14 +10036,17 @@ class IPCHandlers {
           flushPendingMeetingMicChunks();
         }
 
+        // Audio the renderer held through the connect arrives in a burst; its
+        // capture time, not its arrival, places its samples.
+        const chunkCapturedAt = capturedAt ?? receivedAt;
         if (meetingLiveSpeakerActive) {
           // identification.startTime counts samples from the first chunk the
-          // identifier sees, so the wall-clock anchor has to be the arrival of
+          // identifier sees, so the wall-clock anchor has to be the capture of
           // that chunk. Stamping it when identification starts is only correct
           // when capture is already running (the macOS tap); the Windows
           // loopback helper can take seconds to hand over its first buffer, and
           // a stale anchor shifts every label earlier by that gap.
-          meetingLiveSpeakerStartedAt ??= receivedAt;
+          meetingLiveSpeakerStartedAt ??= chunkCapturedAt;
           void liveSpeakerIdentifier.feedAudio(outboundBuffer);
         }
 
@@ -10041,7 +10054,7 @@ class IPCHandlers {
           const os = require("os");
           meetingDiarizationPath = path.join(os.tmpdir(), `ow-diarize-raw-${Date.now()}.pcm`);
           meetingDiarizationStream = fs.createWriteStream(meetingDiarizationPath);
-          meetingDiarizationStartedAt = receivedAt;
+          meetingDiarizationStartedAt = chunkCapturedAt;
         }
         meetingDiarizationStream.write(outboundBuffer);
 
@@ -10261,7 +10274,7 @@ class IPCHandlers {
       }
     };
 
-    // capturedAt marks mic audio the renderer held while main connected; it is
+    // capturedAt marks audio the renderer held while main connected; it is
     // clamped to the connect window so a renderer can't move the timeline.
     ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source, capturedAt) => {
       const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
@@ -10269,8 +10282,6 @@ class IPCHandlers {
         const route = meetingSystemAudioHandover.acceptRendererChunk(buffer);
         if (route === "drop") return;
         if (route === "takeover") completeMeetingSystemAudioHandover();
-        sendMeetingAudio(buffer, source);
-        return;
       }
       const now = Date.now();
       sendMeetingAudio(
@@ -11314,15 +11325,20 @@ class IPCHandlers {
         return snapshot;
       }
     );
-    // The renderer clears before every re-resolve, a token rotation included, and
-    // the config request that follows decides whether running work continues. A
-    // clear with nothing to follow (no workspace, sign-out, account reset) ends
-    // enterprise audio here, since no later snapshot would.
+    // Any window clears its identity (at boot, on a token rotation, on a purge),
+    // so a clear alone retires nothing; sign-out and account changes retire
+    // enterprise audio where main learns them. A clear that names the scope the
+    // renderer moves to ends work another scope owns, even before it resolves.
     ipcMain.handle("clear-managed-enterprise-identity", async (_event, options) => {
-      if (options?.reresolving !== true) {
-        const reason =
-          options?.reason === "workspaceChanged" ? "workspaceChanged" : "accountChanged";
-        this._retireEnterpriseAudio(false, this._enterpriseAudioOwner ? reason : undefined);
+      const next = options?.next;
+      const owner = this._enterpriseAudioOwner;
+      if (
+        owner &&
+        typeof next?.accountId === "string" &&
+        (typeof next.workspaceId === "string" || next.workspaceId === null) &&
+        !sameEnterpriseAudioScope(owner, next)
+      ) {
+        this._retireEnterpriseAudio(false, enterpriseAudioStopReason(owner, next));
         this._enterpriseAudioOwner = null;
       }
       this._enterpriseAudioBinding = null;

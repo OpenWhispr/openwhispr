@@ -37,10 +37,6 @@ interface EnterpriseIdentityState {
     authGeneration: number,
     forceRefresh?: boolean
   ) => Promise<void>;
-  /**
-   * `reresolving` says a refresh for the next scope follows, so main keeps running
-   * enterprise audio until it answers; otherwise main stops it for `reason`.
-   */
   clear: (options?: ClearEnterpriseIdentityOptions) => void;
 }
 

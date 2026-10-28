@@ -206,6 +206,7 @@ const networkFailures = () => [
   // Electron's net.fetch (legacy Azure) carries no code, only the Chromium error.
   new Error("net::ERR_NETWORK_CHANGED"),
   new Error("net::ERR_INTERNET_DISCONNECTED"),
+  new Error("net::ERR_CONNECTION_RESET"),
 ];
 const deadlineFailures = () => [
   Object.assign(new Error("connect timed out"), { code: "ETIMEDOUT" }),
@@ -218,6 +219,7 @@ const deadlineFailures = () => [
     cause: Object.assign(new Error("Enterprise connection timed out"), { code: "TIMEOUT" }),
   }),
   new Error("net::ERR_TIMED_OUT"),
+  new Error("net::ERR_CONNECTION_TIMED_OUT"),
 ];
 
 test("a transient network failure on a late chunk is retried instead of discarding the job", async () => {
@@ -287,6 +289,43 @@ test("configuration, identity and credential refusals still abort the whole chun
       { code }
     );
     assert.equal(calls, 2);
+    assert.deepEqual(temporaryFiles(), before);
+  }
+});
+
+test("certificate, DNS and proxy setup failures abort with the original error", async () => {
+  const failures = [
+    Object.assign(new Error("certificate has expired"), { code: "CERT_HAS_EXPIRED" }),
+    Object.assign(new Error("unable to verify the first certificate"), {
+      code: "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    }),
+    Object.assign(new Error("fetch failed"), {
+      cause: Object.assign(new Error("self-signed certificate"), {
+        code: "DEPTH_ZERO_SELF_SIGNED_CERT",
+      }),
+    }),
+    Object.assign(new Error("getaddrinfo ENOTFOUND speech.example.com"), { code: "ENOTFOUND" }),
+    new Error("net::ERR_CERT_AUTHORITY_INVALID"),
+    new Error("net::ERR_NAME_NOT_RESOLVED"),
+    new Error("net::ERR_PROXY_CONNECTION_FAILED"),
+  ];
+  for (const failure of failures) {
+    const before = temporaryFiles();
+    let calls = 0;
+    await assert.rejects(
+      transcribeManagedAudioFile({
+        audioBuffer: audio(),
+        fileName: "upload.wav",
+        maxUploadBytes: 20000,
+        transcribe: async () => {
+          calls++;
+          if (calls === 2) throw failure;
+          return "kept";
+        },
+      }),
+      (error) => error === failure
+    );
+    assert.equal(calls, 2, failure.message);
     assert.deepEqual(temporaryFiles(), before);
   }
 });
@@ -372,5 +411,29 @@ test("losing more than the cloud path's share of chunks fails the job instead of
       messageKey: "hooks.audioRecording.errorDescriptions.chunkLoss",
     }
   );
+  assert.deepEqual(temporaryFiles(), before);
+});
+
+test("when every chunk fails, the job reports the provider's error instead of a loss count", async () => {
+  const before = temporaryFiles();
+  const refusal = Object.assign(new Error("Enterprise transcription error: 415"), {
+    status: 415,
+    code: "MANAGED_REQUEST_REJECTED",
+    messageKey: "hooks.audioRecording.errorDescriptions.managedRequestRejected",
+  });
+  let calls = 0;
+  await assert.rejects(
+    transcribeManagedAudioFile({
+      audioBuffer: audio(),
+      fileName: "upload.wav",
+      maxUploadBytes: 20000,
+      transcribe: async () => {
+        calls++;
+        throw refusal;
+      },
+    }),
+    (error) => error === refusal
+  );
+  assert.ok(calls >= 3);
   assert.deepEqual(temporaryFiles(), before);
 });

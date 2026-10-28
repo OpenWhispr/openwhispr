@@ -455,7 +455,8 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
   }
 });
 
-test("an enterprise meeting outlives a token rotation and stops for another workspace or account", async (t) => {
+// Runs an enterprise meeting under `workspace-a`, owned by main, and reports every stop.
+async function enterpriseMeeting(t, generation) {
   const originalStop = fakeThis._stopMeetingForPolicy;
   const originalManager = fakeThis.enterpriseIdentityManager;
   const originalAccount = databaseManager.activeAccountId;
@@ -482,79 +483,90 @@ test("an enterprise meeting outlives a token rotation and stops for another work
     }),
     clear: () => {},
   };
-  const loadConfig = (accountId, workspaceId, generation) =>
-    handlers.get("get-managed-enterprise-config")({}, accountId, workspaceId, generation);
-  // The renderer's sequence for a new bearer: clear, re-validate the scope, re-resolve.
-  const rotate = async (accountId, workspaceId, generation) => {
+  const loadConfig = (accountId, workspaceId, authGeneration) =>
+    handlers.get("get-managed-enterprise-config")({}, accountId, workspaceId, authGeneration);
+  const clear = (options) => handlers.get("clear-managed-enterprise-identity")({}, options);
+  const next = (accountId, workspaceId) => ({ next: { accountId, workspaceId } });
+  const rotate = (generation) => {
     tokenState = { token: `enterprise-token-${generation}`, generation };
     handleAuthTokenChange(tokenState);
-    await handlers.get("clear-managed-enterprise-identity")(
-      {},
-      workspaceId ? { reresolving: true } : undefined
-    );
-    await setScope(accountId, generation);
-    databaseManager.activeAccountId = accountId;
-    if (workspaceId) await loadConfig(accountId, workspaceId, generation);
   };
 
-  await rotate("enterprise-account", "workspace-a", 70);
-  stops.length = 0;
+  rotate(generation);
+  await setScope("enterprise-account", generation);
+  databaseManager.activeAccountId = "enterprise-account";
+  await loadConfig("enterprise-account", "workspace-a", generation);
   fakeThis._activeEnterpriseAudioMeeting = true;
-  await rotate("enterprise-account", "workspace-a", 71);
+  stops.length = 0;
+  return { stops, loadConfig, clear, next, rotate };
+}
+
+test("an enterprise meeting outlives a token rotation and any clear that names no scope", async (t) => {
+  const { stops, loadConfig, clear, next, rotate } = await enterpriseMeeting(t, 70);
+  rotate(71);
+  // A window booting mid-rotation reads no scope yet and clears without one.
+  await clear();
+  await clear(next("enterprise-account", "workspace-a"));
+  await setScope("enterprise-account", 71);
+  await loadConfig("enterprise-account", "workspace-a", 71);
   assert.deepEqual(stops, [], "a same-account token rotation keeps the meeting");
+});
 
-  await loadConfig("enterprise-account", "workspace-b", 71);
+test("an enterprise meeting stops as soon as the renderer moves to another workspace, even before the scope resolves", async (t) => {
+  const { stops, loadConfig, clear, next, rotate } = await enterpriseMeeting(t, 72);
+  rotate(73);
+  await clear(next("enterprise-account", "workspace-b"));
   assert.deepEqual(stops, ["workspaceChanged"]);
+  // The config request that would otherwise have noticed is refused meanwhile.
+  await assert.rejects(loadConfig("enterprise-account", "workspace-b", 73), {
+    code: "AUTH_CONTEXT_CHANGED",
+  });
+});
 
-  fakeThis._activeEnterpriseAudioMeeting = true;
-  stops.length = 0;
-  await rotate("other-account", null, 72);
+test("an enterprise meeting stops when the workspace is cleared with no config to follow", async (t) => {
+  const { stops, clear, next } = await enterpriseMeeting(t, 74);
+  await clear({ next: { accountId: "enterprise-account", workspaceId: 7 } });
+  assert.deepEqual(stops, [], "a malformed scope is ignored");
+  await clear(next("enterprise-account", null));
+  assert.deepEqual(stops, ["workspaceChanged"]);
+});
+
+test("an enterprise meeting stops for another account once main learns it, not on the renderer's clear", async (t) => {
+  const { stops, clear, rotate } = await enterpriseMeeting(t, 76);
+  rotate(77);
+  await clear();
+  assert.deepEqual(stops, []);
+  await setScope("other-account", 77);
   // The account scope change stops any meeting as well; every stop names the account.
   assert.ok(stops.length > 0 && stops.every((reason) => reason === "accountChanged"), stops);
 });
 
-test("an enterprise meeting stops when the workspace is cleared with no config to follow", async (t) => {
-  const originalStop = fakeThis._stopMeetingForPolicy;
-  const originalManager = fakeThis.enterpriseIdentityManager;
-  const originalAccount = databaseManager.activeAccountId;
+test("account deletion still deletes the note mirrors when the enterprise vault won't clear", async (t) => {
   const originalTokenState = tokenState;
+  const originals = {
+    enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
+    metaActivation: fakeThis.metaActivation,
+    _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+  };
   t.after(() => {
-    fakeThis._stopMeetingForPolicy = originalStop;
-    fakeThis.enterpriseIdentityManager = originalManager;
-    fakeThis._activeEnterpriseAudioMeeting = false;
-    databaseManager.activeAccountId = originalAccount;
+    Object.assign(fakeThis, originals);
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
     tokenState = originalTokenState;
   });
-  const stops = [];
-  fakeThis._stopMeetingForPolicy = (reason) => {
-    stops.push(reason);
-    fakeThis._activeEnterpriseAudioMeeting = false;
+  const mirrored = [];
+  tokenState = { token: "delete-token", generation: 90 };
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({ deletedNoteIds: [11, 12] });
+  fakeThis.metaActivation = { purge: () => {} };
+  fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis.enterpriseAudioCredentials = {
+    removeAccount: async () => {
+      throw new Error("vault locked");
+    },
   };
-  fakeThis.enterpriseIdentityManager = {
-    getConfig: async ({ accountId, workspaceId, expectedAuthGeneration }) => ({
-      success: true,
-      accountId,
-      workspaceId,
-      authGeneration: expectedAuthGeneration,
-      config: { generation: 1, providers: [] },
-    }),
-    clear: () => {},
-  };
-  tokenState = { token: "enterprise-token-80", generation: 80 };
-  handleAuthTokenChange(tokenState);
-  await setScope("enterprise-account", 80);
-  databaseManager.activeAccountId = "enterprise-account";
-  await handlers.get("get-managed-enterprise-config")({}, "enterprise-account", "workspace-a", 80);
-  fakeThis._activeEnterpriseAudioMeeting = true;
-  stops.length = 0;
 
-  await handlers.get("clear-managed-enterprise-identity")({}, { reresolving: true });
-  assert.deepEqual(
-    stops,
-    [],
-    "a clear before a re-resolve leaves the meeting to the next snapshot"
-  );
-
-  await handlers.get("clear-managed-enterprise-identity")({}, { reason: "workspaceChanged" });
-  assert.deepEqual(stops, ["workspaceChanged"]);
+  const result = await handlers.get("delete-account-data")({}, "deleted-account", 90);
+  assert.equal(result.success, true);
+  assert.deepEqual(mirrored, [11, 12]);
 });

@@ -5164,7 +5164,7 @@
       "bootstrapNotProtected": "引導檔案必須歸您所有，且只有您能讀取。請 IT 部門重新派送。",
       "bootstrapUnreadable": "OpenWhispr 無法讀取引導檔案。請 IT 部門讓您的帳號可以讀取。",
       "bootstrapMismatch": "引導檔案與您的帳號、此工作區或其設定的憑證不符。",
-      "testLinkOtherWorkspace": "此測試連結對應的是您未登入的工作區。"
+      "testLinkOtherWorkspace": "此測試連結對應的是其他工作區。請切換到該工作區，然後重新開啟連結。"
     }
   }
 }

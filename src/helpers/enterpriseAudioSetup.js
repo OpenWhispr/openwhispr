@@ -43,8 +43,9 @@ const REPORTED_AS = {
   SECURE_STORAGE_UNAVAILABLE: "CREDENTIAL_MISSING",
   CA_UNAVAILABLE: "TLS_FAILED",
 };
-// Failures outside a probe: the OpenWhispr API's own refusals, which say
-// nothing about this device and are never reported as a device check.
+// Failures that say nothing about this device's connection: the OpenWhispr
+// API's own refusals and this app's policy or setup refusals. They are never
+// reported as a device check, so they can't overwrite the last real result.
 const SETUP_MESSAGE_KEYS = {
   CONFIG_CHANGED: "enterprise.audio.checks.configChanged",
   SSO_REQUIRED: "enterprise.audio.errors.ssoRequired",
@@ -52,12 +53,20 @@ const SETUP_MESSAGE_KEYS = {
   SIGN_IN_REQUIRED: "enterprise.audio.errors.signInRequired",
   ACCESS_DENIED: "enterprise.audio.errors.accessDenied",
   RATE_LIMITED: "enterprise.audio.errors.rateLimited",
+  POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  PROVIDER_POLICY_CONFLICT: "common.managedPolicyConflict",
+  MANAGED_OPERATION_UNAVAILABLE: "enterprise.audio.operationUnavailable",
+  MANAGED_CONFIG_AMBIGUOUS: "common.managedConfigAmbiguous",
 };
 const LOCAL_CODES = new Set([
   "SECURE_STORAGE_UNAVAILABLE",
   "BOOTSTRAP_NOT_PROTECTED",
   "BOOTSTRAP_UNREADABLE",
   "BOOTSTRAP_MISMATCH",
+  "POLICY_UNRESOLVABLE",
+  "PROVIDER_POLICY_CONFLICT",
+  "MANAGED_OPERATION_UNAVAILABLE",
+  "MANAGED_CONFIG_AMBIGUOUS",
 ]);
 
 // OpenWhispr API errors carry their HTTP status; provider and network errors never do.
@@ -349,7 +358,10 @@ function registerEnterpriseAudioSetup({
           profile = await draftRuntime.resolve(request, operation);
         }
         if (!profile || profile.provider !== provider)
-          throw new Error("The audio operation is not configured");
+          throw Object.assign(new Error("The audio operation is not configured"), {
+            code: "MANAGED_OPERATION_UNAVAILABLE",
+            messageKey: "enterprise.audio.operationUnavailable",
+          });
         const signal = AbortSignal.timeout(30000);
         if (operation === "batch") {
           const form = new FormData();
@@ -383,9 +395,10 @@ function registerEnterpriseAudioSetup({
           }
         }
       } catch (error) {
-        if (apiRefusalCode(error)) throw error;
-        failure = error;
         code = safeCheckCode(error);
+        // Only a code the API accepts as a device check is reported.
+        if (apiRefusalCode(error) || !Object.hasOwn(CHECK_MESSAGE_KEYS, code)) throw error;
+        failure = error;
       }
       await stored(event, provider, expected);
       await fetchApi(request, `${prefix}/device-checks`, {

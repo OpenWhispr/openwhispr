@@ -1059,7 +1059,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       // Held until main connects; capturedAt keeps main's timeline on capture time.
       const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
-      const pendingSystemChunks: ArrayBuffer[] = [];
+      const pendingSystemChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
       let socketReady = false;
 
       const mainStartPromise = (async () => {
@@ -1560,7 +1560,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
               return;
             }
-            pendingSystemChunks.push(chunk.slice(0));
+            pendingSystemChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
           },
         });
         systemSource = source;
@@ -1688,8 +1688,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       for (const { chunk, capturedAt } of pendingMicChunks) {
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
       }
-      for (const chunk of pendingSystemChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+      for (const { chunk, capturedAt } of pendingSystemChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "system", capturedAt);
       }
 
       const totalMs = performance.now() - startTime;

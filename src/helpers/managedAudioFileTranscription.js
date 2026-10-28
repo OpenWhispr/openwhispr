@@ -3,11 +3,12 @@ const path = require("node:path");
 const { getSafeTempDir } = require("./safeTempDir");
 const { splitAudioFile, convertToMp3 } = require("./ffmpegUtils");
 const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
-const { asProviderError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
 const { CLOUD_CHUNK_MAX_LOSS_RATIO } = require("./cloudChunkPolicy");
 
-// Provider overload and fast network failures from the enterprise transport
-// are retried; a chunk that still fails is skipped and the job keeps the rest.
+// Provider overload and dropped connections are retried; a chunk that still
+// fails is skipped and the job keeps the rest. DNS, certificate and proxy
+// configuration failures are not here: every chunk would meet them, so they
+// abort with the real cause.
 const RETRYABLE_CHUNK_CODES = new Set([
   "PROVIDER_RATE_LIMITED",
   "SERVER_ERROR",
@@ -21,6 +22,17 @@ const RETRYABLE_CHUNK_CODES = new Set([
   "EAI_AGAIN",
   "UND_ERR_SOCKET",
 ]);
+// Electron's net.fetch (legacy Azure) reports these only in its message.
+const RETRYABLE_NET_ERRORS = new Set([
+  "net::ERR_CONNECTION_RESET",
+  "net::ERR_CONNECTION_CLOSED",
+  "net::ERR_CONNECTION_REFUSED",
+  "net::ERR_CONNECTION_ABORTED",
+  "net::ERR_NETWORK_CHANGED",
+  "net::ERR_INTERNET_DISCONNECTED",
+  "net::ERR_ADDRESS_UNREACHABLE",
+]);
+const DEADLINE_NET_ERRORS = new Set(["net::ERR_TIMED_OUT", "net::ERR_CONNECTION_TIMED_OUT"]);
 // A deadline already cost a full request timeout, so the chunk is skipped at once.
 const DEADLINE_CHUNK_CODES = new Set([
   "TIMEOUT",
@@ -39,20 +51,18 @@ const JOB_ABORTING_CODES = new Set([
 /** "retry", "skip" (count the chunk as failed now), or "abort" (fail the job). */
 function chunkFailureAction(error) {
   const codes = [error?.code, error?.cause?.code];
+  const netError = String(error?.message ?? "").match(/net::ERR_[A-Z_]+/)?.[0];
   if (codes.some((code) => JOB_ABORTING_CODES.has(code))) return "abort";
   // Callers check the job signal first, so a remaining abort is a request deadline.
   if (
     codes.some((code) => DEADLINE_CHUNK_CODES.has(code)) ||
+    DEADLINE_NET_ERRORS.has(netError) ||
     error?.name === "TimeoutError" ||
     error?.name === "AbortError"
   )
     return "skip";
-  if (codes.some((code) => RETRYABLE_CHUNK_CODES.has(code))) return "retry";
-  // Electron's net.fetch (legacy Azure) reports a dropped connection only in
-  // its net::ERR_* message, so the shared provider classifier reads it.
-  const networkCode = asProviderError(error, { surface: "transcription" })?.code;
-  if (networkCode === PROVIDER_ERROR_CODES.UNREACHABLE) return "retry";
-  if (networkCode === PROVIDER_ERROR_CODES.TIMEOUT) return "skip";
+  if (codes.some((code) => RETRYABLE_CHUNK_CODES.has(code)) || RETRYABLE_NET_ERRORS.has(netError))
+    return "retry";
   // This chunk's audio was refused or answered badly; the others may still pass.
   if ((error?.status >= 400 && error?.status < 500) || error?.code === "MANAGED_RESPONSE_MALFORMED")
     return "skip";
@@ -121,6 +131,7 @@ async function transcribeManagedAudioFile({
   const directory = fs.mkdtempSync(path.join(getSafeTempDir(), "enterprise-chunks-"));
   const texts = [];
   const failed = [];
+  let lastError;
   try {
     onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
     // At 128 kbit/s, leave room for MP3/container overhead and encoder padding.
@@ -178,6 +189,7 @@ async function transcribeManagedAudioFile({
           if (action === "abort") throw error;
           if (action === "skip" || attempt === 2) {
             failed.push(index);
+            lastError = error;
             break;
           }
           await require("node:timers/promises").setTimeout(500 * 2 ** attempt, undefined, {
@@ -192,6 +204,8 @@ async function transcribeManagedAudioFile({
       chunksCompleted: chunkPaths.length,
     });
     const text = texts.filter(Boolean).join(" ");
+    // Nothing got through, so the last refusal names the cause better than a loss count.
+    if (failed.length === chunkPaths.length) throw lastError;
     // Past the cloud path's loss cap the "transcript" is more hole than content.
     if (failed.length / chunkPaths.length > CLOUD_CHUNK_MAX_LOSS_RATIO || (!text && failed.length))
       throw Object.assign(

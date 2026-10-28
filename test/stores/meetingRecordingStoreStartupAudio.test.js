@@ -18,12 +18,16 @@ const CONNECTED = {
   systemAudioMode: "unsupported",
   systemAudioStrategy: "unsupported",
 };
+const LOOPBACK = { mode: "loopback", strategy: "loopback", status: "granted", granted: true };
 
-async function pendingStartup(t, { prewarm = false } = {}) {
+async function pendingStartup(t, { prewarm = false, loopback = false } = {}) {
   const ready = Promise.withResolvers();
   const requested = Promise.withResolvers();
   const captured = Promise.withResolvers();
+  const availabilityRequested = Promise.withResolvers();
+  const availability = Promise.withResolvers();
   const sent = [];
+  const sources = [];
   const capturedAt = [];
   const worklets = [];
   let stoppedTracks = 0;
@@ -32,12 +36,10 @@ async function pendingStartup(t, { prewarm = false } = {}) {
   let mainStops = 0;
   const noop = () => () => {};
   const api = {
-    checkSystemAudioAccess: async () => ({
-      mode: "unsupported",
-      strategy: "unsupported",
-      status: "unsupported",
-      granted: false,
-    }),
+    checkSystemAudioAccess: async () =>
+      loopback
+        ? LOOPBACK
+        : { mode: "unsupported", strategy: "unsupported", status: "unsupported", granted: false },
     meetingTranscriptionPrepare: () => {
       requested.resolve();
       return ready.promise;
@@ -51,9 +53,13 @@ async function pendingStartup(t, { prewarm = false } = {}) {
       mainStops += 1;
       return { success: true };
     },
-    meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
-    meetingTranscriptionSend: (buffer, _source, at) => {
+    meetingTranscriptionSetSystemAudioAvailable: () => {
+      availabilityRequested.resolve();
+      return loopback ? availability.promise : Promise.resolve({ success: true });
+    },
+    meetingTranscriptionSend: (buffer, source, at) => {
       sent.push([...new Int16Array(buffer)]);
+      sources.push(source);
       capturedAt.push(at);
     },
     onMeetingTranscriptionSegment: noop,
@@ -74,6 +80,7 @@ async function pendingStartup(t, { prewarm = false } = {}) {
     captured.resolve();
     return stream;
   };
+  navigator.mediaDevices.getDisplayMedia = async (...args) => acquire(...args);
   const Context = global.AudioContext;
   global.AudioContext = class extends Context {
     async close() {
@@ -94,6 +101,7 @@ async function pendingStartup(t, { prewarm = false } = {}) {
   const starting = store.startRecording(START_ARGS);
   t.after(async () => {
     ready.resolve(CONNECTED);
+    availability.resolve({ success: true });
     await Promise.all([preparing, starting]);
     await store.stopRecording();
   });
@@ -103,13 +111,19 @@ async function pendingStartup(t, { prewarm = false } = {}) {
     store,
     api,
     sent,
+    sources,
     capturedAt,
     starting,
+    ready,
+    availabilityRequested: availabilityRequested.promise,
+    availability,
     finish: async (result = CONNECTED) => {
       ready.resolve(result);
       await Promise.all([preparing, starting]);
     },
     speak: (samples) => worklets[0]?.port.onmessage?.({ data: new Int16Array(samples).buffer }),
+    speakSystem: (samples) =>
+      worklets.at(-1)?.port.onmessage?.({ data: new Int16Array(samples).buffer }),
     resources: () => ({ stoppedTracks, closedContexts, mainStarts, mainStops }),
   };
 }
@@ -182,6 +196,33 @@ test("buffered startup speech tells main when it was captured; live speech does 
   await session.finish();
   session.speak([333, 444]);
   assert.equal(session.capturedAt.length, 2);
+  assert.ok(session.capturedAt[0] >= before && session.capturedAt[0] <= after);
+  assert.equal(session.capturedAt[1], undefined);
+  await session.store.stopRecording();
+});
+
+test("buffered system audio tells main when it was captured, like buffered mic audio", async (t) => {
+  const session = await pendingStartup(t, { loopback: true });
+  session.ready.resolve({
+    ...CONNECTED,
+    systemAudioMode: "loopback",
+    systemAudioStrategy: "loopback",
+  });
+  // Main confirms system audio before the renderer marks its socket ready.
+  await session.availabilityRequested;
+  const before = Date.now();
+  session.speakSystem([5, 6]);
+  const after = Date.now();
+  assert.deepEqual(session.sent, [], "System audio must wait for the authenticated connection");
+
+  session.availability.resolve({ success: true });
+  await session.starting;
+  session.speakSystem([7, 8]);
+  assert.deepEqual(session.sources, ["system", "system"]);
+  assert.deepEqual(session.sent, [
+    [5, 6],
+    [7, 8],
+  ]);
   assert.ok(session.capturedAt[0] >= before && session.capturedAt[0] <= after);
   assert.equal(session.capturedAt[1], undefined);
   await session.store.stopRecording();

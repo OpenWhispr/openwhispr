@@ -74,8 +74,8 @@ test("buffered startup mic audio anchors the in-person timeline at its capture t
   const capturedAt = Date.now() - 5000;
   send(capturedAt);
   assert.equal(context.meetingMicDiarizationStartedAt, capturedAt);
-  // Judged against the system audio of its own moment, and released at once:
-  // its reference arrived long ago.
+  // Analysed under its capture time and released at once: its reference would
+  // have arrived long ago.
   assert.deepEqual(events, [
     ["analyze", capturedAt],
     ["dispatch", "mic", capturedAt],

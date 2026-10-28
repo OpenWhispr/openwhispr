@@ -10,8 +10,8 @@ workspace feature policy.
 
 ## Stage and provision a device
 
-1. Deploy the additive API contract and migrations, then the supporting desktop,
-   then the admin console. See the [release dependencies](#release-dependencies).
+1. Deploy in the order under [release dependencies](#release-dependencies):
+   migration 097, the admin console, the API, then the desktop release.
 2. Save the audio provider in **disabled** mode. Configure full batch HTTPS and
    realtime WSS URLs, deployment aliases, authentication slots, protocol and network
    settings. Gateways retain custom prefixes, ports and non-secret query parameters.
@@ -36,8 +36,10 @@ workspace feature policy.
    editing the profile makes them stale.
 7. Pilot actual uploads, history retries and two-channel meetings on the target
    corporate network before enabling required mode. Disabled draft tests require
-   workspace-admin authorization. The console's desktop-test link contains only
-   workspace/provider references; the desktop checks the signed-in workspace again.
+   workspace-admin authorization, and an Azure draft test requires Azure to be
+   allowed in the workspace's Transcription policy first. The console's
+   desktop-test link contains only workspace/provider references; the desktop
+   checks the signed-in workspace again.
 
 ### Protected MDM bootstrap
 
@@ -223,8 +225,9 @@ a build before 1.12 enforces both batch and realtime until the first successful
 configuration load reports which operations are covered; this fails closed by
 design. Set the actual released minimum desktop
 version: this branch targets **1.12.0**; the package version alone does not prove a
-distributed build contains it. Exercise all four meeting/upload feature-policy
-combinations and verify dictation remains independent. Do not equate a server
+distributed build contains it. Don't raise **Minimum app version** to 1.12.0 until
+desktop 1.12 is released, or every member is blocked. Exercise all four
+meeting/upload feature-policy combinations and verify dictation remains independent. Do not equate a server
 Azure probe or one device's successful test with fleet readiness.
 
 ### Validation and current evidence
@@ -275,13 +278,20 @@ change's `enterprise-audio-v1` client. The API's activation floor checks only th
 version number, so a 1.12.0+ build without the client would be treated as able to
 enforce enterprise audio.
 
-Connectivity API: [API #329](https://github.com/OpenWhispr/openwhispr-api/pull/329).
-Admin: [admin #28](https://github.com/OpenWhispr/openwhispr-admin/pull/28). Their
-desktop counterpart must be released before required activation. Independent
-feature controls are [API #324](https://github.com/OpenWhispr/openwhispr-api/pull/324),
-[desktop #2874](https://github.com/OpenWhispr/openwhispr/pull/2874) and
-[admin #27](https://github.com/OpenWhispr/openwhispr-admin/pull/27); deploy API,
-desktop, then admin controls.
+Desktop: [desktop #2989](https://github.com/OpenWhispr/openwhispr/pull/2989), stacked
+on [desktop #2988](https://github.com/OpenWhispr/openwhispr/pull/2988). API:
+[API #340](https://github.com/OpenWhispr/openwhispr-api/pull/340) (the feature
+controls, [API #339](https://github.com/OpenWhispr/openwhispr-api/pull/339), are
+merged). Admin: [admin #30](https://github.com/OpenWhispr/openwhispr-admin/pull/30)
+([admin #29](https://github.com/OpenWhispr/openwhispr-admin/pull/29) is merged).
+Deploy in this order:
+
+1. Apply migration 097 on dev and prod.
+2. Deploy admin #30.
+3. Deploy API #340 right after 097. Until it is live, the old API answers a second
+   active audio provider with "Workspace policy must allow this managed provider".
+   That fails closed, but keep the window short.
+4. Release desktop 1.12 (#2989, after #2988).
 
 Existing work was incorporated from [API #267](https://github.com/OpenWhispr/openwhispr-api/pull/267)
 and [admin #26](https://github.com/OpenWhispr/openwhispr-admin/pull/26) for bounded,

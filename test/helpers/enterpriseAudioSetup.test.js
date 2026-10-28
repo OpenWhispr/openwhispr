@@ -10,9 +10,10 @@ const {
   safeCheckCode,
 } = require("../../src/helpers/enterpriseAudioSetup");
 
-function setup({ bootstrapDirectory } = {}) {
+function setup({ bootstrapDirectory, resolve } = {}) {
   const handlers = new Map();
   const writes = [];
+  const reports = [];
   let probes = 0;
   const binding = {
     accountId: "account-a",
@@ -40,7 +41,11 @@ function setup({ bootstrapDirectory } = {}) {
         throw Object.assign(new Error("changed"), { code: "AUTH_CONTEXT_CHANGED" });
       return { ...binding, expectedAuthGeneration: binding.authGeneration };
     },
-    fetchApi: async () => ({ ...record }),
+    fetchApi: async (_request, endpoint, init = {}) => {
+      if (endpoint.endsWith("/device-checks")) reports.push(init.body);
+      return { ...record };
+    },
+    getVersion: () => "0.0.0",
     bootstrapDirectory,
     credentials: {
       save: async (...args) => writes.push(args),
@@ -48,8 +53,9 @@ function setup({ bootstrapDirectory } = {}) {
       status: async () => ({ present: false }),
     },
     runtime: {
-      resolve: async () => {
+      resolve: async (...args) => {
         probes++;
+        if (resolve) return resolve(...args);
         throw new Error("Unexpected audio probe");
       },
     },
@@ -59,6 +65,7 @@ function setup({ bootstrapDirectory } = {}) {
     record,
     context,
     writes,
+    reports,
     probes: () => probes,
     invoke: (name, input) =>
       handlers.get(`enterprise-audio-${name}`)({}, { provider: "openai-compatible", ...input }),
@@ -171,6 +178,48 @@ test(
     assert.equal(fixture.writes.length, 1);
   }
 );
+
+test("a policy or setup refusal before the probe is shown and never reported as a device check", async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-refusal-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const refusal = (code, messageKey) => async () => {
+    throw Object.assign(new Error(code), { code, ...(messageKey ? { messageKey } : {}) });
+  };
+  for (const [resolve, code, messageKey] of [
+    [refusal("POLICY_UNRESOLVABLE"), "POLICY_UNRESOLVABLE", "common.policyUnresolved"],
+    [
+      refusal("PROVIDER_POLICY_CONFLICT", "common.managedPolicyConflict"),
+      "PROVIDER_POLICY_CONFLICT",
+      "common.managedPolicyConflict",
+    ],
+    [
+      refusal("MANAGED_OPERATION_UNAVAILABLE", "enterprise.audio.operationUnavailable"),
+      "MANAGED_OPERATION_UNAVAILABLE",
+      "enterprise.audio.operationUnavailable",
+    ],
+    [
+      refusal("MANAGED_CONFIG_AMBIGUOUS", "common.managedConfigAmbiguous"),
+      "MANAGED_CONFIG_AMBIGUOUS",
+      "common.managedConfigAmbiguous",
+    ],
+    [
+      refusal("BOOTSTRAP_UNREADABLE", "enterprise.audio.bootstrapUnreadable"),
+      "BOOTSTRAP_UNREADABLE",
+      "enterprise.audio.bootstrapUnreadable",
+    ],
+    // Manual setup leaves no managed profile to probe.
+    [async () => null, "MANAGED_OPERATION_UNAVAILABLE", "enterprise.audio.operationUnavailable"],
+  ]) {
+    const fixture = setup({ bootstrapDirectory: directory, resolve });
+    const result = await fixture.invoke("test", {
+      context: fixture.context,
+      operation: "batch",
+      allowInferenceValidation: true,
+    });
+    assert.deepEqual(result, { success: false, code, messageKey });
+    assert.deepEqual(fixture.reports, []);
+  }
+});
 
 function draftAzureSetup(t, { config = {}, fetchApi, systemFetch } = {}) {
   const handlers = new Map();

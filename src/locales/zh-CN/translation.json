@@ -5164,7 +5164,7 @@
       "bootstrapNotProtected": "引导文件必须归您所有，且仅您可读取。请让 IT 部门重新下发。",
       "bootstrapUnreadable": "OpenWhispr 无法读取引导文件。请让 IT 部门为您的账号开放读取权限。",
       "bootstrapMismatch": "引导文件与您的账号、此工作区或其配置的凭据不匹配。",
-      "testLinkOtherWorkspace": "此测试链接对应的是您未登录的工作区。"
+      "testLinkOtherWorkspace": "此测试链接对应的是其他工作区。请切换到该工作区，然后重新打开链接。"
     }
   }
 }
