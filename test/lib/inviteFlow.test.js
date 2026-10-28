@@ -90,7 +90,7 @@ test("a current member is flagged before sending", () => {
     "Sam@acme.test"
   );
   assert.deepEqual(state.recipients[0].state, { status: "blocked", reason: "alreadyMember" });
-  assert.equal(inviteSummary(state).canSend, false);
+  assert.equal(inviteSummary(state).skipped.length, 1);
 });
 
 test("a pending invitation is flagged before sending", () => {
@@ -99,7 +99,7 @@ test("a pending invitation is flagged before sending", () => {
     "pat@acme.test"
   );
   assert.deepEqual(state.recipients[0].state, { status: "blocked", reason: "alreadyInvited" });
-  assert.equal(inviteSummary(state).blocked.length, 1);
+  assert.equal(inviteSummary(state).skipped.length, 1);
 });
 
 test("the roster arriving later flags chips already added", () => {
@@ -255,6 +255,8 @@ test("an already-invited answer from the server blocks that chip instead of offe
   );
   const summary = inviteSummary(state);
   assert.deepEqual(summary.failed, []);
+  assert.equal(summary.skipped.length, 2);
+  // The invalid address still blocks until it is fixed or removed.
   assert.equal(summary.canSend, false);
 });
 
@@ -392,8 +394,182 @@ test("re-typing an address already sent in this dialog blocks it as already invi
     { email: "b@y.io", state: { status: "failed", kind: "requestFailed" } },
     { email: "a@x.com", state: { status: "blocked", reason: "alreadyInvited" } },
   ]);
-  assert.equal(inviteSummary(state).canSend, false);
+  // The sent address is skipped; the failed one can still be retried.
+  assert.equal(inviteSummary(state).canSend, true);
+  assert.deepEqual(inviteSummary(state).sendable, ["b@y.io"]);
+  assert.deepEqual(
+    inviteSummary(state).skipped.map((recipient) => recipient.email),
+    ["a@x.com"]
+  );
   // The same address typed twice still makes one chip.
   assert.equal(commitText(state, "a@x.com").recipients.length, 2);
   assert.deepEqual(state.sent, [{ email: "a@x.com", emailSent: true }]);
+});
+
+const members = (...memberEmails) => ({ type: "roster", memberEmails, invitedEmails: [] });
+const seats = (purchasedLeft, ceilingLeft) => ({ type: "seats", purchasedLeft, ceilingLeft });
+const addresses = (count) => Array.from({ length: count }, (_, index) => `p${index}@x.com`);
+
+test("a member address is skipped and doesn't block sending", () => {
+  const state = commitText(run(fresh(), members("m@ws.io")), "a@x.io m@ws.io");
+  const summary = inviteSummary(state);
+  assert.equal(summary.canSend, true);
+  assert.deepEqual(summary.sendable, ["a@x.io"]);
+  assert.deepEqual(
+    summary.skipped.map((recipient) => recipient.email),
+    ["m@ws.io"]
+  );
+
+  const sending = run(state, { type: "send" });
+  assert.deepEqual(statuses(sending), ["sending", "blocked"]);
+});
+
+test("a draft that is already a member is neither sendable nor counted", () => {
+  const state = run(fresh(), members("m@ws.io"), { type: "draft", text: "m@ws.io" });
+  const summary = inviteSummary(state);
+  assert.deepEqual(summary.sendable, []);
+  assert.equal(summary.canSend, false);
+});
+
+test("only skipped addresses leaves nothing to send", () => {
+  const state = commitText(run(fresh(), members("m@ws.io")), "m@ws.io");
+  const summary = inviteSummary(state);
+  assert.deepEqual(summary.sendable, []);
+  assert.equal(summary.skipped.length, 1);
+  assert.equal(summary.canSend, false);
+  assert.equal(run(state, { type: "send" }).phase, "editing");
+});
+
+test("more than 100 recipients blocks sending", () => {
+  const state = commitText(fresh(), addresses(MAX_INVITE_RECIPIENTS + 1).join(" "));
+  assert.equal(inviteSummary(state).tooMany, true);
+  assert.equal(inviteSummary(state).canSend, false);
+});
+
+test("skipped chips don't count toward the cap", () => {
+  const roster = run(fresh(), members("m1@ws.io", "m2@ws.io"));
+  const state = commitText(
+    roster,
+    [...addresses(MAX_INVITE_RECIPIENTS), "m1@ws.io", "m2@ws.io"].join(" ")
+  );
+  const summary = inviteSummary(state);
+  assert.equal(summary.tooMany, false);
+  assert.equal(summary.canSend, true);
+  assert.equal(summary.skipped.length, 2);
+});
+
+test("addresses over the purchased seats warn but still send", () => {
+  const state = commitText(run(fresh(), seats(10, null)), addresses(26).join(" "));
+  const summary = inviteSummary(state);
+  assert.deepEqual(summary.overSeats, { available: 10, excess: 16 });
+  assert.equal(summary.overCeiling, null);
+  assert.equal(summary.canSend, true);
+});
+
+test("no purchased seats left still warns with zero", () => {
+  const state = commitText(run(fresh(), seats(0, null)), addresses(3).join(" "));
+  assert.deepEqual(inviteSummary(state).overSeats, { available: 0, excess: 3 });
+  assert.equal(inviteSummary(state).canSend, true);
+});
+
+test("a negative seats count reads as no seats left", () => {
+  const state = commitText(run(fresh(), seats(-2, null)), addresses(3).join(" "));
+  assert.deepEqual(inviteSummary(state).overSeats, { available: 0, excess: 3 });
+});
+
+test("addresses within the purchased seats don't warn", () => {
+  const state = commitText(run(fresh(), seats(3, null)), addresses(3).join(" "));
+  assert.equal(inviteSummary(state).overSeats, null);
+});
+
+test("addresses over the ceiling block sending", () => {
+  const state = commitText(run(fresh(), seats(null, 4)), addresses(6).join(" "));
+  const summary = inviteSummary(state);
+  assert.deepEqual(summary.overCeiling, { available: 4, excess: 2 });
+  assert.equal(summary.canSend, false);
+  assert.equal(run(state, { type: "send" }).phase, "editing");
+});
+
+test("unknown seats never warn or block", () => {
+  const state = commitText(fresh(), addresses(30).join(" "));
+  const summary = inviteSummary(state);
+  assert.deepEqual(state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(summary.overSeats, null);
+  assert.equal(summary.overCeiling, null);
+  assert.equal(summary.canSend, true);
+});
+
+test("seats arriving later re-judge the chips already added", () => {
+  const added = commitText(fresh(), addresses(5).join(" "));
+  assert.equal(inviteSummary(added).overCeiling, null);
+  const state = run(added, seats(null, 2));
+  assert.deepEqual(inviteSummary(state).overCeiling, { available: 2, excess: 3 });
+  assert.equal(run(state, seats(null, null)).seats.ceilingLeft, null);
+});
+
+test("a seat failure from the server updates the seats left", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "seatLimit", available: 1 } },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "seatLimit", available: 1 } },
+    { type: "finished" }
+  );
+  assert.equal(state.seats.ceilingLeft, 1);
+  assert.equal(state.seats.purchasedLeft, null);
+  assert.deepEqual(statuses(state), ["failed", "failed"]);
+});
+
+test("a seat failure without a count leaves the seats alone", () => {
+  let state = run(commitText(fresh(), "a@x.com"), { type: "send" });
+  state = run(state, {
+    type: "result",
+    email: "a@x.com",
+    outcome: { ok: false, kind: "seatLimit" },
+  });
+  assert.equal(state.seats.ceilingLeft, null);
+});
+
+test("seats events are ignored while sending", () => {
+  const sending = run(commitText(fresh(), "a@x.com"), { type: "send" });
+  assert.deepEqual(run(sending, seats(1, 1)), sending);
+});
+
+test("the send finishes as done when only skipped chips remain", () => {
+  let state = run(commitText(run(fresh(), members("m@ws.io")), "a@x.com m@ws.io"), {
+    type: "send",
+  });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "done");
+  assert.deepEqual(emails(state), ["m@ws.io"]);
+});
+
+test("the send stays editing when a failed chip remains beside skipped ones", () => {
+  let state = run(commitText(run(fresh(), members("m@ws.io")), "a@x.com m@ws.io"), {
+    type: "send",
+  });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "editing");
+});
+
+test("removing the last unsettled chip with only skipped ones left shows the outcome", () => {
+  let state = run(commitText(run(fresh(), members("m@ws.io")), "a@x.com b@y.io m@ws.io"), {
+    type: "send",
+  });
+  state = run(
+    state,
+    { type: "result", email: "a@x.com", outcome: { ok: true, emailSent: true } },
+    { type: "result", email: "b@y.io", outcome: { ok: false, kind: "requestFailed" } },
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "editing");
+  assert.equal(run(state, { type: "remove", email: "b@y.io" }).phase, "done");
 });

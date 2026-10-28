@@ -51,6 +51,7 @@ async function loadView(t) {
           sent: [],
           memberEmails: [],
           invitedEmails: [],
+          seats: { purchasedLeft: null, ceilingLeft: null },
           ...state,
         },
         dispatch: () => {},

@@ -85,6 +85,7 @@ async function mountView(t) {
           sent: [],
           memberEmails: [],
           invitedEmails: [],
+          seats: { purchasedLeft: null, ceilingLeft: null },
         },
         dispatch: () => {},
         suggestions: [],

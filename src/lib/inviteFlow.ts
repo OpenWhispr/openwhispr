@@ -27,6 +27,15 @@ export interface InviteFlowState {
   sent: Array<{ email: string; emailSent: boolean }>;
   memberEmails: string[];
   invitedEmails: string[];
+  /** Invitations the workspace can still take; null while unknown, which never warns or blocks. */
+  seats: InviteSeats;
+}
+
+export interface InviteSeats {
+  /** Purchased seats left. Going over only warns: the server bills a seat when the invite is accepted. */
+  purchasedLeft: number | null;
+  /** Room left under the seat ceiling. The server refuses invitations past it. */
+  ceilingLeft: number | null;
 }
 
 export type InviteFlowEvent =
@@ -36,16 +45,26 @@ export type InviteFlowEvent =
   | { type: "remove"; email: string }
   | { type: "role"; role: "admin" | "member" }
   | { type: "roster"; memberEmails: string[]; invitedEmails: string[] }
+  | ({ type: "seats" } & InviteSeats)
   | { type: "send" }
   | { type: "result"; email: string; outcome: InviteOutcome }
   | { type: "finished" };
+
+export interface SeatShortfall {
+  available: number;
+  excess: number;
+}
 
 export interface InviteSummary {
   sendable: string[];
   canSend: boolean;
   tooMany: boolean;
   invalid: InviteRecipient[];
-  blocked: InviteRecipient[];
+  /** Members and pending invitations: never sent, and they never block sending. */
+  skipped: InviteRecipient[];
+  /** A warning only. */
+  overSeats: SeatShortfall | null;
+  overCeiling: SeatShortfall | null;
   failed: InviteRecipient[];
   noEmailCount: number;
 }
@@ -138,6 +157,17 @@ function setDraft(state: InviteFlowState, text: string): InviteFlowState {
   return { ...withChips, draft: rest.trimStart() };
 }
 
+function shortfall(left: number | null, requested: number): SeatShortfall | null {
+  if (left === null || requested <= left) return null;
+  const available = Math.max(0, left);
+  return { available, excess: requested - available };
+}
+
+// Only blocked chips are left, so there is nothing more to send or fix.
+function isSettled(recipients: InviteRecipient[]): boolean {
+  return recipients.every((recipient) => recipient.state.status === "blocked");
+}
+
 function resolveResult(
   state: InviteFlowState,
   email: string,
@@ -165,8 +195,15 @@ function resolveResult(
     next = { status: "failed", kind: "refused", message: outcome.message };
   } else next = { status: "failed", kind: outcome.kind };
 
+  // A seat refusal means the batch went past the ceiling, so its count is the room that is left.
+  const seats =
+    outcome.kind === "seatLimit" && typeof outcome.available === "number"
+      ? { ...state.seats, ceilingLeft: outcome.available }
+      : state.seats;
+
   return {
     ...state,
+    seats,
     recipients: state.recipients.map((recipient) =>
       recipient === chip ? { email: recipient.email, state: next } : recipient
     ),
@@ -182,6 +219,7 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
     sent: [],
     memberEmails: [],
     invitedEmails: [],
+    seats: { purchasedLeft: null, ceilingLeft: null },
   };
   const initialEmail = input.initialEmail?.trim() ?? "";
   if (!initialEmail) return base;
@@ -210,17 +248,22 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
   const draftText = normalize(state.draft);
   const draftAllowsSend = draftText === "" || isValidEmail(draftText);
   // Send commits the field first, so a valid address typed but not yet chipped counts: otherwise
-  // the button would stay disabled for someone who typed one address and never pressed Enter.
+  // the button would stay disabled for someone who typed one address and never pressed Enter. One
+  // that would become a skipped chip adds nothing to send.
   const draftAddsChip =
     draftText !== "" &&
     draftAllowsSend &&
     !state.recipients.some((recipient) => recipient.email === draftText) &&
-    !state.sent.some((entry) => entry.email === draftText);
+    !state.sent.some((entry) => entry.email === draftText) &&
+    classify(draftText, state.memberEmails, state.invitedEmails).status === "draft";
   if (draftAddsChip) sendable.push(draftText);
   const invalid = state.recipients.filter(({ state: chip }) => chip.status === "invalid");
-  const blocked = state.recipients.filter(({ state: chip }) => chip.status === "blocked");
+  const skipped = state.recipients.filter(({ state: chip }) => chip.status === "blocked");
   const failed = state.recipients.filter(({ state: chip }) => chip.status === "failed");
-  const tooMany = state.recipients.length + (draftAddsChip ? 1 : 0) > MAX_INVITE_RECIPIENTS;
+  const tooMany =
+    state.recipients.length - skipped.length + (draftAddsChip ? 1 : 0) > MAX_INVITE_RECIPIENTS;
+  const overSeats = shortfall(state.seats.purchasedLeft, sendable.length);
+  const overCeiling = shortfall(state.seats.ceilingLeft, sendable.length);
 
   return {
     sendable,
@@ -228,12 +271,14 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
       state.phase === "editing" &&
       sendable.length > 0 &&
       invalid.length === 0 &&
-      blocked.length === 0 &&
       !tooMany &&
+      overCeiling === null &&
       draftAllowsSend,
     tooMany,
     invalid,
-    blocked,
+    skipped,
+    overSeats,
+    overCeiling,
     failed,
     noEmailCount: state.sent.filter((entry) => !entry.emailSent).length,
   };
@@ -249,7 +294,7 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
           ? { email: recipient.email, state: { status: "failed", kind: "requestFailed" } }
           : recipient
       );
-      return { ...state, recipients, phase: recipients.length === 0 ? "done" : "editing" };
+      return { ...state, recipients, phase: isSettled(recipients) ? "done" : "editing" };
     }
     return state;
   }
@@ -269,7 +314,7 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
       // went out, and warn about any whose email wasn't delivered.
       const settled =
         state.phase === "editing" &&
-        recipients.length === 0 &&
+        isSettled(recipients) &&
         state.draft === "" &&
         state.sent.length > 0;
       return { ...state, recipients, phase: settled ? "done" : state.phase };
@@ -294,6 +339,11 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
         ),
       };
     }
+    case "seats":
+      return {
+        ...state,
+        seats: { purchasedLeft: event.purchasedLeft, ceilingLeft: event.ceilingLeft },
+      };
     case "send": {
       const committed = commitDraft(state);
       const summary = inviteSummary(committed);

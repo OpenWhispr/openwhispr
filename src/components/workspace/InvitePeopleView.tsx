@@ -132,7 +132,7 @@ export function InvitePeopleView({
 
   const errorBarContent = (): ErrorBarContent | null => {
     if (summary.tooMany) return { message: t("workspaces.invite.tooMany") };
-    const refused = summary.invalid[0] ?? summary.blocked[0];
+    const refused = summary.invalid[0] ?? summary.skipped[0];
     if (refused) return { message: recipientMessage(refused) };
     if (summary.failed.length === 0) return null;
     // Try again resends exactly these, so the count and the button agree with Send.
