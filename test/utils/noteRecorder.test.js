@@ -25,9 +25,9 @@ const owner = { name: "Alice Owner", email: "alice@acme.com" };
 test("the user's own note is recorded by the user", async () => {
   const { resolveNoteRecorder, recorderTranscriptLabel, recorderLlmLabel } = await load();
   const recorder = resolveNoteRecorder({
-    ownNote: true,
+    recordedByUser: true,
     user: { name: " Bob Viewer ", email: "bob@acme.com" },
-    owner: null,
+    recorder: null,
     participants: [],
   });
   assert.deepEqual(recorder, {
@@ -45,16 +45,21 @@ test("the user's own note is recorded by the user", async () => {
 
 test("a teammate's note is recorded by its owner, never the viewer", async () => {
   const { resolveNoteRecorder, recorderTranscriptLabel, recorderLlmLabel } = await load();
-  const recorder = resolveNoteRecorder({ ownNote: false, user: viewer, owner, participants: [] });
+  const recorder = resolveNoteRecorder({
+    recordedByUser: false,
+    user: viewer,
+    recorder: owner,
+    participants: [],
+  });
   assert.equal(recorder.selfName, "Alice Owner");
   assert.equal(recorder.selfEmail, "alice@acme.com");
   assert.equal(recorderTranscriptLabel(recorder, false, t), "Alice Owner");
   assert.equal(recorderLlmLabel(recorder, false, t), "Alice Owner");
 
   const nameless = resolveNoteRecorder({
-    ownNote: false,
+    recordedByUser: false,
     user: viewer,
-    owner: { name: null, email: "alice@acme.com" },
+    recorder: { name: null, email: "alice@acme.com" },
     participants: [],
   });
   assert.equal(recorderTranscriptLabel(nameless, false, t), "alice@acme.com");
@@ -66,7 +71,12 @@ test("without a roster entry, the attendee the recorder's calendar flagged names
     attendee("alice@acme.com", "Alice Owner", true),
     attendee("bob@acme.com", "Bob Viewer"),
   ];
-  const recorder = resolveNoteRecorder({ ownNote: false, user: viewer, owner: null, participants });
+  const recorder = resolveNoteRecorder({
+    recordedByUser: false,
+    user: viewer,
+    recorder: null,
+    participants,
+  });
   assert.equal(recorder.selfName, "Alice Owner");
   assert.equal(recorder.selfEmail, "alice@acme.com");
   assert.equal(recorderTranscriptLabel(recorder, false, t), "Alice Owner");
@@ -75,9 +85,9 @@ test("without a roster entry, the attendee the recorder's calendar flagged names
 test("an unknown recorder is the note taker, not You", async () => {
   const { resolveNoteRecorder, recorderTranscriptLabel, recorderLlmLabel } = await load();
   const recorder = resolveNoteRecorder({
-    ownNote: false,
+    recordedByUser: false,
     user: viewer,
-    owner: null,
+    recorder: null,
     participants: [],
   });
   assert.deepEqual(recorder, { selfName: null, selfEmail: null, participants: [] });
@@ -92,7 +102,12 @@ test("note generation on a teammate's note attributes the mic to the owner and l
     attendee("alice@acme.com", "Alice Owner", true),
     attendee("bob@acme.com", "Bob Viewer"),
   ];
-  const recorder = resolveNoteRecorder({ ownNote: false, user: viewer, owner, participants });
+  const recorder = resolveNoteRecorder({
+    recordedByUser: false,
+    user: viewer,
+    recorder: owner,
+    participants,
+  });
   const label = recorderLlmLabel(recorder, false, t);
   const segments = [
     { source: "mic", speaker: "you", text: "I'll send the deck." },
@@ -107,7 +122,7 @@ test("note generation on a teammate's note attributes the mic to the owner and l
     buildMeetingContext(recorder, label),
     [
       "## Meeting Context",
-      'The note owner ("Alice Owner" in the transcript) is Alice Owner <alice@acme.com>.',
+      'The note taker ("Alice Owner" in the transcript) is Alice Owner <alice@acme.com>.',
       "Invited participants: Bob Viewer <bob@acme.com>.",
     ].join("\n")
   );
@@ -136,4 +151,25 @@ test("new recording attribution follows the viewer only on somebody else's note"
   assert.equal(resolveSpeakerAssignmentName("You", null, false, t), "Note taker");
   assert.equal(resolveSpeakerAssignmentName("You", user, true, t), "You");
   assert.equal(resolveSpeakerAssignmentName("Alice", user, false, t), "Alice");
+});
+
+test("creator attribution stays separate from operational ownership, including cleared and legacy creators", async () => {
+  const { isNoteRecorder, noteRecorderUserId, recordingRecorderName } = await load();
+  const { ownsNote } = await import("../../src/lib/spacePermissions.ts");
+  const note = { cloud_id: "cloud", owner_user_id: "bob", created_by_user_id: "alice" };
+  const user = { id: "bob", ...viewer };
+  assert.equal(ownsNote(note, user.id), true);
+  assert.equal(isNoteRecorder(note, user.id), false);
+  assert.equal(isNoteRecorder(note, "alice"), true);
+  assert.equal(noteRecorderUserId(note), "alice");
+  assert.equal(recordingRecorderName(note, user, t), "Bob Viewer");
+  const cleared = { ...note, created_by_user_id: null };
+  assert.equal(noteRecorderUserId(cleared), null);
+  assert.equal(isNoteRecorder(cleared, user.id), false);
+  assert.equal(recordingRecorderName(cleared, user, t), "Bob Viewer");
+  const legacy = { cloud_id: "cloud", owner_user_id: "bob" };
+  assert.equal(noteRecorderUserId(legacy), "bob");
+  assert.equal(isNoteRecorder(legacy, user.id), true);
+  assert.equal(recordingRecorderName(legacy, user, t), undefined);
+  assert.equal(isNoteRecorder({ cloud_id: null, created_by_user_id: null }, user.id), true);
 });

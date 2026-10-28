@@ -771,11 +771,11 @@ const SegmentRow = memo(function SegmentRow({
         />
       )}
     </div>
-  ) : segment.source === "mic" && segment.recorderName ? (
+  ) : segment.source === "mic" ? (
     <span className="text-[11px] font-medium mb-0.5 px-1.5" dir="auto">
       {activeName && !isYouSpeakerName(activeName, t("notes.speaker.you"))
         ? activeName
-        : segment.recorderName}
+        : segment.recorderName || recorderLabel}
     </span>
   ) : null;
 

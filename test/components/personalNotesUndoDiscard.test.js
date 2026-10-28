@@ -343,7 +343,7 @@ test("a meeting with speakers keeps its Meeting Context, speaker lines and known
   assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
   assert.ok(
     input.includes(
-      '## Meeting Context\nThe note owner ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
     ),
     "the owner and the invitee"
   );
@@ -382,7 +382,7 @@ test("a teammate's note names its owner from the space roster, not the viewer", 
   );
   assert.ok(
     input.includes(
-      '## Meeting Context\nThe note owner ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>, Bob Lee <bob@example.com>.'
+      '## Meeting Context\nThe note taker ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>, Bob Lee <bob@example.com>.'
     ),
     "the owner recorded it; the viewer is an invitee"
   );
@@ -406,8 +406,74 @@ test("an unknown recorder is the note taker, never the viewer", async (t) => {
   const { input } = await runSummaryOn(t, TEAM_NOTE, [], { user: TEAMMATE });
   assert.ok(input.includes("Note taker: I'll send the deck."));
   assert.ok(!input.includes("Bob Lee"));
-  assert.ok(!input.includes("The note owner"));
+  assert.ok(!input.includes("The note taker"));
 });
+
+test("generation keeps a viewer-local self mapping distinct from the original recorder", async (t) => {
+  const { input } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      transcript: JSON.stringify([
+        { source: "mic", speaker: "you", text: "Original words" },
+        { source: "mic", speaker: "speaker_0", text: "My commitment" },
+      ]),
+    },
+    [{ speaker_id: "speaker_0", display_name: "You" }],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes("Sam Rivera: Original words\nBob Lee: My commitment"));
+});
+
+test("generation attributes a custodian's note to its creator", async (t) => {
+  const { input, options } = await runSummaryOn(
+    t,
+    {
+      ...TEAM_NOTE,
+      owner_user_id: TEAMMATE.id,
+      created_by_user_id: "sam-id",
+    },
+    [],
+    {
+      user: TEAMMATE,
+      spaces: [TEAM_SPACE],
+      roster: [{ user_id: "sam-id", name: "Sam Rivera", email: "sam@example.com" }],
+    }
+  );
+  assert.ok(input.includes('The note taker ("Sam Rivera" in the transcript) is Sam Rivera'));
+  assert.ok(input.includes("Sam Rivera: I'll send the deck."));
+  assert.ok(!input.includes("Bob Lee"));
+  assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+for (const [name, participants, label] of [
+  ["calendar self", PARTICIPANTS, "Sam Rivera"],
+  ["neutral fallback", null, "Note taker"],
+]) {
+  test(`a cleared creator keeps the ${name} in generation instead of the custodian`, async (t) => {
+    const { input } = await runSummaryOn(
+      t,
+      {
+        ...TEAM_NOTE,
+        owner_user_id: TEAMMATE.id,
+        created_by_user_id: null,
+        participants,
+      },
+      [],
+      {
+        user: TEAMMATE,
+        spaces: [TEAM_SPACE],
+        roster: [{ user_id: TEAMMATE.id, name: TEAMMATE.name, email: TEAMMATE.email }],
+      }
+    );
+    assert.ok(input.includes(`${label}: I'll send the deck.`));
+    assert.ok(!input.includes("Bob Lee"));
+  });
+}
 
 test("a note without a transcript keeps the personal-note run", async (t) => {
   const { input, options } = await runSummaryOn(t, { transcript: "", participants: PARTICIPANTS });

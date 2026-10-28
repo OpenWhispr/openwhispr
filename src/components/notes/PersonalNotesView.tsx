@@ -36,11 +36,12 @@ import {
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
 import {
+  isNoteRecorder,
+  noteRecorderUserId,
   recorderLlmLabel,
   resolveNoteRecorder,
   recordingRecorderName,
 } from "../../utils/noteRecorder";
-import { ownsNote } from "../../lib/spacePermissions";
 import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 import type { CalendarAttendee, CalendarEvent } from "../../types/calendar";
@@ -789,20 +790,19 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
-      // Legacy self labels fall back to the owner; newer sessions retain their recorder.
-      const ownNote = ownsNote(editorNote, user?.id);
+      const recordedByUser = isNoteRecorder(editorNote, user?.id);
       const noteSpace = spaces.find((s) => s.id === editorNote.space_id);
-      const ownerId = editorNote.owner_user_id;
-      const owner =
-        !ownNote && ownerId && noteSpace?.kind === "team" && noteSpace.cloud_space_id
+      const recorderId = noteRecorderUserId(editorNote);
+      const recorder =
+        !recordedByUser && recorderId && noteSpace?.kind === "team" && noteSpace.cloud_space_id
           ? ((await fetchSpaceRoster(noteSpace.cloud_space_id).catch(() => [])).find(
-              (member) => member.user_id === ownerId
+              (member) => member.user_id === recorderId
             ) ?? null)
           : null;
       const identity: MeetingIdentity = resolveNoteRecorder({
-        ownNote,
+        recordedByUser,
         user,
-        owner,
+        recorder,
         participants: parseNoteParticipants(editorNote.participants),
       });
       if (segments.length > 0 && speakerlessText === null) {
@@ -812,9 +812,16 @@ export default function PersonalNotesView({
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const selfLabel = recorderLlmLabel(identity, ownNote, t);
+        const selfLabel = recorderLlmLabel(identity, recordedByUser, t);
+        const viewerLabel = user?.name?.trim() || user?.email?.trim() || t("notes.speaker.you");
         meetingContext = buildMeetingContext(identity, selfLabel);
-        formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
+        formattedTranscript = buildLlmTranscript(
+          segments,
+          speakerMappings,
+          selfLabel,
+          t,
+          viewerLabel
+        );
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);
       } else {
         // Plain text shows no speakers, so the run gets no Meeting Context: the model

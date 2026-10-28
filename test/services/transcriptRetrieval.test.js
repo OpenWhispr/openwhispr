@@ -386,7 +386,7 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   };
   assert.equal(
     noteChatTranscript(segments, mappings, owner),
-    `## Meeting Context\nThe note owner ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note taker ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
   );
   // Signed out, the user's own note still says the note taker is the user.
   assert.equal(
@@ -420,4 +420,17 @@ test("note chat and retrieval keep appended recorders distinct from the owner", 
     { source: "mic", speaker: "you", recorderName: "Bob", text: "new" },
   ]);
   assert.equal(readableTranscript(raw).text, "Note taker: old\nBob: new");
+});
+
+test("malformed recorder metadata cannot block parsing, retrieval or direct note chat", async () => {
+  const { parseTranscriptSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  const { readableTranscript, noteChatTranscript } =
+    await import("../../src/utils/transcriptEvidence.ts");
+  for (const recorderName of [42, { name: "Bob" }, ["Bob"], true, null]) {
+    const segments = [{ source: "mic", speaker: "you", text: "Still readable", recorderName }];
+    const raw = JSON.stringify(segments);
+    assert.equal(parseTranscriptSegments(raw)[0].recorderName, undefined);
+    assert.equal(readableTranscript(raw).text, "Note taker: Still readable");
+    assert.match(noteChatTranscript(segments, {}, null), /Note taker: Still readable$/);
+  }
 });

@@ -40,7 +40,10 @@ function codePointBoundary(text: string, index: number): number {
 }
 
 function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string, string>): string {
-  const recorderLabel = segment.recorderName || NOTE_TAKER_LABEL;
+  const recorderLabel =
+    typeof segment.recorderName === "string" && segment.recorderName
+      ? segment.recorderName
+      : NOTE_TAKER_LABEL;
   // Stored JSON is untrusted: a malformed name must not block the transcript.
   const resolved: unknown = resolveSegmentSpeakerName(segment, speakerMappings);
   if (typeof resolved === "string" && resolved) {

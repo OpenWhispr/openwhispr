@@ -91,6 +91,8 @@ import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
 import {
+  isNoteRecorder,
+  noteRecorderUserId,
   recorderTranscriptLabel,
   resolveNoteRecorder,
   resolveSpeakerAssignmentName,
@@ -505,23 +507,23 @@ export default function NoteEditor({
     [displaySegments, speakerMappings, speakerProfiles]
   );
 
-  // The roster names a teammate who recorded this note; it isn't fetched for the user's own.
-  const ownerRoster = useSpaceRoster(
-    !ownedByUser && isTeamNote ? (space?.cloud_space_id ?? null) : null
+  const recordedByUser = isNoteRecorder(note, user?.id);
+  const recorderId = noteRecorderUserId(note);
+  const recorderRoster = useSpaceRoster(
+    !recordedByUser && recorderId && isTeamNote ? (space?.cloud_space_id ?? null) : null
   );
-  const noteOwner = note.owner_user_id ? ownerRoster?.get(note.owner_user_id) : undefined;
-  // Legacy segments without a session recorder fall back to the note owner.
+  const noteRecorder = recorderId ? recorderRoster?.get(recorderId) : undefined;
   const meetingIdentity = useMemo<MeetingIdentity>(
     () =>
       resolveNoteRecorder({
-        ownNote: ownedByUser,
+        recordedByUser,
         user: { name: user?.name, email: user?.email },
-        owner: noteOwner,
+        recorder: noteRecorder,
         participants: parsedParticipants,
       }),
-    [ownedByUser, user?.name, user?.email, noteOwner, parsedParticipants]
+    [recordedByUser, user?.name, user?.email, noteRecorder, parsedParticipants]
   );
-  const recorderLabel = recorderTranscriptLabel(meetingIdentity, ownedByUser, t);
+  const recorderLabel = recorderTranscriptLabel(meetingIdentity, recordedByUser, t);
 
   const mentionPeople = useMemo(
     () => collectKnownPeople(meetingIdentity, speakerMappings, displaySegments),
@@ -532,10 +534,14 @@ export default function NoteEditor({
   // for, and says whether the note taker is the user.
   const chatTranscript = useMemo(
     () =>
-      noteChatTranscript(displaySegments, speakerMappings, ownedByUser ? meetingIdentity : null) ??
+      noteChatTranscript(
+        displaySegments,
+        speakerMappings,
+        recordedByUser ? meetingIdentity : null
+      ) ??
       note.transcript ??
       undefined,
-    [displaySegments, meetingIdentity, note.transcript, ownedByUser, speakerMappings]
+    [displaySegments, meetingIdentity, note.transcript, recordedByUser, speakerMappings]
   );
 
   const embeddedChat = useEmbeddedChat({
@@ -546,7 +552,7 @@ export default function NoteEditor({
     noteTranscript: chatTranscript,
     noteSummary: enhancement?.content,
     noteParticipants: parsedParticipants,
-    noteOwnedByUser: ownedByUser,
+    noteOwnedByUser: recordedByUser,
     selfEmail: user?.email ?? null,
     noteCalendarEventId: note.calendar_event_id,
     onNewChatUnsent: setChatDraft,
@@ -708,7 +714,7 @@ export default function NoteEditor({
       displayName = resolveSpeakerAssignmentName(
         displayName,
         user,
-        ownedByUser && !hasOtherRecorders,
+        recordedByUser && !hasOtherRecorders,
         t
       );
       // The reserved self ID is shared by recording sessions. Its corrections
@@ -749,7 +755,7 @@ export default function NoteEditor({
       diarizedSegments,
       displaySegments,
       user,
-      ownedByUser,
+      recordedByUser,
       t,
       isRecording,
       note.id,
@@ -826,7 +832,7 @@ export default function NoteEditor({
       displayName = resolveSpeakerAssignmentName(
         displayName,
         user,
-        ownedByUser && !displaySegments.some((segment) => segment.recorderName),
+        recordedByUser && !displaySegments.some((segment) => segment.recorderName),
         t
       );
       const nextSegments = displaySegments.map((segment) =>
@@ -848,7 +854,7 @@ export default function NoteEditor({
       persistDisplaySegments,
       handleClearSelection,
       user,
-      ownedByUser,
+      recordedByUser,
       t,
     ]
   );

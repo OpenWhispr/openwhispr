@@ -200,3 +200,17 @@ test("a correction of an unnumbered recorder line overrides its session identity
   assert.ok(html.includes("Alice Owner"));
   assert.ok(!html.includes("Bob Viewer"));
 });
+
+test("original unnumbered mic rows show the resolved recorder and preserve named corrections", async () => {
+  const segments = [{ id: "original", source: "mic", text: "Original words", timestamp: 1 }];
+  const shared = await renderChat({ segments, recorderLabel: "Alice Recorder" });
+  assert.ok(shared.includes("Alice Recorder"));
+  const own = await renderChat({ segments });
+  assert.match(own, />You</);
+  const corrected = await renderChat({
+    segments: [{ ...segments[0], speakerName: "Corrected", speakerLocked: true }],
+    recorderLabel: "Alice Recorder",
+  });
+  assert.ok(corrected.includes("Corrected"));
+  assert.ok(!corrected.includes("Alice Recorder"));
+});

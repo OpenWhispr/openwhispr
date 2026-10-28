@@ -212,7 +212,10 @@ async function loadNoteEditor(t, permission) {
         };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
-export function useSpaceRoster() { return null; }`,
+export function useSpaceRoster(cloudSpaceId) {
+  globalThis.__noteEditorRosterId = cloudSpaceId;
+  return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
+}`,
     },
   });
 
@@ -507,7 +510,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
   assert.equal(
     chatTranscript(),
-    `## Meeting Context\nThe note owner ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note taker ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
   );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
@@ -1054,5 +1057,73 @@ test("the owner can correct a teammate's self row without renaming earlier sessi
     buildLlmTranscript(segments, {}, "Alice Owner", (key) => key),
     "Original correction: Old words\nAlice Owner: New words"
   );
+  await unmount();
+});
+
+test("the editor resolves the creator separately from custodian permissions and self corrections", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  globalThis.__noteEditorRoster = [
+    { user_id: "alice", name: "Alice Recorder", email: "alice@example.com" },
+  ];
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorRoster;
+    delete globalThis.__noteEditorRosterId;
+    delete globalThis.__embeddedChatOptions;
+  });
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t, "editor");
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 1, kind: "team", cloud_space_id: "team" },
+  ];
+  await loadSpaces();
+  const saved = [];
+  globalThis.window.electronAPI.setSpeakerMapping = async () => {};
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  const note = {
+    ...NOTE,
+    cloud_id: "shared-note",
+    owner_user_id: "bob",
+    created_by_user_id: "alice",
+    space_id: 1,
+    transcript: JSON.stringify([{ source: "mic", speaker: "you", text: "Original words" }]),
+  };
+  await render(undefined, { note });
+  await click("transcript");
+  let chat;
+  let dropdown;
+  walk(latest(), (node) => {
+    if (node.props.onMapSpeaker) chat = node;
+    if ("ownedByUser" in node.props) dropdown = node;
+  });
+  assert.equal(chat.props.recorderLabel, "Alice Recorder");
+  assert.equal(
+    globalThis.__noteEditorRosterId,
+    "team",
+    "custodians still load the recorder's roster"
+  );
+  assert.equal(dropdown.props.ownedByUser, true, "permission ownership remains the custodian's");
+  assert.equal(globalThis.__embeddedChatOptions.noteOwnedByUser, false);
+  assert.match(
+    globalThis.__embeddedChatOptions.noteTranscript,
+    /Someone other than the user took these notes/
+  );
+  await React.act(async () => chat.props.onMapSpeaker("you", "You"));
+  assert.equal(JSON.parse(saved.at(-1).transcript)[0].speakerName, "Bob Viewer");
+
+  await render(undefined, { note: { ...note, created_by_user_id: null, participants: null } });
+  walk(latest(), (node) => {
+    if (node.props.onMapSpeaker) chat = node;
+  });
+  assert.equal(chat.props.recorderLabel, "notes.speaker.noteTaker");
+  assert.equal(
+    globalThis.__noteEditorRosterId,
+    null,
+    "a cleared creator never uses the owner's roster"
+  );
+  assert.equal(globalThis.__embeddedChatOptions.noteOwnedByUser, false);
   await unmount();
 });
