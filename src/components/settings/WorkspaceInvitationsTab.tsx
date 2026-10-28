@@ -1,4 +1,4 @@
-import React, { useReducer, useRef, useState } from "react";
+import React, { useEffect, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, MoreHorizontal, Trash2 } from "../icons";
 import { Button } from "../ui/button";
@@ -13,11 +13,21 @@ import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { invitationDaysLeft, invitationStatus, orderInvitations } from "../../lib/peopleRoster";
+import {
+  headerCheckState,
+  keepRows,
+  setRows,
+  toggleRow,
+  type RowSelection,
+} from "../../lib/rowSelection";
 import { classifyRowActionError } from "../../lib/workspaceErrors";
+import { bulkInvitationActions } from "../../services/bulkInvitationActions";
 import { InvitationsService } from "../../services/InvitationsService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceInvitation } from "../../types/electron";
 import { CancelInvitationDialog } from "../workspace/CancelInvitationDialog";
+import { CancelInvitationsDialog } from "../workspace/CancelInvitationsDialog";
+import { RowCheckbox, SelectionBar } from "../workspace/SelectionBar";
 import type { WorkspaceInvitationsState } from "./useWorkspaceInvitations";
 
 interface WorkspaceInvitationsTabProps {
@@ -31,6 +41,7 @@ const ROW_DIVIDER = "border-t border-border/60 dark:border-border-subtle/50";
 const HEADER_CELL =
   "sticky top-0 z-10 h-9 bg-background dark:bg-surface-1 text-xs font-normal text-muted-foreground first:rounded-ss-xl last:rounded-se-xl";
 const SKELETON_ROWS = 3;
+const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 
 export default function WorkspaceInvitationsTab({
   workspace,
@@ -41,6 +52,13 @@ export default function WorkspaceInvitationsTab({
   const [cancelState, dispatchCancel] = useReducer(confirmActionReducer<WorkspaceInvitation>, {
     kind: "closed",
   });
+  const [cancelManyState, dispatchCancelMany] = useReducer(
+    confirmActionReducer<WorkspaceInvitation[]>,
+    { kind: "closed" }
+  );
+  const [selection, setSelection] = useState<RowSelection>(() => new Set());
+  const [bulkResending, setBulkResending] = useState(false);
+  const bulkResendingRef = useRef(false);
   const [resendingIds, setResendingIds] = useState<ReadonlySet<string>>(() => new Set());
   // Read synchronously, so a second Resend on a row still sending is ignored before any render.
   const resendingRef = useRef(new Set<string>());
@@ -48,6 +66,23 @@ export default function WorkspaceInvitationsTab({
   // One reading of the clock per render, so the order, the status and the day count agree.
   const now = Date.now();
   const rows = orderInvitations(invitations.invitations, now);
+  const rowIds = rows.map((invitation) => invitation.id);
+  const rowKey = rowIds.join(",");
+  const selectedInvitations = rows.filter((invitation) => selection.has(invitation.id));
+  const bulkAbortRef = useRef<AbortController | null>(null);
+
+  // A bulk resend that outlives the tab stops asking for the invitations it hasn't reached.
+  useEffect(() => () => bulkAbortRef.current?.abort(), []);
+
+  useEffect(() => {
+    setSelection((current) => (current.size === 0 ? current : new Set()));
+  }, [workspace.id]);
+
+  // Cancel and Resend act on what is listed, so a reload that drops an invitation drops it here.
+  useEffect(() => {
+    setSelection((current) => keepRows(current, rowIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowKey]);
 
   // An invitation that left the list may have been accepted, which adds a member.
   function refreshMembersQuietly(): void {
@@ -118,6 +153,83 @@ export default function WorkspaceInvitationsTab({
     }
   }
 
+  async function handleResendSelected(): Promise<void> {
+    if (bulkResendingRef.current) return;
+    bulkResendingRef.current = true;
+    setBulkResending(true);
+    const controller = new AbortController();
+    bulkAbortRef.current = controller;
+    const emailsById = new Map(selectedInvitations.map(({ id, email }) => [id, email]));
+    try {
+      const outcome = await bulkInvitationActions.resendInvitations(
+        workspace.id,
+        selectedInvitations.map(({ id }) => id),
+        controller.signal
+      );
+      if (controller.signal.aborted) return;
+      const listed = await reload();
+      // A failure that left the list may be an invitation that was accepted.
+      if (
+        listed &&
+        outcome.failed.some(
+          ({ id, error }) => error.kind === "gone" && !listed.some((entry) => entry.id === id)
+        )
+      ) {
+        refreshMembersQuietly();
+      }
+      // Failed invitations stay selected, so Resend invites again retries only those.
+      setSelection((current) => setRows(current, outcome.done, false));
+
+      const { done, failed, noEmail } = outcome;
+      const ended = failed.find(
+        ({ error }) => error.kind === "notAllowed" || error.kind === "ssoRequired"
+      );
+      if (failed.length === 0) {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resentMany", { count: done.length }),
+        });
+      } else if (done.length > 0) {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resentPartial", {
+            count: done.length,
+          }),
+          description: t("settingsPage.workspace.people.invitations.resendFailedSome", {
+            count: failed.length,
+            email: isolate(emailsById.get(failed[0].id) ?? ""),
+          }),
+        });
+      } else if (ended?.error.kind === "ssoRequired") {
+        toast({
+          title: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
+          variant: "destructive",
+        });
+      } else if (ended) {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resendNotAllowed", {
+            workspace: isolate(workspace.name),
+          }),
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: t("settingsPage.workspace.people.invitations.resendFailedAll", {
+            count: failed.length,
+          }),
+          variant: "destructive",
+        });
+      }
+      if (noEmail.length > 0) {
+        toast({
+          title: t("settingsPage.workspace.invites.resentNoEmail"),
+          variant: "destructive",
+        });
+      }
+    } finally {
+      bulkResendingRef.current = false;
+      setBulkResending(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {rows.length === 0 && invitations.status === "failed" && (
@@ -178,7 +290,16 @@ export default function WorkspaceInvitationsTab({
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-3 text-start")}>
+                <th scope="col" className={cn(HEADER_CELL, "w-10 ps-4 pe-0 text-start")}>
+                  <RowCheckbox
+                    label={t("settingsPage.workspace.people.selection.selectAllInvitations")}
+                    checked={HEADER_CHECKED[headerCheckState(rowIds, selection)]}
+                    onChange={(checked) =>
+                      setSelection((current) => setRows(current, rowIds, checked))
+                    }
+                  />
+                </th>
+                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-3 text-start")}>
                   {t("settingsPage.workspace.people.columns.email")}
                 </th>
                 <th scope="col" className={cn(HEADER_CELL, "px-3 text-start whitespace-nowrap")}>
@@ -198,8 +319,19 @@ export default function WorkspaceInvitationsTab({
                 const resending = resendingIds.has(invitation.id);
                 return (
                   <tr key={invitation.id} className={cn("h-14", ROW_DIVIDER)}>
+                    <td className="w-10 ps-4 pe-0">
+                      <RowCheckbox
+                        label={t("settingsPage.workspace.people.selection.selectRow", {
+                          name: isolate(invitation.email),
+                        })}
+                        checked={selection.has(invitation.id)}
+                        onChange={() =>
+                          setSelection((current) => toggleRow(current, invitation.id))
+                        }
+                      />
+                    </td>
                     {/* max-w-0 lets the email truncate inside an auto-layout table. */}
-                    <td className="ps-4 pe-3 w-full max-w-0">
+                    <td className="ps-3 pe-3 w-full max-w-0">
                       <p className="text-xs font-medium text-foreground truncate">
                         <bdi dir="ltr">{invitation.email}</bdi>
                       </p>
@@ -222,7 +354,7 @@ export default function WorkspaceInvitationsTab({
                     <td className="ps-3 pe-4 w-px whitespace-nowrap text-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          disabled={resending}
+                          disabled={resending || bulkResending}
                           aria-label={t("common.actions")}
                           className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 active:bg-foreground/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
                         >
@@ -259,6 +391,35 @@ export default function WorkspaceInvitationsTab({
           </table>
         </div>
       )}
+
+      <SelectionBar
+        count={selectedInvitations.length}
+        onClear={() => setSelection(new Set())}
+        actions={[
+          {
+            label: t("settingsPage.workspace.people.invitations.cancelSelected"),
+            tone: "destructive",
+            onClick: () => dispatchCancelMany({ type: "open", subject: selectedInvitations }),
+          },
+          {
+            label: bulkResending
+              ? t("settingsPage.workspace.people.invitations.resendingSelected")
+              : t("settingsPage.workspace.people.invitations.resendSelected"),
+            busy: bulkResending,
+            onClick: () => void handleResendSelected(),
+          },
+        ]}
+      />
+
+      <CancelInvitationsDialog
+        workspace={workspace}
+        state={cancelManyState}
+        dispatch={dispatchCancelMany}
+        onCanceled={(canceledIds) => {
+          void reload();
+          setSelection((current) => setRows(current, canceledIds, false));
+        }}
+      />
 
       <CancelInvitationDialog
         workspaceId={workspace.id}
