@@ -197,16 +197,108 @@ test("Responses requests carry the other families' effort facts too", async (t) 
   assert.deepEqual(bodies[1].reasoning, { effort: "none" });
 });
 
-test("a model outside the family table gets no reasoning param on a Responses endpoint", async (t) => {
+test("a model outside the family table gets the generic off value on a Responses endpoint", async (t) => {
   const bodies = installFetch(t, () => completeMessage("# Notes"));
   const { openaiProvider } = await load();
 
   await openaiProvider.call({ ...glmNotesCall({ disableThinking: true }), model: "glm-5.2" });
+  await openaiProvider.call({ ...glmNotesCall({ disableThinking: false }), model: "glm-5.2" });
 
-  assert.equal(bodies[0].reasoning, undefined);
+  // "none", as the chat body's generic dialect sends (#791); thinking on leaves the default.
+  assert.deepEqual(bodies[0].reasoning, { effort: "none" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
+test("a chosen level on a Responses endpoint is checked against the endpoint's host", async (t) => {
+  const bodies = installFetch(t, () => completeMessage("Cleaned."));
+  const { openaiProvider } = await load();
+  const xaiCall = (reasoningEffort) => ({
+    text: "raw transcript",
+    model: "grok-4.7",
+    agentName: null,
+    config: {
+      provider: "custom",
+      baseUrl: "https://api.x.ai/v1",
+      customApiKey: "test-key",
+      disableThinking: false,
+      reasoningEffort,
+    },
+    ctx: makeCtx(),
+  });
+
+  await openaiProvider.call(xaiCall("xhigh"));
+  // x.ai takes no "minimal", so it's left at the server's default.
+  await openaiProvider.call(xaiCall("minimal"));
+
+  assert.deepEqual(bodies[0].reasoning, { effort: "xhigh" });
+  assert.equal(bodies[1].reasoning, undefined);
+});
+
+test("a Custom endpoint that rejects the off value pays the 400 once, not on every request", async (t) => {
+  // e.g. Azure OpenAI with a non-reasoning deployment, whose name we can't recognise.
+  const bodies = installFetch(t, (body) =>
+    body.reasoning
+      ? jsonResponse({ error: { message: "Unsupported parameter: 'reasoning.effort'" } }, 400)
+      : completeMessage("Cleaned.")
+  );
+  const { openaiProvider } = await load();
+  const cleanup = () =>
+    openaiProvider.call({
+      text: "raw transcript",
+      model: "gpt-4o-prod",
+      agentName: null,
+      config: {
+        provider: "custom",
+        baseUrl: "https://rejecting-host.example/v1",
+        customApiKey: "test-key",
+        disableThinking: true,
+      },
+      ctx: makeCtx(),
+    });
+
+  assert.equal(await cleanup(), "Cleaned.");
+  assert.equal(await cleanup(), "Cleaned.");
+
+  assert.deepEqual(
+    bodies.map((body) => body.reasoning),
+    [{ effort: "none" }, undefined, undefined]
+  );
 });
 
 test("a Responses result that ran out of tokens before any text is an error, not the input echoed back", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [] }],
+    })
+  );
+  const { openaiProvider } = await load();
+  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  const error = await openaiProvider
+    .call({
+      text: TRANSCRIPT,
+      model: "gpt-5.6-terra",
+      agentName: null,
+      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+      ctx: makeCtx(),
+    })
+    .then(
+      () => null,
+      (rejection) => rejection
+    );
+
+  assert.match(error?.message ?? "", /ran out of output tokens/);
+  assert.equal(error.messageKey, TRUNCATED_OUTPUT_MESSAGE_KEY);
+  // The code is what note formatting retries with more room (#2008); this
+  // model's request already had it.
+  assert.equal(error.code, undefined, "note formatting must not send the same cap again");
+});
+
+test("a Custom endpoint's Responses result that only reasoned carries the retry code", async (t) => {
+  // Ollama answers the app's notes request on /v1/responses: GLM-5.3 at its
+  // default effort spends the whole 4,096 tokens reasoning (#2008).
   installFetch(t, () =>
     jsonResponse({
       status: "incomplete",
@@ -219,13 +311,105 @@ test("a Responses result that ran out of tokens before any text is an error, not
   await assert.rejects(
     openaiProvider.call({
       text: TRANSCRIPT,
-      model: "gpt-5.6-terra",
+      model: "glm-5.3",
       agentName: null,
-      config: { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+      config: {
+        provider: "custom",
+        baseUrl: "https://ollama.example/v1",
+        customApiKey: "test-key",
+        systemPrompt: "Summarize",
+        maxTokens: 4096,
+      },
       ctx: makeCtx(),
     }),
-    /ran out of output tokens/
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
+});
+
+test("a Responses result stopped by a content filter is not reported as running out of tokens", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output: [],
+    })
+  );
+  const { openaiProvider } = await load();
+  const { EMPTY_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  // Notes show it as their translated empty reply, and Prompt Studio's cleanup
+  // test (no system prompt) as an error rather than its own input echoed back.
+  for (const config of [
+    { provider: "openai", systemPrompt: "Summarize", maxTokens: 4096 },
+    { provider: "openai" },
+  ]) {
+    await assert.rejects(
+      openaiProvider.call({
+        text: TRANSCRIPT,
+        model: "gpt-5.6-terra",
+        agentName: null,
+        config,
+        ctx: makeCtx(),
+      }),
+      (error) =>
+        /content filter/.test(error.message) &&
+        error.messageKey === EMPTY_OUTPUT_MESSAGE_KEY &&
+        error.code === undefined
+    );
+  }
+});
+
+test("a cancelled run aborts its request in flight and is not retried", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requests = 0;
+  globalThis.fetch = (_input, init = {}) => {
+    if ((init.method || "GET") === "GET") {
+      return Promise.resolve(jsonResponse({ error: { message: "unauthorized" } }, 401));
+    }
+    requests += 1;
+    // A model still thinking: no reply until the request is aborted.
+    return new Promise((_resolve, reject) => {
+      const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      if (init.signal.aborted) abort();
+      else init.signal.addEventListener("abort", abort);
+    });
+  };
+  const { openaiProvider } = await load();
+  const { cancelRequest, trackRequest } =
+    await import("../../src/services/ai/requestCancellation.ts");
+  t.after(trackRequest("run-1"));
+
+  const call = openaiProvider.call({
+    text: TRANSCRIPT,
+    model: "glm-5.3",
+    agentName: null,
+    config: {
+      provider: "custom",
+      baseUrl: "https://ollama.example/v1",
+      customApiKey: "test-key",
+      systemPrompt: "Summarize",
+      maxTokens: 25_000,
+      requestId: "run-1",
+    },
+    ctx: makeCtx(),
+  });
+  for (let attempt = 0; requests === 0 && attempt < 400; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  cancelRequest("run-1");
+
+  // Promptly, not at the request deadline.
+  const deadline = new Promise((_resolve, reject) =>
+    setTimeout(() => reject(new Error("still waiting on the request")), 2_000).unref()
+  );
+  await assert.rejects(Promise.race([call, deadline]), {
+    message: "Request cancelled",
+    status: 499,
+  });
+  assert.equal(requests, 1, "neither retried nor sent to another endpoint");
 });
 
 test("a Chat Completions result cut off before any text is an error, not the input echoed back", async (t) => {
@@ -248,8 +432,41 @@ test("a Chat Completions result cut off before any text is an error, not the inp
       },
       ctx: makeCtx(),
     }),
-    /ran out of output tokens/
+    { message: /ran out of output tokens/, code: "OUTPUT_LIMIT_BEFORE_ANSWER" }
   );
+});
+
+test("a cut-off on a task that needs complete output carries no retry code", async (t) => {
+  installFetch(t, () =>
+    jsonResponse({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "reasoning", summary: [] }],
+    })
+  );
+  const { openaiProvider } = await load();
+  const { TRUNCATED_OUTPUT_MESSAGE_KEY } = await import("../../src/services/ai/chatRequestBody.ts");
+
+  const error = await openaiProvider
+    .call({
+      text: TRANSCRIPT,
+      model: "gpt-4.1",
+      agentName: null,
+      config: {
+        provider: "openai",
+        systemPrompt: "Summarize",
+        maxTokens: 8192,
+        requireCompleteOutput: true,
+      },
+      ctx: makeCtx(),
+    })
+    .then(
+      () => null,
+      (rejection) => rejection
+    );
+
+  assert.equal(error?.messageKey, TRUNCATED_OUTPUT_MESSAGE_KEY);
+  assert.equal(error.code, undefined, "note formatting must not retry a summary rewrite");
 });
 
 test("an empty but complete response on a task with its own prompt is an error, not the input echoed back", async (t) => {

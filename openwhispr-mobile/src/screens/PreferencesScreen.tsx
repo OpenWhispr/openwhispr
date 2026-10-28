@@ -78,7 +78,7 @@ export default function PreferencesScreen() {
           icon="person.wave.2"
           mdIcon="UserRoundCog"
           title="Voice Assistant"
-          description="Trigger AI actions by saying your assistant’s name"
+          description="Have the keyboard’s wand write for you"
           subtitle={agentName}
           onPress={() => router.push('/(account)/dictation-agent')}
         />

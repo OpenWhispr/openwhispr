@@ -166,3 +166,16 @@ test("a panel command still opens for an approval and has no delivery hook", asy
   built.options.onApprovalRequested();
   assert.equal(h.calls.opened, 1);
 });
+
+test("a caret-delivered command tells the chat which kind of app it writes into", async () => {
+  const { buildAssistantCommandSendOptions } = await load();
+  const send = (delivery) =>
+    buildAssistantCommandSendOptions(
+      { attachment: null, selectedContext: null, delivery },
+      handlers().value
+    ).options.destinationAppCategory;
+
+  assert.equal(send({ ...PASTE, appCategory: "email" }), "email");
+  assert.equal(send(PASTE), undefined);
+  assert.equal(send({ mode: "clipboard" }), undefined);
+});

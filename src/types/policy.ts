@@ -34,6 +34,8 @@ export interface OrgPolicy {
   features: {
     agentEnabled: boolean;
     webSearchEnabled: boolean;
+    meetingRecordingEnabled?: boolean;
+    audioUploadEnabled?: boolean;
     /** Absent on servers that predate the field; absent means allowed. */
     screenContextEnabled?: boolean;
     /**
@@ -42,8 +44,9 @@ export interface OrgPolicy {
      */
     connectorsEnabled?: boolean;
     /**
-     * Server-only Mem0 agent-memory gate, enforced by the API on
-     * `/api/agent/stream`; the app never reads it. Absent on older servers.
+     * Retired agent-memory gate: the API stopped using it when it removed
+     * assistant memory (openwhispr-api#243), but older API versions may still
+     * send it. The app ignores it.
      */
     memoryEnabled?: boolean;
   };

@@ -218,7 +218,7 @@ const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note 
     useConfigStore.getState().config?.inference?.notes?.mode !== 'providers'
   )
     return false;
-  if (useProcessingModeStore.getState().activeMode === 'private') return false;
+  // Local Mode's meetings are private notes; note formatting follows its own selection otherwise.
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
 

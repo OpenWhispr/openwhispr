@@ -170,7 +170,8 @@ export async function streamAgentText(options: StreamAgentTextOptions): Promise<
       'On-device keyboard composition is not available. Choose a provider or OpenWhispr Cloud.',
     );
   if (selection?.mode === 'providers') {
-    const route = await resolveMobileProviderRoute('agent', options.inferenceRoute);
+    // The provider saved for the voice assistant is the user's choice, in Local Mode too.
+    const route = await resolveMobileProviderRoute('agent', options.inferenceRoute, false, true);
     const { processProviderText } =
       require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
     const latest = messages.at(-1);

@@ -22,7 +22,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The release tag comes from the source so protocol changes ship under a
       # new tag and download-windows-mic-listener.js (pinned to the same

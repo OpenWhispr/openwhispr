@@ -2,25 +2,26 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 const MicrosoftCalendarOAuth = require("./microsoftCalendarOAuth");
 const CalendarSyncInterval = require("./calendarSyncInterval");
-const { MAX_BUFFER_MINUTES } = require("./calendarAvailability");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
 const { broadcastToWindows } = require("./windowBroadcast");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 
+// webLink is the series' page: a stripped occurrence has none of its own, and
+// the series is the nearest page to open without a request per occurrence.
 const SERIES_MASTER_FIELDS =
-  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees";
+  "subject,isAllDay,isCancelled,showAs,responseStatus,onlineMeeting,onlineMeetingUrl,location,bodyPreview,organizer,attendees,webLink";
 
 // Graph's deltaLink permanently encodes the calendarView window it was created
-// with — it never rolls forward. Sync a 38-day window and discard the token
-// after 7 days so coverage never drops below the app's 31-day lookahead.
+// with — it never rolls forward. Sync from CALENDAR_LOOKBACK_MS back to 38 days
+// ahead and discard the token after 7 days so coverage never drops below the
+// app's 31-day lookahead.
 const DELTA_WINDOW_MS = 38 * 24 * 60 * 60 * 1000;
 const DELTA_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // A failed series-master backfill can't be retried via delta (unchanged
 // occurrences are never re-delivered); a short TTL forces an early full sync.
 const BACKFILL_RETRY_TTL_MS = 10 * 60 * 1000;
-const BUFFER_COVERAGE_MS = MAX_BUFFER_MINUTES * 60 * 1000;
-const LOOKBACK_SAFETY_MS = 24 * 60 * 60 * 1000;
 
 const AVAILABILITY_STATUS_BY_GRAPH = {
   free: "free",
@@ -352,6 +353,7 @@ class MicrosoftCalendarManager {
         extractMeetingUrl([item.location?.displayName, item.bodyPreview]),
       conference_data: null,
       organizer_email: item.organizer?.emailAddress?.address || null,
+      web_link: item.webLink || null,
       attendees_count: attendees.length,
       attendees: attendees.length
         ? JSON.stringify(
@@ -430,7 +432,7 @@ class MicrosoftCalendarManager {
   // deltaLink for incremental syncs (stored in microsoft_calendars.sync_token).
   _deltaUrl(calendarId) {
     const params = new URLSearchParams({
-      startDateTime: new Date(Date.now() - LOOKBACK_SAFETY_MS - BUFFER_COVERAGE_MS).toISOString(),
+      startDateTime: new Date(Date.now() - CALENDAR_LOOKBACK_MS).toISOString(),
       endDateTime: new Date(Date.now() + DELTA_WINDOW_MS).toISOString(),
     });
     return `/me/calendars/${encodeURIComponent(calendarId)}/calendarView/delta?${params.toString()}`;

@@ -7,10 +7,13 @@ import {
   persistLiveTranscript,
   primeMeetingWorklet,
   stopRecording,
+  stopRecordingForPolicy,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import { isAudioFeatureAllowed } from "../stores/policyRules";
 import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
@@ -18,9 +21,20 @@ const EMA_NEXT = 0.5;
 
 // Sentinel errors set by meetingRecordingStore, translated at display time.
 // A sentinel may carry one argument after a colon, e.g. `unsupportedProvider:groq`.
+// `managedConfig:<key>` carries a managed-setup translation key as its argument.
 // Anything that is not a sentinel reaches the toast unchanged.
 const MEETING_ERROR_KEYS: Record<string, string> = {
   policyRestricted: "notes.meeting.restrictedByOrg",
+  // Org-policy refusal codes, from the main process or the server.
+  POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
+  AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
+  POLICY_UNRESOLVABLE: "common.policyUnresolved",
+  // A running recording stopped because the policy couldn't be checked.
+  policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
+  // The main process ended the recording because it belonged to the previous account.
+  accountChanged: "notes.meeting.stoppedAccountChanged",
+  // An enterprise recording ended because the active workspace changed.
+  workspaceChanged: "notes.meeting.stoppedWorkspaceChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
@@ -32,6 +46,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
+  const policy = usePolicySnapshot();
+  const meetingAllowed = isAudioFeatureAllowed(policy, "meeting");
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
@@ -42,6 +58,9 @@ export default function MeetingRecordingMount(): null {
     (s) => s.systemAudioInterruptedNonce
   );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
+  useEffect(() => {
+    if (isRecording && !meetingAllowed) void stopRecordingForPolicy();
+  }, [isRecording, meetingAllowed]);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
 
@@ -78,7 +97,7 @@ export default function MeetingRecordingMount(): null {
   useEffect(() => {
     if (!error) return;
     const [sentinel, argument] = error.split(":");
-    const errorKey = MEETING_ERROR_KEYS[sentinel];
+    const errorKey = sentinel === "managedConfig" ? argument : MEETING_ERROR_KEYS[sentinel];
     const needsSignIn = sentinel === "signInRequired";
     toast({
       title: t("notes.meeting.title"),

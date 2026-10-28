@@ -14,6 +14,7 @@ function loadManager(execFileSync) {
   delete require.cache[modulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "child_process") return { ...childProcess, execFileSync };
+    if (request === "./debugLogger") return { log() {} };
     return originalLoad.call(this, request, parent, isMain);
   };
   try {
@@ -110,6 +111,42 @@ test("exports every Hyprland D-Bus toggle", async () => {
     exported.methods.ToggleVoiceAgent();
     exported.methods.ToggleTranslation();
     assert.deepEqual(calls, ["dictation", "meeting", "voiceAgent", "translation"]);
+  });
+});
+
+test("every Hyprland D-Bus trigger reports its slot and action for the debug log", async () => {
+  let exported;
+  const dbusModule = {
+    sessionBus() {
+      return {
+        connection: { on() {}, end() {} },
+        requestName(_name, _flags, callback) {
+          callback(null, 1);
+        },
+        exportInterface(methods) {
+          exported = methods;
+        },
+      };
+    },
+  };
+  const HyprlandShortcutManager = loadManager(() => "ok\n");
+  await withDbusMock(dbusModule, async () => {
+    const events = [];
+    const manager = new HyprlandShortcutManager();
+    manager.onHotkeyEvent = (slotName, action) => events.push([slotName, action]);
+    assert.equal(await manager.initDBusService(() => {}), true);
+
+    exported.Toggle();
+    exported.ToggleMeeting();
+    exported.PttDown();
+    exported.PttUp();
+
+    assert.deepEqual(events, [
+      ["dictation", "press"],
+      ["meeting", "press"],
+      ["dictation", "down"],
+      ["dictation", "up"],
+    ]);
   });
 });
 
@@ -531,7 +568,7 @@ test(
 );
 
 test(
-  "replaces an old dofile loader before a trailing top-level return",
+  "keeps an existing dofile loader before a trailing top-level return",
   withTempHyprConfig(async (configDir) => {
     const luaPath = path.join(configDir, "hyprland.lua");
     const bindsPath = path.join(configDir, "openwhispr-binds.lua");
@@ -549,10 +586,10 @@ test(
     );
 
     const content = fs.readFileSync(luaPath, "utf8");
-    const protectedLoader = `pcall(require, "${bindsPath}")`;
-    assert.doesNotMatch(content, /dofile\(/);
+    const existingLoader = `dofile("${bindsPath}")`;
+    assert.match(content, /dofile\(/);
     assert.equal((content.match(/openwhispr-binds\.lua/g) || []).length, 1);
-    assert.ok(content.indexOf(protectedLoader) < content.indexOf("return {}"));
+    assert.ok(content.indexOf(existingLoader) < content.indexOf("return {}"));
   })
 );
 
@@ -586,6 +623,41 @@ test(
     assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, false);
   })
 );
+
+for (const filename of ["hyprland.lua", "openwhispr-binds.lua"]) {
+  test(
+    `reports and recovers from a non-writable symlink target directory for ${filename}`,
+    { skip: process.platform === "win32" || process.getuid?.() === 0 },
+    withTempHyprConfig(async (configDir) => {
+      const targetDir = path.join(configDir, "dotfiles");
+      fs.mkdirSync(targetDir, { recursive: true });
+      const configPath = path.join(configDir, "hyprland.lua");
+      const targetPath = path.join(targetDir, filename);
+      fs.writeFileSync(targetPath, "-- original\n", { mode: 0o644 });
+      if (filename !== "hyprland.lua") fs.writeFileSync(configPath, "-- main config\n");
+      fs.symlinkSync(targetPath, path.join(configDir, filename));
+      const HyprlandShortcutManager = loadManager(successfulHyprctl("lua").execFileSync);
+      const manager = new HyprlandShortcutManager();
+
+      fs.chmodSync(targetDir, 0o555);
+      try {
+        assert.equal(await manager.registerKeybinding("F8"), true);
+        assert.equal(manager.persistencePending, true);
+        assert.equal(fs.readFileSync(targetPath, "utf8"), "-- original\n");
+        assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, false);
+      } finally {
+        fs.chmodSync(targetDir, 0o755);
+      }
+
+      assert.equal(await manager.registerKeybinding("F8"), true);
+      assert.equal(manager.persistencePending, false);
+      assert.equal(HyprlandShortcutManager.getHyprlandConfigStatus().canWrite, true);
+      assert.equal(fs.lstatSync(path.join(configDir, filename)).isSymbolicLink(), true);
+      assert.match(fs.readFileSync(configPath, "utf8"), /pcall\(require,/);
+      assert.match(fs.readFileSync(path.join(configDir, "openwhispr-binds.lua"), "utf8"), /F8/);
+    })
+  );
+}
 
 test(
   "removes the previous header wording when rewriting managed binds",

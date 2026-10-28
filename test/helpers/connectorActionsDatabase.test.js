@@ -657,6 +657,6 @@ test("upgrading to user_version 3 forces a full calendar re-sync", (t) => {
     .all();
   assert.deepEqual(tokens, [{ sync_token: null }, { sync_token: null }]);
   // Reopening also applies subsequent migrations.
-  assert.equal(reopened.db.pragma("user_version", { simple: true }), 4);
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 5);
   reopened.db.close();
 });

@@ -7,13 +7,16 @@ import logger from "../../../utils/logger";
 import { canBorrowCleanupCustomKey, resolveConfiguredOpenAIBase } from "../openaiBase";
 import {
   applyChatCompletionsParams,
+  emptyOutputError,
   emptyResponseError,
-  familyResponsesEffort,
   fetchWithParamFallback,
   isTruncatedFinishReason,
+  REASONING_MODEL_MIN_OUTPUT_TOKENS,
+  responsesReasoningEffort,
   truncatedOutputError,
 } from "../chatRequestBody";
 import { detectEndpointDialect } from "../thinkingSuppressionDialects";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "../requestCancellation";
 import {
   getLlmRequestTimeoutSeconds,
   llmRequestTimeoutError,
@@ -29,10 +32,6 @@ import {
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const PROBE_TIMEOUT_MS = 2_000;
-// OpenAI counts a reasoning model's hidden reasoning against the output cap and
-// recommends reserving at least 25k tokens for reasoning plus output. A cap,
-// not a spend: an unused allowance costs nothing.
-const REASONING_MODEL_MIN_OUTPUT_TOKENS = 25_000;
 
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
@@ -109,15 +108,13 @@ async function detectServerType(base: string): Promise<void> {
     return;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     const res = await fetch(buildApiUrl(base, "/models"), {
       method: "GET",
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     if (!res.ok) {
       probedBases.add(base);
       return;
@@ -138,6 +135,8 @@ async function detectServerType(base: string): Promise<void> {
     probedBases.add(base);
   } catch {
     probedBases.add(base);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -168,7 +167,7 @@ export const openaiProvider: InferenceProvider = {
       keyLength: apiKey?.length || 0,
     });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const imageDataUrl = config.screenContext
       ? `data:${config.screenContext.mediaType};base64,${config.screenContext.data}`
@@ -236,6 +235,11 @@ export const openaiProvider: InferenceProvider = {
       });
     }
 
+    // Only registry-known OpenAI reasoning models on OpenAI's own host: an
+    // unknown id (fine-tune, proxy) may reject a cap above its output limit.
+    const hasReasoningRoom =
+      !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false;
+
     const retryStrategy = createApiRetryStrategy();
     const response = await withRetry(async () => {
       let lastError: Error | null = null;
@@ -245,6 +249,8 @@ export const openaiProvider: InferenceProvider = {
         const controller = new AbortController();
         const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+        const unlinkCancel = abortOnCancel(config.requestId, controller);
+        let readingBody = false;
         try {
           const requestedMaxTokens =
             config.maxTokens ||
@@ -259,12 +265,9 @@ export const openaiProvider: InferenceProvider = {
             );
           // A known endpoint host knows its own request shape better than the model id does.
           const apiConfig = dialect ?? getOpenAiApiConfig(model, resolvedProvider);
-          // Only registry-known OpenAI reasoning models on OpenAI's own host: an
-          // unknown id (fine-tune, proxy) may reject a cap above its output limit.
-          const maxTokens =
-            !isCustomEndpoint && getCloudModel(model)?.supportsTemperature === false
-              ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
-              : requestedMaxTokens;
+          const maxTokens = hasReasoningRoom
+            ? Math.max(requestedMaxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS)
+            : requestedMaxTokens;
 
           const requestBody: Record<string, unknown> = { model };
 
@@ -275,7 +278,7 @@ export const openaiProvider: InferenceProvider = {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
             }
-            const effort = familyResponsesEffort(model, config);
+            const effort = responsesReasoningEffort(model, resolvedProvider, config, openAiBase);
             if (effort) requestBody.reasoning = { effort };
           } else {
             requestBody.messages = buildMessages(type);
@@ -289,6 +292,7 @@ export const openaiProvider: InferenceProvider = {
           }
 
           const res = await fetchWithParamFallback(
+            endpoint,
             () =>
               fetch(endpoint, {
                 method: "POST",
@@ -338,11 +342,14 @@ export const openaiProvider: InferenceProvider = {
           }
 
           rememberPreference(openAiBase, type);
-          return res.json();
+          readingBody = true;
+          return await res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
+            if (isRequestCancelled(config.requestId)) throw requestCancelledError();
             throw llmRequestTimeoutError(timeoutSeconds);
           }
+          if (readingBody) throw error;
           lastError = error as Error;
           if (retryStrategy.shouldRetry(lastError)) {
             lastRetryableError = lastError;
@@ -357,6 +364,7 @@ export const openaiProvider: InferenceProvider = {
           throw lastRetryableError || error;
         } finally {
           clearTimeout(timeoutId);
+          unlinkCancel();
         }
       }
 
@@ -374,6 +382,9 @@ export const openaiProvider: InferenceProvider = {
       response?.status === "incomplete" ||
       !!response?.incomplete_details ||
       response?.choices?.some((choice: any) => isTruncatedFinishReason(choice?.finish_reason));
+    const contentFiltered =
+      response?.incomplete_details?.reason === "content_filter" ||
+      response?.choices?.some((choice: any) => choice?.finish_reason === "content_filter");
     if (config.requireCompleteOutput && responseIncomplete) {
       throw truncatedOutputError();
     }
@@ -455,8 +466,14 @@ export const openaiProvider: InferenceProvider = {
       if (refusal) {
         throw new Error(`Model declined the request: ${refusal}`);
       }
+      // A content filter also marks a Responses reply "incomplete", but no output
+      // budget ran out: an empty reply, never retried and never echoed back.
+      if (contentFiltered) throw emptyOutputError("Model output was stopped by a content filter");
       const error = emptyResponseError("OpenAI", config, !!responseIncomplete);
-      if (error) throw error;
+      // No retry code: that request already had a retry's room.
+      if (error) {
+        throw responseIncomplete && hasReasoningRoom ? truncatedOutputError(error.message) : error;
+      }
       logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
         model,
         originalTextLength: text.length,

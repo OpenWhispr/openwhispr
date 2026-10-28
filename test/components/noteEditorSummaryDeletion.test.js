@@ -286,6 +286,57 @@ test("deleting the AI summary moves the selection to Your notes", async (t) => {
   await unmount();
 });
 
+test("an uploaded transcript opens in Transcript and leaves Your notes available for writing", async (t) => {
+  const { createDb } = require("../helpers/harness/db");
+  const db = createDb(t);
+  assert.ok(db);
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
+  cleanup = unmount;
+  Object.assign(globalThis.window.electronAPI, {
+    saveNote: async (...args) => db.saveNote(...args),
+    updateNote: async (...args) => db.updateNote(...args),
+  });
+  const { saveUploadNote } = await vite.ssrLoadModule("/services/uploadNotes.ts");
+  const text = "Uploaded words.\nAnother paragraph.";
+  const saved = await saveUploadNote({
+    title: "Uploaded meeting",
+    text,
+    sourceName: "public-fixture.wav",
+    folderId: null,
+    diarization: { enabled: false, localModelsReady: false, numSpeakers: null },
+  });
+  const note = db.getNote(saved.note.id);
+  await render(undefined, { note });
+  // No click: an upload without notes opens on its transcript.
+  let transcript = null;
+  walk(latest(), (node) => {
+    if (node.props.segments) transcript = node.props.segments;
+  });
+  assert.deepEqual(
+    transcript?.map((segment) => segment.text),
+    [text]
+  );
+  await click("raw");
+  assert.ok(collectEditorValues(latest()).includes(""), "Your notes starts empty");
+  db.updateNote(note.id, { content: "My own reminder" });
+  await render(undefined, { note: db.getNote(note.id) });
+  await click("raw");
+  assert.ok(collectEditorValues(latest()).includes("My own reminder"));
+  await click("transcript");
+  transcript = null;
+  walk(latest(), (node) => {
+    if (node.props.segments) transcript = node.props.segments;
+  });
+  assert.deepEqual(
+    transcript.map((segment) => segment.text),
+    [text]
+  );
+  await unmount();
+  cleanup = () => {};
+});
+
 test("the highlight slides onto Your notes when the summary is deleted", async (t) => {
   const { render, click, latest, unmount } = await loadNoteEditor(t);
 
@@ -867,3 +918,90 @@ for (const failing of ["flush", "base"]) {
     await unmount();
   });
 }
+
+// The note header's date and attendees dropdown in the tree the component returned.
+function findElementOfType(tree, type) {
+  let found = null;
+  walk(tree, (node) => {
+    if (!found && node.type === type) found = node;
+  });
+  return found;
+}
+
+test("the note header hands its event link to the dropdown, changeable only by editors", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t, "viewer");
+  const { default: NoteParticipants } = await vite.ssrLoadModule(
+    "/components/notes/NoteParticipants.tsx"
+  );
+  try {
+    const linkedEvent = { id: "evt-1", summary: "Standup" };
+    await render(undefined, {
+      note: { ...NOTE, cloud_id: "shared-note", calendar_event_id: "evt-1" },
+      linkedEvent,
+    });
+    const viewer = findElementOfType(latest(), NoteParticipants).props;
+    assert.equal(viewer.canEdit, false, "a viewer of a shared note can't change the link");
+    assert.equal(viewer.ownedByUser, false, "someone else's note");
+    assert.equal(viewer.linkedEventId, "evt-1");
+    assert.equal(viewer.linkedEvent, linkedEvent);
+    assert.equal(viewer.noteCreatedAt, NOTE.created_at);
+
+    await render(undefined, { note: { ...NOTE, calendar_event_id: "" } });
+    const owner = findElementOfType(latest(), NoteParticipants).props;
+    assert.equal(owner.canEdit, true, "the user's own note is editable");
+    assert.equal(owner.ownedByUser, true);
+    assert.equal(owner.linkedEventId, null, "an unlinked note's blank id reaches it as no link");
+  } finally {
+    await unmount();
+  }
+});
+
+test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const messages = () => {
+    const out = [];
+    walk(latest(), (node) => {
+      if (node.props.role === "status") out.push(node.props.children);
+    });
+    return out;
+  };
+  for (const audioUploadEnabled of [true, false]) {
+    await React.act(async () => {
+      usePolicyStore.setState({
+        status: "managed",
+        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: false });
+    assert.ok(messages().includes("notes.meeting.recordingDisabledByOrg"));
+    assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
+    await React.act(async () => {
+      usePolicyStore.setState({
+        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: true });
+    assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
+  }
+  const recordReason = () => {
+    let reason;
+    walk(latest(), (node) => {
+      if ("disabledReason" in node.props) reason = node.props.disabledReason;
+    });
+    return reason;
+  };
+  for (const [policy, expected] of [
+    [{ status: "loading", policy: null }, "common.policyUnresolved"],
+    [
+      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      "notes.meeting.restrictedByOrg",
+    ],
+  ]) {
+    await React.act(async () => usePolicyStore.setState(policy));
+    await render(undefined, { recordingAllowed: false });
+    assert.deepEqual(messages(), [], `${policy.status}: no banner`);
+    assert.equal(recordReason(), expected);
+  }
+  await unmount();
+});

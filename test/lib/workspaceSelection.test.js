@@ -17,6 +17,17 @@ test("manageableWorkspaces: keeps only owner/admin workspaces, in order", () => 
   assert.deepEqual(manageableWorkspaces([member]), []);
 });
 
+test("manageableWorkspaces and empty groups follow the create_spaces capability", () => {
+  const blockedAdmin = { ...workspace("a", "admin"), capabilities: { create_spaces: false } };
+  const grantedMember = { ...workspace("m", "member"), capabilities: { create_spaces: true } };
+  assert.deepEqual(manageableWorkspaces([blockedAdmin, grantedMember]), [grantedMember]);
+  const { groups } = groupTeamSpacesByWorkspace([blockedAdmin, grantedMember], []);
+  assert.deepEqual(
+    groups.map((g) => g.workspace.id),
+    ["m"]
+  );
+});
+
 test("groupTeamSpacesByWorkspace: groups spaces under their workspace", () => {
   const workspaces = [workspace("a", "owner"), workspace("b", "member")];
   const spaces = [space(1, "a"), space(2, "b"), space(3, "a")];

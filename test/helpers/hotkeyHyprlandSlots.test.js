@@ -25,7 +25,24 @@ require.cache[require.resolve("electron")] = {
 };
 
 const HotkeyManager = require("../../src/helpers/hotkeyManager.js");
+const HyprlandShortcutManager = require("../../src/helpers/hyprlandShortcut.js");
 const hyprlandTest = process.platform === "linux" ? test : test.skip;
+
+test("Hyprland persistence failures remain visible until a successful retry", (context) => {
+  context.mock.method(HyprlandShortcutManager, "getHyprlandConfigStatus", () => ({
+    path: "/config/hyprland.lua",
+    canWrite: true,
+  }));
+  const manager = new HotkeyManager();
+  manager.hyprlandManager = { persistencePending: true };
+
+  assert.deepEqual(manager.getHyprlandConfigStatus(), {
+    path: "/config/hyprland.lua",
+    canWrite: false,
+  });
+  manager.hyprlandManager.persistencePending = false;
+  assert.equal(manager.getHyprlandConfigStatus().canWrite, true);
+});
 
 async function withHyprland(fn) {
   const saved = {

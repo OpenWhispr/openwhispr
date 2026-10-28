@@ -6,7 +6,7 @@ The mobile app lives in the main [`OpenWhispr/openwhispr`](https://github.com/Op
 
 ## Highlights
 
-- **Cloud, Private, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
+- **Cloud, Local Mode, or Bring Your Own Key** — choose hosted transcription, on-device inference, or your own provider key on iOS
 - **iOS dictation keyboard** — dictate from any text field system-wide via a custom keyboard extension
 - **Markdown notes** — folders, full-text search, AI-assisted cleanup
 - **Note sharing** — web links, email invitations, organization domains, and viewer/editor access; Markdown and plain-text exports remain available offline
@@ -61,7 +61,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for platform prerequisites, configurati
 
 ## Personal provider setup (iOS)
 
-Open **AI Models** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, and chat/voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model, and save. The list shows what each workflow currently runs. OpenWhispr Cloud and On-Device apply as soon as you tap them, and On-Device dictation and uploads can each use a specific downloaded model or Automatic. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers are not offered on mobile yet.
+Open **AI Models** and tap a workflow. Each workflow (dictation/keyboard, uploads, cleanup, note formatting/titles, note chat, and the keyboard's voice assistant) has its own mode; choose **Bring Your Own Key**, then a provider and model, and save. The list shows what each workflow currently runs. OpenWhispr Cloud and On-Device apply as soon as you tap them, and On-Device dictation and uploads can each use a specific downloaded model or Automatic. This release supports OpenAI, Groq, OpenRouter (text), and any OpenAI-compatible Custom server. Other providers are not offered on mobile yet.
 
 Enter a provider API key and save. No OpenWhispr account or Pro subscription is required for personal provider use; your provider bills requests separately. Hosted inference and sync retain their existing account requirements. Provider credentials live in device-local secure storage, are not synced, and survive sign-out. Deleting your OpenWhispr account removes them. Remove credential deletes one key; Remove all provider keys deletes every saved key, including keys for Custom endpoints you no longer use. Deleting the app leaves them in the Keychain until the app is installed again; the first launch after a reinstall erases them. After a member of a managed organization signs out, that organization's provider policy keeps applying until another account (not a guest session) signs in and its policy loads, or until Remove all provider keys is used. Removing keys one at a time does not lift it.
 

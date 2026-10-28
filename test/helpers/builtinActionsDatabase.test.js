@@ -5,7 +5,6 @@ const { createDb } = require("./harness/db.js");
 const DatabaseManager = require("../../src/helpers/database.js");
 const {
   BUILTIN_ACTIONS,
-  DETAILED_NOTES_KEY,
   FOLLOW_UP_EMAIL_KEY,
   GENERATE_NOTES_KEY,
   NOTE_ACTION_LIMITS,
@@ -104,43 +103,6 @@ for (const action of BUILTIN_ACTIONS) {
   });
 }
 
-test("launch puts the default AI Summary template first, then Detailed Notes", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-  // As an earlier build ordered them, with Detailed Notes as the default.
-  db.db
-    .prepare("UPDATE actions SET sort_order = 0 WHERE translation_key = ?")
-    .run(DETAILED_NOTES_KEY);
-  db.db
-    .prepare("UPDATE actions SET sort_order = 1 WHERE translation_key = ?")
-    .run(GENERATE_NOTES_KEY);
-  db.db.close();
-
-  relaunch((migrated) => {
-    const [first, second] = migrated.getActions();
-    assert.equal(first.translation_key, GENERATE_NOTES_KEY);
-    assert.equal(second.translation_key, DETAILED_NOTES_KEY);
-  });
-});
-
-test("an upgrade to sections keeps a name the user gave Detailed Notes", (t) => {
-  const db = createDb(t);
-  if (!db) return;
-  const detailed = BUILTIN_ACTIONS.find((a) => a.translationKey === DETAILED_NOTES_KEY);
-  db.db
-    .prepare(
-      "UPDATE actions SET name = 'Team notes', prompt = ?, sections = NULL WHERE translation_key = ?"
-    )
-    .run(detailed.previousPrompts.at(-1), DETAILED_NOTES_KEY);
-  db.db.close();
-
-  relaunch((migrated) => {
-    const [row] = builtinRows(migrated, DETAILED_NOTES_KEY);
-    assert.deepEqual(row.sections, detailed.sections, "the old default still moves to sections");
-    assert.equal(row.name, "Team notes");
-  });
-});
-
 test("a database from before templates and chat actions migrates on launch", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -217,8 +179,8 @@ test("templates and actions are validated and normalized when saved", (t) => {
   assert.equal(updated.action.kind, "action", "a row's kind never changes");
   assert.equal(updated.action.output, "chat");
 
-  const [detailed] = builtinRows(db, DETAILED_NOTES_KEY);
-  assert.equal(db.updateAction(detailed.id, { sections: [] }).success, false);
+  const [summary] = builtinRows(db, GENERATE_NOTES_KEY);
+  assert.equal(db.updateAction(summary.id, { sections: [] }).success, false);
 });
 
 test("an older build renaming the newer built-ins doesn't stop the next launch", (t) => {
@@ -353,6 +315,22 @@ test("TL;DR stock prompt upgrades without replacing an edited description", (t) 
     assert.equal(action.prompt, tldr.prompt);
     assert.equal(action.description, "My description");
     assert.equal(action.output, "chat");
+  });
+});
+
+test("AI Summary stock prompt upgrades without replacing an edited description", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const summary = BUILTIN_ACTIONS.find((a) => a.translationKey === GENERATE_NOTES_KEY);
+  const [row] = builtinRows(db, GENERATE_NOTES_KEY);
+  db.db
+    .prepare("UPDATE actions SET prompt = ?, sections = NULL, description = ? WHERE id = ?")
+    .run(summary.previousPrompts.at(-1), "My description", row.id);
+  db.db.close();
+  relaunch((upgraded) => {
+    const action = upgraded.getAction(row.id);
+    assert.deepEqual(action.sections, summary.sections);
+    assert.equal(action.description, "My description");
   });
 });
 

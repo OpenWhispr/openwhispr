@@ -5,28 +5,34 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { getActiveCustomCleanupPrompt } from '@/store/useCustomPromptsStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { requiresRealAccount } from './accountAccess';
-import type { KeyboardTone, ReasoningRequest, TextInferenceSnapshot } from '@/types';
+import type {
+  KeyboardTone,
+  LocalReasoningReadiness,
+  ReasoningRequest,
+  TextInferenceSnapshot,
+} from '@/types';
+import { getDictationAgentName } from './dictationAgent';
+import { buildDictationHintTiers } from './dictationHints';
+import { splitLlmDictionary, type LlmDictionary } from './snippets';
+import { fitDictionaryOnDevice } from './onDeviceDictionary';
+import { buildProviderPrompt } from '@/services/reasoning/buildProviderPrompt';
 import {
-  getDictationAgentName,
-  isDictationAgentApplicable,
-  detectAgentMention,
-} from './dictationAgent';
-import { buildDictationHints } from './dictationHints';
-import {
-  LOCAL_OUTPUT_TOKEN_RESERVE,
+  LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS,
   countLocalReasoningTokens,
   estimateLocalTokens,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
   LocalReasoningError,
+  UNSUPPORTED_LANGUAGE_MESSAGE,
 } from './localReasoning';
 import { withRetry, createApiRetryStrategy } from './retry';
 
-// Only 'keyboard' and 'recording' may receive agentName — notes/meeting are not dictation flows.
+// Only 'keyboard' and 'recording' are dictation, where the prompt is told the assistant's name.
 type DictationCleanupContext = 'keyboard' | 'recording';
 type CleanupContext = DictationCleanupContext | 'notes' | 'meeting';
 
-interface CleanupOptions extends TextInferenceSnapshot {
+interface CleanupOptions
+  extends Pick<TextInferenceSnapshot, 'cleanupRoute' | 'cleanupUnavailable'> {
   inferenceRoute?: ReasoningRequest['inferenceRoute'];
   requireProvider?: boolean;
   onSkipped?: (reason: string) => void;
@@ -36,7 +42,6 @@ interface CleanupOptions extends TextInferenceSnapshot {
 }
 
 export const CLEANUP_TIMEOUT_MS = 12_000;
-export const AGENT_ACTION_TIMEOUT_MS = 30_000;
 export const CLEANUP_MAX_RETRIES = 1;
 export const CLEANUP_INITIAL_RETRY_DELAY_MS = 750;
 
@@ -48,11 +53,6 @@ function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: 
     cancel: () => clearTimeout(timeout),
   };
 }
-
-// Apple Intelligence stops at LOCAL_OUTPUT_TOKEN_RESERVE without an error, so a transcript
-// whose cleaned copy might not fit would come back cut short. The margin covers the
-// punctuation and capitals cleanup adds.
-const LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS = Math.floor(LOCAL_OUTPUT_TOKEN_RESERVE * 0.8);
 
 // Apple Intelligence writes a cleaned copy about as long as the transcript, at roughly 30 tokens a
 // second on an iPhone 15 Pro (Apple's figure), so a long one can't finish in Cloud's 12 s. The rate
@@ -68,30 +68,34 @@ function localCleanupTimeoutMs(transcriptTokens: number): number {
   );
 }
 
-// Why an on-device pass can't run, or, for cleanup, the transcript's length in tokens.
+const TOO_LONG_FOR_ON_DEVICE = 'This transcript is too long for On-Device cleanup.';
+
+// Why an on-device pass can't run, or the transcript's length in tokens.
 async function prepareLocalRun(
   text: string,
-  scope: 'cleanup' | 'agent',
-): Promise<{ skipReason: string } | { tokens?: number }> {
+): Promise<{ skipReason: string } | { tokens: number; readiness: LocalReasoningReadiness }> {
   let readiness = await getLocalReasoningReadiness();
   // The cached answer outlives a fix in iOS Settings, so check again before refusing.
   if (readiness.status !== 'ready') readiness = await getLocalReasoningReadiness({ refresh: true });
   if (readiness.status !== 'ready') {
     return { skipReason: getLocalReasoningUnavailableMessage(readiness) };
   }
-  if (scope !== 'cleanup') return {};
   const tokens = (await countLocalReasoningTokens({ prompt: text })) ?? estimateLocalTokens(text);
   return tokens > LOCAL_CLEANUP_MAX_TRANSCRIPT_TOKENS
-    ? { skipReason: 'This transcript is too long for On-Device cleanup.' }
-    : { tokens };
+    ? { skipReason: TOO_LONG_FOR_ON_DEVICE }
+    : { tokens, readiness };
 }
 
-// Apple Intelligence's two common failures say what happened. The only signal a cleanup run gets
-// is its timeout, so a cancelled one took too long.
+// Apple Intelligence's common failures say what happened. The only signal a cleanup run gets is
+// its timeout, so a cancelled one took too long.
 function cleanupFailureReason(error: unknown): string {
   if (error instanceof LocalReasoningError) {
     if (error.code === 'APPLE_LLM_CANCELLED') return 'Apple Intelligence took too long.';
     if (error.code === 'APPLE_LLM_RATE_LIMITED') return 'Apple Intelligence was busy.';
+    if (error.code === 'APPLE_LLM_UNSUPPORTED_LANGUAGE') return UNSUPPORTED_LANGUAGE_MESSAGE;
+    if (error.code === 'LOCAL_CONTEXT_LIMIT' || error.code === 'APPLE_LLM_CONTEXT_LIMIT') {
+      return TOO_LONG_FOR_ON_DEVICE;
+    }
   }
   return 'Cleanup failed.';
 }
@@ -120,37 +124,27 @@ export async function cleanupTranscript(
 
   const preferred = cfg?.preferredLanguage;
   const lang = preferred && preferred !== 'auto' ? preferred : undefined;
-  const hintWords = buildDictationHints(options.includeSnippetTriggers ?? false);
-  const customDictionary = hintWords.length > 0 ? hintWords : undefined;
+  const hintTiers = buildDictationHintTiers(options.includeSnippetTriggers ?? false);
+  let dictionary = splitLlmDictionary(hintTiers);
 
   const activeMode = useProcessingModeStore.getState().activeMode;
-  const agentApplicable =
-    isDictationCleanupContext(options.context) &&
-    isDictationAgentApplicable(activeMode, cfg ?? { defaultMode: activeMode });
-  const agentName = agentApplicable
+  // The cleanup prompt keeps the assistant's name as dictated words. Saying it gives no command:
+  // the voice assistant is the keyboard's compose button.
+  const agentName = isDictationCleanupContext(options.context)
     ? getDictationAgentName(cfg ?? { defaultMode: activeMode })
     : undefined;
 
-  // Bump timeout only when the mention is detected — ordinary dictation shouldn't
-  // wait longer on a slow network just because the feature is on.
-  const mentionDetected = agentName !== undefined && detectAgentMention(rawText, agentName);
-  let timeoutMs = mentionDetected ? AGENT_ACTION_TIMEOUT_MS : CLEANUP_TIMEOUT_MS;
-  const scope = mentionDetected ? 'agent' : 'cleanup';
-  const snapshottedRoute = mentionDetected
-    ? options.agentRoute
-    : (options.inferenceRoute ?? options.cleanupRoute);
-  const unavailable = mentionDetected ? options.agentUnavailable : options.cleanupUnavailable;
-  if (unavailable) {
-    options.onSkipped?.(unavailable);
+  let timeoutMs = CLEANUP_TIMEOUT_MS;
+  const snapshottedRoute = options.inferenceRoute ?? options.cleanupRoute;
+  if (options.cleanupUnavailable) {
+    options.onSkipped?.(options.cleanupUnavailable);
     return rawText;
   }
-  const configuredRoute = snapshottedRoute ?? cfg?.inference?.[scope];
+  const configuredRoute = snapshottedRoute ?? cfg?.inference?.cleanup;
   const requireProvider =
     options.requireProvider || (!configuredRoute && activeMode === 'providers');
   if (requireProvider && !snapshottedRoute && configuredRoute?.mode !== 'providers') {
-    options.onSkipped?.(
-      `Choose ${scope === 'agent' ? 'a voice assistant' : 'a cleanup'} provider in AI Models. Your raw transcript is saved.`,
-    );
+    options.onSkipped?.('Choose a cleanup provider in AI Models. Your raw transcript is saved.');
     return rawText;
   }
   if (
@@ -161,45 +155,62 @@ export async function cleanupTranscript(
     return rawText;
   }
   const resolved = resolveMobileInferenceRoute({
-    scope,
+    scope: 'cleanup',
     selection: configuredRoute ?? { mode: 'openwhispr' },
     privateContent: false,
     policy: { status: 'unmanaged' },
   });
   if (!resolved.ok) {
-    options.onSkipped?.(`The ${scope} route is unavailable. Your raw transcript is saved.`);
+    options.onSkipped?.('The cleanup route is unavailable. Your raw transcript is saved.');
     return rawText;
   }
   const inferenceRoute = resolved.route;
+  // A cleanup provider route only ever comes from the provider the user saved for cleanup, so it is
+  // sent there even in On-Device mode. An on-device route takes the privacy hint. A Cloud route is
+  // either the user's choice or a Cloud fallback they just consented to while still in private
+  // mode; hinting it would make ReasoningService demand local reasoning and fail the cleanup.
+  const routing =
+    inferenceRoute.mode === 'providers'
+      ? { sendToChosenProvider: true }
+      : inferenceRoute.mode === 'local'
+        ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
+        : undefined;
+  // One request for the on-device budget and the call itself, so the two can't drift.
+  const request: ReasoningRequest = {
+    text: rawText,
+    inferenceRoute,
+    inferenceScope: 'cleanup',
+    ...(routing ? { routing } : {}),
+    language: lang,
+    locale: lang,
+    tone: options.tone,
+    agentName,
+    customPrompt: getActiveCustomCleanupPrompt(),
+  };
+  const withDictionary = ({ personal, shared }: LlmDictionary): ReasoningRequest => ({
+    ...request,
+    customDictionary: personal.length > 0 ? personal : undefined,
+    ...(shared.length > 0 ? { sharedDictionary: shared } : {}),
+  });
   // Say why an on-device pass can't run, rather than retrying into a generic failure.
   if (inferenceRoute.mode === 'local') {
-    const localRun = await prepareLocalRun(rawText, scope);
+    const localRun = await prepareLocalRun(rawText);
     if ('skipReason' in localRun) {
       options.onSkipped?.(`${localRun.skipReason} Your raw transcript is saved.`);
       return rawText;
     }
-    if (localRun.tokens !== undefined) timeoutMs = localCleanupTimeoutMs(localRun.tokens);
+    timeoutMs = localCleanupTimeoutMs(localRun.tokens);
+    // Built as ReasoningService builds the on-device cleanup prompt.
+    dictionary = await fitDictionaryOnDevice(
+      hintTiers,
+      (candidate) => {
+        const prompt = buildProviderPrompt(withDictionary(candidate));
+        return { instructions: prompt.systemPrompt, prompt: prompt.text };
+      },
+      localRun.readiness,
+    );
   }
-  // Only provider and on-device routes take the privacy hint. A Cloud route is
-  // either the user's choice or a Cloud fallback they just consented to while
-  // still in private mode; hinting it would make ReasoningService demand local
-  // reasoning and fail the cleanup. ReasoningService re-checks private mode for
-  // provider and local routes on its own. A cleanup provider route only ever
-  // comes from the provider the user saved for cleanup, so it is sent there even
-  // in On-Device mode.
-  const routing =
-    inferenceRoute.mode === 'providers' && scope === 'cleanup'
-      ? { sendToChosenProvider: true }
-      : inferenceRoute.mode === 'providers' || inferenceRoute.mode === 'local'
-        ? { isPrivateNote: useProcessingModeStore.getState().activeMode === 'private' }
-        : undefined;
-
-  // A custom prompt goes out with promptMode "cleanup", which turns off the
-  // server's agent-name detection that the dictation agent relies on. When our
-  // port of that detection fires, withhold the override so the server can still
-  // route the utterance to the action prompt. If the two disagree, that one
-  // utterance is cleaned with the default prompt instead — rare and harmless.
-  const customPrompt = mentionDetected ? undefined : getActiveCustomCleanupPrompt();
+  const finalRequest = withDictionary(dictionary);
 
   try {
     const startedAt = Date.now();
@@ -208,20 +219,7 @@ export async function cleanupTranscript(
       async () => {
         const { signal, cancel } = createTimeoutSignal(timeoutMs);
         try {
-          return await ReasoningService.processText({
-            text: rawText,
-            inferenceRoute,
-            inferenceScope: scope,
-            ...(routing ? { routing } : {}),
-            language: lang,
-            locale: lang,
-            customDictionary,
-            signal,
-            timeoutMs,
-            tone: options.tone,
-            agentName,
-            customPrompt,
-          });
+          return await ReasoningService.processText({ ...finalRequest, signal, timeoutMs });
         } finally {
           cancel();
         }

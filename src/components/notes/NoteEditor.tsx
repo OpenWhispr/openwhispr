@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
+import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { meetingRecordingRefusal } from "../../stores/policyRules";
 import {
   Loader2,
   FileText,
   Sparkles,
   AlignLeft,
   MessageSquareText,
-  LinkIcon,
   Link2,
   Lock,
   FolderOpen,
@@ -17,6 +18,7 @@ import {
   ChevronDown,
   ShieldCheck,
   Users,
+  AlertTriangle,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
 import { reconcileLocalShareState } from "./shareNoteRules";
@@ -62,6 +64,7 @@ import {
   SPLIT_BUTTON_GROUP_CLASS,
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
+import type { CalendarEvent } from "../../types/calendar";
 import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
@@ -101,6 +104,7 @@ import NoteParticipants from "./NoteParticipants";
 import { parseNoteParticipants } from "../../utils/noteAttendees";
 import { observeFloatingChatLayout } from "./floatingChatLayout";
 import {
+  MEETING_RECORDING_REFUSAL_KEYS,
   NOTE_META_CHIP_CLASS,
   defaultFolderDisplayName,
   folderMatchesQuery,
@@ -227,7 +231,8 @@ interface NoteEditorProps {
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
   folderName?: string | null;
-  calendarEventName?: string | null;
+  /** The linked event's stored row; undefined while it is being looked up. */
+  linkedEvent?: CalendarEvent | null;
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
@@ -264,7 +269,7 @@ export default function NoteEditor({
   onSetSessionDiarizationEnabled,
   onSetSessionExpectedCount,
   folderName,
-  calendarEventName,
+  linkedEvent,
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
@@ -273,7 +278,16 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
-  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
+  // An upload's transcription lives in its transcript, so until the user writes
+  // notes it opens there rather than on an empty "Your notes".
+  const opensOnTranscript =
+    note.note_type === "upload" && !!note.transcript && !note.content.trim();
+  const defaultViewMode: MeetingViewMode = enhancement
+    ? "enhanced"
+    : opensOnTranscript
+      ? "transcript"
+      : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
@@ -1034,13 +1048,12 @@ export default function NoteEditor({
               participants={parsedParticipants}
               dateLabel={shortDate || undefined}
               dateTitle={noteDate}
+              noteCreatedAt={note.created_at}
+              linkedEventId={note.calendar_event_id || null}
+              linkedEvent={linkedEvent}
+              canEdit={canEditNote}
+              ownedByUser={ownedByUser}
             />
-            {calendarEventName && (
-              <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
-                <LinkIcon size={14} className="shrink-0 text-foreground/60" />
-                <span className="max-w-40 truncate">{calendarEventName}</span>
-              </span>
-            )}
             {isTeamNote && space && (
               <>
                 <button
@@ -1296,6 +1309,7 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
+                  disabledReason={t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal])}
                   onStart={onStartRecording}
                   onStop={onStopRecording}
                 />
@@ -1358,6 +1372,24 @@ export default function NoteEditor({
               >
                 {t("notes.spaces.conflictKeep")}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Only the org's meeting switch earns a banner; other restrictions just disable recording. */}
+        {canEditNote && !recordingAllowed && recordingRefusal === "disabled" && (
+          <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
+            <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
+              <AlertTriangle
+                aria-hidden="true"
+                className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
+              />
+              <p
+                role="status"
+                className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
+              >
+                {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
+              </p>
             </div>
           </div>
         )}
@@ -1471,11 +1503,14 @@ export default function NoteEditor({
           {!isRecording && selectedSegmentIds.size > 0 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
               <SelectionBar
-                count={selectedSegmentIds.size}
                 onClear={handleClearSelection}
                 speakerProfiles={knownSpeakers}
                 participants={parsedParticipants}
                 onAssignName={handleBulkAssignName}
+                selectedSegments={displaySegments.filter((segment) =>
+                  selectedSegmentIds.has(segment.id)
+                )}
+                speakerMappings={speakerMappings}
                 t={t}
               />
             </div>

@@ -79,6 +79,7 @@ test("_mapEvent maps a Graph event to the shared calendar_events shape", () => {
       responseStatus: { response: "declined" },
       onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
       organizer: { emailAddress: { address: "organizer@example.com" } },
+      webLink: "https://outlook.office365.com/owa/?itemid=abc",
       attendees: [
         {
           emailAddress: { address: "me@example.com", name: "Me" },
@@ -98,6 +99,7 @@ test("_mapEvent maps a Graph event to the shared calendar_events shape", () => {
   assert.equal(mapped.self_response_status, "declined");
   assert.equal(mapped.hangout_link, "https://teams.microsoft.com/l/meetup-join/abc");
   assert.equal(mapped.organizer_email, "organizer@example.com");
+  assert.equal(mapped.web_link, "https://outlook.office365.com/owa/?itemid=abc");
   assert.equal(mapped.attendees_count, 2);
 
   const attendees = JSON.parse(mapped.attendees);
@@ -198,6 +200,7 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
       id: "master-1",
       subject: "Standup",
       isAllDay: false,
+      webLink: "https://outlook.office365.com/owa/?itemid=master-1",
       onlineMeeting: { joinUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
       organizer: { emailAddress: { address: "organizer@example.com" } },
       attendees: [
@@ -213,12 +216,20 @@ test("_syncCalendar backfills stripped recurring occurrences from their series m
 
   assert.equal(masterFetches.length, 1);
   assert.match(masterFetches[0], /^\/me\/calendars\/cal-1\/events\/master-1\?\$select=/);
+  assert.ok(
+    new URL(masterFetches[0], "https://graph.microsoft.com").searchParams
+      .get("$select")
+      .split(",")
+      .includes("webLink"),
+    "the master fetch asks for its web link"
+  );
 
   const occurrence = upserted.find((event) => event.id === "occ-1");
   assert.equal(occurrence.summary, "Standup");
   assert.equal(occurrence.start_time, "2026-07-20T09:25:00Z");
   assert.equal(occurrence.hangout_link, "https://teams.microsoft.com/l/meetup-join/abc");
   assert.equal(occurrence.organizer_email, "organizer@example.com");
+  assert.equal(occurrence.web_link, "https://outlook.office365.com/owa/?itemid=master-1");
   assert.equal(occurrence.attendees_count, 1);
   assert.equal(upserted.find((event) => event.id === "occ-2").summary, "Standup");
   assert.equal(upserted.find((event) => event.id === "evt-1").summary, "One-off");
@@ -477,4 +488,18 @@ test("a stripped occurrence keeps details but applies explicit RSVP after master
   };
   await manager._syncCalendar({ id: "cal-1", account_email: "me@example.com" });
   assert.deepEqual(upserted, [{ ...original, self_response_status: "declined" }]);
+});
+
+test("_deltaUrl starts CALENDAR_LOOKBACK_DAYS back", () => {
+  const MicrosoftCalendarManager = loadManagerModule();
+  const { CALENDAR_LOOKBACK_MS } = require("../../src/helpers/calendarCacheWindow.js");
+  const manager = new MicrosoftCalendarManager({}, {});
+
+  const params = new URL(manager._deltaUrl("cal-1"), "https://graph.microsoft.com").searchParams;
+
+  const now = Date.now();
+  assert.ok(
+    Math.abs(Date.parse(params.get("startDateTime")) - (now - CALENDAR_LOOKBACK_MS)) < 5_000
+  );
+  assert.ok(Math.abs(Date.parse(params.get("endDateTime")) - (now + 38 * 86_400_000)) < 5_000);
 });

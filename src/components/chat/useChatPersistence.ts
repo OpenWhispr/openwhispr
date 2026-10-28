@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Message, ToolCallInfo } from "./types";
 import type { ContainerScope } from "../../types/chat";
+import { withoutSkillCardDrafts } from "./skillCardRecord";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -21,7 +22,11 @@ export interface ChatPersistence {
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
   saveUserMessage: (text: string) => Promise<void>;
-  saveAssistantMessage: (content: string, toolCalls?: ToolCallInfo[]) => Promise<void>;
+  saveAssistantMessage: (
+    content: string,
+    toolCalls?: ToolCallInfo[],
+    conversationId?: number | null
+  ) => Promise<void>;
   handleNewChat: () => void;
 }
 
@@ -105,16 +110,23 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     }
   }, []);
 
-  const saveAssistantMessage = useCallback(async (content: string, toolCalls?: ToolCallInfo[]) => {
-    if (conversationIdRef.current) {
-      window.electronAPI?.addAgentMessage?.(
-        conversationIdRef.current,
-        "assistant",
-        content,
-        toolCalls?.length ? { toolCalls } : undefined
-      );
-    }
-  }, []);
+  const saveAssistantMessage = useCallback(
+    async (
+      content: string,
+      toolCalls?: ToolCallInfo[],
+      targetConversationId = conversationIdRef.current
+    ): Promise<void> => {
+      if (targetConversationId) {
+        window.electronAPI?.addAgentMessage?.(
+          targetConversationId,
+          "assistant",
+          content,
+          toolCalls?.length ? { toolCalls: withoutSkillCardDrafts(toolCalls) } : undefined
+        );
+      }
+    },
+    []
+  );
 
   const handleNewChat = useCallback(() => {
     sessionVersionRef.current += 1;

@@ -23,7 +23,11 @@ import {
 } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
-import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import {
+  parseSeedSegments,
+  parseTranscriptSegments,
+  speakerlessTranscriptText,
+} from "../../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   buildLlmTranscript,
@@ -32,7 +36,7 @@ import {
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
-import type { CalendarAttendee } from "../../types/calendar";
+import type { CalendarAttendee, CalendarEvent } from "../../types/calendar";
 import {
   useNotes,
   useSpaces,
@@ -386,16 +390,31 @@ export default function PersonalNotesView({
     [activeNote, folders]
   );
 
-  const [calendarEventName, setCalendarEventName] = useState<string | null>(null);
+  // The linked event's stored row, tagged with the id it was looked up for so a
+  // stale lookup never shows against another link.
+  const [linkedEventLookup, setLinkedEventLookup] = useState<{
+    id: string;
+    event: CalendarEvent | null;
+  } | null>(null);
+  const linkedEventId = activeNote?.calendar_event_id || null;
   useEffect(() => {
-    if (!activeNote?.calendar_event_id) {
-      setCalendarEventName(null);
-      return;
-    }
-    window.electronAPI.gcalGetEvent?.(activeNote.calendar_event_id).then((result) => {
-      setCalendarEventName(result?.success && result.event?.summary ? result.event.summary : null);
+    if (!linkedEventId) return;
+    let cancelled = false;
+    window.electronAPI.gcalGetEvent?.(linkedEventId).then((result) => {
+      if (!cancelled) {
+        setLinkedEventLookup({ id: linkedEventId, event: result?.success ? result.event : null });
+      }
     });
-  }, [activeNote?.calendar_event_id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [linkedEventId]);
+  const linkedEvent = !linkedEventId
+    ? null
+    : linkedEventLookup?.id === linkedEventId
+      ? linkedEventLookup.event
+      : undefined;
+  const calendarEventName = linkedEvent?.summary ?? null;
 
   const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
 
@@ -690,7 +709,7 @@ export default function PersonalNotesView({
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
     const note = activeNote?.id === meetingRecordingRequest.noteId ? activeNote : null;
-    const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
+    const seedSegments = parseSeedSegments(note?.transcript);
     void handleMeetingRecordingRequest({
       args: {
         noteId: meetingRecordingRequest.noteId,
@@ -725,45 +744,63 @@ export default function PersonalNotesView({
 
   const runNoteAction = async (action: ActionItem) => {
     if (!editorNote) return;
-    const { recordingNoteId: liveNoteId, transcript: liveTranscript } =
-      useMeetingRecordingStore.getState();
+    const {
+      recordingNoteId: liveNoteId,
+      transcript: liveTranscript,
+      isTranscribing: liveIsTranscribing,
+    } = useMeetingRecordingStore.getState();
     const rawTranscript =
-      (liveNoteId === activeNote?.id ? liveTranscript : "") || activeNoteRawTranscript;
+      (liveIsTranscribing && liveNoteId === activeNote?.id ? liveTranscript : "") ||
+      activeNoteRawTranscript;
     const noteContent = editorNote.content;
     const hasNotes = !!noteContent.trim();
     if (!hasNotes && !rawTranscript) return;
+    // Uploads made before their text moved into the transcript keep it as the
+    // note's text with no transcript; newer ones whose provider named no
+    // speakers store it as segments without any. Either way nothing shows who
+    // speaks, so it runs as a plain transcript (#2666).
+    const transcriptInContent = !rawTranscript && editorNote.note_type === "upload";
+    const segments = parseTranscriptSegments(rawTranscript);
+    const speakerlessText = speakerlessTranscriptText(segments);
+    const transcriptText = transcriptInContent ? noteContent : (speakerlessText ?? rawTranscript);
 
     let formattedTranscript = "";
     let meetingContext = "";
     let isMeetingNote = false;
+    let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
-    if (rawTranscript) {
-      const segments = parseTranscriptSegments(rawTranscript);
-      if (segments.length > 0) {
+    if (transcriptText) {
+      const identity: MeetingIdentity = {
+        selfName: user?.name?.trim() || null,
+        selfEmail: user?.email?.trim() || null,
+        participants: parseNoteParticipants(editorNote.participants),
+      };
+      if (segments.length > 0 && speakerlessText === null) {
         isMeetingNote = true;
         const mappingRows =
           (await window.electronAPI?.getSpeakerMappings?.(editorNote.id).catch(() => [])) || [];
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const identity: MeetingIdentity = {
-          selfName: user?.name?.trim() || null,
-          selfEmail: user?.email?.trim() || null,
-          participants: parseNoteParticipants(editorNote.participants),
-        };
         const selfLabel = identity.selfName || t("notes.speaker.you");
         meetingContext = buildMeetingContext(identity, selfLabel);
         formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);
+      } else {
+        // Plain text shows no speakers, so the run gets no Meeting Context: the model
+        // can't tell who "I" is, and an invitee list invites guessed owners. The user
+        // and the invitees still turn an owner the transcript names into a mention (#2666).
+        hasPlainTranscript = true;
+        knownPeople = collectKnownPeople(identity, {}, []);
       }
       if (!formattedTranscript) {
-        formattedTranscript = rawTranscript;
+        formattedTranscript = transcriptText;
       }
     }
 
     const { input, fromSummary, material } = buildNoteRunInput(action, {
       summary: editorEnhancedContent,
-      notes: noteContent,
+      notes: transcriptInContent ? "" : noteContent,
       meetingContext,
       transcript: formattedTranscript,
     });
@@ -771,6 +808,7 @@ export default function PersonalNotesView({
       isCloudMode,
       modelId: effectiveModelId,
       isMeetingNote,
+      hasPlainTranscript,
       knownPeople,
       fromSummary,
       material,
@@ -873,7 +911,7 @@ export default function PersonalNotesView({
               onSetSessionDiarizationEnabled={setSessionDiarizationEnabled}
               onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}
-              calendarEventName={calendarEventName}
+              linkedEvent={linkedEvent}
               folders={editorFolders}
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}

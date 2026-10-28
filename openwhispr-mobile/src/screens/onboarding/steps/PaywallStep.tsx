@@ -5,15 +5,19 @@ import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useAffiliateStore } from '@/store/useAffiliateStore';
+import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
+import { TrackingPermissionStep } from './TrackingPermissionStep';
 
 const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
   { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
   { icon: 'arrow.triangle.2.circlepath', mdIcon: 'RefreshCw', label: 'Sync notes across devices' },
-  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and note chat' },
+  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and chat' },
 ];
 
 // A cold launch that resumes on this step arrives before the SDK's configure
@@ -35,6 +39,7 @@ export const PAYWALL_ESCAPE_MS = 8_000;
 export function PaywallStep() {
   const { goNext } = useOnboardingStep('paywall');
   const user = useAuthStore((s) => s.user);
+  const sessionCookie = useAuthStore((s) => s.sessionCookie);
   const usage = useUsageStore((s) => s.usage);
   const usageOwnerKey = useUsageStore((s) => s.ownerKey);
   // Usage is only this account's when the store loaded it for the current
@@ -45,6 +50,12 @@ export function PaywallStep() {
     usageOwnerKey === getUsageOwnerKey() &&
     !usage.isSubscribed;
   const { register, state, isConfigured } = useSuperwallGate();
+  // Creator preparation awaits before registering; by then the SDK may have
+  // finished configuring, so register through the latest gate, not this render's.
+  const registerRef = useRef(register);
+  useEffect(() => {
+    registerRef.current = register;
+  }, [register]);
   const hasPresentedRef = useRef(false);
   const hasAdvancedRef = useRef(false);
   const unmountedRef = useRef(false);
@@ -53,6 +64,31 @@ export function PaywallStep() {
   const [presenting, setPresenting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [escapeElapsed, setEscapeElapsed] = useState(false);
+  const affiliateEnabled = Boolean(getAffiliateClientConfig());
+  // Only a trusted inbound creator link brings the tracking question forward, so
+  // its offer can be checked; everyone else meets it at its usual step after signup.
+  const [inboundCreator, setInboundCreator] = useState<boolean | null>(
+    affiliateEnabled ? null : false,
+  );
+  const [consentChecked, setConsentChecked] = useState(false);
+  const completeConsent = useCallback(async () => setConsentChecked(true), []);
+  const consentReady = inboundCreator === false || (inboundCreator === true && consentChecked);
+  const userId = user?.id;
+  useEffect(() => {
+    if (!affiliateEnabled) return;
+    let active = true;
+    (async () => {
+      await useAffiliateStore.getState().hydrate();
+      await useAffiliateStore.getState().bindSession();
+    })()
+      .catch(() => {})
+      .finally(() => {
+        if (active) setInboundCreator(useAffiliateStore.getState().inboundOfferPending);
+      });
+    return () => {
+      active = false;
+    };
+  }, [affiliateEnabled, userId]);
 
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advance = useCallback(async (): Promise<void> => {
@@ -107,6 +143,8 @@ export function PaywallStep() {
       return;
     }
 
+    if (!consentReady) return;
+
     if (!isConfigured && !readyGraceElapsed) return;
     hasPresentedRef.current = true;
     setPresenting(true);
@@ -117,12 +155,54 @@ export function PaywallStep() {
     // only thing that cancels the advance; effect re-runs must not.
     const controller = new AbortController();
     registrationRef.current = controller;
-    register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall, signal: controller.signal })
+    const isCurrent = () =>
+      !unmountedRef.current &&
+      !hasAdvancedRef.current &&
+      !controller.signal.aborted &&
+      useAuthStore.getState().user?.id === user.id &&
+      useAuthStore.getState().sessionCookie === sessionCookie;
+    (async () => {
+      // Only a trusted inbound-link intent can seed this first presentation.
+      // Ordinary rendering and typed candidates never claim or allocate stock.
+      let creatorOffer: AffiliateOffer | undefined;
+      try {
+        if (affiliateEnabled && (await useAffiliateStore.getState().consumeInboundOffer(isCurrent)))
+          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
+      } catch {
+        // Optional referral storage must not skip ordinary purchasing.
+      }
+      if (!isCurrent()) return;
+      const latestUsage = useUsageStore.getState();
+      if (
+        !latestUsage.usage ||
+        !latestUsage.ownerKey ||
+        latestUsage.ownerKey !== getUsageOwnerKey() ||
+        latestUsage.usage.isSubscribed
+      ) {
+        setPresenting(false);
+        setSkipping(true);
+        return;
+      }
+      await registerRef.current({
+        placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
+        signal: controller.signal,
+        creatorOffer,
+      });
+    })()
       .catch(() => {})
       .finally(() => {
-        if (!unmountedRef.current) void advance();
+        if (isCurrent()) void advance();
       });
-  }, [advance, isConfigured, isConfirmedFree, readyGraceElapsed, register, user]);
+  }, [
+    advance,
+    affiliateEnabled,
+    consentReady,
+    isConfigured,
+    isConfirmedFree,
+    readyGraceElapsed,
+    user,
+    sessionCookie,
+  ]);
 
   // Between registering and the SDK presenting, this backdrop looks like an
   // ordinary screen with a primary button; tapping it would mount the next
@@ -145,6 +225,9 @@ export function PaywallStep() {
       </OnboardingShell>
     );
   }
+
+  if (inboundCreator && !consentChecked && user && isConfirmedFree)
+    return <TrackingPermissionStep onComplete={completeConsent} />;
 
   return (
     <OnboardingShell
