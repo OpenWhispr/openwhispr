@@ -6878,6 +6878,14 @@ class DatabaseManager {
         // POST never delivers a deliberate clear; it still owes a PATCH.
         if (cloudNote && !writeRejected) {
           const adopted = acknowledgedCreateTextUpdates(current, snapshot, cloudNote);
+          const hasExplicitCreator = Object.prototype.hasOwnProperty.call(
+            cloudNote,
+            "created_by_user_id"
+          );
+          if (hasExplicitCreator || Object.prototype.hasOwnProperty.call(cloudNote, "user_id")) {
+            adopted.created_by_user_id =
+              (hasExplicitCreator ? cloudNote.created_by_user_id : cloudNote.user_id) ?? null;
+          }
           noteUndo.preserveUnchangedUndo(this, id, Object.keys(adopted), () => {
             this._setNoteColumns(id, adopted);
           });
