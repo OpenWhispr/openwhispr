@@ -203,6 +203,7 @@ export interface StructuredMeetingNotes {
 }
 
 export interface TranscriptionRequest extends CleanupInferenceSnapshot {
+  signal?: AbortSignal;
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
   provider: TranscriptionProvider;

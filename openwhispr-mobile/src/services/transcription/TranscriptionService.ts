@@ -21,6 +21,8 @@ import { CLEANUP_TIMEOUT_MS } from '../../lib/cleanupTranscript';
 import { withRetry } from '../../lib/retry';
 import { wordLimitErrorFromBody } from './wordLimit';
 import { transcriptionPolicyErrorFromResponse } from './policyErrors';
+import { abortError } from '../providers/NativeProviderTransport';
+import { uploadTranscriptionAudio } from './uploadTranscriptionAudio';
 
 const TRANSCRIBE_ENDPOINT = '/api/transcribe';
 const TRANSCRIBE_AND_CLEAN_ENDPOINT =
@@ -246,11 +248,14 @@ const isTransientUploadStatus = (status: number): boolean => status >= 500 && st
 const uploadWithRetry = async (
   upload: () => Promise<UploadHttpResponse>,
   label: string,
+  signal?: AbortSignal,
 ): Promise<UploadHttpResponse> => {
   try {
     return await withRetry(
       async () => {
+        if (signal?.aborted) throw abortError('Transcription cancelled.');
         const response = await upload();
+        if (signal?.aborted) throw abortError('Transcription cancelled.');
         if (isTransientUploadStatus(response.status)) {
           throw new TranscriptionApiError(label, response.status, response.body);
         }
@@ -259,6 +264,8 @@ const uploadWithRetry = async (
       {
         maxRetries: UPLOAD_MAX_RETRIES,
         initialDelay: UPLOAD_INITIAL_RETRY_DELAY_MS,
+        shouldRetry: (error) =>
+          !signal?.aborted && !(error instanceof Error && error.name === 'AbortError'),
         onRetry: (attempt, error, delayMs) => {
           if (__DEV__) {
             console.warn(
@@ -392,6 +399,7 @@ export class TranscriptionService {
     error: unknown,
   ): boolean {
     return (
+      !request.signal?.aborted &&
       request.requestContext === 'keyboard' &&
       request.provider === 'cloud' &&
       !isWavAudio(request) &&
@@ -455,8 +463,10 @@ export class TranscriptionService {
       requestContext?: TranscriptionRequest['requestContext'];
       clientTranscriptionId?: string;
       fusedCleanup?: boolean;
+      signal?: AbortSignal;
     } = {},
   ): Promise<TranscriptionResponse> {
+    if (options.signal?.aborted) throw abortError('Transcription cancelled.');
     const sessionCookie = useAuthStore.getState().sessionCookie;
     if (!sessionCookie) {
       throw new Error('Not authenticated. Please sign in to use cloud transcription.');
@@ -532,6 +542,7 @@ export class TranscriptionService {
     };
 
     const fileSizeBytes = await getFileSizeBytes(audioUri);
+    if (options.signal?.aborted) throw abortError('Transcription cancelled.');
 
     // The gateway rejects bodies over ~4.5MB and the cloud only detects certain
     // container formats, so large or undecodable audio is split and uploaded as
@@ -550,11 +561,23 @@ export class TranscriptionService {
       );
       if (plan === 'ogg') {
         const { chunks } = await AudioTools.splitOggOpus(audioUri, CLOUD_INLINE_LIMIT);
-        return this.transcribeChunked(chunks, 'audio/ogg', parameters, sessionCookie);
+        return this.transcribeChunked(
+          chunks,
+          'audio/ogg',
+          parameters,
+          sessionCookie,
+          options.signal,
+        );
       }
       if (plan === 'wav') {
         const { chunks } = await AudioTools.splitToChunks(audioUri, CLOUD_CHUNK_SECONDS);
-        return this.transcribeChunked(chunks, 'audio/wav', parameters, sessionCookie);
+        return this.transcribeChunked(
+          chunks,
+          'audio/wav',
+          parameters,
+          sessionCookie,
+          options.signal,
+        );
       }
     }
 
@@ -584,19 +607,25 @@ export class TranscriptionService {
               timeoutSeconds,
               headers,
             })
-          : FileSystem.uploadAsync(`${API_ENDPOINTS.OPENWHISPR_API}${endpointPath}`, audioUri, {
-              httpMethod: 'POST',
-              uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-              // uploadAsync defaults to a background NSURLSession on iOS — the
-              // exact lazily-scheduled transport this path exists to avoid
-              // (observed: 24s for a 163KB clip until the app was foregrounded).
-              sessionType: FileSystem.FileSystemSessionType.FOREGROUND,
-              fieldName: 'file',
-              mimeType: finalMimeType,
-              parameters,
-              headers,
-            }),
+          : uploadTranscriptionAudio(
+              `${API_ENDPOINTS.OPENWHISPR_API}${endpointPath}`,
+              audioUri,
+              {
+                httpMethod: 'POST',
+                uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+                // uploadAsync defaults to a background NSURLSession on iOS — the
+                // exact lazily-scheduled transport this path exists to avoid
+                // (observed: 24s for a 163KB clip until the app was foregrounded).
+                sessionType: FileSystem.FileSystemSessionType.FOREGROUND,
+                fieldName: 'file',
+                mimeType: finalMimeType,
+                parameters,
+                headers,
+              },
+              options.signal,
+            ),
       endpointLabel,
+      options.signal,
     );
     const uploadMs = Date.now() - uploadStartedAt;
 
@@ -757,6 +786,7 @@ export class TranscriptionService {
     chunkMimeType: string,
     parameters: Record<string, string>,
     sessionCookie: string,
+    signal?: AbortSignal,
   ): Promise<TranscriptionResponse> {
     try {
       const texts: string[] = new Array(chunkUris.length);
@@ -765,6 +795,10 @@ export class TranscriptionService {
 
       const worker = async (): Promise<void> => {
         while (firstError === null) {
+          if (signal?.aborted) {
+            firstError = abortError('Transcription cancelled.');
+            return;
+          }
           const index = nextIndex++;
           if (index >= chunkUris.length) {
             return;
@@ -785,8 +819,10 @@ export class TranscriptionService {
                   chunkMimeType,
                   chunkParameters,
                   sessionCookie,
+                  signal,
                 ),
               'transcribe',
+              signal,
             );
             texts[index] = parseChunkTranscriptionText(response);
           } catch (error) {
@@ -810,6 +846,7 @@ export class TranscriptionService {
     mimeType: string,
     parameters: Record<string, string>,
     sessionCookie: string,
+    signal?: AbortSignal,
   ): Promise<{ status: number; body: string }> {
     const url = `${API_ENDPOINTS.OPENWHISPR_API}${TRANSCRIBE_ENDPOINT}`;
     // Keyboard chunks take the in-process transport for the same reason small
@@ -827,15 +864,20 @@ export class TranscriptionService {
         headers: { Cookie: sessionCookie, ...getClientVersionHeader() },
       });
     }
-    return FileSystem.uploadAsync(url, audioUri, {
-      httpMethod: 'POST',
-      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-      sessionType: FileSystem.FileSystemSessionType.FOREGROUND,
-      fieldName: 'file',
-      mimeType,
-      parameters,
-      headers: { Cookie: sessionCookie, ...getClientVersionHeader() },
-    });
+    return uploadTranscriptionAudio(
+      url,
+      audioUri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        sessionType: FileSystem.FileSystemSessionType.FOREGROUND,
+        fieldName: 'file',
+        mimeType,
+        parameters,
+        headers: { Cookie: sessionCookie, ...getClientVersionHeader() },
+      },
+      signal,
+    );
   }
 
   private static async transcribeLocally(
@@ -880,6 +922,7 @@ export class TranscriptionService {
   static async transcribeWithCloudCleanup(
     request: TranscriptionRequest,
   ): Promise<TranscriptionResponse> {
+    if (request.signal?.aborted) throw abortError('Transcription cancelled.');
     if (fusedCleanupEndpointUnavailable) {
       throw new FusedCleanupUnavailableError('Fused cleanup endpoint already marked unavailable');
     }
@@ -920,6 +963,7 @@ export class TranscriptionService {
           requestContext: candidate.requestContext,
           clientTranscriptionId: candidate.clientTranscriptionId,
           fusedCleanup: true,
+          signal: candidate.signal,
           extraHeaders: {
             'X-OpenWhispr-Cleanup-Timeout-Ms': String(CLEANUP_TIMEOUT_MS),
           },
@@ -947,6 +991,7 @@ export class TranscriptionService {
   }
 
   static async transcribe(request: TranscriptionRequest): Promise<TranscriptionResponse> {
+    if (request.signal?.aborted) throw abortError('Transcription cancelled.');
     const { audioUri, provider, language } = request;
 
     const runCloud = (candidate: TranscriptionRequest) =>
@@ -960,6 +1005,7 @@ export class TranscriptionService {
           requestContext: candidate.requestContext,
           clientTranscriptionId: candidate.clientTranscriptionId,
           timeoutSeconds: candidate.timeoutSeconds,
+          signal: candidate.signal,
         },
       );
 
@@ -978,6 +1024,7 @@ export class TranscriptionService {
           false,
           scope === 'upload' && Platform.OS !== 'android',
         );
+        if (request.signal?.aborted) throw abortError('Transcription cancelled.');
         const recoveryJobId = request.jobId ?? request.clientTranscriptionId;
         const routeSnapshot = recoveryJobId
           ? JSON.stringify({
@@ -1002,6 +1049,7 @@ export class TranscriptionService {
           language,
           prompt: prompt || undefined,
           routeSnapshot,
+          signal: request.signal,
         }).catch((error: unknown) => {
           // Silence leaves nothing to recover, and every caller discards the audio.
           if (recoveryJobId && (error as { code?: unknown })?.code === 'NO_SPEECH') {

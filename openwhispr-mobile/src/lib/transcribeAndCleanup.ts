@@ -20,6 +20,7 @@ import { isNoSpeechError } from './permissions';
 import { withRetry, type RetryOptions } from './retry';
 import { expandSnippets } from './snippets';
 import { isUsageLimitError } from './usageLimitError';
+import { abortError } from '@/services/providers/NativeProviderTransport';
 import type { KeyboardTone, TranscriptionRequest, TranscriptionResponse } from '@/types';
 
 type ProcessingStage = 'transcribing' | 'cleaning';
@@ -144,7 +145,10 @@ function transcriptionRetry(lifecycle: DictationProcessingLifecycle): RetryOptio
     initialDelay: 1000,
     // Stop the moment the user abandons the dictation; don't burn backoff time
     // retrying a result they've already cancelled.
-    shouldRetry: (error) => !lifecycle.shouldCancel?.() && isRetryableTranscriptionError(error),
+    shouldRetry: (error) =>
+      !lifecycle.signal?.aborted &&
+      !lifecycle.shouldCancel?.() &&
+      isRetryableTranscriptionError(error),
     onRetry: (attempt, error, delayMs) => {
       if (__DEV__) {
         console.warn(
@@ -383,8 +387,10 @@ export async function transcribeAndCleanup(
   request: TranscriptionRequest,
   lifecycle: DictationProcessingLifecycle = {},
 ): Promise<DictationProcessingResult> {
+  const signal = lifecycle.signal ?? request.signal;
+  if (signal?.aborted) throw abortError('Transcription cancelled.');
   return withActiveProviderJob(
     request.provider === 'byok' ? (request.jobId ?? request.clientTranscriptionId) : undefined,
-    () => processTranscriptionJob(request, lifecycle),
+    () => processTranscriptionJob({ ...request, signal }, { ...lifecycle, signal }),
   );
 }
