@@ -116,6 +116,7 @@ function buildFakeThis() {
     databaseManager,
     _meetingMicStreaming: null,
     _meetingSystemStreaming: null,
+    _activeEnterpriseAudioMeeting: false,
   };
   return new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
