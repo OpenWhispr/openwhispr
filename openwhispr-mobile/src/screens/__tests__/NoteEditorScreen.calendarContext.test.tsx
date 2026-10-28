@@ -1182,34 +1182,54 @@ describe('NoteEditorScreen body tabs', () => {
     expect(getByText('Transcript failed')).toBeTruthy();
   });
 
-  it('never shows an uploaded file’s body, the flat copy of its transcript, as My notes', () => {
+  it('lets an upload with a transcript keep editable notes without changing its transcript', () => {
+    jest.useFakeTimers();
     mockNote = note({
       noteType: 'upload',
       calendarEventId: null,
       participants: null,
-      content: 'Alice can take the first pass.',
+      content: '',
     });
     mockNotesState.notes = [mockNote];
-    const { getByText, queryByTestId } = render(<NoteEditorScreen />);
+    const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
-    expect(queryByTestId('note-tab-notes')).toBeNull();
+    expect(queryByTestId('note-content-input')).toBeNull();
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByTestId('note-content-input').props.value).toBe('');
+    expect(getByTestId('note-content-input').props.editable).toBe(true);
+    expect(getByTestId('note-content-input').props.placeholder).toBe('Add your own notes…');
+    fireEvent.changeText(getByTestId('note-content-input'), 'Send the revised checklist.');
+    act(() => {
+      jest.advanceTimersByTime(800);
+    });
+    expect(mockUpdateNote).toHaveBeenCalledWith(7, { content: 'Send the revised checklist.' });
+    expect(extractCorrections).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId('note-tab-transcript'));
+    expect(getByText('Alice can take the first pass.')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
   });
 
-  it('keeps an uploaded file’s transcript as a tab once notes are generated', () => {
+  it('keeps an upload’s transcript tab and typed notes beside generated notes', () => {
     mockNote = note({
       noteType: 'upload',
       calendarEventId: null,
       participants: null,
+      content: 'Send the revised checklist.',
       enhancedContent: '## Summary',
     });
     mockNotesState.notes = [mockNote];
     const { getByText, getByTestId, queryByTestId } = render(<NoteEditorScreen />);
+    expect(getByText('## Summary')).toBeTruthy();
     expect(getByTestId('note-tab-enhanced')).toBeTruthy();
-    expect(queryByTestId('note-tab-notes')).toBeNull();
+    expect(getByTestId('note-tab-transcript')).toBeTruthy();
+
+    fireEvent.press(getByTestId('note-tab-notes'));
+    expect(getByTestId('note-content-input').props.value).toBe('Send the revised checklist.');
+    expect(getByTestId('note-content-input').props.editable).toBe(true);
 
     fireEvent.press(getByTestId('note-tab-transcript'));
-
     expect(getByText('Alice can take the first pass.')).toBeTruthy();
     expect(queryByTestId('note-content-input')).toBeNull();
   });
