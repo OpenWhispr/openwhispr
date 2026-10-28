@@ -1,14 +1,29 @@
 const { i18nMain } = require("./i18nMain");
 
-function resolveSpeaker(seg, speakerMappings) {
-  if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
+// Naming a speaker "You" marks the recorder's voice; the name is stored in the
+// language it was saved in, so English "You" counts alongside the current one
+// (transcriptSpeakerState.ts's isYouSpeakerName).
+function isYouSpeakerName(name) {
+  const normalized = name.trim().toLowerCase();
+  return normalized === "you" || normalized === i18nMain.t("notes.speaker.you").toLowerCase();
+}
+
+// recorderLabel names whoever recorded the note when it isn't the user's own
+// (the renderer resolves it from the space roster); without one the recorder's
+// lines read "You". Like the transcript view, a "You" from this device's speaker
+// mappings stays: it names the viewer, not the recorder.
+function resolveSpeaker(seg, speakerMappings, recorderLabel) {
+  const recorder = recorderLabel || i18nMain.t("transcript.speaker.you");
+  if (seg.speakerName && !seg.speakerIsPlaceholder) {
+    return recorderLabel && isYouSpeakerName(seg.speakerName) ? recorderLabel : seg.speakerName;
+  }
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
-  if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
+  if (seg.speaker === "you") return recorder;
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
-  if (seg.source === "mic") return i18nMain.t("transcript.speaker.you");
+  if (seg.source === "mic") return recorder;
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return i18nMain.t("notes.speaker.unknown");
 }
@@ -135,7 +150,7 @@ function extractMetadata(note) {
   return { title, dateStr, participants };
 }
 
-function formatTxt(note, segments, speakerMappings) {
+function formatTxt(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
@@ -146,7 +161,9 @@ function formatTxt(note, segments, speakerMappings) {
   const untimed = isUntimed(segments);
   for (const seg of merged) {
     if (!untimed) {
-      lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
+      lines.push(
+        `[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings, recorderLabel)}:`
+      );
     }
     lines.push(seg.text);
     lines.push("");
@@ -154,7 +171,7 @@ function formatTxt(note, segments, speakerMappings) {
   return lines.join("\n");
 }
 
-function formatSrt(segments, speakerMappings, note = {}) {
+function formatSrt(segments, speakerMappings, note = {}, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   // Upload transcripts carry no speaker identity at all; prefixing every cue
   // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
@@ -171,21 +188,23 @@ function formatSrt(segments, speakerMappings, note = {}) {
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
     entries.push(
-      hasSpeakerIdentity ? `${resolveSpeaker(seg, speakerMappings)}: ${seg.text}` : seg.text
+      hasSpeakerIdentity
+        ? `${resolveSpeaker(seg, speakerMappings, recorderLabel)}: ${seg.text}`
+        : seg.text
     );
     entries.push("");
   }
   return entries.join("\n");
 }
 
-function formatJson(note, segments, speakerMappings) {
+function formatJson(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr } = extractMetadata(note);
 
   const untimed = isUntimed(segments);
   const speakersSet = new Set();
   if (!untimed) {
-    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
+    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings, recorderLabel));
   }
   const lastSeg = merged[merged.length - 1];
 
@@ -205,7 +224,7 @@ function formatJson(note, segments, speakerMappings) {
       },
       speakers: [...speakersSet],
       segments: merged.map((seg) => ({
-        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings),
+        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings, recorderLabel),
         timestamp: seg.timestamp,
         text: seg.text,
       })),
@@ -215,7 +234,7 @@ function formatJson(note, segments, speakerMappings) {
   );
 }
 
-function formatMd(note, segments, speakerMappings) {
+function formatMd(note, segments, speakerMappings, { recorderLabel } = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
   const { title, dateStr, participants } = extractMetadata(note);
 
@@ -227,7 +246,7 @@ function formatMd(note, segments, speakerMappings) {
   for (const seg of merged) {
     if (!untimed) {
       lines.push(
-        `**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``
+        `**${resolveSpeaker(seg, speakerMappings, recorderLabel)}** \`${formatTimestamp(seg.timestamp)}\``
       );
     }
     lines.push(`${seg.text}`, "");
