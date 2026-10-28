@@ -167,28 +167,82 @@ test("every en key is present in every other language", () => {
   }
 });
 
-test("interpolation variables match en in every language", () => {
-  // Compares names, not repeat counts — word order can make a translation
-  // reference the same variable a different number of times.
-  const variables = (value) =>
-    typeof value === "string"
-      ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
-      : [];
+// Compares names, not repeat counts — word order can make a translation reference the same
+// variable a different number of times.
+const variables = (value) =>
+  typeof value === "string"
+    ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
+    : [];
 
+// A plural form may use any variable from any of en's forms of the same message, since a
+// language's `one` can cover more than 1 (Russian 21, 31, …) where en's `one` drops the number;
+// it may also leave one out (Arabic's `two` spells the number). Every other key matches en
+// exactly.
+function interpolationMismatches(en, translated) {
+  const pluralVariables = new Map();
+  for (const [key, value] of en) {
+    if (!PLURAL_SUFFIX.test(key)) continue;
+    const base = stripPlural(key);
+    const names = pluralVariables.get(base) ?? new Set();
+    for (const name of variables(value)) names.add(name);
+    pluralVariables.set(base, names);
+  }
+
+  const mismatches = [];
+  for (const [key, value] of translated) {
+    const allowed = PLURAL_SUFFIX.test(key) ? pluralVariables.get(stripPlural(key)) : undefined;
+    if (allowed) {
+      const unknown = variables(value).filter((name) => !allowed.has(name));
+      if (unknown.length > 0) mismatches.push(`${key} uses {{${unknown.join("}}, {{")}}}`);
+    } else if (en.has(key) && variables(value).join() !== variables(en.get(key)).join()) {
+      mismatches.push(`${key} has different {{variables}} than en`);
+    }
+  }
+  return mismatches;
+}
+
+test("interpolation variables match en in every language", () => {
   for (const namespace of NAMESPACES) {
     const en = flatten(load("en", namespace));
     for (const lang of languages) {
       if (lang === "en") continue;
-      for (const [key, value] of flatten(load(lang, namespace))) {
-        if (!en.has(key)) continue;
-        assert.deepEqual(
-          variables(value),
-          variables(en.get(key)),
-          `${lang}/${namespace} ${key} has different {{variables}} than en`
-        );
-      }
+      assert.deepEqual(
+        interpolationMismatches(en, flatten(load(lang, namespace))),
+        [],
+        `${lang}/${namespace}`
+      );
     }
   }
+});
+
+test("a plural form may use a variable from another of en's forms, but not a new one", () => {
+  const en = new Map([
+    ["invite.submit_one", "Send invite"],
+    ["invite.submit_other", "Send {{count}} invites"],
+    ["invite.title", "Invite {{name}}"],
+  ]);
+
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{count}} приглашение"],
+        ["invite.submit_two", "إرسال دعوتين"],
+        ["invite.title", "Пригласить {{name}}"],
+      ])
+    ),
+    []
+  );
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{total}} приглашение"],
+        ["invite.title", "Пригласить"],
+      ])
+    ),
+    ["invite.submit_one uses {{total}}", "invite.title has different {{variables}} than en"]
+  );
 });
 
 test("every messageKey literal resolves in en", () => {
