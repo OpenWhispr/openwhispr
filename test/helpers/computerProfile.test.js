@@ -324,6 +324,19 @@ test("an NVIDIA card Windows reports only by name has no memory figure", async (
   assert.equal(profile.formFactor, "desktop");
 });
 
+test("a GPU read that never answers leaves the graphics unnamed instead of hanging", async () => {
+  const { deps } = windowsDeps(
+    { Manufacturer: "HP", Model: "HP ProDesk 400 G7", PCSystemType: 1, Batteries: 0 },
+    {
+      cpuModel: "AMD Ryzen 7 7700 8-Core Processor",
+      extra: { getGPUInfo: () => new Promise(() => {}), gpuInfoTimeoutMs: 20 },
+    }
+  );
+  const profile = await readComputerProfile(deps);
+  assert.equal(profile.graphicsName, null);
+  assert.equal(profile.name, "HP ProDesk 400 G7");
+});
+
 test("a Windows tower with integrated graphics reads the active GPU name", async () => {
   const { deps } = windowsDeps(
     {

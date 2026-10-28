@@ -9,6 +9,9 @@ const { readActiveGpu } = require("../utils/vulkanDetection");
 
 const SYSTEM_PROFILER_TIMEOUT_MS = 10000;
 const POWERSHELL_TIMEOUT_MS = 15000;
+// Chromium's full GPU info waits on the GPU process, which may never answer; the
+// graphics name is only shown, so the setup screen doesn't wait for it any longer.
+const GPU_INFO_TIMEOUT_MS = 3000;
 
 // Text firmware leaves in when the maker never filled the field in
 const PLACEHOLDER =
@@ -126,6 +129,14 @@ function run(execFileImpl, file, args, options) {
   });
 }
 
+function withinTime(promise, ms, fallback) {
+  let timer;
+  const expiry = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, expiry]).finally(() => clearTimeout(timer));
+}
+
 async function attempt(read, fallback) {
   try {
     const value = await read();
@@ -144,6 +155,7 @@ function resolveDeps(deps) {
     os: deps.os ?? os,
     // Electron and the GPU helpers load on use so injected deps never pull them in
     getGPUInfo: deps.getGPUInfo ?? ((type) => require("electron").app.getGPUInfo(type)),
+    gpuInfoTimeoutMs: deps.gpuInfoTimeoutMs ?? GPU_INFO_TIMEOUT_MS,
     detectNvidiaGpu:
       deps.detectNvidiaGpu ?? (() => require("../utils/gpuDetection").detectNvidiaGpu()),
     getParakeetCapability:
@@ -282,7 +294,11 @@ async function buildProfile(d) {
     graphicsName = nvidia
       ? nvidia.name
       : await attempt(async () => {
-          const gpu = await readActiveGpu({ getGPUInfo: d.getGPUInfo });
+          const gpu = await withinTime(
+            readActiveGpu({ getGPUInfo: d.getGPUInfo }),
+            d.gpuInfoTimeoutMs,
+            null
+          );
           return cleanGraphicsName(gpu?.deviceName);
         }, null);
   }
