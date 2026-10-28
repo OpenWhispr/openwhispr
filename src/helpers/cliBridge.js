@@ -587,6 +587,11 @@ class CliBridge {
       }),
       param("DELETE", "/v1/transcriptions/", "/audio", "id", ({ params }) => {
         const id = requireId(params, "transcription");
+        if (!db.getTranscriptionById(id)) {
+          const err = new Error(`Transcription ${id} not found`);
+          err.code = "NOT_FOUND";
+          throw err;
+        }
         const result = ipc.audioStorageManager.deleteAudio(id);
         if (!result?.success) {
           throw new Error(`Failed to delete audio for transcription ${id}`);
