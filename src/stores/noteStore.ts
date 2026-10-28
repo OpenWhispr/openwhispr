@@ -366,15 +366,16 @@ function ensureIpcListeners() {
     const dispose = window.electronAPI.onFolderDeleted(({ id }) => {
       if (id == null) return;
       const state = useNoteStore.getState();
-      const keys = folderAndSubfolderKeys(state.folders, id);
-      const teardown = teardownNoteContainers(state, keys);
+      // Main sends one event per folder it deletes; a parent's subfolders
+      // that survive it (a delete pulled from the cloud) stay loaded.
+      const teardown = teardownNoteContainers(state, [folderContainerKey(id)]);
       persistExpandedContainers(teardown.expandedContainers);
       const extra: Partial<NoteState> = {
         expandedContainers: teardown.expandedContainers,
         activeNoteId: teardown.activeNoteId,
       };
       let fallbackContext: ActiveContext | null = null;
-      if (state.activeContext && keys.includes(contextContainerKey(state.activeContext))) {
+      if (state.activeContext?.folderId === id) {
         // The active folder vanished under us — degrade to the deleted
         // subfolder's parent, else to the space root.
         const deleted = state.folders.find((f) => f.id === id);

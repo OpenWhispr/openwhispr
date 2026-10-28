@@ -65,7 +65,6 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import {
-  canHaveSubfolders,
   canNestFolder,
   defaultFolderDisplayName,
   folderPathLabel,
@@ -618,13 +617,13 @@ function FolderRow({
   // focus handling can't take focus back from it.
   const newSubfolderPicked = useRef(false);
   const displayName = defaultFolderDisplayName(folder, t);
-  const isSubfolder = !canHaveSubfolders(folder);
+  const isSubfolder = folder.parent_folder_id != null;
   const canMoveToSpace = canManageDestructive && !folder.is_default && spaces.length > 1;
   // A subfolder keeps its current parent listed, as the disabled current row.
   const parentOptions = useMemo(
     () =>
       folders.filter(
-        (f) => f.space_id === folder.space_id && f.id !== folder.id && canHaveSubfolders(f)
+        (f) => f.space_id === folder.space_id && f.id !== folder.id && f.parent_folder_id == null
       ),
     [folder, folders]
   );
@@ -1533,9 +1532,14 @@ export default function SpacesTree({
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
+    // Moving back out of a team leaves subfolders behind and doesn't re-nest
+    // a subfolder, so a nested folder's move stays one-way, as confirmed.
+    const isNested =
+      folder.parent_folder_id != null || folders.some((f) => f.parent_folder_id === folder.id);
     const result = await moveFolderSafely(() => moveFolderToSpace(folder.id, space.id));
     if (!result.success) return;
     revealContainer(space.id, null);
+    if (isNested) return;
     showUndoToast(folder.name, spaceDisplayName(space, t), () => {
       // Undo is a folder move like any other: after a role change it must
       // not bypass the destructive-folder-action rules in the new space.
@@ -1557,12 +1561,7 @@ export default function SpacesTree({
     if (!result.success) return;
     revealContainer(folder.space_id, parentFolderId);
     const parent = folders.find((f) => f.id === parentFolderId);
-    const space = spacesById.get(folder.space_id);
-    const target = parent
-      ? defaultFolderDisplayName(parent, t)
-      : space
-        ? spaceDisplayName(space, t)
-        : "";
+    const target = parent ? defaultFolderDisplayName(parent, t) : t("notes.folders.topLevel");
     showUndoToast(folder.name, target, () => {
       void moveFolderSafely(() => setFolderParent(folder.id, prevParentId));
     });

@@ -91,16 +91,14 @@ test("path labels name the parent and localize default folder segments", async (
   assert.equal(folderPathLabel(orphan, folders, t), "Q1");
 });
 
-test("only top-level folders take subfolders, and only plain leaf folders nest", async () => {
-  const { canHaveSubfolders, canNestFolder } = await load();
+test("only plain leaf folders nest", async () => {
+  const { canNestFolder } = await load();
   const meetings = folder(1, { name: "Meetings", is_default: 1 });
   const parent = folder(2);
   const child = folder(3, { parent_folder_id: 2 });
   const plain = folder(4);
   const folders = [meetings, parent, child, plain];
 
-  assert.equal(canHaveSubfolders(meetings), true);
-  assert.equal(canHaveSubfolders(child), false);
   assert.equal(canNestFolder(meetings, folders), false);
   assert.equal(canNestFolder(parent, folders), false);
   assert.equal(canNestFolder(child, folders), true);

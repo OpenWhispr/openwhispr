@@ -76,11 +76,7 @@ export function folderPathLabel(
   return parent ? `${defaultFolderDisplayName(parent, t)} / ${name}` : name;
 }
 
-// Menu gates mirroring main's nesting rules, which main enforces itself.
-export function canHaveSubfolders(folder: FolderItem): boolean {
-  return folder.parent_folder_id == null;
-}
-
+// Menu gate mirroring main's nesting rules, which main enforces itself.
 export function canNestFolder(folder: FolderItem, folders: FolderItem[]): boolean {
   return !folder.is_default && !folders.some((f) => f.parent_folder_id === folder.id);
 }

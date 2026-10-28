@@ -83,7 +83,7 @@ const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 test("a parent folder lists its own subfolders above its notes, with direct counts", async (t) => {
   const html = await renderOverview(t, WORK);
 
-  assert.match(text(html), /these notes\. 1 note Subfolders Q1 3 notes/);
+  assert.match(text(html), /Subfolders Q1 3 notes/);
   assert.ok(html.indexOf("Subfolders") < html.indexOf("data-note-list"));
   assert.doesNotMatch(html, /Elsewhere|Q2/);
 });

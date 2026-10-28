@@ -91,3 +91,19 @@ test("a subfolder deleted elsewhere moves the active view to its parent", async 
   assert.equal(store.getActiveFolderIdValue(), 11);
   assert.equal(store.getNoteFromStore(112), null);
 });
+
+test("a parent deleted elsewhere leaves its surviving subfolder open", async (t) => {
+  const { main, store, expanded } = await loadStore(t);
+  store.revealContainer(1, 12);
+  store.setActiveContext(1, 12);
+  store.setActiveNoteId(112);
+
+  // Main's hard delete keeps the subfolder, now top level.
+  main.folders = [PERSONAL, folder(12, "Q1")];
+  main.onFolderDeleted({ id: 11 });
+
+  assert.equal(store.getActiveFolderIdValue(), 12);
+  assert.equal(store.getActiveNoteIdValue(), 112);
+  assert.ok(store.getNoteFromStore(112));
+  assert.deepEqual(expanded(), ["f:12", "s:1"]);
+});
