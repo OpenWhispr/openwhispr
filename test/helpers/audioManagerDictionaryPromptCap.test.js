@@ -207,3 +207,40 @@ test("local whisper receives the dictionary whole, and echo checks see what it s
   // echo recovery classifying against a string the decoder never saw.
   assert.equal(seen[0], longPrompt, "local whisper must receive the dictionary uncut");
 });
+
+test("an echo of the trimmed prompt is caught against what was sent (#1636)", async (t) => {
+  const { setSettings, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-dictionary-prompt-cap-echo-test-",
+    settingsKey: "__dictionaryPromptCapEchoSettings",
+  });
+  setSettings({
+    useLocalWhisper: false,
+    allowLocalFallback: false,
+    cloudTranscriptionProvider: "openai",
+  });
+
+  const audioBlob = new Blob([new ArrayBuffer(8)], { type: "audio/webm" });
+  const longPrompt = buildLongDictionaryPrompt(300);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_endpoint, init) => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => "application/json" },
+    // The decoder recites exactly the prompt it was primed with.
+    text: async () => JSON.stringify({ text: init.body.get("prompt") }),
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const manager = createManager({
+    getTranscriptionEndpoint: () => "https://api.openai.com/v1/audio/transcriptions",
+    getCustomDictionaryPrompt: () => longPrompt,
+    getWhisperPrompt: () => longPrompt,
+  });
+  // Use the real echo check, not the harness stub.
+  delete manager.isDictionaryEcho;
+
+  await assert.rejects(manager.processWithOpenAIAPI(audioBlob, {}), {
+    code: "DICTIONARY_ECHO",
+  });
+});
