@@ -221,12 +221,12 @@ instead.
 Pilot a disabled/default profile with provisioned devices first. Before required
 activation, acknowledge that private endpoints cannot be reached by a hosted probe
 and that unprovisioned devices will block. A required-transcription hint saved by
-a build before 1.12 enforces both batch and realtime until the first successful
+a build before 1.11 enforces both batch and realtime until the first successful
 configuration load reports which operations are covered; this fails closed by
 design. Set the actual released minimum desktop
-version: this branch targets **1.12.0**; the package version alone does not prove a
-distributed build contains it. Don't raise **Minimum app version** to 1.12.0 until
-desktop 1.12 is released, or every member is blocked. Exercise all four
+version: this branch targets **1.11.0**; the package version alone does not prove a
+distributed build contains it. Don't raise **Minimum app version** to 1.11.0 until
+desktop 1.11 is released, or every member is blocked. Exercise all four
 meeting/upload feature-policy combinations and verify dictation remains independent. Do not equate a server
 Azure probe or one device's successful test with fleet readiness.
 
@@ -273,9 +273,9 @@ results.
 
 ### Release dependencies
 
-Release rule: no desktop release at or above 1.12.0 may ship without this
+Release rule: no desktop release at or above 1.11.0 may ship without this
 change's `enterprise-audio-v1` client. The API's activation floor checks only the
-version number, so a 1.12.0+ build without the client would be treated as able to
+version number, so a 1.11.0+ build without the client would be treated as able to
 enforce enterprise audio.
 
 Desktop: [desktop #2989](https://github.com/OpenWhispr/openwhispr/pull/2989), stacked
@@ -291,7 +291,7 @@ Deploy in this order:
 3. Deploy API #340 right after 097. Until it is live, the old API answers a second
    active audio provider with "Workspace policy must allow this managed provider".
    That fails closed, but keep the window short.
-4. Release desktop 1.12 (#2989, after #2988).
+4. Release desktop 1.11.0 with #2989 (after #2988).
 
 Existing work was incorporated from [API #267](https://github.com/OpenWhispr/openwhispr-api/pull/267)
 and [admin #26](https://github.com/OpenWhispr/openwhispr-admin/pull/26) for bounded,

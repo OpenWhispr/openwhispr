@@ -43,7 +43,7 @@ test("enterprise-only transcription policy resolves meeting mode and provider be
     usePolicyStore.setState({
       status: "managed",
       managed: true,
-      appVersion: "1.12.0",
+      appVersion: "1.11.0",
       policy: {
         ...managedPolicy,
         transcription: {
