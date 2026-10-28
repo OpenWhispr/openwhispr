@@ -10,7 +10,12 @@ import { classifyRemovalError, type RemovalError } from "../../lib/workspaceErro
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { removeMembers } from "../../services/workspaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import type { MemberRemovalResult, Workspace, WorkspaceMember } from "../../types/electron";
+import type {
+  MemberRemovalPreview,
+  MemberRemovalResult,
+  Workspace,
+  WorkspaceMember,
+} from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
 import { ChevronDown } from "../icons";
 import MemberAvatar from "../MemberAvatar";
@@ -61,8 +66,11 @@ export function RemoveMembersDialog({
     if (!checking) return;
     let cancelled = false;
     WorkspacesService.previewMemberRemoval(workspace.id, JSON.parse(subjectIds) as string[]).then(
-      (preview) => {
-        if (!cancelled) dispatch({ type: "previewed", owners: preview.members });
+      (preview: Partial<MemberRemovalPreview> | undefined) => {
+        if (cancelled) return;
+        // The reply reaches here unchecked; one without a member list reads as a failed preview.
+        const owners: unknown = preview?.members;
+        dispatch(Array.isArray(owners) ? { type: "previewed", owners } : { type: "previewFailed" });
       },
       () => {
         if (!cancelled) dispatch({ type: "previewFailed" });

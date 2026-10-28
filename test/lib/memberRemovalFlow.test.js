@@ -84,6 +84,18 @@ test("preview entries that name nobody are dropped", async () => {
   assert.deepEqual(state.owners, [owns("u-alex", 0, 2)]);
 });
 
+test("a preview whose owners aren't a list offers the plain removal", async () => {
+  const { memberRemovalReducer, needsTransfer } = await load();
+
+  for (const owners of [undefined, null, {}, "u-liam"]) {
+    const state = run(memberRemovalReducer, [open(), { type: "previewed", owners }]);
+
+    assert.equal(state.kind, "confirm", String(owners));
+    assert.deepEqual(state.owners, []);
+    assert.equal(needsTransfer(state), false);
+  }
+});
+
 test("a failed preview still offers removal", async () => {
   const { memberRemovalReducer, needsTransfer } = await load();
 

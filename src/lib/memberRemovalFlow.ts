@@ -20,7 +20,7 @@ export type MemberRemovalState =
 export type MemberRemovalEvent =
   | { type: "open"; subjects: WorkspaceMember[]; defaultOwnerId: string }
   // The preview's entries; only those that own something are kept.
-  | { type: "previewed"; owners: OwnedMemberContent[] }
+  | { type: "previewed"; owners: unknown }
   | { type: "previewFailed" }
   | { type: "pickOwner"; userId: string }
   | { type: "confirm" }
@@ -83,6 +83,8 @@ export function memberRemovalReducer(
       };
     case "previewed":
       if (state.kind !== "checking") return state;
+      // A list that can't be read says nothing about owners, as a failed preview doesn't.
+      if (!Array.isArray(event.owners)) return confirmWith(state, []);
       return confirmWith(state, event.owners.filter(isOwnerEntry).filter(ownsContent));
     case "previewFailed":
       // The removal itself tells the dialog when someone owns content (transfer_required).

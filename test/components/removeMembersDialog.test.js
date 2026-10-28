@@ -297,6 +297,22 @@ test("a failed preview offers the plain confirm", async (t) => {
   assert.match(view.text(), /workspaces\.removeMembers\.confirm\|\{"count":2\}/);
 });
 
+test("a malformed preview offers the plain confirm", async (t) => {
+  const { mount, opened } = await loadDialog(t);
+
+  for (const reply of [{}, { members: {} }, { members: "u-liam" }, undefined]) {
+    globalThis.__previewImpl = async () => reply;
+    const view = await mount(opened([LIAM, ALEX]));
+
+    assert.match(
+      view.text(),
+      /workspaces\.removeMembers\.confirm\|\{"count":2\}/,
+      JSON.stringify(reply)
+    );
+    assert.equal(view.events.at(-1).type, "previewFailed");
+  }
+});
+
 test("a transfer sends the new owner and toasts the transfer", async (t) => {
   const { mount, opened } = await loadDialog(t);
   globalThis.__previewImpl = async () => preview([owns("u-liam")]);
