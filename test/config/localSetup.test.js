@@ -76,10 +76,14 @@ test("classifies the §8 machine types", async () => {
   assert.equal(c(mac({ appleChip: { generation: 4, tier: "Pro" } })), "mac-m4-pro");
   assert.equal(c(mac({ appleChip: { generation: 2, tier: "" }, memoryGb: 64 })), "mac-m2");
   assert.equal(c(mac({ appleChip: { generation: 4, tier: "Max" } })), "mac-m4-max");
-  // tier not in the table
-  assert.equal(c(mac({ appleChip: { generation: 2, tier: "Ultra" } })), "mac-16-plus");
-  // chip not in the table yet
-  assert.equal(c(mac({ appleChip: { generation: 6, tier: "" } })), "mac-16-plus");
+  // an Ultra takes its generation's Max row
+  assert.equal(c(mac({ appleChip: { generation: 2, tier: "Ultra" } })), "mac-m2-max");
+  // a chip not in the table yet takes the newest listed one of its tier
+  assert.equal(c(mac({ appleChip: { generation: 6, tier: "" } })), "mac-m5");
+  assert.equal(c(mac({ appleChip: { generation: 7, tier: "Max" } })), "mac-m5-max");
+  assert.equal(c(mac({ appleChip: { generation: 6, tier: "Ultra" } })), "mac-m5-max");
+  // a tier the table doesn't know
+  assert.equal(c(mac({ appleChip: { generation: 4, tier: "Nano" } })), "mac-16-plus");
   assert.equal(c(mac({ appleChip: { generation: 1, tier: "" }, memoryGb: 8 })), "mac-under-16");
   // Intel Mac
   assert.equal(c(mac({ arch: "x64", appleChip: null, memoryGb: 16 })), "pc-16-plus");
@@ -106,7 +110,10 @@ test("language pick follows design §6.2 and call 4", async () => {
   assert.equal(m(["nb"]), "small"); // Norwegian: whisper yes, Orukeet no
   assert.equal(m([]), "parakeet-unified-en-0.6b");
   assert.equal(m(["auto"]), "parakeet-unified-en-0.6b");
-  assert.equal(m(["xx-unsupported"]), "parakeet-unified-en-0.6b");
+  // a language no local model knows goes to Whisper, never the English-only model
+  assert.equal(m(["xx-unsupported"]), "small");
+  assert.equal(m(["yue"]), "small");
+  assert.equal(m(["fil-PH"]), "small"); // Filipino is Whisper's Tagalog
   // macOS before 15.5
   assert.equal(m(["en-US"], mac({ parakeetSupported: false })), "small");
   assert.equal(pickDictationModel(["en-US"], mac({ parakeetSupported: false })).group, "olderMac");
@@ -574,7 +581,10 @@ test("switching an auto-off row back on overflows", async () => {
 test("items already on disk cost nothing and their rows are never trimmed", async () => {
   const { fitLocalSetupToSpace } = await load();
   const p = await plan(mac({}));
-  const has = (...ids) => (item) => ids.includes(item.id);
+  const has =
+    (...ids) =>
+    (item) =>
+      ids.includes(item.id);
   const dictationAndCleanup = has(row(p, "dictation").modelId, row(p, "cleanup").modelId);
 
   // Back after two downloads: the assistant alone now fits where all three would not.

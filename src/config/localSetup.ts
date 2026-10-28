@@ -17,9 +17,9 @@ export type MachineType =
   | "pc-16-plus"
   | "pc-nvidia"
   | "mac-under-16"
-  | "mac-16-plus" // the cautious row for unlisted or unread chips
+  | "mac-16-plus" // the cautious row for unread chips
   | `mac-m${number}` // base chip, e.g. "mac-m4"
-  | `mac-m${number}-${"pro" | "max"}`; // e.g. "mac-m4-pro"; Ultra and unlisted tiers → mac-16-plus
+  | `mac-m${number}-${"pro" | "max"}`; // e.g. "mac-m4-pro"; an Ultra takes its Max row
 export type LanguageGroup = "english" | "european" | "hindi" | "other";
 export interface LocalSetupDownload {
   kind: LocalSetupDownloadKind;
@@ -124,10 +124,21 @@ export function classifyMachine(profile: ComputerProfile): MachineType {
   if (isAppleChipMac(profile)) {
     if (!(profile.memoryGb >= memoryBandGb)) return "mac-under-16";
     const chip = profile.appleChip;
-    if (chip) {
-      const tier = chip.tier === "Pro" ? "-pro" : chip.tier === "Max" ? "-max" : "";
-      const key = `mac-m${chip.generation}${tier}`;
-      if ((chip.tier === "" || tier) && table.machines[key]) return key as MachineType;
+    // An Ultra is two Max chips, and a newer chip is never slower than the newest
+    // listed one of its tier: both take that row, a lower bound on their speed.
+    const tier =
+      chip?.tier === "Pro"
+        ? "-pro"
+        : chip?.tier === "Max" || chip?.tier === "Ultra"
+          ? "-max"
+          : chip?.tier === ""
+            ? ""
+            : null;
+    if (chip && tier !== null) {
+      for (let generation = chip.generation; generation >= 1; generation--) {
+        const key = `mac-m${generation}${tier}`;
+        if (table.machines[key]) return key as MachineType;
+      }
     }
     return "mac-16-plus";
   }
@@ -136,8 +147,9 @@ export function classifyMachine(profile: ComputerProfile): MachineType {
   return profile.memoryGb >= memoryBandGb ? "pc-16-plus" : "pc-under-16";
 }
 
-// macOS reports Norwegian Bokmål as "nb"; the language list (and Whisper) call it "no".
-const LANGUAGE_ALIASES: Record<string, string> = { nb: "no" };
+// macOS reports Norwegian Bokmål as "nb" and Filipino as "fil"; the language list
+// (and Whisper) call them "no" and "tl".
+const LANGUAGE_ALIASES: Record<string, string> = { nb: "no", fil: "tl" };
 
 function baseCode(code: string): string {
   const base = code.split("-")[0].toLowerCase();
@@ -165,6 +177,9 @@ function languageGroup(languages: string[]): LanguageGroup {
   const known = languages.filter(
     (code) => europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code)
   );
+  // No language at all reads as English; one no local model knows goes to Whisper,
+  // which detects the language rather than forcing English onto it.
+  if (languages.length > 0 && known.length === 0) return "other";
   if (known.every((code) => code === "en")) return "english";
   if (known.includes("hi") && known.every((code) => code === "hi" || code === "en")) {
     return "hindi";
