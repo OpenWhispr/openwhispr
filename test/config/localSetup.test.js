@@ -299,6 +299,17 @@ test("languages fall back to the system language", async () => {
   assert.equal(row(spoken, "dictation").modelId, "orukeet-v0.1.0");
 });
 
+test("the plan names Chinese by its script and every other language by its base", async () => {
+  const tags = async (spokenLanguages, systemLanguage = "en") =>
+    (await plan(mac({ systemLanguage }), { spokenLanguages })).languageTags;
+  assert.deepEqual(await tags(["zh-TW"]), ["zh-Hant"]);
+  assert.deepEqual(await tags(["zh-CN", "en-US", "en-GB"]), ["zh-Hans", "en"]);
+  assert.deepEqual(await tags(["nb", "auto"]), ["no"]);
+  assert.deepEqual(await tags([], "de"), ["de"]);
+  // The pick still works from base codes.
+  assert.deepEqual((await plan(mac({}), { spokenLanguages: ["zh-TW"] })).languages, ["zh"]);
+});
+
 test("policy hides rows", async () => {
   const noLocalLlm = await plan(mac({}), { policy: managed({ llmModes: ["openwhispr"] }) });
   assert.deepEqual(

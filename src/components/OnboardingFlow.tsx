@@ -1295,7 +1295,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                       : "onboarding.rehaul.localSetup.subtitle",
                     {
                       computer: localSetupComputerName(localSetupPlan.profile, t),
-                      language: localSetupLanguageLabel(localSetupPlan.languages, i18n.language),
+                      language: localSetupLanguageLabel(localSetupPlan.languageTags, i18n.language),
                     }
                   )
                 ) : (

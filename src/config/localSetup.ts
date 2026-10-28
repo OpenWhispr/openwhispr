@@ -58,6 +58,7 @@ export interface LocalSetupPlan {
   machineType: MachineType;
   profile: ComputerProfile;
   languages: string[]; // base codes the pick was made for
+  languageTags: string[]; // the same languages to name on screen; Chinese keeps its script
   rows: LocalSetupRow[]; // policy-hidden rows are absent; order dictation, cleanup, assistant
   graphicsPack: LocalSetupDownload | null;
   /** The organization keeps AI models off this device, so chat and notes run where it chose. */
@@ -162,6 +163,23 @@ const LANGUAGE_ALIASES: Record<string, string> = { nb: "no", fil: "tl" };
 function baseCode(code: string): string {
   const base = code.split("-")[0].toLowerCase();
   return LANGUAGE_ALIASES[base] ?? base;
+}
+
+// "zh-TW" and "zh-CN" share a base code but not a name: Traditional or Simplified.
+function languageTag(code: string): string {
+  const [base, region] = code.split("-");
+  if (baseCode(base) !== "zh" || !region) return baseCode(code);
+  return /^(tw|hk|mo|hant)$/i.test(region) ? "zh-Hant" : "zh-Hans";
+}
+
+function normalizeLanguageTags(codes: string[]): string[] {
+  const out: string[] = [];
+  for (const code of codes) {
+    if (typeof code !== "string" || !code || baseCode(code) === "auto") continue;
+    const tag = languageTag(code);
+    if (!out.includes(tag)) out.push(tag);
+  }
+  return out;
 }
 
 function normalizeLanguages(codes: string[]): string[] {
@@ -334,6 +352,9 @@ export function buildLocalSetupPlan(input: {
   const machine = table.machines[machineType];
   const spoken = normalizeLanguages(input.spokenLanguages ?? []);
   const languages = spoken.length ? spoken : normalizeLanguages([profile.systemLanguage]);
+  const languageTags = normalizeLanguageTags(
+    spoken.length ? input.spokenLanguages : [profile.systemLanguage]
+  );
 
   const rows: LocalSetupRow[] = [];
   if (isModeAllowedByPolicy(policy, "transcription", "local")) {
@@ -355,7 +376,15 @@ export function buildLocalSetupPlan(input: {
     !localTextAllowed &&
     TEXT_MODES_OFF_DEVICE.some((mode) => isModeAllowedByPolicy(policy, "llm", mode));
 
-  return { machineType, profile, languages, rows, graphicsPack, organizationRunsText };
+  return {
+    machineType,
+    profile,
+    languages,
+    languageTags,
+    rows,
+    graphicsPack,
+    organizationRunsText,
+  };
 }
 
 /**

@@ -22,14 +22,23 @@ export function localSetupComputerName(
     : t("onboarding.rehaul.localSetup.computer.linuxDesktop");
 }
 
-/** The plan's languages as one list ("English and German"), in the UI language. */
-export function localSetupLanguageLabel(languages: string[], i18nLanguage: string): string {
-  const labels = languages.map((code) => {
-    // The plan holds base codes; the list keys some languages by region ("en-US").
+/** The plan's languages as one list ("Englisch und Deutsch"), named in the UI language. */
+export function localSetupLanguageLabel(languageTags: string[], i18nLanguage: string): string {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([i18nLanguage], { type: "language", fallback: "none" });
+  } catch {
+    names = null;
+  }
+  const labels = languageTags.map((tag) => {
+    const named = names?.of(tag);
+    if (named) return named;
+    // A code the runtime can't name falls back to the language list's English name.
+    const base = tag.split("-")[0];
     const entry =
-      getOnboardingLanguageByCode(code) ??
-      languageRegistry.languages.find((language) => language.code.split("-")[0] === code);
-    return entry ? displayOnboardingLanguageLabel(entry) : code;
+      getOnboardingLanguageByCode(tag) ??
+      languageRegistry.languages.find((language) => language.code.split("-")[0] === base);
+    return entry ? displayOnboardingLanguageLabel(entry) : tag;
   });
   try {
     return new Intl.ListFormat(i18nLanguage, { type: "conjunction" }).format(labels);

@@ -126,7 +126,13 @@ function lineText(line: LocalSetupLine, onMac: boolean, t: Translate): string | 
   }
 }
 
-function ComputerCard({ profile, languages }: { profile: ComputerProfile; languages: string[] }) {
+function ComputerCard({
+  profile,
+  languageTags,
+}: {
+  profile: ComputerProfile;
+  languageTags: string[];
+}) {
   const { t, i18n } = useTranslation();
   const appleChip = isAppleChipMac(profile);
   const DeviceIcon = profile.formFactor === "laptop" ? Laptop : Monitor;
@@ -162,7 +168,7 @@ function ComputerCard({ profile, languages }: { profile: ComputerProfile; langua
         </span>
         <span className="flex h-7 min-w-0 max-w-[50%] shrink-0 items-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] px-2.5 text-sm text-[var(--onboarding-text-secondary)]">
           <Globe className="size-4 shrink-0" />
-          <span className="truncate">{localSetupLanguageLabel(languages, i18n.language)}</span>
+          <span className="truncate">{localSetupLanguageLabel(languageTags, i18n.language)}</span>
         </span>
       </div>
       <div className="mt-3 grid grid-cols-3 border-t border-[var(--onboarding-control-border)]">
@@ -492,7 +498,7 @@ export function LocalSetupStep({
 
   return (
     <section className={CARD_CLASS}>
-      <ComputerCard profile={plan.profile} languages={plan.languages} />
+      <ComputerCard profile={plan.profile} languageTags={plan.languageTags} />
 
       <div className={`mt-4 ${PANEL_CLASS}`}>
         {plan.rows.map((row) => {

@@ -863,6 +863,12 @@ test("header helpers name the computer and join the languages", async (t) => {
     step.localSetupLanguageLabel(["en", "de", "fr"], "en"),
     "English, German, and French"
   );
+  // Named in the UI language, the "and" included.
+  assert.equal(step.localSetupLanguageLabel(["de", "en"], "de"), "Deutsch und Englisch");
+  assert.equal(step.localSetupLanguageLabel(["ar"], "ar"), "العربية");
+  // Chinese keeps its script.
+  assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "en"), "Traditional Chinese");
+  assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "zh-TW"), "繁體中文");
   assert.equal(step.formatLocalSetupSeconds([1.6, 2.7]), "2–3");
   assert.equal(step.formatLocalSetupSeconds([4.8, 4.8]), "5");
   assert.equal(step.formatLocalSetupSeconds([2.4, 2.6]), "2–3");
