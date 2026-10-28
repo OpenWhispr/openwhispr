@@ -214,6 +214,7 @@
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
+    "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
     "resizePanel": "Resize panel"
   },
@@ -969,6 +970,9 @@
         "managedTranscriptionUnavailable": "Managed transcription is not available right now. Try again in a moment.",
         "managedRouteInvalid": "Managed transcription couldn't start due to a configuration mismatch. Try again or contact your administrator.",
         "managedAuthRejected": "Your organization's managed transcription credentials were rejected. Contact your administrator.",
+        "managedRequestRejected": "Your organization's transcription service refused this audio (HTTP {{status}}). Try again or contact your administrator.",
+        "managedResponseMalformed": "Your organization's transcription service sent a response OpenWhispr couldn't read. Try again or contact your administrator.",
+        "managedChunkTooLarge": "This audio couldn't be split small enough for your organization's transcription service. Contact your administrator.",
         "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
         "providerKeyMissing": "No API key is set for your transcription provider. Add it in Settings → Speech to Text.",
         "cleanupTruncated": "The AI model ran out of room before it finished cleaning up your dictation.",
@@ -3587,7 +3591,8 @@
       },
       "recordingDisabledByOrg": "Meeting recording is disabled by your organization.",
       "stoppedAccountChanged": "Recording stopped because you signed out or switched accounts.",
-      "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked."
+      "stoppedPolicyUnresolved": "Recording stopped because your organization's settings couldn't be checked.",
+      "stoppedWorkspaceChanged": "Recording stopped because you switched workspaces."
     },
     "meetingPill": {
       "returnToNote": "Return to recording",
@@ -5101,7 +5106,7 @@
       "testBatch": "Test file transcription",
       "testRealtime": "Test live meeting connection",
       "testPassed": "Connection test passed and reported to your administrator.",
-      "testFailed": "Connection test failed: {{code}}",
+      "testFailed": "Connection test failed.",
       "setupFailed": "Setup failed. Check your sign-in, workspace access and network settings.",
       "saved": "Credential saved on this device.",
       "operationUnavailable": "Your organization has not configured this audio operation.",
@@ -5109,7 +5114,29 @@
       "partialUpload": "{{count}} audio chunks failed; this transcript is incomplete.",
       "importBootstrap": "Import organization bootstrap",
       "importedBootstrap": "Bootstrap credentials imported.",
-      "bootstrapNotFound": "No bootstrap file was found."
+      "bootstrapNotFound": "No bootstrap file was found.",
+      "checks": {
+        "authRejected": "The audio provider rejected this device's credentials. Check the provisioned key or identity setup.",
+        "tlsFailed": "The secure connection couldn't be verified. Check your organization's certificates.",
+        "proxyFailed": "The connection through your organization's proxy failed. Check the proxy settings and credentials.",
+        "timeout": "The audio provider didn't respond in time. Check your network or VPN.",
+        "credentialMissing": "A credential this connection needs isn't provisioned on this device.",
+        "configChanged": "Your organization changed this audio configuration. Reopen setup and try again.",
+        "protocolFailed": "The audio provider answered in a format OpenWhispr doesn't support. Check the deployment and protocol.",
+        "networkFailed": "The audio provider couldn't be reached. Check your network, VPN and DNS.",
+        "secureStorageUnavailable": "This device has no secure credential storage. On Linux, install and unlock a keyring (such as GNOME Keyring or KWallet), then try again."
+      },
+      "errors": {
+        "ssoRequired": "Your organization requires company SSO. Sign in with SSO and try again.",
+        "enterpriseRequired": "Enterprise audio needs an active Enterprise plan for this workspace.",
+        "signInRequired": "Your session expired. Sign in again and retry.",
+        "accessDenied": "Your account can't set up audio for this workspace. Check that you're a member and signed in to the right workspace.",
+        "rateLimited": "Too many test requests. Wait a few minutes and try again."
+      },
+      "bootstrapNotProtected": "The bootstrap file must be owned by you and readable only by you. Ask IT to redeliver it.",
+      "bootstrapUnreadable": "OpenWhispr can't read the bootstrap file. Ask IT to make it readable by your account.",
+      "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
+      "testLinkOtherWorkspace": "This test link is for a workspace you're not signed into."
     }
   }
 }

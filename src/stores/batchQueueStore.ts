@@ -313,7 +313,10 @@ export function processBatchQueue(
     } catch (err) {
       failItem(
         item.id,
-        transcriptionErrorKey(err) || (err instanceof Error ? err.message : "batchUnknownError"),
+        transcriptionErrorKey(err) ||
+          (err instanceof Error
+            ? describeProviderError(err, i18n.t).description
+            : "batchUnknownError"),
         err
       );
     } finally {

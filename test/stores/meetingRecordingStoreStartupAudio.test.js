@@ -24,6 +24,7 @@ async function pendingStartup(t, { prewarm = false } = {}) {
   const requested = Promise.withResolvers();
   const captured = Promise.withResolvers();
   const sent = [];
+  const capturedAt = [];
   const worklets = [];
   let stoppedTracks = 0;
   let closedContexts = 0;
@@ -51,7 +52,10 @@ async function pendingStartup(t, { prewarm = false } = {}) {
       return { success: true };
     },
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
-    meetingTranscriptionSend: (buffer) => sent.push([...new Int16Array(buffer)]),
+    meetingTranscriptionSend: (buffer, _source, at) => {
+      sent.push([...new Int16Array(buffer)]);
+      capturedAt.push(at);
+    },
     onMeetingTranscriptionSegment: noop,
     onMeetingSpeakerIdentified: noop,
     onMeetingSpeakersMerged: noop,
@@ -99,6 +103,7 @@ async function pendingStartup(t, { prewarm = false } = {}) {
     store,
     api,
     sent,
+    capturedAt,
     starting,
     finish: async (result = CONNECTED) => {
       ready.resolve(result);
@@ -161,6 +166,34 @@ test("stopping during cloud startup discards captured speech and releases the mi
   await stopping;
   assert.deepEqual(session.sent, []);
   assert.equal(session.store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.deepEqual(session.resources(), {
+    stoppedTracks: 1,
+    closedContexts: 1,
+    mainStarts: 1,
+    mainStops: 1,
+  });
+});
+
+test("buffered startup speech tells main when it was captured; live speech does not", async (t) => {
+  const session = await pendingStartup(t);
+  const before = Date.now();
+  session.speak([1234, -4567]);
+  const after = Date.now();
+  await session.finish();
+  session.speak([333, 444]);
+  assert.equal(session.capturedAt.length, 2);
+  assert.ok(session.capturedAt[0] >= before && session.capturedAt[0] <= after);
+  assert.equal(session.capturedAt[1], undefined);
+  await session.store.stopRecording();
+});
+
+test("stopping during a slow connect releases the microphone before main settles", async (t) => {
+  const session = await pendingStartup(t);
+  const stopping = session.store.stopRecording();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(session.resources().stoppedTracks, 1, "the mic is off while main still connects");
+  await session.finish();
+  await stopping;
   assert.deepEqual(session.resources(), {
     stoppedTracks: 1,
     closedContexts: 1,

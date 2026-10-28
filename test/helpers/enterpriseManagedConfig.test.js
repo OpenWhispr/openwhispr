@@ -144,6 +144,7 @@ test("an ambiguous cached provider switch fails closed", () => {
   );
   assert.equal(result.kind, "error");
   assert.equal(result.code, "MANAGED_CONFIG_AMBIGUOUS");
+  assert.equal(result.messageKey, "common.managedConfigAmbiguous");
 });
 
 test("accepts Azure resource and Foundry endpoints, rejects sovereign and path-qualified ones", () => {
@@ -382,6 +383,32 @@ test("a required batch-only audio record leaves realtime on the user's route but
     assert.equal(
       resolveManagedEnterpriseScope(envelope([unusable]), "transcription", "auto", "realtime").code,
       "MANAGED_OPERATION_UNAVAILABLE"
+    );
+  }
+});
+
+test("a gateway batch upload limit outside the API's bounds rejects the envelope", () => {
+  const gateway = (maxUploadBytes) =>
+    provider({
+      provider: "openai-compatible",
+      config: {
+        batch: {
+          allowedDeployments: ["company-batch"],
+          defaultDeployment: "company-batch",
+          endpoint: "https://gateway.example.com/v1/audio/transcriptions",
+          authentication: { type: "bearer", credentialSlot: "http" },
+          ...(maxUploadBytes === undefined ? {} : { maxUploadBytes }),
+        },
+      },
+    });
+  for (const valid of [undefined, 1024 * 1024, 25 * 1024 * 1024, 100 * 1024 * 1024]) {
+    assert.ok(validateManagedEnterpriseEnvelope(envelope([gateway(valid)]), "workspace-a"), valid);
+  }
+  for (const invalid of [NaN, "26214400", 1024 * 1024 - 1, 100 * 1024 * 1024 + 1, 2.5e6 + 0.5]) {
+    assert.equal(
+      validateManagedEnterpriseEnvelope(envelope([gateway(invalid)]), "workspace-a"),
+      null,
+      String(invalid)
     );
   }
 });

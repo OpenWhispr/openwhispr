@@ -1,13 +1,23 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { useEnterpriseIdentityStore } from "../../stores/enterpriseIdentityStore";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Toggle } from "../ui/toggle";
 import type { EnterpriseAudioSetupContext } from "../../types/enterpriseAudio";
 
 export function EnterpriseAudioSettings() {
   const { t } = useTranslation();
-  const { config, accountId, workspaceId, authGeneration } = useEnterpriseIdentityStore();
+  const { config, accountId, workspaceId, authGeneration } = useEnterpriseIdentityStore(
+    useShallow(({ config, accountId, workspaceId, authGeneration }) => ({
+      config,
+      accountId,
+      workspaceId,
+      authGeneration,
+    }))
+  );
   const records =
     config?.providers.filter(
       (record) =>
@@ -139,7 +149,7 @@ export function EnterpriseAudioSettings() {
       setMessage(
         result?.success && result.passed
           ? t("enterprise.audio.testPassed")
-          : t("enterprise.audio.testFailed", { code: result?.code ?? "NETWORK_FAILED" })
+          : t(result?.messageKey ?? "enterprise.audio.testFailed")
       );
     } catch {
       if (isCurrent()) setMessage(t("enterprise.audio.setupFailed"));
@@ -152,19 +162,22 @@ export function EnterpriseAudioSettings() {
       <h3 className="text-sm font-medium">{t("enterprise.audio.title")}</h3>
       <p className="text-xs text-muted-foreground">{t("enterprise.audio.description")}</p>
       {records.length > 1 && (
-        <select
-          aria-label={t("enterprise.audio.provider")}
+        <Select
           disabled={busy}
           value={selected}
-          onChange={(event) => setProvider(event.target.value as typeof provider)}
-          className="w-full rounded-md border bg-background p-2 text-sm"
+          onValueChange={(value) => setProvider(value as typeof provider)}
         >
-          {records.map((record) => (
-            <option key={record.provider} value={record.provider}>
-              {record.provider === "azure" ? "Azure OpenAI" : t("enterprise.audio.gateway")}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger aria-label={t("enterprise.audio.provider")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {records.map((record) => (
+              <SelectItem key={record.provider} value={record.provider}>
+                {record.provider === "azure" ? "Azure OpenAI" : t("enterprise.audio.gateway")}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
       {slots.length > 0 && (
         <Button
@@ -254,14 +267,14 @@ export function EnterpriseAudioSettings() {
               {bundle.name} · SHA-256 {bundle.fingerprint}
             </p>
           ))}
-      <label className="flex items-start gap-2 text-xs">
-        <input
-          type="checkbox"
+      <div className="flex items-center justify-between gap-3 text-xs">
+        <span>{t("enterprise.audio.probeConsent")}</span>
+        <Toggle
           checked={consent}
-          onChange={(event) => setConsent(event.target.checked)}
+          onChange={setConsent}
+          ariaLabel={t("enterprise.audio.probeConsent")}
         />
-        {t("enterprise.audio.probeConsent")}
-      </label>
+      </div>
       <div className="flex flex-wrap gap-2">
         {operations.map((operation) => (
           <Button

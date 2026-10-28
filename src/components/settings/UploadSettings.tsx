@@ -111,8 +111,13 @@ export function UploadTranscriptionPanel() {
       requestSignIn();
       return;
     }
-    // Only the explicit enterprise controls change the setup mode dictation and meetings share.
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
+    // Only the explicit enterprise controls change the setup mode dictation and meetings
+    // share. Managed setup outranks the personal mode, which stays as the user left it
+    // so "Use personal setup" returns to it.
+    if (mode === "enterprise") {
+      setEnterpriseTranscriptionSetupMode("managed");
+      return;
+    }
     if (mode === effectiveTranscriptionMode) return;
     setUploadTranscriptionMode(mode);
     setUploadUseLocalWhisper(mode === "local");

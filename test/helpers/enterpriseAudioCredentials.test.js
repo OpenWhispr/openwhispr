@@ -10,7 +10,10 @@ const { createRequire } = require("node:module");
 const {
   createEnterpriseAudioCredentials,
 } = require("../../src/helpers/enterpriseAudioCredentials");
-const { importEnterpriseAudioBootstrap } = require("../../src/helpers/enterpriseAudioBootstrap");
+const {
+  importEnterpriseAudioBootstrap,
+  removeClaimedBootstraps,
+} = require("../../src/helpers/enterpriseAudioBootstrap");
 const { parseEnterpriseAudioDeepLink } = require("../../src/helpers/enterpriseAudioDeepLink");
 
 function encryption() {
@@ -88,6 +91,15 @@ test("the production vault rejects Linux basic_text before provisioning or impor
   try {
     await assert.rejects(fixture.vault.save("account-a", "workspace-a", "http", "device-key"), {
       message: "OS-protected enterprise credential storage is unavailable",
+      code: "SECURE_STORAGE_UNAVAILABLE",
+    });
+    // Reads and status say why, rather than reporting a missing credential.
+    await assert.rejects(fixture.vault.read("account-a", "workspace-a", "http"), {
+      code: "SECURE_STORAGE_UNAVAILABLE",
+      messageKey: "enterprise.audio.checks.secureStorageUnavailable",
+    });
+    await assert.rejects(fixture.vault.status("account-a", "workspace-a", "http"), {
+      code: "SECURE_STORAGE_UNAVAILABLE",
     });
     await fs.writeFile(
       source,
@@ -237,6 +249,113 @@ test("protected MDM imports bind the signed-in account and configured slots and 
       await fs.symlink(path.join(directory, "encrypted"), source);
       await assert.rejects(importEnterpriseAudioBootstrap(input));
     }
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("deleting an account removes every workspace vault it owns and no other account's", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-secrets-"));
+  let changed = 0;
+  const vault = createEnterpriseAudioCredentials({
+    directory,
+    crypto: encryption(),
+    onChanged: () => changed++,
+  });
+  try {
+    await vault.save("account-a", "workspace-a", "http", "a-1");
+    await vault.save("account-a", "workspace-b", "http", "a-2");
+    await vault.save("account-b", "workspace-a", "http", "b-1");
+    // A vault named before the account prefix can't be attributed; it never shipped.
+    const legacy = path.join(directory, `${"0".repeat(64)}.enc`);
+    await fs.writeFile(legacy, "legacy");
+    changed = 0;
+    await vault.removeAccount("account-a");
+    assert.equal((await vault.status("account-a", "workspace-a", "http")).present, false);
+    assert.equal((await vault.status("account-a", "workspace-b", "http")).present, false);
+    assert.equal(await vault.read("account-b", "workspace-a", "http"), "b-1");
+    await assert.rejects(fs.access(legacy));
+    assert.equal((await fs.readdir(directory)).length, 1);
+    assert.equal(changed, 1);
+    await createEnterpriseAudioCredentials({
+      directory: path.join(directory, "missing"),
+      crypto: encryption(),
+    }).removeAccount("account-a");
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test(
+  "an unreadable bootstrap is rejected with its own code before it is claimed",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+    const source = path.join(directory, "enterprise-audio-bootstrap.json");
+    try {
+      await fs.writeFile(source, "{}", { mode: 0o200 });
+      await assert.rejects(
+        importEnterpriseAudioBootstrap({
+          directory,
+          accountId: "account-a",
+          workspaceId: "workspace-a",
+          allowedSlots: [],
+          credentials: { saveMany: async () => assert.fail("must not import") },
+        }),
+        { code: "BOOTSTRAP_UNREADABLE", messageKey: "enterprise.audio.bootstrapUnreadable" }
+      );
+      assert.deepEqual(await fs.readdir(directory), ["enterprise-audio-bootstrap.json"]);
+      await fs.chmod(source, 0o640);
+      await assert.rejects(
+        importEnterpriseAudioBootstrap({
+          directory,
+          accountId: "account-a",
+          workspaceId: "workspace-a",
+          allowedSlots: [],
+          credentials: {},
+        }),
+        { code: "BOOTSTRAP_NOT_PROTECTED", messageKey: "enterprise.audio.bootstrapNotProtected" }
+      );
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }
+);
+
+test("a failed import that can't be restored deletes its claimed plaintext", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+  const source = path.join(directory, "enterprise-audio-bootstrap.json");
+  const data = {
+    version: 1,
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    credentials: { http: "http-test" },
+  };
+  try {
+    await fs.writeFile(source, JSON.stringify(data), { mode: 0o600 });
+    await assert.rejects(
+      importEnterpriseAudioBootstrap({
+        directory,
+        accountId: "account-a",
+        workspaceId: "workspace-a",
+        allowedSlots: ["http"],
+        credentials: {
+          // A newer MDM delivery lands mid-import, so the claim can't be restored.
+          saveMany: async () => {
+            await fs.writeFile(source, "newer", { mode: 0o600 });
+            throw new Error("vault write failed");
+          },
+        },
+      }),
+      { message: "vault write failed" }
+    );
+    assert.deepEqual(await fs.readdir(directory), ["enterprise-audio-bootstrap.json"]);
+    assert.equal(await fs.readFile(source, "utf8"), "newer");
+
+    const stranded = `${source}.11111111-1111-4111-8111-111111111111.importing`;
+    await fs.writeFile(stranded, "plaintext");
+    await removeClaimedBootstraps(directory);
+    assert.deepEqual(await fs.readdir(directory), ["enterprise-audio-bootstrap.json"]);
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }

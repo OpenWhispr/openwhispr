@@ -113,7 +113,6 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
-  "src/components/settings/EnterpriseAudioSettings.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],

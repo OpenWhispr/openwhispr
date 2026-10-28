@@ -93,18 +93,28 @@ function createManagedTranscriptionExecutor({
         err.messageKey = "hooks.audioRecording.errorDescriptions.managedAuthRejected";
       } else if (response.status >= 500) {
         err.code = "SERVER_ERROR";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.managedTranscriptionUnavailable";
+      } else {
+        err.code = "MANAGED_REQUEST_REJECTED";
+        err.messageKey = "hooks.audioRecording.errorDescriptions.managedRequestRejected";
+        err.messageParams = { status: response.status };
       }
       throw err;
     }
+    const malformed = () =>
+      Object.assign(new Error("Managed transcription response was malformed"), {
+        code: "MANAGED_RESPONSE_MALFORMED",
+        messageKey: "hooks.audioRecording.errorDescriptions.managedResponseMalformed",
+      });
     let result;
     try {
       result = await response.json();
     } catch {
       request.signal?.throwIfAborted();
-      throw new Error("Managed transcription response was malformed");
+      throw malformed();
     }
     if (typeof result?.text !== "string") {
-      throw new Error("Managed transcription response was malformed");
+      throw malformed();
     }
     if (!result.text.trim()) {
       throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });

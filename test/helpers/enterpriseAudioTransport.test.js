@@ -10,6 +10,7 @@ const { execFileSync, spawnSync } = require("node:child_process");
 const { once } = require("node:events");
 const { WebSocketServer } = require("ws");
 const {
+  bypassesProxy,
   createEnterpriseAudioTransport,
   proxyCandidates,
 } = require("../../src/helpers/enterpriseAudioTransport");
@@ -192,7 +193,7 @@ test("malformed proxy credentials fail with a fixed code and never echo the secr
   ]) {
     await assert.rejects(
       transport(undefined, async () => secret).request("https://127.0.0.1:1/audio", {
-        network: { proxy: { mode: "direct", credentialSlot: "proxy" } },
+        network: { proxy: { mode: "fixed", url: "http://127.0.0.1:1", credentialSlot: "proxy" } },
       }),
       (error) => {
         assert.equal(error.code, "PROXY_CREDENTIAL_INVALID");
@@ -202,6 +203,40 @@ test("malformed proxy credentials fail with a fixed code and never echo the secr
       }
     );
   }
+});
+
+test("a route that never dials the proxy never reads its credential", async () => {
+  let reads = 0;
+  const missing = async () => {
+    reads++;
+    throw Object.assign(new Error("missing"), { code: "CREDENTIAL_MISSING" });
+  };
+  for (const [proxy, resolveProxy] of [
+    [{ mode: "direct", credentialSlot: "proxy" }, undefined],
+    [{ mode: "fixed", url: "http://proxy.test:8080", bypass: ["127.*"], credentialSlot: "proxy" }],
+    [{ mode: "system", credentialSlot: "proxy" }, async () => "DIRECT"],
+  ]) {
+    await assert.rejects(
+      transport(resolveProxy, missing).request("https://127.0.0.1:1/audio", {
+        network: { proxy },
+      }),
+      (error) => error.code !== "CREDENTIAL_MISSING"
+    );
+  }
+  assert.equal(reads, 0);
+});
+
+test("proxy bypass rules are whole-host globs, not regular expressions", () => {
+  const bypass = (host, rules) => bypassesProxy(new URL(`https://${host}`), rules);
+  assert.equal(bypass("api.corp.example", ["*.corp.example"]), true);
+  assert.equal(bypass("API.Corp.Example:8443", ["*.corp.example:8443"]), true);
+  assert.equal(bypass("corp.example.evil.test", ["*.corp.example"]), false);
+  assert.equal(bypass("corpXexample", ["corp.example"]), false);
+  assert.equal(bypass("a.b.c", ["a*c"]), true);
+  assert.equal(bypass("intranet", ["<local>"]), true);
+  // A regex-hostile pattern stays linear and literal.
+  assert.equal(bypass(`${"a".repeat(60)}.test`, [`${"*a".repeat(30)}b`]), false);
+  assert.equal(bypass("x.test", ["(x|y).test"]), false);
 });
 
 // Proxy is named "localhost" so a check against the proxy host would match the DNS-only leaf.

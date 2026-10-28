@@ -5,7 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
-import type { EnterpriseAudioSetupContext } from "./enterpriseAudio";
+import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
@@ -80,6 +80,8 @@ export interface PolicyFailureMetadata {
   status?: number;
   minAppVersion?: string;
   details?: unknown;
+  messageKey?: string;
+  messageParams?: Record<string, unknown>;
 }
 
 export interface NoteRecordingProviderModel {
@@ -2543,10 +2545,14 @@ declare global {
           enforcedAudioOperations?: string[];
         }) => void
       ) => () => void;
-      clearManagedEnterpriseIdentity?: () => Promise<void>;
+      clearManagedEnterpriseIdentity?: (options?: {
+        reresolving?: boolean;
+        reason?: "accountChanged" | "workspaceChanged";
+      }) => Promise<void>;
       getPendingEnterpriseAudioTest?: (
         consume?: boolean
-      ) => Promise<{ workspaceId: string; provider: "azure" | "openai-compatible" } | null>;
+      ) => Promise<EnterpriseAudioTestLink | null>;
+      claimEnterpriseAudioTest?: () => Promise<EnterpriseAudioTestLink | null>;
       onEnterpriseAudioTestRequested?: (callback: () => void) => () => void;
       enterpriseAudioImportBootstrap?: (data: {
         provider: "azure" | "openai-compatible";
@@ -2585,7 +2591,13 @@ declare global {
           provider: "azure" | "openai-compatible";
           context: ManagedEnterpriseRequestContext;
         };
-      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
+      }) => Promise<{
+        text?: string;
+        warning?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -3358,7 +3370,11 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
-      meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
+      meetingTranscriptionSend?: (
+        buffer: ArrayBuffer,
+        source: "mic" | "system",
+        capturedAt?: number
+      ) => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean

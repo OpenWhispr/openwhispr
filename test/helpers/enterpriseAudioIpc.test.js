@@ -206,7 +206,7 @@ test("token exchanges read proxy credentials for the requesting identity, not th
     identityOptions.enterpriseFetch(
       "https://login.microsoftonline.com/tenant/oauth2/v2.0/token",
       { method: "POST" },
-      { proxy: { mode: "direct", credentialSlot: "proxy" } },
+      { proxy: { mode: "fixed", url: "http://proxy.test:8080", credentialSlot: "proxy" } },
       [],
       { accountId: "account-b", workspaceId: "workspace-b" }
     ),

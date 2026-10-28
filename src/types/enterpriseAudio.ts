@@ -7,6 +7,11 @@ export interface EnterpriseAudioSetupContext {
   configFingerprint?: string;
 }
 
+export interface EnterpriseAudioTestLink {
+  workspaceId: string;
+  provider: "azure" | "openai-compatible";
+}
+
 export interface EnterpriseAudioAuthentication {
   type: "bearer" | "api-key";
   credentialSlot: string;

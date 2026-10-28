@@ -1,5 +1,6 @@
-const { createHash } = require("node:crypto");
-const os = require("node:os");
+const { createHash, randomBytes } = require("node:crypto");
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const { createEnterpriseAudioRuntime } = require("./enterpriseAudioRuntime");
 const { parseProxyCredential, requiresEnterpriseTransport } = require("./enterpriseAudioTransport");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
@@ -10,7 +11,8 @@ function configFingerprint(provider, config) {
       ? `[${value.map(stable).join(",")}]`
       : value && typeof value === "object"
         ? `{${Object.entries(value)
-            .sort(([a], [b]) => a.localeCompare(b))
+            // Code-unit order, as the API sorts: localeCompare varies by locale (cs, sk).
+            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
             .map(([key, child]) => `${JSON.stringify(key)}:${stable(child)}`)
             .join(",")}}`
         : JSON.stringify(value);
@@ -23,9 +25,59 @@ function configFingerprint(provider, config) {
     .digest("hex");
 }
 
+// Probe failures, each a device-check code the API accepts or a local code
+// that REPORTED_AS folds into one.
+const CHECK_MESSAGE_KEYS = {
+  AUTH_REJECTED: "enterprise.audio.checks.authRejected",
+  TLS_FAILED: "enterprise.audio.checks.tlsFailed",
+  PROXY_FAILED: "enterprise.audio.checks.proxyFailed",
+  TIMEOUT: "enterprise.audio.checks.timeout",
+  CREDENTIAL_MISSING: "enterprise.audio.checks.credentialMissing",
+  CONFIG_CHANGED: "enterprise.audio.checks.configChanged",
+  PROTOCOL_FAILED: "enterprise.audio.checks.protocolFailed",
+  NETWORK_FAILED: "enterprise.audio.checks.networkFailed",
+  SECURE_STORAGE_UNAVAILABLE: "enterprise.audio.checks.secureStorageUnavailable",
+  CA_UNAVAILABLE: "enterprise.audio.certificateUnavailable",
+};
+const REPORTED_AS = {
+  SECURE_STORAGE_UNAVAILABLE: "CREDENTIAL_MISSING",
+  CA_UNAVAILABLE: "TLS_FAILED",
+};
+// Failures outside a probe: the OpenWhispr API's own refusals, which say
+// nothing about this device and are never reported as a device check.
+const SETUP_MESSAGE_KEYS = {
+  CONFIG_CHANGED: "enterprise.audio.checks.configChanged",
+  SSO_REQUIRED: "enterprise.audio.errors.ssoRequired",
+  ENTERPRISE_REQUIRED: "enterprise.audio.errors.enterpriseRequired",
+  SIGN_IN_REQUIRED: "enterprise.audio.errors.signInRequired",
+  ACCESS_DENIED: "enterprise.audio.errors.accessDenied",
+  RATE_LIMITED: "enterprise.audio.errors.rateLimited",
+};
+const LOCAL_CODES = new Set([
+  "SECURE_STORAGE_UNAVAILABLE",
+  "BOOTSTRAP_NOT_PROTECTED",
+  "BOOTSTRAP_UNREADABLE",
+  "BOOTSTRAP_MISMATCH",
+]);
+
+// OpenWhispr API errors carry their HTTP status; provider and network errors never do.
+function apiRefusalCode(error) {
+  if (!Number.isInteger(error?.status)) return null;
+  if (["SSO_REQUIRED", "ENTERPRISE_REQUIRED"].includes(error.code)) return error.code;
+  if (error.status === 409 || error.code === "MANAGED_CONFIG_CHANGED") return "CONFIG_CHANGED";
+  if (error.status === 429) return "RATE_LIMITED";
+  if (error.status === 401) return "SIGN_IN_REQUIRED";
+  if (error.status === 403 || error.status === 404) return "ACCESS_DENIED";
+  return "API_UNAVAILABLE";
+}
+
 function safeCheckCode(error) {
+  const refusal = apiRefusalCode(error);
+  if (refusal) return refusal;
+  if (LOCAL_CODES.has(error?.code)) return error.code;
   if (error?.code === "PROTOCOL_FAILED") return "PROTOCOL_FAILED";
   if (error?.code === "CREDENTIAL_MISSING") return "CREDENTIAL_MISSING";
+  if (error?.code === "MANAGED_CA_UNAVAILABLE") return "CA_UNAVAILABLE";
   if (["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED"].includes(error?.code))
     return "CONFIG_CHANGED";
   if (/CERT|TLS|SSL|SELF_SIGNED/.test(error?.code ?? "")) return "TLS_FAILED";
@@ -35,9 +87,34 @@ function safeCheckCode(error) {
     ["TimeoutError", "AbortError"].includes(error?.name)
   )
     return "TIMEOUT";
-  if (error?.code === "MANAGED_AUTH_REJECTED" || /401|403/.test(error?.message ?? ""))
+  // IDENTITY_EXCHANGE_FAILED without a status is Microsoft Entra refusing the token.
+  if (
+    ["MANAGED_AUTH_REJECTED", "IDENTITY_EXCHANGE_FAILED"].includes(error?.code) ||
+    /401|403/.test(error?.message ?? "")
+  )
     return "AUTH_REJECTED";
   return "NETWORK_FAILED";
+}
+
+function setupFailure(error) {
+  const code = safeCheckCode(error);
+  return {
+    success: false,
+    code,
+    messageKey: error?.messageKey ?? SETUP_MESSAGE_KEYS[code] ?? "enterprise.audio.setupFailed",
+  };
+}
+
+const ENTERPRISE_AUDIO_DEVICE_ID_FILE = "enterprise-audio-device-id";
+
+// A random per-install id, so device checks never carry anything derived from the machine.
+async function installDeviceId(file) {
+  const stored = await fs.readFile(file, "utf8").catch(() => "");
+  if (/^[a-f0-9]{32}$/.test(stored)) return stored;
+  const id = randomBytes(16).toString("hex");
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, id, { mode: 0o600 });
+  return id;
 }
 
 function silenceWav() {
@@ -120,11 +197,7 @@ function registerEnterpriseAudioSetup({
       try {
         return { success: true, ...(await fn(event, input)) };
       } catch (error) {
-        return {
-          success: false,
-          code: safeCheckCode(error),
-          messageKey: "enterprise.audio.setupFailed",
-        };
+        return setupFailure(error);
       }
     });
   handle("enterprise-audio-status", async (event, { provider, context: expected }) => {
@@ -192,6 +265,7 @@ function registerEnterpriseAudioSetup({
       const { request, record, prefix } = context;
       let profile;
       let code = "OK";
+      let failure;
       try {
         if (record.mode !== "disabled") profile = await runtime.resolve(request, operation);
         else {
@@ -309,6 +383,8 @@ function registerEnterpriseAudioSetup({
           }
         }
       } catch (error) {
+        if (apiRefusalCode(error)) throw error;
+        failure = error;
         code = safeCheckCode(error);
       }
       await stored(event, provider, expected);
@@ -317,16 +393,34 @@ function registerEnterpriseAudioSetup({
         body: {
           configFingerprint: context.configFingerprint,
           operation,
-          deviceId: createHash("sha256").update(os.hostname()).digest("hex").slice(0, 32),
+          deviceId: await installDeviceId(
+            path.join(bootstrapDirectory, ENTERPRISE_AUDIO_DEVICE_ID_FILE)
+          ),
           appVersion: getVersion(),
           os: process.platform,
           status: code === "OK" ? "passed" : "failed",
-          code,
+          code: REPORTED_AS[code] ?? code,
         },
       });
-      return { passed: code === "OK", code, operation };
+      return {
+        passed: code === "OK",
+        code,
+        operation,
+        messageKey:
+          code === "OK"
+            ? "enterprise.audio.testPassed"
+            : code === "NETWORK_FAILED"
+              ? (failure.messageKey ?? CHECK_MESSAGE_KEYS.NETWORK_FAILED)
+              : CHECK_MESSAGE_KEYS[code],
+      };
     }
   );
 }
 
-module.exports = { registerEnterpriseAudioSetup, configFingerprint, safeCheckCode, silenceWav };
+module.exports = {
+  ENTERPRISE_AUDIO_DEVICE_ID_FILE,
+  registerEnterpriseAudioSetup,
+  configFingerprint,
+  safeCheckCode,
+  silenceWav,
+};

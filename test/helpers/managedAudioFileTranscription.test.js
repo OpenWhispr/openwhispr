@@ -203,6 +203,9 @@ const networkFailures = () => [
   Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }),
   Object.assign(new Error("connection refused"), { code: "ECONNREFUSED" }),
   Object.assign(new Error("Enterprise proxy connection failed"), { code: "PROXY_FAILED" }),
+  // Electron's net.fetch (legacy Azure) carries no code, only the Chromium error.
+  new Error("net::ERR_NETWORK_CHANGED"),
+  new Error("net::ERR_INTERNET_DISCONNECTED"),
 ];
 const deadlineFailures = () => [
   Object.assign(new Error("connect timed out"), { code: "ETIMEDOUT" }),
@@ -214,6 +217,7 @@ const deadlineFailures = () => [
     code: "ABORT_ERR",
     cause: Object.assign(new Error("Enterprise connection timed out"), { code: "TIMEOUT" }),
   }),
+  new Error("net::ERR_TIMED_OUT"),
 ];
 
 test("a transient network failure on a late chunk is retried instead of discarding the job", async () => {
@@ -265,8 +269,8 @@ test("a chunk that keeps failing on the network keeps the completed chunks", asy
   assert.doesNotMatch(result.text, /part-1/);
 });
 
-test("configuration and identity changes still abort the whole chunked job", async () => {
-  for (const code of ["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED"]) {
+test("configuration, identity and credential refusals still abort the whole chunked job", async () => {
+  for (const code of ["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED", "MANAGED_AUTH_REJECTED"]) {
     const before = temporaryFiles();
     let calls = 0;
     await assert.rejects(
@@ -308,4 +312,65 @@ test("a chunk that hits its request deadline is counted as failed without a retr
     assert.equal(result.failedChunks, 1);
     assert.match(result.text, /part-0 part-2/);
   }
+});
+
+test("a chunk the provider refuses or answers badly is skipped and the others are kept", async () => {
+  const failures = [
+    ...[400, 404, 413, 415, 422].map((status) =>
+      Object.assign(new Error(`Enterprise transcription error: ${status}`), {
+        status,
+        code: "MANAGED_REQUEST_REJECTED",
+      })
+    ),
+    Object.assign(new Error("Managed transcription response was malformed"), {
+      code: "MANAGED_RESPONSE_MALFORMED",
+    }),
+  ];
+  for (const failure of failures) {
+    let index = 0;
+    let attempts = 0;
+    const result = await transcribeManagedAudioFile({
+      audioBuffer: audio(),
+      fileName: "upload.wav",
+      maxUploadBytes: 20000,
+      onProgress: (progress) => {
+        index = progress.chunksCompleted;
+      },
+      transcribe: async () => {
+        if (index !== 1) return `part-${index}`;
+        attempts++;
+        throw failure;
+      },
+    });
+    assert.equal(attempts, 1, failure.message);
+    assert.equal(result.failedChunks, 1);
+    assert.match(result.text, /part-0 part-2/);
+  }
+});
+
+test("losing more than the cloud path's share of chunks fails the job instead of a fragment", async () => {
+  const before = temporaryFiles();
+  let index = 0;
+  await assert.rejects(
+    transcribeManagedAudioFile({
+      audioBuffer: audio(),
+      fileName: "upload.wav",
+      maxUploadBytes: 20000,
+      onProgress: (progress) => {
+        index = progress.chunksCompleted;
+      },
+      transcribe: async () => {
+        if (index === 0) return "part-0";
+        throw Object.assign(new Error("Enterprise transcription error: 422"), {
+          status: 422,
+          code: "MANAGED_REQUEST_REJECTED",
+        });
+      },
+    }),
+    {
+      code: "CHUNK_LOSS_EXCEEDED",
+      messageKey: "hooks.audioRecording.errorDescriptions.chunkLoss",
+    }
+  );
+  assert.deepEqual(temporaryFiles(), before);
 });

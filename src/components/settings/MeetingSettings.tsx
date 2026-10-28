@@ -150,9 +150,13 @@ export function MeetingTranscriptionPanel() {
       requestSignIn();
       return;
     }
-    // Only the explicit enterprise controls change the setup mode dictation and uploads share.
-    if (mode === "enterprise")
+    // Only the explicit enterprise controls change the setup mode dictation and uploads
+    // share. Managed setup outranks the personal mode, which stays as the user left it
+    // so "Use personal setup" returns to it.
+    if (mode === "enterprise") {
       useSettingsStore.getState().setEnterpriseTranscriptionSetupMode("managed");
+      return;
+    }
     if (mode === effectiveTranscriptionMode) return;
     setMeetingTranscriptionMode(mode);
     setMeetingUseLocalWhisper(mode === "local");

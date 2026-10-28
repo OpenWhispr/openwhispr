@@ -1,29 +1,68 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
-const { execFileSync } = require("node:child_process");
+const { promisify } = require("node:util");
+const execFileAsync = promisify(require("node:child_process").execFile);
+
+const BOOTSTRAP_NAME = "enterprise-audio-bootstrap.json";
+
+const bootstrapError = (code, messageKey, message) =>
+  Object.assign(new Error(message), { code, messageKey });
+const notProtected = (message) =>
+  bootstrapError("BOOTSTRAP_NOT_PROTECTED", "enterprise.audio.bootstrapNotProtected", message);
+
+// The owner must be the current user, and no Allow ACE may grant ReadData to
+// anyone but that user, SYSTEM or Administrators. The path travels in the
+// environment, so no quoting of it reaches the script.
+const WINDOWS_ACL_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$acl = Get-Acl -LiteralPath $env:OW_BOOTSTRAP_PATH
+$sid = [System.Security.Principal.SecurityIdentifier]
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+if ($acl.GetOwner($sid).Value -ne $me) { exit 1 }
+$allowed = @($me, 'S-1-5-18', 'S-1-5-32-544')
+$read = [System.Security.AccessControl.FileSystemRights]::ReadData
+foreach ($rule in $acl.GetAccessRules($true, $true, $sid)) {
+  if ($rule.AccessControlType -eq 'Allow' -and ($rule.FileSystemRights -band $read) -and $rule.IdentityReference.Value -notin $allowed) { exit 1 }
+}
+exit 0`;
 
 async function assertProtectedBootstrap(file) {
   const stat = await fs.lstat(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 512 * 1024)
-    throw new Error("Enterprise bootstrap must be a regular file under 512 KiB");
+    throw notProtected("Enterprise bootstrap must be a regular file under 512 KiB");
   if (process.platform !== "win32") {
-    if ((stat.mode & 0o077) !== 0 || (stat.uid !== process.getuid() && stat.uid !== 0))
-      throw new Error(
-        "Enterprise bootstrap must be owned by the current user or root and readable only by its owner"
+    // The app runs as the signed-in user, so a root-owned 0600 file could never be read.
+    if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid())
+      throw notProtected(
+        "Enterprise bootstrap must be owned by the signed-in user and readable only by that user"
       );
   } else {
-    const literal = file.replace(/'/g, "''");
-    const script = `$bad = @('S-1-1-0','S-1-5-11','S-1-5-32-545'); $broad = (Get-Acl -LiteralPath '${literal}').Access | Where-Object { $_.AccessControlType -eq 'Allow' -and $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -in $bad -and ($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::ReadData) }; if ($broad) { exit 1 }`;
-    execFileSync(
-      "powershell.exe",
-      [
-        "-NoProfile",
-        "-NonInteractive",
-        "-EncodedCommand",
-        Buffer.from(script, "utf16le").toString("base64"),
-      ],
-      { windowsHide: true, stdio: "ignore" }
+    try {
+      await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-EncodedCommand",
+          Buffer.from(WINDOWS_ACL_SCRIPT, "utf16le").toString("base64"),
+        ],
+        { windowsHide: true, env: { ...process.env, OW_BOOTSTRAP_PATH: file } }
+      );
+    } catch {
+      throw notProtected(
+        "Enterprise bootstrap must be owned by the signed-in user and readable only by that user"
+      );
+    }
+  }
+  // Checked before the claim, so an unreadable delivery is never renamed away.
+  try {
+    await fs.access(file, fs.constants.R_OK);
+  } catch {
+    throw bootstrapError(
+      "BOOTSTRAP_UNREADABLE",
+      "enterprise.audio.bootstrapUnreadable",
+      "Enterprise bootstrap is not readable by the signed-in user"
     );
   }
 }
@@ -35,7 +74,7 @@ async function importEnterpriseAudioBootstrap({
   allowedSlots,
   credentials,
 }) {
-  const source = path.join(directory, "enterprise-audio-bootstrap.json");
+  const source = path.join(directory, BOOTSTRAP_NAME);
   try {
     await assertProtectedBootstrap(source);
   } catch (error) {
@@ -58,20 +97,35 @@ async function importEnterpriseAudioBootstrap({
       Array.isArray(data.credentials) ||
       Object.keys(data.credentials).some((slot) => !allowedSlots.includes(slot))
     )
-      throw new Error(
+      throw bootstrapError(
+        "BOOTSTRAP_MISMATCH",
+        "enterprise.audio.bootstrapMismatch",
         "Enterprise bootstrap does not match the signed-in account, workspace or configured slots"
       );
     await credentials.saveMany(accountId, workspaceId, data.credentials);
     await fs.rm(claimed);
     return { imported: true };
   } catch (error) {
-    // Restore without overwriting a newer MDM delivery. No plaintext reaches logs.
-    try {
-      await fs.link(claimed, source);
-      await fs.rm(claimed);
-    } catch {}
+    // Restore without overwriting a newer MDM delivery; a claim that can't be
+    // restored is deleted, never kept as plaintext. No plaintext reaches logs.
+    await fs.link(claimed, source).catch(() => {});
+    await fs.rm(claimed, { force: true }).catch(() => {});
     throw error;
   }
 }
 
-module.exports = { assertProtectedBootstrap, importEnterpriseAudioBootstrap };
+// Claims an interrupted import left behind; Reset app data removes them.
+async function removeClaimedBootstraps(directory) {
+  const names = await fs.readdir(directory).catch(() => []);
+  await Promise.all(
+    names
+      .filter((name) => name.startsWith(`${BOOTSTRAP_NAME}.`) && name.endsWith(".importing"))
+      .map((name) => fs.rm(path.join(directory, name), { force: true }))
+  );
+}
+
+module.exports = {
+  assertProtectedBootstrap,
+  importEnterpriseAudioBootstrap,
+  removeClaimedBootstraps,
+};

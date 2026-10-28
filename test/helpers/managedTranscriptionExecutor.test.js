@@ -112,7 +112,7 @@ test("managed HTTP failures expose status and codes without reading provider dia
   const marker = "provider-private-diagnostic-marker";
   for (const provider of ["azure", "openai-compatible"]) {
     for (const [status, code] of [
-      [400, undefined],
+      [400, "MANAGED_REQUEST_REJECTED"],
       [401, "MANAGED_AUTH_REJECTED"],
       [403, "MANAGED_AUTH_REJECTED"],
       [429, "PROVIDER_RATE_LIMITED"],
@@ -149,11 +149,14 @@ test("managed HTTP failures expose status and codes without reading provider dia
         assert.equal(error.status, status);
         assert.equal(error.message, `Enterprise transcription error: ${status}`);
         assert.equal(JSON.stringify(ipcErrorFields(error)).includes(marker), false);
+        // Every status reaches the user as a translated sentence, never the raw message.
+        assert.match(error.messageKey, /^hooks\.audioRecording\.errorDescriptions\./);
         if ([401, 403].includes(status))
           assert.equal(
             error.messageKey,
             "hooks.audioRecording.errorDescriptions.managedAuthRejected"
           );
+        if (status === 400) assert.deepEqual(error.messageParams, { status: 400 });
         return true;
       });
       assert.equal(bodyRead, false);
@@ -167,6 +170,11 @@ test("malformed successful responses do not expose the provider body in parse er
   const run = executor({ fetch: async () => new Response(marker) });
   await assert.rejects(run({}, route, input), (error) => {
     assert.equal(error.message, "Managed transcription response was malformed");
+    assert.equal(error.code, "MANAGED_RESPONSE_MALFORMED");
+    assert.equal(
+      error.messageKey,
+      "hooks.audioRecording.errorDescriptions.managedResponseMalformed"
+    );
     assert.equal(JSON.stringify(ipcErrorFields(error)).includes(marker), false);
     return true;
   });

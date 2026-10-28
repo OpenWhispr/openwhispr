@@ -598,13 +598,19 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
-    // Only the explicit enterprise controls change the shared setup mode.
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
-    if (mode === effectiveTranscriptionMode) return;
-    setTranscriptionMode(mode);
-    setUseLocalWhisper(mode === "local");
-    updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
-    setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    // Only the explicit enterprise controls change the shared setup mode. Managed setup
+    // outranks the personal mode, which stays as the user left it so "Use personal
+    // setup" returns to it.
+    if (mode === "enterprise") {
+      if (enterpriseTranscriptionSetupMode === "managed") return;
+      setEnterpriseTranscriptionSetupMode("managed");
+    } else {
+      if (mode === effectiveTranscriptionMode) return;
+      setTranscriptionMode(mode);
+      setUseLocalWhisper(mode === "local");
+      updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
+      setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    }
 
     const toastKey = {
       openwhispr: "switchedCloud",

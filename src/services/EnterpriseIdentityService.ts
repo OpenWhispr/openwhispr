@@ -39,6 +39,11 @@ export async function getManagedEnterpriseConfig(
   ) as Promise<ManagedEnterpriseConfigResult>;
 }
 
-export function clearManagedEnterpriseIdentity(): void {
-  void window.electronAPI?.clearManagedEnterpriseIdentity?.();
+export type ClearEnterpriseIdentityOptions = {
+  reresolving?: boolean;
+  reason?: "accountChanged" | "workspaceChanged";
+};
+
+export function clearManagedEnterpriseIdentity(options?: ClearEnterpriseIdentityOptions): void {
+  void window.electronAPI?.clearManagedEnterpriseIdentity?.(options);
 }

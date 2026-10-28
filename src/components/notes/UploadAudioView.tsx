@@ -342,6 +342,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Mode detection
   const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+  // Managed audio never reaches the saved personal provider, so its diarize notes don't apply.
+  const byokDiarizeProvider =
+    isByok && !managedActive && !isSelfHosted ? cloudTranscriptionProvider : null;
 
   // Mode-aware file size validation
   // Local: no limits at all
@@ -1312,33 +1315,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     {t("notes.upload.speakerDetectionDescription")}
                   </p>
 
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "openai" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.openaiDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "mistral" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                        {t("notes.upload.mistralDiarizeNote")}
-                      </p>
-                    )}
-                  {diarizationEnabled &&
-                    !useLocalWhisper &&
-                    !isOpenWhisprCloud &&
-                    !isSelfHosted &&
-                    cloudTranscriptionProvider === "groq" && (
-                      <p className="mt-1.5 text-xs leading-relaxed text-warning">
-                        {t("notes.upload.groqDiarizeNote")}
-                      </p>
-                    )}
+                  {diarizationEnabled && byokDiarizeProvider === "openai" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.openaiDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "mistral" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      {t("notes.upload.mistralDiarizeNote")}
+                    </p>
+                  )}
+                  {diarizationEnabled && byokDiarizeProvider === "groq" && (
+                    <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                      {t("notes.upload.groqDiarizeNote")}
+                    </p>
+                  )}
 
                   {diarizationDownloading && (
                     <p className="mt-1.5 text-xs leading-relaxed text-primary">
@@ -1346,7 +1337,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     </p>
                   )}
 
-                  {diarizationEnabled && isOpenWhisprCloud && (
+                  {diarizationEnabled && (isOpenWhisprCloud || managedActive) && (
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                       {t("notes.upload.diarizationRunsLocally")}
                     </p>

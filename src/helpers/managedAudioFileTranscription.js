@@ -3,6 +3,8 @@ const path = require("node:path");
 const { getSafeTempDir } = require("./safeTempDir");
 const { splitAudioFile, convertToMp3 } = require("./ffmpegUtils");
 const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
+const { asProviderError, PROVIDER_ERROR_CODES } = require("./providerHttpErrors");
+const { CLOUD_CHUNK_MAX_LOSS_RATIO } = require("./cloudChunkPolicy");
 
 // Provider overload and fast network failures from the enterprise transport
 // are retried; a chunk that still fails is skipped and the job keeps the rest.
@@ -27,12 +29,17 @@ const DEADLINE_CHUNK_CODES = new Set([
   "UND_ERR_HEADERS_TIMEOUT",
   "UND_ERR_BODY_TIMEOUT",
 ]);
-const JOB_RETIRING_CODES = new Set(["MANAGED_CONFIG_CHANGED", "AUTH_CONTEXT_CHANGED"]);
+// Every later chunk would meet the same refusal or a context that no longer applies.
+const JOB_ABORTING_CODES = new Set([
+  "MANAGED_CONFIG_CHANGED",
+  "AUTH_CONTEXT_CHANGED",
+  "MANAGED_AUTH_REJECTED",
+]);
 
 /** "retry", "skip" (count the chunk as failed now), or "abort" (fail the job). */
 function chunkFailureAction(error) {
   const codes = [error?.code, error?.cause?.code];
-  if (codes.some((code) => JOB_RETIRING_CODES.has(code))) return "abort";
+  if (codes.some((code) => JOB_ABORTING_CODES.has(code))) return "abort";
   // Callers check the job signal first, so a remaining abort is a request deadline.
   if (
     codes.some((code) => DEADLINE_CHUNK_CODES.has(code)) ||
@@ -40,7 +47,17 @@ function chunkFailureAction(error) {
     error?.name === "AbortError"
   )
     return "skip";
-  return codes.some((code) => RETRYABLE_CHUNK_CODES.has(code)) ? "retry" : "abort";
+  if (codes.some((code) => RETRYABLE_CHUNK_CODES.has(code))) return "retry";
+  // Electron's net.fetch (legacy Azure) reports a dropped connection only in
+  // its net::ERR_* message, so the shared provider classifier reads it.
+  const networkCode = asProviderError(error, { surface: "transcription" })?.code;
+  if (networkCode === PROVIDER_ERROR_CODES.UNREACHABLE) return "retry";
+  if (networkCode === PROVIDER_ERROR_CODES.TIMEOUT) return "skip";
+  // This chunk's audio was refused or answered badly; the others may still pass.
+  if ((error?.status >= 400 && error?.status < 500) || error?.code === "MANAGED_RESPONSE_MALFORMED")
+    return "skip";
+  // Anything else is a setup failure every later chunk would meet too.
+  return "abort";
 }
 
 async function transcribeSingleRequest(transcribe, onProgress, audioBuffer, fileName, contentType) {
@@ -136,7 +153,13 @@ async function transcribeManagedAudioFile({
         chunksCompleted: index,
       });
       if (fs.statSync(chunkPath).size > maxUploadBytes)
-        throw new Error("Prepared audio chunk exceeds the enterprise provider limit");
+        throw Object.assign(
+          new Error("Prepared audio chunk exceeds the enterprise provider limit"),
+          {
+            code: "MANAGED_CHUNK_TOO_LARGE",
+            messageKey: "hooks.audioRecording.errorDescriptions.managedChunkTooLarge",
+          }
+        );
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           texts[index] = await transcribe(
@@ -169,10 +192,17 @@ async function transcribeManagedAudioFile({
       chunksCompleted: chunkPaths.length,
     });
     const text = texts.filter(Boolean).join(" ");
+    // Past the cloud path's loss cap the "transcript" is more hole than content.
+    if (failed.length / chunkPaths.length > CLOUD_CHUNK_MAX_LOSS_RATIO || (!text && failed.length))
+      throw Object.assign(
+        new Error(`${failed.length} of ${chunkPaths.length} audio segments were lost`),
+        {
+          code: "CHUNK_LOSS_EXCEEDED",
+          messageKey: "hooks.audioRecording.errorDescriptions.chunkLoss",
+        }
+      );
     if (!text)
-      throw Object.assign(new Error("No usable enterprise transcript was returned"), {
-        code: failed.length ? "SERVER_ERROR" : "NO_SPEECH_DETECTED",
-      });
+      throw Object.assign(new Error("No speech detected in audio"), { code: "NO_SPEECH_DETECTED" });
     return { text, failedChunks: failed.length, totalChunks: chunkPaths.length };
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

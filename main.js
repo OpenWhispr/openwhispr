@@ -789,10 +789,18 @@ function initializeDeferredManagers() {
 }
 
 let pendingEnterpriseAudioTest = null;
+// The control panel acts on each link once, so a link it can't use never
+// reopens Settings on a later mount; Settings still reads it until consumed.
+let enterpriseAudioTestClaimed = false;
 ipcMain.handle("get-pending-enterprise-audio-test", (_event, consume = false) => {
   const pending = pendingEnterpriseAudioTest;
   if (consume) pendingEnterpriseAudioTest = null;
   return pending;
+});
+ipcMain.handle("claim-enterprise-audio-test", () => {
+  if (enterpriseAudioTestClaimed) return null;
+  enterpriseAudioTestClaimed = true;
+  return pendingEnterpriseAudioTest;
 });
 function handleEnterpriseAudioLink(url) {
   const request = require("./src/helpers/enterpriseAudioDeepLink").parseEnterpriseAudioDeepLink(
@@ -801,6 +809,7 @@ function handleEnterpriseAudioLink(url) {
   );
   if (!request) return false;
   pendingEnterpriseAudioTest = request;
+  enterpriseAudioTestClaimed = false;
   void windowManager?.showControlPanel();
   windowManager?.controlPanelWindow?.webContents.send("enterprise-audio-test-requested");
   return true;

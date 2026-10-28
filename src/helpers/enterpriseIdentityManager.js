@@ -216,7 +216,9 @@ function createEnterpriseIdentityManager({
     }
     const credentialHash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(Object.entries(authHeaders).sort(([a], [b]) => a.localeCompare(b))))
+      .update(
+        JSON.stringify(Object.entries(authHeaders).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      )
       .digest("hex");
     const apiOrigin = new URL(apiUrl).origin;
     const cacheKey = `${apiOrigin}\n${credentialHash}\n${accountId}\n${workspaceId}`;

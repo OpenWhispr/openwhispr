@@ -534,8 +534,12 @@ const MEETING_POLICY_REFUSALS = new Set([
 ]);
 
 // Main-process errors that mean main has already ended the recording: a policy
-// refusal, or the recording belonging to an account that is no longer signed in.
-const MEETING_MAIN_STOPS = new Set([...MEETING_POLICY_REFUSALS, "accountChanged"]);
+// refusal, or the recording belonging to an account or workspace no longer active.
+const MEETING_MAIN_STOPS = new Set([
+  ...MEETING_POLICY_REFUSALS,
+  "accountChanged",
+  "workspaceChanged",
+]);
 
 // The last session main ended itself, so a policy stop of the same session
 // from this window doesn't explain it a second time.
@@ -1053,7 +1057,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
-      const pendingMicChunks: ArrayBuffer[] = [];
+      // Held until main connects; capturedAt keeps main's timeline on capture time.
+      const pendingMicChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
       const pendingSystemChunks: ArrayBuffer[] = [];
       let socketReady = false;
 
@@ -1121,6 +1126,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             return null;
           }
           micStream = micResult;
+          // A Stop while main is still connecting (up to its connect timeout)
+          // turns the microphone off now; the rest is torn down once start settles.
+          startOperation.onCancel(() => {
+            if (micStream !== micResult) return;
+            stopMediaStream(micResult);
+            micStream = null;
+          });
           const ctx = new AudioContext({ sampleRate: 24000 });
           micContext = ctx;
           await detachFromOutputDevice(ctx);
@@ -1138,7 +1150,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
                 window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
                 return;
               }
-              pendingMicChunks.push(chunk.slice(0));
+              pendingMicChunks.push({ chunk: chunk.slice(0), capturedAt: Date.now() });
             },
           }).then(async ({ source, processor }) => {
             if (!isCurrentStart()) {
@@ -1211,7 +1223,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             ? "signInRequired"
             : startResult?.code && MEETING_POLICY_REFUSALS.has(startResult.code)
               ? startResult.code
-              : startResult?.error || "Failed to start meeting transcription",
+              : describeMeetingSetupError({
+                  message: startResult?.error || "Failed to start meeting transcription",
+                  messageKey: startResult?.messageKey,
+                }),
           { isRecording: false, isTranscribing: false }
         );
         stopMediaStream(systemCaptureResult.stream);
@@ -1670,8 +1685,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       isStartingFlag = false;
       socketReady = true;
 
-      for (const chunk of pendingMicChunks) {
-        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic");
+      for (const { chunk, capturedAt } of pendingMicChunks) {
+        window.electronAPI?.meetingTranscriptionSend?.(chunk, "mic", capturedAt);
       }
       for (const chunk of pendingSystemChunks) {
         window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");

@@ -75,24 +75,29 @@ signed-in desktop, and every delivered slot must be configured for that provider
 The import accepts at most 20 non-empty, single-line values of at most 16,384
 characters each, within a regular file no larger than 512 KiB.
 
-On macOS/Linux, deliver an owner-only file (`0600`), owned by the target user or
-root, in a directory the app can read and rename. Symlinks and group/other access
-are rejected. A root-owned file must still be readable by the desktop; per-user
-MDM delivery is usually simpler. On Windows, restrict the file ACL to the intended
-user and required administrators/SYSTEM; remove read grants to Everyone,
-Authenticated Users and Users. The importer checks those broad principals using
-PowerShell; this is not an ACL repair operation.
+The desktop runs as the signed-in user, so the MDM must hand the file to that user.
+On macOS/Linux, set the file owner to the signed-in user with mode `0600`, in a
+directory the app can read and rename. Root-owned files, symlinks and any
+group/other access are rejected (`BOOTSTRAP_NOT_PROTECTED`), as is a file the user
+cannot read (`BOOTSTRAP_UNREADABLE`); a rejected file is never renamed. On
+Windows, make the signed-in user the file owner and restrict the ACL so only that
+user, SYSTEM and Administrators can read it. The importer checks the owner and
+every Allow entry granting read access using PowerShell; this is not an ACL
+repair operation.
 
 Publish the file atomically from a protected temporary file, then click **Import
 organization bootstrap**. Import is user initiated, not an unattended startup
 watcher. Main claims the file by renaming it to a unique `.importing` name, checks
 its binding, encrypts credentials into `userData/enterprise-audio-keys/*.enc`, then
-removes the plaintext. A rejected import preserves the file for correction without
-overwriting a newer MDM delivery. Inspect for stranded `.importing` files after an
-interrupted import and remove obsolete plaintext through the device-management
+removes the plaintext. A rejected import restores the file for correction without
+overwriting a newer MDM delivery; when it cannot be restored, the claimed plaintext
+is deleted rather than kept. A `.importing` file can remain only after the app is
+interrupted mid-import; remove obsolete plaintext through the device-management
 system. Never collect bootstrap contents in support logs. Encryption reuses the
-desktop OS keychain/safe-storage backend; a missing backend is a provisioning
-failure. App-data reset removes enterprise keys and the bootstrap file.
+desktop OS keychain/safe-storage backend; a missing backend (for example Linux
+without a keyring) is a provisioning failure (`SECURE_STORAGE_UNAVAILABLE`).
+App-data reset removes enterprise keys, the bootstrap file and any `.importing`
+leftovers; deleting an account removes that account's keys.
 
 ### Azure API-key authentication
 
@@ -184,6 +189,11 @@ enterprise recording. Required activation also stops an existing personal meetin
 
 Setup returns bounded diagnostic codes such as `CREDENTIAL_MISSING`, `TLS_FAILED`,
 `PROXY_FAILED`, `AUTH_REJECTED`, `TIMEOUT`, `CONFIG_CHANGED` or `PROTOCOL_FAILED`.
+The desktop shows `SECURE_STORAGE_UNAVAILABLE` and `CA_UNAVAILABLE` locally and
+reports them to the admin console as `CREDENTIAL_MISSING` and `TLS_FAILED`. A
+refusal by the OpenWhispr API itself (SSO required, Enterprise plan required,
+configuration changed, rate limited) is shown on the device and is not reported as
+a failed device check.
 Check credential presence, exact account/workspace/profile binding, CA fingerprints,
 VPN/DNS, proxy mode and Basic credentials, then deployment/protocol compatibility.
 Collect app/OS version, operation, configuration fingerprint and sanitized errors;
@@ -200,9 +210,18 @@ history/audio retention remains separately governed. An Azure STT setting alone
 does not keep transcripts, summaries or backups inside Azure. Verify all four
 destinations and the effective backup/retention policy during acceptance.
 
+Azure text deployments are validated by OpenWhispr's servers, so they must be
+publicly reachable from them; a private-endpoint-only resource cannot pass the
+server text check (the API answers `PROVIDER_ENDPOINT_NOT_PUBLIC`). Audio
+operations behind device network settings are proven by an admin's device test
+instead.
+
 Pilot a disabled/default profile with provisioned devices first. Before required
 activation, acknowledge that private endpoints cannot be reached by a hosted probe
-and that unprovisioned devices will block. Set the actual released minimum desktop
+and that unprovisioned devices will block. A required-transcription hint saved by
+a build before 1.12 enforces both batch and realtime until the first successful
+configuration load reports which operations are covered; this fails closed by
+design. Set the actual released minimum desktop
 version: this branch targets **1.12.0**; the package version alone does not prove a
 distributed build contains it. Exercise all four meeting/upload feature-policy
 combinations and verify dictation remains independent. Do not equate a server
@@ -250,6 +269,11 @@ those paths remains separate from the confirmed HTTP/WSS and credential-store
 results.
 
 ### Release dependencies
+
+Release rule: no desktop release at or above 1.12.0 may ship without this
+change's `enterprise-audio-v1` client. The API's activation floor checks only the
+version number, so a 1.12.0+ build without the client would be treated as able to
+enforce enterprise audio.
 
 Connectivity API: [API #329](https://github.com/OpenWhispr/openwhispr-api/pull/329).
 Admin: [admin #28](https://github.com/OpenWhispr/openwhispr-admin/pull/28). Their

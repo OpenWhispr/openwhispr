@@ -3,9 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const {
   registerEnterpriseAudioSetup,
   configFingerprint,
+  safeCheckCode,
 } = require("../../src/helpers/enterpriseAudioSetup");
 
 function setup({ bootstrapDirectory } = {}) {
@@ -170,7 +172,7 @@ test(
   }
 );
 
-test("a draft Azure device test uses the network stack the managed route will use", async () => {
+function draftAzureSetup(t, { config = {}, fetchApi, systemFetch } = {}) {
   const handlers = new Map();
   const record = {
     version: 1,
@@ -181,19 +183,28 @@ test("a draft Azure device test uses the network stack the managed route will us
       tenantId: "22222222-2222-4222-8222-222222222222",
       clientId: "33333333-3333-4333-8333-333333333333",
       transcription: { defaultDeployment: "speech" },
+      ...config,
     },
   };
   const fingerprint = configFingerprint("azure", record.config);
   const binding = { accountId: "account-a", workspaceId: "workspace-a", authGeneration: 1 };
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-device-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const systemRequests = [];
   const transportRequests = [];
+  const reports = [];
   registerEnterpriseAudioSetup({
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
     getRequest: async () => ({ ...binding, expectedAuthGeneration: 1 }),
-    fetchApi: async (_request, endpoint, { method = "GET" } = {}) => {
-      if (endpoint.endsWith("/device-checks")) return {};
+    fetchApi: async (request, endpoint, init = {}) => {
+      if (endpoint.endsWith("/device-checks")) {
+        reports.push(init.body);
+        return {};
+      }
+      const answer = await fetchApi?.(endpoint, init);
+      if (answer) return answer;
       if (endpoint.endsWith("/test-context"))
-        return method === "POST"
+        return init.method === "POST"
           ? { assertion: "signed" }
           : { record, configFingerprint: fingerprint, certificateBundles: [] };
       return { ...record };
@@ -205,8 +216,9 @@ test("a draft Azure device test uses the network stack the managed route will us
         throw new Error("The legacy Azure shape must not use the Node transport");
       },
     },
-    systemFetch: async (url) => {
+    systemFetch: async (url, init) => {
       systemRequests.push(url);
+      if (systemFetch) return systemFetch(url, init);
       return new Response(
         JSON.stringify(
           url.startsWith("https://login.microsoftonline.com/")
@@ -216,19 +228,137 @@ test("a draft Azure device test uses the network stack the managed route will us
       );
     },
     getVersion: () => "0.0.0",
+    bootstrapDirectory: directory,
   });
-  const result = await handlers.get("enterprise-audio-test")(
-    {},
-    {
-      provider: "azure",
-      operation: "batch",
-      allowInferenceValidation: true,
-      context: { ...binding, generation: 1, providerVersion: 1, configFingerprint: fingerprint },
-    }
-  );
-  assert.deepEqual(transportRequests, []);
+  return {
+    reports,
+    systemRequests,
+    transportRequests,
+    test: () =>
+      handlers.get("enterprise-audio-test")(
+        {},
+        {
+          provider: "azure",
+          operation: "batch",
+          allowInferenceValidation: true,
+          context: {
+            ...binding,
+            generation: 1,
+            providerVersion: 1,
+            configFingerprint: fingerprint,
+          },
+        }
+      ),
+  };
+}
+
+test("a draft Azure device test uses the network stack the managed route will use", async (t) => {
+  const fixture = draftAzureSetup(t);
+  const result = await fixture.test();
+  assert.deepEqual(fixture.transportRequests, []);
   assert.equal(result.code, "OK");
-  assert.equal(systemRequests.length, 2);
-  assert.match(systemRequests[0], /^https:\/\/login\.microsoftonline\.com\//);
-  assert.match(systemRequests[1], /^https:\/\/acme\.openai\.azure\.com\/openai\//);
+  assert.equal(result.messageKey, "enterprise.audio.testPassed");
+  assert.equal(fixture.systemRequests.length, 2);
+  assert.match(fixture.systemRequests[0], /^https:\/\/login\.microsoftonline\.com\//);
+  assert.match(fixture.systemRequests[1], /^https:\/\/acme\.openai\.azure\.com\/openai\//);
+});
+
+test("device checks carry a random per-install id, never one derived from the host", async (t) => {
+  const fixture = draftAzureSetup(t);
+  await fixture.test();
+  await fixture.test();
+  const [first, second] = fixture.reports.map((report) => report.deviceId);
+  assert.match(first, /^[a-f0-9]{32}$/);
+  assert.equal(second, first);
+  assert.notEqual(
+    first,
+    crypto.createHash("sha256").update(os.hostname()).digest("hex").slice(0, 32)
+  );
+});
+
+test("an OpenWhispr API refusal is shown on the device and never reported as a device check", async (t) => {
+  for (const [status, code, expected, messageKey] of [
+    [403, "SSO_REQUIRED", "SSO_REQUIRED", "enterprise.audio.errors.ssoRequired"],
+    [
+      403,
+      "ENTERPRISE_REQUIRED",
+      "ENTERPRISE_REQUIRED",
+      "enterprise.audio.errors.enterpriseRequired",
+    ],
+    [409, "MANAGED_CONFIG_CHANGED", "CONFIG_CHANGED", "enterprise.audio.checks.configChanged"],
+    [429, undefined, "RATE_LIMITED", "enterprise.audio.errors.rateLimited"],
+  ]) {
+    const fixture = draftAzureSetup(t, {
+      fetchApi: async (endpoint, init) => {
+        if (endpoint.endsWith("/test-context") && init.method === "POST")
+          throw Object.assign(new Error(`Enterprise setup request failed (${status})`), {
+            status,
+            code,
+          });
+      },
+    });
+    const result = await fixture.test();
+    assert.deepEqual(result, { success: false, code: expected, messageKey });
+    assert.deepEqual(fixture.reports, []);
+  }
+});
+
+test("device failures carry a translated message and report a code the API accepts", async (t) => {
+  const tls = draftAzureSetup(t, {
+    systemFetch: async () => {
+      throw Object.assign(new Error("self-signed"), { code: "SELF_SIGNED_CERT_IN_CHAIN" });
+    },
+  });
+  assert.deepEqual(await tls.test(), {
+    success: true,
+    passed: false,
+    code: "TLS_FAILED",
+    operation: "batch",
+    messageKey: "enterprise.audio.checks.tlsFailed",
+  });
+  assert.equal(tls.reports[0].code, "TLS_FAILED");
+
+  const missingCa = draftAzureSetup(t, { config: { network: { caBundleId: "corporate" } } });
+  const result = await missingCa.test();
+  assert.equal(result.code, "CA_UNAVAILABLE");
+  assert.equal(result.messageKey, "enterprise.audio.certificateUnavailable");
+  assert.equal(missingCa.reports[0].code, "TLS_FAILED");
+});
+
+test("secure-storage and CA failures keep their own codes locally", () => {
+  assert.equal(
+    safeCheckCode({ code: "SECURE_STORAGE_UNAVAILABLE", message: "unavailable" }),
+    "SECURE_STORAGE_UNAVAILABLE"
+  );
+  assert.equal(safeCheckCode({ code: "MANAGED_CA_UNAVAILABLE" }), "CA_UNAVAILABLE");
+  assert.equal(
+    safeCheckCode({ code: "IDENTITY_EXCHANGE_FAILED", message: "AADSTS" }),
+    "AUTH_REJECTED"
+  );
+  assert.equal(safeCheckCode({ status: 401, message: "(401)" }), "SIGN_IN_REQUIRED");
+});
+
+const FINGERPRINT_SAMPLE = {
+  endpoint: "https://x.openai.azure.com/path",
+  tenantId: "11111111-1111-4111-8111-111111111111",
+  clientId: "22222222-2222-4222-8222-222222222222",
+  apiVersion: "v1",
+  scopeDefaults: { hotkey: "a", dictationCleanup: "b", chatIntelligence: "c" },
+  network: { connectTimeoutMs: 15000 },
+};
+// Pinned: the API computes the same value for the same record.
+const FINGERPRINT_SAMPLE_HASH = "016cb96459ca4a132b364c41bdb1618023fcff5f49da28971e0cc92877349645";
+
+test("the configuration fingerprint sorts keys by code unit, whatever the locale", () => {
+  assert.equal(configFingerprint("azure", FINGERPRINT_SAMPLE), FINGERPRINT_SAMPLE_HASH);
+  const localeCompare = String.prototype.localeCompare;
+  // Czech collates "ch" after "h", which would reorder chatIntelligence.
+  String.prototype.localeCompare = function (other) {
+    return localeCompare.call(this, other, "cs");
+  };
+  try {
+    assert.equal(configFingerprint("azure", FINGERPRINT_SAMPLE), FINGERPRINT_SAMPLE_HASH);
+  } finally {
+    String.prototype.localeCompare = localeCompare;
+  }
 });

@@ -3936,7 +3936,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ? MANAGED_TRANSCRIPTION_SPEC
         : PROXY_TRANSCRIPTION_PROVIDERS[provider];
       if (proxySpec && (managedResolution || !isSelfHostedTranscription(apiSettings))) {
-        const providerName = managedResolution ? "azure-managed" : provider;
+        const providerName = managedResolution ? `${managedResolution.provider}-managed` : provider;
         const call = proxySpec.ipc();
         if (!call) {
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
@@ -3991,7 +3991,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
-        return { success: true, text, rawText: proxyText, source, timings };
+        return {
+          success: true,
+          text,
+          rawText: proxyText,
+          source,
+          timings,
+          // Managed audio over the upload limit is chunked; lost chunks leave a partial transcript.
+          ...(result.warning ? { warning: result.warning } : {}),
+        };
       }
 
       // Some Custom endpoints decode the upload and reject anything that isn't

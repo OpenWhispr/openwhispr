@@ -33,6 +33,8 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
   accountChanged: "notes.meeting.stoppedAccountChanged",
+  // An enterprise recording ended because the active workspace changed.
+  workspaceChanged: "notes.meeting.stoppedWorkspaceChanged",
   unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",

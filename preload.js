@@ -729,10 +729,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "managed-enterprise-config-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
-  clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  clearManagedEnterpriseIdentity: (options) =>
+    ipcRenderer.invoke("clear-managed-enterprise-identity", options),
   managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
   getPendingEnterpriseAudioTest: (consume = false) =>
     ipcRenderer.invoke("get-pending-enterprise-audio-test", consume),
+  claimEnterpriseAudioTest: () => ipcRenderer.invoke("claim-enterprise-audio-test"),
   onEnterpriseAudioTestRequested: registerListener(
     "enterprise-audio-test-requested",
     (callback) => () => callback()
@@ -946,8 +948,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
-  meetingTranscriptionSend: (buffer, source) =>
-    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionSend: (buffer, source, capturedAt) =>
+    ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>

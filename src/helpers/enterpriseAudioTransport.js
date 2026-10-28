@@ -58,6 +58,7 @@ function parseProxyCredential(value) {
   )
     throw Object.assign(new Error("Enterprise proxy credentials are invalid"), {
       code: "PROXY_CREDENTIAL_INVALID",
+      messageKey: "enterprise.audio.proxyCredentialFormat",
     });
   return secret;
 }
@@ -75,18 +76,35 @@ function requiresEnterpriseTransport(network) {
   );
 }
 
+// Whole-value glob where "*" matches any run of characters. A two-pointer
+// match rather than a regex, so no admin pattern can backtrack catastrophically.
+function globMatches(pattern, value) {
+  let patternIndex = 0;
+  let valueIndex = 0;
+  let starIndex = -1;
+  let starValueIndex = 0;
+  while (valueIndex < value.length) {
+    if (pattern[patternIndex] === "*") {
+      starIndex = patternIndex++;
+      starValueIndex = valueIndex;
+    } else if (pattern[patternIndex] === value[valueIndex]) {
+      patternIndex++;
+      valueIndex++;
+    } else if (starIndex !== -1) {
+      patternIndex = starIndex + 1;
+      valueIndex = ++starValueIndex;
+    } else return false;
+  }
+  while (pattern[patternIndex] === "*") patternIndex++;
+  return patternIndex === pattern.length;
+}
+
 function bypassesProxy(url, rules = []) {
   const host = url.hostname.toLowerCase();
   return rules.some((rule) => {
     if (rule === "<local>") return !host.includes(".");
-    const pattern = rule
-      .toLowerCase()
-      .replace(/[.+?^$()|[\]\\]/g, "\\$&")
-      .replace(/\*/g, ".*");
-    return (
-      new RegExp(`^${pattern}$`).test(host) ||
-      new RegExp(`^${pattern}$`).test(url.host.toLowerCase())
-    );
+    const pattern = rule.toLowerCase();
+    return globMatches(pattern, host) || globMatches(pattern, url.host.toLowerCase());
   });
 }
 
@@ -119,14 +137,19 @@ function createEnterpriseAudioTransport({
         proxy.mandatory
       );
     }
-    const proxyHeaders = {};
-    if (proxy.credentialSlot) {
-      const secret = parseProxyCredential(
-        await runAbortableOperation(() => credentialReader(proxy.credentialSlot), signal)
-      );
-      proxyHeaders["Proxy-Authorization"] =
-        `Basic ${Buffer.from(`${secret.username}:${secret.password}`).toString("base64")}`;
-    }
+    // Read only once a proxy is dialed, so DIRECT routes never need the credential.
+    let proxyHeaders;
+    const readProxyHeaders = () =>
+      (proxyHeaders ??= proxy.credentialSlot
+        ? runAbortableOperation(() => credentialReader(proxy.credentialSlot), signal).then(
+            (value) => {
+              const secret = parseProxyCredential(value);
+              return {
+                "Proxy-Authorization": `Basic ${Buffer.from(`${secret.username}:${secret.password}`).toString("base64")}`,
+              };
+            }
+          )
+        : Promise.resolve({}));
     signal?.throwIfAborted();
     const targetHost = url.hostname.replace(/^\[|\]$/g, "");
     // https-proxy-agent drops the target host before the TLS upgrade, so without
@@ -139,6 +162,8 @@ function createEnterpriseAudioTransport({
     agent.connect = async (req, options) => {
       let lastError;
       for (const candidate of candidates) {
+        // A credential failure is the answer itself, not a reason to try the next proxy.
+        const headers = candidate ? await readProxyHeaders() : null;
         const attempt = new AbortController();
         try {
           if (!candidate)
@@ -153,7 +178,7 @@ function createEnterpriseAudioTransport({
           const candidateSignal = AbortSignal.any([attempt.signal, signal].filter(Boolean));
           const proxyAgent = new HttpsProxyAgent(proxyUrl, {
             ca,
-            headers: proxyHeaders,
+            headers,
             signal: candidateSignal,
             rejectUnauthorized: true,
           });

@@ -63,7 +63,7 @@ test("equal-generation workspace changes clear credentials and consent and ignor
   await React.act(async () => root.render(React.createElement(Harness)));
   const find = (predicate) => elements(tree).find(predicate);
   const password = () => find((node) => node.props.type === "password");
-  const consent = () => find((node) => node.props.type === "checkbox");
+  const consent = () => find((node) => node.props.ariaLabel === "enterprise.audio.probeConsent");
   const status = {
     success: true,
     slots: [{ slot: "http", present: false }],
@@ -73,7 +73,7 @@ test("equal-generation workspace changes clear credentials and consent and ignor
   await React.act(async () => pending[0].resolve(status));
   await React.act(async () => {
     password().props.onChange({ target: { value: "workspace-a-test-secret" } });
-    consent().props.onChange({ target: { checked: true } });
+    consent().props.onChange(true);
   });
   assert.equal(password().props.value, "workspace-a-test-secret");
   assert.equal(consent().props.checked, true);
@@ -87,6 +87,22 @@ test("equal-generation workspace changes clear credentials and consent and ignor
   await React.act(async () => pending[2].resolve(status));
   assert.equal(password().props.value, "");
   assert.equal(consent().props.checked, false);
+
+  // A failed probe shows its translated reason, never the raw check code.
+  globalThis.window.electronAPI.enterpriseAudioTest = async () => ({
+    success: true,
+    passed: false,
+    code: "TIMEOUT",
+    messageKey: "enterprise.audio.checks.timeout",
+  });
+  await React.act(async () => consent().props.onChange(true));
+  await React.act(async () =>
+    find((node) => node.props.children === "enterprise.audio.testBatch").props.onClick()
+  );
+  assert.equal(
+    find((node) => node.props.role === "status").props.children,
+    "enterprise.audio.checks.timeout"
+  );
 });
 
 test("meeting and upload mode picks leave the shared enterprise setup mode to its explicit controls", async (t) => {
@@ -230,6 +246,22 @@ test("meeting and upload mode picks leave the shared enterprise setup mode to it
     await React.act(async () => selector().props.onSelect("enterprise"));
     assert.equal(setupMode(), "managed");
     assert.equal(await routedToEnterprise(), true);
+
+    // Neither pick nor a click on the active enterprise tile overwrites the personal
+    // choice, so the opt-out returns to it instead of an unroutable "enterprise".
+    await React.act(async () => selector().props.onSelect("enterprise"));
+    const personal = useSettingsStore.getState();
+    assert.equal(
+      meeting ? personal.meetingTranscriptionMode : personal.uploadTranscriptionMode,
+      "local"
+    );
+    assert.equal(
+      meeting ? personal.meetingCloudTranscriptionMode : personal.uploadCloudTranscriptionMode,
+      "byok"
+    );
+    await React.act(async () => personalSetup().props.onClick());
+    assert.equal(selector().props.activeMode, "local");
+    assert.equal(await routedToEnterprise(), false);
 
     // Required profiles win over a stored opt-out and offer no personal setup.
     for (const overrides of [{ mode: "managed_required" }, { allowManualSetup: false }]) {

@@ -238,7 +238,8 @@ function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto", oper
   if (candidates.length !== 1) {
     return resolutionError(
       "MANAGED_CONFIG_AMBIGUOUS",
-      "Managed enterprise configuration is inconsistent. Contact your IT administrator."
+      "Managed enterprise configuration is inconsistent. Contact your IT administrator.",
+      "common.managedConfigAmbiguous"
     );
   }
   const [record] = candidates;
@@ -344,8 +345,20 @@ function isValidAudioNetwork(network) {
   );
 }
 
+// The API's bounds for a batch upload limit. Smaller values would split audio
+// into clips too short to transcribe.
+const MIN_UPLOAD_BYTES = 1024 * 1024;
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
 function isValidAudioOperation(operation, scheme, gateway) {
   if (!isValidTranscriptionSection(operation)) return false;
+  if (
+    operation.maxUploadBytes !== undefined &&
+    (!Number.isInteger(operation.maxUploadBytes) ||
+      operation.maxUploadBytes < MIN_UPLOAD_BYTES ||
+      operation.maxUploadBytes > MAX_UPLOAD_BYTES)
+  )
+    return false;
   if (
     scheme === "wss:" &&
     (!operation ||

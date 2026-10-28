@@ -2,6 +2,7 @@ import type { InferenceScope } from "../config/inferenceScopes";
 import { create } from "zustand";
 import {
   clearManagedEnterpriseIdentity,
+  type ClearEnterpriseIdentityOptions,
   getManagedEnterpriseConfig,
 } from "../services/EnterpriseIdentityService";
 import type {
@@ -36,7 +37,11 @@ interface EnterpriseIdentityState {
     authGeneration: number,
     forceRefresh?: boolean
   ) => Promise<void>;
-  clear: () => void;
+  /**
+   * `reresolving` says a refresh for the next scope follows, so main keeps running
+   * enterprise audio until it answers; otherwise main stops it for `reason`.
+   */
+  clear: (options?: ClearEnterpriseIdentityOptions) => void;
 }
 
 type AudioOperation = "batch" | "realtime";
@@ -84,6 +89,24 @@ function persistScopes(accountId: string, workspaceId: string, summary: ScopeSum
 
 function summarize(config: ManagedEnterpriseConfig | null): ScopeSummary {
   return managedScopesForConfig(config) as ScopeSummary;
+}
+
+/**
+ * The managed setup a failed fetch keeps holding. A workspace the API says is
+ * no longer Enterprise has none left, so routing returns to the user's own
+ * setup; any other failure keeps the last known one so it still fails closed.
+ */
+function scopesHeldAfterError(
+  code: unknown,
+  config: ManagedEnterpriseConfig | null,
+  accountId: string | null,
+  workspaceId: string | null
+): ScopeSummary {
+  if (code === "ENTERPRISE_REQUIRED") {
+    if (accountId && workspaceId) persistScopes(accountId, workspaceId, EMPTY_SCOPES);
+    return EMPTY_SCOPES;
+  }
+  return config ? summarize(config) : readPersistedScopes(accountId, workspaceId);
 }
 
 /** Scopes that must fail closed when the config is gone: the main process's list, else the last known one. */
@@ -167,6 +190,7 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
           throw Object.assign(
             new Error(result.error || "Managed enterprise AI configuration is unavailable."),
             {
+              code: result.code,
               enforcementRequired: result.enforcementRequired,
               enforcedScopes: result.enforcedScopes,
               enforcedAudioOperations: (result as { enforcedAudioOperations?: unknown })
@@ -191,9 +215,12 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
         const enforcementRequired = (error as { enforcementRequired?: boolean })
           .enforcementRequired;
         logger.warn("Managed enterprise AI configuration unavailable", { error: message }, "auth");
-        const lastKnown = current.config
-          ? summarize(current.config)
-          : readPersistedScopes(accountId, workspaceId);
+        const lastKnown = scopesHeldAfterError(
+          (error as { code?: unknown }).code,
+          current.config,
+          accountId,
+          workspaceId
+        );
         set({
           status: "error",
           config: null,
@@ -224,11 +251,11 @@ export const useEnterpriseIdentityStore = create<EnterpriseIdentityState>((set, 
     return promise;
   },
 
-  clear: () => {
+  clear: (options) => {
     requestSequence += 1;
     inFlightKey = null;
     inFlightPromise = null;
-    clearManagedEnterpriseIdentity();
+    clearManagedEnterpriseIdentity(options);
     set({
       accountId: null,
       workspaceId: null,
@@ -286,9 +313,12 @@ function ensureLifecycleListeners(): void {
       });
       return;
     }
-    const lastKnown = state.config
-      ? summarize(state.config)
-      : readPersistedScopes(state.accountId, state.workspaceId);
+    const lastKnown = scopesHeldAfterError(
+      snapshot.code,
+      state.config,
+      state.accountId,
+      state.workspaceId
+    );
     useEnterpriseIdentityStore.setState({
       status: "error",
       config: null,

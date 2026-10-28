@@ -440,3 +440,66 @@ test("an opted-in setup only holds the audio operations the workspace managed", 
     kind: "manual",
   });
 });
+
+test("a workspace downgraded from Enterprise releases its managed audio setup; an outage does not", async (t) => {
+  const azureOptional = {
+    ...azureSttRequired,
+    providers: [
+      { ...azureSttRequired.providers[0], mode: "managed_default", allowManualSetup: true },
+    ],
+  };
+  for (const [code, held] of [
+    ["ENTERPRISE_REQUIRED", false],
+    ["AUTH_EXPIRED", true],
+  ]) {
+    let call = 0;
+    let notify;
+    const { useEnterpriseIdentityStore, getManagedScopeResolution } = await boot(t, {
+      electronAPI: {
+        onManagedEnterpriseConfigChanged: (callback) => {
+          notify = callback;
+          return () => {};
+        },
+        getManagedEnterpriseConfig: async (accountId, workspaceId, authGeneration) => {
+          call += 1;
+          const scope = { accountId, workspaceId, authGeneration };
+          return call === 1
+            ? { success: true, status: "network", ...scope, config: azureOptional }
+            : {
+                success: false,
+                status: "error",
+                ...scope,
+                code,
+                error: "refused",
+                enforcementRequired: false,
+                enforcedScopes: [],
+                enforcedAudioOperations: [],
+              };
+        },
+      },
+    });
+    const store = useEnterpriseIdentityStore;
+    await store.getState().refresh("account-a", "workspace-a", 1);
+    assert.equal(getManagedScopeResolution("transcription", "managed").kind, "managed");
+    await store.getState().refresh("account-a", "workspace-a", 1, true);
+    const expected = held ? "MANAGED_CONFIG_UNAVAILABLE" : undefined;
+    assert.equal(getManagedScopeResolution("transcription", "managed").code, expected, code);
+    // The cold-start hint must not hold the next launch either.
+    const hint = JSON.parse(localStorage.getItem("managedEnterpriseScopes:account-a:workspace-a"));
+    assert.deepEqual(hint.managed, held ? ["transcription"] : [], code);
+
+    // The main process's eviction broadcast follows the same rule.
+    store.setState({ status: "ready", config: azureOptional });
+    notify({
+      accountId: "account-a",
+      workspaceId: "workspace-a",
+      authGeneration: 1,
+      config: null,
+      code,
+      enforcementRequired: false,
+      enforcedScopes: [],
+      enforcedAudioOperations: [],
+    });
+    assert.equal(getManagedScopeResolution("transcription", "managed").code, expected, code);
+  }
+});

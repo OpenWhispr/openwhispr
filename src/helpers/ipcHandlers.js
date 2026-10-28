@@ -242,6 +242,10 @@ const { createAbortError } = require("./abortError");
 const { describeCortiTokenFailure, testProviderConnection } = require("./providerConnectionTest");
 const { createConnectionCheckCache } = require("./connectionCheckCache");
 const { PAID_KEY_CHECKS_FILE, createPaidKeyCheck } = require("./paidKeyCheck");
+const {
+  ENTERPRISE_AUDIO_DEVICE_ID_FILE,
+  registerEnterpriseAudioSetup,
+} = require("./enterpriseAudioSetup");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -889,7 +893,12 @@ class IPCHandlers {
       this._stopMeetingForPolicy?.("accountChanged");
     }
     this.windowManager.retireMeetingNotificationScope();
-    this._retireEnterpriseAudio?.();
+    // Like the jobs above, enterprise audio outlives a token rotation; a
+    // different account or workspace retires it once it is learned.
+    if (!token) {
+      this._retireEnterpriseAudio?.(false, "accountChanged");
+      this._enterpriseAudioOwner = null;
+    }
     this._enterpriseAudioBinding = null;
     this._enterpriseAudioScope = null;
     this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
@@ -2577,6 +2586,8 @@ class IPCHandlers {
         if (accountChanged) {
           this._audioFeaturePolicy?.cancelJobs();
           this._stopMeetingForPolicy?.("accountChanged");
+          this._retireEnterpriseAudio?.(false, "accountChanged");
+          this._enterpriseAudioOwner = null;
         }
         this.windowManager.retireMeetingNotificationScope();
       } else if (guestPolicy) {
@@ -2628,6 +2639,7 @@ class IPCHandlers {
           });
           const result = this.databaseManager.deleteAccountData(accountId);
           this.metaActivation?.purge(accountId);
+          await this.enterpriseAudioCredentials?.removeAccount(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
@@ -4518,9 +4530,11 @@ class IPCHandlers {
           recursive: true,
           force: true,
         });
-        fs.rmSync(path.join(app.getPath("userData"), "enterprise-audio-bootstrap.json"), {
-          force: true,
-        });
+        for (const fileName of ["enterprise-audio-bootstrap.json", ENTERPRISE_AUDIO_DEVICE_ID_FILE])
+          fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
+        await require("./enterpriseAudioBootstrap").removeClaimedBootstraps(
+          app.getPath("userData")
+        );
       } catch (error) {
         errors.push(`Enterprise audio credentials: ${error.message}`);
       }
@@ -6799,10 +6813,35 @@ class IPCHandlers {
       enforcesEnterpriseTranscription,
     } = require("./enterpriseAudioRuntime");
     let audioRetirement = new AbortController();
-    this._retireEnterpriseAudio = (required = false) => {
+    this._retireEnterpriseAudio = (required = false, reason = undefined) => {
       audioRetirement.abort(createEnterpriseAudioConfigChangedError());
       audioRetirement = new AbortController();
-      if (required || this._activeEnterpriseAudioMeeting) void this._stopMeetingForPolicy?.();
+      if (required || this._activeEnterpriseAudioMeeting) void this._stopMeetingForPolicy?.(reason);
+    };
+    // _enterpriseAudioOwner is the last binding enterprise audio ran under. A
+    // token rotation drops the binding (its auth generation is stale) but keeps
+    // the owner, so a snapshot for the same account, workspace and config
+    // doesn't retire the running work.
+    const sameEnterpriseAudioScope = (previous, next) =>
+      previous?.accountId === next.accountId && previous?.workspaceId === next.workspaceId;
+    const enterpriseAudioStopReason = (previous, next) =>
+      !previous
+        ? undefined
+        : previous.accountId !== next.accountId
+          ? "accountChanged"
+          : previous.workspaceId !== next.workspaceId
+            ? "workspaceChanged"
+            : undefined;
+    // The binding a snapshot continues: the current one or, after a token
+    // rotation, the owner when the snapshot keeps its account and workspace.
+    const continuedEnterpriseAudioBinding = (snapshot) =>
+      this._enterpriseAudioBinding ??
+      (sameEnterpriseAudioScope(this._enterpriseAudioOwner, snapshot)
+        ? this._enterpriseAudioOwner
+        : null);
+    const bindEnterpriseAudio = (binding) => {
+      this._enterpriseAudioBinding = binding;
+      if (binding?.config) this._enterpriseAudioOwner = binding;
     };
     this.enterpriseAudioCredentials = createEnterpriseAudioCredentials({
       directory: path.join(app.getPath("userData"), "enterprise-audio-keys"),
@@ -6826,9 +6865,7 @@ class IPCHandlers {
         };
       },
       getBinding: () => this._enterpriseAudioBinding,
-      setBinding: (binding) => {
-        this._enterpriseAudioBinding = binding;
-      },
+      setBinding: bindEnterpriseAudio,
       getAuthHeaders: getAuthHeader,
       getWorkspaces: async (authHeaders) => {
         const response = await proxyFetch(`${getApiUrl()}/api/workspaces`, {
@@ -6883,18 +6920,17 @@ class IPCHandlers {
       },
       broadcast: (snapshot) => {
         if (!matchesEnterpriseAudioScope(snapshot)) return;
-        const old = this._enterpriseAudioBinding;
+        const old = continuedEnterpriseAudioBinding(snapshot);
         const required = enforcesEnterpriseTranscription(snapshot);
         if (
           old &&
-          (old.workspaceId !== snapshot.workspaceId ||
-            old.accountId !== snapshot.accountId ||
+          (!sameEnterpriseAudioScope(old, snapshot) ||
             old.generation !== snapshot.config?.generation)
         )
-          this._retireEnterpriseAudio(required);
+          this._retireEnterpriseAudio(required, enterpriseAudioStopReason(old, snapshot));
         else if (!old && required) this._retireEnterpriseAudio(true);
         if (snapshot.config)
-          this._enterpriseAudioBinding = { ...snapshot, generation: snapshot.config.generation };
+          bindEnterpriseAudio({ ...snapshot, generation: snapshot.config.generation });
         else {
           // A known enforced workspace whose config was evicted keeps failing closed.
           this._enterpriseAudioBinding = required ? snapshot : null;
@@ -6940,7 +6976,7 @@ class IPCHandlers {
       systemFetch: proxyFetch,
       getRetirementSignal: () => audioRetirement.signal,
     });
-    require("./enterpriseAudioSetup").registerEnterpriseAudioSetup({
+    registerEnterpriseAudioSetup({
       ipcMain,
       getRequest: getEnterpriseAudioRequest,
       credentials: this.enterpriseAudioCredentials,
@@ -6961,10 +6997,13 @@ class IPCHandlers {
           ...(body ? { body: JSON.stringify(body) } : {}),
           signal: AbortSignal.timeout(15000),
         });
-        if (!response.ok)
+        if (!response.ok) {
+          const detail = await response.json().catch(() => null);
           throw Object.assign(new Error(`Enterprise setup request failed (${response.status})`), {
             status: response.status,
+            code: typeof detail?.code === "string" ? detail.code : undefined,
           });
+        }
         return (await response.json()).data;
       },
     });
@@ -8553,6 +8592,8 @@ class IPCHandlers {
     const MEETING_MIC_REFERENCE_RECENT_MS = 1000;
     const MEETING_STARTUP_WARMUP_MS = 1500;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
+    // Longest a start can hold mic audio: the enterprise connect timeout and then some.
+    const MEETING_STARTUP_AUDIO_MAX_AGE_MS = 180_000;
     const MEETING_MIC_STATS_LOG_LIMIT = 200;
     const MEETING_SYSTEM_AUDIO_SILENCE_WARNING_MS = 45000;
     const MEETING_SYSTEM_AUDIO_TICK_MS = 2000;
@@ -8722,9 +8763,11 @@ class IPCHandlers {
       let outbound = buffer;
       if (source === "mic" && buffer.length >= 2) {
         const { rms, peak, sampleCount } = computeChunkStats(buffer);
+        const at = capturedAt ?? Date.now();
         // Evaluated eagerly (as before) because the stats log reports it.
         const systemSpeaking = meetingEchoLeakDetector.isSystemSpeaking(
-          Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS
+          at - MEETING_MIC_BLEED_LOOKBACK_MS,
+          at
         );
         const verdict = resolveMicChunkAction({
           mode: "streaming",
@@ -8833,23 +8876,26 @@ class IPCHandlers {
           : MEETING_MIC_REFERENCE_ALIGNMENT_MS[meetingSystemAudioStrategy];
       while (meetingPendingMicChunks.length > 0) {
         const next = meetingPendingMicChunks[0];
-        if (holdMs && now - next.queuedAt < holdMs) {
+        // Buffered startup audio is judged at its capture time, whose system
+        // reference has long arrived, never against the audio playing now.
+        const capturedAt = next.capturedAt ?? null;
+        if (holdMs && now - (capturedAt ?? next.queuedAt) < holdMs) {
           break;
         }
 
         meetingPendingMicChunks.shift();
-        const analysis = meetingEchoLeakDetector.analyzeMicChunk(next.buffer);
+        const analysis = meetingEchoLeakDetector.analyzeMicChunk(next.buffer, capturedAt ?? now);
         if (next.analysisOnly) {
           continue;
         }
         if (analysis?.shouldMute && !meetingAecEnabled) {
           if (!meetingLocalMode) {
-            dispatchMeetingAudioBuffer(Buffer.alloc(next.buffer.length), "mic");
+            dispatchMeetingAudioBuffer(Buffer.alloc(next.buffer.length), "mic", false, capturedAt);
           }
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic");
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt);
       }
     };
 
@@ -10028,7 +10074,9 @@ class IPCHandlers {
               `ow-diarize-raw-mic-${receivedAt}.pcm`
             );
             meetingMicDiarizationStream = fs.createWriteStream(meetingMicDiarizationPath);
-            meetingMicDiarizationStartedAt = receivedAt;
+            // Startup audio the renderer held through the connect arrives in a
+            // burst; its capture time, not its arrival, starts the timeline.
+            meetingMicDiarizationStartedAt = capturedAt ?? receivedAt;
           }
           meetingMicDiarizationStream.write(outboundBuffer);
         }
@@ -10040,6 +10088,7 @@ class IPCHandlers {
         meetingPendingMicChunks.push({
           buffer: outboundBuffer,
           queuedAt: Date.now(),
+          capturedAt,
         });
         flushPendingMeetingMicChunks();
         return;
@@ -10212,14 +10261,26 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source) => {
+    // capturedAt marks mic audio the renderer held while main connected; it is
+    // clamped to the connect window so a renderer can't move the timeline.
+    ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source, capturedAt) => {
       const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       if (source === "system") {
         const route = meetingSystemAudioHandover.acceptRendererChunk(buffer);
         if (route === "drop") return;
         if (route === "takeover") completeMeetingSystemAudioHandover();
+        sendMeetingAudio(buffer, source);
+        return;
       }
-      sendMeetingAudio(buffer, source);
+      const now = Date.now();
+      sendMeetingAudio(
+        buffer,
+        source,
+        false,
+        Number.isFinite(capturedAt)
+          ? Math.min(Math.max(capturedAt, now - MEETING_STARTUP_AUDIO_MAX_AGE_MS), now)
+          : null
+      );
     });
 
     this._stopMeetingForPolicy = (reason = "policyRestricted") => {
@@ -10229,6 +10290,7 @@ class IPCHandlers {
         meetingTranscriptionStartInProgress ||
         isMeetingStreamingConnected();
       meetingConnectionOptions = null;
+      this._activeEnterpriseAudioMeeting = false;
       for (const stream of [this._meetingMicStreaming, this._meetingSystemStreaming]) {
         if (stream) {
           stream.coldStartBuffer = [];
@@ -11220,8 +11282,13 @@ class IPCHandlers {
           this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
           this._enterpriseAudioScope = scope;
           this._enterpriseAudioBinding = null;
-          // Only an enterprise meeting belongs to the old scope; a personal one continues.
-          this._retireEnterpriseAudio();
+          // Only an enterprise meeting belongs to the old scope; a personal one
+          // continues, and so does one a token rotation leaves in its scope.
+          if (!sameEnterpriseAudioScope(this._enterpriseAudioOwner, scope))
+            this._retireEnterpriseAudio(
+              false,
+              enterpriseAudioStopReason(this._enterpriseAudioOwner, scope)
+            );
         }
         const authHeaders = await getAuthHeader(event);
         const snapshot = await this.enterpriseIdentityManager.getConfig({
@@ -11232,27 +11299,32 @@ class IPCHandlers {
           forceRefresh,
         });
         if (snapshot.success && snapshot.config && matchesEnterpriseAudioScope(snapshot)) {
-          if (
-            this._enterpriseAudioBinding &&
-            (this._enterpriseAudioBinding.accountId !== snapshot.accountId ||
-              this._enterpriseAudioBinding.workspaceId !== snapshot.workspaceId ||
-              this._enterpriseAudioBinding.generation !== snapshot.config.generation)
-          )
-            this._retireEnterpriseAudio();
+          const previous = continuedEnterpriseAudioBinding(snapshot);
           // A cached envelope skips the broadcast, which would otherwise enforce the new scope.
-          else if (
-            scopeChanged &&
-            !this._enterpriseAudioBinding &&
-            enforcesEnterpriseTranscription(snapshot)
+          const required = scopeChanged && enforcesEnterpriseTranscription(snapshot);
+          if (
+            previous &&
+            (!sameEnterpriseAudioScope(previous, snapshot) ||
+              previous.generation !== snapshot.config.generation)
           )
-            this._retireEnterpriseAudio(true);
-          this._enterpriseAudioBinding = { ...snapshot, generation: snapshot.config.generation };
+            this._retireEnterpriseAudio(required, enterpriseAudioStopReason(previous, snapshot));
+          else if (!previous && required) this._retireEnterpriseAudio(true);
+          bindEnterpriseAudio({ ...snapshot, generation: snapshot.config.generation });
         }
         return snapshot;
       }
     );
-    ipcMain.handle("clear-managed-enterprise-identity", async () => {
-      this._retireEnterpriseAudio();
+    // The renderer clears before every re-resolve, a token rotation included, and
+    // the config request that follows decides whether running work continues. A
+    // clear with nothing to follow (no workspace, sign-out, account reset) ends
+    // enterprise audio here, since no later snapshot would.
+    ipcMain.handle("clear-managed-enterprise-identity", async (_event, options) => {
+      if (options?.reresolving !== true) {
+        const reason =
+          options?.reason === "workspaceChanged" ? "workspaceChanged" : "accountChanged";
+        this._retireEnterpriseAudio(false, this._enterpriseAudioOwner ? reason : undefined);
+        this._enterpriseAudioOwner = null;
+      }
       this._enterpriseAudioBinding = null;
       this._enterpriseAudioScope = null;
       this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
