@@ -56,8 +56,8 @@
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
       },
       "appSpeakerLabels": {
-        "title": "從 Zoom 取得發言者名稱",
-        "description": "使用 Zoom 桌面應用程式顯示的參與者名稱與目前發言者來標記聲音。需要輔助使用權限，並在開啟「辨識並標記發言者」時生效。請讓 Zoom 保持演講者檢視：圖庫檢視不會顯示誰在發言。"
+        "title": "從會議應用程式辨識發言者姓名",
+        "description": "使用 Zoom，或 Chrome 中的 Google Meet 和 Microsoft Teams 為目前發言者顯示的名稱來標記聲音。請使用演講者檢視（Meet 中為焦點檢視），或在 Meet 或 Teams 中開啟即時字幕：圖庫檢視不會顯示誰在發言。需要輔助使用權限，並在開啟「辨識並標記發言者」時生效。"
       }
     }
   },

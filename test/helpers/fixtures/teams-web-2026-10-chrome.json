@@ -1,0 +1,3511 @@
+{
+  "galleryMuted": {
+    "type": "snapshot",
+    "at": 1793200160704,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Microsoft Teams meeting | Microsoft Teams - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Microsoft Teams meeting | Microsoft Teams",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "subrole": "AXWebApplication",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 326, 876, 775]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 326, 868, 767]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "title": "Personal | priya@example.com",
+            "description": "Personal | priya@example.com",
+            "frame": [1691, 250, 95, 24]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXPopUpButton",
+            "title": "Settings and more, new activity",
+            "description": "Settings and more, new activity",
+            "frame": [1667, 250, 25, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXStaticText",
+            "frame": [1699, 254, 49, 15],
+            "value": "Personal"
+          },
+          {
+            "depth": 16,
+            "role": "AXButton",
+            "title": "Turn on",
+            "frame": [1677, 292, 64, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXStaticText",
+            "frame": [953, 296, 306, 16],
+            "value": "Stay in the know. Turn on desktop notifications."
+          },
+          {
+            "depth": 17,
+            "role": "AXButton",
+            "title": "Close",
+            "description": "Close",
+            "frame": [1753, 292, 24, 24]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkComplementary",
+            "title": "Participants",
+            "description": "Participants",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Calling indicators",
+            "description": "Calling indicators",
+            "frame": [921, 326, 82, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Meeting controls",
+            "description": "Meeting controls",
+            "frame": [1007, 326, 667, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationGroup",
+            "title": "Calling controls",
+            "description": "Calling controls",
+            "frame": [1678, 326, 89, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXSlider",
+            "title": "Resize right panel",
+            "description": "Resize right panel",
+            "frame": [1461, 386, 4, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1462, 386, 319, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Encryption status",
+            "frame": [921, 340, 30, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXTimeGroup",
+            "title": "Elapsed time --:--",
+            "frame": [951, 340, 52, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Record",
+            "description": "Record",
+            "frame": [1061, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Chat",
+            "description": "Chat",
+            "frame": [1117, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "People",
+            "description": "People",
+            "frame": [1173, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Raise",
+            "description": "Raise",
+            "frame": [1229, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "React",
+            "description": "React",
+            "frame": [1285, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "View",
+            "description": "View",
+            "frame": [1341, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "More",
+            "description": "More",
+            "frame": [1397, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share",
+            "description": "Share",
+            "frame": [1622, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1187, 386, 274, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXHeading",
+            "title": "Participants",
+            "frame": [1482, 407, 94, 22]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Close participants pane",
+            "description": "Close participants pane",
+            "frame": [1729, 403, 32, 30]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share invite",
+            "frame": [1482, 505, 279, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXOutline",
+            "title": "Attendees",
+            "description": "Attendees",
+            "frame": [1462, 542, 319, 182]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Turn camera on",
+            "description": "Turn camera on",
+            "frame": [1470, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open video options",
+            "description": "Open video options",
+            "frame": [1518, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Unmute mic",
+            "description": "Unmute mic",
+            "frame": [1546, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open audio options",
+            "description": "Open audio options",
+            "frame": [1594, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Leave",
+            "description": "Leave",
+            "frame": [1695, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1743, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "title": "Shared content view",
+            "description": "Shared content view",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 20,
+            "role": "AXStaticText",
+            "frame": [1482, 408, 94, 19],
+            "value": "Participants"
+          },
+          {
+            "depth": 20,
+            "role": "AXTextField",
+            "title": "Type a name",
+            "description": "Type a name",
+            "frame": [1483, 464, 245, 30]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Priya Shah, Organizer, Muted",
+            "frame": [1462, 580, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1462, 628, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1462, 676, 319, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [958, 348, 30, 16],
+            "value": "--:--"
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 142]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 21,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "In this meeting, 3 total Mute all",
+            "frame": [1462, 542, 319, 38]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Priya Shah, Organizer, Muted",
+            "description": "Priya Shah, Organizer, Muted",
+            "frame": [1464, 580, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "description": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1464, 628, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "description": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1464, 676, 315, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 142]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "In this meeting, 3 total",
+            "description": "In this meeting, 3 total",
+            "frame": [1490, 553, 104, 16]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Mute all",
+            "frame": [1687, 549, 72, 24]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 594, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 642, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Unmuted",
+            "description": "Unmuted",
+            "frame": [1741, 690, 20, 20]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 138]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1490, 554, 104, 14],
+            "value": "In this meeting (3)"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 606, 56, 15],
+            "value": "Organizer"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Omar Haddad (Guest)",
+            "frame": [1527, 635, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 654, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Jane Doe (Guest)",
+            "frame": [1527, 683, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 702, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "You’ve started a group meeting Free meetings end at 60 minutes. Upgrade for up to 30 hours per call. Close",
+            "help": "Close",
+            "frame": [1318, 412, 16, 16]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "Extend your meeting",
+            "description": "Extend your meeting",
+            "frame": [1040, 490, 294, 32]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 588, 66, 17],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 636, 90, 17],
+            "value": "Omar Haddad"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1618, 636, 49, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 684, 73, 17],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1601, 684, 52, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 413, 177, 14],
+            "value": "You’ve started a group meeting"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 440, 277, 36],
+            "value": "Free meetings end at 60 minutes. Upgrade for up to 30 hours per call."
+          },
+          {
+            "depth": 25,
+            "role": "AXGroup",
+            "frame": [979, 389, 416, 234]
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Omar Haddad (Guest), muted, Context menu is available",
+            "description": "Omar Haddad (Guest), muted, Context menu is available",
+            "frame": [979, 623, 416, 234]
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Jane Doe (Guest), video is on, Context menu is available",
+            "description": "Jane Doe (Guest), video is on, Context menu is available",
+            "frame": [979, 856, 416, 234]
+          },
+          {
+            "depth": 26,
+            "role": "AXMenuItem",
+            "title": "Myself video, Priya Shah, Muted, Has context menu",
+            "description": "Myself video, Priya Shah, Muted, Has context menu",
+            "frame": [981, 391, 412, 230]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 625, 412, 230]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 858, 412, 230]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 858, 412, 230]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "frame": [981, 391, 412, 230]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 391, 412, 230]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 858, 412, 230]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "frame": [982, 392, 410, 228]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [981, 858, 412, 230]
+          },
+          {
+            "depth": 29,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [992, 402, 400, 218]
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [995, 827, 125, 15],
+            "value": "Omar Haddad (Guest)"
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [995, 1061, 107, 14],
+            "value": "Jane Doe (Guest)"
+          },
+          {
+            "depth": 31,
+            "role": "AXStaticText",
+            "frame": [995, 594, 58, 14],
+            "value": "Priya Shah"
+          }
+        ]
+      }
+    ]
+  },
+  "galleryPhoneTalking": {
+    "type": "snapshot",
+    "at": 1793200217182,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Microsoft Teams meeting | Microsoft Teams - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Microsoft Teams meeting | Microsoft Teams",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "subrole": "AXWebApplication",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 270, 876, 831]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 270, 868, 823]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "title": "Personal | priya@example.com",
+            "description": "Personal | priya@example.com",
+            "frame": [1691, 194, 95, 24]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 330, 548, 763]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [1461, 330, 320, 763]
+          },
+          {
+            "depth": 16,
+            "role": "AXPopUpButton",
+            "title": "Settings and more, new activity",
+            "description": "Settings and more, new activity",
+            "frame": [1667, 194, 25, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXStaticText",
+            "frame": [1699, 198, 49, 15],
+            "value": "Personal"
+          },
+          {
+            "depth": 16,
+            "role": "AXButton",
+            "title": "Turn on",
+            "frame": [1677, 236, 64, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 330, 548, 763]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1461, 330, 320, 763]
+          },
+          {
+            "depth": 17,
+            "role": "AXStaticText",
+            "frame": [953, 240, 306, 16],
+            "value": "Stay in the know. Turn on desktop notifications."
+          },
+          {
+            "depth": 17,
+            "role": "AXButton",
+            "title": "Close",
+            "description": "Close",
+            "frame": [1753, 236, 24, 24]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [913, 330, 548, 763]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkComplementary",
+            "title": "Participants",
+            "description": "Participants",
+            "frame": [1461, 330, 320, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Calling indicators",
+            "description": "Calling indicators",
+            "frame": [921, 270, 82, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Meeting controls",
+            "description": "Meeting controls",
+            "frame": [1007, 270, 667, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationGroup",
+            "title": "Calling controls",
+            "description": "Calling controls",
+            "frame": [1678, 270, 89, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [913, 330, 548, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXSlider",
+            "title": "Resize right panel",
+            "description": "Resize right panel",
+            "frame": [1461, 330, 4, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1462, 330, 319, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Encryption status",
+            "frame": [921, 284, 30, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXTimeGroup",
+            "title": "Elapsed time --:--",
+            "frame": [951, 284, 52, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Record",
+            "description": "Record",
+            "frame": [1061, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Chat",
+            "description": "Chat",
+            "frame": [1117, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "People",
+            "description": "People",
+            "frame": [1173, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Raise",
+            "description": "Raise",
+            "frame": [1229, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "React",
+            "description": "React",
+            "frame": [1285, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "View",
+            "description": "View",
+            "frame": [1341, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "More",
+            "description": "More",
+            "frame": [1397, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share",
+            "description": "Share",
+            "frame": [1622, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [913, 330, 548, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1187, 330, 274, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXHeading",
+            "title": "Participants",
+            "frame": [1482, 351, 94, 22]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Close participants pane",
+            "description": "Close participants pane",
+            "frame": [1729, 347, 32, 30]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share invite",
+            "frame": [1482, 449, 279, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXOutline",
+            "title": "Attendees",
+            "description": "Attendees",
+            "frame": [1462, 486, 319, 182]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Turn camera on",
+            "description": "Turn camera on",
+            "frame": [1470, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open video options",
+            "description": "Open video options",
+            "frame": [1518, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Unmute mic",
+            "description": "Unmute mic",
+            "frame": [1546, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open audio options",
+            "description": "Open audio options",
+            "frame": [1594, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Leave",
+            "description": "Leave",
+            "frame": [1695, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1743, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "title": "Shared content view",
+            "description": "Shared content view",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 20,
+            "role": "AXStaticText",
+            "frame": [1482, 352, 94, 19],
+            "value": "Participants"
+          },
+          {
+            "depth": 20,
+            "role": "AXTextField",
+            "title": "Type a name",
+            "description": "Type a name",
+            "frame": [1483, 408, 245, 30]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Priya Shah, Organizer, Muted",
+            "frame": [1462, 524, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "frame": [1462, 572, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Jane Doe (Guest), Meeting guest, Muted",
+            "frame": [1462, 620, 319, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [958, 292, 30, 16],
+            "value": "--:--"
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [1027, 341, 320, 142]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 21,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "In this meeting, 3 total Mute all",
+            "frame": [1462, 486, 319, 38]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Priya Shah, Organizer, Muted",
+            "description": "Priya Shah, Organizer, Muted",
+            "frame": [1464, 524, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "description": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "frame": [1464, 572, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Jane Doe (Guest), Meeting guest, Muted",
+            "description": "Jane Doe (Guest), Meeting guest, Muted",
+            "frame": [1464, 620, 315, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1027, 341, 320, 142]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "In this meeting, 3 total",
+            "description": "In this meeting, 3 total",
+            "frame": [1490, 497, 104, 16]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Mute all",
+            "frame": [1687, 493, 72, 24]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 538, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Unmuted",
+            "description": "Unmuted",
+            "frame": [1741, 586, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 634, 20, 20]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [1027, 341, 320, 138]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1490, 498, 104, 14],
+            "value": "In this meeting (3)"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 550, 56, 15],
+            "value": "Organizer"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Omar Haddad (Guest)",
+            "frame": [1527, 579, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 598, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Jane Doe (Guest)",
+            "frame": [1527, 627, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 646, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "You’ve started a group meeting Free meetings end at 60 minutes. Upgrade for up to 30 hours per call. Close",
+            "help": "Close",
+            "frame": [1318, 356, 16, 16]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "Extend your meeting",
+            "description": "Extend your meeting",
+            "frame": [1040, 434, 294, 32]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [916, 333, 542, 757]
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 532, 66, 17],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 580, 94, 17],
+            "value": "Omar Haddad"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1622, 580, 52, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 628, 70, 17],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1598, 628, 49, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 357, 177, 14],
+            "value": "You’ve started a group meeting"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 384, 277, 36],
+            "value": "Free meetings end at 60 minutes. Upgrade for up to 30 hours per call."
+          },
+          {
+            "depth": 25,
+            "role": "AXGroup",
+            "frame": [963, 333, 449, 253]
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Omar Haddad (Guest), Context menu is available",
+            "description": "Omar Haddad (Guest), Context menu is available",
+            "frame": [963, 585, 449, 253]
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Jane Doe (Guest), video is on, muted, Context menu is available",
+            "description": "Jane Doe (Guest), video is on, muted, Context menu is available",
+            "frame": [963, 838, 449, 252]
+          },
+          {
+            "depth": 26,
+            "role": "AXMenuItem",
+            "title": "Myself video, Priya Shah, Muted, Has context menu",
+            "description": "Myself video, Priya Shah, Muted, Has context menu",
+            "frame": [965, 335, 445, 249]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 587, 445, 249]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 587, 445, 249]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 840, 445, 248]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "frame": [965, 335, 445, 249]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 335, 445, 249]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 840, 445, 248]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "frame": [966, 336, 443, 247]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [965, 840, 445, 248]
+          },
+          {
+            "depth": 29,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1125, 398, 124, 123]
+          },
+          {
+            "depth": 29,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [976, 346, 433, 237]
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [979, 809, 124, 14],
+            "value": "Omar Haddad (Guest)"
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [979, 1061, 107, 14],
+            "value": "Jane Doe (Guest)"
+          },
+          {
+            "depth": 31,
+            "role": "AXStaticText",
+            "frame": [979, 556, 57, 15],
+            "value": "Priya Shah"
+          }
+        ]
+      }
+    ]
+  },
+  "speakerPhoneTalking": {
+    "type": "snapshot",
+    "at": 1793200259051,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Microsoft Teams meeting | Microsoft Teams - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Microsoft Teams meeting | Microsoft Teams",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "subrole": "AXWebApplication",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 326, 876, 775]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 326, 868, 767]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "title": "Personal | priya@example.com",
+            "description": "Personal | priya@example.com",
+            "frame": [1691, 250, 95, 24]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXPopUpButton",
+            "title": "Settings and more, new activity",
+            "description": "Settings and more, new activity",
+            "frame": [1667, 250, 25, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXStaticText",
+            "frame": [1699, 254, 49, 15],
+            "value": "Personal"
+          },
+          {
+            "depth": 16,
+            "role": "AXButton",
+            "title": "Turn on",
+            "frame": [1677, 292, 64, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXStaticText",
+            "frame": [953, 296, 306, 16],
+            "value": "Stay in the know. Turn on desktop notifications."
+          },
+          {
+            "depth": 17,
+            "role": "AXButton",
+            "title": "Close",
+            "description": "Close",
+            "frame": [1753, 292, 24, 24]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkComplementary",
+            "title": "Participants",
+            "description": "Participants",
+            "frame": [1461, 386, 320, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Calling indicators",
+            "description": "Calling indicators",
+            "frame": [921, 326, 82, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Meeting controls",
+            "description": "Meeting controls",
+            "frame": [1007, 326, 667, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationGroup",
+            "title": "Calling controls",
+            "description": "Calling controls",
+            "frame": [1678, 326, 89, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXSlider",
+            "title": "Resize right panel",
+            "description": "Resize right panel",
+            "frame": [1461, 386, 4, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1462, 386, 319, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Encryption status",
+            "frame": [921, 340, 30, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXTimeGroup",
+            "title": "Elapsed time --:--",
+            "frame": [951, 340, 52, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Record",
+            "description": "Record",
+            "frame": [1061, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Chat",
+            "description": "Chat",
+            "frame": [1117, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "People",
+            "description": "People",
+            "frame": [1173, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Raise",
+            "description": "Raise",
+            "frame": [1229, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "React",
+            "description": "React",
+            "frame": [1285, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "View",
+            "description": "View",
+            "frame": [1341, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "More",
+            "description": "More",
+            "frame": [1397, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share",
+            "description": "Share",
+            "frame": [1622, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [913, 386, 548, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1187, 386, 274, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXHeading",
+            "title": "Participants",
+            "frame": [1482, 407, 94, 22]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Close participants pane",
+            "description": "Close participants pane",
+            "frame": [1729, 403, 32, 30]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share invite",
+            "frame": [1482, 505, 279, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXOutline",
+            "title": "Attendees",
+            "description": "Attendees",
+            "frame": [1462, 542, 319, 182]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Turn camera on",
+            "description": "Turn camera on",
+            "frame": [1470, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open video options",
+            "description": "Open video options",
+            "frame": [1518, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Unmute mic",
+            "description": "Unmute mic",
+            "frame": [1546, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open audio options",
+            "description": "Open audio options",
+            "frame": [1594, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Leave",
+            "description": "Leave",
+            "frame": [1695, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1743, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "title": "Shared content view",
+            "description": "Shared content view",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 20,
+            "role": "AXStaticText",
+            "frame": [1482, 408, 94, 19],
+            "value": "Participants"
+          },
+          {
+            "depth": 20,
+            "role": "AXTextField",
+            "title": "Type a name",
+            "description": "Type a name",
+            "frame": [1483, 464, 245, 30]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Priya Shah, Organizer, Muted",
+            "frame": [1462, 580, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "frame": [1462, 628, 319, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Jane Doe (Guest), Meeting guest, Muted",
+            "frame": [1462, 676, 319, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [958, 347, 30, 17],
+            "value": "--:--"
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 142]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [916, 479, 542, 611]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 701]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 90]
+          },
+          {
+            "depth": 21,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "In this meeting, 3 total Mute all",
+            "frame": [1462, 542, 319, 38]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Priya Shah, Organizer, Muted",
+            "description": "Priya Shah, Organizer, Muted",
+            "frame": [1464, 580, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "description": "Omar Haddad (Guest), Meeting guest, Unmuted",
+            "frame": [1464, 628, 315, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Jane Doe (Guest), Meeting guest, Muted",
+            "description": "Jane Doe (Guest), Meeting guest, Muted",
+            "frame": [1464, 676, 315, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 142]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [916, 479, 542, 611]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [916, 479, 542, 611]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [916, 389, 542, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1027, 389, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1187, 389, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "In this meeting, 3 total",
+            "description": "In this meeting, 3 total",
+            "frame": [1490, 553, 104, 16]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Mute all",
+            "frame": [1687, 549, 72, 24]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 594, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Unmuted",
+            "description": "Unmuted",
+            "frame": [1741, 642, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 690, 20, 20]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [1027, 397, 320, 138]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [916, 479, 542, 611]
+          },
+          {
+            "depth": 23,
+            "role": "AXSlider",
+            "title": "Resize top gallery",
+            "description": "Resize top gallery",
+            "frame": [916, 476, 542, 5]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [1027, 389, 160, 90]
+          },
+          {
+            "depth": 23,
+            "role": "AXImage",
+            "title": "Myself video, Priya Shah, Muted, Has context menu",
+            "description": "Myself video, Priya Shah, Muted, Has context menu",
+            "frame": [1189, 391, 156, 86]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1490, 554, 104, 14],
+            "value": "In this meeting (3)"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 606, 56, 15],
+            "value": "Organizer"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Omar Haddad (Guest)",
+            "frame": [1527, 635, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 654, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Jane Doe (Guest)",
+            "frame": [1527, 683, 204, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1527, 702, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "You’ve started a group meeting Free meetings end at 60 minutes. Upgrade for up to 30 hours per call. Close",
+            "help": "Close",
+            "frame": [1318, 412, 16, 16]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "Extend your meeting",
+            "description": "Extend your meeting",
+            "frame": [1040, 490, 294, 32]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [916, 479, 542, 611]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [1027, 389, 160, 90]
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 588, 66, 17],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 636, 94, 17],
+            "value": "Omar Haddad"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1622, 636, 52, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1527, 684, 70, 17],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1598, 684, 49, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 413, 177, 14],
+            "value": "You’ve started a group meeting"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [1040, 440, 277, 36],
+            "value": "Free meetings end at 60 minutes. Upgrade for up to 30 hours per call."
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Omar Haddad (Guest), Context menu is available",
+            "description": "Omar Haddad (Guest), Context menu is available",
+            "frame": [916, 632, 542, 305]
+          },
+          {
+            "depth": 25,
+            "role": "AXGroup",
+            "frame": [1027, 389, 160, 90]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [918, 634, 538, 301]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [928, 644, 530, 293]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [918, 634, 538, 301]
+          },
+          {
+            "depth": 26,
+            "role": "AXMenuItem",
+            "title": "Jane Doe (Guest), video is on, muted, Context menu is available",
+            "description": "Jane Doe (Guest), video is on, muted, Context menu is available",
+            "frame": [1027, 389, 160, 90]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1029, 391, 156, 86]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1035, 397, 152, 82]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1029, 391, 156, 86]
+          },
+          {
+            "depth": 29,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1029, 391, 156, 86]
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [932, 908, 125, 14],
+            "value": "Omar Haddad (Guest)"
+          }
+        ]
+      }
+    ]
+  },
+  "speakerGuestTalking": {
+    "type": "snapshot",
+    "at": 1793200317042,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Microsoft Teams meeting | Microsoft Teams - Google Chrome",
+        "frame": [712, 61, 1077, 1040],
+        "nodes": [
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Microsoft Teams meeting | Microsoft Teams",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "subrole": "AXWebApplication",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [712, 182, 1077, 919]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [712, 270, 1077, 831]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [712, 270, 1069, 823]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "title": "Personal | priya@example.com",
+            "description": "Personal | priya@example.com",
+            "frame": [1691, 194, 95, 24]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [712, 330, 709, 763]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [1421, 330, 360, 763]
+          },
+          {
+            "depth": 16,
+            "role": "AXPopUpButton",
+            "title": "Settings and more, new activity",
+            "description": "Settings and more, new activity",
+            "frame": [1667, 194, 25, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXStaticText",
+            "frame": [1699, 198, 49, 15],
+            "value": "Personal"
+          },
+          {
+            "depth": 16,
+            "role": "AXButton",
+            "title": "Turn on",
+            "frame": [1677, 236, 64, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [712, 330, 709, 763]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1421, 330, 360, 763]
+          },
+          {
+            "depth": 17,
+            "role": "AXStaticText",
+            "frame": [752, 240, 306, 16],
+            "value": "Stay in the know. Turn on desktop notifications."
+          },
+          {
+            "depth": 17,
+            "role": "AXButton",
+            "title": "Close",
+            "description": "Close",
+            "frame": [1753, 236, 24, 24]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [712, 330, 709, 763]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkComplementary",
+            "title": "Participants",
+            "description": "Participants",
+            "frame": [1421, 330, 360, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Calling indicators",
+            "description": "Calling indicators",
+            "frame": [720, 270, 82, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Meeting controls",
+            "description": "Meeting controls",
+            "frame": [806, 270, 868, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationGroup",
+            "title": "Calling controls",
+            "description": "Calling controls",
+            "frame": [1678, 270, 89, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [712, 330, 709, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXSlider",
+            "title": "Resize right panel",
+            "description": "Resize right panel",
+            "frame": [1421, 330, 4, 763]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1422, 330, 359, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Encryption status",
+            "frame": [720, 284, 30, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXTimeGroup",
+            "title": "Elapsed time --:--",
+            "frame": [750, 284, 52, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Record",
+            "description": "Record",
+            "frame": [1061, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Chat",
+            "description": "Chat",
+            "frame": [1117, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "People",
+            "description": "People",
+            "frame": [1173, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Raise",
+            "description": "Raise",
+            "frame": [1229, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "React",
+            "description": "React",
+            "frame": [1285, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "View",
+            "description": "View",
+            "frame": [1341, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "More",
+            "description": "More",
+            "frame": [1397, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share",
+            "description": "Share",
+            "frame": [1622, 276, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [712, 330, 709, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1067, 330, 354, 763]
+          },
+          {
+            "depth": 19,
+            "role": "AXHeading",
+            "title": "Participants",
+            "frame": [1442, 351, 94, 22]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Close participants pane",
+            "description": "Close participants pane",
+            "frame": [1729, 347, 32, 30]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share invite",
+            "frame": [1442, 449, 319, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXOutline",
+            "title": "Attendees",
+            "description": "Attendees",
+            "frame": [1422, 486, 359, 182]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Turn camera on",
+            "description": "Turn camera on",
+            "frame": [1470, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open video options",
+            "description": "Open video options",
+            "frame": [1518, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Unmute mic",
+            "description": "Unmute mic",
+            "frame": [1546, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open audio options",
+            "description": "Open audio options",
+            "frame": [1594, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Leave",
+            "description": "Leave",
+            "frame": [1695, 276, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1743, 276, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [715, 333, 703, 757]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "title": "Shared content view",
+            "description": "Shared content view",
+            "frame": [715, 333, 703, 757]
+          },
+          {
+            "depth": 20,
+            "role": "AXStaticText",
+            "frame": [1442, 352, 94, 19],
+            "value": "Participants"
+          },
+          {
+            "depth": 20,
+            "role": "AXTextField",
+            "title": "Type a name",
+            "description": "Type a name",
+            "frame": [1443, 408, 285, 30]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Priya Shah, Organizer, Muted",
+            "frame": [1422, 524, 359, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1422, 572, 359, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1422, 620, 359, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [757, 291, 30, 17],
+            "value": "--:--"
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [907, 341, 320, 142]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [715, 423, 703, 667]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [715, 333, 703, 757]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [715, 333, 703, 90]
+          },
+          {
+            "depth": 21,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "In this meeting, 3 total Mute all",
+            "frame": [1422, 486, 359, 38]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Priya Shah, Organizer, Muted",
+            "description": "Priya Shah, Organizer, Muted",
+            "frame": [1424, 524, 355, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "description": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1424, 572, 355, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "description": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1424, 620, 355, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [907, 341, 320, 142]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [715, 423, 703, 667]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [715, 423, 703, 667]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [715, 333, 703, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [907, 333, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1067, 333, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "In this meeting, 3 total",
+            "description": "In this meeting, 3 total",
+            "frame": [1450, 497, 104, 16]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Mute all",
+            "frame": [1687, 493, 72, 24]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 538, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 586, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Unmuted",
+            "description": "Unmuted",
+            "frame": [1741, 634, 20, 20]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [907, 341, 320, 138]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [715, 423, 703, 667]
+          },
+          {
+            "depth": 23,
+            "role": "AXSlider",
+            "title": "Resize top gallery",
+            "description": "Resize top gallery",
+            "frame": [715, 420, 703, 5]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [907, 333, 160, 90]
+          },
+          {
+            "depth": 23,
+            "role": "AXImage",
+            "title": "Myself video, Priya Shah, Muted, Has context menu",
+            "description": "Myself video, Priya Shah, Muted, Has context menu",
+            "frame": [1069, 335, 156, 86]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1450, 498, 104, 14],
+            "value": "In this meeting (3)"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 550, 56, 15],
+            "value": "Organizer"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Omar Haddad (Guest)",
+            "frame": [1487, 579, 244, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 598, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Jane Doe (Guest)",
+            "frame": [1487, 627, 244, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 646, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "You’ve started a group meeting Free meetings end at 60 minutes. Upgrade for up to 30 hours per call. Close",
+            "help": "Close",
+            "frame": [1198, 356, 16, 16]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "Extend your meeting",
+            "description": "Extend your meeting",
+            "frame": [920, 434, 294, 32]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [715, 423, 703, 667]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [907, 333, 160, 90]
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 532, 66, 17],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 580, 90, 17],
+            "value": "Omar Haddad"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1578, 580, 49, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 628, 73, 17],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1561, 628, 52, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [920, 357, 177, 14],
+            "value": "You’ve started a group meeting"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [920, 384, 276, 36],
+            "value": "Free meetings end at 60 minutes. Upgrade for up to 30 hours per call."
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Jane Doe (Guest), video is on, Context menu is available",
+            "description": "Jane Doe (Guest), video is on, Context menu is available",
+            "frame": [715, 559, 703, 396]
+          },
+          {
+            "depth": 25,
+            "role": "AXGroup",
+            "frame": [907, 333, 160, 90]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 561, 699, 392]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [727, 571, 691, 384]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 561, 699, 392]
+          },
+          {
+            "depth": 26,
+            "role": "AXMenuItem",
+            "title": "Omar Haddad (Guest), muted, Context menu is available",
+            "description": "Omar Haddad (Guest), muted, Context menu is available",
+            "frame": [907, 333, 160, 90]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 561, 699, 392]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [909, 335, 156, 86]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [915, 341, 152, 82]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 561, 699, 392]
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [731, 925, 107, 15],
+            "value": "Jane Doe (Guest)"
+          }
+        ]
+      }
+    ]
+  },
+  "captionsGuestTalking": {
+    "type": "snapshot",
+    "at": 1793200355983,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Microsoft Teams meeting | Microsoft Teams - Google Chrome",
+        "frame": [712, 61, 1077, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Microsoft Teams meeting | Microsoft Teams",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "subrole": "AXWebApplication",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [712, 238, 1077, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [712, 326, 1077, 775]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [712, 326, 1069, 767]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "title": "Personal | priya@example.com",
+            "description": "Personal | priya@example.com",
+            "frame": [1691, 250, 95, 24]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [712, 386, 709, 707]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [1421, 386, 360, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXPopUpButton",
+            "title": "Settings and more, new activity",
+            "description": "Settings and more, new activity",
+            "frame": [1667, 250, 25, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXStaticText",
+            "frame": [1699, 254, 49, 15],
+            "value": "Personal"
+          },
+          {
+            "depth": 16,
+            "role": "AXButton",
+            "title": "Turn on",
+            "frame": [1677, 292, 64, 24]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [712, 386, 709, 707]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1421, 386, 360, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXStaticText",
+            "frame": [752, 296, 306, 16],
+            "value": "Stay in the know. Turn on desktop notifications."
+          },
+          {
+            "depth": 17,
+            "role": "AXButton",
+            "title": "Close",
+            "description": "Close",
+            "frame": [1753, 292, 24, 24]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [712, 386, 709, 707]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkComplementary",
+            "title": "Participants",
+            "description": "Participants",
+            "frame": [1421, 386, 360, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Calling indicators",
+            "description": "Calling indicators",
+            "frame": [720, 326, 82, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXToolbar",
+            "title": "Meeting controls",
+            "description": "Meeting controls",
+            "frame": [806, 326, 868, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationGroup",
+            "title": "Calling controls",
+            "description": "Calling controls",
+            "frame": [1678, 326, 89, 60]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [712, 386, 709, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXSlider",
+            "title": "Resize right panel",
+            "description": "Resize right panel",
+            "frame": [1421, 386, 4, 707]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1422, 386, 359, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Encryption status",
+            "frame": [720, 340, 30, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXTimeGroup",
+            "title": "Elapsed time --:--",
+            "frame": [750, 340, 52, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Record",
+            "description": "Record",
+            "frame": [1061, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Chat",
+            "description": "Chat",
+            "frame": [1117, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "People",
+            "description": "People",
+            "frame": [1173, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Raise",
+            "description": "Raise",
+            "frame": [1229, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "React",
+            "description": "React",
+            "frame": [1285, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "View",
+            "description": "View",
+            "frame": [1341, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "More",
+            "description": "More",
+            "frame": [1397, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share",
+            "description": "Share",
+            "frame": [1622, 332, 48, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [712, 386, 709, 492]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "title": "Live Captions",
+            "description": "Live Captions",
+            "frame": [716, 878, 701, 211]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1067, 386, 354, 707]
+          },
+          {
+            "depth": 19,
+            "role": "AXHeading",
+            "title": "Participants",
+            "frame": [1442, 407, 94, 22]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Close participants pane",
+            "description": "Close participants pane",
+            "frame": [1729, 403, 32, 30]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share invite",
+            "frame": [1442, 505, 319, 32]
+          },
+          {
+            "depth": 19,
+            "role": "AXOutline",
+            "title": "Attendees",
+            "description": "Attendees",
+            "frame": [1422, 542, 359, 182]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Turn camera on",
+            "description": "Turn camera on",
+            "frame": [1470, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open video options",
+            "description": "Open video options",
+            "frame": [1518, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Unmute mic",
+            "description": "Unmute mic",
+            "frame": [1546, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Open audio options",
+            "description": "Open audio options",
+            "frame": [1594, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXButton",
+            "title": "Leave",
+            "description": "Leave",
+            "frame": [1695, 332, 48, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1743, 332, 24, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [715, 389, 703, 486]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "title": "Shared content view",
+            "description": "Shared content view",
+            "frame": [715, 389, 703, 486]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "frame": [719, 878, 620, 211]
+          },
+          {
+            "depth": 20,
+            "role": "AXStaticText",
+            "frame": [1442, 408, 94, 19],
+            "value": "Participants"
+          },
+          {
+            "depth": 20,
+            "role": "AXTextField",
+            "title": "Type a name",
+            "description": "Type a name",
+            "frame": [1443, 464, 285, 30]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Priya Shah, Organizer, Muted",
+            "frame": [1422, 580, 359, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1422, 628, 359, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1422, 676, 359, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [757, 347, 30, 17],
+            "value": "--:--"
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [907, 397, 320, 142]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [715, 389, 543, 486]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [715, 389, 703, 486]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [1258, 389, 160, 486]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [719, 878, 620, 211]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "Closed captions overflow menu",
+            "description": "Closed captions overflow menu",
+            "frame": [1345, 884, 32, 32]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Hide live captions",
+            "description": "Hide live captions",
+            "frame": [1377, 884, 32, 32]
+          },
+          {
+            "depth": 21,
+            "role": "AXRow",
+            "subrole": "AXOutlineRow",
+            "title": "In this meeting, 3 total Mute all",
+            "frame": [1422, 542, 359, 38]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Priya Shah, Organizer, Muted",
+            "description": "Priya Shah, Organizer, Muted",
+            "frame": [1424, 580, 355, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Omar Haddad (Guest), Meeting guest, Muted",
+            "description": "Omar Haddad (Guest), Meeting guest, Muted",
+            "frame": [1424, 628, 355, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "description": "Jane Doe (Guest), Meeting guest, Unmuted",
+            "frame": [1424, 676, 355, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [907, 397, 320, 142]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [715, 389, 543, 486]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [715, 389, 543, 486]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1258, 389, 160, 486]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1258, 542, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [1258, 632, 160, 90]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "frame": [719, 878, 606, 211]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "In this meeting, 3 total",
+            "description": "In this meeting, 3 total",
+            "frame": [1450, 553, 104, 16]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Mute all",
+            "frame": [1687, 549, 72, 24]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 594, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Muted",
+            "description": "Muted",
+            "frame": [1741, 642, 20, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXImage",
+            "title": "Unmuted",
+            "description": "Unmuted",
+            "frame": [1741, 690, 20, 20]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [907, 397, 320, 138]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [715, 389, 543, 486]
+          },
+          {
+            "depth": 23,
+            "role": "AXSlider",
+            "title": "Resize side gallery",
+            "description": "Resize side gallery",
+            "frame": [1256, 389, 5, 486]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "frame": [1258, 542, 160, 90]
+          },
+          {
+            "depth": 23,
+            "role": "AXImage",
+            "title": "Myself video, Priya Shah, Muted, Has context menu",
+            "description": "Myself video, Priya Shah, Muted, Has context menu",
+            "frame": [1260, 634, 156, 86]
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [719, 878, 606, 211]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1450, 554, 104, 14],
+            "value": "In this meeting (3)"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 606, 56, 15],
+            "value": "Organizer"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Omar Haddad (Guest)",
+            "frame": [1487, 635, 244, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 654, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 23,
+            "role": "AXGroup",
+            "help": "Jane Doe (Guest)",
+            "frame": [1487, 683, 244, 19]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1487, 702, 81, 15],
+            "value": "Meeting guest"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "You’ve started a group meeting Free meetings end at 60 minutes. Upgrade for up to 30 hours per call. Close",
+            "help": "Close",
+            "frame": [1198, 412, 16, 16]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "Extend your meeting",
+            "description": "Extend your meeting",
+            "frame": [920, 490, 294, 32]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [715, 389, 543, 486]
+          },
+          {
+            "depth": 24,
+            "role": "AXGroup",
+            "frame": [1258, 542, 160, 90]
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [771, 878, 64, 15],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [771, 894, 142, 20],
+            "value": "Caption text."
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [771, 917, 64, 15],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [771, 933, 494, 20],
+            "value": "Caption text."
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 588, 66, 17],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 636, 90, 17],
+            "value": "Omar Haddad"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1578, 636, 49, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1487, 684, 73, 17],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1561, 684, 52, 17],
+            "value": "(Guest)"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [920, 413, 177, 14],
+            "value": "You’ve started a group meeting"
+          },
+          {
+            "depth": 25,
+            "role": "AXStaticText",
+            "frame": [920, 440, 276, 36],
+            "value": "Free meetings end at 60 minutes. Upgrade for up to 30 hours per call."
+          },
+          {
+            "depth": 25,
+            "role": "AXMenuItem",
+            "title": "Jane Doe (Guest), video is on, Context menu is available",
+            "description": "Jane Doe (Guest), video is on, Context menu is available",
+            "frame": [715, 479, 543, 306]
+          },
+          {
+            "depth": 25,
+            "role": "AXGroup",
+            "frame": [1258, 542, 160, 90]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 481, 539, 302]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [727, 491, 531, 294]
+          },
+          {
+            "depth": 26,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 481, 539, 302]
+          },
+          {
+            "depth": 26,
+            "role": "AXMenuItem",
+            "title": "Omar Haddad (Guest), muted, Context menu is available",
+            "description": "Omar Haddad (Guest), muted, Context menu is available",
+            "frame": [1258, 542, 160, 90]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 481, 539, 302]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1260, 544, 156, 86]
+          },
+          {
+            "depth": 27,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1266, 550, 152, 82]
+          },
+          {
+            "depth": 28,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [717, 481, 539, 302]
+          },
+          {
+            "depth": 29,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1387, 602, 19, 24]
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [731, 756, 107, 14],
+            "value": "Jane Doe (Guest)"
+          },
+          {
+            "depth": 30,
+            "role": "AXStaticText",
+            "frame": [1270, 607, 88, 14],
+            "value": "Omar Haddad (Guest)"
+          }
+        ]
+      }
+    ]
+  }
+}

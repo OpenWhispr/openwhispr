@@ -56,8 +56,8 @@
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
       },
       "appSpeakerLabels": {
-        "title": "Nombrar participantes desde Zoom",
-        "description": "Etiqueta las voces con los nombres de los participantes y quién habla en la app de escritorio de Zoom. Usa el permiso de Accesibilidad y funciona con \"Identificar y etiquetar participantes\" activado. Mantén Zoom en la vista del hablante: la vista de galería no muestra quién habla."
+        "title": "Nombrar a los participantes desde tu app de reuniones",
+        "description": "Etiqueta las voces con los nombres que Zoom, o Google Meet y Microsoft Teams en Chrome, muestran para quien habla. Usa la vista del hablante (Foco en Meet) o activa los subtítulos en Meet o Teams: la vista de galería no muestra quién habla. Usa el permiso de Accesibilidad y funciona con \"Identificar y etiquetar participantes\" activado."
       }
     }
   },

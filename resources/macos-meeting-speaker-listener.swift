@@ -1,31 +1,41 @@
 /**
  * macOS Meeting Speaker Listener
  *
- * Snapshots the accessibility tree of a running meeting app (Zoom first) so
- * OpenWhispr can tell which participant the app shows as speaking. The helper
- * is app-agnostic on purpose: it reports text-bearing elements and their
- * frames, and src/helpers/meetingAppSpeakerAdapters.js decides what a video
- * tile or an active-speaker marker looks like. Meeting apps restyle their UI
- * without notice; those fixes belong in JS beside their tests, not here.
+ * Snapshots the accessibility tree of running meeting apps (Zoom, and Meet or
+ * Teams in a browser) so OpenWhispr can tell which participant the app shows
+ * as speaking. The helper is app-agnostic on purpose: it reports text-bearing
+ * elements and their frames, and src/helpers/meetingAppSpeakerAdapters.js
+ * decides what a video tile or an active-speaker marker looks like. Meeting
+ * apps restyle their UI without notice; those fixes belong in JS beside their
+ * tests, not here.
  *
  * Usage:
- *   macos-meeting-speaker-listener --bundle-id us.zoom.xos [--bundle-id …] [--interval-ms 500]
+ *   macos-meeting-speaker-listener --bundle-id us.zoom.xos
+ *     [--bundle-id com.google.Chrome --page-title '^Meet [–-] '] [--interval-ms 500]
  *   macos-meeting-speaker-listener --dump --bundle-id us.zoom.xos
+ *
+ * --page-title applies to the --bundle-id before it and marks that app as a
+ * browser: only its windows whose title (the front tab's title) matches the
+ * pattern are read, and only the page inside them, never the tab strip, which
+ * lists every other tab's title.
  *
  * stdout, one JSON object per line:
  *   {"type":"start","intervalMs":500}
  *   {"type":"status","state":"waiting_for_app"}
- *   {"type":"status","state":"tracking","bundleId":"us.zoom.xos"}
- *   {"type":"status","state":"unreadable","bundleId":"us.zoom.xos","axError":-25204}
- *   {"type":"snapshot","at":<ms>,"bundleId":"us.zoom.xos","windows":[
- *     {"title":"Zoom Meeting","frame":[x,y,w,h],"nodes":[
+ *   {"type":"status","state":"tracking","bundleIds":["us.zoom.xos"]}
+ *   {"type":"status","state":"unreadable","bundleIds":["us.zoom.xos"],"axError":-25204}
+ *   {"type":"snapshot","at":<ms>,"windows":[
+ *     {"bundleId":"us.zoom.xos","title":"Zoom Meeting","frame":[x,y,w,h],"nodes":[
  *       {"role":"AXGroup","description":"Jane Doe","frame":[x,y,w,h],"depth":7}]}]}
  *   {"type":"error","code":"accessibility_denied","message":"…"}  (then exits 2)
  *
- * A snapshot is written only when the reported tree changed, and carries an
- * element's title, description and help text but never its value (chat text
- * lives there). Uses the Accessibility permission the app already holds for
- * paste; no Screen Recording.
+ * A snapshot is written only when the reported tree changed. It carries an
+ * element's title, description and help text, the frames of unlabelled groups
+ * the size of a video tile, and the value of a static text only when it is at
+ * most 80 characters: Meet and caption bars keep participant names there.
+ * Longer values (most chat messages) and every other element's value are left
+ * out. Uses the Accessibility permission the app already holds for paste; no
+ * Screen Recording.
  *
  * --dump prints one full tree, values included, for calibrating the adapters
  * against a real meeting, then exits. It is a developer tool: its output can
@@ -48,6 +58,11 @@ let maxDumpNodes = 5_000
 let maxReportedNodes = 400
 let maxDepth = 40
 let maxTextLength = 200
+// A participant name; longer static text is chat or a caption sentence.
+let maxReportedValueLength = 80
+// Video tiles are at least thumbnail-sized; smaller unlabelled groups are layout.
+let minTileWidth = 120
+let minTileHeight = 68
 // Meeting apps answer accessibility requests on their main thread; a busy
 // meeting must delay one poll, not hang the helper.
 let messagingTimeoutSeconds: Float = 0.25
@@ -72,7 +87,13 @@ let nodeAttributes: [String] = [
 ]
 let dumpAttributes: [String] = nodeAttributes + [valueAttribute, identifierAttribute]
 
-var bundleIds: [String] = []
+struct Target {
+    let bundleId: String
+    // Set for a browser: the front-tab titles worth reading.
+    var pageTitle: NSRegularExpression?
+}
+
+var targets: [Target] = []
 var intervalMs = defaultIntervalMs
 var dumpMode = false
 
@@ -82,7 +103,14 @@ while argumentIndex < arguments.count {
     let argument = arguments[argumentIndex]
     let next: String? = argumentIndex + 1 < arguments.count ? arguments[argumentIndex + 1] : nil
     if argument == "--bundle-id", let bundleId = next {
-        bundleIds.append(bundleId)
+        targets.append(Target(bundleId: bundleId, pageTitle: nil))
+        argumentIndex += 1
+    } else if argument == "--page-title", let pattern = next, !targets.isEmpty {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            print("{\"type\":\"error\",\"code\":\"usage\",\"message\":\"Invalid --page-title pattern\"}")
+            exit(64)
+        }
+        targets[targets.count - 1].pageTitle = expression
         argumentIndex += 1
     } else if argument == "--interval-ms", let value = next.flatMap({ Int($0) }) {
         intervalMs = max(minimumIntervalMs, value)
@@ -187,33 +215,69 @@ func isTextBearing(_ node: [String: Any]) -> Bool {
     node["title"] != nil || node["description"] != nil || node["help"] != nil
 }
 
-func describeWindow(_ window: AXUIElement, dump: Bool) -> [String: Any] {
+// An unlabelled group the size of a video tile: Meet draws tiles this way and
+// keeps the participant's name in a static text inside.
+func isTileSizedGroup(_ node: [String: Any]) -> Bool {
+    guard node["role"] as? String == "AXGroup", let nodeFrame = node["frame"] as? [Int] else { return false }
+    return nodeFrame[2] >= minTileWidth && nodeFrame[3] >= minTileHeight
+}
+
+// Live snapshots keep a static text's value only when it is short enough to
+// be a name; the value is fetched only for static text, never for text areas
+// or fields.
+func shortStaticTextValue(_ element: AXUIElement, role: String?) -> String? {
+    guard role == "AXStaticText", let value = text(elementAttribute(element, valueAttribute).value) else {
+        return nil
+    }
+    return value.count <= maxReportedValueLength ? value : nil
+}
+
+// nil for a browser window whose front tab isn't a meeting page.
+func describeWindow(_ window: AXUIElement, target: Target, dump: Bool) -> [String: Any]? {
     let windowValues = attributes(of: window, dump ? dumpAttributes : nodeAttributes)
-    var described: [String: Any] = [:]
-    if let title = text(windowValues[titleAttribute]) { described["title"] = title }
+    let title = text(windowValues[titleAttribute])
+    if !dump, let pageTitle = target.pageTitle {
+        guard let title = title,
+              pageTitle.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)) != nil
+        else { return nil }
+    }
+
+    var described: [String: Any] = ["bundleId": target.bundleId]
+    if let title = title { described["title"] = title }
     if let windowFrame = frame(position: windowValues[positionAttribute], size: windowValues[sizeAttribute]) {
         described["frame"] = windowFrame
     }
 
-    var queue: [(element: AXUIElement, depth: Int)] =
-        ((windowValues[childrenAttribute] as? [AXUIElement]) ?? []).map { (element: $0, depth: 1) }
+    // In a browser only the page is reported: the tab strip and toolbar sit
+    // outside its AXWebArea and carry every other tab's title.
+    let pageOnly = !dump && target.pageTitle != nil
+    var queue: [(element: AXUIElement, depth: Int, inPage: Bool)] =
+        ((windowValues[childrenAttribute] as? [AXUIElement]) ?? []).map { (element: $0, depth: 1, inPage: !pageOnly) }
     var head = 0
     var nodes: [[String: Any]] = []
     let visitLimit = dump ? maxDumpNodes : maxVisitedNodes
 
     while head < queue.count && head < visitLimit {
-        let (element, depth) = queue[head]
+        let (element, depth, parentInPage) = queue[head]
         head += 1
 
         let values = attributes(of: element, dump ? dumpAttributes : nodeAttributes)
-        let node = describeNode(values, depth: depth, includeValue: dump)
-        if dump || (isTextBearing(node) && nodes.count < maxReportedNodes) {
+        var node = describeNode(values, depth: depth, includeValue: dump)
+        let inPage = parentInPage || node["role"] as? String == "AXWebArea"
+        if dump {
             nodes.append(node)
+        } else if inPage && nodes.count < maxReportedNodes {
+            if let value = shortStaticTextValue(element, role: node["role"] as? String) {
+                node["value"] = value
+            }
+            if isTextBearing(node) || node["value"] != nil || isTileSizedGroup(node) {
+                nodes.append(node)
+            }
         }
 
         if depth < maxDepth, let children = values[childrenAttribute] as? [AXUIElement] {
             for child in children {
-                queue.append((element: child, depth: depth + 1))
+                queue.append((element: child, depth: depth + 1, inPage: inPage))
             }
         }
     }
@@ -223,14 +287,11 @@ func describeWindow(_ window: AXUIElement, dump: Bool) -> [String: Any] {
     return described
 }
 
-func runningTarget() -> (app: NSRunningApplication, bundleId: String)? {
-    for bundleId in bundleIds {
-        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-        if let app = running.first(where: { !$0.isTerminated }) {
-            return (app: app, bundleId: bundleId)
-        }
+func runningTargets() -> [(app: NSRunningApplication, target: Target)] {
+    targets.compactMap { target in
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: target.bundleId)
+        return running.first(where: { !$0.isTerminated }).map { (app: $0, target: target) }
     }
-    return nil
 }
 
 func elementAttribute(_ element: AXUIElement, _ name: String) -> (value: AnyObject?, error: AXError) {
@@ -266,13 +327,13 @@ func windowElements(of appElement: AXUIElement) -> (windows: [AXUIElement], erro
     return (windows: windows, error: windows.isEmpty && listed.error != .success ? listed.error : nil)
 }
 
-func describeApp(_ app: NSRunningApplication, dump: Bool) -> (windows: [[String: Any]], error: AXError?) {
+func describeApp(_ app: NSRunningApplication, target: Target, dump: Bool) -> (windows: [[String: Any]], error: AXError?) {
     let found = windowElements(of: AXUIElementCreateApplication(app.processIdentifier))
-    return (windows: found.windows.map { describeWindow($0, dump: dump) }, error: found.error)
+    return (windows: found.windows.compactMap { describeWindow($0, target: target, dump: dump) }, error: found.error)
 }
 
-if bundleIds.isEmpty {
-    emitError(code: "usage", message: "Usage: macos-meeting-speaker-listener [--dump] --bundle-id <id> [--interval-ms <ms>]")
+if targets.isEmpty {
+    emitError(code: "usage", message: "Usage: macos-meeting-speaker-listener [--dump] --bundle-id <id> [--page-title <pattern>] [--interval-ms <ms>]")
     exit(64)
 }
 
@@ -286,17 +347,17 @@ if !AXIsProcessTrusted() {
 _ = AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), messagingTimeoutSeconds)
 
 if dumpMode {
-    guard let target = runningTarget() else {
+    guard let running = runningTargets().first else {
         emitError(code: "app_not_running", message: "None of the requested apps is running")
         exit(1)
     }
-    let described = describeApp(target.app, dump: true)
+    let described = describeApp(running.app, target: running.target, dump: true)
     if let error = described.error {
         emitError(code: "windows_unreadable", message: "Could not read the app's windows (AXError \(error.rawValue))")
         exit(1)
     }
     emit(
-        ["type": "dump", "at": nowMs(), "bundleId": target.bundleId, "windows": described.windows],
+        ["type": "dump", "at": nowMs(), "bundleId": running.target.bundleId, "windows": described.windows],
         pretty: true
     )
     exit(0)
@@ -314,12 +375,12 @@ for signalNumber in [SIGTERM, SIGINT] {
 var lastStatus = ""
 var lastWindowsJSON: Data?
 
-func reportStatus(_ state: String, bundleId: String? = nil, axError: AXError? = nil) {
-    let key = state + ":" + (bundleId ?? "") + ":" + (axError.map { String($0.rawValue) } ?? "")
+func reportStatus(_ state: String, bundleIds: [String] = [], axError: AXError? = nil) {
+    let key = state + ":" + bundleIds.joined(separator: ",") + ":" + (axError.map { String($0.rawValue) } ?? "")
     guard key != lastStatus else { return }
     lastStatus = key
     var payload: [String: Any] = ["type": "status", "state": state]
-    if let bundleId = bundleId { payload["bundleId"] = bundleId }
+    if !bundleIds.isEmpty { payload["bundleIds"] = bundleIds }
     if let axError = axError { payload["axError"] = Int(axError.rawValue) }
     emit(payload)
 }
@@ -329,20 +390,30 @@ func poll() {
     // any more, and the helper writes too rarely for SIGPIPE to end it.
     if getppid() == 1 { exit(0) }
 
-    guard let target = runningTarget() else {
+    let running = runningTargets()
+    if running.isEmpty {
         lastWindowsJSON = nil
         reportStatus("waiting_for_app")
         return
     }
-    let described = describeApp(target.app, dump: false)
-    if let error = described.error {
+
+    // Every running app is read each poll: a browser is always open, and a
+    // Meet call must not hide a Zoom call or the other way round.
+    var windows: [[String: Any]] = []
+    var errors: [AXError] = []
+    for entry in running {
+        let described = describeApp(entry.app, target: entry.target, dump: false)
+        windows += described.windows
+        if let error = described.error { errors.append(error) }
+    }
+    let bundleIds = running.map { $0.target.bundleId }
+    if errors.count == running.count, let error = errors.first {
         lastWindowsJSON = nil
-        reportStatus("unreadable", bundleId: target.bundleId, axError: error)
+        reportStatus("unreadable", bundleIds: bundleIds, axError: error)
         return
     }
-    reportStatus("tracking", bundleId: target.bundleId)
+    reportStatus("tracking", bundleIds: bundleIds)
 
-    let windows = described.windows
     guard
         JSONSerialization.isValidJSONObject(windows),
         let windowsJSON = try? JSONSerialization.data(withJSONObject: windows, options: [.sortedKeys])
@@ -350,7 +421,7 @@ func poll() {
     if windowsJSON == lastWindowsJSON { return }
     lastWindowsJSON = windowsJSON
 
-    emit(["type": "snapshot", "at": nowMs(), "bundleId": target.bundleId, "windows": windows])
+    emit(["type": "snapshot", "at": nowMs(), "windows": windows])
 }
 
 emit(["type": "start", "intervalMs": intervalMs])

@@ -56,8 +56,8 @@
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
       },
       "appSpeakerLabels": {
-        "title": "Nomina i partecipanti da Zoom",
-        "description": "Etichetta le voci con i nomi dei partecipanti e chi sta parlando nell'app desktop di Zoom. Usa il permesso Accessibilità e funziona con \"Identifica ed etichetta i partecipanti\" attivo. Tieni Zoom nella vista relatore: la vista galleria non mostra chi sta parlando."
+        "title": "Dai un nome ai partecipanti dall'app di riunione",
+        "description": "Etichetta le voci con i nomi che Zoom, o Google Meet e Microsoft Teams in Chrome, mostrano per chi sta parlando. Usa la vista relatore (In evidenza in Meet) o attiva i sottotitoli in Meet o Teams: la vista galleria non mostra chi sta parlando. Usa il permesso Accessibilità e funziona con \"Identifica ed etichetta i partecipanti\" attivo."
       }
     }
   },

@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
 const {
-  MEETING_APP_SPEAKER_BUNDLE_IDS,
+  MEETING_APP_SPEAKER_TARGETS,
   interpretMeetingAppSnapshot,
 } = require("./meetingAppSpeakerAdapters");
 
@@ -99,7 +99,9 @@ class MeetingSpeakerListener {
     this.lastStrategy = null;
 
     const args = [
-      ...MEETING_APP_SPEAKER_BUNDLE_IDS.flatMap((bundleId) => ["--bundle-id", bundleId]),
+      ...MEETING_APP_SPEAKER_TARGETS.flatMap(({ bundleId, pageTitle }) =>
+        pageTitle ? ["--bundle-id", bundleId, "--page-title", pageTitle] : ["--bundle-id", bundleId]
+      ),
       "--interval-ms",
       String(POLL_INTERVAL_MS),
     ];
@@ -240,7 +242,7 @@ class MeetingSpeakerListener {
     if (message.type === "status") {
       debugLogger.debug(
         "[MeetingSpeakerListener] status",
-        { state: message.state, bundleId: message.bundleId, axError: message.axError },
+        { state: message.state, bundleIds: message.bundleIds, axError: message.axError },
         "meeting"
       );
       if (message.state !== "tracking") {

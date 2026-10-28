@@ -56,8 +56,8 @@
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
       },
       "appSpeakerLabels": {
-        "title": "Sprecher aus Zoom benennen",
-        "description": "Beschriftet Stimmen mit den Teilnehmernamen und dem aktiven Sprecher aus der Zoom-Desktop-App. Nutzt die Bedienungshilfen-Berechtigung und funktioniert mit „Sprecher erkennen und beschriften“. Lass Zoom in der Sprecheransicht: Die Galerieansicht zeigt nicht, wer spricht."
+        "title": "Sprecher aus deiner Meeting-App benennen",
+        "description": "Beschriftet Stimmen mit den Namen, die Zoom oder Google Meet und Microsoft Teams in Chrome für die sprechende Person anzeigen. Nutze die Sprecheransicht (Spotlight in Meet) oder aktiviere Untertitel in Meet oder Teams: Die Galerieansicht zeigt nicht, wer spricht. Nutzt die Bedienungshilfen-Berechtigung und funktioniert mit „Sprecher erkennen und beschriften“."
       }
     }
   },

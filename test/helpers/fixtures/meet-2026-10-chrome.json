@@ -1,0 +1,2537 @@
+{
+  "twoPersonMuted": {
+    "type": "snapshot",
+    "at": 1793199222680,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Meet – abc-defg-hij - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Meet – abc-defg-hij",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "frame": [929, 302, 844, 663]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 286, 876, 687]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 128]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 1021, 876, 80]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 663]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 663]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1413, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call controls",
+            "description": "Call controls",
+            "frame": [1037, 973, 628, 128]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [933, 530, 127, 431]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 663]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "title": "Left side panel",
+            "description": "Left side panel",
+            "frame": [913, 302, 1, 663]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1043, 973, 616, 120]
+          },
+          {
+            "depth": 18,
+            "role": "AXStaticText",
+            "frame": [937, 260, 39, 20],
+            "value": "16:53"
+          },
+          {
+            "depth": 18,
+            "role": "AXHeading",
+            "title": "abc-defg-hij",
+            "frame": [1001, 238, 98, 72]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call feature notifications and actions",
+            "description": "Call feature notifications and actions",
+            "frame": [1710, 252, 67, 36]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1165, 302, 373, 664]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 663]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationDialog",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1043, 973, 616, 48]
+          },
+          {
+            "depth": 18,
+            "role": "AXButton",
+            "title": "Raise hand (Ctrl + ⌘ + h)",
+            "description": "Raise hand (Ctrl + ⌘ + h)",
+            "frame": [1459, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Meeting details",
+            "description": "Meeting details",
+            "frame": [1107, 256, 29, 29]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share screen",
+            "description": "Share screen",
+            "frame": [1255, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXCheckBox",
+            "subrole": "AXToggleButton",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1323, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Turn on captions",
+            "description": "Turn on captions",
+            "frame": [1391, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Leave call",
+            "description": "Leave call",
+            "frame": [1575, 1033, 72, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Skin tone. Unspecified skin tone selected.",
+            "description": "Skin tone. Unspecified skin tone selected.",
+            "frame": [1607, 981, 40, 40]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [1001, 260, 98, 20],
+            "value": "abc-defg-hij"
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "People",
+            "frame": [1714, 252, 59, 36]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1165, 302, 373, 663]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 817, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "Audio settings",
+            "description": "Audio settings",
+            "frame": [1055, 1033, 88, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn off microphone",
+            "description": "Turn off microphone",
+            "frame": [1095, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "Video settings",
+            "description": "Video settings",
+            "frame": [1155, 1033, 88, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on camera",
+            "description": "Turn on camera",
+            "frame": [1195, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXToolbar",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1055, 981, 360, 40]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1181, 930, 75, 20],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1532, 926, 57, 15],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "💖",
+            "description": "💖",
+            "frame": [1055, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👍",
+            "description": "👍",
+            "frame": [1095, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🎉",
+            "description": "🎉",
+            "frame": [1135, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👏",
+            "description": "👏",
+            "frame": [1175, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😂",
+            "description": "😂",
+            "frame": [1215, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😮",
+            "description": "😮",
+            "frame": [1255, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😢",
+            "description": "😢",
+            "frame": [1295, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🤔",
+            "description": "🤔",
+            "frame": [1335, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👎",
+            "description": "👎",
+            "frame": [1375, 981, 40, 40]
+          }
+        ]
+      }
+    ]
+  },
+  "twoPersonCaptions": {
+    "type": "snapshot",
+    "at": 1793199323033,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Meet – abc-defg-hij - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Meet – abc-defg-hij",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXStaticText",
+            "frame": [913, 238, 1, 1],
+            "value": "Live captions are on"
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 757, 876, 216]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 286, 876, 687]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 128]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 1021, 876, 80]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [929, 757, 844, 216]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1413, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call controls",
+            "description": "Call controls",
+            "frame": [1037, 973, 628, 128]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [933, 454, 127, 291]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "title": "Left side panel",
+            "description": "Left side panel",
+            "frame": [913, 302, 1, 663]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1043, 973, 616, 120]
+          },
+          {
+            "depth": 18,
+            "role": "AXStaticText",
+            "frame": [937, 260, 39, 20],
+            "value": "16:55"
+          },
+          {
+            "depth": 18,
+            "role": "AXHeading",
+            "title": "abc-defg-hij",
+            "frame": [1001, 238, 99, 72]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call feature notifications and actions",
+            "description": "Call feature notifications and actions",
+            "frame": [1710, 252, 67, 36]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1226, 302, 251, 448]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationDialog",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1043, 973, 616, 48]
+          },
+          {
+            "depth": 18,
+            "role": "AXButton",
+            "title": "Raise hand (Ctrl + ⌘ + h)",
+            "description": "Raise hand (Ctrl + ⌘ + h)",
+            "frame": [1459, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Meeting details",
+            "description": "Meeting details",
+            "frame": [1107, 256, 30, 29]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "Open caption settings",
+            "description": "Open caption settings",
+            "frame": [1717, 761, 40, 40]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Captions",
+            "description": "Captions",
+            "frame": [945, 886, 804, 87]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share screen",
+            "description": "Share screen",
+            "frame": [1255, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXCheckBox",
+            "subrole": "AXToggleButton",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1323, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Turn off captions",
+            "description": "Turn off captions",
+            "frame": [1391, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Leave call",
+            "description": "Leave call",
+            "frame": [1575, 1033, 72, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font size",
+            "description": "Font size",
+            "frame": [1637, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font colour",
+            "description": "Font colour",
+            "frame": [1677, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "frame": [945, 886, 804, 87]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Skin tone. Unspecified skin tone selected.",
+            "description": "Skin tone. Unspecified skin tone selected.",
+            "frame": [1607, 981, 40, 40]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [1001, 260, 99, 20],
+            "value": "abc-defg-hij"
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "People",
+            "frame": [1714, 252, 59, 36]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1226, 302, 251, 447]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXComboBox",
+            "title": "Meeting language",
+            "description": "Meeting language",
+            "frame": [945, 765, 200, 32]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "Audio settings",
+            "description": "Audio settings",
+            "frame": [1055, 1033, 88, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on microphone",
+            "description": "Turn on microphone",
+            "frame": [1095, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "Video settings",
+            "description": "Video settings",
+            "frame": [1155, 1033, 88, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on camera",
+            "description": "Turn on camera",
+            "frame": [1195, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "You're continuously framed",
+            "description": "You're continuously framed",
+            "frame": [1574, 645, 44, 44]
+          },
+          {
+            "depth": 22,
+            "role": "AXButton",
+            "title": "Backgrounds and effects",
+            "description": "Backgrounds and effects",
+            "frame": [1618, 645, 44, 44]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "English",
+            "description": "English",
+            "frame": [989, 771, 112, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 908, 713, 57],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXToolbar",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1055, 981, 360, 40]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [1242, 714, 75, 20],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 23,
+            "role": "AXPopUpButton",
+            "title": "More options for Priya Shah",
+            "description": "More options for Priya Shah",
+            "frame": [1662, 645, 44, 44]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [989, 772, 46, 18],
+            "value": "English"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 886, 74, 19],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1532, 710, 57, 15],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "💖",
+            "description": "💖",
+            "frame": [1055, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👍",
+            "description": "👍",
+            "frame": [1095, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🎉",
+            "description": "🎉",
+            "frame": [1135, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👏",
+            "description": "👏",
+            "frame": [1175, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😂",
+            "description": "😂",
+            "frame": [1215, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😮",
+            "description": "😮",
+            "frame": [1255, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😢",
+            "description": "😢",
+            "frame": [1295, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🤔",
+            "description": "🤔",
+            "frame": [1335, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👎",
+            "description": "👎",
+            "frame": [1375, 981, 40, 40]
+          }
+        ]
+      }
+    ]
+  },
+  "spotlightGuestTalking": {
+    "type": "snapshot",
+    "at": 1793199597842,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Meet – abc-defg-hij - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 5,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Meet – abc-defg-hij",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 238, 876, 863]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 757, 876, 216]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 286, 876, 687]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 238, 876, 128]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 1021, 876, 80]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [929, 757, 844, 216]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1413, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 286, 376, 687]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call controls",
+            "description": "Call controls",
+            "frame": [1037, 973, 628, 128]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [933, 454, 127, 291]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "title": "Left side panel",
+            "description": "Left side panel",
+            "frame": [913, 302, 1, 663]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1043, 973, 616, 120]
+          },
+          {
+            "depth": 18,
+            "role": "AXStaticText",
+            "frame": [937, 260, 39, 20],
+            "value": "16:59"
+          },
+          {
+            "depth": 18,
+            "role": "AXHeading",
+            "title": "abc-defg-hij",
+            "frame": [1000, 238, 99, 72]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call feature notifications and actions",
+            "description": "Call feature notifications and actions",
+            "frame": [1710, 252, 67, 36]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [929, 302, 844, 448]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationDialog",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1043, 973, 616, 48]
+          },
+          {
+            "depth": 18,
+            "role": "AXButton",
+            "title": "Raise hand (Ctrl + ⌘ + h)",
+            "description": "Raise hand (Ctrl + ⌘ + h)",
+            "frame": [1459, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Meeting details",
+            "description": "Meeting details",
+            "frame": [1107, 256, 29, 29]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "Open caption settings",
+            "description": "Open caption settings",
+            "frame": [1717, 761, 40, 40]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Captions",
+            "description": "Captions",
+            "frame": [945, 770, 804, 203]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share screen",
+            "description": "Share screen",
+            "frame": [1255, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXCheckBox",
+            "subrole": "AXToggleButton",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1323, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Turn off captions",
+            "description": "Turn off captions",
+            "frame": [1391, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Leave call",
+            "description": "Leave call",
+            "frame": [1575, 1033, 72, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 302, 844, 447]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font size",
+            "description": "Font size",
+            "frame": [1637, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font colour",
+            "description": "Font colour",
+            "frame": [1677, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "frame": [945, 770, 804, 145]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Skin tone. Unspecified skin tone selected.",
+            "description": "Skin tone. Unspecified skin tone selected.",
+            "frame": [1607, 981, 40, 40]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [1000, 260, 99, 20],
+            "value": "abc-defg-hij"
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "People",
+            "frame": [1714, 252, 59, 36]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXComboBox",
+            "title": "Meeting language",
+            "description": "Meeting language",
+            "frame": [945, 765, 200, 32]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [997, 792, 744, 115]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on microphone",
+            "description": "Turn on microphone",
+            "frame": [1095, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on camera",
+            "description": "Turn on camera",
+            "frame": [1195, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "English",
+            "description": "English",
+            "frame": [989, 771, 112, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 792, 713, 58],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1147, 821, 349, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 821, 742, 57],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1528, 849, 163, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 878, 381, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1383, 878, 255, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 937, 326, 28],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1328, 937, 235, 28],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXToolbar",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1055, 981, 360, 40]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "Audio settings",
+            "description": "Audio settings",
+            "frame": [1055, 1033, 88, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "Video settings",
+            "description": "Video settings",
+            "frame": [1155, 1033, 88, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [945, 714, 80, 20],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [989, 772, 46, 18],
+            "value": "Caption text."
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 770, 74, 20],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 914, 78, 20],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1532, 710, 57, 15],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "💖",
+            "description": "💖",
+            "frame": [1055, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👍",
+            "description": "👍",
+            "frame": [1095, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🎉",
+            "description": "🎉",
+            "frame": [1135, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👏",
+            "description": "👏",
+            "frame": [1175, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😂",
+            "description": "😂",
+            "frame": [1215, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😮",
+            "description": "😮",
+            "frame": [1255, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😢",
+            "description": "😢",
+            "frame": [1295, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🤔",
+            "description": "🤔",
+            "frame": [1335, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👎",
+            "description": "👎",
+            "frame": [1375, 981, 40, 40]
+          }
+        ]
+      }
+    ]
+  },
+  "spotlightPhoneTalking": {
+    "type": "snapshot",
+    "at": 1793199644826,
+    "windows": [
+      {
+        "bundleId": "com.google.Chrome",
+        "title": "Meet – abc-defg-hij - Google Chrome",
+        "frame": [913, 61, 876, 1040],
+        "nodes": [
+          {
+            "depth": 6,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 8,
+            "role": "AXWebArea",
+            "title": "Meet – abc-defg-hij",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 9,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 10,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 11,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 12,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 13,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 14,
+            "role": "AXGroup",
+            "frame": [913, 182, 876, 919]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkMain",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 757, 876, 216]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 230, 876, 743]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 182, 876, 128]
+          },
+          {
+            "depth": 15,
+            "role": "AXGroup",
+            "frame": [913, 1021, 876, 80]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [929, 757, 844, 216]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [1413, 230, 376, 743]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "frame": [913, 230, 376, 743]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 16,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call controls",
+            "description": "Call controls",
+            "frame": [1037, 973, 628, 128]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [933, 418, 127, 327]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "title": "Left side panel",
+            "description": "Left side panel",
+            "frame": [913, 246, 1, 719]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [913, 823, 388, 252]
+          },
+          {
+            "depth": 17,
+            "role": "AXGroup",
+            "frame": [1043, 973, 616, 120]
+          },
+          {
+            "depth": 18,
+            "role": "AXStaticText",
+            "frame": [937, 204, 42, 20],
+            "value": "17:00"
+          },
+          {
+            "depth": 18,
+            "role": "AXHeading",
+            "title": "abc-defg-hij",
+            "frame": [1003, 182, 99, 72]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Call feature notifications and actions",
+            "description": "Call feature notifications and actions",
+            "frame": [1710, 196, 67, 36]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [929, 246, 844, 504]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "frame": [929, 769, 844, 204]
+          },
+          {
+            "depth": 18,
+            "role": "AXGroup",
+            "subrole": "AXApplicationDialog",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1043, 973, 616, 48]
+          },
+          {
+            "depth": 18,
+            "role": "AXButton",
+            "title": "Raise hand (Ctrl + ⌘ + h)",
+            "description": "Raise hand (Ctrl + ⌘ + h)",
+            "frame": [1459, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Meeting details",
+            "description": "Meeting details",
+            "frame": [1110, 200, 29, 29]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 19,
+            "role": "AXPopUpButton",
+            "title": "Open caption settings",
+            "description": "Open caption settings",
+            "frame": [1717, 761, 40, 40]
+          },
+          {
+            "depth": 19,
+            "role": "AXGroup",
+            "subrole": "AXLandmarkRegion",
+            "title": "Captions",
+            "description": "Captions",
+            "frame": [945, 769, 804, 204]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Share screen",
+            "description": "Share screen",
+            "frame": [1255, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXCheckBox",
+            "subrole": "AXToggleButton",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1323, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Turn off captions",
+            "description": "Turn off captions",
+            "frame": [1391, 1033, 56, 48]
+          },
+          {
+            "depth": 19,
+            "role": "AXButton",
+            "title": "Leave call",
+            "description": "Leave call",
+            "frame": [1575, 1033, 72, 48]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1193, 246, 315, 503]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [929, 246, 844, 503]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font size",
+            "description": "Font size",
+            "frame": [1637, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Font colour",
+            "description": "Font colour",
+            "frame": [1677, 761, 40, 40]
+          },
+          {
+            "depth": 20,
+            "role": "AXGroup",
+            "frame": [945, 770, 804, 145]
+          },
+          {
+            "depth": 20,
+            "role": "AXPopUpButton",
+            "title": "Skin tone. Unspecified skin tone selected.",
+            "description": "Skin tone. Unspecified skin tone selected.",
+            "frame": [1607, 981, 40, 40]
+          },
+          {
+            "depth": 21,
+            "role": "AXStaticText",
+            "frame": [1003, 204, 99, 20],
+            "value": "abc-defg-hij"
+          },
+          {
+            "depth": 21,
+            "role": "AXPopUpButton",
+            "title": "People",
+            "frame": [1714, 196, 59, 36]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1193, 246, 315, 503]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "subrole": "AXEmptyGroup",
+            "frame": [1522, 601, 235, 132]
+          },
+          {
+            "depth": 21,
+            "role": "AXComboBox",
+            "title": "Meeting language",
+            "description": "Meeting language",
+            "frame": [945, 765, 200, 32]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "frame": [997, 792, 744, 115]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on microphone",
+            "description": "Turn on microphone",
+            "frame": [1095, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXButton",
+            "title": "Turn on camera",
+            "description": "Turn on camera",
+            "frame": [1195, 1033, 48, 48]
+          },
+          {
+            "depth": 21,
+            "role": "AXGroup",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXGroup",
+            "title": "English",
+            "description": "English",
+            "frame": [989, 771, 112, 20]
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 769, 713, 1],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1147, 769, 349, 1],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 769, 742, 1],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1528, 769, 163, 1],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 757, 381, 6],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1383, 757, 255, 6],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 792, 326, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1328, 792, 235, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 792, 726, 58],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 821, 709, 57],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 849, 717, 58],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1235, 878, 61, 29],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [997, 937, 181, 28],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXStaticText",
+            "frame": [1183, 937, 146, 28],
+            "value": "Caption text."
+          },
+          {
+            "depth": 22,
+            "role": "AXToolbar",
+            "title": "Send a reaction",
+            "description": "Send a reaction",
+            "frame": [1055, 981, 360, 40]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "Audio settings",
+            "description": "Audio settings",
+            "frame": [1055, 1033, 88, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "Video settings",
+            "description": "Video settings",
+            "frame": [1155, 1033, 88, 48]
+          },
+          {
+            "depth": 22,
+            "role": "AXPopUpButton",
+            "title": "More options",
+            "description": "More options",
+            "frame": [1527, 1033, 36, 48]
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [945, 714, 75, 20],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [989, 772, 46, 18],
+            "value": "Caption text."
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 769, 74, 1],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 770, 78, 20],
+            "value": "Jane Doe"
+          },
+          {
+            "depth": 23,
+            "role": "AXStaticText",
+            "frame": [997, 914, 74, 20],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXStaticText",
+            "frame": [1532, 710, 57, 15],
+            "value": "Priya Shah"
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "💖",
+            "description": "💖",
+            "frame": [1055, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👍",
+            "description": "👍",
+            "frame": [1095, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🎉",
+            "description": "🎉",
+            "frame": [1135, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👏",
+            "description": "👏",
+            "frame": [1175, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😂",
+            "description": "😂",
+            "frame": [1215, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😮",
+            "description": "😮",
+            "frame": [1255, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "😢",
+            "description": "😢",
+            "frame": [1295, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "🤔",
+            "description": "🤔",
+            "frame": [1335, 981, 40, 40]
+          },
+          {
+            "depth": 24,
+            "role": "AXButton",
+            "title": "👎",
+            "description": "👎",
+            "frame": [1375, 981, 40, 40]
+          }
+        ]
+      }
+    ]
+  }
+}

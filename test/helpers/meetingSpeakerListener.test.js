@@ -85,7 +85,16 @@ test("asks the helper for every adapted app at the poll interval", async () => {
   const { listener, spawned } = await startListener();
 
   assert.equal(spawned[0].binary, "/fake/macos-meeting-speaker-listener");
-  assert.deepEqual(spawned[0].args, ["--bundle-id", "us.zoom.xos", "--interval-ms", "500"]);
+  assert.deepEqual(spawned[0].args, [
+    "--bundle-id",
+    "us.zoom.xos",
+    "--bundle-id",
+    "com.google.Chrome",
+    "--page-title",
+    "(?:^Meet [–-] )|(?:\\| Microsoft Teams\\b)",
+    "--interval-ms",
+    "500",
+  ]);
   await listener.stop();
 });
 
@@ -112,7 +121,10 @@ test("turns snapshots into speaking states, across split chunks", async () => {
 
 test("clears speaking when the meeting app goes away", async () => {
   const { listener, child, states } = await startListener();
-  child.stdout.emit("data", line({ type: "status", state: "tracking", bundleId: "us.zoom.xos" }));
+  child.stdout.emit(
+    "data",
+    line({ type: "status", state: "tracking", bundleIds: ["us.zoom.xos"] })
+  );
   assert.equal(states.length, 0);
 
   child.stdout.emit("data", line(SPEAKER_VIEW_SNAPSHOT));
@@ -128,7 +140,7 @@ test("clears speaking while the meeting app's windows can't be read", async () =
   child.stdout.emit("data", line(SPEAKER_VIEW_SNAPSHOT));
   child.stdout.emit(
     "data",
-    line({ type: "status", state: "unreadable", bundleId: "us.zoom.xos", axError: -25204 })
+    line({ type: "status", state: "unreadable", bundleIds: ["us.zoom.xos"], axError: -25204 })
   );
   assert.equal(states.length, 2);
   assert.deepEqual(states[1].speakingIds, []);

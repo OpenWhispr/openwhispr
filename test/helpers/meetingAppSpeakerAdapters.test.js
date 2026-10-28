@@ -2,15 +2,21 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  MEETING_APP_SPEAKER_BUNDLE_IDS,
+  MEETING_APP_SPEAKER_TARGETS,
   interpretMeetingAppSnapshot,
   parseZoomTileText,
+  parseTeamsLabel,
   participantIdForName,
 } = require("../../src/helpers/meetingAppSpeakerAdapters");
 
 const ZOOM_SPEAKER_VIEW = require("./fixtures/zoom-7.2-speaker-view.json");
 // One live session, Priya on the Mac and Omar on a phone.
 const ZOOM_TWO_PERSON = require("./fixtures/zoom-7.2-two-person.json");
+// Chrome, Oct 2026: Priya on the Mac, Omar on a phone, Jane as a Safari guest,
+// shaped as the live helper reports them. In the Meet session Omar's phone
+// used Priya's display name, so Meet's "Priya Shah" tiles are two people.
+const MEET = require("./fixtures/meet-2026-10-chrome.json");
+const TEAMS_WEB = require("./fixtures/teams-web-2026-10-chrome.json");
 
 // Synthetic trees for layouts not dumped yet, shaped like Zoom 7.2's (tiles are
 // AXTabGroups; see the fixture).
@@ -234,8 +240,93 @@ test("the home window's profile button marks the user's tile", () => {
   }
 });
 
+const verdict = (snapshot) => {
+  const state = interpretMeetingAppSnapshot(snapshot);
+  return [state.strategy, state.speakingIds];
+};
+
+test("Teams web: Speaker view's large tile speaks, gallery names no one", () => {
+  assert.deepEqual(verdict(TEAMS_WEB.speakerPhoneTalking), ["speaker-view", ["omar haddad"]]);
+  assert.deepEqual(verdict(TEAMS_WEB.speakerGuestTalking), ["speaker-view", ["jane doe"]]);
+  assert.deepEqual(verdict(TEAMS_WEB.galleryMuted), ["none", []]);
+  assert.deepEqual(verdict(TEAMS_WEB.galleryPhoneTalking), ["none", []]);
+
+  const { participants } = interpretMeetingAppSnapshot(TEAMS_WEB.galleryMuted);
+  assert.deepEqual(participants.map(({ id, isSelf }) => [id, isSelf]).sort(), [
+    ["jane doe", false],
+    ["omar haddad", false],
+    ["priya shah", true],
+  ]);
+});
+
+test("Teams web: captions name the speaker in any layout", () => {
+  assert.deepEqual(verdict(TEAMS_WEB.captionsGuestTalking), ["captions", ["jane doe"]]);
+});
+
+test("parses Teams tile labels", () => {
+  assert.deepEqual(parseTeamsLabel("Myself video, Priya Shah, Muted, Has context menu"), {
+    name: "Priya Shah",
+    isSelf: true,
+    tokens: ["muted", "has context menu"],
+  });
+  assert.deepEqual(parseTeamsLabel("Jane Doe (Guest), video is on, Context menu is available"), {
+    name: "Jane Doe",
+    isSelf: false,
+    tokens: ["video is on", "context menu is available"],
+  });
+});
+
+test("Meet: Spotlight's large tile speaks, and follows the speaker", () => {
+  assert.deepEqual(verdict(MEET.spotlightGuestTalking).slice(1), [["jane doe"]]);
+  assert.deepEqual(verdict(MEET.spotlightPhoneTalking).slice(1), [["priya shah"]]);
+});
+
+test("Meet: captions win over the layout, newest block first", () => {
+  // The bar's newest block is Jane while she talks, then the phone.
+  assert.deepEqual(verdict(MEET.spotlightGuestTalking), ["captions", ["jane doe"]]);
+  assert.deepEqual(verdict(MEET.spotlightPhoneTalking), ["captions", ["priya shah"]]);
+
+  const withoutCaptions = {
+    ...MEET.spotlightGuestTalking,
+    windows: MEET.spotlightGuestTalking.windows.map((window) => ({
+      ...window,
+      nodes: window.nodes.filter((node) => node.title !== "Captions"),
+    })),
+  };
+  assert.deepEqual(verdict(withoutCaptions), ["speaker-view", ["jane doe"]]);
+});
+
+test("Meet: a caption name line is never read as a tile", () => {
+  const { participants } = interpretMeetingAppSnapshot(MEET.spotlightGuestTalking);
+  assert.deepEqual(participants.map(({ id }) => id).sort(), ["jane doe", "priya shah"]);
+});
+
+test("browser windows go to the adapter their page title names", () => {
+  const meet = MEET.spotlightGuestTalking.windows[0];
+  const retitled = (title) =>
+    interpretMeetingAppSnapshot({ type: "snapshot", windows: [{ ...meet, title }] });
+  assert.equal(retitled("Inbox - Google Chrome").strategy, "none");
+  assert.deepEqual(retitled("Inbox - Google Chrome").participants, []);
+  assert.deepEqual(retitled(meet.title).speakingIds, ["jane doe"]);
+});
+
+test("one meeting naming a speaker wins over another app's silent one", () => {
+  const state = interpretMeetingAppSnapshot({
+    type: "snapshot",
+    windows: [
+      { ...meetingWindow(...gallery("Ann Lee", "Bo Chen")), bundleId: "us.zoom.xos" },
+      ...TEAMS_WEB.speakerGuestTalking.windows,
+    ],
+  });
+  assert.deepEqual(state.speakingIds, ["jane doe"]);
+  assert.ok(state.participants.some(({ id }) => id === "ann lee"));
+});
+
 test("only apps with an adapter are read", () => {
-  assert.ok(MEETING_APP_SPEAKER_BUNDLE_IDS.includes("us.zoom.xos"));
+  assert.deepEqual(
+    MEETING_APP_SPEAKER_TARGETS.map(({ bundleId }) => bundleId),
+    ["us.zoom.xos", "com.google.Chrome"]
+  );
   const state = interpretMeetingAppSnapshot({
     bundleId: "com.example.other",
     windows: [meetingWindow(...gallery("Jane Doe, Talking"))],

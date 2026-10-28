@@ -56,8 +56,8 @@
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
       },
       "appSpeakerLabels": {
-        "title": "Nomear participantes pelo Zoom",
-        "description": "Rotula as vozes com os nomes dos participantes e quem está falando no app Zoom para desktop. Usa a permissão de Acessibilidade e funciona com \"Identificar e rotular participantes\" ativado. Mantenha o Zoom na visualização do orador: a visualização da galeria não mostra quem está falando."
+        "title": "Nomear participantes pelo app de reunião",
+        "description": "Rotula as vozes com os nomes que o Zoom, ou o Google Meet e o Microsoft Teams no Chrome, mostram para quem está falando. Use a visualização do orador (Destaque no Meet) ou ative as legendas no Meet ou no Teams: a visualização em galeria não mostra quem está falando. Usa a permissão de Acessibilidade e funciona com \"Identificar e rotular participantes\" ativado."
       }
     }
   },

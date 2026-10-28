@@ -56,8 +56,8 @@
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
       },
       "appSpeakerLabels": {
-        "title": "从 Zoom 获取发言者姓名",
-        "description": "使用 Zoom 桌面应用中显示的参会者姓名和当前发言者来标记声音。需要辅助功能权限，并在开启\"识别并标记发言者\"时生效。请让 Zoom 保持演讲者视图：图库视图不会显示谁在发言。"
+        "title": "从会议应用识别发言者姓名",
+        "description": "使用 Zoom，或 Chrome 中的 Google Meet 和 Microsoft Teams 为当前发言者显示的姓名来标记声音。请使用演讲者视图（Meet 中为聚焦视图），或在 Meet 或 Teams 中开启实时字幕：图库视图不会显示谁在发言。需要辅助功能权限，并在开启\"识别并标记发言者\"时生效。"
       }
     }
   },

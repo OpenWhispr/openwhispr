@@ -56,8 +56,8 @@
         "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
       },
       "appSpeakerLabels": {
-        "title": "Nommer les intervenants depuis Zoom",
-        "description": "Étiquette les voix avec les noms des participants et l'intervenant actif affichés dans l'app Zoom pour ordinateur. Utilise l'autorisation Accessibilité et fonctionne avec « Identifier et étiqueter les intervenants » activé. Gardez Zoom en mode intervenant : le mode galerie n'indique pas qui parle."
+        "title": "Nommer les intervenants depuis votre app de réunion",
+        "description": "Étiquette les voix avec les noms que Zoom, ou Google Meet et Microsoft Teams dans Chrome, affichent pour la personne qui parle. Utilisez le mode intervenant (Spotlight dans Meet) ou activez les sous-titres dans Meet ou Teams : le mode galerie n'indique pas qui parle. Utilise l'autorisation Accessibilité et fonctionne avec « Identifier et étiqueter les intervenants » activé."
       }
     }
   },

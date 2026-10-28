@@ -56,8 +56,8 @@
         "description": "When off, transcripts show \"You\" and \"Others\""
       },
       "appSpeakerLabels": {
-        "title": "Name speakers from Zoom",
-        "description": "Labels voices with the participant names and active speaker shown in the Zoom desktop app. Uses the Accessibility permission and works with Identify and label speakers on. Keep Zoom in Speaker view: Gallery view doesn't show who's talking."
+        "title": "Name speakers from your meeting app",
+        "description": "Labels voices with the names Zoom, or Google Meet and Microsoft Teams in Chrome, show for whoever is talking. Use Speaker view (Spotlight in Meet), or turn on live captions in Meet or Teams: gallery views don't show who's talking. Uses the Accessibility permission and works with Identify and label speakers on."
       }
     }
   },
