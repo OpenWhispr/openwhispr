@@ -2,9 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { WINDOWS_RESERVED_NAME } = require("./windowsReservedName");
 
 const ENCODED_FOLDER_PREFIX = "__ow-";
-const WINDOWS_RESERVED_FOLDER = /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i;
 
 class MarkdownMirror {
   constructor() {
@@ -36,7 +36,7 @@ class MarkdownMirror {
       raw.startsWith(" ") ||
       /[ .]$/.test(raw) ||
       /[<>:"/\\|?*\u0000-\u001f]/.test(raw) ||
-      WINDOWS_RESERVED_FOLDER.test(raw) ||
+      WINDOWS_RESERVED_NAME.test(raw) ||
       raw.toLowerCase().startsWith(ENCODED_FOLDER_PREFIX);
     if (!requiresEncoding) return raw;
 

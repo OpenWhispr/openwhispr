@@ -126,6 +126,9 @@ describe('provider uploads that the provider would reject', () => {
     pick({ name: 'voice.aac', size: 1 * MB });
     const { error } = await upload();
     expect(error).toBeUndefined();
-    expect(mockTranscribeAndCleanup).toHaveBeenCalled();
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'cloud', requestContext: 'file', purpose: 'upload' }),
+      expect.anything(),
+    );
   });
 });

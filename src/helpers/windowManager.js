@@ -81,6 +81,10 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
+    this.getMeetingRecordingRefusal = () => null;
+    // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
+    this.resolveMeetingRecordingRefusal = async () => null;
     // Set by main.js: an app started to the tray creates no control panel.
     this.startedMinimized = false;
     this.notificationWindow = null;
@@ -221,6 +225,7 @@ class WindowManager {
     this._assistantPanelOpen = Boolean(open);
     if (!this._assistantPanelOpen) {
       this._assistantPanelBusy = false;
+      this.assistantPasteTarget?.clear();
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       if (this._assistantPanelOpen) {
@@ -1162,6 +1167,15 @@ class WindowManager {
       return;
     }
 
+    // Each recording may become a voice command the panel answers; the panel takes the app it
+    // was started over as its paste target only then (assistantPasteTarget.js). Follow-ups
+    // spoken while the panel is open count too, so a capture is never an older recording's.
+    if (
+      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
+      nextState !== DICTATION_LIFECYCLE.IDLE
+    ) {
+      this.assistantPasteTarget?.noteRecordingStart();
+    }
     this._dictationLifecycleState = nextState;
     this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
@@ -1220,6 +1234,13 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The pill explains a refused meeting start the way it explains a refused
+  // tray action: the start may have come from a hotkey with nothing else shown.
+  sendMeetingStartRefused(code) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("meeting-start-refused", code);
   }
 
   // The tray's Ask assistant. Only the renderer can open the panel, and only it

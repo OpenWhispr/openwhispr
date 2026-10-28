@@ -2,10 +2,15 @@ import { create } from "zustand";
 import i18n from "../i18n";
 import { transcribeFileWithSpeakers } from "../services/fileTranscription";
 import type { FileTranscriptionConfig, DiarizationSettings } from "../services/fileTranscription";
-import { DOWNLOAD_ERROR_KEYS, transcriptionErrorKey } from "../components/notes/shared";
+import {
+  DOWNLOAD_ERROR_KEYS,
+  isUploadPolicyRefusal,
+  transcriptionErrorKey,
+  uploadRestrictionKey,
+} from "../components/notes/shared";
 import { saveUploadNote, uploadTitleFallback } from "../services/uploadNotes";
 import { getSettings } from "./settingsStore";
-import { isTranscriptionContextAllowed } from "./policyRules";
+import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
 import { isManagedTranscriptionActive } from "../services/managedTranscription";
 import { describeProviderError } from "../utils/describeProviderError";
@@ -28,6 +33,8 @@ export interface QueueItem {
   diarizationWarning?: boolean;
   noteId?: number;
   tempPath?: string;
+  // Stopped by org policy, showing why in `error`; the next run retries it.
+  stoppedByPolicy?: boolean;
 }
 
 export interface TranscribeOptions {
@@ -49,13 +56,13 @@ export const useBatchQueueStore = create<BatchQueueStoreState>()(() => ({
   isProcessing: false,
 }));
 
-// Bumping the run id soft-cancels the drain loop; cloud and local uploads
-// additionally get a true backend abort via cancel-upload-transcription
-// (BYOK providers' in-flight IPC still can't be aborted). Either way the
+// Bumping the run id soft-cancels the drain loop; active uploads
+// additionally get a true backend abort via cancel-upload-transcription. The
 // orphaned run's late results are discarded on arrival while the UI unlocks
 // immediately.
 let runId = 0;
 let activeUploadRequestId: string | null = null;
+let activeUploadProgressCleanup: (() => void) | undefined;
 
 function updateQueue(updater: (prev: QueueItem[]) => QueueItem[]) {
   useBatchQueueStore.setState((s) => ({ queue: updater(s.queue) }));
@@ -94,13 +101,19 @@ export function removeQueueItem(id: string) {
   updateQueue((prev) => prev.filter((item) => item.id !== id));
 }
 
-export function cancelBatch() {
+function abortRun() {
   runId++;
+  activeUploadProgressCleanup?.();
+  activeUploadProgressCleanup = undefined;
   if (activeUploadRequestId) {
     window.electronAPI.cancelUploadTranscription?.(activeUploadRequestId);
     activeUploadRequestId = null;
   }
   window.electronAPI.cancelUrlDownload();
+}
+
+export function cancelBatch() {
+  abortRun();
   useBatchQueueStore.setState((s) => ({
     isProcessing: false,
     queue: s.queue.map((item) =>
@@ -113,6 +126,8 @@ export function cancelBatch() {
 
 export function clearBatchQueue() {
   runId++;
+  activeUploadProgressCleanup?.();
+  activeUploadProgressCleanup = undefined;
   useBatchQueueStore.setState({ queue: [], isProcessing: false });
 }
 
@@ -126,12 +141,20 @@ export function processBatchQueue(
 ): void {
   if (useBatchQueueStore.getState().isProcessing) return;
   if (
-    !isManagedTranscriptionActive() &&
-    !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload")
+    !isAudioFeatureAllowed(usePolicyStore.getState(), "upload") ||
+    (!isManagedTranscriptionActive() &&
+      !isTranscriptionContextAllowed(usePolicyStore.getState(), getSettings(), "upload"))
   )
     return;
   const run = ++runId;
-  useBatchQueueStore.setState({ isProcessing: true });
+  useBatchQueueStore.setState((s) => ({
+    isProcessing: true,
+    queue: s.queue.map((item) =>
+      item.stoppedByPolicy
+        ? { ...item, status: "queued", progress: 0, error: undefined, stoppedByPolicy: undefined }
+        : item
+    ),
+  }));
 
   const snapshotApiKey = transcribeOpts.transcription.getApiKey();
   const transcription: FileTranscriptionConfig = {
@@ -143,6 +166,15 @@ export function processBatchQueue(
   const updateItem = (id: string, updates: Partial<QueueItem>) => {
     if (run !== runId) return;
     updateQueue((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+  };
+
+  // A policy refusal would meet every later item too, so it ends the run and
+  // leaves the rest queued for when policy allows uploads again.
+  let refusedByPolicy = false;
+  const failItem = (id: string, error: string, failure: unknown) => {
+    const byPolicy = isUploadPolicyRefusal(failure);
+    if (byPolicy) refusedByPolicy = true;
+    updateItem(id, { status: "error", error, ...(byPolicy ? { stoppedByPolicy: true } : {}) });
   };
 
   const processItem = async (item: QueueItem) => {
@@ -172,7 +204,7 @@ export function processBatchQueue(
               fail.code === "DOWNLOAD_CANCELLED"
                 ? "batchCancelled"
                 : DOWNLOAD_ERROR_KEYS[fail.code || ""];
-            updateItem(item.id, { status: "error", error: key || fail.error });
+            failItem(item.id, key || fail.error, fail);
             return;
           }
           filePath = res.tempPath;
@@ -203,6 +235,16 @@ export function processBatchQueue(
 
       const requestId = crypto.randomUUID();
       activeUploadRequestId = requestId;
+      let cleanupTranscriptionProgress: (() => void) | undefined;
+      if (isManagedTranscriptionActive()) {
+        cleanupTranscriptionProgress = window.electronAPI.onUploadTranscriptionProgress?.(
+          ({ chunksCompleted, chunksTotal }) => {
+            if (chunksTotal > 0)
+              updateItem(item.id, { progress: (chunksCompleted / chunksTotal) * 90 });
+          }
+        );
+        activeUploadProgressCleanup = cleanupTranscriptionProgress;
+      }
       const transcriptionResult = await transcribeFileWithSpeakers(
         filePath,
         transcription,
@@ -210,16 +252,18 @@ export function processBatchQueue(
         durationSeconds,
         { requestId, timestamps: true }
       ).finally(() => {
+        cleanupTranscriptionProgress?.();
+        if (activeUploadProgressCleanup === cleanupTranscriptionProgress)
+          activeUploadProgressCleanup = undefined;
         if (activeUploadRequestId === requestId) activeUploadRequestId = null;
       });
 
       if (run !== runId) return;
 
       if (!transcriptionResult.success || !transcriptionResult.text) {
-        updateItem(item.id, {
-          status: "error",
-          error:
-            transcriptionErrorKey(transcriptionResult) ||
+        failItem(
+          item.id,
+          transcriptionErrorKey(transcriptionResult) ||
             (transcriptionResult.messageKey
               ? describeProviderError(
                   { ...transcriptionResult, message: transcriptionResult.error },
@@ -228,7 +272,8 @@ export function processBatchQueue(
               : undefined) ||
             transcriptionResult.error ||
             "batchTranscriptionFailed",
-        });
+          transcriptionResult
+        );
         return;
       }
 
@@ -266,11 +311,14 @@ export function processBatchQueue(
         updateItem(item.id, { status: "error", error: "batchSaveFailed" });
       }
     } catch (err) {
-      updateItem(item.id, {
-        status: "error",
-        error:
-          transcriptionErrorKey(err) || (err instanceof Error ? err.message : "batchUnknownError"),
-      });
+      failItem(
+        item.id,
+        transcriptionErrorKey(err) ||
+          (err instanceof Error
+            ? describeProviderError(err, i18n.t).description
+            : "batchUnknownError"),
+        err
+      );
     } finally {
       // Nothing else owns the temp file, so delete it even for a stale run.
       if (tempPath) {
@@ -284,6 +332,7 @@ export function processBatchQueue(
     let next: QueueItem | undefined;
     while (
       run === runId &&
+      !refusedByPolicy &&
       (next = useBatchQueueStore
         .getState()
         .queue.find((i) => i.status === "queued" && !processed.has(i.id)))
@@ -297,6 +346,23 @@ export function processBatchQueue(
   })();
 }
 
+// Policy refusing uploads stops the run: the item in flight shows the same
+// reason as the page banner, and Transcribe retries it with the rest once allowed.
+usePolicyStore.subscribe((policy) => {
+  if (!useBatchQueueStore.getState().isProcessing || isAudioFeatureAllowed(policy, "upload"))
+    return;
+  abortRun();
+  const error = i18n.t(uploadRestrictionKey(policy));
+  useBatchQueueStore.setState((s) => ({
+    isProcessing: false,
+    queue: s.queue.map((item) =>
+      item.status === "downloading" || item.status === "transcribing"
+        ? { ...item, status: "error" as const, error, stoppedByPolicy: true }
+        : item
+    ),
+  }));
+});
+
 // Same composed shape the queue UI consumed when this lived in a hook.
 export function useBatchQueue() {
   const { queue, isProcessing } = useBatchQueueStore();
@@ -308,6 +374,8 @@ export function useBatchQueue() {
     completedCount: queue.filter((i) => i.status === "done").length,
     failedCount: queue.filter((i) => i.status === "error").length,
     totalCount: queue.length,
+    // Queued items, or ones a policy stopped, that Transcribe would run.
+    hasPending: queue.some((i) => i.status === "queued" || i.stoppedByPolicy),
     addFiles,
     addUrls,
     removeItem: removeQueueItem,

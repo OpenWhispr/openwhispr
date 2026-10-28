@@ -6,7 +6,7 @@ import {
   cloudDelete,
   type DataWrap,
 } from "./cloudApi.js";
-import type { SpaceTeamRef, TeamMember, TeamRole } from "../types/electron";
+import type { SpaceCapabilities, SpaceTeamRef, TeamMember, TeamRole } from "../types/electron";
 
 export interface MySpace {
   id: string;
@@ -20,9 +20,17 @@ export interface MySpace {
   my_direct_role: TeamRole | null;
   member_count: number;
   teams: SpaceTeamRef[];
+  // Server-computed permissions; absent from older APIs.
+  capabilities?: SpaceCapabilities;
   created_at: string;
   updated_at: string;
 }
+
+// PATCH /api/spaces/:id answers with the space row only, without the caller's access.
+export type SpaceRecord = Pick<
+  MySpace,
+  "id" | "workspace_id" | "name" | "slug" | "description" | "emoji" | "created_at" | "updated_at"
+>;
 
 // Union roster entry: one row per user across direct members and all assigned
 // teams, with attribution of which grant(s) convey the access. via_teams is
@@ -68,8 +76,8 @@ async function create(
 async function update(
   spaceId: string,
   patch: { name?: string; description?: string; emoji?: string | null }
-): Promise<MySpace> {
-  const res = await cloudPatch<DataWrap<MySpace>>(`/api/spaces/${spaceId}`, patch);
+): Promise<SpaceRecord> {
+  const res = await cloudPatch<DataWrap<SpaceRecord>>(`/api/spaces/${spaceId}`, patch);
   return res.data;
 }
 

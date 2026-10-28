@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Mic, Square } from "../icons";
 import { cn } from "../lib/utils";
@@ -41,6 +41,7 @@ interface NoteRecordControlProps {
   isRecording: boolean;
   isProcessing: boolean;
   disabled?: boolean;
+  disabledReason?: string;
   onStart: () => void;
   onStop: () => void;
 }
@@ -50,10 +51,13 @@ export default function NoteRecordControl({
   isRecording,
   isProcessing,
   disabled = false,
+  disabledReason,
   onStart,
   onStop,
 }: NoteRecordControlProps) {
   const { t } = useTranslation();
+  const reasonId = useId();
+  const reason = disabled ? (disabledReason ?? t("common.managedByOrg")) : undefined;
   // Elapsed time comes from the session's start timestamp rather than a tick
   // count: this control remounts whenever the user switches notes, and counted
   // ticks would restart at zero (and drift while the window is throttled).
@@ -105,27 +109,36 @@ export default function NoteRecordControl({
           </span>
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={onStart}
-          disabled={disabled || isProcessing}
-          aria-label={t("notes.editor.transcribe")}
-          title={disabled ? t("common.managedByOrg") : undefined}
-          className={cn(
-            "flex h-[30px] w-[30px] items-center justify-center rounded-full",
-            GRADIENT_CIRCLE,
-            "transition-[filter,transform] duration-150 hover:brightness-110 active:scale-95",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-            disabled && "pointer-events-none opacity-40 saturate-0",
-            isProcessing && "pointer-events-none"
+        <>
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={disabled || isProcessing}
+            aria-label={t("notes.editor.transcribe")}
+            aria-describedby={reason ? reasonId : undefined}
+            title={reason}
+            className={cn(
+              "flex h-[30px] w-[30px] items-center justify-center rounded-full",
+              GRADIENT_CIRCLE,
+              "transition-[filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-95",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              // Keeps pointer events so hovering still shows why recording is off.
+              disabled && "cursor-not-allowed opacity-40 saturate-0",
+              isProcessing && "pointer-events-none"
+            )}
+          >
+            {isProcessing ? (
+              <Loader2 size={14} className="animate-spin text-white/90" />
+            ) : (
+              <Mic size={15} />
+            )}
+          </button>
+          {reason && (
+            <span id={reasonId} hidden>
+              {reason}
+            </span>
           )}
-        >
-          {isProcessing ? (
-            <Loader2 size={14} className="animate-spin text-white/90" />
-          ) : (
-            <Mic size={15} />
-          )}
-        </button>
+        </>
       )}
     </div>
   );

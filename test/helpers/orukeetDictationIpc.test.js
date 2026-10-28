@@ -372,6 +372,50 @@ test("cloud cleanup forwards fallback telemetry to its combined log request", as
   assert.equal(Object.hasOwn(requests[1], "streamingFallbackReason"), false);
 });
 
+test("cloud reason sends shared words in sharedDictionary, and omits it when there are none", async () => {
+  const bodies = [];
+  backendResponse = async (_url, options) => {
+    bodies.push(options.body);
+    return Response.json({ text: "clean transcript" });
+  };
+  await handlers.get("cloud-reason")(event, "raw", {
+    purpose: "cleanup",
+    customDictionary: ["Piha"],
+    sharedDictionary: ["Acme"],
+  });
+  await handlers.get("cloud-reason")(event, "raw", {
+    purpose: "cleanup",
+    customDictionary: ["Piha"],
+  });
+
+  const [shared, personal] = bodies.map((body) => JSON.parse(body));
+  assert.deepEqual(shared.customDictionary, ["Piha"]);
+  assert.deepEqual(shared.sharedDictionary, ["Acme"]);
+  assert.equal(Object.hasOwn(personal, "sharedDictionary"), false);
+  assert.doesNotMatch(bodies[1], /sharedDictionary/);
+});
+
+test("pipeline minting forwards shared words in cleanupOptions", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const calls = [];
+  backendResponse = async (url, request) => {
+    calls.push(JSON.parse(request.body));
+    return Response.json({
+      ...cloudSession,
+      baseUrl: "https://orukeet.gizmovoice.ai/preview/gemma12",
+      websocketUrl: "wss://orukeet.gizmovoice.ai/preview/gemma12/v1/pipeline/stream",
+      protocol: "orukeet.pipeline.v2",
+      cleanup: true,
+      cleanupModel: "gemma-4-12b",
+      requireAccountLimits: true,
+    });
+  };
+  const pipelineOptions = { customDictionary: ["Piha"], sharedDictionary: ["Acme"] };
+  await handlers.get("dictation-realtime-start")(event, { ...managedOptions, pipelineOptions });
+  assert.deepEqual(calls[0].cleanupOptions, pipelineOptions);
+  await handlers.get("dictation-realtime-stop")();
+});
+
 const DETECTED = {
   sttDetectedLanguage: "ja",
   sttDetectedLanguageConfidence: 0.97,

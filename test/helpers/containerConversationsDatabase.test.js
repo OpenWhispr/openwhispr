@@ -192,6 +192,74 @@ test("getConversationsForContainer excludes deleted conversations", (t) => {
   assert.equal(db.getConversationsForContainer(space.id, null).length, 0);
 });
 
+test("private-space root chats are owned by the account that created them", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateSpaceId = db.getPrivateSpaceId();
+  // A row from before root chats carried an owner stays visible to everyone,
+  // like a legacy personal note.
+  const legacy = db.createAgentConversation("Legacy root chat", null, privateSpaceId);
+  db.db.prepare("UPDATE agent_conversations SET account_id = NULL WHERE id = ?").run(legacy.id);
+
+  db.setActiveAccountId("account-a");
+  const chatA = db.createAgentConversation("A root chat", null, privateSpaceId);
+  db.addAgentMessage(chatA.id, "user", "private to A");
+  db.setActiveAccountId("account-b");
+  const chatB = db.createAgentConversation("B root chat", null, privateSpaceId);
+
+  assert.deepEqual(
+    db
+      .getConversationsForContainer(privateSpaceId, null)
+      .map((conversation) => conversation.id)
+      .sort((a, b) => a - b),
+    [legacy.id, chatB.id],
+    "another account on the device must not list A's root chats"
+  );
+  db.setActiveAccountId(null);
+  assert.deepEqual(
+    db.getConversationsForContainer(privateSpaceId, null).map((conversation) => conversation.id),
+    [legacy.id],
+    "signed out, only device-owned root chats are listed"
+  );
+
+  db.setActiveAccountId("account-a");
+  db.deleteAccountData("account-a");
+  const remaining = db.db
+    .prepare("SELECT id FROM agent_conversations ORDER BY id")
+    .all()
+    .map((row) => row.id);
+  assert.deepEqual(remaining, [legacy.id, chatB.id], "account deletion removes A's root chats");
+  assert.equal(
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM agent_messages WHERE conversation_id = ?")
+      .get(chatA.id).count,
+    0
+  );
+});
+
+test("team-space root chats stay unowned and outlive a member's account deletion", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { space } = createTestTeamSpace(db, { name: "Shared" });
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(space.id, "account-a");
+
+  db.setActiveAccountId("account-a");
+  const chat = db.createAgentConversation("Team root chat", null, space.id);
+  db.addAgentMessage(chat.id, "user", "for the whole team");
+  assert.equal(chat.account_id, null, "team root chats are owned by the team, not the creator");
+
+  db.deleteAccountData("account-a");
+  db.setActiveAccountId("test-account");
+  assert.deepEqual(
+    db.getConversationsForContainer(space.id, null).map((conversation) => conversation.id),
+    [chat.id],
+    "another member still lists the team's root chat"
+  );
+  assert.equal(db.getAgentMessages(chat.id).length, 1);
+});
+
 test("global conversation lists and search exclude space and folder chats", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -982,6 +1050,91 @@ test("failed and unchanged folder moves preserve chat ownership and history", (t
   assert.deepEqual(db.getAgentConversation(chat.id), before);
   assert.deepEqual(db.getAgentMessages(chat.id), messages);
 });
+
+function createMovedFolderChat(db) {
+  const source = createTestTeamSpace(db, { name: "Source" }).space;
+  const destination = createTestTeamSpace(db, { name: "Destination" }).space;
+  const folder = db.createFolder("Moved", source.id).folder;
+  db.markFolderSynced(folder.id, "cloud-folder-moved");
+  const chat = db.createAgentConversation("Moved chat", null, source.id, folder.id);
+  db.addAgentMessage(chat.id, "user", "Keep this history");
+  const sourceRootChat = db.createAgentConversation("Source chat", null, source.id);
+  return { source, destination, folder, chat, sourceRootChat };
+}
+
+test("a folder moved by a pull keeps its chats when the old space is purged", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  t.after(() => db.db.close());
+  const { source, destination, folder, chat, sourceRootChat } = createMovedFolderChat(db);
+  const messages = db.getAgentMessages(chat.id);
+
+  db.upsertFolderFromCloud(
+    {
+      id: "cloud-folder-moved",
+      client_folder_id: folder.client_folder_id,
+      name: folder.name,
+      created_at: folder.created_at,
+      updated_at: new Date().toISOString(),
+    },
+    destination.id
+  );
+  assert.equal(db.getAgentConversation(chat.id).space_id, destination.id);
+
+  assert.equal(db.purgeSpace(source.id).success, true);
+  assert.deepEqual(db.getAgentMessages(chat.id), messages);
+  assert.deepEqual(
+    db.getConversationsForContainer(destination.id, folder.id).map((row) => row.id),
+    [chat.id]
+  );
+  assert.equal(db.getAgentConversation(sourceRootChat.id), null);
+
+  assert.equal(db.purgeSpace(destination.id).success, true);
+  assert.equal(db.getAgentConversation(chat.id), null);
+  assert.deepEqual(db.getAgentMessages(chat.id), []);
+});
+
+for (const mode of ["preserve-dirty", "destructive"]) {
+  test(`${mode} purge matches folder chats through their folder, not a stale space_id`, (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    t.after(() => db.db.close());
+    const { source, destination, folder, chat, sourceRootChat } = createMovedFolderChat(db);
+    const sourceNote = db.saveNote(
+      "Source note",
+      "body",
+      "personal",
+      null,
+      null,
+      null,
+      source.id
+    ).note;
+    db.markNoteSynced(sourceNote.id, "cloud-source-note");
+    const sourceNoteChat = db.createAgentConversation("Source note chat", sourceNote.id);
+    assert.equal(db.moveFolderToSpace(folder.id, destination.id).success, true);
+    // Folders moved before chats followed them still carry the old space.
+    db.db
+      .prepare("UPDATE agent_conversations SET space_id = ? WHERE id = ?")
+      .run(source.id, chat.id);
+    const messages = db.getAgentMessages(chat.id);
+
+    assert.equal(db.purgeSpace(source.id, { mode }).success, true);
+    assert.deepEqual(db.getAgentMessages(chat.id), messages);
+    assert.deepEqual(
+      db.getConversationsForContainer(destination.id, folder.id).map((row) => row.id),
+      [chat.id]
+    );
+    assert.equal(db.getAgentConversation(sourceRootChat.id), null);
+    assert.equal(db.getAgentConversation(sourceNoteChat.id), null);
+
+    assert.equal(db.purgeSpace(destination.id, { mode }).success, true);
+    assert.equal(
+      db.db.prepare("SELECT COUNT(*) AS n FROM agent_conversations WHERE id = ?").get(chat.id).n,
+      0
+    );
+    assert.deepEqual(db.getAgentMessages(chat.id), []);
+  });
+}
 
 test("relocateRevokedFolder moves or retires the folder's conversations", (t) => {
   const db = createDb(t);

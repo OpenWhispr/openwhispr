@@ -49,7 +49,21 @@ for (const { name, saved, expected } of [
     );
 
     assert.equal(useWorkspaceStore.getState().activeWorkspaceId, saved);
+    const observedScopes = [];
+    const unsubscribe = useWorkspaceStore.subscribe((state) => {
+      if (state.loaded) {
+        observedScopes.push({
+          activeWorkspaceId: state.activeWorkspaceId,
+          persistedWorkspaceId: storage.getItem(ACTIVE_WORKSPACE_KEY),
+        });
+      }
+    });
+    t.after(unsubscribe);
     await useWorkspaceStore.getState().refresh();
+
+    assert.deepEqual(observedScopes, [
+      { activeWorkspaceId: expected, persistedWorkspaceId: expected },
+    ]);
 
     assert.deepEqual(
       useWorkspaceStore.getState().workspaces.map((workspace) => workspace.id),

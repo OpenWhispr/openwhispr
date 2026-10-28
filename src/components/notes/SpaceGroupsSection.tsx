@@ -15,7 +15,7 @@ import {
 } from "../../services/spaceActions";
 import { useToast } from "../ui/useToast";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { canManageSpace, canManageWorkspace } from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import type { SpaceItem, SpaceTeamRef, Team } from "../../types/electron";
 
 interface SpaceGroupsSectionProps {
@@ -31,9 +31,7 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
   const { t } = useTranslation();
   const { toast } = useToast();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-  const workspaceRole = useWorkspaceStore(
-    (s) => s.workspaces.find((w) => w.id === space.workspace_id)?.role ?? null
-  );
+  const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === space.workspace_id));
   const [workspaceTeams, setWorkspaceTeams] = useState<Team[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamsError, setTeamsError] = useState(false);
@@ -43,9 +41,9 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [accessBusyTeamId, setAccessBusyTeamId] = useState<string | null>(null);
 
-  const canManage = canManageSpace(space, workspaceRole);
-  // Group creation is 403'd below workspace admin.
-  const isWorkspaceAdmin = canManageWorkspace(workspaceRole);
+  const canManage = spaceCan(space, "manage_members") || workspaceCan(workspace, "manage_settings");
+  // Group creation is 403'd without manage_teams.
+  const canCreateGroups = workspaceCan(workspace, "manage_teams");
 
   const loadWorkspaceTeams = useCallback(async (workspaceId: string) => {
     setTeamsLoading(true);
@@ -257,7 +255,7 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
           );
         })}
 
-        {((canManage && unassignedTeams.length > 0) || isWorkspaceAdmin) && (
+        {((canManage && unassignedTeams.length > 0) || canCreateGroups) && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground/50">
               {t("notes.spaces.teamsMembers.addTeamLabel")}
@@ -287,7 +285,7 @@ export default function SpaceGroupsSection({ space, onChanged }: SpaceGroupsSect
                 </Button>
               </div>
             )}
-            {isWorkspaceAdmin && (
+            {canCreateGroups && (
               <Button
                 variant="ghost"
                 size="sm"

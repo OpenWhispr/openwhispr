@@ -41,6 +41,23 @@ describe('ReasoningService custom cleanup prompt on the wire', () => {
     expect(body.agentName).toBe('Aria');
   });
 
+  it('sends shared words in their own field, and leaves it out without any', async () => {
+    await ReasoningService.processText({
+      text: 'hi',
+      customDictionary: ['Whispr'],
+      sharedDictionary: ['Acme'],
+    });
+    expect(lastBody()).toMatchObject({ customDictionary: ['Whispr'], sharedDictionary: ['Acme'] });
+
+    mockPost.mockClear();
+    await ReasoningService.processText({
+      text: 'hi',
+      customDictionary: ['Whispr'],
+      sharedDictionary: [],
+    });
+    expect(lastBody()).not.toHaveProperty('sharedDictionary');
+  });
+
   // promptMode "cleanup" keeps the API from running a dictation that addresses the assistant as a
   // command.
   it('pins cleanup mode with no custom prompt', async () => {
