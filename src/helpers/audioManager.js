@@ -3042,6 +3042,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let capture;
     try {
       capture = await this.consumeSelectionCapture();
+      if (!capture || capture.status !== "selected") {
+        try {
+          const late = await window.electronAPI?.captureSelectedText?.({
+            forceFreshTarget: true,
+            probeEditable: false,
+          });
+          if (late && late.status === "selected") {
+            capture = late;
+          }
+        } catch {}
+      }
     } catch (cause) {
       const error = new Error(
         `Selection edit could not safely read the selection: ${cause.message}`
@@ -3123,7 +3134,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       temperature: config?.temperature ?? 0.2,
       requireCompleteOutput: true,
     };
-    const isLocalSelection = config?.provider === "local";
+    const isLocalSelection =
+      config?.provider === "local" ||
+      config?.provider === "lan" ||
+      Boolean(config?.lanUrl);
     const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
     const withToneSentence = (prompt) =>
       toneSentence ? `${String(prompt ?? "").trim()}\n\n${toneSentence}` : prompt;

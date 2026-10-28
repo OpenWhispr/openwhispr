@@ -156,6 +156,7 @@ export function useAssistantPanel({
       // already streaming into a visible conversation, and delivering it to
       // the external caret would snap that surface away mid-read.
       const delivery = openRef.current ? null : (command.delivery ?? null);
+      if (!openRef.current) setConversationId(null);
       // A command's paste goes to the app it was spoken over. A follow-up spoken over the panel
       // itself keeps the conversation's app, so its Paste stays offered while main decides.
       const id = commandIdRef.current;

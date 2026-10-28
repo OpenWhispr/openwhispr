@@ -306,3 +306,49 @@ test("non-local empty and truncated failures use selection recovery and retain p
     assert.equal(manager.pendingAssistantConversation, undefined);
   }
 });
+
+test("self-hosted and lan endpoints route to local selection editing and support late selection capture", async (t) => {
+  const { createManager, window } = await setup(t);
+  let lateCaptureRequested = false;
+  window.electronAPI.captureSelectedText = async (options = {}) => {
+    if (options.forceFreshTarget) {
+      lateCaptureRequested = true;
+      return {
+        status: "selected",
+        text: "Late selected text",
+        sessionId: "late-captured-session",
+      };
+    }
+    return { status: "none" };
+  };
+
+  const calls = [];
+  const manager = createManager({
+    voiceAgentRequested: true,
+    processWithReasoningModel: async (...args) => {
+      calls.push(args);
+      return JSON.stringify({ replacement: "Edited text" });
+    },
+  });
+
+  const lanConfig = {
+    provider: "lan",
+    lanUrl: "http://192.168.0.111:8080",
+    selectionEditReachable: true,
+  };
+
+  const result = await manager.processAgentCommand(
+    "Make this clearer",
+    "qwen",
+    "Agent",
+    lanConfig
+  );
+
+  assert.equal(result, "Edited text");
+  assert.equal(lateCaptureRequested, true);
+  assert.deepEqual(manager.pendingSelectionEdit, { sessionId: "late-captured-session" });
+  const [user, , , options] = calls[0];
+  assert.ok(user.includes(JSON.stringify("Late selected text")));
+  assert.equal(options.responseFormat.type, "json_object");
+  assert.equal(options.disableThinking, true);
+});
