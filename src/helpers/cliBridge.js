@@ -7,7 +7,7 @@ const debugLogger = require("./debugLogger");
 const { isPortAvailable } = require("../utils/serverUtils");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { NOTE_TEXT_FIELDS } = require("./noteFieldSync");
-const { isAudioPolicyRefusal } = require("./audioFeaturePolicy");
+const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -557,15 +557,9 @@ class CliBridge {
         );
         const language =
           typeof body?.language === "string" && body.language ? body.language : undefined;
-        const event = {};
-        const result = await ipc._audioFeaturePolicy.run(event, "upload", () => {
+        const result = await ipc._audioFeaturePolicy.run({}, "upload", (signal) => {
           ipc.approveAudioPath(real);
-          return ipc.transcribeLocalFile(real, {
-            provider,
-            model,
-            language,
-            signal: ipc._audioFeaturePolicy.signalFor(event),
-          });
+          return ipc.transcribeLocalFile(real, { provider, model, language, signal });
         });
         if (!result?.success) {
           if (result?.code === "NO_SPEECH_DETECTED" || result?.message === "No audio detected") {

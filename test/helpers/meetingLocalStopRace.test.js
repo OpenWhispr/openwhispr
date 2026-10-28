@@ -46,7 +46,7 @@ function harness({
   };
   const context = {
     events,
-    _audioFeaturePolicy: { failure: () => null, signalFor: () => undefined },
+    _audioFeaturePolicy: { failure: () => null, activeFailure: () => null },
     chunkGates,
     lateStreamingFinals,
     win,
@@ -218,7 +218,7 @@ test("policy revocation during system decode prevents the microphone decode from
   mic.resolve();
 
   const pending = api.timerTick();
-  policy.failure = () => ({ code: "POLICY_MEETING_RECORDING_DISABLED" });
+  policy.activeFailure = () => ({ code: "POLICY_MEETING_RECORDING_DISABLED" });
   system.resolve();
   await pending;
 
@@ -307,4 +307,60 @@ test("start sets the mic alignment strategy from the plan, then from the start r
     events.filter((event) => event.startsWith("strategy:")),
     ["strategy:wasapi-loopback", "strategy:loopback"]
   );
+});
+
+// Runs the real local chunk decode over a stubbed engine whose result the
+// test releases, to see what reaches the meeting window afterwards.
+function chunkHarness() {
+  const decode = deferred();
+  const finals = [];
+  const context = {
+    _audioFeaturePolicy: { activeFailure: () => null },
+    parakeetManager: { transcribeLocalParakeet: () => decode.promise },
+    finals,
+    debugLogger: { debug() {}, error() {} },
+    Buffer,
+  };
+  vm.createContext(context);
+  vm.runInContext(
+    `
+    const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
+    const meetingLocalWin = null;
+    const meetingLocalProvider = "nvidia";
+    const meetingLocalModel = "parakeet";
+    const meetingLocalLanguage = "en";
+    const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
+    const meetingEchoLeakDetector = { isSystemSpeaking: () => false };
+    const downsample24kTo16k = (pcm) => pcm;
+    const computeChunkStats = () => ({ rms: 1, peak: 1, sampleCount: 2 });
+    const resolveMicChunkAction = () => ({ action: "send" });
+    const pcm16ToWav = (pcm) => pcm;
+    const isSherpaLocalProvider = () => true;
+    const removePendingMicFinalsFor = () => [];
+    const removeRacingMicEntriesFor = () => [];
+    const hasRiskyMicDuplicateProfile = () => false;
+    const sendMeetingFinalSegment = (segment) => finals.push(segment.text);
+
+    ${sliceBetween("const transcribeLocalMeetingChunk =", "const transcribeAllLocalBuffers =")}
+
+    globalThis.transcribe = () => transcribeLocalMeetingChunk("system");
+    `,
+    context
+  );
+  return { context, decode, finals };
+}
+
+test("a local decode that finishes after revocation delivers no text", async () => {
+  for (const revoked of [false, true]) {
+    const { context, decode, finals } = chunkHarness();
+    const pending = context.transcribe();
+    if (revoked) {
+      context._audioFeaturePolicy.activeFailure = () => ({
+        code: "POLICY_MEETING_RECORDING_DISABLED",
+      });
+    }
+    decode.resolve({ success: true, text: "said as the policy changed" });
+    await pending;
+    assert.deepEqual(plain(finals), revoked ? [] : ["said as the policy changed"]);
+  }
 });

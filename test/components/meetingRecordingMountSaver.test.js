@@ -5,6 +5,7 @@ const { createRoot } = require("react-dom/client");
 const { audioFeatureFailure } = require("../../src/helpers/audioFeaturePolicy");
 const { i18nMain, changeLanguage } = require("../../src/helpers/i18nMain");
 const esTranslation = require("../../src/locales/es/translation.json");
+const { deferred } = require("../helpers/harness/deferred");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -90,6 +91,8 @@ async function setup(t, { language = "en" } = {}) {
   const { default: Mount } = await vite.ssrLoadModule("/components/MeetingRecordingMount.tsx");
   const { toasts } = await vite.ssrLoadModule("/ui/useToast");
   store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const setPolicy = (policy) => React.act(async () => usePolicyStore.setState(policy));
   t.mock.timers.enable({ apis: ["setInterval"] });
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Mount)));
@@ -115,6 +118,7 @@ async function setup(t, { language = "en" } = {}) {
     store,
     streamError,
     vite,
+    setPolicy,
   };
 }
 
@@ -224,4 +228,143 @@ test("an unavailable managed meeting route appears translated before capture sta
 
   assert.equal(starts, 0);
   assert.equal(toasts.at(-1)?.description, esTranslation.enterprise.audio.operationUnavailable);
+});
+
+const MANAGED_SCOPE = {
+  allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+  allowedByokProviders: [],
+  allowedEnterpriseProviders: [],
+};
+const managedPolicy = (features) => ({
+  status: "managed",
+  appVersion: "1.11.0",
+  policy: {
+    version: 1,
+    transcription: MANAGED_SCOPE,
+    llm: MANAGED_SCOPE,
+    features,
+    sharing: { externalLinkSharing: "allowed" },
+    dataRetention: {
+      localHistoryMode: "user_choice",
+      cloudBackupAllowed: true,
+      audioRetentionMaxDays: null,
+    },
+    requiredLocalModels: [],
+    minAppVersion: null,
+  },
+});
+// A policy stop from this window explains itself once its stop has finished.
+const settle = async (store) => {
+  for (let i = 0; i < 100 && store.useMeetingRecordingStore.getState().isRecording; i++) {
+    await React.act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+  }
+  await React.act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+};
+
+test("an org's meeting switch refuses a start with its own reason", async (t) => {
+  const { start, store, toasts, setPolicy } = await setup(t);
+  await setPolicy(managedPolicy({ meetingRecordingEnabled: false }));
+
+  await start();
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(toasts.at(-1)?.description, "Meeting recording is disabled by your organization.");
+});
+
+test("a policy this window can't resolve mid-meeting stops the recording and says so once", async (t) => {
+  const { start, store, toasts, setPolicy } = await setup(t);
+  await start();
+  const before = toasts.length;
+
+  await setPolicy({ status: "error", policy: null });
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.deepEqual(
+    toasts.slice(before).map((toast) => toast.description),
+    ["Recording stopped because your organization's settings couldn't be checked."]
+  );
+});
+
+test("main's refusal and this window's policy stop explain the same recording once", async (t) => {
+  const { start, store, streamError, toasts, setPolicy } = await setup(t);
+  await start();
+  const before = toasts.length;
+
+  await streamError("POLICY_MEETING_RECORDING_DISABLED");
+  await setPolicy(managedPolicy({ meetingRecordingEnabled: false }));
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.deepEqual(
+    toasts.slice(before).map((toast) => toast.description),
+    ["Meeting recording is disabled by your organization."]
+  );
+});
+
+test("main ending a meeting it can no longer check reads as a stop, not a retry", async (t) => {
+  const { start, store, streamError, toasts } = await setup(t);
+  await start();
+
+  await streamError("POLICY_UNRESOLVABLE");
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(
+    toasts.at(-1)?.description,
+    "Recording stopped because your organization's settings couldn't be checked."
+  );
+});
+
+test("a policy flip while the user's own Stop is finishing adds no policy toast", async (t) => {
+  const { start, store, api, toasts, setPolicy } = await setup(t);
+  await start();
+  const reply = deferred();
+  const stop = api.meetingTranscriptionStop;
+  api.meetingTranscriptionStop = async (...args) => {
+    await reply.promise;
+    return stop(...args);
+  };
+  const before = toasts.length;
+
+  const userStop = store.stopRecording();
+  await setPolicy({ status: "error", policy: null });
+  reply.resolve();
+  await React.act(() => userStop);
+  await settle(store);
+
+  assert.deepEqual(toasts.slice(before), []);
+});
+
+test("a policy flip that cancels a start still in progress says why", async (t) => {
+  const { store, api, toasts, setPolicy } = await setup(t);
+  const reply = deferred();
+  const startMain = api.meetingTranscriptionStart;
+  api.meetingTranscriptionStart = async (...args) => {
+    await reply.promise;
+    return startMain(...args);
+  };
+  t.after(() => reply.resolve());
+  let starting;
+  await React.act(async () => {
+    starting = store.startRecording(START_ARGS);
+    for (let i = 0; i < 20 && !store.useMeetingRecordingStore.getState().isRecording; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  });
+  assert.equal(
+    store.useMeetingRecordingStore.getState().isRecording,
+    true,
+    "the start is under way"
+  );
+
+  await setPolicy({ status: "error", policy: null });
+  reply.resolve();
+  await React.act(() => starting);
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.equal(
+    toasts.at(-1)?.description,
+    "Recording stopped because your organization's settings couldn't be checked."
+  );
 });

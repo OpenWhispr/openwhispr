@@ -44,7 +44,7 @@ function harness({ native = true, local = false } = {}) {
         : imported;
     },
     Buffer,
-    _audioFeaturePolicy: { failure: () => null },
+    _audioFeaturePolicy: { failure: () => null, activeFailure: () => null },
     path,
     Date: { now: () => now },
     performance: { now: () => now },
@@ -383,7 +383,9 @@ test("recovery silence plus AssemblyAI's pending partial packet stays within its
 test("a meeting restriction drops native audio before transcription, speaker analysis or disk capture", async () => {
   const h = harness();
   await h.start();
-  h.context._audioFeaturePolicy.failure = () => ({ code: "POLICY_MEETING_RECORDING_DISABLED" });
+  h.context._audioFeaturePolicy.activeFailure = () => ({
+    code: "POLICY_MEETING_RECORDING_DISABLED",
+  });
   h.chunk();
   assert.equal(bytes(h.streamed), 0);
   assert.equal(bytes(h.pcm), 0);

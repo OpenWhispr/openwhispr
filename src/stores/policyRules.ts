@@ -438,6 +438,18 @@ export function isAudioFeatureAllowed(
   );
 }
 
+export type MeetingRecordingRefusal = "unresolved" | "disabled" | "restricted";
+
+/**
+ * Why policy refuses a meeting recording: no policy resolved yet, the org's
+ * meeting recording switch, or another restriction (e.g. a minimum app version).
+ */
+export function meetingRecordingRefusal(state: PolicyDecisionSnapshot): MeetingRecordingRefusal {
+  const policy = managedPolicy(state);
+  if (!policy) return "unresolved";
+  return policy.features.meetingRecordingEnabled === false ? "disabled" : "restricted";
+}
+
 /** Whether a note share visibility is allowed under the org's external-sharing mode. */
 export function isShareVisibilityAllowed(
   state: PolicyDecisionSnapshot,

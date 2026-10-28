@@ -35,6 +35,11 @@ const windows = [1, 2, 3].map((id) => ({
 const mintToken = async (key) => `token-${key}`;
 let fetchToken = mintToken;
 let authGeneration = 1;
+// The org's current verdict, as the policy manager would answer it: each
+// change carries a newer revision, so a lookup answered earlier can't undo it.
+const UNMANAGED_POLICY = { success: true, managed: false };
+let policyRevision = 0;
+let workspacePolicy = { ...UNMANAGED_POLICY, authGeneration, revision: policyRevision };
 const environmentManager = Object.fromEntries(
   bindings.flatMap(({ get, save, storeKey }) => [
     [get, () => keys.get(storeKey) || ""],
@@ -161,7 +166,7 @@ Module._load = function (request, parent, isMain) {
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async () => ({ success: true, managed: false }),
+          getPolicy: async () => workspacePolicy,
         }),
       };
     if (request === "./tokenStore")
@@ -222,13 +227,12 @@ const target = {
     tenant: "base",
   }),
 };
+const handlersThis = new Proxy(target, {
+  get: (value, property) => (property in value ? value[property] : anything()),
+});
 test.before(() => {
   const IPCHandlers = require(modulePath);
-  IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
-  );
+  IPCHandlers.prototype.setupHandlers.call(handlersThis);
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
 
@@ -562,8 +566,21 @@ const assertMeetingStreams = ([mic, system]) => {
   assert.equal(target._meetingMicStreaming, mic);
   assert.equal(target._meetingSystemStreaming, system);
 };
+const setWorkspacePolicy = (snapshot) => {
+  workspacePolicy = { ...snapshot, authGeneration, revision: ++policyRevision };
+  target._audioFeaturePolicy.update(workspacePolicy);
+};
+const REVOKED_MEETINGS = {
+  success: true,
+  managed: true,
+  policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: true } },
+};
+
 const resetMeeting = (t) => {
-  t.after(() => invoke("meeting-transcription-stop"));
+  t.after(() => {
+    setWorkspacePolicy(UNMANAGED_POLICY);
+    return invoke("meeting-transcription-stop");
+  });
   target._meetingMicStreaming = null;
   target._meetingSystemStreaming = null;
 };
@@ -738,14 +755,11 @@ test("meeting policy revocation closes live streams and prevents a late warmup f
   const options = { provider: "deepgram-realtime", mode: "byok" };
   assert.equal((await invoke("meeting-transcription-start", options)).success, true);
   const streams = meetingStreams();
-  target._audioFeaturePolicy.update({
-    success: true,
-    managed: true,
-    policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: true } },
-  });
+  setWorkspacePolicy(REVOKED_MEETINGS);
   for (const stream of streams) assert.equal(stream.isConnected, false);
   assert.equal(target._audioFeaturePolicy.failure("upload"), null);
   await invoke("meeting-transcription-stop");
+  setWorkspacePolicy(UNMANAGED_POLICY);
 
   const mintStarted = deferred();
   const minted = deferred();
@@ -763,11 +777,7 @@ test("meeting policy revocation closes live streams and prevents a late warmup f
     mode: "byok",
   });
   await mintStarted.promise;
-  target._audioFeaturePolicy.update({
-    success: true,
-    managed: true,
-    policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: true } },
-  });
+  setWorkspacePolicy(REVOKED_MEETINGS);
   minted.resolve("late-token");
   const result = await preparing;
   assert.equal(result.success, false);
@@ -787,11 +797,7 @@ test("a completed policy stop preserves its result for only its renderer, sessio
   const options = { provider: "deepgram-realtime", mode: "byok", sessionId: "policy-stopped" };
   assert.equal((await invoke("meeting-transcription-start", options)).success, true);
   meetingStreams()[1].onFinalTranscript("Already recorded.", Date.now());
-  target._audioFeaturePolicy.update({
-    success: true,
-    managed: true,
-    policy: { features: { meetingRecordingEnabled: false } },
-  });
+  setWorkspacePolicy(REVOKED_MEETINGS);
   const diarizationSessionId = await stopped.promise;
   await new Promise(setImmediate);
 
@@ -814,6 +820,7 @@ test("a completed policy stop preserves its result for only its renderer, sessio
     success: false,
     reason: "stale-session",
   });
+  setWorkspacePolicy(UNMANAGED_POLICY);
   assert.equal(
     (await invoke("meeting-transcription-start", { ...options, sessionId: "next-session" }))
       .success,
@@ -837,11 +844,7 @@ test("an in-flight policy stop rejects another renderer and an auth change befor
   invoke("save-deepgram-key", "A");
   const options = { provider: "deepgram-realtime", mode: "byok", sessionId: "pending-policy-stop" };
   assert.equal((await invoke("meeting-transcription-start", options)).success, true);
-  target._audioFeaturePolicy.update({
-    success: true,
-    managed: true,
-    policy: { features: { meetingRecordingEnabled: false } },
-  });
+  setWorkspacePolicy(REVOKED_MEETINGS);
   const foreign = handlers.get("meeting-transcription-stop")({ sender: {} }, options.sessionId);
   const pending = invoke("meeting-transcription-stop", options.sessionId);
   authGeneration++;
@@ -849,5 +852,46 @@ test("an in-flight policy stop rejects another renderer and an auth change befor
   finishStop.resolve();
   for (const result of await Promise.all([foreign, pending, changed])) {
     assert.deepEqual(result, { success: false, reason: "stale-session" });
+  }
+});
+
+test("a sign-out or account switch during a meeting prepare leaves no warm connection behind", async (t) => {
+  const IPCHandlers = require(modulePath);
+  const accountScopeBinding = require("../../src/helpers/accountScopeBinding");
+  for (const method of ["read", "persist", "clear"])
+    t.mock.method(accountScopeBinding, method, () => null);
+  const previousFetch = fetchToken;
+  t.after(() => {
+    fetchToken = previousFetch;
+  });
+
+  for (const leave of [
+    () =>
+      IPCHandlers.prototype._handleAuthTokenChange.call(handlersThis, {
+        token: null,
+        generation: authGeneration,
+      }),
+    () => handlers.get("set-active-account-scope")({}, "another-account", authGeneration),
+  ]) {
+    resetMeeting(t);
+    setWorkspacePolicy(UNMANAGED_POLICY);
+    const mintStarted = deferred();
+    const minted = deferred();
+    fetchToken = async () => {
+      mintStarted.resolve();
+      return minted.promise;
+    };
+    invoke("save-assemblyai-key", "A");
+    const preparing = invoke("meeting-transcription-prepare", {
+      provider: "assemblyai-realtime",
+      mode: "byok",
+    });
+    await mintStarted.promise;
+    await leave();
+    minted.resolve("token-for-the-previous-account");
+
+    const result = await preparing;
+    assert.equal(result.code, "AUDIO_OPERATION_CANCELLED");
+    assert.ok(meetingStreams().every((stream) => !stream?.isConnected));
   }
 });

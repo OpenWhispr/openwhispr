@@ -8,6 +8,7 @@ const { deferred } = require("../helpers/harness/deferred");
 const { audioFeatureFailure } = require("../../src/helpers/audioFeaturePolicy");
 const { i18nMain, changeLanguage } = require("../../src/helpers/i18nMain");
 const esTranslation = require("../../src/locales/es/translation.json");
+const { uploadRestrictionKey } = require("../../src/components/notes/shared.ts");
 
 const source = ts.createSourceFile(
   "UploadAudioView.tsx",
@@ -18,11 +19,7 @@ const source = ts.createSourceFile(
 );
 let transcribe;
 let policyChanged;
-let restrictionKey;
 function visit(node) {
-  if (ts.isFunctionDeclaration(node) && node.name?.getText(source) === "uploadRestrictionKey") {
-    restrictionKey = node.getText(source);
-  }
   if (ts.isVariableDeclaration(node) && node.name.getText(source) === "handleTranscribe") {
     transcribe = node.initializer.getText(source);
   }
@@ -34,9 +31,8 @@ function visit(node) {
 visit(source);
 assert.ok(transcribe);
 assert.ok(policyChanged);
-assert.ok(restrictionKey);
 const callbacks = ts.transpileModule(
-  `${restrictionKey}; ({ transcribe: ${transcribe}, policyChanged: ${policyChanged} })`,
+  `({ transcribe: ${transcribe}, policyChanged: ${policyChanged} })`,
   { compilerOptions: { target: ts.ScriptTarget.ES2022 } }
 ).outputText;
 
@@ -55,6 +51,7 @@ for (const phase of ["title", "save"]) {
       batch: { isProcessing: false },
       usePolicyStore: { getState: () => ({ allowed: true }) },
       isAudioFeatureAllowed: (policy) => policy.allowed,
+      uploadRestrictionKey,
       isManagedTranscriptionActive: () => false,
       isTranscriptionContextAllowed: () => true,
       getSettings: () => ({}),
@@ -188,6 +185,7 @@ test("an upload refused before it starts names the reason the policy gives", asy
       batch: { isProcessing: false },
       usePolicyStore: { getState: () => policy },
       isAudioFeatureAllowed: () => false,
+      uploadRestrictionKey,
       setError: (error) => errors.push(error),
       t: (key) => key,
     };

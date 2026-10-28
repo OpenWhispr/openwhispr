@@ -1051,13 +1051,16 @@ test("file IPCs preserve dictation when uploads are disabled, including cloud so
     return { success: true, text: "dictation" };
   };
   fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+  // Only a recording main saved as a voice draft may claim to be dictation.
+  const { path: draftFile } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, draftFile));
 
   for (const channel of [
     "transcribe-audio-file",
     "transcribe-audio-file-cloud",
     "transcribe-audio-file-byok",
   ]) {
-    const invokeFile = (purpose) => {
+    const invokeFile = (filePath, purpose) => {
       const options = {
         purpose,
         apiKey: "sk-test",
@@ -1066,20 +1069,32 @@ test("file IPCs preserve dictation when uploads are disabled, including cloud so
         transcriptionMode: "providers",
       };
       return channel.endsWith("-byok")
-        ? handlers.get(channel)({ sender: {} }, { filePath: uploadTempFile, ...options })
-        : handlers.get(channel)({ sender: {} }, uploadTempFile, options);
+        ? handlers.get(channel)({ sender: {} }, { filePath, ...options })
+        : handlers.get(channel)({ sender: {} }, filePath, options);
     };
     fetches.length = 0;
-    assert.equal((await invokeFile("dictation")).success, true, channel);
+    assert.equal((await invokeFile(draftFile, "dictation")).success, true, channel);
     if (channel.endsWith("-cloud")) {
       assert.match(fetches[0].init.body.toString(), /name="source"\r\n\r\ndictation\r\n/);
     }
     const networkCalls = fetches.length;
-    const refused = await invokeFile(undefined);
-    assert.equal(refused.code, "POLICY_AUDIO_UPLOAD_DISABLED", channel);
+    for (const [filePath, purpose] of [
+      [uploadTempFile, undefined],
+      [uploadTempFile, "dictation"],
+    ]) {
+      const refused = await invokeFile(filePath, purpose);
+      assert.equal(refused.code, "POLICY_AUDIO_UPLOAD_DISABLED", channel);
+    }
     assert.equal(fetches.length, networkCalls, channel);
   }
   assert.equal(localCalls, 1);
+
+  // A deleted draft's path is an upload again.
+  await handlers.get("delete-temp-audio")({}, draftFile);
+  const deleted = await handlers.get("transcribe-audio-file")({ sender: {} }, draftFile, {
+    purpose: "dictation",
+  });
+  assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
 });
 
 test("cancelling during policy lookup prevents every upload handler's later side effects", async (t) => {

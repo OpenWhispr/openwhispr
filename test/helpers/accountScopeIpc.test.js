@@ -291,6 +291,7 @@ test("signed-out transitions restore guest meeting detection without granting a 
   fakeThis.meetingDetectionEngine = { setPreferences: (prefs) => applied.push(prefs) };
   fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
     getPolicy: async () => ({ success: false }),
+    onChange: () => fakeThis._syncMeetingDetectorPolicy(),
   });
   fakeThis._audioFeaturePolicy.update({
     success: true,
@@ -382,11 +383,74 @@ test("senderless audio policy uses the current bearer or a live app window's coo
       await fakeThis._audioFeaturePolicy.run(event, "upload", () => ({ success: true })),
       { success: true }
     );
+    // With a verdict already held, the lookup runs behind the answer.
+    for (let turn = 0; expected && turn < 50 && requests.length === before; turn++) {
+      await new Promise(setImmediate);
+    }
     assert.equal(requests.length - before, expected ? 1 : 0);
     if (expected) {
       for (const [key, value] of Object.entries(expected)) {
         assert.equal(requests.at(-1)[key], value);
       }
     }
+  }
+});
+
+test("a token rotation keeps the account's running jobs and meeting; another account ends them", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalStop = fakeThis._stopMeetingForPolicy;
+  const originalAccount = databaseManager.activeAccountId;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis._stopMeetingForPolicy = originalStop;
+    databaseManager.activeAccountId = originalAccount;
+    tokenState = originalTokenState;
+  });
+  const allowed = { success: true, managed: true, policy: { features: {} } };
+  const stops = [];
+  fakeThis._stopMeetingForPolicy = (reason) => stops.push(reason);
+
+  for (const [nextAccount, accountChanged] of [
+    ["rotation-account", false],
+    ["other-account", true],
+  ]) {
+    stops.length = 0;
+    let lookup = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => lookup.promise });
+    tokenState = { token: "rotation-token-a", generation: 60 };
+    databaseManager.activeAccountId = "rotation-account";
+    await setScope("rotation-account", 60);
+    fakeThis._audioFeaturePolicy.update(allowed);
+
+    const entered = deferred();
+    const finish = deferred();
+    const upload = fakeThis._audioFeaturePolicy.run({}, "upload", async () => {
+      entered.resolve();
+      await finish.promise;
+      return { success: true };
+    });
+    await entered.promise;
+    lookup = deferred();
+
+    tokenState = { token: "rotation-token-b", generation: 61 };
+    handleAuthTokenChange(tokenState);
+    await setScope(nextAccount, 61);
+    // The same account's live meeting keeps transcribing until the new verdict
+    // arrives; nothing keeps the previous account's verdict.
+    assert.equal(
+      fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null,
+      accountChanged ? "POLICY_UNRESOLVABLE" : null
+    );
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+    finish.resolve();
+
+    assert.deepEqual(stops, accountChanged ? ["accountChanged"] : []);
+    assert.equal((await upload).success, !accountChanged);
+    lookup.resolve(allowed);
+    await new Promise(setImmediate);
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
   }
 });

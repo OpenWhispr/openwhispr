@@ -3234,7 +3234,8 @@
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
       },
       "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
-      "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta."
+      "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
+      "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",

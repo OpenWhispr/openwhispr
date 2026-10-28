@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Upload,
@@ -36,6 +36,7 @@ import {
   findVideosFolder,
   DOWNLOAD_ERROR_KEYS,
   transcriptionErrorKey,
+  uploadRestrictionKey,
   MEETINGS_FOLDER_NAME,
 } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
@@ -75,11 +76,7 @@ import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-import {
-  isAudioFeatureAllowed,
-  isTranscriptionContextAllowed,
-  type PolicyDecisionSnapshot,
-} from "../../stores/policyRules";
+import { isAudioFeatureAllowed, isTranscriptionContextAllowed } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import { byokFileSizeLimit, resolveTranscriptionRoute } from "../../helpers/transcriptionRoute";
@@ -99,14 +96,6 @@ const MAX_BATCH_URLS = 50;
 // Every action on this page: the brand pill for the next step, a ghost pill beside it.
 const PRIMARY_ACTION_CLASS = "rounded-full px-5 font-medium";
 const SECONDARY_ACTION_CLASS = "rounded-full px-4";
-
-// Why the org refuses uploads under this policy, as an i18n key.
-function uploadRestrictionKey(policy: PolicyDecisionSnapshot): string {
-  if (policy.status !== "managed" || !policy.policy) return "common.policyUnresolved";
-  return policy.policy.features.audioUploadEnabled === false
-    ? "notes.upload.disabledByOrg"
-    : "common.policyTranscriptionRestricted";
-}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -317,6 +306,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     )
   );
   const uploadAllowedByPolicy = useTranscriptionContextAllowed("upload");
+  // The org's upload switch, which the banner explains and the inputs follow.
+  const uploadFeatureAllowed = isAudioFeatureAllowed(policyState, "upload");
+  const uploadRestrictionId = useId();
+  const uploadRestrictionDescription = uploadFeatureAllowed ? undefined : uploadRestrictionId;
 
   const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
   const setUploadCloudTranscriptionMode = useSettingsStore(
@@ -933,6 +926,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBatchUrlSubmit = () => {
+    if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
     const { valid, skipped } = parseBatchUrls(urlInput);
     if (valid.length > 0) {
       batch.addUrls(valid);
@@ -1027,8 +1021,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 py-8 shrink-0 my-auto")}
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        {!isAudioFeatureAllowed(policyState, "upload") && (
+        {!uploadFeatureAllowed && (
           <p
+            id={uploadRestrictionId}
             role="status"
             className="mb-5 rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-foreground/80"
           >
@@ -1049,6 +1044,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               isDragOver={isDragOver}
               setIsDragOver={setIsDragOver}
               onOpenSettings={onOpenSettings}
+              disabled={!uploadFeatureAllowed}
+              describedBy={uploadRestrictionDescription}
             />
 
             <div className="my-5 flex items-center gap-3">
@@ -1059,7 +1056,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               <div className="h-px flex-1 bg-border/70 dark:bg-white/10" />
             </div>
 
-            {urlExpanded ? (
+            {urlExpanded && uploadFeatureAllowed ? (
               <div>
                 <textarea
                   dir="ltr"
@@ -1136,16 +1133,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     }
                   }}
                   placeholder={t("notes.upload.urlPlaceholder")}
-                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-foreground/45"
+                  disabled={!uploadFeatureAllowed}
+                  aria-describedby={uploadRestrictionDescription}
+                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-foreground/45 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <button
                   onClick={handleUrlSubmit}
-                  disabled={!urlInput.trim()}
+                  disabled={!uploadFeatureAllowed || !urlInput.trim()}
                   aria-label={t("notes.upload.urlSubmit")}
                   className={cn(
                     "absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full transition-[filter,transform] duration-100",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-                    urlInput.trim()
+                    uploadFeatureAllowed && urlInput.trim()
                       ? cn(GRADIENT_CIRCLE, "hover:brightness-110 active:scale-95")
                       : "bg-muted text-muted-foreground"
                   )}
@@ -1179,7 +1178,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               }
             />
 
-            {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+            {!batch.isProcessing && batch.hasPending && (
               <div className="mt-4 flex flex-col items-center gap-3">
                 {folders.length > 0 && (
                   <FolderSelect
@@ -1518,6 +1517,8 @@ interface IdleViewProps {
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
   onOpenSettings?: (section: string) => void;
+  disabled: boolean;
+  describedBy?: string;
 }
 
 function IdleView({
@@ -1528,6 +1529,8 @@ function IdleView({
   isDragOver,
   setIsDragOver,
   onOpenSettings,
+  disabled,
+  describedBy,
 }: IdleViewProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -1554,10 +1557,12 @@ function IdleView({
         role="button"
         tabIndex={0}
         aria-label={t("notes.upload.dropOrBrowse")}
+        aria-disabled={disabled || undefined}
+        aria-describedby={describedBy}
         onDrop={handleDrop}
         onDragOver={(e) => {
           e.preventDefault();
-          setIsDragOver(true);
+          if (!disabled) setIsDragOver(true);
         }}
         onDragLeave={(e) => {
           e.preventDefault();
@@ -1566,12 +1571,14 @@ function IdleView({
         onClick={handleBrowse}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group mt-6 flex cursor-pointer flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center",
+          "group mt-6 flex flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center",
           "transition-[background-color,border-color,transform] duration-200",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          isDragOver
-            ? "scale-[1.01] border-primary/60 bg-primary/5 dark:bg-primary/10"
-            : "border-border bg-card/50 hover:border-primary/40 hover:bg-primary/5 dark:border-white/15 dark:bg-surface-2/60 dark:hover:bg-primary/10"
+          disabled
+            ? "cursor-not-allowed border-border bg-card/50 opacity-50 dark:border-white/15 dark:bg-surface-2/60"
+            : isDragOver
+              ? "cursor-pointer scale-[1.01] border-primary/60 bg-primary/5 dark:bg-primary/10"
+              : "cursor-pointer border-border bg-card/50 hover:border-primary/40 hover:bg-primary/5 dark:border-white/15 dark:bg-surface-2/60 dark:hover:bg-primary/10"
         )}
         style={isDragOver ? { animation: "drag-pulse 1.5s ease-in-out infinite" } : undefined}
       >
@@ -1580,7 +1587,7 @@ function IdleView({
             "flex h-11 w-11 items-center justify-center rounded-xl transition-colors",
             isDragOver
               ? "bg-primary/15 text-primary"
-              : "bg-surface-3 text-foreground/70 group-hover:text-primary"
+              : cn("bg-surface-3 text-foreground/70", !disabled && "group-hover:text-primary")
           )}
         >
           <Upload size={20} />

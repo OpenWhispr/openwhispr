@@ -3310,7 +3310,8 @@
         "description": "数分間、誰の声も検出されていません。通話が続いている場合は、音声出力デバイスを確認してください。"
       },
       "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
-      "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。"
+      "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
+      "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",

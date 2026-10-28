@@ -33,6 +33,21 @@ describe('transcriptionPolicyErrorFromResponse', () => {
     expect(error?.message).toBe(message);
   });
 
+  it('keeps status and code on the mapped error so retries treat it as terminal', () => {
+    expect(
+      transcriptionPolicyErrorFromResponse(
+        403,
+        JSON.stringify({ error: 'raw server text', code: 'POLICY_AUDIO_UPLOAD_DISABLED' }),
+      ),
+    ).toMatchObject({ status: 403, code: 'POLICY_AUDIO_UPLOAD_DISABLED' });
+    expect(transcriptionPolicyErrorFromResponse(426, '')).toMatchObject({ status: 426 });
+  });
+
+  it('neither tells the user to update the app nor to retry when the purpose is missing', () => {
+    expect(AUDIO_PURPOSE_REQUIRED_MESSAGE).not.toMatch(/update/i);
+    expect(AUDIO_PURPOSE_REQUIRED_MESSAGE).not.toMatch(/try again/i);
+  });
+
   it('names the disabled control in the audio refusal messages', () => {
     expect(MEETING_RECORDING_DISABLED_MESSAGE).toBe(
       'Meeting recording is disabled by your organization.',

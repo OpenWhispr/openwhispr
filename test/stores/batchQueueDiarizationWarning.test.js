@@ -32,6 +32,8 @@ test("batch uploads retain diarization warnings separately from transcription wa
       "/components/notes/shared": `
         export const DOWNLOAD_ERROR_KEYS = {};
         export function transcriptionErrorKey() { return null; }
+        export function isUploadPolicyRefusal() { return false; }
+        export function uploadRestrictionKey() { return ""; }
       `,
       "/services/uploadNotes": `
         export async function saveUploadNote() {

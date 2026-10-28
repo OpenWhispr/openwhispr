@@ -3286,7 +3286,8 @@
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
       },
       "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
-      "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta."
+      "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
+      "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
