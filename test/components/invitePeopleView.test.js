@@ -154,7 +154,7 @@ test("sending is busy and can't be dismissed", async (t) => {
   assert.match(primaryButton(markup), /animate-spin/);
 });
 
-test("some failed shows the summary with Try again", async (t) => {
+test("some failed counts only the addresses Try again resends", async (t) => {
   const { render } = await loadView(t);
 
   const markup = render({
@@ -166,7 +166,7 @@ test("some failed shows the summary with Try again", async (t) => {
 
   assert.match(
     markup,
-    /role="alert"[\s\S]*workspaces\.invite\.someFailed\|\{&quot;count&quot;:2\}/
+    /role="alert"[\s\S]*workspaces\.invite\.someFailed\|\{&quot;count&quot;:1\}/
   );
   assert.match(markup, /<button[^>]*>workspaces\.exit\.tryAgain<\/button>/);
   assert.match(markup, /title="workspaces\.invite\.errors\.requestFailed/);
@@ -278,6 +278,19 @@ test("the role trigger is named by its label and its current role", async (t) =>
   );
   // Radix's own trigger id is what labels the open menu, so it isn't overridden.
   assert.doesNotMatch(trigger[0], / id="/);
+});
+
+test("the field points at the error that's about it", async (t) => {
+  const { render } = await loadView(t);
+
+  const markup = render({ recipients: [chip("bad", { status: "invalid" })] });
+
+  const input = markup.match(/<input[^>]*>/)[0];
+  assert.match(input, /aria-invalid="true"/);
+  const describedBy = input.match(/aria-describedby="([^"]+)"/)[1].split(" ");
+  const alert = markup.match(/<div id="([^"]+)" role="alert"/);
+  assert.ok(alert, "error bar with an id");
+  assert.ok(describedBy.includes(alert[1]));
 });
 
 test("done shows the sent count and Done", async (t) => {

@@ -123,14 +123,19 @@ export default function WorkspaceMembersTab({
   }, [workspace.id]);
 
   // A re-read for another workspace (a role change that finished after a switch) can take the
-  // store's one roster slot. Read this workspace's again, once, rather than show nobody.
+  // store's one roster slot. Read this workspace's again, once, rather than show nobody. If that
+  // read is overtaken by another workspace's too, the failed view offers Try again instead of
+  // retrying here, where two views of different workspaces would take turns forever.
   useEffect(() => {
     if (membersLoading || membersError) return;
     if (rosterIsOurs) {
       rereadRef.current = false;
       return;
     }
-    if (rereadRef.current) return;
+    if (rereadRef.current) {
+      setMembersError(true);
+      return;
+    }
     rereadRef.current = true;
     void loadMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,6 +160,8 @@ export default function WorkspaceMembersTab({
         return t("settingsPage.workspace.people.roleNotAllowed", {
           workspace: isolate(workspace.name),
         });
+      case "ssoRequired":
+        return t("workspaces.ssoRequired", { workspace: isolate(workspace.name) });
       case "failed":
         return t("settingsPage.workspace.people.roleFailed", { name: isolate(name) });
     }
@@ -291,7 +298,8 @@ export default function WorkspaceMembersTab({
             </button>
           )}
         </div>
-        {canManage && view.kind === "rows" && (
+        {/* The seat count is the workspace's, so a search that matches nobody keeps it. */}
+        {canManage && (view.kind === "rows" || view.kind === "noResults") && (
           <p className="ms-auto text-xs text-muted-foreground/80">
             {t("settingsPage.workspace.members.description", {
               count: members.length,

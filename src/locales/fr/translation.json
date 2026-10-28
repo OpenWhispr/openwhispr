@@ -1752,7 +1752,9 @@
           "resend": "Renvoyer l'invitation",
           "cancel": "Annuler l'invitation",
           "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne.",
-          "resendNotAllowed": "Vous n'avez plus l'autorisation de renvoyer des invitations dans {{workspace}}."
+          "resendNotAllowed": "Vous n'avez plus l'autorisation de renvoyer des invitations dans {{workspace}}.",
+          "noLongerPending": "L'invitation pour {{email}} n'est plus en attente",
+          "refreshFailed": "Impossible d'actualiser les invitations. Cette liste n'est peut-être pas à jour."
         }
       },
       "role": {
@@ -3086,6 +3088,10 @@
       "roleLabel": "Rôle dans l'espace",
       "seatUsage": "{{used}} sur {{seats}} sièges utilisés",
       "seatCost": "En cas d’acceptation, un siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
+      "seatCostMany_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
+      "seatCostMany_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre · facturation au prorata estimée à {{amount}}.",
+      "seatCostManyUnpriced_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre.",
+      "seatCostManyUnpriced_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre.",
       "submit_one": "Envoyer l'invitation",
       "submit_other": "Envoyer {{count}} invitations",
       "submitting": "Invitation en cours…",
@@ -3116,6 +3122,7 @@
         "directoryRequired": "Attribuez d'abord {{email}} dans votre fournisseur d'identité.",
         "notAllowed": "Vous ne pouvez plus inviter de personnes dans {{workspace}}.",
         "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour inviter des personnes dans {{workspace}}.",
+        "sessionExpired": "Impossible d'inviter {{email}} : votre session a expiré ou a changé. Reconnectez-vous, puis réessayez.",
         "requestFailed": "Impossible d'inviter {{email}}. Vérifiez votre connexion et réessayez.",
         "refused": "Impossible d'inviter {{email}} : {{reason}}"
       }
@@ -3196,8 +3203,10 @@
       "keep": "Conserver l'invitation",
       "canceling": "Annulation…",
       "done": "Invitation annulée",
-      "failed": "Impossible d'annuler l'invitation. Vérifiez votre connexion et réessayez."
+      "failed": "Impossible d'annuler l'invitation. Vérifiez votre connexion et réessayez.",
+      "notAllowed": "Vous n'avez plus l'autorisation d'annuler des invitations dans {{workspace}}."
     },
+    "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour gérer les personnes de {{workspace}}.",
     "transfer": {
       "title": "Choisir un nouveau propriétaire",
       "body": "Choisissez un membre existant de l'espace. Vous deviendrez administrateur après le transfert.",
@@ -3440,7 +3449,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Ajouté via {{group}}. Retirez-le depuis ce groupe.",
         "roleFromGroup": "Admin via {{group}}. Modifiez-le là-bas.",
-        "invited": "Invitation envoyée à {{email}}"
+        "invited": "Invitation envoyée à {{email}}",
+        "invitedMany_one": "Invitation envoyée à {{count}} personne",
+        "invitedMany_other": "Invitations envoyées à {{count}} personnes"
       },
       "invitedTo_one": "Vous rejoindrez {{count}} espace d'équipe",
       "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe",

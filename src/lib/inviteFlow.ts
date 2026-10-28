@@ -1,5 +1,7 @@
 import type { InviteErrorKind, InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
+import { parseAddressList } from "../utils/emailApprovalFields";
+import { EMAIL_REGEX } from "../utils/validation";
 
 export const MAX_INVITE_RECIPIENTS = 20;
 
@@ -48,23 +50,37 @@ export interface InviteSummary {
   noEmailCount: number;
 }
 
-const SEPARATOR = /[,;\s]/;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Commas as typed in every locale and semicolons are what `parseAddressList` splits on; a line
+// break separates the rows of a pasted column.
+const HARD_SEPARATOR = /[,;،，、\n\r]/;
+// An address followed by a space is complete. A space anywhere else may belong to a name being
+// searched for, or to a pasted "Name <address>" that isn't closed yet.
+const ADDRESS_THEN_SPACE = /^\s*([^\s<>,;،，、]*@[^\s<>,;،，、]*)\s+/;
+const CLOSED_DISPLAY_NAME = />\s*$/;
 
 function normalize(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function splitEmails(text: string): string[] {
-  return text
-    .split(/[,;\s]+/)
-    .map(normalize)
-    .filter((email) => email.length > 0);
+// Deliberately loose: the server has the final say on what an address is.
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email);
 }
 
-// Deliberately loose: the server has the final say on what an address is.
-export function isValidEmail(email: string): boolean {
-  return EMAIL_PATTERN.test(email);
+/** The addresses in pasted or typed text, with any "Name <address>" reduced to its address. */
+function parseEmails(text: string): string[] {
+  const emails: string[] = [];
+  for (const line of text.split(/[\n\r]+/)) {
+    for (const part of parseAddressList(line)) {
+      const words = part.split(/\s+/).filter(Boolean);
+      // "a@x.com b@y.com" is two addresses; anything else stays whole, so a stray name is one
+      // chip to remove rather than one per word.
+      const addresses =
+        words.length > 1 && words.every((word) => word.includes("@")) ? words : [part];
+      emails.push(...addresses.map(normalize).filter((email) => email.length > 0));
+    }
+  }
+  return emails;
 }
 
 function classify(email: string, memberEmails: string[], invitedEmails: string[]): RecipientState {
@@ -95,22 +111,31 @@ function addEmails(state: InviteFlowState, candidates: string[]): InviteFlowStat
 }
 
 function commitDraft(state: InviteFlowState): InviteFlowState {
-  const withChips = addEmails(state, splitEmails(state.draft));
+  const withChips = addEmails(state, parseEmails(state.draft));
   return withChips.draft === "" ? withChips : { ...withChips, draft: "" };
 }
 
 function setDraft(state: InviteFlowState, text: string): InviteFlowState {
+  if (CLOSED_DISPLAY_NAME.test(text)) return { ...addEmails(state, parseEmails(text)), draft: "" };
+
   // Everything up to the last separator is complete; only the fragment after it stays editable.
-  let lastSeparator = -1;
+  let complete = "";
+  let rest = text;
   for (let index = text.length - 1; index >= 0; index -= 1) {
-    if (SEPARATOR.test(text[index])) {
-      lastSeparator = index;
+    if (HARD_SEPARATOR.test(text[index])) {
+      complete = text.slice(0, index + 1);
+      rest = text.slice(index + 1);
       break;
     }
   }
-  if (lastSeparator === -1) return { ...state, draft: text };
-  const withChips = addEmails(state, splitEmails(text.slice(0, lastSeparator + 1)));
-  return { ...withChips, draft: text.slice(lastSeparator + 1) };
+  const typed: string[] = [];
+  for (let match = rest.match(ADDRESS_THEN_SPACE); match; match = rest.match(ADDRESS_THEN_SPACE)) {
+    typed.push(match[1]);
+    rest = rest.slice(match[0].length);
+  }
+  if (complete === "" && typed.length === 0) return { ...state, draft: text };
+  const withChips = addEmails(state, [...parseEmails(complete), ...typed]);
+  return { ...withChips, draft: rest.trimStart() };
 }
 
 function resolveResult(
@@ -158,36 +183,44 @@ export function createInviteFlow(input: { initialEmail?: string }): InviteFlowSt
     memberEmails: [],
     invitedEmails: [],
   };
-  return input.initialEmail ? addEmails(base, [input.initialEmail]) : base;
+  const initialEmail = input.initialEmail?.trim() ?? "";
+  if (!initialEmail) return base;
+  // A caller can pass a half-typed address (a roster search for "john@acme"); a chip could only
+  // be removed, so it stays in the field to finish.
+  return isValidEmail(normalize(initialEmail))
+    ? addEmails(base, [initialEmail])
+    : { ...base, draft: initialEmail };
 }
 
-// The server gave a reason that the same request would get again, so these wait to be removed.
-const UNRETRYABLE_FAILURES: ReadonlySet<InviteErrorKind> = new Set(["refused", "ssoRequired"]);
+/**
+ * Whether sending the same request again can succeed. Every other failure is the server's
+ * answer for this address or this workspace, so its chip waits to be removed.
+ */
+export function isRetryableFailure(kind: InviteErrorKind): boolean {
+  return kind === "requestFailed" || kind === "sessionExpired";
+}
 
 export function inviteSummary(state: InviteFlowState): InviteSummary {
   const sendable = state.recipients
     .filter(
       ({ state: chip }) =>
-        chip.status === "draft" ||
-        (chip.status === "failed" && !UNRETRYABLE_FAILURES.has(chip.kind))
+        chip.status === "draft" || (chip.status === "failed" && isRetryableFailure(chip.kind))
     )
     .map((recipient) => recipient.email);
   const draftText = normalize(state.draft);
   const draftAllowsSend = draftText === "" || isValidEmail(draftText);
   // Send commits the field first, so a valid address typed but not yet chipped counts: otherwise
   // the button would stay disabled for someone who typed one address and never pressed Enter.
-  if (
+  const draftAddsChip =
     draftText !== "" &&
     draftAllowsSend &&
     !state.recipients.some((recipient) => recipient.email === draftText) &&
-    !state.sent.some((entry) => entry.email === draftText)
-  ) {
-    sendable.push(draftText);
-  }
+    !state.sent.some((entry) => entry.email === draftText);
+  if (draftAddsChip) sendable.push(draftText);
   const invalid = state.recipients.filter(({ state: chip }) => chip.status === "invalid");
   const blocked = state.recipients.filter(({ state: chip }) => chip.status === "blocked");
   const failed = state.recipients.filter(({ state: chip }) => chip.status === "failed");
-  const tooMany = state.recipients.length > MAX_INVITE_RECIPIENTS;
+  const tooMany = state.recipients.length + (draftAddsChip ? 1 : 0) > MAX_INVITE_RECIPIENTS;
 
   return {
     sendable,
@@ -283,7 +316,7 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
 }
 
 export function inviteSuggestions(
-  contacts: Array<{ email: string; display_name?: string | null }>,
+  contacts: Array<{ email: string; name?: string | null }>,
   exclude: string[],
   limit = 5
 ): Array<{ email: string; name: string | null }> {
@@ -294,7 +327,7 @@ export function inviteSuggestions(
     const key = normalize(contact.email);
     if (!key || skipped.has(key)) continue;
     skipped.add(key);
-    suggestions.push({ email: contact.email, name: contact.display_name?.trim() || null });
+    suggestions.push({ email: contact.email, name: contact.name?.trim() || null });
   }
   return suggestions;
 }

@@ -53,6 +53,7 @@ export function RemoveMemberDialog({
     if (error.kind === "notAllowed") {
       return t("workspaces.removeMember.notAllowed", { workspace });
     }
+    if (error.kind === "ssoRequired") return t("workspaces.ssoRequired", { workspace });
     return t("workspaces.removeMember.failed", { name });
   };
 

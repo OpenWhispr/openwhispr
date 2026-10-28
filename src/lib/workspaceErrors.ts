@@ -8,6 +8,7 @@ export type InviteErrorKind =
   | "directoryRequired"
   | "notAllowed"
   | "ssoRequired"
+  | "sessionExpired"
   | "refused"
   | "requestFailed";
 
@@ -22,6 +23,10 @@ const INVITE_ERROR_CODES: Record<string, Exclude<InviteErrorKind, "refused">> = 
   seat_limit_reached: "seatLimit",
   DIRECTORY_ASSIGNMENT_REQUIRED: "directoryRequired",
   SSO_REQUIRED: "ssoRequired",
+  // Main's codes for a session that expired or was replaced by another account's.
+  AUTH_EXPIRED: "sessionExpired",
+  AUTH_CONTEXT_CHANGED: "sessionExpired",
+  AUTH_CONTEXT_UNVALIDATED: "sessionExpired",
 };
 
 /**
@@ -38,6 +43,7 @@ export function classifyInviteError(error: unknown): InviteFailure {
   if (status === 409 && /already a member/i.test(message)) return { kind: "alreadyMember" };
   if (status === 409 && /already pending/i.test(message)) return { kind: "alreadyInvited" };
   if (status === 400 && /invalid email/i.test(message)) return { kind: "invalid" };
+  if (status === 401) return { kind: "sessionExpired" };
   // The API's text for these ("Insufficient role", "Workspace not found") says less than the
   // copy does, and every remaining address would get the same answer.
   if (status === 403 || status === 404) return { kind: "notAllowed" };
@@ -49,8 +55,13 @@ export function classifyInviteError(error: unknown): InviteFailure {
 export type RowActionError =
   | { kind: "gone" }
   | { kind: "notAllowed" }
+  | { kind: "ssoRequired" }
   | { kind: "refused"; message: string }
   | { kind: "failed" };
+
+// The API's answers when the member or invitation itself is missing. Anything else at 404 (the
+// workspace, or a bare status the main process filled in) proves nothing about the row.
+const ROW_GONE_MESSAGE = /^(member|invitation) not found$/i;
 
 /**
  * Maps a failure from acting on a member or invitation row. A 404 for the workspace itself
@@ -58,8 +69,10 @@ export type RowActionError =
  */
 export function classifyRowActionError(error: unknown): RowActionError {
   if (error instanceof CloudApiError) {
+    if (error.code === "SSO_REQUIRED") return { kind: "ssoRequired" };
     if (error.status === 404) {
-      return error.message === "Workspace not found" ? { kind: "notAllowed" } : { kind: "gone" };
+      if (ROW_GONE_MESSAGE.test(error.message)) return { kind: "gone" };
+      if (error.message === "Workspace not found") return { kind: "notAllowed" };
     }
     if (error.status === 403) return { kind: "notAllowed" };
   }

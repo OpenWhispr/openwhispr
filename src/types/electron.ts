@@ -3298,6 +3298,14 @@ declare global {
         success: boolean;
         contacts: Array<{ email: string; display_name: string | null }>;
       }>;
+      /** People to invite: the same calendars and contacts the assistant's find_contact reads. */
+      searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
+      }>;
       upsertContact: (contact: {
         email: string;
         displayName?: string | null;

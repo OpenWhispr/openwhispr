@@ -1752,7 +1752,9 @@
           "resend": "Resend invite",
           "cancel": "Cancel invite",
           "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
-          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}."
+          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}.",
+          "noLongerPending": "The invitation for {{email}} is no longer pending",
+          "refreshFailed": "Couldn't refresh invitations. This list may be out of date."
         }
       },
       "role": {
@@ -3086,6 +3088,10 @@
       "roleLabel": "Workspace role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
       "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
+      "seatCostMany_one": "If all are accepted, adds {{count}} seat to your plan · estimated prorated charge {{amount}}.",
+      "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
+      "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
+      "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
       "submit_one": "Send invitation",
       "submit_other": "Send {{count}} invitations",
       "submitting": "Inviting…",
@@ -3116,6 +3122,7 @@
         "directoryRequired": "Assign {{email}} in your identity provider first.",
         "notAllowed": "You can no longer invite people to {{workspace}}.",
         "ssoRequired": "Sign in with your company's single sign-on to invite people to {{workspace}}.",
+        "sessionExpired": "Couldn't invite {{email}}: your sign-in expired or changed. Sign in again, then try again.",
         "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
         "refused": "Couldn't invite {{email}}: {{reason}}"
       }
@@ -3196,8 +3203,10 @@
       "keep": "Keep invitation",
       "canceling": "Canceling…",
       "done": "Invitation canceled",
-      "failed": "Couldn't cancel the invitation. Check your connection and try again."
+      "failed": "Couldn't cancel the invitation. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to cancel invitations in {{workspace}}."
     },
+    "ssoRequired": "Sign in with your company's single sign-on to manage people in {{workspace}}.",
     "transfer": {
       "title": "Choose a new Owner",
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
@@ -3440,7 +3449,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Added through {{group}}. Remove them there.",
         "roleFromGroup": "Admin through {{group}}. Change it there.",
-        "invited": "Invitation sent to {{email}}"
+        "invited": "Invitation sent to {{email}}",
+        "invitedMany_one": "Invitation sent to {{count}} person",
+        "invitedMany_other": "Invitations sent to {{count}} people"
       },
       "invitedTo_one": "You'll join {{count}} team space",
       "invitedTo_other": "You'll join {{count}} team spaces",

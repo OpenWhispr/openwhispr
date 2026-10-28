@@ -102,10 +102,13 @@ function PeopleBody({
   );
 
   const { reload } = invitations;
-  const handleInvited = useCallback((): void => {
-    invitedCountRef.current += 1;
-    void reload();
-  }, [reload]);
+  const handleInvited = useCallback(
+    (emails: string[]): void => {
+      invitedCountRef.current += emails.length;
+      void reload();
+    },
+    [reload]
+  );
 
   return (
     <>
@@ -146,7 +149,9 @@ function PeopleBody({
         {canManage && (
           <button
             type="button"
-            aria-label={t("settingsPage.workspace.people.addLabel")}
+            // A tooltip rather than an aria-label, so the accessible name stays the visible "Add"
+            // that voice control users say.
+            title={t("settingsPage.workspace.people.addLabel")}
             onClick={openInvite}
             className="ms-auto mb-1 inline-flex h-7 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >

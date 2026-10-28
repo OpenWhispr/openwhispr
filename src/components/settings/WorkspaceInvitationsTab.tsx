@@ -15,6 +15,7 @@ import { confirmActionReducer } from "../../lib/confirmActionFlow";
 import { invitationDaysLeft, invitationStatus, orderInvitations } from "../../lib/peopleRoster";
 import { classifyRowActionError } from "../../lib/workspaceErrors";
 import { InvitationsService } from "../../services/InvitationsService";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceInvitation } from "../../types/electron";
 import { CancelInvitationDialog } from "../workspace/CancelInvitationDialog";
 import type { WorkspaceInvitationsState } from "./useWorkspaceInvitations";
@@ -48,6 +49,14 @@ export default function WorkspaceInvitationsTab({
   const now = Date.now();
   const rows = orderInvitations(invitations.invitations, now);
 
+  // An invitation that left the list may have been accepted, which adds a member.
+  function refreshMembersQuietly(): void {
+    void useWorkspaceStore
+      .getState()
+      .refreshMembers(workspace.id)
+      .catch(() => undefined);
+  }
+
   function setResending(invitationId: string, resending: boolean): void {
     if (resending) resendingRef.current.add(invitationId);
     else resendingRef.current.delete(invitationId);
@@ -71,13 +80,25 @@ export default function WorkspaceInvitationsTab({
     } catch (error) {
       const failure = classifyRowActionError(error);
       if (failure.kind === "gone") {
+        // The API answers 404 both for an invitation accepted or canceled meanwhile and for an
+        // expired one it won't renew; only the list says which this was.
+        const listed = await reload();
+        const stillListed = listed?.some((entry) => entry.id === invitation.id) ?? true;
+        if (!stillListed) refreshMembersQuietly();
         toast({
-          title: t("settingsPage.workspace.people.invitations.resendFailed", {
-            email: isolate(invitation.email),
-          }),
+          title: t(
+            stillListed
+              ? "settingsPage.workspace.people.invitations.resendFailed"
+              : "settingsPage.workspace.people.invitations.noLongerPending",
+            { email: isolate(invitation.email) }
+          ),
+          variant: stillListed ? "destructive" : undefined,
+        });
+      } else if (failure.kind === "ssoRequired") {
+        toast({
+          title: t("workspaces.ssoRequired", { workspace: isolate(workspace.name) }),
           variant: "destructive",
         });
-        await reload();
       } else if (failure.kind === "notAllowed") {
         toast({
           title: t("settingsPage.workspace.people.invitations.resendNotAllowed", {
@@ -140,6 +161,15 @@ export default function WorkspaceInvitationsTab({
           <p className="text-xs text-muted-foreground mt-0.5">
             {t("settingsPage.workspace.people.invitations.emptyBody")}
           </p>
+        </div>
+      )}
+
+      {rows.length > 0 && invitations.stale && (
+        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <p>{t("settingsPage.workspace.people.invitations.refreshFailed")}</p>
+          <Button variant="outline" size="sm" onClick={() => void reload()}>
+            {t("workspaces.exit.tryAgain")}
+          </Button>
         </div>
       )}
 
@@ -232,9 +262,13 @@ export default function WorkspaceInvitationsTab({
 
       <CancelInvitationDialog
         workspaceId={workspace.id}
+        workspaceName={workspace.name}
         state={cancelState}
         dispatch={dispatchCancel}
-        onCanceled={() => void reload()}
+        onCanceled={(outcome) => {
+          void reload();
+          if (outcome === "gone") refreshMembersQuietly();
+        }}
       />
     </div>
   );

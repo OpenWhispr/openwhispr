@@ -50,9 +50,9 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
   );
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
-  // Invitees don't appear in the roster until they accept, so the last sent
-  // invite stays visible under the add block.
-  const [invitedEmail, setInvitedEmail] = useState<string | null>(null);
+  // Invitees don't appear in the roster until they accept, so the last send's
+  // invitations stay visible under the add block.
+  const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
   const [groupsOpen, setGroupsOpen] = useState(false);
 
   const canManage = spaceCan(space, "manage_members") || workspaceCan(workspace, "manage_settings");
@@ -174,12 +174,17 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           }
         />
 
-        {invitedEmail && (
+        {invitedEmails.length === 1 && (
           <p className="text-[11px] text-muted-foreground">
             <BidiInterpolatedText
               text={t("notes.spaces.members.invited", { email: BIDI_VALUE_TOKEN })}
-              value={invitedEmail}
+              value={invitedEmails[0]}
             />
+          </p>
+        )}
+        {invitedEmails.length > 1 && (
+          <p className="text-[11px] text-muted-foreground">
+            {t("notes.spaces.members.invitedMany", { count: invitedEmails.length })}
           </p>
         )}
 
@@ -224,7 +229,7 @@ export default function SpaceMembersPanel({ space }: SpaceMembersPanelProps) {
           workspaceName={workspace.name}
           spaceIds={[spaceId]}
           initialEmail={inviteEmail}
-          onInvited={setInvitedEmail}
+          onInvited={setInvitedEmails}
         />
       )}
 

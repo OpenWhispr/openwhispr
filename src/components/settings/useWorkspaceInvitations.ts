@@ -6,8 +6,13 @@ export interface WorkspaceInvitationsState {
   status: "idle" | "loading" | "failed" | "ready";
   /** As the API returned them; the tab orders them. */
   invitations: WorkspaceInvitation[];
-  /** Resolves once the list has settled, and never rejects. */
-  reload: () => Promise<void>;
+  /** The last reload failed, so the list on screen may be out of date. */
+  stale: boolean;
+  /**
+   * Resolves once the list has settled, with the list it read, or null when the read failed or
+   * was overtaken. Never rejects.
+   */
+  reload: () => Promise<WorkspaceInvitation[] | null>;
 }
 
 // What the last answer for one workspace left behind. `invitations` stays null until a load
@@ -40,42 +45,49 @@ export function useWorkspaceInvitations(
     };
   }, [workspaceId]);
 
-  const load = useCallback(async (targetWorkspaceId: string): Promise<void> => {
-    // A caller can hold a reload from before a workspace switch; it must not touch the slot or
-    // supersede the current workspace's request.
-    if (currentWorkspaceRef.current !== targetWorkspaceId) return;
-    const requestId = ++latestRequestRef.current;
-    setSlot((current) =>
-      current.workspaceId === targetWorkspaceId
-        ? { ...current, failed: false }
-        : { workspaceId: targetWorkspaceId, invitations: null, failed: false }
-    );
-    let invitations: WorkspaceInvitation[] | null = null;
-    try {
-      invitations = await InvitationsService.list(targetWorkspaceId);
-    } catch {
-      // Marks the slot as failed. The list loads once per People mount and again after a resend,
-      // a cancel or an invite, and the failed view offers Try again.
-    }
-    // A switch, an unmount, or a newer request for this workspace makes this answer stale.
-    if (currentWorkspaceRef.current !== targetWorkspaceId) return;
-    if (latestRequestRef.current !== requestId) return;
-    setSlot((current) => {
-      const base =
+  const load = useCallback(
+    async (targetWorkspaceId: string): Promise<WorkspaceInvitation[] | null> => {
+      // A caller can hold a reload from before a workspace switch; it must not touch the slot or
+      // supersede the current workspace's request.
+      if (currentWorkspaceRef.current !== targetWorkspaceId) return null;
+      const requestId = ++latestRequestRef.current;
+      setSlot((current) =>
         current.workspaceId === targetWorkspaceId
-          ? current
-          : { workspaceId: targetWorkspaceId, invitations: null, failed: false };
-      return invitations
-        ? { workspaceId: targetWorkspaceId, invitations, failed: false }
-        : { ...base, failed: true };
-    });
-  }, []);
+          ? { ...current, failed: false }
+          : { workspaceId: targetWorkspaceId, invitations: null, failed: false }
+      );
+      let invitations: WorkspaceInvitation[] | null = null;
+      try {
+        invitations = await InvitationsService.list(targetWorkspaceId);
+      } catch {
+        // Marks the slot as failed. The list loads once per People mount and again after a resend,
+        // a cancel or an invite, and the failed view offers Try again.
+      }
+      // A switch, an unmount, or a newer request for this workspace makes this answer stale.
+      if (currentWorkspaceRef.current !== targetWorkspaceId) return null;
+      if (latestRequestRef.current !== requestId) return null;
+      setSlot((current) => {
+        const base =
+          current.workspaceId === targetWorkspaceId
+            ? current
+            : { workspaceId: targetWorkspaceId, invitations: null, failed: false };
+        return invitations
+          ? { workspaceId: targetWorkspaceId, invitations, failed: false }
+          : { ...base, failed: true };
+      });
+      return invitations;
+    },
+    []
+  );
 
   useEffect(() => {
     if (enabled) void load(workspaceId);
   }, [enabled, workspaceId, load]);
 
-  const reload = useCallback((): Promise<void> => load(workspaceId), [load, workspaceId]);
+  const reload = useCallback(
+    (): Promise<WorkspaceInvitation[] | null> => load(workspaceId),
+    [load, workspaceId]
+  );
 
   // A slot left over from another workspace is invisible until its own load lands.
   const own = slot.workspaceId === workspaceId ? slot : null;
@@ -86,5 +98,5 @@ export function useWorkspaceInvitations(
   else if (own?.failed) status = "failed";
   else status = "loading";
 
-  return { status, invitations, reload };
+  return { status, invitations, stale: Boolean(own?.invitations && own.failed), reload };
 }

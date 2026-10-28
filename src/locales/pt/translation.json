@@ -2456,7 +2456,9 @@
           "resend": "Reenviar convite",
           "cancel": "Cancelar convite",
           "resendFailed": "Não foi possível reenviar o convite para {{email}}. Cancele-o e convide a pessoa novamente.",
-          "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}."
+          "resendNotAllowed": "Você não tem mais permissão para reenviar convites em {{workspace}}.",
+          "noLongerPending": "O convite para {{email}} não está mais pendente",
+          "refreshFailed": "Não foi possível atualizar os convites. Esta lista pode estar desatualizada."
         }
       },
       "role": {
@@ -2991,7 +2993,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Adicionado por meio de {{group}}. Remova a pessoa lá.",
         "roleFromGroup": "Administrador por meio de {{group}}. Altere isso lá.",
-        "invited": "Convite enviado para {{email}}"
+        "invited": "Convite enviado para {{email}}",
+        "invitedMany_one": "Convite enviado para {{count}} pessoa",
+        "invitedMany_other": "Convites enviados para {{count}} pessoas"
       },
       "invitedTo_one": "Você entrará em {{count}} espaço de equipe",
       "invitedTo_other": "Você entrará em {{count}} espaços de equipe",
@@ -4824,6 +4828,10 @@
       "roleLabel": "Função no espaço de trabalho",
       "seatUsage": "Usando {{used}} de {{seats}} assentos",
       "seatCost": "Se a pessoa aceitar, será adicionado um assento ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostMany_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostMany_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano · cobrança proporcional estimada de {{amount}}.",
+      "seatCostManyUnpriced_one": "Se todos aceitarem, será adicionado {{count}} assento ao plano.",
+      "seatCostManyUnpriced_other": "Se todos aceitarem, serão adicionados {{count}} assentos ao plano.",
       "submit_one": "Enviar convite",
       "submit_other": "Enviar {{count}} convites",
       "submitting": "Convidando…",
@@ -4854,6 +4862,7 @@
         "directoryRequired": "Primeiro atribua {{email}} no seu provedor de identidade.",
         "notAllowed": "Você não pode mais convidar pessoas para {{workspace}}.",
         "ssoRequired": "Entre com o login único (SSO) da sua empresa para convidar pessoas para {{workspace}}.",
+        "sessionExpired": "Não foi possível convidar {{email}}: seu login expirou ou mudou. Entre novamente e tente outra vez.",
         "requestFailed": "Não foi possível convidar {{email}}. Verifique sua conexão e tente novamente.",
         "refused": "Não foi possível convidar {{email}}: {{reason}}"
       }
@@ -4934,8 +4943,10 @@
       "keep": "Manter convite",
       "canceling": "Cancelando…",
       "done": "Convite cancelado",
-      "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente."
+      "failed": "Não foi possível cancelar o convite. Verifique sua conexão e tente novamente.",
+      "notAllowed": "Você não tem mais permissão para cancelar convites em {{workspace}}."
     },
+    "ssoRequired": "Entre com o login único (SSO) da sua empresa para gerenciar as pessoas de {{workspace}}.",
     "transfer": {
       "title": "Escolha um novo proprietário",
       "body": "Escolha um membro existente do espaço de trabalho. Você se tornará administrador após a transferência.",

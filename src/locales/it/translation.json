@@ -2477,7 +2477,9 @@
           "resend": "Reinvia invito",
           "cancel": "Annulla invito",
           "resendFailed": "Impossibile reinviare l'invito a {{email}}. Annullalo e invita di nuovo la persona.",
-          "resendNotAllowed": "Non hai più l'autorizzazione per reinviare inviti in {{workspace}}."
+          "resendNotAllowed": "Non hai più l'autorizzazione per reinviare inviti in {{workspace}}.",
+          "noLongerPending": "L'invito per {{email}} non è più in sospeso",
+          "refreshFailed": "Impossibile aggiornare gli inviti. Questo elenco potrebbe non essere aggiornato."
         }
       },
       "role": {
@@ -2991,7 +2993,9 @@
         "viaGroup": "tramite {{group}}",
         "managedByGroup": "Aggiunto tramite {{group}}. Rimuovilo da lì.",
         "roleFromGroup": "Admin tramite {{group}}. Modificalo lì.",
-        "invited": "Invito inviato a {{email}}"
+        "invited": "Invito inviato a {{email}}",
+        "invitedMany_one": "Invito inviato a {{count}} persona",
+        "invitedMany_other": "Inviti inviati a {{count}} persone"
       },
       "invitedTo_one": "Entrerai in {{count}} spazio del team",
       "invitedTo_other": "Entrerai in {{count}} spazi del team",
@@ -4824,6 +4828,10 @@
       "roleLabel": "Ruolo nell'area di lavoro",
       "seatUsage": "{{used}} di {{seats}} posti in uso",
       "seatCost": "Se accetta, verrà aggiunto un posto al piano · addebito proporzionale stimato di {{amount}}.",
+      "seatCostMany_one": "Se tutti accettano, verrà aggiunto {{count}} posto al piano · addebito proporzionale stimato di {{amount}}.",
+      "seatCostMany_other": "Se tutti accettano, verranno aggiunti {{count}} posti al piano · addebito proporzionale stimato di {{amount}}.",
+      "seatCostManyUnpriced_one": "Se tutti accettano, verrà aggiunto {{count}} posto al piano.",
+      "seatCostManyUnpriced_other": "Se tutti accettano, verranno aggiunti {{count}} posti al piano.",
       "submit_one": "Invia invito",
       "submit_other": "Invia {{count}} inviti",
       "submitting": "Invito in corso…",
@@ -4854,6 +4862,7 @@
         "directoryRequired": "Assegna prima {{email}} nel tuo provider di identità.",
         "notAllowed": "Non puoi più invitare persone in {{workspace}}.",
         "ssoRequired": "Accedi con il Single Sign-On (SSO) della tua azienda per invitare persone in {{workspace}}.",
+        "sessionExpired": "Impossibile invitare {{email}}: il tuo accesso è scaduto o è cambiato. Accedi di nuovo e riprova.",
         "requestFailed": "Impossibile invitare {{email}}. Controlla la connessione e riprova.",
         "refused": "Impossibile invitare {{email}}: {{reason}}"
       }
@@ -4934,8 +4943,10 @@
       "keep": "Mantieni invito",
       "canceling": "Annullamento…",
       "done": "Invito annullato",
-      "failed": "Impossibile annullare l'invito. Controlla la connessione e riprova."
+      "failed": "Impossibile annullare l'invito. Controlla la connessione e riprova.",
+      "notAllowed": "Non hai più l'autorizzazione per annullare gli inviti in {{workspace}}."
     },
+    "ssoRequired": "Accedi con il Single Sign-On (SSO) della tua azienda per gestire le persone in {{workspace}}.",
     "transfer": {
       "title": "Scegli un nuovo proprietario",
       "body": "Scegli un membro esistente dell'area di lavoro. Dopo il trasferimento diventerai amministratore.",

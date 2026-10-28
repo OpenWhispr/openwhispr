@@ -2476,7 +2476,9 @@
           "resend": "招待を再送信",
           "cancel": "招待を取り消す",
           "resendFailed": "{{email}} への招待を再送信できませんでした。招待を取り消してから、もう一度招待してください。",
-          "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。"
+          "resendNotAllowed": "{{workspace}} で招待を再送信する権限がなくなりました。",
+          "noLongerPending": "{{email}} への招待は保留中ではなくなりました",
+          "refreshFailed": "招待を更新できませんでした。この一覧は最新ではない可能性があります。"
         }
       },
       "role": {
@@ -2918,7 +2920,8 @@
         "viaGroup": "{{group}} 経由",
         "managedByGroup": "{{group}} 経由で追加されています。削除はそのグループで行ってください。",
         "roleFromGroup": "{{group}} 経由の管理者です。変更はそちらで行ってください。",
-        "invited": "{{email}} に招待を送信しました"
+        "invited": "{{email}} に招待を送信しました",
+        "invitedMany_other": "{{count}} 人に招待を送信しました"
       },
       "invitedTo_one": "{{count}} 件のチームスペースに参加します",
       "invitedTo_other": "{{count}} 件のチームスペースに参加します",
@@ -4823,6 +4826,8 @@
       "roleLabel": "ワークスペースのロール",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
       "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "seatCostMany_other": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
+      "seatCostManyUnpriced_other": "すべて承諾されるとプランに {{count}} 席追加されます。",
       "submit_other": "{{count}} 件の招待を送信",
       "submitting": "招待しています…",
       "sentTitle_other": "招待を送信しました",
@@ -4848,6 +4853,7 @@
         "directoryRequired": "先に ID プロバイダーで {{email}} を割り当ててください。",
         "notAllowed": "{{workspace}} にユーザーを招待できなくなりました。",
         "ssoRequired": "{{workspace}} にユーザーを招待するには、会社のシングルサインオン (SSO) でサインインしてください。",
+        "sessionExpired": "{{email}} を招待できませんでした。サインインの有効期限が切れたか、変更されました。もう一度サインインしてから、やり直してください。",
         "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
         "refused": "{{email}} を招待できませんでした：{{reason}}"
       }
@@ -4928,8 +4934,10 @@
       "keep": "招待を残す",
       "canceling": "取り消しています…",
       "done": "招待を取り消しました",
-      "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。"
+      "failed": "招待を取り消せませんでした。接続を確認して、もう一度お試しください。",
+      "notAllowed": "{{workspace}} の招待を取り消す権限がなくなりました。"
     },
+    "ssoRequired": "{{workspace}} のメンバーを管理するには、会社のシングルサインオン (SSO) でサインインしてください。",
     "transfer": {
       "title": "新しいオーナーを選択",
       "body": "既存のワークスペースメンバーを選んでください。譲渡後、あなたは管理者になります。",

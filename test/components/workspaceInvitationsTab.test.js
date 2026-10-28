@@ -42,6 +42,7 @@ async function loadTab(t) {
       "__resendImpl",
       "__cancelDispatches",
       "__cancelState",
+      "__memberRefreshes",
     ]) {
       delete globalThis[key];
     }
@@ -51,6 +52,7 @@ async function loadTab(t) {
   globalThis.__resendCalls = [];
   globalThis.__resendImpl = async () => ({ email_sent: true });
   globalThis.__cancelDispatches = [];
+  globalThis.__memberRefreshes = [];
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-workspace-invitations-tab-",
     noExternal: ["react-i18next"],
@@ -74,6 +76,15 @@ async function loadTab(t) {
             globalThis.__resendCalls.push([workspaceId, invitationId]);
             return globalThis.__resendImpl();
           },
+        };
+      `,
+      "/stores/workspaceStore": `
+        export const useWorkspaceStore = {
+          getState: () => ({
+            refreshMembers: async (workspaceId) => {
+              globalThis.__memberRefreshes.push(workspaceId);
+            },
+          }),
         };
       `,
       "/CancelInvitationDialog": `
@@ -332,6 +343,7 @@ test("a resend for an invitation that is gone reloads and says to invite again",
     Tab,
     ready([invitation("i1", "ada@example.com", inDays(3))], async () => {
       reloads += 1;
+      return [invitation("i1", "ada@example.com", inDays(3))];
     })
   );
 
@@ -344,6 +356,56 @@ test("a resend for an invitation that is gone reloads and says to invite again",
       variant: "destructive",
     },
   ]);
+  assert.deepEqual(globalThis.__memberRefreshes, []);
+});
+
+test("a resend for an invitation no longer listed says it's no longer pending", async (t) => {
+  const { Tab, CloudApiError } = await loadTab(t);
+  globalThis.__resendImpl = async () => {
+    throw new CloudApiError("Invitation not found", 404);
+  };
+  const container = await mount(
+    t,
+    Tab,
+    ready([invitation("i1", "ada@example.com", inDays(3))], async () => [])
+  );
+
+  await React.act(async () => propsOf(menuItem(container, "invitations.resend")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    {
+      title:
+        "settingsPage.workspace.people.invitations.noLongerPending#\u2068ada@example.com\u2069",
+      variant: undefined,
+    },
+  ]);
+  // It may have been accepted, which adds a member.
+  assert.deepEqual(globalThis.__memberRefreshes, ["w1"]);
+});
+
+test("a resend refused for single sign-on says to sign in with it", async (t) => {
+  const { Tab, CloudApiError } = await loadTab(t);
+  globalThis.__resendImpl = async () => {
+    throw new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED");
+  };
+  const container = await mount(t, Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
+
+  await React.act(async () => propsOf(menuItem(container, "invitations.resend")).onClick());
+
+  assert.deepEqual(globalThis.__toasts, [
+    { title: "workspaces.ssoRequired", variant: "destructive" },
+  ]);
+});
+
+test("a list that couldn't be refreshed says it may be out of date", async (t) => {
+  const { Tab } = await loadTab(t);
+  const stale = { ...ready([invitation("i1", "ada@example.com", inDays(3))]), stale: true };
+
+  assert.match(render(Tab, stale), /settingsPage\.workspace\.people\.invitations\.refreshFailed/);
+  assert.doesNotMatch(
+    render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))])),
+    /refreshFailed/
+  );
 });
 
 test("a refused resend shows the server's message", async (t) => {

@@ -56,9 +56,10 @@ export function membersView(input: {
   const { loading, error, members, query } = input;
   // Only an empty roster blocks on loading/failure: a refresh over a cached
   // roster keeps the rows on screen instead of flashing a skeleton or error.
+  // A workspace always has its caller as a member, so an empty roster that isn't
+  // loading is one about to be read again, never an empty table.
   if (members.length === 0) {
-    if (loading) return { kind: "loading" };
-    if (error) return { kind: "failed" };
+    return error && !loading ? { kind: "failed" } : { kind: "loading" };
   }
   const trimmed = query.trim();
   const rows = filterMembers(members, trimmed);

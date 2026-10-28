@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "./ui/dialog";
-import { InvitePeopleView } from "./workspace/InvitePeopleView";
+import { InvitePeopleView, SUGGESTION_MIN_CHARS } from "./workspace/InvitePeopleView";
 import {
   createInviteFlow,
   inviteReducer,
@@ -20,8 +20,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
   workspaceName: string;
-  /** Called once per address, with its normalized email, as its invitation succeeds. */
-  onInvited?: (email: string) => void;
+  /** Called after each send that invited anyone, with the normalized addresses it invited. */
+  onInvited?: (emails: string[]) => void;
   cancelLabel?: string;
   /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
@@ -37,10 +37,10 @@ interface Roster {
   invitedEmails: string[];
 }
 
-type Contact = { email: string; display_name: string | null };
+type Contact = { email: string; name: string | null };
 
 const SUGGESTION_DEBOUNCE_MS = 150;
-const SUGGESTION_MIN_CHARS = 2;
+const SEAT_PREVIEW_DEBOUNCE_MS = 300;
 
 export default function InviteTeammateDialog({
   open,
@@ -60,7 +60,12 @@ export default function InviteTeammateDialog({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
   const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
+  // Prices for adding more than one seat, by seat count.
+  const [batchPreviews, setBatchPreviews] = useState<ReadonlyMap<number, SeatPreview>>(
+    () => new Map()
+  );
   const running = useRef(false);
+  const runController = useRef<AbortController | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const seats = workspace?.seats ?? null;
 
@@ -112,8 +117,21 @@ export default function InviteTeammateDialog({
       cancelled = true;
       setSeatsUsed(null);
       setSeatPreview(null);
+      setBatchPreviews(new Map());
     };
   }, [open, workspaceId]);
+
+  // A dialog unmounted mid-run (its workspace dropped out, or the page re-keyed) sends no more.
+  useEffect(() => () => runController.current?.abort(), []);
+
+  // Addresses with nothing left to suggest: on a chip, already invited here, or on the roster.
+  const excludedKey = JSON.stringify([
+    ...state.recipients.map((recipient) => recipient.email),
+    ...state.sent.map((entry) => entry.email),
+    ...roster.memberEmails,
+    ...roster.invitedEmails,
+  ]);
+  const excluded = useMemo((): string[] => JSON.parse(excludedKey) as string[], [excludedKey]);
 
   const query = state.draft.trim();
   useEffect(() => {
@@ -124,7 +142,7 @@ export default function InviteTeammateDialog({
     let cancelled = false;
     const timer = setTimeout(() => {
       Promise.resolve()
-        .then(() => window.electronAPI.searchContacts(query))
+        .then(() => window.electronAPI.searchInviteContacts(query, excluded))
         .then((result) => {
           if (!cancelled) setContacts(result?.success ? result.contacts : []);
         })
@@ -136,35 +154,58 @@ export default function InviteTeammateDialog({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, query]);
+  }, [open, query, excluded]);
 
-  const suggestions = useMemo(
-    () =>
-      inviteSuggestions(contacts, [
-        ...state.recipients.map((recipient) => recipient.email),
-        ...state.sent.map((entry) => entry.email),
-        ...roster.memberEmails,
-        ...roster.invitedEmails,
-      ]),
-    [contacts, state.recipients, state.sent, roster]
-  );
+  // Filtered again here: an answer can land just after a chip or the roster changed.
+  const suggestions = useMemo(() => inviteSuggestions(contacts, excluded), [contacts, excluded]);
 
-  // A subscribed workspace already at capacity bills a seat if an invite is accepted. Both sides
-  // of the comparison come from the same preview, so a stale store can't misprice it.
-  const addsBilledSeat =
-    seatPreview !== null && seatPreview.seats_used >= seatPreview.current_quantity;
+  // Seats this send would add if every invitation is accepted: those it needs beyond the
+  // subscription's free ones. An empty field still prices one, as the old single invite did.
+  const sendableCount = state.phase === "editing" ? inviteSummary(state).sendable.length : 0;
+  const billedSeats =
+    seatPreview === null || state.phase !== "editing"
+      ? 0
+      : Math.max(
+          0,
+          seatPreview.seats_used + Math.max(1, sendableCount) - seatPreview.current_quantity
+        );
+
+  useEffect(() => {
+    if (!open || billedSeats <= 1 || batchPreviews.has(billedSeats)) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      WorkspacesService.previewSeats(workspaceId, billedSeats)
+        .then((preview) => {
+          if (!cancelled) setBatchPreviews((current) => new Map(current).set(billedSeats, preview));
+        })
+        // The line still says how many seats are added, just without a price.
+        .catch(() => undefined);
+    }, SEAT_PREVIEW_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, workspaceId, billedSeats, batchPreviews]);
+
   const seatLine =
     seatsUsed !== null && seats !== null
       ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
       : null;
-  // The preview prices one seat, so with several addresses its charge would understate the cost.
-  // While sending no chip counts as sendable, so the phase check keeps the line from returning.
-  const seatCostLine =
-    addsBilledSeat && state.phase === "editing" && inviteSummary(state).sendable.length <= 1
-      ? t("workspaces.invite.seatCost", {
-          amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
+  // The opening preview prices one added seat; more come from their own preview.
+  const batchPreview = billedSeats > 1 ? batchPreviews.get(billedSeats) : undefined;
+  let seatCostLine: string | null = null;
+  if (billedSeats === 1 && seatPreview) {
+    seatCostLine = t("workspaces.invite.seatCost", {
+      amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
+    });
+  } else if (billedSeats > 1) {
+    seatCostLine = batchPreview
+      ? t("workspaces.invite.seatCostMany", {
+          count: billedSeats,
+          amount: formatAmount(batchPreview.amount_due, batchPreview.currency),
         })
-      : null;
+      : t("workspaces.invite.seatCostManyUnpriced", { count: billedSeats });
+  }
 
   const handleSend = async (): Promise<void> => {
     if (running.current) return;
@@ -174,9 +215,12 @@ export default function InviteTeammateDialog({
     if (next.phase !== "sending") return;
 
     running.current = true;
+    const controller = new AbortController();
+    runController.current = controller;
     const emails = next.recipients
       .filter((recipient) => recipient.state.status === "sending")
       .map((recipient) => recipient.email);
+    const invited: string[] = [];
     try {
       await invitePeople.sendInvitations({
         workspaceId,
@@ -184,17 +228,22 @@ export default function InviteTeammateDialog({
         role: next.role,
         teamIds,
         spaceIds,
+        signal: controller.signal,
         onResult: (email, outcome) => {
           dispatch({ type: "result", email, outcome });
-          if (outcome.ok === true) onInvited?.(email);
+          if (outcome.ok === true) invited.push(email);
         },
       });
     } finally {
       running.current = false;
-      dispatch({ type: "finished" });
-      // The reducer drops a roster that arrives mid-send, so the latest one is applied now.
-      dispatch({ type: "roster", ...latestRoster.current });
+      runController.current = null;
+      if (!controller.signal.aborted) {
+        dispatch({ type: "finished" });
+        // The reducer drops a roster that arrives mid-send, so the latest one is applied now.
+        dispatch({ type: "roster", ...latestRoster.current });
+      }
     }
+    if (!controller.signal.aborted && invited.length > 0) onInvited?.(invited);
   };
 
   const close = (): void => onOpenChange(false);

@@ -230,7 +230,7 @@ test("a member already gone counts as removed", async () => {
   const { createWorkspaceActions } = await load();
   const { CloudApiError } = await import("../../src/services/cloudApi.ts");
   const { calls, deps } = makeHarness({
-    failures: { removeMember: new CloudApiError("Not found", 404) },
+    failures: { removeMember: new CloudApiError("Member not found", 404) },
   });
 
   const outcome = await createWorkspaceActions(deps).removeMember("ws-1", "user-2");

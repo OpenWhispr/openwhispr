@@ -3,6 +3,8 @@ import { AlertCircle } from "../icons";
 import { cn } from "../lib/utils";
 
 export interface WorkspaceErrorBarProps {
+  /** Lets the field the error is about point at it with `aria-describedby`. */
+  id?: string;
   tone: "error" | "warning";
   /** A string, or text with an isolated value (`BidiInterpolatedText`). */
   message: ReactNode;
@@ -11,9 +13,15 @@ export interface WorkspaceErrorBarProps {
 
 // The tone colors the surface and the icon only; the message stays in the foreground color,
 // since the warning amber is too light for body text on a light background.
-export function WorkspaceErrorBar({ tone, message, action }: WorkspaceErrorBarProps): ReactElement {
+export function WorkspaceErrorBar({
+  id,
+  tone,
+  message,
+  action,
+}: WorkspaceErrorBarProps): ReactElement {
   return (
     <div
+      id={id}
       role="alert"
       className={cn(
         "flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm text-foreground",

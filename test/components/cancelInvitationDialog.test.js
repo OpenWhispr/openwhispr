@@ -80,9 +80,10 @@ async function loadDialog(t) {
     renderToStaticMarkup(
       createElement(CancelInvitationDialog, {
         workspaceId: "w1",
+        workspaceName: "Acme",
         state,
         dispatch: (event) => events.push(event),
-        onCanceled: () => canceled.push(true),
+        onCanceled: (outcome) => canceled.push(outcome),
       })
     );
   return { render, events, canceled, CloudApiError, confirmActionReducer };
@@ -161,10 +162,10 @@ test("confirming revokes, toasts, closes and reports", async (t) => {
   );
   assert.equal(globalThis.__toasts.length, 1);
   assert.equal(globalThis.__toasts[0].title, "workspaces.cancelInvitation.done");
-  assert.equal(canceled.length, 1);
+  assert.deepEqual(canceled, ["canceled"]);
 });
 
-test("an invitation that is already gone counts as canceled", async (t) => {
+test("an invitation no longer pending closes without claiming it was canceled", async (t) => {
   const { render, events, canceled, CloudApiError } = await loadDialog(t);
   globalThis.__revokeImpl = async () => {
     throw new CloudApiError("Invitation not found", 404);
@@ -178,8 +179,35 @@ test("an invitation that is already gone counts as canceled", async (t) => {
     events.map((event) => event.type),
     ["confirm", "succeeded"]
   );
-  assert.equal(globalThis.__toasts[0].title, "workspaces.cancelInvitation.done");
-  assert.equal(canceled.length, 1);
+  // It may have been accepted, so the tab is told to read the members as well.
+  assert.match(
+    globalThis.__toasts[0].title,
+    /^settingsPage\.workspace\.people\.invitations\.noLongerPending\|/
+  );
+  assert.deepEqual(canceled, ["gone"]);
+});
+
+test("a bare 404 is a failure, not a cancel", async (t) => {
+  const { render, events, canceled, CloudApiError } = await loadDialog(t);
+  globalThis.__revokeImpl = async () => {
+    throw new CloudApiError("API error: 404", 404);
+  };
+
+  render(confirmState);
+  globalThis.__actionDialogProps.primary.onClick();
+  await tick();
+
+  assert.deepEqual(events[1], { type: "failed", error: { kind: "failed" } });
+  assert.equal(canceled.length, 0);
+});
+
+test("lost permission and required single sign-on say so instead of blaming the connection", async (t) => {
+  const { render } = await loadDialog(t);
+
+  const notAllowed = render({ kind: "failed", subject: INVITATION, error: { kind: "notAllowed" } });
+  assert.match(notAllowed, /role="alert"[^>]*>workspaces\.cancelInvitation\.notAllowed\|/);
+  const sso = render({ kind: "failed", subject: INVITATION, error: { kind: "ssoRequired" } });
+  assert.match(sso, /role="alert"[^>]*>workspaces\.ssoRequired\|/);
 });
 
 test("any other rejection dispatches failed and leaves the list alone", async (t) => {

@@ -147,7 +147,7 @@ test("localized sentences isolate technical interpolations without changing word
     ],
     [
       "src/components/notes/SpaceMembersPanel.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmail\}/,
+      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmails\[0\]\}/,
     ],
     [
       "src/components/integrations/CalendarsPane.tsx",

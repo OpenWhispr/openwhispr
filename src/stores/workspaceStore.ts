@@ -132,7 +132,15 @@ let refreshPromise: Promise<void> | null = null;
 let listEpoch = 0;
 let refreshPromiseEpoch = 0;
 let membersRequestSeq = 0;
+// The latest member read. An overtaken read of the same workspace settles with it, so its caller
+// doesn't move on before the roster it asked for has landed or failed.
+let latestMembersRead: { seq: number; workspaceId: string; done: Promise<void> } | null = null;
 let accountGeneration = 0;
+
+function newerMembersRead(workspaceId: string, seq: number): Promise<void> | null {
+  const latest = latestMembersRead;
+  return latest && latest.seq > seq && latest.workspaceId === workspaceId ? latest.done : null;
+}
 
 /**
  * Managed enterprise config is keyed by account + workspace + auth generation, so it has to be
@@ -280,20 +288,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return workspace;
   },
 
-  refreshMembers: async (workspaceId) => {
+  refreshMembers: (workspaceId) => {
     const seq = ++membersRequestSeq;
-    try {
-      const members = await WorkspacesService.listMembers(workspaceId);
-      // Discard stale responses when a newer request targets another workspace.
-      if (seq !== membersRequestSeq) return;
-      set({ members, membersWorkspaceId: workspaceId });
-    } catch (error) {
-      logger.error(
-        "Failed to load workspace members",
-        { error: (error as Error).message },
-        "workspaces"
-      );
-      throw error;
-    }
+    const done = (async (): Promise<void> => {
+      let members: WorkspaceMember[];
+      try {
+        members = await WorkspacesService.listMembers(workspaceId);
+      } catch (error) {
+        const newer = newerMembersRead(workspaceId, seq);
+        if (newer) return newer;
+        logger.error(
+          "Failed to load workspace members",
+          { error: (error as Error).message },
+          "workspaces"
+        );
+        throw error;
+      }
+      if (seq === membersRequestSeq) {
+        set({ members, membersWorkspaceId: workspaceId });
+        return;
+      }
+      // Overtaken: by another workspace's read or a switch, this answer is discarded; by a newer
+      // read of this workspace, that read's answer is this caller's too.
+      await newerMembersRead(workspaceId, seq);
+    })();
+    latestMembersRead = { seq, workspaceId, done };
+    return done;
   },
 }));

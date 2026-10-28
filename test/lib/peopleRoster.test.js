@@ -87,10 +87,9 @@ test("no match reports the query", () => {
   );
 });
 
-test("a blank query over an empty roster shows empty rows", () => {
+test("an empty roster that isn't loading waits for its re-read instead of showing an empty table", () => {
   assert.deepEqual(membersView({ loading: false, error: false, members: [], query: "  " }), {
-    kind: "rows",
-    rows: [],
+    kind: "loading",
   });
 });
 

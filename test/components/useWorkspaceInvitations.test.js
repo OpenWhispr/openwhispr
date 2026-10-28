@@ -142,10 +142,18 @@ test("a failed first load is failed, and reload retries", async (t) => {
   assert.equal(state().status, "failed");
 
   globalThis.__invitationListImpl = async () => [invitation("i1", "one@example.com")];
-  await React.act(async () => state().reload());
+  let listed;
+  await React.act(async () => {
+    listed = await state().reload();
+  });
 
   assert.equal(state().status, "ready");
   assert.equal(state().invitations.length, 1);
+  // The caller gets the list it read, to check a row against.
+  assert.deepEqual(
+    listed.map((inv) => inv.id),
+    ["i1"]
+  );
 });
 
 test("a failed reload keeps the list it had and stays ready", async (t) => {
@@ -157,13 +165,22 @@ test("a failed reload keeps the list it had and stays ready", async (t) => {
     throw new Error("offline");
   };
   // reload resolves even though the list call rejects.
-  await React.act(async () => state().reload());
+  let listed;
+  await React.act(async () => {
+    listed = await state().reload();
+  });
 
+  assert.equal(listed, null);
   assert.equal(state().status, "ready");
+  assert.equal(state().stale, true);
   assert.deepEqual(
     state().invitations.map((inv) => inv.id),
     ["i1"]
   );
+
+  globalThis.__invitationListImpl = async () => [invitation("i1", "one@example.com")];
+  await React.act(async () => state().reload());
+  assert.equal(state().stale, false);
 });
 
 test("a reload from a previous workspace leaves the current list alone", async (t) => {

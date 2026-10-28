@@ -12,15 +12,24 @@ async function mountDialog(t, props) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    for (const key of ["__viewProps", "__sendCalls", "__seatPreview", "__sendGate"]) {
+    for (const key of [
+      "__viewProps",
+      "__sendCalls",
+      "__seatPreview",
+      "__sendGate",
+      "__previewCalls",
+    ]) {
       delete globalThis[key];
     }
   });
   installBrowserGlobals(t, {
-    window: { electronAPI: { searchContacts: async () => ({ success: true, contacts: [] }) } },
+    window: {
+      electronAPI: { searchInviteContacts: async () => ({ success: true, contacts: [] }) },
+    },
   });
   const container = installHostDom(t);
   globalThis.__sendCalls = [];
+  globalThis.__previewCalls = [];
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-invite-teammate-dialog-",
     noExternal: ["react-i18next"],
@@ -55,10 +64,16 @@ async function mountDialog(t, props) {
       `,
       "/services/WorkspacesService": `
         export const WorkspacesService = {
-          previewSeats: () =>
-            globalThis.__seatPreview
-              ? Promise.resolve(globalThis.__seatPreview)
-              : Promise.reject(new Error("no subscription")),
+          // Prices each added seat at the opening preview's amount.
+          previewSeats: (workspaceId, seats) => {
+            globalThis.__previewCalls.push(seats);
+            return globalThis.__seatPreview
+              ? Promise.resolve({
+                  ...globalThis.__seatPreview,
+                  amount_due: globalThis.__seatPreview.amount_due * seats,
+                })
+              : Promise.reject(new Error("no subscription"));
+          },
           listMembers: async () => [],
         };
       `,
@@ -69,7 +84,13 @@ async function mountDialog(t, props) {
   );
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(InviteTeammateDialog, props)));
-  return { latest: () => globalThis.__viewProps.at(-1) };
+  return {
+    latest: () => globalThis.__viewProps.at(-1),
+    unmount: async () => {
+      await React.act(async () => root.unmount());
+      root = null;
+    },
+  };
 }
 
 test("existing callers keep their props", async (t) => {
@@ -101,7 +122,7 @@ test("existing callers keep their props", async (t) => {
   assert.deepEqual(call.emails, ["a@x.com"]);
   assert.deepEqual(call.teamIds, ["t1"]);
   assert.equal(call.role, "member");
-  assert.deepEqual(invited, ["a@x.com"]);
+  assert.deepEqual(invited, [["a@x.com"]]);
   assert.equal(latest().state.phase, "done");
   assert.deepEqual(
     latest().state.sent.map((entry) => entry.email),
@@ -124,7 +145,7 @@ test("knownEmails blocks an address already in the workspace", async (t) => {
   ]);
 });
 
-test("the seat cost line hides once several addresses are added", async (t) => {
+test("several addresses show the seats they add, priced by their own preview", async (t) => {
   globalThis.__seatPreview = {
     seats_used: 5,
     current_quantity: 5,
@@ -143,12 +164,36 @@ test("the seat cost line hides once several addresses are added", async (t) => {
   assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCost\|/);
 
   await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+  // Never silent while the price for two seats is on its way.
+  assert.equal(latest().seatCostLine, 'workspaces.invite.seatCostManyUnpriced|{"count":2}');
 
-  assert.deepEqual(
-    latest().state.recipients.map((recipient) => recipient.email),
-    ["a@x.com", "b@x.com"]
-  );
+  await React.act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  assert.deepEqual(globalThis.__previewCalls, [1, 2]);
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCostMany\|\{"count":2,"amount":/);
+  assert.match(latest().seatCostLine, /24/);
+});
+
+test("only seats beyond the plan's free ones are priced", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 4,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
   assert.equal(latest().seatCostLine, null);
+
+  // The second address takes the first seat past the plan: the opening preview prices it.
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCost\|/);
+  assert.deepEqual(globalThis.__previewCalls, [1]);
 });
 
 test("the seat cost line hides while invitations are sending", async (t) => {
@@ -185,4 +230,45 @@ test("the seat cost line hides while invitations are sending", async (t) => {
     await sending;
   });
   assert.equal(latest().state.phase, "done");
+});
+
+test("a send reports everyone it invited at once", async (t) => {
+  const invited = [];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    onInvited: (emails) => invited.push(emails),
+  });
+  await React.act(async () => latest().dispatch({ type: "draft", text: "a@x.com, b@x.com," }));
+  await React.act(async () => latest().onSend());
+
+  assert.deepEqual(invited, [["a@x.com", "b@x.com"]]);
+});
+
+test("closing the page mid-send stops the rest of the run", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const invited = [];
+  const { latest, unmount } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+    onInvited: (emails) => invited.push(emails),
+  });
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  await unmount();
+
+  assert.equal(globalThis.__sendCalls[0].signal.aborted, true);
+  release();
+  await sending;
+  assert.deepEqual(invited, []);
 });

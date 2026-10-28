@@ -1752,7 +1752,9 @@
           "resend": "Einladung erneut senden",
           "cancel": "Einladung zurückziehen",
           "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
-          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden."
+          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden.",
+          "noLongerPending": "Die Einladung an {{email}} ist nicht mehr offen",
+          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet."
         }
       },
       "role": {
@@ -3086,6 +3088,10 @@
       "roleLabel": "Workspace-Rolle",
       "seatUsage": "{{used}} von {{seats}} Plätzen belegt",
       "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostMany_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
+      "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
       "submit_one": "Einladung senden",
       "submit_other": "{{count}} Einladungen senden",
       "submitting": "Wird eingeladen…",
@@ -3116,6 +3122,7 @@
         "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
         "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
         "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen zu {{workspace}} einzuladen.",
+        "sessionExpired": "{{email}} konnte nicht eingeladen werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
         "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
         "refused": "{{email}} konnte nicht eingeladen werden: {{reason}}"
       }
@@ -3196,8 +3203,10 @@
       "keep": "Einladung behalten",
       "canceling": "Wird zurückgezogen…",
       "done": "Einladung zurückgezogen",
-      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} zurückzuziehen."
     },
+    "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen in {{workspace}} zu verwalten.",
     "transfer": {
       "title": "Neuen Inhaber wählen",
       "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",
@@ -3440,7 +3449,9 @@
         "viaGroup": "über {{group}}",
         "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
         "roleFromGroup": "Admin über {{group}}. Ändere es dort.",
-        "invited": "Einladung an {{email}} gesendet"
+        "invited": "Einladung an {{email}} gesendet",
+        "invitedMany_one": "Einladung an {{count}} Person gesendet",
+        "invitedMany_other": "Einladungen an {{count}} Personen gesendet"
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",

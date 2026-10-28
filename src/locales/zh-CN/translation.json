@@ -2476,7 +2476,9 @@
           "resend": "重新发送邀请",
           "cancel": "取消邀请",
           "resendFailed": "无法向 {{email}} 重新发送邀请。请取消该邀请，然后重新邀请。",
-          "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。"
+          "resendNotAllowed": "你已无权在 {{workspace}} 中重新发送邀请。",
+          "noLongerPending": "{{email}} 的邀请已不再处于待处理状态",
+          "refreshFailed": "无法刷新邀请。此列表可能不是最新的。"
         }
       },
       "role": {
@@ -2990,7 +2992,8 @@
         "viaGroup": "通过 {{group}}",
         "managedByGroup": "通过 {{group}} 添加。请在该群组中移除。",
         "roleFromGroup": "通过 {{group}} 获得管理员身份，请在该群组中更改。",
-        "invited": "已向 {{email}} 发送邀请"
+        "invited": "已向 {{email}} 发送邀请",
+        "invitedMany_other": "已向 {{count}} 人发送邀请"
       },
       "invitedTo_one": "你将加入 {{count}} 个团队空间",
       "invitedTo_other": "你将加入 {{count}} 个团队空间",
@@ -4823,6 +4826,8 @@
       "roleLabel": "工作区角色",
       "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
       "seatCost": "接受邀请后将为你的方案增加一个席位 · 预计按比例收取 {{amount}}。",
+      "seatCostMany_other": "全部接受后将为你的方案增加 {{count}} 个席位 · 预计按比例收取 {{amount}}。",
+      "seatCostManyUnpriced_other": "全部接受后将为你的方案增加 {{count}} 个席位。",
       "submit_other": "发送 {{count}} 份邀请",
       "submitting": "正在邀请…",
       "sentTitle_other": "邀请已发送",
@@ -4848,6 +4853,7 @@
         "directoryRequired": "请先在身份提供商中分配 {{email}}。",
         "notAllowed": "你已无法再邀请他人加入 {{workspace}}。",
         "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再邀请他人加入 {{workspace}}。",
+        "sessionExpired": "无法邀请 {{email}}：你的登录已过期或已更改。请重新登录后再试。",
         "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。",
         "refused": "无法邀请 {{email}}：{{reason}}"
       }
@@ -4928,8 +4934,10 @@
       "keep": "保留邀请",
       "canceling": "正在取消…",
       "done": "邀请已取消",
-      "failed": "无法取消邀请。请检查网络连接后重试。"
+      "failed": "无法取消邀请。请检查网络连接后重试。",
+      "notAllowed": "你已无权取消 {{workspace}} 中的邀请。"
     },
+    "ssoRequired": "请先使用公司的单点登录 (SSO) 登录，再管理 {{workspace}} 的成员。",
     "transfer": {
       "title": "选择新的所有者",
       "body": "选择一位现有的工作区成员。转让后你将成为管理员。",

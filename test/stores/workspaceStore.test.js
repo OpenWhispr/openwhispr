@@ -74,8 +74,8 @@ async function loadStoreWithDeferredMembers(t) {
         export const WorkspacesService = {
           list: async () => [],
           listMembers: (workspaceId) =>
-            new Promise((resolve) => {
-              globalThis.__memberRequests.push({ workspaceId, resolve });
+            new Promise((resolve, reject) => {
+              globalThis.__memberRequests.push({ workspaceId, resolve, reject });
             }),
         };
       `,
@@ -157,4 +157,39 @@ test("forgetting a workspace that isn't the roster's keeps the roster", async (t
 
   useWorkspaceStore.getState().forgetWorkspace("C");
   assert.deepEqual(rosterFor(useWorkspaceStore.getState(), "A"), PEOPLE_A);
+});
+
+test("a read overtaken by a newer read of the same workspace settles with that read", async (t) => {
+  const { useWorkspaceStore, rosterFor, requests } = await loadStoreWithDeferredMembers(t);
+  const store = useWorkspaceStore.getState();
+
+  // Two role changes in a row: the first one's re-read answers first but is overtaken.
+  let firstSettled = false;
+  const first = store.refreshMembers("A").then(() => {
+    firstSettled = true;
+  });
+  const second = store.refreshMembers("A");
+  requests[0].resolve([{ ...PEOPLE_A[0], role: "admin" }]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  // Settling now would let its caller report a change the roster doesn't show yet.
+  assert.equal(firstSettled, false);
+  assert.deepEqual(rosterFor(useWorkspaceStore.getState(), "A"), []);
+
+  requests[1].resolve(PEOPLE_A);
+  await Promise.all([first, second]);
+  assert.deepEqual(rosterFor(useWorkspaceStore.getState(), "A"), PEOPLE_A);
+});
+
+test("an overtaken read shares the newer read's failure", async (t) => {
+  const { useWorkspaceStore, requests } = await loadStoreWithDeferredMembers(t);
+  const store = useWorkspaceStore.getState();
+
+  const first = store.refreshMembers("A");
+  const second = store.refreshMembers("A");
+  requests[0].resolve(PEOPLE_A);
+  requests[1].reject(new Error("offline"));
+
+  await assert.rejects(first, /offline/);
+  await assert.rejects(second, /offline/);
 });

@@ -2,8 +2,6 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   MAX_INVITE_RECIPIENTS,
-  splitEmails,
-  isValidEmail,
   createInviteFlow,
   inviteReducer,
   inviteSummary,
@@ -36,10 +34,46 @@ test("adding text splits on commas, spaces and semicolons and drops duplicates",
   assert.equal(state.draft, "");
 });
 
-test("splitEmails trims, lowercases and drops empties", () => {
-  assert.deepEqual(splitEmails("  A@x.com,, ;B@Y.io \n"), ["a@x.com", "b@y.io"]);
-  assert.equal(isValidEmail("sam@acme.test"), true);
-  assert.equal(isValidEmail("sam@acme"), false);
+test("committed text is trimmed, lowercased and stripped of empty parts", () => {
+  const state = commitText(fresh(), "  A@x.com,, ;B@Y.io \n");
+  assert.deepEqual(emails(state), ["a@x.com", "b@y.io"]);
+  assert.deepEqual(statuses(state), ["draft", "draft"]);
+});
+
+test("a pasted Name <address> becomes its address", () => {
+  const gmail = run(fresh(), { type: "draft", text: "Jane Doe <Jane@x.com>, bob@x.com" });
+  assert.deepEqual(emails(gmail), ["jane@x.com"]);
+  assert.equal(gmail.draft, "bob@x.com");
+
+  // Outlook copies "Last, First <address>", whose comma isn't a separator.
+  const outlook = run(fresh(), {
+    type: "draft",
+    text: "Doe, Jane <jane@x.com>; Roe, Bob <bob@x.com>",
+  });
+  assert.deepEqual(emails(outlook), ["jane@x.com", "bob@x.com"]);
+  assert.equal(outlook.draft, "");
+});
+
+test("Arabic and CJK commas separate addresses", () => {
+  for (const comma of ["،", "，", "、"]) {
+    const state = run(fresh(), { type: "draft", text: `a@x.com${comma} b@y.io` });
+    assert.deepEqual(emails(state), ["a@x.com"]);
+    assert.deepEqual(statuses(state), ["draft"]);
+    assert.equal(state.draft, "b@y.io");
+  }
+});
+
+test("a space only ends an address, so a name can be typed to search contacts", () => {
+  const typing = run(fresh(), { type: "draft", text: "Jane Smith" });
+  assert.deepEqual(emails(typing), []);
+  assert.equal(typing.draft, "Jane Smith");
+
+  const half = run(fresh(), { type: "draft", text: "Jane <jane@x" });
+  assert.deepEqual(emails(half), []);
+
+  // Committed, a stray name is one chip to remove rather than one per word.
+  assert.deepEqual(statuses(commitText(fresh(), "Jane Smith")), ["invalid"]);
+  assert.deepEqual(emails(commitText(fresh(), "a@x.com b@y.io")), ["a@x.com", "b@y.io"]);
 });
 
 test("a malformed address becomes an invalid chip and blocks sending", () => {
@@ -89,6 +123,30 @@ test("more than 20 recipients blocks sending", () => {
   assert.equal(run(state, { type: "send" }).phase, "editing");
 });
 
+test("a valid address typed after 20 chips counts toward the cap", () => {
+  const twenty = Array.from({ length: MAX_INVITE_RECIPIENTS }, (_, index) => `p${index}@x.com`);
+  const state = run(commitText(fresh(), twenty.join(" ")), { type: "draft", text: "extra@x.com" });
+  const summary = inviteSummary(state);
+  assert.equal(summary.tooMany, true);
+  assert.equal(summary.canSend, false);
+});
+
+test("only failures that sending again could fix are sent again", () => {
+  const kinds = ["seatLimit", "notAllowed", "directoryRequired", "sessionExpired", "requestFailed"];
+  const addresses = kinds.map((kind) => `${kind.toLowerCase()}@x.com`);
+  let state = run(commitText(fresh(), addresses.join(" ")), { type: "send" });
+  state = run(
+    state,
+    ...kinds.map((kind, index) => ({
+      type: "result",
+      email: addresses[index],
+      outcome: { ok: false, kind },
+    })),
+    { type: "finished" }
+  );
+  assert.deepEqual(inviteSummary(state).sendable, ["sessionexpired@x.com", "requestfailed@x.com"]);
+});
+
 test("removing a chip clears tooMany when back under the cap", () => {
   const many = Array.from({ length: MAX_INVITE_RECIPIENTS + 1 }, (_, index) => `p${index}@x.com`);
   const state = run(commitText(fresh(), many.join(" ")), { type: "remove", email: "P0@x.com" });
@@ -130,6 +188,12 @@ test("add puts a picked suggestion in as a chip once", () => {
     { type: "add", email: "sam@acme.test" }
   );
   assert.deepEqual(emails(state), ["sam@acme.test"]);
+});
+
+test("a half-typed initial email stays in the field to finish", () => {
+  const state = createInviteFlow({ initialEmail: "john@acme" });
+  assert.deepEqual(emails(state), []);
+  assert.equal(state.draft, "john@acme");
 });
 
 test("the initial email starts as a chip", () => {
@@ -213,12 +277,12 @@ test("a chip still sending when the run finishes becomes a failed chip", () => {
 
 test("suggestions leave out members, pending invites and chips", () => {
   const contacts = [
-    { email: "member@acme.test", display_name: "Member" },
-    { email: "Invited@acme.test", display_name: "Invited" },
+    { email: "member@acme.test", name: "Member" },
+    { email: "Invited@acme.test", name: "Invited" },
     { email: "chip@acme.test" },
-    { email: "ana@acme.test", display_name: "Ana" },
-    { email: "bo@acme.test", display_name: null },
-    { email: "cy@acme.test", display_name: "Cy" },
+    { email: "ana@acme.test", name: "Ana" },
+    { email: "bo@acme.test", name: null },
+    { email: "cy@acme.test", name: "Cy" },
   ];
   const exclude = ["member@acme.test", "invited@acme.test", "chip@acme.test"];
   assert.deepEqual(inviteSuggestions(contacts, exclude), [

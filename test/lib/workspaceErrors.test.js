@@ -65,8 +65,26 @@ test("a refusal without a known code keeps the server's reason", () => {
 test("a dropped connection is a failed request", () => {
   assert.equal(kindOf(new CloudApiError("Network", 0)), "requestFailed");
   assert.equal(kindOf(new Error("boom")), "requestFailed");
-  assert.equal(kindOf(new CloudApiError("Unauthorized", 401)), "requestFailed");
   assert.equal(kindOf(new CloudApiError("Oops", 500)), "requestFailed");
+});
+
+test("an expired or replaced sign-in is its own kind", () => {
+  assert.equal(kindOf(new CloudApiError("Unauthorized", 401)), "sessionExpired");
+  assert.equal(kindOf(new CloudApiError("Expired", 401, "AUTH_EXPIRED")), "sessionExpired");
+  assert.equal(kindOf(new CloudApiError("Changed", 409, "AUTH_CONTEXT_CHANGED")), "sessionExpired");
+});
+
+test("single sign-on required on a row action is its own kind", () => {
+  assert.deepEqual(
+    classifyRowActionError(new CloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED")),
+    { kind: "ssoRequired" }
+  );
+});
+
+test("a 404 that doesn't name the row proves nothing about it", () => {
+  assert.deepEqual(classifyRowActionError(new CloudApiError("API error: 404", 404)), {
+    kind: "failed",
+  });
 });
 
 test("a missing member is gone", () => {
@@ -88,10 +106,11 @@ test("403 on a row action is not allowed", () => {
 });
 
 test("a 400 with a server message is refused with that message", () => {
-  assert.deepEqual(
-    classifyRowActionError(new CloudApiError("Transfer ownership before demoting the owner", 400)),
-    { kind: "refused", message: "Transfer ownership before demoting the owner" }
-  );
+  const message = "Transfer ownership to another member before leaving the workspace";
+  assert.deepEqual(classifyRowActionError(new CloudApiError(message, 400)), {
+    kind: "refused",
+    message,
+  });
 });
 
 test("connection and server failures on a row action are failed", () => {

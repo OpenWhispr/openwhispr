@@ -439,6 +439,9 @@ test("a roster the store holds for another workspace never shows", async (t) => 
   for (const member of MEMBERS) assert.doesNotMatch(text, new RegExp(member.name));
   // The load settled with someone else's roster in the store, so the tab asks once more.
   assert.equal(calls, 2);
+  // That read was overtaken too: Try again, rather than an empty table or a third read.
+  assert.match(text, /settingsPage\.workspace\.people\.failed\.title/);
+  assert.doesNotMatch(text, /settingsPage\.workspace\.people\.columns\.name/);
 });
 
 test("seat usage shows only beside the member rows", async (t) => {
@@ -460,6 +463,17 @@ test("seat usage hides when the roster failed", async (t) => {
   const failedText = textOf(await mount(t, failed, { ...WORKSPACE, role: "admin" }));
   assert.match(failedText, /settingsPage\.workspace\.people\.failed\.title/);
   assert.doesNotMatch(failedText, /settingsPage\.workspace\.members\.description/);
+});
+
+test("seat usage stays when a search matches nobody", async (t) => {
+  const WorkspaceMembersTab = await loadMembersTab(t);
+  const markup = render(
+    WorkspaceMembersTab,
+    { ...WORKSPACE, role: "admin" },
+    { searchQuery: "zed" }
+  );
+  assert.match(markup, /settingsPage\.workspace\.people\.search\.noResultsTitle/);
+  assert.match(markup, /settingsPage\.workspace\.members\.description#3/);
 });
 
 test("seat usage shows with the rows", async (t) => {
@@ -502,9 +516,9 @@ const cloudApiError = (message, status, code) => async (vite) => {
 test("a refused role change shows the server's reason", async (t) => {
   const { toast, reloads } = await changeRoleFailing(
     t,
-    cloudApiError("Transfer ownership before demoting the owner", 400)
+    cloudApiError("Only admins can be seat-free", 400)
   );
-  assert.equal(toast.description, "Transfer ownership before demoting the owner");
+  assert.equal(toast.description, "Only admins can be seat-free");
   assert.equal(toast.variant, "destructive");
   assert.equal(reloads, 0);
 });
@@ -524,4 +538,13 @@ test("a role change without permission says the permission is gone", async (t) =
 test("any other role change failure gives connection advice", async (t) => {
   const { toast } = await changeRoleFailing(t, async () => new Error("offline"));
   assert.equal(toast.description, "settingsPage.workspace.people.roleFailed");
+});
+
+test("a role change refused for single sign-on says to sign in with it", async (t) => {
+  const { toast, reloads } = await changeRoleFailing(
+    t,
+    cloudApiError("Sign in with company SSO", 403, "SSO_REQUIRED")
+  );
+  assert.equal(toast.description, "workspaces.ssoRequired");
+  assert.equal(reloads, 0);
 });

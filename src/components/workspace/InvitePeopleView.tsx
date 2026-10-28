@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useId,
   useRef,
   useState,
@@ -9,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   inviteSummary,
+  isRetryableFailure,
   type InviteFlowEvent,
   type InviteFlowState,
   type InviteRecipient,
@@ -47,16 +49,7 @@ export interface InvitePeopleViewProps {
 }
 
 const ROLES = ["member", "admin"] as const;
-const SUGGESTION_MIN_CHARS = 2;
-// Failures retrying can't fix: when these are all that failed, the first one's own message
-// replaces the "Try again" summary.
-const FINAL_FAILURES: ReadonlySet<InviteErrorKind> = new Set([
-  "seatLimit",
-  "notAllowed",
-  "directoryRequired",
-  "ssoRequired",
-  "refused",
-]);
+export const SUGGESTION_MIN_CHARS = 2;
 
 const BUTTON_BASE =
   "flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
@@ -112,7 +105,9 @@ export function InvitePeopleView({
   const listId = useId();
   const roleLabelId = useId();
   const roleValueId = useId();
+  const errorId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousPhase = useRef(state.phase);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [listDismissed, setListDismissed] = useState(false);
 
@@ -140,17 +135,26 @@ export function InvitePeopleView({
     const refused = summary.invalid[0] ?? summary.blocked[0];
     if (refused) return { message: recipientMessage(refused) };
     if (summary.failed.length === 0) return null;
-    const allFinal = summary.failed.every((recipient) => {
-      const kind = recipientErrorKind(recipient);
-      return kind !== null && FINAL_FAILURES.has(kind);
-    });
-    if (allFinal) return { message: recipientMessage(summary.failed[0]) };
+    // Try again resends exactly these, so the count and the button agree with Send.
+    const retryable = summary.failed.filter(
+      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip.kind)
+    );
+    if (retryable.length === 0) return { message: recipientMessage(summary.failed[0]) };
     return {
-      message: t("workspaces.invite.someFailed", { count: summary.failed.length }),
+      message: t("workspaces.invite.someFailed", { count: retryable.length }),
       action: { label: t("workspaces.exit.tryAgain"), onClick: onSend },
     };
   };
   const errorBar = errorBarContent();
+
+  // The field and Send are disabled while sending, which drops focus to the page; a run that
+  // leaves chips to fix returns it to the field (the Done screen focuses its own button).
+  useEffect(() => {
+    if (previousPhase.current === "sending" && state.phase === "editing") {
+      inputRef.current?.focus();
+    }
+    previousPhase.current = state.phase;
+  }, [state.phase]);
 
   const changeDraft = (text: string): void => {
     setActiveIndex(-1);
@@ -265,7 +269,8 @@ export function InvitePeopleView({
                     aria-expanded={listOpen}
                     aria-controls={listOpen ? listId : undefined}
                     aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-                    aria-describedby={hintId}
+                    aria-describedby={errorBar ? `${hintId} ${errorId}` : hintId}
+                    aria-invalid={errorBar ? true : undefined}
                     disabled={sending}
                     value={state.draft}
                     placeholder={
@@ -342,6 +347,7 @@ export function InvitePeopleView({
                   <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
+                  aria-labelledby={roleLabelId}
                   align="start"
                   className="w-[var(--radix-dropdown-menu-trigger-width)]"
                 >
@@ -373,7 +379,12 @@ export function InvitePeopleView({
             </div>
 
             {errorBar ? (
-              <WorkspaceErrorBar tone="error" message={errorBar.message} action={errorBar.action} />
+              <WorkspaceErrorBar
+                id={errorId}
+                tone="error"
+                message={errorBar.message}
+                action={errorBar.action}
+              />
             ) : null}
           </div>
 
@@ -497,7 +508,8 @@ function InviteDoneContent({
           message={t("workspaces.invite.noEmail", { count: noEmailCount })}
         />
       ) : null}
-      <button type="button" onClick={onDone} className={PRIMARY_BUTTON}>
+      {/* The send button that had focus is gone, so focus would otherwise fall to the page. */}
+      <button type="button" autoFocus onClick={onDone} className={PRIMARY_BUTTON}>
         {t("workspaces.invite.done")}
       </button>
     </>

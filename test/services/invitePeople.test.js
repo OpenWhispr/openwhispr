@@ -10,9 +10,11 @@ function makeSend(answers = {}) {
   const inputs = [];
   let inFlight = 0;
   let maxInFlight = 0;
-  const send = async (workspaceId, input) => {
+  const generations = [];
+  const send = async (workspaceId, input, authGeneration) => {
     events.push(`start:${input.email}`);
     inputs.push({ workspaceId, input });
+    generations.push(authGeneration);
     inFlight += 1;
     maxInFlight = Math.max(maxInFlight, inFlight);
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -22,14 +24,14 @@ function makeSend(answers = {}) {
     if (answer instanceof Error) throw answer;
     return { email_sent: answer?.email_sent ?? true };
   };
-  return { send, events, inputs, maxInFlight: () => maxInFlight };
+  return { send, events, inputs, generations, maxInFlight: () => maxInFlight };
 }
 
-async function run(answers, input) {
+async function run(answers, input, authGeneration = () => 7) {
   const { createInvitePeople } = await load();
   const harness = makeSend(answers);
   const results = [];
-  await createInvitePeople({ send: harness.send }).sendInvitations({
+  await createInvitePeople({ send: harness.send, authGeneration }).sendInvitations({
     workspaceId: "ws-1",
     role: "member",
     onResult: (email, outcome) => results.push([email, outcome]),
@@ -129,17 +131,73 @@ test("stops calling once single sign-on is required", async () => {
   );
 });
 
-test("a refusal carries the server's reason and doesn't stop the rest", async () => {
+test("an address-specific refusal carries the server's reason and doesn't stop the rest", async () => {
   const { results, inputs } = await run(
-    { "a@x.com": new CloudApiError("Only admins can be invited without a seat", 400) },
+    { "a@x.com": new CloudApiError("That address can't be invited", 409) },
     { emails: ["a@x.com", "b@x.com"] }
   );
   assert.equal(inputs.length, 2);
   assert.deepEqual(results, [
-    [
-      "a@x.com",
-      { ok: false, kind: "refused", message: "Only admins can be invited without a seat" },
-    ],
+    ["a@x.com", { ok: false, kind: "refused", message: "That address can't be invited" }],
     ["b@x.com", { ok: true, emailSent: true }],
   ]);
+});
+
+test("a 400 about the request itself stops the batch", async () => {
+  const message = "One or more teams do not belong to this workspace";
+  const { results, inputs } = await run(
+    { "a@x.com": new CloudApiError(message, 400) },
+    { emails: ["a@x.com", "b@x.com", "c@x.com"] }
+  );
+  assert.equal(inputs.length, 1);
+  assert.deepEqual(
+    results.map(([, outcome]) => outcome),
+    Array(3).fill({ ok: false, kind: "refused", message })
+  );
+});
+
+test("an expired or replaced sign-in stops the batch", async () => {
+  for (const error of [
+    new CloudApiError("Unauthorized", 401, "AUTH_EXPIRED"),
+    new CloudApiError("Account changed", 409, "AUTH_CONTEXT_CHANGED"),
+  ]) {
+    const { results, inputs } = await run({ "a@x.com": error }, { emails: ["a@x.com", "b@x.com"] });
+    assert.equal(inputs.length, 1);
+    assert.deepEqual(
+      results.map(([, outcome]) => outcome),
+      [
+        { ok: false, kind: "sessionExpired" },
+        { ok: false, kind: "sessionExpired" },
+      ]
+    );
+  }
+});
+
+test("every request of a batch carries the sign-in it started under", async () => {
+  let generation = 7;
+  const { generations } = await run({}, { emails: ["a@x.com", "b@x.com"] }, () => generation++);
+  assert.deepEqual(generations, [7, 7]);
+});
+
+test("an aborted run sends nothing more and reports nothing more", async () => {
+  const controller = new AbortController();
+  const { createInvitePeople } = await load();
+  const harness = makeSend();
+  const results = [];
+  await createInvitePeople({
+    send: async (...args) => {
+      const answer = await harness.send(...args);
+      controller.abort();
+      return answer;
+    },
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: ["a@x.com", "b@x.com"],
+    signal: controller.signal,
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.equal(harness.inputs.length, 1);
+  assert.deepEqual(results, []);
 });

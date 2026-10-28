@@ -2529,7 +2529,9 @@
           "resend": "Reenviar invitación",
           "cancel": "Cancelar invitación",
           "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo.",
-          "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}."
+          "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}.",
+          "noLongerPending": "La invitación para {{email}} ya no está pendiente",
+          "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día."
         }
       },
       "role": {
@@ -3043,7 +3045,9 @@
         "viaGroup": "vía {{group}}",
         "managedByGroup": "Añadido a través de {{group}}. Quítalo desde ahí.",
         "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí.",
-        "invited": "Invitación enviada a {{email}}"
+        "invited": "Invitación enviada a {{email}}",
+        "invitedMany_one": "Invitación enviada a {{count}} persona",
+        "invitedMany_other": "Invitaciones enviadas a {{count}} personas"
       },
       "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
       "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
@@ -4824,6 +4828,10 @@
       "roleLabel": "Rol en el espacio de trabajo",
       "seatUsage": "Usando {{used}} de {{seats}} asientos",
       "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostMany_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostMany_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostManyUnpriced_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan.",
+      "seatCostManyUnpriced_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan.",
       "submit_one": "Enviar invitación",
       "submit_other": "Enviar {{count}} invitaciones",
       "submitting": "Invitando…",
@@ -4854,6 +4862,7 @@
         "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
         "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
         "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para invitar personas a {{workspace}}.",
+        "sessionExpired": "No se pudo invitar a {{email}}: tu sesión caducó o cambió. Vuelve a iniciar sesión e inténtalo de nuevo.",
         "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
         "refused": "No se pudo invitar a {{email}}: {{reason}}"
       }
@@ -4934,8 +4943,10 @@
       "keep": "Conservar invitación",
       "canceling": "Cancelando…",
       "done": "Invitación cancelada",
-      "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo."
+      "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para cancelar invitaciones en {{workspace}}."
     },
+    "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para gestionar a las personas de {{workspace}}.",
     "transfer": {
       "title": "Elige un nuevo propietario",
       "body": "Elige a un miembro existente del espacio de trabajo. Pasarás a ser administrador tras la transferencia.",

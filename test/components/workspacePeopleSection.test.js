@@ -225,7 +225,7 @@ test("Add appears only with manage_members", async (t) => {
   const Section = await loadSection(t);
 
   const adminMarkup = render(Section, ADMIN);
-  assert.match(adminMarkup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
+  assert.match(adminMarkup, /title="settingsPage\.workspace\.people\.addLabel"/);
   assert.match(adminMarkup, /settingsPage\.workspace\.people\.add</);
   assert.ok(globalThis.__dialogProps, "the dialog is rendered for admins");
 
@@ -254,13 +254,13 @@ test("inviting reloads the list and closing the dialog afterwards opens Invitati
 
   const addButton = findNode(
     container,
-    (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.addLabel"
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
   );
   assert.ok(addButton, "Add button");
   await React.act(async () => propsOf(addButton).onClick());
   assert.equal(globalThis.__dialogProps.open, true);
 
-  await React.act(async () => globalThis.__dialogProps.onInvited("new@example.com"));
+  await React.act(async () => globalThis.__dialogProps.onInvited(["new@example.com"]));
   assert.equal(globalThis.__reloadCalls, 1);
   await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
 
@@ -274,7 +274,7 @@ test("closing the dialog without inviting anyone keeps the current tab", async (
 
   const addButton = findNode(
     container,
-    (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.addLabel"
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
   );
   await React.act(async () => propsOf(addButton).onClick());
   await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
@@ -297,7 +297,7 @@ test("a roster the store holds for another workspace isn't handed to the invite 
 async function openAdd(container) {
   const addButton = findNode(
     container,
-    (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.addLabel"
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
   );
   await React.act(async () => propsOf(addButton).onClick());
 }
@@ -333,5 +333,7 @@ test("Add sits beside the tab list, not inside it", async (t) => {
   const tablist = markup.match(/<div role="tablist"[^>]*>([\s\S]*?)<\/div>/);
   assert.ok(tablist, "tab list");
   assert.doesNotMatch(tablist[1], /settingsPage\.workspace\.people\.addLabel/);
-  assert.match(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
+  assert.match(markup, /title="settingsPage\.workspace\.people\.addLabel"/);
+  // The visible "Add" is the button's accessible name, as voice control users say it.
+  assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.addLabel"/);
 });

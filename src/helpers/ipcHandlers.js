@@ -226,6 +226,8 @@ const XAI_STT_URL = "https://api.x.ai/v1/stt";
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
+// Suggestions the invite dialog shows under its field.
+const INVITE_SUGGESTION_LIMIT = 5;
 
 // Route caps vary by provider (Gemini's inline-base64 limit is the lowest), so
 // the message reports the cap that actually applied.
@@ -12366,6 +12368,30 @@ class IPCHandlers {
         const contacts = this.databaseManager.searchContacts(query);
         return { success: true, contacts };
       } catch (error) {
+        return { success: false, contacts: [] };
+      }
+    });
+
+    // Limited to connected calendars and contact sources, like find_contact, with the addresses
+    // the invite dialog can't use left out before the limit so they don't crowd out the rest.
+    ipcMain.handle("search-invite-contacts", async (_event, query, exclude) => {
+      try {
+        const excluded = new Set(
+          (Array.isArray(exclude) ? exclude : []).map((email) => String(email).toLowerCase())
+        );
+        const { contacts } = searchContacts(
+          this.databaseManager.getContactLookupSources(),
+          String(query ?? ""),
+          { limit: excluded.size + INVITE_SUGGESTION_LIMIT }
+        );
+        return {
+          success: true,
+          contacts: contacts
+            .filter((contact) => !excluded.has(contact.email.toLowerCase()))
+            .slice(0, INVITE_SUGGESTION_LIMIT)
+            .map(({ email, name }) => ({ email, name })),
+        };
+      } catch {
         return { success: false, contacts: [] };
       }
     });

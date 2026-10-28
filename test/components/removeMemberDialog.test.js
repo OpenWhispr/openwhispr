@@ -193,6 +193,19 @@ test("losing the right to remove people shows the not-allowed copy", async (t) =
   assert.match(markup, /\u2068Acme\u2069/);
 });
 
+test("single sign-on required says to sign in with it, not that permission is gone", async (t) => {
+  const { render } = await loadDialog(t);
+
+  const markup = render({
+    kind: "failed",
+    subject: subject(),
+    error: { kind: "ssoRequired" },
+  });
+
+  assert.match(markup, /role="alert"[^>]*>workspaces\.ssoRequired\|/);
+  assert.doesNotMatch(markup, /workspaces\.removeMember\.notAllowed/);
+});
+
 test("a network failure shows the failed copy with Try again", async (t) => {
   const { render } = await loadDialog(t);
 
