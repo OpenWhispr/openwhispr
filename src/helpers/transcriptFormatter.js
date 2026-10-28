@@ -1,6 +1,12 @@
 const { i18nMain } = require("./i18nMain");
+const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
 function resolveSpeaker(seg, speakerMappings) {
+  const mappedName =
+    seg.speaker && !(seg.speaker === "you" && seg.recorderName)
+      ? speakerMappings[seg.speaker]
+      : undefined;
+  if (mappedName && !(seg.speakerName && isSpeakerLocked(seg))) return mappedName;
   if (seg.speakerName && !seg.speakerIsPlaceholder) {
     const name = seg.speakerName.trim().toLowerCase();
     const isSelfName =
@@ -8,7 +14,6 @@ function resolveSpeaker(seg, speakerMappings) {
     return isSelfName && seg.recorderName ? seg.recorderName : seg.speakerName;
   }
   if (seg.speaker === "you" && seg.recorderName) return seg.recorderName;
-  if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);

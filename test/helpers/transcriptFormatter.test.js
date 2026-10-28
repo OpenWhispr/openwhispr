@@ -350,3 +350,74 @@ test("exports keep different recorders' adjacent self lines separate", () => {
   assert.match(formatSrt(segments, {}, note), /Bob: new/);
   assert.equal(JSON.parse(formatJson(note, segments, {})).segments[1].speaker, "Bob");
 });
+
+for (const [language, youLabel] of [
+  ["en", "You"],
+  ["de", "Du"],
+]) {
+  test(`exports preserve local mappings, locked corrections and session recorders in ${language}`, (t) => {
+    changeLanguage(language);
+    t.after(() => changeLanguage("en"));
+    const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+    const segments = [
+      {
+        source: "mic",
+        speaker: "speaker_0",
+        speakerName: "You",
+        recorderName: "Alice Recorder",
+        text: "Viewer commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_1",
+        speakerName: youLabel,
+        recorderName: "Alice Recorder",
+        speakerLocked: true,
+        text: "Recorder commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_2",
+        speakerName: "Carol",
+        speakerLockSource: "user",
+        text: "Corrected commitment.",
+      },
+      {
+        source: "mic",
+        speaker: "speaker_3",
+        speakerName: "Old match",
+        text: "Updated match.",
+      },
+      {
+        source: "mic",
+        speaker: "you",
+        speakerName: "You",
+        recorderName: "Bob Recorder",
+        text: "Appended commitment.",
+      },
+    ].map((segment, index) => ({ ...segment, timestamp: index * 3 }));
+    const mappings = {
+      speaker_0: youLabel,
+      speaker_1: youLabel,
+      speaker_2: youLabel,
+      speaker_3: "Updated name",
+      you: "Original recorder",
+    };
+    const expectedNames = [youLabel, "Alice Recorder", "Carol", "Updated name", "Bob Recorder"];
+    const txt = formatTxt(note, segments, mappings);
+    const md = formatMd(note, segments, mappings);
+    const srt = formatSrt(segments, mappings, note);
+    const json = JSON.parse(formatJson(note, segments, mappings));
+    assert.deepEqual(
+      json.segments.map((segment) => segment.speaker),
+      expectedNames
+    );
+    expectedNames.forEach((name, index) => {
+      const text = segments[index].text;
+      const timestamp = `00:00:${String(index * 3).padStart(2, "0")}`;
+      assert.ok(txt.includes(`${name}:\n${text}`));
+      assert.ok(md.includes(`**${name}** \`${timestamp}\`\n${text}`));
+      assert.ok(srt.includes(`${name}: ${text}`));
+    });
+  });
+}
