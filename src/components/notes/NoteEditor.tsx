@@ -211,7 +211,8 @@ interface NoteEditorProps {
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
-  onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
+  /** recorderLabel is set on a teammate's note, so the export names its recorder, not "You". */
+  onExportTranscript?: (format: "txt" | "srt" | "json" | "md", recorderLabel?: string) => void;
   enhancement?: Enhancement;
   /** Runs a template, or an action that edits the summary, on this note. */
   onRunNoteAction?: (action: ActionItem) => void;
@@ -1019,7 +1020,7 @@ export default function NoteEditor({
       return (["txt", "srt", "md", "json"] as const).map((format) => ({
         id: format,
         label: t(TRANSCRIPT_EXPORT_LABEL_KEYS[format]),
-        onSelect: () => onExportTranscript(format),
+        onSelect: () => onExportTranscript(format, ownedByUser ? undefined : recorderLabel),
       }));
     }
     if (!onExportNote) return [];
@@ -1028,7 +1029,7 @@ export default function NoteEditor({
       label: t(NOTE_EXPORT_LABEL_KEYS[format]),
       onSelect: () => onExportNote(format),
     }));
-  }, [viewMode, onExportTranscript, onExportNote, t]);
+  }, [viewMode, onExportTranscript, onExportNote, ownedByUser, recorderLabel, t]);
 
   return (
     <div className="flex h-full min-h-0">

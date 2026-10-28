@@ -331,3 +331,78 @@ test("untimed upload text exports without invented times or speakers", () => {
   assert.deepEqual(json.speakers, []);
   assert.equal(json.segments[0].speaker, null);
 });
+
+const recorderSegments = [
+  { source: "mic", speaker: "you", timestamp: 0, text: "Morning." },
+  { source: "system", speaker: "speaker_0", timestamp: 3, text: "Hi." },
+  { source: "mic", timestamp: 6, text: "Unlabelled mic." },
+  { source: "system", speakerName: "You", speaker: "speaker_1", timestamp: 9, text: "Named." },
+];
+const recorderNote = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
+
+test("without a recorder label the recorder's lines read You, as before", () => {
+  const txt = formatTxt(recorderNote, recorderSegments, {});
+
+  assert.ok(txt.includes("[00:00:00] You:\nMorning."));
+  assert.ok(txt.includes("[00:00:06] You:\nUnlabelled mic."));
+  assert.ok(txt.includes("[00:00:09] You:\nNamed."));
+  assert.equal(txt, formatTxt(recorderNote, recorderSegments, {}, {}));
+});
+
+test("a recorder label names the recorder's lines in every format", () => {
+  const options = { recorderLabel: "Ada Lovelace" };
+
+  const txt = formatTxt(recorderNote, recorderSegments, {}, options);
+  assert.ok(txt.includes("[00:00:00] Ada Lovelace:\nMorning."));
+  assert.ok(txt.includes("[00:00:03] Speaker 1:\nHi."));
+  assert.ok(txt.includes("[00:00:06] Ada Lovelace:\nUnlabelled mic."));
+  assert.ok(txt.includes("[00:00:09] Ada Lovelace:\nNamed."));
+  assert.ok(!/\bYou\b/.test(txt));
+
+  const md = formatMd(recorderNote, recorderSegments, {}, options);
+  assert.match(md, /\*\*Ada Lovelace\*\* `00:00:00`\nMorning\./);
+  assert.ok(!md.includes("**You**"));
+
+  const srt = formatSrt(recorderSegments, {}, recorderNote, options);
+  assert.match(srt, /Ada Lovelace: Morning\./);
+  assert.ok(!srt.includes("You:"));
+
+  const json = JSON.parse(formatJson(recorderNote, recorderSegments, {}, options));
+  assert.deepEqual(json.speakers, ["Ada Lovelace", "Speaker 1"]);
+  assert.equal(json.segments[0].speaker, "Ada Lovelace");
+});
+
+test("an unknown recorder exports as Note taker", () => {
+  const txt = formatTxt(recorderNote, recorderSegments, {}, { recorderLabel: "Note taker" });
+
+  assert.ok(txt.includes("[00:00:00] Note taker:\nMorning."));
+});
+
+test("a localized You speaker name takes the recorder label", (t) => {
+  changeLanguage("de");
+  t.after(() => changeLanguage("en"));
+
+  const txt = formatTxt(
+    recorderNote,
+    [{ source: "system", speakerName: "Du", speaker: "speaker_0", timestamp: 0, text: "Hallo." }],
+    {},
+    { recorderLabel: "Ada Lovelace" }
+  );
+
+  assert.ok(txt.includes("[00:00:00] Ada Lovelace:\nHallo."));
+});
+
+test("other speaker names and this device's You mapping keep their names", () => {
+  const txt = formatTxt(
+    recorderNote,
+    [
+      { source: "system", speakerName: "Grace", speaker: "speaker_0", timestamp: 0, text: "A." },
+      { source: "system", speaker: "speaker_1", timestamp: 3, text: "B." },
+    ],
+    { speaker_1: "You" },
+    { recorderLabel: "Ada Lovelace" }
+  );
+
+  assert.ok(txt.includes("[00:00:00] Grace:\nA."));
+  assert.ok(txt.includes("[00:00:03] You:\nB."));
+});
