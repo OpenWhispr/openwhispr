@@ -1410,3 +1410,55 @@ test("a completed new installation survives failed journal cleanup", (t) => {
   assert.match(readSkill(skillsDir, "new"), /Keep\./);
   assert.deepEqual(listDir(skillsDir), ["new"]);
 });
+
+test("retrying a failed recommended install recovers it before reporting success", (t) => {
+  const { library, database, skillsDir, userDataDir } = setup(t);
+  const name = "meeting-decisions";
+  const copy = { title: "Meeting decisions", description: "Keeps them." };
+  const rename = fs.renameSync;
+  t.mock.method(database, "upsertSkillState", () => {
+    throw new Error("database full");
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === path.join(skillsDir, name) && path.basename(to).startsWith(".staging-")) {
+      throw Object.assign(new Error("rollback locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  assert.throws(() => library.addRecommended(name, copy), /database full/);
+  t.mock.restoreAll();
+
+  assert.deepEqual(library.addRecommended(name, copy), { name });
+  assert.equal(library.get(name)?.enabled, true);
+  assert.deepEqual(listDir(skillsDir), [name]);
+  const restarted = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });
+  assert.equal(restarted.get(name)?.enabled, true);
+});
+
+test("a recommended install retry reports failure while recovery is blocked", (t) => {
+  const { library, database, skillsDir } = setup(t);
+  const name = "meeting-decisions";
+  const copy = { title: "Meeting decisions", description: "Keeps them." };
+  const target = path.join(skillsDir, name);
+  const rename = fs.renameSync;
+  const remove = fs.rmSync;
+  const upsert = t.mock.method(database, "upsertSkillState", () => {
+    throw new Error("database full");
+  });
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === target) throw Object.assign(new Error("locked"), { code: "EACCES" });
+    return rename(from, to);
+  });
+  t.mock.method(fs, "rmSync", (file, options) => {
+    if (file === target) throw Object.assign(new Error("locked"), { code: "EACCES" });
+    return remove(file, options);
+  });
+  assert.throws(() => library.addRecommended(name, copy), /database full/);
+  upsert.mock.restore();
+
+  assert.throws(() => library.addRecommended(name, copy), /recovery/);
+  assert.deepEqual(library.scan(), []);
+  t.mock.restoreAll();
+  assert.deepEqual(library.addRecommended(name, copy), { name });
+  assert.equal(library.get(name)?.enabled, true);
+});

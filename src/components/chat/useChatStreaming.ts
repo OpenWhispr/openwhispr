@@ -17,7 +17,7 @@ import {
   isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { readSkillCardRecord } from "./skillCardRecord";
+import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
 import { useAuth } from "../../hooks/useAuth";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
@@ -741,14 +741,22 @@ export function useChatStreaming({
 
         const assistantId = crypto.randomUUID();
         let persisted = false;
-        const persist = (content: string, toolCalls?: ToolCallInfo[]): void => {
-          if (persisted) return;
-          persisted = true;
+        let interrupted = false;
+        const persistedSkillCalls = new Set<string>();
+        const writeMessage = (content: string, toolCalls?: ToolCallInfo[]): void => {
+          for (const call of toolCalls ?? []) {
+            if (readSkillCardRecord(call)?.status === "saved") persistedSkillCalls.add(call.id);
+          }
           if (options?.persistAssistantMessage) {
             void options.persistAssistantMessage(content, toolCalls);
           } else {
             onStreamComplete?.(assistantId, content, toolCalls);
           }
+        };
+        const persist = (content: string, toolCalls?: ToolCallInfo[]): void => {
+          if (persisted) return;
+          persisted = true;
+          writeMessage(content, toolCalls);
         };
         // Keep this send's outcomes independently of React's next render or conversation.
         const turnToolCalls: ToolCallInfo[] = [];
@@ -769,6 +777,19 @@ export function useChatStreaming({
             ...(metadata && !isQueryResultData(metadata) ? { metadata } : {}),
             ...(result.success ? {} : { failed: true }),
           });
+          if (interrupted) persistNewSavedSkills();
+        };
+        const persistNewSavedSkills = (): void => {
+          const savedSkills = snapshotToolCalls().filter(
+            (call) =>
+              call.status === "completed" &&
+              readSkillCardRecord(call)?.status === "saved" &&
+              !persistedSkillCalls.has(call.id)
+          );
+          if (savedSkills.length === 0) return;
+          // The send can already be over when a committed write's IPC reply arrives.
+          persisted = true;
+          writeMessage("", savedSkills);
         };
         setMessages((prev) => [
           ...prev,
@@ -799,6 +820,7 @@ export function useChatStreaming({
         };
 
         const finishInterrupted = (): void => {
+          interrupted = true;
           flushContentNow();
           const toolCalls = snapshotToolCalls();
           setMessages((prev) =>
@@ -806,16 +828,16 @@ export function useChatStreaming({
               message.id === assistantId ? { ...message, toolCalls, isStreaming: false } : message
             )
           );
-          const savedSkills = toolCalls.filter(
-            (call) => call.status === "completed" && readSkillCardRecord(call)?.status === "saved"
-          );
           const explicitlyCancelled = explicitCancelGenerationRef.current > sendGeneration;
           if (!explicitlyCancelled && fullContent.trim().length > 0) {
-            persist(fullContent, toolCalls.length ? toolCalls : undefined);
-          } else if (savedSkills.length > 0) {
-            // Stop can discard a partial answer, but cannot undo a skill already saved.
-            persist("", savedSkills);
+            // Pending skill writes may finish later; their eventual card gets its own row.
+            const historyToolCalls = toolCalls.filter(
+              (call) => !SKILL_CARD_TOOLS.has(call.name) || call.status === "completed"
+            );
+            persist(fullContent, historyToolCalls.length ? historyToolCalls : undefined);
           }
+          // Stop can discard a partial answer, but cannot undo a skill already saved.
+          persistNewSavedSkills();
         };
 
         try {
@@ -847,9 +869,9 @@ export function useChatStreaming({
                   const result = await executeTool(
                     tool,
                     args,
-                    toolScope.createContext({ messageId: assistantId, toolCallId })
+                    toolScope.createContext({ messageId: assistantId, toolCallId }),
+                    (result) => recordExecutedResult(toolCallId, result)
                   );
-                  recordExecutedResult(toolCallId, result);
                   const data = result.success
                     ? typeof result.data === "string"
                       ? result.data
@@ -1015,6 +1037,8 @@ export function useChatStreaming({
           if (cancelled()) {
             finishInterrupted();
           } else {
+            interrupted = true;
+            persistNewSavedSkills();
             cancelContentFlush();
             logger.error(
               "Assistant request failed",

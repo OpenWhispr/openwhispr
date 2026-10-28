@@ -951,3 +951,176 @@ for (const [ending, mode] of [
     if (ending === "navigate") assert.deepEqual(chat.getMessages(), []);
   });
 }
+
+for (const [ending, mode, writeFails, partialText] of [
+  ["provider error", "cloud", false, true],
+  ["provider error", "byok", false, true],
+  ["provider error during Save", "byok", false, true],
+  ["stop", "cloud", false, false],
+  ["navigate", "cloud", false, false],
+  ["unmount", "cloud", false, false],
+  ["unmount", "cloud", false, true],
+  ["stop", "byok", false, false],
+  ["navigate", "byok", false, false],
+  ["unmount", "byok", false, false],
+  ["stop", "cloud", true, false],
+  ["stop", "byok", true, false],
+]) {
+  test(`a skill Save still in flight after ${ending} preserves its outcome (${mode}, ${writeFails ? "failed" : "saved"}${partialText ? ", partial answer" : ""})`, async (t) => {
+    const { setup } = require("./skills/libraryFixture");
+    const { library } = setup(t);
+    const proposal = {
+      title: "Weekly recap",
+      description: "Recaps my week.",
+      instructions: "Original steps",
+      files: [],
+    };
+    library.saveProposal(proposal);
+    const stored = [];
+    let releaseSave;
+    const response = new Promise((resolve) => {
+      releaseSave = resolve;
+    });
+    t.after(() => releaseSave());
+    let notifyWrite;
+    const writeStarted = new Promise((resolve) => {
+      notifyWrite = resolve;
+    });
+    const api = {
+      skillsList: async () => ({ skills: library.scan() }),
+      skillsCheckProposal: async (input) => library.checkProposal(input),
+      skillsSaveProposal: async (input) => {
+        const result = writeFails
+          ? { ok: false, error: "write" }
+          : { ok: true, ...library.saveProposal(input) };
+        notifyWrite();
+        await response;
+        return result;
+      },
+      addAgentMessage: async (id, role, content, metadata) => {
+        stored.push({ id, role, content, metadata });
+      },
+      getAgentConversation: async (id) => ({
+        id,
+        messages: stored
+          .filter((row) => row.id === id)
+          .map((row) => ({
+            ...row,
+            metadata: row.metadata ? JSON.stringify(row.metadata) : undefined,
+          })),
+      }),
+    };
+    const chat = await renderChat(
+      t,
+      { skillsEnabled: true },
+      {
+        electronAPI: api,
+        live: true,
+        persist: true,
+        settings: mode === "byok" ? BYOK : {},
+      }
+    );
+    const approvals = await chat.vite.ssrLoadModule("/stores/skillApprovalStore.ts");
+    const replacement = { ...proposal, instructions: "New steps" };
+    const call = {
+      id: "save-in-flight",
+      name: "propose_skill",
+      arguments: JSON.stringify(replacement),
+    };
+    if (mode === "cloud") {
+      // Exercise the real cloud iterator, including its cancellation check after a tool.
+      chat.reasoningService.processTextStreamingCloud.mock.restore();
+      let ipcStep = 0;
+      t.mock.method(chat.reasoningService, "streamFromIPC", () => ({
+        stream: (async function* () {
+          if (ipcStep++ > 0) throw new Error("Network connection lost after Save");
+          if (partialText) yield { type: "content", text: "Working on it." };
+          yield { type: "tool_call", ...call };
+        })(),
+        wasCancelled: () => false,
+      }));
+    } else {
+      chat.reasoningService.processTextStreamingAI.mock.mockImplementation(
+        (_messages, _model, _provider, _config, tools) =>
+          (async function* () {
+            if (partialText) yield { type: "content", text: "Working on it." };
+            yield { type: "tool_calls", calls: [call] };
+            const executing = tools.propose_skill.execute(replacement, { toolCallId: call.id });
+            if (ending === "provider error during Save") {
+              await writeStarted;
+              throw new Error("Network connection lost during Save");
+            }
+            await executing;
+            if (ending === "provider error") throw new Error("Network connection lost after Save");
+          })()
+      );
+    }
+    let notifyApproval;
+    const approvalShown = new Promise((resolve) => {
+      notifyApproval = resolve;
+    });
+    const unsubscribe = approvals.useSkillApprovalStore.subscribe((state) => {
+      const entry = Object.values(state.entries).find((entry) => entry.state === "pending");
+      if (entry) notifyApproval(entry.key);
+    });
+    t.after(unsubscribe);
+    await React.act(async () => {
+      const sending = chat.send("Replace my weekly recap");
+      const key = await approvalShown;
+      const saving = approvals.saveSkillApproval(key);
+      await writeStarted;
+      if (ending === "unmount") await chat.unmount();
+      else if (!ending.startsWith("provider error")) chat.captured.cancelStream();
+      if (ending === "provider error") releaseSave();
+      if (ending === "navigate") await chat.getPersistence().loadConversation(2);
+      // The send lock releases even though the write's IPC response has not arrived.
+      await sending;
+      releaseSave();
+      await saving;
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+    const assistants = stored.filter((row) => row.role === "assistant");
+    const savedCalls = assistants
+      .flatMap((row) => row.metadata?.toolCalls ?? [])
+      .filter((entry) => entry.metadata?.status === "saved");
+    if (writeFails) {
+      assert.deepEqual(assistants, []);
+      assert.match(library.get("weekly-recap").markdown, /Original steps/);
+    } else {
+      assert.equal(savedCalls.length, 1, "the committed outcome is persisted exactly once");
+      assert.ok(
+        assistants.every((row) => row.id === 1),
+        "the outcome belongs to its original chat"
+      );
+      assert.equal(savedCalls[0].arguments, "{}", "saved history excludes skill drafts");
+      assert.match(library.get("weekly-recap").markdown, /New steps/);
+      assert.equal(
+        library.undo(savedCalls[0].metadata.name, savedCalls[0].metadata.versionId),
+        true
+      );
+      assert.match(library.get("weekly-recap").markdown, /Original steps/);
+      if (ending.startsWith("provider error")) {
+        assert.equal(assistants.length, 1);
+        assert.equal(assistants[0].content, "", "failed partial answers stay out of saved history");
+        const reply = chat.getMessages().find((message) => message.role === "assistant");
+        assert.equal(reply.isStreaming, false);
+        assert.notEqual(
+          reply.content,
+          "Working on it.",
+          "the provider error still replaces the answer"
+        );
+      } else if (partialText) {
+        assert.equal(assistants[0].content, "Working on it.");
+        assert.equal(
+          assistants
+            .flatMap((row) => row.metadata?.toolCalls ?? [])
+            .filter((entry) => entry.name === "propose_skill" && entry.status === "executing")
+            .length,
+          0,
+          "reopened history does not leave the saved skill permanently executing"
+        );
+      } else assert.equal(assistants.length, 1);
+    }
+    if (ending === "navigate") assert.deepEqual(chat.getMessages(), []);
+  });
+}

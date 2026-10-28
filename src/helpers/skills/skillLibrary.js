@@ -572,6 +572,13 @@ class SkillLibrary {
     } catch {
       return null;
     }
+    if (this._recoverInterruptedWrites().has(id)) {
+      throw writeError(
+        Object.assign(new Error("The skill needs recovery before it can be added"), {
+          code: "EBUSY",
+        })
+      );
+    }
     if (this._exists(id)) return { name: id };
     const twin = this._skillTitled(title);
     if (twin) return { problems: [titleTaken(twin)] };

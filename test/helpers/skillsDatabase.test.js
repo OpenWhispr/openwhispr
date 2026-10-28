@@ -190,3 +190,39 @@ test("a read-only database still rolls the skill files back without another data
   });
   assert.equal(library.get("keep").enabled, false);
 });
+
+test("a failed replacement marker restores the original database row before scanning", async (t) => {
+  const database = createDb(t);
+  if (!database) return;
+  const library = new SkillLibrary({ userDataDir: getUserDataDir(), database });
+  library.create({ title: "Keep", description: "Old", instructions: "Original", files: [] });
+  library.setEnabled("keep", false);
+  database.markSkillUsed("keep");
+  database.db.prepare("UPDATE skills SET updated_at = '2000-01-01 00:00:00'").run();
+  const original = database.db.prepare("SELECT * FROM skills").all();
+  const markdown = fs.readFileSync(path.join(library.skillsDir, "keep", "SKILL.md"), "utf8");
+  const [preview] = await library.previewUploads([
+    {
+      fileName: "keep.md",
+      data: Buffer.from("---\nname: keep\ndescription: New\n---\nReplacement\n"),
+    },
+  ]);
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (
+      path.basename(from).startsWith(".replacing-") &&
+      path.basename(to).startsWith(".replaced-")
+    ) {
+      throw Object.assign(new Error("marker locked"), { code: "EACCES" });
+    }
+    return rename(from, to);
+  });
+  assert.equal(
+    library.commitUploads({ tokens: [preview.token], replace: ["keep"] }).failed.length,
+    1
+  );
+  t.mock.restoreAll();
+  assert.deepEqual(database.db.prepare("SELECT * FROM skills").all(), original);
+  assert.equal(fs.readFileSync(path.join(library.skillsDir, "keep", "SKILL.md"), "utf8"), markdown);
+  assert.equal(library.get("keep").enabled, false);
+});
