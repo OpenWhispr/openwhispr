@@ -465,7 +465,7 @@ for (const previousOutcome of ["sent", "unknown"]) {
     harness.setStream((tools) =>
       (async function* () {
         const running = tools.slack_send_message.execute(
-          { destination: "#eng", text: "PR  #12 merged!" },
+          { destination: "#eng", text: "PR #12 merged!" },
           toolOptions("s2")
         );
         await new Promise((resolve) => setImmediate(resolve));
