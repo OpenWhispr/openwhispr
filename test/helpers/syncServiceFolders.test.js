@@ -585,3 +585,32 @@ test("a pulled subfolder that arrives before its parent is linked once the page 
     "linking a pulled parent is not a local edit to push back"
   );
 });
+
+test("a subfolder the cloud refuses to nest goes top-level without stranding its batch", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  await (await newSyncService(t)).syncAll(true);
+  const quarter = db.createFolder("Q1", null, parent.id).folder;
+  db.createFolder("Sibling");
+
+  const invalidParent = { status: 400, code: "invalid_parent_folder", error: "Invalid parent" };
+  cloud.failNext("POST /api/folders/batch-create", invalidParent);
+  cloud.failNext(
+    (call) => call.path === "/api/folders/create" && call.body?.name === "Q1",
+    invalidParent
+  );
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(folderByName(db, "Sibling").sync_status, "synced");
+  assert.equal(folderByName(db, "Q1").parent_folder_id, null);
+  assert.equal(folderByName(db, "Q1").sync_status, "pending");
+
+  await (await newSyncService(t)).syncAll(true);
+  const synced = folderByName(db, "Q1");
+  assert.equal(synced.id, quarter.id);
+  assert.equal(synced.sync_status, "synced");
+  assert.equal(cloud.folder(synced.cloud_id).parent_folder_id, null);
+});

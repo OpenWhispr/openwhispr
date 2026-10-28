@@ -104,6 +104,7 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (spaceKind) => db.getPendingFolders(spaceKind),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
+    setFolderParent: async (id, parentFolderId) => db.setFolderParent(id, parentFolderId),
     upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>
       db.upsertFolderFromCloud(cloudFolder, localSpaceId),
     acknowledgeFolderCreate: async (

@@ -123,6 +123,14 @@ function isFolderNameTakenError(err: unknown): boolean {
   return err instanceof CloudApiError && err.code === "folder_name_taken";
 }
 
+// Typed 400 for a parent the server can't nest under (moved to another space,
+// nested itself, or the folder gained subfolders on another device). Pending
+// rows never take pulled parents, so the folder is un-nested locally and the
+// next pass pushes it top-level.
+function isInvalidParentFolderError(err: unknown): boolean {
+  return err instanceof CloudApiError && err.code === "invalid_parent_folder";
+}
+
 // Typed 409 from a note PATCH whose base_updated_at is older than the stored
 // row — another device wrote first. The body carries the current cloud note.
 function isNoteVersionConflictError(err: unknown): boolean {
@@ -990,6 +998,8 @@ export class SyncService {
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           this.dispatchFolderNameTaken(folder.name);
+        } else if (isInvalidParentFolderError(err)) {
+          await window.electronAPI.setFolderParent(folder.id, null);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
           await this.restoreDeniedRows("folder");
@@ -1769,6 +1779,8 @@ export class SyncService {
           // proves the folder is still accessible, so reset any 404 streak.
           this.dispatchFolderNameTaken(folder.name);
           this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
+        } else if (isInvalidParentFolderError(err)) {
+          await window.electronAPI.setFolderParent(folder.id, null);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
           denied = true;
@@ -1817,7 +1829,11 @@ export class SyncService {
           );
         }
       } catch (err) {
-        if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
+        if (
+          isSpaceAccessError(err) ||
+          isPermissionDenialError(err) ||
+          isInvalidParentFolderError(err)
+        ) {
           // A typed rejection can't be attributed to a row from the batch
           // response; create individually so one rejected folder settles
           // terminally without stranding (or relocating) the rest.
@@ -1846,6 +1862,8 @@ export class SyncService {
     } catch (err) {
       if (isFolderNameTakenError(err)) {
         this.dispatchFolderNameTaken(folder.name);
+      } else if (isInvalidParentFolderError(err)) {
+        await window.electronAPI.setFolderParent(folder.id, null);
       } else if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
         await this.handleRevokedFolderPush(folder, ctx);
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
