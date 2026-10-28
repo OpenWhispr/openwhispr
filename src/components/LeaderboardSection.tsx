@@ -104,6 +104,7 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onJoin: () => Promise<boolean>;
   onRefreshParticipation: () => void;
+  onSessionRefresh: () => void;
   onSignIn: () => void;
   onSsoSignIn: () => void;
   ssoActionDisabled: boolean;
@@ -168,6 +169,7 @@ export default function LeaderboardSection({
   onJoin,
   onLeave,
   onRefreshParticipation,
+  onSessionRefresh,
   onSignIn,
   onSsoSignIn,
   ssoActionDisabled,
@@ -669,7 +671,13 @@ export default function LeaderboardSection({
             ? t("insights.leaderboard.signInDescription")
             : t("insights.leaderboard.accessError")
         }
-        onRetry={accessError === "auth" ? onSignIn : () => void loadAccess()}
+        onRetry={
+          accessError === "auth"
+            ? onSignIn
+            : accountOffline
+              ? onSessionRefresh
+              : () => void loadAccess()
+        }
       />
     );
   }

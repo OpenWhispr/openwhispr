@@ -24,7 +24,7 @@ export default function LeaderboardView({
   syncAllowedByPolicy,
 }: LeaderboardViewProps) {
   const { t } = useTranslation();
-  const { isLoaded: authSettled, isSignedIn, user, isOfflineAccount } = useAuth();
+  const { isLoaded: authSettled, isSignedIn, user, isOfflineAccount, refetch } = useAuth();
   const authGeneration = getValidatedAuthGeneration();
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState<boolean | null>(null);
   const [ssoStarting, setSsoStarting] = useState(false);
@@ -116,6 +116,7 @@ export default function LeaderboardView({
         onJoin={joinLeaderboard}
         onLeave={leaveParticipation}
         onRefreshParticipation={refreshParticipation}
+        onSessionRefresh={() => void refetch()}
         onSignIn={onSignIn}
         onSsoSignIn={() => void startSsoSignIn()}
         ssoActionDisabled={ssoStarting || oauthProtocolRegistered !== true}

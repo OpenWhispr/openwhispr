@@ -208,8 +208,9 @@ export async function authContextFetch(
   init?: RequestInit
 ): Promise<Response> {
   await assertAuthRequestCurrent(init);
+  let response: Response | undefined;
   try {
-    const response = await globalThis.fetch(input, { ...init, credentials: "omit" });
+    response = await globalThis.fetch(input, { ...init, credentials: "omit" });
     // Fetch resolves at headers; a broken session body must fence the lease too.
     if (isGetSessionRequest((init ?? {}) as AuthRequest)) await response.clone().text();
     await assertAuthRequestCurrent(init);
@@ -221,10 +222,14 @@ export async function authContextFetch(
     // Better Auth cancels a session request whenever it starts another one: a
     // cancelled request says nothing about the server.
     if (isGetSessionRequest((init ?? {}) as AuthRequest) && !init?.signal?.aborted) {
-      // Keep the session binding so a transient refetch failure keeps
-      // presenting the account. A real 401 clears it via handleAuthRequestError.
-      markRefetchFailed(requestGeneration(init));
-      await noteSessionUnreachable(requestGeneration(init), { signal: init?.signal });
+      if (response?.status === 401) {
+        await handleAuthRequestError({ request: init as AuthRequest, response });
+      } else {
+        // Keep the session binding so a transient refetch failure keeps
+        // presenting the account. A real 401 clears it via handleAuthRequestError.
+        markRefetchFailed(requestGeneration(init));
+        await noteSessionUnreachable(requestGeneration(init), { signal: init?.signal });
+      }
     }
     throw error;
   }

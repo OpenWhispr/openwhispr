@@ -236,3 +236,53 @@ test("a cancelled server-error binding read cannot clear a newer successful sess
   assert.equal(authContext.getOfflineAccount(), null);
   assert.equal(browser.focusListenerCount(), 0);
 });
+
+test("an interrupted 401 body preserves the rejection and clears the saved account", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const browser = installWindow({ token: "token-a", generation: 4 });
+  t.after(browser.restore);
+  const profileKey = "openwhispr:accountProfile";
+  const stored = new Map([[profileKey, JSON.stringify({ id: "user-a", validatedAt: Date.now() })]]);
+  globalThis.window.localStorage = {
+    getItem: (key) => stored.get(key) ?? null,
+    removeItem: (key) => stored.delete(key),
+  };
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
+  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
+  const session = authClient.$store.atoms.session;
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
+        headers: { "Content-Type": "application/json" },
+      })
+  );
+  await session.value.refetch();
+  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+
+  globalThis.fetch = async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"message":'));
+          setImmediate(() => controller.error(new TypeError("401 body disconnected")));
+        },
+      }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  await session.value.refetch();
+
+  assert.equal(authContext.getBoundSessionGeneration("user-a"), null);
+  assert.equal(authContext.getValidatedAuthGeneration(), null);
+  assert.equal(authContext.getAuthRequestContextSnapshot().sessionRejectedGeneration, 4);
+  assert.equal(stored.has(profileKey), false);
+  assert.equal(browser.focusListenerCount(), 0);
+
+  globalThis.fetch = async () => {
+    throw new TypeError("offline");
+  };
+  await session.value.refetch();
+  assert.equal(authContext.getOfflineAccount(), null);
+});
