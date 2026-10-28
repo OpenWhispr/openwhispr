@@ -6,38 +6,60 @@ purchase; RevenueCat remains an observer and does not grant access.
 
 The app supplies `$appsflyerId` only for the requested, identified billing user
 when Usage Analytics is enabled and ATT is authorized (or unavailable on that
-platform). It waits for a started AppsFlyer session, discards stale lookups, and
-bounds a native ID lookup to two seconds. Attribute writes share the existing
-RevenueCat identity queue with logins, restores and purchase records.
+platform). The AppsFlyer identifier is readable once the SDK is initialized with
+consent, before its first session starts, so a purchase made right after the ATT
+prompt can carry it. A native lookup is bounded to two seconds and read once per
+install. Attribute writes share the existing RevenueCat identity queue with
+logins, restores and purchase records.
 
-Consent has three states. A definite opt-out (Usage Analytics off, ATT denied or
-not determined) or an account change clears the identifier. An undecided state
-leaves it as it is: the app re-reads ATT on every foreground, and that re-check,
-a session that has not started yet, or a timed-out lookup is not a withdrawal.
-A pending or failed sign-out cannot relink the departed account.
+## Consent
 
-Signing out clears the departing account's identifier on purpose: the device no
-longer belongs to that account, so its later renewals are not attributed to
-this device's install even though consent never changed.
+- **Granted** (Usage Analytics on, ATT authorized): the identifier is linked.
+- **Revoked** (Usage Analytics off, ATT denied, or no AppsFlyer key in the
+  build): the identifier is cleared.
+- **Undecided** (the ATT prompt has not been answered on this device) and
+  **pending** (a decision not read yet, including the ATT re-check that runs on
+  every foreground): nothing changes in the background.
+
+A purchase or restore posts its receipt, with the attributes, right after the
+app writes them. Before it posts, the app waits up to one second for a pending
+decision, then links the identifier only with this device's consent. Undecided,
+revoked or still unknown consent clears it for that post, so a purchase made on a
+device without consent is never attributed through another device's link.
+
+An account change or sign-out clears the departing account's identifier, so its
+later renewals are not attributed to this device's install. A pending or failed
+sign-out cannot relink the departed account.
+
+`$appsflyerId` belongs to the RevenueCat customer, not the device. On an account
+used on several devices, the most recent consenting device to open the app or
+make a purchase supplies it, and a device that clears it (opt-out, sign-out, or a
+purchase without consent) removes it until a consenting device reopens. Each
+consenting device writes its identifier again once per app session, since
+RevenueCat would otherwise skip a value equal to its local copy and never send it.
 
 ## Device identifiers
 
-RevenueCat's automatic device identifier collection is off. Left on, every
-`setAppsflyerID` call, including the `null` that clears it, also sets `$idfv`,
-`$ip`, `$deviceVersion` and `$idfa`, and RevenueCat cannot delete those once set.
-The app calls `collectDeviceIdentifiers()` only when it links an identifier with
-consent, so an opted-out user never sends them.
+The app never sends `$idfa`, `$idfv`, `$ip` or `$deviceVersion`: RevenueCat
+cannot delete them once set, and AppsFlyer already holds the install's device
+identifiers. It writes `$appsflyerId` with `setAttributes`, never with
+`setAppsflyerID`, which collects all four on every call, including a clear.
+RevenueCat's `automaticDeviceIdentifierCollectionEnabled` option would turn that
+off, but PurchasesHybridCommon 19.0.0 (pinned by react-native-purchases 10.10.0)
+accepts it without applying it. Revisit this only on an SDK upgrade that
+verifiably honours the option.
 
 ## Synchronization
 
 Attribute setters are local. RevenueCat pushes pending attributes before
-`logIn` and `logOut` switch users, with every receipt post (purchase record,
-restore), and on app foreground and background. The app asks for an immediate
-push (`syncAttributesAndOfferingsIfNeeded`) only when it withdraws an identifier
-it linked in this session. That call is limited to 5 per 60 seconds (a throttled
-call skips the push without failing), also fetches offerings, and can fail when
-offerings have no products; a pending deletion then goes out with the next
-automatic push. It is not proof of delivery.
+`logIn` and `logOut` switch users (including the login to the same user on every
+launch), with every receipt post (purchase record, restore), and in its own
+lifecycle syncs. The app asks for an immediate push
+(`syncAttributesAndOfferingsIfNeeded`) only when it withdraws an identifier it
+linked in this session. That call is limited to 5 per 60 seconds (a throttled
+call skips the push without failing), and it also fetches offerings, which fails
+in a project without offerings after the attributes are sent; that failure is not
+reported. It is not proof of delivery.
 
 A device that is offline or has not reopened after an OS ATT change cannot
 instantly notify RevenueCat. Verify actual server deletion and subsequent
@@ -63,8 +85,11 @@ paid event avoids duplicating the old client purchase signal on this app version
 It also changes when `af_subscribe` fires: the old client event fired when
 Superwall reported a purchase, including a free-trial start or an offer-code
 redemption; RevenueCat's fires on the first payment or trial conversion, which
-can fall outside short ad-network and SKAN windows. Renewal partner mapping is a
-separate reviewed configuration step.
+can fall outside short ad-network and SKAN windows. The client event was also
+queued until AppsFlyer started, so a purchase made before the first session still
+counted; RevenueCat forwards only a purchase whose customer already had
+`$appsflyerId`, and never later. Decide whether that loss is acceptable before
+activation. Renewal partner mapping is a separate reviewed configuration step.
 
 Builds without this change never set `$appsflyerId`, and RevenueCat forwards
 nothing to AppsFlyer without it, so enabling forwarding cannot double-count old
@@ -107,7 +132,9 @@ all, so forwarding and SKAN must be ready before the build reaches users.
      events for SKAN where the mode supports it, or remap the rule, in the same
      window.
    - Update the App Store privacy label: purchases are now linked to the user's
-     identity and used for tracking and third-party advertising.
+     identity and used for tracking and third-party advertising. The app's
+     privacy manifest declares no collected data types; review it at the same
+     time.
 6. Release the approved app build. Verify one naturally occurring eligible
    production transaction and a renewal. No synthetic production purchase,
    historical backfill, campaign optimization changes, or merge/release

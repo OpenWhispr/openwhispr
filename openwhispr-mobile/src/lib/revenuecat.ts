@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import Purchases, {
   LOG_LEVEL,
   PURCHASES_ARE_COMPLETED_BY_TYPE,
+  PURCHASES_ERROR_CODE,
   STOREKIT_VERSION,
 } from 'react-native-purchases';
 import { Sentry } from '@/lib/sentry';
@@ -9,6 +10,7 @@ import {
   getAppsFlyerAttributionConsent,
   getAppsFlyerRevenueId,
   subscribeAppsFlyerAttribution,
+  waitForAppsFlyerAttributionConsent,
 } from '@/lib/appsflyer';
 
 let configured = false;
@@ -18,6 +20,11 @@ let identifiedUserId: string | null = null;
 let requestedUserId: string | null = null;
 // The identifier this session attached to identifiedUserId, if any.
 let linkedRevenueId: string | null = null;
+
+// Written with setAttributes, never setAppsflyerID: that setter also collects
+// IDFA/IDFV/IP on every call, including a clear, and PurchasesHybridCommon
+// 19.0.0 ignores the configure flag that should turn this off.
+const APPSFLYER_ID_ATTRIBUTE = '$appsflyerId';
 let identityQueue: Promise<unknown> = Promise.resolve();
 
 const IDENTITY_CALL_TIMEOUT_MS = 10_000;
@@ -71,12 +78,12 @@ function revenueAttributionWithdrawn(): boolean {
 }
 
 async function linkRevenueAttribution(id: string): Promise<void> {
-  if (linkedRevenueId === id) return;
   try {
-    // Device identifiers are collected only here, with consent; automatic
-    // collection is off so clearing the ID never sends them.
-    await Purchases.collectDeviceIdentifiers();
-    await Purchases.setAppsflyerID(id);
+    // The ID belongs to the account, not the device, and RevenueCat skips a
+    // value equal to its local copy. Clearing first makes it a pending change,
+    // so it reaches the server even after another device replaced or cleared it.
+    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: null });
+    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: id });
     linkedRevenueId = id;
   } catch (error) {
     reportRevenueCatError('sync-attribution', error);
@@ -89,40 +96,56 @@ async function linkRevenueAttribution(id: string): Promise<void> {
 async function unlinkRevenueAttribution({ push }: { push: boolean }): Promise<void> {
   const wasLinked = linkedRevenueId !== null;
   try {
-    await Purchases.setAppsflyerID(null);
+    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: null });
     linkedRevenueId = null;
-    if (push && wasLinked) await Purchases.syncAttributesAndOfferingsIfNeeded();
   } catch (error) {
     reportRevenueCatError('sync-attribution', error);
+    return;
+  }
+  if (!push || !wasLinked) return;
+  try {
+    await Purchases.syncAttributesAndOfferingsIfNeeded();
+  } catch (error) {
+    // The attributes go out before the offerings fetch, which fails in a
+    // project without offerings; the deletion is sent either way.
+    const code = (error as { code?: unknown } | null)?.code;
+    if (code !== PURCHASES_ERROR_CODE.CONFIGURATION_ERROR) {
+      reportRevenueCatError('sync-attribution', error);
+    }
   }
 }
 
 // Must run inside withIdentity: attribute setters target the current SDK user.
-async function syncRevenueAttribution(): Promise<void> {
+// A purchase or restore posts its receipt, with the attributes, right after, so
+// it waits for a known decision and links only with consent from this device.
+async function syncRevenueAttribution({ beforePost = false } = {}): Promise<void> {
   if (Platform.OS !== 'ios') return;
-  if (revenueAttributionWithdrawn()) {
-    await unlinkRevenueAttribution({ push: true });
+  const consent = beforePost
+    ? await waitForAppsFlyerAttributionConsent()
+    : getAppsFlyerAttributionConsent();
+  if (revenueAttributionWithdrawn() || (beforePost && consent !== 'granted')) {
+    await unlinkRevenueAttribution({ push: !beforePost });
     return;
   }
   // Undecided consent, or a user this session has not logged in: keep what the
   // SDK user already has rather than treating "unknown" as a withdrawal.
   if (!canLinkRevenueAttribution() || linkedRevenueId) return;
-  // A null ID is "not readable yet"; a started session notifies again.
+  // A null ID is "not readable yet"; the SDK becoming ready notifies again.
   const id = await getAppsFlyerRevenueId();
   if (!id || !canLinkRevenueAttribution()) return;
   await linkRevenueAttribution(id);
   // Consent can be withdrawn while the setters cross the bridge. Clear it
   // before a queued purchase or restore posts, not only in a later callback.
-  if (revenueAttributionWithdrawn()) await unlinkRevenueAttribution({ push: true });
-}
-
-// An anonymous SDK user is never linked, so only a signed-in one needs clearing.
-async function isSignedInSdkUserOtherThan(userId: string | null): Promise<boolean> {
-  return (await Purchases.getAppUserID()) !== userId && !(await Purchases.isAnonymous());
+  if (revenueAttributionWithdrawn()) await unlinkRevenueAttribution({ push: !beforePost });
 }
 
 async function logInWithAttribution(userId: string): Promise<void> {
-  if (Platform.OS === 'ios' && (await isSignedInSdkUserOtherThan(userId))) {
+  // An anonymous SDK user is never linked, so only a signed-in one needs clearing.
+  if (
+    Platform.OS === 'ios' &&
+    (await Purchases.getAppUserID()) !== userId &&
+    !(await Purchases.isAnonymous())
+  ) {
     // logIn pushes the departing user's attributes before switching.
     await unlinkRevenueAttribution({ push: false });
   }
@@ -134,7 +157,7 @@ async function logInWithAttribution(userId: string): Promise<void> {
 
 async function logOutWithAttribution(): Promise<void> {
   // The SDK rejects logging out an anonymous user; there is no one to sign out.
-  if (await isSignedInSdkUserOtherThan(null)) {
+  if (!(await Purchases.isAnonymous())) {
     // logOut pushes the departing user's attributes before switching.
     if (Platform.OS === 'ios') await unlinkRevenueAttribution({ push: false });
     await Purchases.logOut();
@@ -172,7 +195,6 @@ export function configureRevenueCat(): void {
         type: PURCHASES_ARE_COMPLETED_BY_TYPE.MY_APP,
         storeKitVersion: STOREKIT_VERSION.STOREKIT_2,
       },
-      automaticDeviceIdentifierCollectionEnabled: false,
     });
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.INFO);
     configured = true;
@@ -228,6 +250,7 @@ export async function reconcileRevenueCatPurchases(
       if (!isCurrent()) return false;
       await logInWithAttribution(billingUserId);
       if (!isCurrent()) return false;
+      await syncRevenueAttribution({ beforePost: true });
       await Purchases.syncPurchasesForResult();
       return isCurrent();
     }, PURCHASE_SYNC_TIMEOUT_MS);
@@ -247,7 +270,7 @@ export async function recordRevenueCatPurchase(productId: string): Promise<boole
   if (!configured) return false;
   try {
     await withIdentity(async () => {
-      await syncRevenueAttribution();
+      await syncRevenueAttribution({ beforePost: true });
       await Purchases.recordPurchase(productId);
     });
     return true;

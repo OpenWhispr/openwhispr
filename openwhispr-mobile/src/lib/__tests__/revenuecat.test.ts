@@ -13,8 +13,7 @@ jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
-    collectDeviceIdentifiers: jest.fn(),
-    setAppsflyerID: jest.fn(),
+    setAttributes: jest.fn(),
     syncAttributesAndOfferingsIfNeeded: jest.fn(),
     getAppUserID: jest.fn(),
     isAnonymous: jest.fn().mockResolvedValue(false),
@@ -28,11 +27,13 @@ jest.mock('react-native-purchases', () => ({
   },
   LOG_LEVEL: { INFO: 'INFO' },
   PURCHASES_ARE_COMPLETED_BY_TYPE: { MY_APP: 'MY_APP' },
+  PURCHASES_ERROR_CODE: { CONFIGURATION_ERROR: '23' },
   STOREKIT_VERSION: { STOREKIT_2: 'STOREKIT_2' },
 }));
 jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerRevenueId: jest.fn().mockResolvedValue(null),
   getAppsFlyerAttributionConsent: () => 'revoked',
+  waitForAppsFlyerAttributionConsent: () => Promise.resolve('revoked'),
   subscribeAppsFlyerAttribution: jest.fn(),
 }));
 jest.mock('@/lib/sentry', () => ({
