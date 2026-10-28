@@ -2126,6 +2126,24 @@ test("applyCloudFolderParents links pulled subfolders and keeps invalid ones top
   assert.equal(parentOf(grandchild.id), null);
 });
 
+test("applyCloudFolderParents un-nests the pending end of a too-deep chain", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const client = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1").folder;
+  const archive = db.createFolder("Archive").folder;
+  db.markFolderSynced(client.id, "c-client");
+  db.markFolderSynced(quarter.id, "c-quarter");
+  db.markFolderSynced(archive.id, "c-archive");
+  db.setFolderParent(client.id, archive.id);
+
+  db.applyCloudFolderParents([{ cloudId: "c-quarter", parentCloudId: "c-client" }]);
+  const folder = (id) => db.getFolders().find((f) => f.id === id);
+  assert.equal(folder(quarter.id).parent_folder_id, client.id, "the server's nesting stands");
+  assert.equal(folder(client.id).parent_folder_id, null);
+  assert.equal(folder(client.id).sync_status, "pending", "the un-nest pushes");
+});
+
 test("a pulled space change clears a stale parent and a parent's hard delete frees its children", (t) => {
   const db = createDb(t);
   if (!db) return;

@@ -181,6 +181,23 @@ test("deleting a parent announces each deleted folder and removes the nested dir
   assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
 });
 
+test("hard-deleting a parent moves its surviving subfolder's files to the top level", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
+  await settle();
+  fs.writeFileSync(path.join(basePath, "Client A", "Q1", "1-plan.md"), "---\nid: 1\n---\n");
+
+  assert.ok((await handlers.get("db-hard-delete-folder")(null, parent.id)).success);
+  await settle();
+  assert.equal(ctx.db.getFolders().find((f) => f.id === child.id).parent_folder_id, null);
+  assert.ok(fs.existsSync(path.join(basePath, "Q1", "1-plan.md")));
+  assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
+});
+
 test("a subfolder's directory survives while another space's folder shares its path", async (t) => {
   const ctx = setup(t);
   if (!ctx) return;

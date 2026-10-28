@@ -8646,7 +8646,9 @@ class DatabaseManager {
   // its parent; links are applied once the page is stored. A parent unknown
   // here or in another space leaves the folder top-level, and a final pass
   // undoes any chain deeper than one level whatever order the links came in.
-  // Pending rows keep their unpushed local parent.
+  // Pending rows keep their unpushed local parent; the final pass un-nests a
+  // chain's pending folder (the server refuses its nesting anyway), else the
+  // subfolder.
   applyCloudFolderParents(links) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -8675,8 +8677,11 @@ class DatabaseManager {
         const tooDeep = this.db
           .prepare(
             `SELECT * FROM folders
-             WHERE ${accountScope.sql}
-               AND parent_folder_id IN (SELECT id FROM folders WHERE parent_folder_id IS NOT NULL)`
+             WHERE ${accountScope.sql} AND parent_folder_id IS NOT NULL
+               AND ((sync_status = 'pending'
+                     AND id IN (SELECT parent_folder_id FROM folders WHERE deleted_at IS NULL))
+                 OR parent_folder_id IN (SELECT id FROM folders
+                                         WHERE parent_folder_id IS NOT NULL AND sync_status != 'pending'))`
           )
           .all(...accountScope.params);
         for (const folder of tooDeep) {

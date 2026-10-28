@@ -3154,6 +3154,14 @@ class IPCHandlers {
     });
     ipcMain.handle("db-hard-delete-folder", (_, id) => {
       const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
+      // The server keeps a deleted parent's live subfolders, now top-level.
+      const subfolders = mirrorFolder
+        ? this.databaseManager.db
+            .prepare(
+              "SELECT id, name FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL"
+            )
+            .all(id)
+        : [];
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
@@ -3164,6 +3172,9 @@ class IPCHandlers {
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });
+          for (const child of subfolders) {
+            this._mirrorMoveFolder([mirrorFolder, child.name], child.id);
+          }
           if (mirrorFolder) this._mirrorDeleteFolderIfUnshared(mirrorFolder);
         });
       }
@@ -3171,6 +3182,13 @@ class IPCHandlers {
     });
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
+      const subfolders = previousMirrorFolder
+        ? this.databaseManager.db
+            .prepare(
+              "SELECT id, name FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL"
+            )
+            .all(id)
+        : [];
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
@@ -3190,6 +3208,9 @@ class IPCHandlers {
           }
           for (const noteId of result.deletedNoteIds ?? []) {
             broadcastToWindows("note-deleted", { id: noteId });
+          }
+          for (const child of subfolders) {
+            this._mirrorMoveFolder([previousMirrorFolder, child.name], child.id);
           }
           const folderGone =
             !result.folder ||
