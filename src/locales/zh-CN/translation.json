@@ -183,7 +183,6 @@
     "managedByOrg": "由您的组织管理",
     "signInRequired": "需要登录",
     "signIn": "登录",
-    "comingSoon": "即将推出",
     "cloud": "云端",
     "local": "本地",
     "apiKey": "API Key",
@@ -2390,7 +2389,14 @@
         }
       },
       "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。",
-      "meetingCloudSignedOut": "未登录时，无法使用 OpenWhispr Cloud 开始笔记录音。请在上方选择其他引擎。"
+      "meetingCloudSignedOut": "未登录时，无法使用 OpenWhispr Cloud 开始笔记录音。请在上方选择其他引擎。",
+      "selfHostedRealtime": {
+        "urlLabel": "实时 WebSocket URL",
+        "urlInvalid": "请使用 wss://，局域网内的服务器可使用 ws://。",
+        "modelRequired": "必填：服务器应加载的模型，例如 Whisper-Large-v3-Turbo。",
+        "apiKeyLabel": "API Key（可选）",
+        "help": "你的服务器必须通过 WebSocket 支持 OpenAI Realtime 转写协议。不提供 HTTP 回退。"
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3239,7 +3245,9 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "unsupportedSelfHosted": "笔记录音暂不支持自托管端点。请打开设置，选择本地或支持流式传输的服务商。",
+      "selfHostedRealtimeUrlMissing": "笔记录音的自托管模式需要实时 WebSocket URL。请打开设置并输入服务器的 URL，或选择其他模式。",
+      "selfHostedRealtimeUrlInvalid": "笔记录音的自托管 URL 必须以 wss:// 开头，局域网内的服务器可使用 ws://。请打开设置并更正 URL。",
+      "selfHostedRealtimeModelMissing": "笔记录音的自托管模式需要模型名称。请打开设置并输入服务器应使用的模型。",
       "unsupportedProvider": "笔记录音无法使用 {{provider}} 进行实时转录。请打开设置，选择本地或支持流式传输的服务商。",
       "noProviderSelected": "尚未为笔记录音选择服务商。请打开设置，选择本地或支持流式传输的服务商。",
       "signInRequired": "笔记录音需要登录，请先登录。",

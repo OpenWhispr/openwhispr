@@ -101,6 +101,7 @@ export interface ApiKeySettings {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  openaiCompatibleRealtimeApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }

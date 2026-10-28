@@ -183,7 +183,6 @@
     "managedByOrg": "Von Ihrer Organisation verwaltet",
     "signInRequired": "Anmeldung erforderlich",
     "signIn": "Anmelden",
-    "comingSoon": "Demnächst verfügbar",
     "cloud": "Cloud",
     "local": "Lokal",
     "apiKey": "API-Schlüssel",
@@ -2684,7 +2683,14 @@
         }
       },
       "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
-      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine.",
+      "selfHostedRealtime": {
+        "urlLabel": "Realtime-WebSocket-URL",
+        "urlInvalid": "Verwenden Sie wss:// oder ws:// für einen Server in Ihrem lokalen Netzwerk.",
+        "modelRequired": "Erforderlich: das Modell, das Ihr Server laden soll, z. B. Whisper-Large-v3-Turbo.",
+        "apiKeyLabel": "API-Schlüssel (optional)",
+        "help": "Ihr Server muss das OpenAI-Realtime-Transkriptionsprotokoll über WebSocket sprechen. Es gibt keinen HTTP-Fallback."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3591,7 +3597,9 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "selfHostedRealtimeUrlMissing": "Der selbst gehostete Modus der Notizaufnahme benötigt eine Realtime-WebSocket-URL. Öffne die Einstellungen und gib die URL deines Servers ein oder wähle einen anderen Modus.",
+      "selfHostedRealtimeUrlInvalid": "Die selbst gehostete URL der Notizaufnahme muss mit wss:// beginnen oder mit ws:// für einen Server in deinem lokalen Netzwerk. Öffne die Einstellungen und korrigiere die URL.",
+      "selfHostedRealtimeModelMissing": "Der selbst gehostete Modus der Notizaufnahme benötigt einen Modellnamen. Öffne die Einstellungen und gib das Modell ein, das dein Server verwenden soll.",
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",

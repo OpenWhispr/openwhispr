@@ -73,6 +73,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
+  // The self-hosted realtime WebSocket URL and model id are technical values.
+  "src/components/settings/MeetingSettings.tsx": ["ltr", "ltr"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],

@@ -16,6 +16,7 @@ const deps = (overrides = {}) => ({
     getDeepgramKey: () => "dg-key",
     getAssemblyAIKey: () => "aai-key",
     getGeminiKey: () => "gm-key",
+    getOpenAICompatibleRealtimeKey: () => "self-hosted-key",
     ...overrides.environmentManager,
   },
   proxyFetch: overrides.proxyFetch || (async () => jsonResponse(200, { token: "aai-token" })),
@@ -29,6 +30,76 @@ test("provider-less and unknown providers fail closed with the exact #1480 messa
     await assert.rejects(
       fetchRealtimeTokenForProvider(provider, deps(), { mode: "byok" }),
       new Error(`Unsupported realtime token provider: ${provider}`)
+    );
+  }
+});
+
+test("openai-compatible realtime returns its optional saved key without a network call", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  const offline = {
+    proxyFetch: async () => assert.fail("no token request"),
+    postServerToken: async () => assert.fail("no server token"),
+  };
+  const options = { mode: "self-hosted", url: "ws://192.168.1.20:9000/v1/realtime" };
+
+  assert.equal(
+    await fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(offline), options),
+    "self-hosted-key"
+  );
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(offline), options, {
+      streams: 2,
+    }),
+    ["self-hosted-key", "self-hosted-key"]
+  );
+  // A keyless local server is the common case, not a configuration error.
+  const keyless = deps({
+    ...offline,
+    environmentManager: { getOpenAICompatibleRealtimeKey: () => null },
+  });
+  assert.equal(
+    await fetchRealtimeTokenForProvider("openai-compatible-realtime", keyless, options),
+    ""
+  );
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider("openai-compatible-realtime", keyless, options, {
+      streams: 2,
+    }),
+    ["", ""]
+  );
+});
+
+test("openai-compatible realtime never releases its key without the server URL", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  // Dictation sends no URL and would dial api.openai.com with whatever key it got.
+  await assert.rejects(
+    fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), { mode: "byok" }),
+    { message: "selfHostedRealtimeUrlMissing" }
+  );
+  // Nor for a URL the client would refuse to dial: the key is not handed out
+  // first and checked later.
+  for (const url of [
+    "ws://stt.example.com/v1/realtime",
+    "http://192.168.1.20:9000/v1/realtime",
+    "not a url",
+  ]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+        mode: "self-hosted",
+        url,
+      }),
+      { message: "selfHostedRealtimeUrlInvalid" },
+      url
+    );
+  }
+  for (const url of [42, {}, "   "]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider("openai-compatible-realtime", deps(), {
+        mode: "self-hosted",
+        url,
+      }),
+      { message: "selfHostedRealtimeUrlMissing" },
+      JSON.stringify(url)
     );
   }
 });

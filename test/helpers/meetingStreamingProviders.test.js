@@ -14,6 +14,19 @@ test("tinfoil-realtime resolves to the Tinfoil client, never the OpenAI default"
   assert.notEqual(STREAMING_CLIENT_BY_PROVIDER["tinfoil-realtime"], OpenAIRealtimeStreaming);
 });
 
+test("openai-compatible-realtime resolves to its own client, never the OpenAI default", async () => {
+  const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
+  const { OpenAICompatibleRealtimeStreaming } =
+    await import("../../src/helpers/openaiCompatibleRealtimeStreaming.js");
+  const OpenAIRealtimeStreaming = (await import("../../src/helpers/openaiRealtimeStreaming.js"))
+    .default;
+
+  const client = STREAMING_CLIENT_BY_PROVIDER["openai-compatible-realtime"];
+  assert.equal(client, OpenAICompatibleRealtimeStreaming);
+  assert.notEqual(client, OpenAIRealtimeStreaming);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("openai-compatible-realtime"), true);
+});
+
 test("every allowed realtime provider has a streaming client (no silent OpenAI fallback)", async () => {
   const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
 
@@ -140,6 +153,18 @@ test("connection identity includes every provider-specific option", async () => 
     getMeetingConnectionKey(options),
     getMeetingConnectionKey({ ...options, tenant: "tenant-b" })
   );
+
+  // A warm self-hosted connection must not be reused for a different server.
+  const selfHosted = {
+    provider: "openai-compatible-realtime",
+    url: "ws://192.168.1.20:9000/v1/realtime",
+    model: "whisper",
+    mode: "self-hosted",
+  };
+  assert.notEqual(
+    getMeetingConnectionKey(selfHosted),
+    getMeetingConnectionKey({ ...selfHosted, url: "ws://192.168.1.21:9000/v1/realtime" })
+  );
 });
 
 test("connection identity follows key saves exactly when the token comes from a saved key", async () => {
@@ -148,13 +173,14 @@ test("connection identity follows key saves exactly when the token comes from a 
     await import("../../src/helpers/realtimeTokenProviders.js");
 
   for (const provider of Object.keys(STREAMING_CLIENT_BY_PROVIDER)) {
-    for (const mode of ["byok", "openwhispr"]) {
+    for (const mode of ["byok", "openwhispr", "self-hosted"]) {
       let readsSavedKey = false;
       const savedKey = () => {
         readsSavedKey = true;
         return "key";
       };
-      const options = { provider, mode };
+      // The self-hosted entry releases its key only for a connection naming its server.
+      const options = { provider, mode, url: "ws://127.0.0.1:9000/v1/realtime" };
       await fetchRealtimeTokenForProvider(
         provider,
         {
