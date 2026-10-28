@@ -365,3 +365,19 @@ test("each subfolder segment gets a portable directory name", (t) => {
   assert.match(parentDir, /^__ow-[0-9a-f]{64}$/);
   assert.match(childDir, /^__ow-[0-9a-f]{64}$/);
 });
+
+test("renaming a folder into a shared directory merges same-named subfolders", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+
+  markdownMirror.writeNote({ id: 31, title: "Plan", content: "Body" }, ["Client A", "Q1"]);
+  markdownMirror.writeNote({ id: 32, title: "Roadmap", content: "Body" }, ["Client B", "Q1"]);
+  markdownMirror.renameFolder("Client A", "Client B");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Client B", "Q1")).sort(), [
+    "31-plan.md",
+    "32-roadmap.md",
+  ]);
+  assert.equal(fs.existsSync(path.join(basePath, "Client A")), false);
+});

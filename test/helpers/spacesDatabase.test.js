@@ -2144,29 +2144,10 @@ test("applyCloudFolderParents un-nests the pending end of a too-deep chain", (t)
   assert.equal(folder(client.id).sync_status, "pending", "the un-nest pushes");
 });
 
-test("a pulled space change clears a stale parent and a parent's hard delete frees its children", (t) => {
+test("a parent's hard delete frees its children", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const team = createTestTeamSpace(db, { name: "Growth" }).space;
-  db.db.prepare("UPDATE spaces SET cloud_space_id = 'cloud-team' WHERE id = ?").run(team.id);
   const parent = db.createFolder("Client A").folder;
-  const child = db.createFolder("Q1", null, parent.id).folder;
-  db.markFolderSynced(parent.id, "c-parent");
-  db.markFolderSynced(child.id, "c-child");
-
-  const moved = db.upsertFolderFromCloud(
-    {
-      id: "c-child",
-      client_folder_id: child.client_folder_id,
-      name: "Q1",
-      sort_order: 0,
-      updated_at: "2027-01-01T00:00:00.000Z",
-      created_at: "2026-01-01T00:00:00.000Z",
-    },
-    team.id
-  );
-  assert.equal(moved.parent_folder_id, null);
-
   const other = db.createFolder("Q2", null, parent.id).folder;
   assert.ok(db.hardDeleteFolder(parent.id).success);
   assert.equal(db.getFolders().find((f) => f.id === other.id)?.parent_folder_id, null);

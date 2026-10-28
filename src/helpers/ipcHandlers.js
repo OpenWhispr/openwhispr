@@ -1131,27 +1131,37 @@ class IPCHandlers {
     this.getSemanticSearch?.()?.notifyChanges();
   }
 
-  _mirrorDeleteFolderIfUnshared(mirrorFolder) {
-    if (!this._noteFilesEnabled) return;
-    // Folder names are only unique per space — a live folder with the same
-    // path in another space shares the mirror directory, so leave it on disk.
+  // Folder names are only unique per space — a live folder with the same path
+  // in another space shares the mirror directory.
+  _mirrorFolderInUse(mirrorFolder) {
     const [parentName, name] = Array.isArray(mirrorFolder) ? mirrorFolder : [null, mirrorFolder];
-    const stillLive = this.databaseManager.db
+    return !!this.databaseManager.db
       .prepare(
         `SELECT 1 FROM folders f LEFT JOIN folders p ON p.id = f.parent_folder_id
          WHERE f.name = ? AND p.name IS ? AND f.deleted_at IS NULL`
       )
       .get(name, parentName);
-    if (stillLive) return;
+  }
+
+  _mirrorDeleteFolderIfUnshared(mirrorFolder) {
+    if (!this._noteFilesEnabled || this._mirrorFolderInUse(mirrorFolder)) return;
     const markdownMirror = require("./markdownMirror");
     markdownMirror.deleteFolder(mirrorFolder);
   }
 
   // Renames or moves a folder's mirror directory after a change to its path.
+  // A directory another folder still uses stays put; only this folder's notes
+  // (its subfolders' included) are rewritten at the new path.
   _mirrorMoveFolder(previousMirrorFolder, folderId) {
     if (!this._noteFilesEnabled || !previousMirrorFolder) return;
     const mirrorFolder = this._getMirrorFolder(folderId);
     if (JSON.stringify(mirrorFolder) === JSON.stringify(previousMirrorFolder)) return;
+    if (this._mirrorFolderInUse(previousMirrorFolder)) {
+      for (const noteId of this.databaseManager.getNoteIdsInFolder(folderId)) {
+        this._asyncMirrorWrite(this.databaseManager.getNote(noteId));
+      }
+      return;
+    }
     const markdownMirror = require("./markdownMirror");
     markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder);
   }

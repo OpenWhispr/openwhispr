@@ -102,6 +102,7 @@ test.before(() => {
     "_buildFolderMap",
     "_getMirrorFolder",
     "_mirrorMoveFolder",
+    "_mirrorFolderInUse",
     "_mirrorDeleteFolderIfUnshared",
   ]) {
     target[method] = Ctor.prototype[method];
@@ -246,4 +247,28 @@ test("a subfolder's directory survives while another space's folder shares its p
   await handlers.get("db-delete-folder")(null, privateChild.id);
   await settle();
   assert.ok(fs.existsSync(path.join(basePath, "Client A", "Q1")));
+});
+
+test("nesting a folder leaves the directory another space's same-named folder shares", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+    )
+    .run("team-shared-move", "Growth");
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team.lastInsertRowid, "test-account");
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  const archive = (await handlers.get("db-create-folder")(null, "Archive")).folder;
+  await handlers.get("db-create-folder")(null, "Archive", team.lastInsertRowid);
+  await settle();
+  fs.writeFileSync(path.join(basePath, "Archive", "77-roadmap.md"), "---\nid: 77\n---\n");
+
+  await handlers.get("db-set-folder-parent")(null, archive.id, parent.id);
+  await settle();
+  assert.ok(fs.existsSync(path.join(basePath, "Archive", "77-roadmap.md")));
 });
