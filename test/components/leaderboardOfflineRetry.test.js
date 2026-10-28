@@ -6,14 +6,16 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 const en = require("../../src/locales/en/translation.json");
 
-test("the offline leaderboard Retry asks auth to confirm the session", async (t) => {
+test("leaderboard Retry reloads online and confirms offline sessions with or without access", async (t) => {
   let root;
   t.after(() => act(() => root?.unmount()));
-  installBrowserGlobals(t);
+  installBrowserGlobals(t, { window: { clearInterval() {} } });
   const container = installInteractiveDom(t);
-  const calls = { auth: 0, access: 0, signIn: 0 };
-  globalThis.__leaderboardRetry = calls;
+  const calls = { auth: 0, access: 0, board: 0, signIn: 0 };
+  const state = { offline: true, calls };
+  globalThis.__leaderboardRetry = state;
   t.after(() => delete globalThis.__leaderboardRetry);
+  t.mock.method(console, "error", () => {});
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-leaderboard-retry-",
     mockModules: {
@@ -21,19 +23,21 @@ test("the offline leaderboard Retry asks auth to confirm the session", async (t)
         export const useAuth = () => ({
           isLoaded: true,
           isSignedIn: true,
-          isOfflineAccount: true,
+          isOfflineAccount: globalThis.__leaderboardRetry.offline,
           user: { id: "user-a" },
-          refetch: async () => { globalThis.__leaderboardRetry.auth += 1; },
+          refetch: async () => { globalThis.__leaderboardRetry.calls.auth += 1; },
         });
       `,
       "/hooks/useSettings": "export const useSettings = () => ({ dataRetentionEnabled: true });",
       "/hooks/useLeaderboardParticipation": `
         export const useLeaderboardParticipation = () => ({
-          enabled: false, ready: true, error: null, updating: false, leavePending: false,
+          enabled: true, ready: true, error: null, updating: false, leavePending: false,
         });
       `,
       "/lib/auth": "export const signInWithSSO = async () => ({});",
-      "/lib/authRequestContext": "export const getValidatedAuthGeneration = () => null;",
+      "/lib/authRequestContext": `
+        export const getValidatedAuthGeneration = () => globalThis.__leaderboardRetry.offline ? null : 1;
+      `,
       "/stores/workspaceStore": `
         const state = { loaded: true, workspaces: [] };
         export const useWorkspaceStore = (select) => select(state);
@@ -43,7 +47,21 @@ test("the offline leaderboard Retry asks auth to confirm the session", async (t)
       `,
       "/services/LeaderboardService": `
         export const LeaderboardService = {
-          getAccess: async () => { globalThis.__leaderboardRetry.access += 1; },
+          getAccess: async () => {
+            globalThis.__leaderboardRetry.calls.access += 1;
+            return {
+              state: "ready", domain: "example.com", colleagueCount: 2,
+              invitation: null, joinableWorkspace: null,
+              scopes: [{
+                key: "domain:example.com", kind: "domain", id: "example.com",
+                name: "Example", memberCount: 2, state: "ready", role: null,
+              }],
+            };
+          },
+          getLeaderboard: async () => {
+            globalThis.__leaderboardRetry.calls.board += 1;
+            throw new Error("Board unavailable");
+          },
         };
       `,
       "/ui/useToast": "export const useToast = () => ({ toast() {} });",
@@ -51,24 +69,42 @@ test("the offline leaderboard Retry asks auth to confirm the session", async (t)
   });
   const { default: LeaderboardView } = await vite.ssrLoadModule("/components/LeaderboardView.tsx");
   root = createRoot(container);
-  await act(async () =>
-    root.render(
-      createElement(LeaderboardView, {
-        enableInsightsSync: async () => true,
-        insightsSyncEnabled: false,
-        onSignIn: () => {
-          calls.signIn += 1;
-        },
-        syncAllowedByPolicy: true,
-      })
-    )
-  );
-  const retry = findElement(
+  const props = {
+    enableInsightsSync: async () => true,
+    insightsSyncEnabled: false,
+    onSignIn: () => {
+      calls.signIn += 1;
+    },
+    syncAllowedByPolicy: true,
+  };
+  await act(async () => root.render(createElement(LeaderboardView, props)));
+  let retry = findElement(
     container,
     (node) => node.tagName === "BUTTON" && node.textContent === en.insights.leaderboard.retry
   );
   assert.ok(retry, `Retry button missing: ${container.textContent}`);
   await act(async () => retry.dispatchEvent({ type: "click", bubbles: true, button: 0 }));
 
-  assert.deepEqual(calls, { auth: 1, access: 0, signIn: 0 });
+  assert.deepEqual(calls, { auth: 1, access: 0, board: 0, signIn: 0 });
+
+  state.offline = false;
+  await act(async () => root.render(createElement(LeaderboardView, props)));
+  assert.deepEqual(calls, { auth: 1, access: 1, board: 1, signIn: 0 });
+  retry = findElement(
+    container,
+    (node) => node.tagName === "BUTTON" && node.textContent === en.insights.leaderboard.retry
+  );
+  assert.ok(retry, `Board Retry button missing: ${container.textContent}`);
+  await act(async () => retry.dispatchEvent({ type: "click", bubbles: true, button: 0 }));
+  assert.deepEqual(calls, { auth: 1, access: 1, board: 2, signIn: 0 });
+
+  state.offline = true;
+  await act(async () => root.render(createElement(LeaderboardView, props)));
+  retry = findElement(
+    container,
+    (node) => node.tagName === "BUTTON" && node.textContent === en.insights.leaderboard.retry
+  );
+  assert.ok(retry, `Offline board Retry button missing: ${container.textContent}`);
+  await act(async () => retry.dispatchEvent({ type: "click", bubbles: true, button: 0 }));
+  assert.deepEqual(calls, { auth: 2, access: 1, board: 2, signIn: 0 });
 });
