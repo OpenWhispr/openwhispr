@@ -3596,6 +3596,7 @@
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",
       "signInExpired": "Deine Anmeldung ist abgelaufen, daher kann die Notizaufnahme ihre Verbindung nicht erneuern und stoppt möglicherweise. Melde dich nach dem Ende dieser Aufnahme erneut an.",
+      "customEndpointNotConfigured": "Der benutzerdefinierte Endpunkt für die Notizaufnahme ist nicht konfiguriert. Öffne Einstellungen → Sprache-zu-Text → Notizaufnahme und gib seine URL ein.",
       "systemAudioSilent": {
         "title": "Noch kein Meeting-Ton erkannt",
         "description": "Bisher hat nur Ihr Mikrofon Ton aufgenommen. Sie sind in einem Videoanruf? Prüfen Sie, ob der Meeting-Ton auf diesem Computer wiedergegeben wird und nicht stummgeschaltet ist. Sie nehmen vor Ort auf? Dann können Sie diesen Hinweis ignorieren – Ihr Mikrofon nimmt den Raum auf."

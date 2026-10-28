@@ -13,6 +13,7 @@ const SENTINEL_KEYS = {
   unsupportedSelfHosted: "unsupportedSelfHosted",
   unsupportedProvider: "unsupportedProvider",
   noProviderSelected: "noProviderSelected",
+  customEndpointNotConfigured: "customEndpointNotConfigured",
 };
 
 const byokProviders = [
@@ -180,13 +181,12 @@ test("Corti keeps the meeting-specific connection settings", async () => {
   );
 });
 
-test("unknown and custom providers fail closed", async () => {
+test("unknown providers fail closed", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
   // Sentinels, translated at display time by MeetingRecordingMount. The named
   // provider rides after the colon so the toast can say which one failed.
   for (const [selectedProvider, message] of [
-    ["custom", "unsupportedProvider:custom"],
     ["groq", "unsupportedProvider:groq"],
     ["", "noProviderSelected"],
     [undefined, "noProviderSelected"],
@@ -267,6 +267,88 @@ test("gpt-live-transcribe is never offered for Note Recording", async () => {
         selectedModel: "gpt-live-transcribe",
       }).model,
       "gpt-4o-mini-transcribe"
+    );
+  }
+});
+
+// Cloud Providers → Custom has no realtime client: it runs on the local chunk
+// pipeline and POSTs each chunk to the OpenAI-compatible batch endpoint, with
+// the same URL validation and Azure handling as the dictation route.
+test("custom provider resolves to a batch endpoint on the chunk pipeline", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "custom",
+      selectedModel: " whisper-large-v3 ",
+      customBaseUrl: " https://gateway.example.com/v1/ ",
+    }),
+    {
+      provider: "custom",
+      endpoint: "https://gateway.example.com/v1/audio/transcriptions",
+      model: "whisper-large-v3",
+      authScheme: "bearer",
+      mode: "byok",
+      language: "en",
+    }
+  );
+
+  // A pasted full path is normalized rather than doubled up.
+  assert.equal(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "custom",
+      customBaseUrl: "http://192.168.1.126:8178/v1/audio/transcriptions",
+    }).endpoint,
+    "http://192.168.1.126:8178/v1/audio/transcriptions"
+  );
+
+  const azure = resolveMeetingTranscriptionOptions({
+    ...baseOptions,
+    selectedProvider: "custom",
+    selectedModel: "whisper",
+    customBaseUrl: "https://my-resource.openai.azure.com",
+  });
+  assert.equal(azure.authScheme, "azure-api-key");
+  assert.match(
+    azure.endpoint,
+    /^https:\/\/my-resource\.openai\.azure\.com\/.*whisper.*audio\/transcriptions/
+  );
+
+  // An empty model is omitted so the endpoint's default applies.
+  assert.equal(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "custom",
+      selectedModel: "",
+      customBaseUrl: "https://gateway.example.com/v1",
+    }).model,
+    null
+  );
+});
+
+test("custom provider without a usable endpoint fails closed", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const customBaseUrl of [
+    undefined,
+    "",
+    "   ",
+    // The untouched store default would route the custom key + audio to OpenAI.
+    "https://api.openai.com/v1",
+    "ftp://gateway.example.com/v1",
+    "not a url",
+  ]) {
+    assert.throws(
+      () =>
+        resolveMeetingTranscriptionOptions({
+          ...baseOptions,
+          selectedProvider: "custom",
+          customBaseUrl,
+        }),
+      { message: "customEndpointNotConfigured" },
+      `url ${JSON.stringify(customBaseUrl)}`
     );
   }
 });
