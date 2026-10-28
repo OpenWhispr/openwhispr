@@ -3259,6 +3259,37 @@ class DatabaseManager {
     }
   }
 
+  // Recovery restores the original timestamps too, without recording a new content change.
+  restoreSkillState(name, state) {
+    if (state === null) return this.deleteSkillState(name);
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const toSkillTimestamp = (value) => toDbTimestamp(value)?.replace(/(?:\.000)?Z$/, "") ?? null;
+      this.db
+        .prepare(
+          `INSERT INTO skills (name, enabled, content_hash, last_used_at, created_at, updated_at)
+           VALUES (@name, @enabled, @contentHash, @lastUsedAt, @createdAt, @updatedAt)
+           ON CONFLICT(name) DO UPDATE SET
+             enabled = excluded.enabled,
+             content_hash = excluded.content_hash,
+             last_used_at = excluded.last_used_at,
+             created_at = excluded.created_at,
+             updated_at = excluded.updated_at`
+        )
+        .run({
+          name,
+          enabled: Number(state.enabled),
+          contentHash: state.contentHash,
+          lastUsedAt: toSkillTimestamp(state.lastUsedAt),
+          createdAt: toSkillTimestamp(state.createdAt),
+          updatedAt: toSkillTimestamp(state.updatedAt),
+        });
+    } catch (error) {
+      debugLogger.error("Error restoring skill state", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
   setSkillEnabled(name, enabled) {
     try {
       if (!this.db) throw new Error("Database not initialized");

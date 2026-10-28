@@ -175,13 +175,21 @@ export function CreateSkillScreen({ onCreated, onBack }: CreateSkillScreenProps)
       return;
     }
 
+    const startedFor = useSkillsStore.getState().createDraftGeneration;
     setSaving(true);
     const result = await window.electronAPI?.skillsCreate?.(draft);
     setSaving(false);
+    // The user can leave, discard or edit while main writes. That result belongs only to
+    // the submitted draft, so it must not clear or mark a newer draft with old errors.
+    if (useSkillsStore.getState().createDraftGeneration !== startedFor || currentDraft() !== draft)
+      return;
     if (result?.ok) {
       setCreateDraft(null);
+      const clearedFor = useSkillsStore.getState().createDraftGeneration;
       // Listed before going home, so its card is there to play and take focus.
       await refreshSkills();
+      const current = useSkillsStore.getState();
+      if (current.createDraftGeneration !== clearedFor || current.createDraft !== null) return;
       toast({
         title: t("skills.toasts.created", { name: draft.title.trim() }),
         variant: "success",

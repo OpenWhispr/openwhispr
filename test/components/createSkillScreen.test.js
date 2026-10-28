@@ -500,3 +500,85 @@ for (const finishDraft of ["discard", "save"]) {
     assert.deepEqual(draft.files, []);
   });
 }
+
+test("a Create response from an earlier screen cannot discard a newer draft", async (t) => {
+  let completeSave;
+  let remount;
+  const pendingSave = new Promise((resolve) => (completeSave = resolve));
+  const created = [];
+  const { container, store, toasts } = await mountSkillsComponent(t, {
+    modulePath: "/components/skills/CreateSkillScreen.tsx",
+    exportName: "CreateSkillScreen",
+    api: { skillsCreate: () => pendingSave },
+    wrap: (Component) => {
+      function Owner() {
+        const [version, setVersion] = React.useState(0);
+        remount = () => setVersion((current) => current + 1);
+        return React.createElement(Component, {
+          key: version,
+          onCreated: (name) => created.push(name),
+          onBack() {},
+        });
+      }
+      return React.createElement(Owner);
+    },
+  });
+  await fill(container, { name: "Original", description: "Does it.", instructions: "Go" });
+  await click(createButton(container));
+  await React.act(async () => remount());
+  await click(button(container, "common.cancel"));
+  await click(button(container, "skills.create.discard"));
+  await fill(container, { name: "New draft", description: "Keep this", instructions: "New text" });
+
+  await React.act(async () => completeSave({ ok: true, name: "original" }));
+  await settle();
+
+  assert.equal(store.useSkillsStore.getState().createDraft?.title, "New draft");
+  assert.equal(field(container, "instructions").value, "New text");
+  assert.deepEqual(created, []);
+  assert.deepEqual(toasts, []);
+});
+
+for (const [outcome, result] of [
+  ["succeeds", { ok: true, name: "original" }],
+  ["rejects a field", { ok: false, problems: [{ code: "descriptionAngleBrackets" }] }],
+  ["cannot write", { ok: false, error: "permission" }],
+]) {
+  test(`a Create response that ${outcome} leaves later edits alone`, async (t) => {
+    let completeSave;
+    const pendingSave = new Promise((resolve) => (completeSave = resolve));
+    const { container, store, calls, toasts } = await renderCreate(t, {
+      api: { skillsCreate: () => pendingSave },
+    });
+    await fill(container, { name: "Original", description: "Uses <b>", instructions: "Go" });
+    await click(createButton(container));
+    await typeInto(field(container, "description"), "Corrected description");
+
+    await React.act(async () => completeSave(result));
+    await settle();
+
+    assert.equal(store.useSkillsStore.getState().createDraft?.description, "Corrected description");
+    assert.equal(field(container, "description").getAttribute("aria-invalid"), null);
+    assert.equal(createButton(container).getAttribute("disabled"), null);
+    assert.deepEqual(calls.created, []);
+    assert.deepEqual(toasts, []);
+  });
+}
+
+test("a completed Create refresh cannot navigate away from a new draft", async (t) => {
+  let finishRefresh;
+  const pendingRefresh = new Promise((resolve) => (finishRefresh = resolve));
+  const { container, store, calls } = await renderCreate(t, {
+    api: { skillsList: () => pendingRefresh },
+  });
+  await fill(container, { name: "Original", description: "Does it.", instructions: "Go" });
+  await click(createButton(container));
+  assert.equal(store.useSkillsStore.getState().createDraft, null);
+  await fill(container, { name: "New draft" });
+
+  await React.act(async () => finishRefresh({ skills: [] }));
+  await settle();
+
+  assert.equal(store.useSkillsStore.getState().createDraft?.title, "New draft");
+  assert.deepEqual(calls.created, []);
+});

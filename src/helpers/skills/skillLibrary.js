@@ -19,6 +19,7 @@ const ARCHIVE_EXTENSIONS = new Set([".zip", ".skill"]);
 const FINDER_JUNK = ".DS_Store";
 // Where a replace puts the old copy while the new one is swapped in, named for its skill.
 const MOVED_ASIDE = /^\.(?:replaced|replacing)-[0-9a-f-]{36}-(.+)$/;
+const WRITE_JOURNAL = /^\.(writing|written)-([0-9a-f-]{36})-(.+)\.json$/;
 
 // A name the library can address on disk: one path segment that isn't hidden. Wider than
 // SKILL_NAME_PATTERN, so a folder dropped in under any name can still be shown and removed.
@@ -184,7 +185,32 @@ class SkillLibrary {
     } catch {
       return unresolved;
     }
+    // A journal owns both disk and database rollback. Keep its backups out of the legacy
+    // recovery below, especially when restoring the database or directory is still blocked.
+    const journalBackups = new Set();
     for (const entry of entries) {
+      const journal = WRITE_JOURNAL.exec(entry);
+      if (!journal || !isSkillFolderName(journal[3])) continue;
+      const [, phase, id, name] = journal;
+      if (phase === "written") {
+        this._removeQuietly(path.join(this.skillsDir, entry));
+        continue;
+      }
+      journalBackups.add(`.replacing-${id}-${name}`);
+      journalBackups.add(`.replaced-${id}-${name}`);
+      try {
+        this._rollbackWrite(path.join(this.skillsDir, entry));
+      } catch (error) {
+        unresolved.add(name);
+        debugLogger.error(
+          "Could not recover a skill write",
+          { name, error: error.message },
+          "skills"
+        );
+      }
+    }
+    for (const entry of entries) {
+      if (journalBackups.has(entry)) continue;
       const leftover = path.join(this.skillsDir, entry);
       const movedAside = MOVED_ASIDE.exec(entry)?.[1];
       if (movedAside && isSkillFolderName(movedAside)) {
@@ -224,6 +250,11 @@ class SkillLibrary {
     const uncommitted = new Set();
     const entries = fs.readdirSync(this.skillsDir, { withFileTypes: true });
     for (const entry of entries) {
+      const journal = WRITE_JOURNAL.exec(entry.name);
+      if (journal?.[1] === "writing" && isSkillFolderName(journal[3])) {
+        awaitingRecovery.add(journal[3]);
+        uncommitted.add(journal[3]);
+      }
       const movedAside = MOVED_ASIDE.exec(entry.name)?.[1];
       if (!movedAside || !isSkillFolderName(movedAside)) continue;
       awaitingRecovery.add(movedAside);
@@ -379,6 +410,7 @@ class SkillLibrary {
   }
 
   commitUploads({ tokens, replace }) {
+    this._recoverInterruptedWrites();
     const installed = [];
     const failed = [];
     for (const token of tokens) {
@@ -420,6 +452,7 @@ class SkillLibrary {
   }
 
   create({ title, description, instructions, files }) {
+    this._recoverInterruptedWrites();
     const cleanTitle = title.trim();
     if (!cleanTitle) return { problems: [{ code: "missingName" }] };
     const twin = this._skillTitled(cleanTitle);
@@ -464,6 +497,13 @@ class SkillLibrary {
       shipped = fs.readFileSync(path.join(this.recommendedDir, id, "SKILL.md"), "utf8");
     } catch {
       return null;
+    }
+    if (this._recoverInterruptedWrites().has(id)) {
+      throw writeError(
+        Object.assign(new Error("The skill needs recovery before it can be added"), {
+          code: "EBUSY",
+        })
+      );
     }
     if (this._exists(id)) return { name: id };
     const twin = this._skillTitled(title);
@@ -572,12 +612,51 @@ class SkillLibrary {
     this.inspected.delete(name);
   }
 
-  // Writes into a staging folder, then swaps it in, so a failure never leaves half a skill.
+  // A pending journal keeps the complete old row, including its switch and timestamps.
+  // Recovery can retry either half without publishing a failed installation as a new skill.
+  _rollbackWrite(journalPath, staging) {
+    const [, , id, name] = WRITE_JOURNAL.exec(path.basename(journalPath));
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
+    if (
+      typeof journal.replacing !== "boolean" ||
+      !(journal.state === null || journal.state?.name === name)
+    ) {
+      throw new Error("Invalid skill write journal");
+    }
+    const currentState =
+      this.database.getSkillStates().find((entry) => entry.name === name) ?? null;
+    // A failed initial database write needs no compensating write, even on a read-only disk.
+    if (JSON.stringify(currentState) !== JSON.stringify(journal.state)) {
+      this.database.restoreSkillState(name, journal.state);
+    }
+    const target = path.join(this.skillsDir, name);
+    const backup = ["replacing", "replaced"]
+      .map((phase) => path.join(this.skillsDir, `.${phase}-${id}-${name}`))
+      .find((folder) => fs.existsSync(folder));
+    if (backup || !journal.replacing) {
+      if (this._exists(name)) {
+        if (staging) renameWithRetry(target, staging);
+        else {
+          this._discard(target);
+          if (this._exists(name)) throw new Error("The failed skill write is still locked");
+        }
+      }
+      if (backup) renameWithRetry(backup, target);
+    }
+    fs.unlinkSync(journalPath);
+    this.inspected.delete(name);
+  }
+
+  // Writes into a staging folder, then swaps it in. The journal commits only after both
+  // the directory and database have succeeded; cleanup after that cannot roll the save back.
   _writeSkillFolder(name, files, saveState) {
-    const staging = path.join(this.skillsDir, `.staging-${crypto.randomUUID()}`);
+    const id = crypto.randomUUID();
+    const staging = path.join(this.skillsDir, `.staging-${id}`);
+    const journalStaging = `${staging}.json`;
+    const journalPath = path.join(this.skillsDir, `.writing-${id}-${name}.json`);
+    const committedJournal = path.join(this.skillsDir, `.written-${id}-${name}.json`);
     const target = path.join(this.skillsDir, name);
     let movedAside = null;
-    let installed = false;
     try {
       for (const file of files) {
         const destination = path.join(staging, ...file.path.split("/"));
@@ -585,50 +664,41 @@ class SkillLibrary {
         // The filesystem is the final authority on aliases that preflight may not know.
         fs.writeFileSync(destination, file.data, { flag: "wx" });
       }
-      if (this._exists(name)) {
-        movedAside = path.join(this.skillsDir, `.replacing-${crypto.randomUUID()}-${name}`);
+      const replacing = this._exists(name);
+      const state = this.database.getSkillStates().find((entry) => entry.name === name) ?? null;
+      // Publish the journal atomically so a partial write cannot strand an untouched skill.
+      fs.writeFileSync(journalStaging, JSON.stringify({ replacing, state }), { flag: "wx" });
+      renameWithRetry(journalStaging, journalPath);
+      if (replacing) {
+        movedAside = path.join(this.skillsDir, `.replacing-${id}-${name}`);
         renameWithRetry(target, movedAside);
       }
       renameWithRetry(staging, target);
-      installed = true;
-      // Keep the previous folder until its replacement's database write has succeeded.
       saveState();
       if (movedAside) {
-        // Startup rolls pending replacements back, including a rollback blocked by a lock.
-        const committed = path.join(
-          this.skillsDir,
-          path.basename(movedAside).replace(".replacing-", ".replaced-")
-        );
+        const committed = path.join(this.skillsDir, `.replaced-${id}-${name}`);
         renameWithRetry(movedAside, committed);
         movedAside = committed;
       }
+      renameWithRetry(journalPath, committedJournal);
     } catch (error) {
-      if (installed) {
+      if (fs.existsSync(journalPath)) {
         try {
-          renameWithRetry(target, staging);
+          this._rollbackWrite(journalPath, staging);
         } catch (restoreError) {
           debugLogger.error(
-            "Could not roll back a skill whose state could not be saved",
+            "Could not roll back a skill write; its journal will retry on restart",
             { name, error: restoreError.message },
             "skills"
           );
         }
       }
       this._removeQuietly(staging);
-      if (movedAside && fs.existsSync(movedAside) && !this._exists(name)) {
-        try {
-          renameWithRetry(movedAside, target);
-        } catch (restoreError) {
-          debugLogger.error(
-            "Could not put a skill back after a failed write",
-            { name, movedAside, error: restoreError.message },
-            "skills"
-          );
-        }
-      }
+      this._removeQuietly(journalStaging);
       debugLogger.error("Failed to write a skill", { name, error: error.message }, "skills");
       throw writeError(error);
     }
+    this._removeQuietly(committedJournal);
     if (movedAside) this._discard(movedAside);
   }
 
