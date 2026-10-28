@@ -124,6 +124,8 @@ function createElectronApi(db, options = {}) {
       ),
     markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId) =>
       db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
+    ensureAccountDefaultFolders: async (foreignCloudIds) =>
+      db.ensureAccountDefaultFolders(foreignCloudIds),
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),

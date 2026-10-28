@@ -244,6 +244,29 @@ test("joining a calendar meeting with no note of the user's own creates one", as
   assert.equal(meetingNavigations[0].folderId, 7);
 });
 
+// A signed-out device, or an account whose defaults haven't arrived, has no
+// Meetings folder; saveNote then files the note at the space root.
+test("a meeting with no Meetings folder opens its note at the space root", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  const db = createJoinDatabase(null);
+  engine.databaseManager = {
+    ...db.databaseManager,
+    getMeetingsFolder: () => null,
+    getActiveEvents: () => [],
+  };
+
+  await engine.startManualMeeting();
+  await engine.joinCalendarMeeting("event-1");
+
+  assert.deepEqual(
+    meetingNavigations.map((navigation) => [navigation.noteId, navigation.folderId]),
+    [
+      [99, null],
+      [99, null],
+    ]
+  );
+});
+
 test("a manual meeting passes its options to whichever note it opens", async () => {
   // The meeting hotkey asks for an open panel to stay behind the call.
   const { engine, windowManager } = createEngine();

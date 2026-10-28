@@ -863,6 +863,7 @@ class IPCHandlers {
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
+      this.databaseManager.ensureAccountDefaultFolders();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
       // As set-active-account-scope does: a connect can't outlive its account.
@@ -2530,6 +2531,7 @@ class IPCHandlers {
         this.windowManager.retireMeetingNotificationScope();
       }
       this.databaseManager.setActiveAccountId(accountId);
+      this.databaseManager.ensureAccountDefaultFolders();
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
       broadcastToWindows(
@@ -2578,6 +2580,9 @@ class IPCHandlers {
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
+          }
+          for (const note of result.relocatedNotes) {
+            this._asyncMirrorWrite(note);
           }
           return { success: true, ...result };
         } catch (error) {
@@ -2890,6 +2895,13 @@ class IPCHandlers {
     );
     ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, snapshot, expectedCloudId) =>
       this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)
+    );
+    ipcMain.handle("db-ensure-account-default-folders", (_, foreignCloudIds) =>
+      this.databaseManager.ensureAccountDefaultFolders(
+        Array.isArray(foreignCloudIds)
+          ? foreignCloudIds.filter((cloudId) => typeof cloudId === "string")
+          : []
+      )
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>

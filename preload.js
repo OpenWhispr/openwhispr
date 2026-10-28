@@ -1243,6 +1243,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudId,
       cloudUpdatedAt
     ),
+  ensureAccountDefaultFolders: (foreignCloudIds) =>
+    ipcRenderer.invoke("db-ensure-account-default-folders", foreignCloudIds),
   markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId) =>
     ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, snapshot, expectedCloudId),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),

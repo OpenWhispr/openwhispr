@@ -101,6 +101,9 @@ const FOLDER_ACK_FIELDS = [
   "deleted_at",
   "left_team",
 ];
+const DEFAULT_FOLDER_NAMES = ["Personal", "Meetings", "Videos"];
+// Note-create outcomes that leave the row bound to a cloud row.
+const CLOUD_BOUND_ACK_OUTCOMES = new Set(["synced", "pending", "awaiting-cloud"]);
 
 // Validates and normalizes the editable fields of a note template or action.
 function resolveActionFields(kind, fields) {
@@ -261,6 +264,84 @@ class DatabaseManager {
       typeof accountId === "string" && accountId.trim().length > 0 ? accountId.trim() : null;
   }
 
+  // Each scope, signed out included, needs defaults it can see. The device
+  // seeds its own once; the first account to sign in takes those, and any
+  // other account gets a fresh set its first sync adopts the cloud's same-named
+  // defaults onto (or pushes). Defaults made while signed out fold into the
+  // account's own once it is back, or the account would see both.
+  // foreignCloudIds are device-owned defaults the account's sync proved belong
+  // to another account's cloud, so they don't stand in for its own.
+  ensureAccountDefaultFolders(foreignCloudIds = []) {
+    if (!this.db) return;
+    try {
+      const accountId = this.activeAccountId;
+      const spaceId = this.getPrivateSpaceId();
+      const accountScope = this._accountScopeCondition("folders");
+      const nameTaken = this.db.prepare(
+        `SELECT 1 FROM folders
+         WHERE name = ? AND space_id = ? AND ${FOLDER_NAME_TAKEN_FILTER} AND ${accountScope.sql}
+           AND NOT (account_id IS NULL AND cloud_id IN (SELECT value FROM json_each(?)))`
+      );
+      const foreign = JSON.stringify(accountId ? foreignCloudIds : []);
+      const ownFolder = this.db.prepare(
+        `SELECT id FROM folders
+         WHERE name = ? AND space_id = ? AND account_id = ? AND deleted_at IS NULL`
+      );
+      // Only a never-synced device default that holds no other account's
+      // notes can change hands without stranding anything.
+      const deviceDefault = this.db.prepare(
+        `SELECT id FROM folders
+         WHERE name = ? AND space_id = ? AND is_default = 1 AND account_id IS NULL
+           AND cloud_id IS NULL AND deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM notes
+             WHERE notes.folder_id = folders.id AND notes.account_id IS NOT NULL
+               AND notes.account_id != ?
+           )`
+      );
+      const claim = this.db.prepare("UPDATE folders SET account_id = ? WHERE id = ?");
+      const insert = this.db.prepare(
+        "INSERT INTO folders (name, is_default, sort_order, space_id, client_folder_id, account_id) VALUES (?, 1, ?, ?, ?, ?)"
+      );
+      this.db.transaction(() => {
+        DEFAULT_FOLDER_NAMES.forEach((name, sortOrder) => {
+          if (accountId) {
+            const own = ownFolder.get(name, spaceId, accountId);
+            const device = deviceDefault.get(name, spaceId, accountId);
+            if (own) {
+              if (device) this._foldSignedOutDefault(device.id, own.id, accountId);
+              return;
+            }
+            if (device) {
+              claim.run(accountId, device.id);
+              this._claimFolderNotes(device.id, accountId);
+              return;
+            }
+          }
+          if (nameTaken.get(name, spaceId, ...accountScope.params, foreign)) return;
+          insert.run(name, sortOrder, spaceId, randomUUID(), accountId);
+        });
+      })();
+    } catch (error) {
+      debugLogger.error("Error seeding default folders", { error: error.message }, "database");
+    }
+  }
+
+  _foldSignedOutDefault(fromFolderId, intoFolderId, accountId) {
+    this.db
+      .prepare(
+        `UPDATE notes
+         SET folder_id = ?, account_id = COALESCE(account_id, ?), sync_status = 'pending',
+             updated_at = datetime('now')
+         WHERE folder_id = ?`
+      )
+      .run(intoFolderId, accountId, fromFolderId);
+    this.db
+      .prepare("UPDATE agent_conversations SET folder_id = ? WHERE folder_id = ?")
+      .run(intoFolderId, fromFolderId);
+    this.db.prepare("DELETE FROM folders WHERE id = ?").run(fromFolderId);
+  }
+
   _accountScopeCondition(tableName) {
     return {
       sql: `((${tableName}.account_id IS NULL AND EXISTS (
@@ -283,6 +364,41 @@ class DatabaseManager {
   _accountIdForSpace(spaceId) {
     const space = this.db.prepare("SELECT kind FROM spaces WHERE id = ?").get(spaceId);
     return space?.kind === "team" ? null : this.activeAccountId;
+  }
+
+  // A device-owned (NULL account) private row stops being device-owned once
+  // it is bound to a cloud row: that cloud row lives only in the active
+  // account, so another local account would see a folder or note it can
+  // neither sync nor tell apart from its own copy. A same-named folder the
+  // account already owns keeps the row device-owned rather than colliding.
+  _claimLegacyPrivateRow(table, id) {
+    if (!this.activeAccountId) return;
+    const nameGuard =
+      table === "folders"
+        ? `AND NOT EXISTS (
+             SELECT 1 FROM folders owned
+             WHERE owned.space_id = folders.space_id AND owned.name = folders.name
+               AND owned.account_id = ? AND owned.deleted_at IS NULL
+           )`
+        : "";
+    const { changes } = this.db
+      .prepare(
+        `UPDATE ${table} SET account_id = ?
+         WHERE id = ? AND account_id IS NULL AND cloud_id IS NOT NULL
+           AND EXISTS (SELECT 1 FROM spaces WHERE spaces.id = ${table}.space_id AND spaces.kind = 'private')
+           ${nameGuard}`
+      )
+      .run(this.activeAccountId, id, ...(table === "folders" ? [this.activeAccountId] : []));
+    if (table === "folders" && changes > 0) this._claimFolderNotes(id, this.activeAccountId);
+  }
+
+  // Device-owned notes follow the folder they sit in once an account owns it;
+  // left NULL they stay visible to every account inside a folder only one of
+  // them can see.
+  _claimFolderNotes(folderId, accountId) {
+    this.db
+      .prepare("UPDATE notes SET account_id = ? WHERE folder_id = ? AND account_id IS NULL")
+      .run(accountId, folderId);
   }
 
   _getFolderInAccountScope(id) {
@@ -322,6 +438,97 @@ class DatabaseManager {
     return this.db
       .prepare(`SELECT * FROM notes WHERE id IN (${placeholders})`)
       .all(...outOfScopeIds);
+  }
+
+  // Builds before _claimLegacyPrivateRow bound device-owned private rows to an
+  // account's cloud without attributing them, so a second local account saw
+  // the first one's default folders beside its own and saved notes into them.
+  // Attribute such rows where the owner can be proven, and move notes out of
+  // folders that can't be their account's. Folders with no proof stay
+  // device-owned until their account's folder pull claims them. Idempotent;
+  // runs every launch.
+  _repairCloudBoundLegacyRows() {
+    const privateRow = (table) =>
+      `${table}.space_id IN (SELECT id FROM spaces WHERE kind = 'private')`;
+    this.db.transaction(() => {
+      // A pushed note's owner is the account's user id, which is the account id.
+      this.db
+        .prepare(
+          `UPDATE notes SET account_id = owner_user_id
+           WHERE account_id IS NULL AND cloud_id IS NOT NULL AND owner_user_id IS NOT NULL
+             AND ${privateRow("notes")}`
+        )
+        .run();
+
+      const boundFolders = this.db
+        .prepare(
+          `SELECT id, name, is_default, space_id FROM folders
+           WHERE account_id IS NULL AND cloud_id IS NOT NULL AND deleted_at IS NULL
+             AND ${privateRow("folders")}`
+        )
+        .all();
+      if (boundFolders.length > 0) {
+        // Only synced notes prove an owner: the server accepts a note into a
+        // folder only for the folder's own account.
+        const syncedNoteAccounts = this.db.prepare(
+          `SELECT DISTINCT account_id FROM notes
+           WHERE folder_id = ? AND account_id IS NOT NULL AND cloud_id IS NOT NULL
+             AND sync_status = 'synced' AND deleted_at IS NULL`
+        );
+        const hasOwnFolder = this.db.prepare(
+          `SELECT 1 FROM folders
+           WHERE space_id = ? AND name = ? AND account_id = ? AND deleted_at IS NULL`
+        );
+        const attribute = this.db.prepare(
+          "UPDATE folders SET account_id = ? WHERE id = ? AND account_id IS NULL"
+        );
+        for (const folder of boundFolders) {
+          const candidates = syncedNoteAccounts
+            .all(folder.id)
+            .map((row) => row.account_id)
+            .filter((accountId) => !hasOwnFolder.get(folder.space_id, folder.name, accountId));
+          if (candidates.length !== 1) continue;
+          attribute.run(candidates[0], folder.id);
+          this._claimFolderNotes(folder.id, candidates[0]);
+        }
+      }
+
+      // A note is stranded in another account's folder, or in a cloud-bound
+      // device-owned one while its account has a same-named folder: cloud
+      // folder names are unique per account, so that folder isn't its own.
+      const strandedNotes = this.db
+        .prepare(
+          `SELECT notes.id, notes.account_id, notes.space_id, folders.name, folders.is_default
+           FROM notes
+           JOIN folders ON folders.id = notes.folder_id
+           WHERE notes.account_id IS NOT NULL AND notes.deleted_at IS NULL
+             AND ${privateRow("notes")}
+             AND (
+               (folders.account_id IS NOT NULL AND folders.account_id != notes.account_id)
+               OR (folders.account_id IS NULL AND folders.cloud_id IS NOT NULL AND EXISTS (
+                 SELECT 1 FROM folders own
+                 WHERE own.space_id = folders.space_id AND own.name = folders.name
+                   AND own.account_id = notes.account_id AND own.deleted_at IS NULL
+               ))
+             )`
+        )
+        .all();
+      const ownDefault = this.db.prepare(
+        `SELECT id FROM folders
+         WHERE space_id = ? AND name = ? AND is_default = 1 AND account_id = ?
+           AND deleted_at IS NULL`
+      );
+      const rehome = this.db.prepare(
+        `UPDATE notes SET folder_id = ?, sync_status = 'pending', updated_at = datetime('now')
+         WHERE id = ?`
+      );
+      for (const note of strandedNotes) {
+        const target = note.is_default
+          ? ownDefault.get(note.space_id, note.name, note.account_id)
+          : null;
+        rehome.run(target?.id ?? null, note.id);
+      }
+    })();
   }
 
   _releaseActiveSpaceMembershipIfShared(spaceId) {
@@ -547,9 +754,7 @@ class DatabaseManager {
         const seedFolder = this.db.prepare(
           "INSERT INTO folders (name, is_default, sort_order) VALUES (?, 1, ?)"
         );
-        seedFolder.run("Personal", 0);
-        seedFolder.run("Meetings", 1);
-        seedFolder.run("Videos", 2);
+        DEFAULT_FOLDER_NAMES.forEach((name, sortOrder) => seedFolder.run(name, sortOrder));
       }
 
       // Backfill folder_id only when the column is first added: on later
@@ -1498,7 +1703,8 @@ class DatabaseManager {
       }
 
       // Rebuild folders to drop the table-level UNIQUE(name); per-space name
-      // uniqueness is enforced by idx_folders_space_name below.
+      // uniqueness is enforced by idx_folders_space_legacy_name and
+      // idx_folders_space_account_name below.
       // better-sqlite3 enables foreign_keys by default, so DROP TABLE folders
       // would fail while notes.folder_id rows reference it; the pragma is a
       // no-op inside a transaction, so toggle it around the rebuild.
@@ -1542,10 +1748,6 @@ class DatabaseManager {
           if (foreignKeysWereOn) this.db.pragma("foreign_keys = ON");
         }
       }
-      this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_name ON folders(space_id, name) WHERE deleted_at IS NULL"
-      );
-
       const privateSpace = this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get();
       this.db
         .prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL")
@@ -1576,6 +1778,9 @@ class DatabaseManager {
       }
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_account_id ON notes(account_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_folders_account_id ON folders(account_id)");
+      // Builds before per-account folders kept names unique per space alone,
+      // which fails once two accounts' default folders share a space; never
+      // re-create it, or launch fails on such a database.
       this.db.exec("DROP INDEX IF EXISTS idx_folders_space_name");
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_legacy_name ON folders(space_id, name) WHERE deleted_at IS NULL AND account_id IS NULL"
@@ -1644,6 +1849,14 @@ class DatabaseManager {
         this.db.exec("ALTER TABLE notes ADD COLUMN created_by_user_id TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // A repair failure must never stop the app from launching: the rows
+      // stay as they were, and the next launch tries again.
+      try {
+        this._repairCloudBoundLegacyRows();
+      } catch (error) {
+        debugLogger.error("Legacy row account repair failed", { error: error.message }, "database");
       }
 
       // Space vector purges owed to Qdrant while the sidecar was down/booting;
@@ -3225,9 +3438,10 @@ class DatabaseManager {
         const defaultFolder = this.db
           .prepare(
             `SELECT id FROM folders
-             WHERE name = ? AND is_default = 1 AND space_id = ? AND ${folderScope.sql}`
+             WHERE name = ? AND is_default = 1 AND space_id = ? AND ${folderScope.sql}
+             ORDER BY account_id IS ? DESC, id`
           )
-          .get(defaultFolderName, spaceId, ...folderScope.params);
+          .get(defaultFolderName, spaceId, ...folderScope.params, this.activeAccountId);
         folderId = defaultFolder?.id || null;
       }
       const clientNoteId = randomUUID();
@@ -3765,6 +3979,7 @@ class DatabaseManager {
 
     const notePlaceholders = deletedNoteIds.map(() => "?").join(", ");
     const folderPlaceholders = deletedFolderIds.map(() => "?").join(", ");
+    let relocatedNotes = [];
     const deleteRows = () => {
       const conversationConditions = [];
       const conversationParams = [];
@@ -3808,6 +4023,28 @@ class DatabaseManager {
           .run(...deletedNoteIds);
       }
       if (deletedFolderIds.length > 0) {
+        // Device-owned and other accounts' notes can sit in this account's
+        // folders; they outlive the account at the space root.
+        const releasedIds = this.db
+          .prepare(
+            `SELECT id FROM notes
+             WHERE folder_id IN (${folderPlaceholders}) AND account_id IS NOT ?`
+          )
+          .all(...deletedFolderIds, accountId)
+          .map((row) => row.id);
+        if (releasedIds.length > 0) {
+          const releasedPlaceholders = releasedIds.map(() => "?").join(", ");
+          this.db
+            .prepare(
+              `UPDATE notes
+               SET folder_id = NULL, sync_status = 'pending', updated_at = datetime('now')
+               WHERE id IN (${releasedPlaceholders})`
+            )
+            .run(...releasedIds);
+          relocatedNotes = this.db
+            .prepare(`SELECT * FROM notes WHERE id IN (${releasedPlaceholders})`)
+            .all(...releasedIds);
+        }
         this.db
           .prepare(
             `DELETE FROM optimistic_folder_delete_rows WHERE folder_id IN (${folderPlaceholders})`
@@ -3836,7 +4073,7 @@ class DatabaseManager {
       }
     }
 
-    return { deletedNoteIds, deletedFolderIds };
+    return { deletedNoteIds, deletedFolderIds, relocatedNotes };
   }
 
   deleteFolder(id) {
@@ -6056,9 +6293,11 @@ class DatabaseManager {
           .prepare(
             `SELECT id FROM folders
              WHERE name = 'Meetings' AND is_default = 1 AND space_id = ?
-               AND ${accountScope.sql}`
+               AND ${accountScope.sql}
+             ORDER BY account_id IS ? DESC, id`
           )
-          .get(spaceId ?? this.getPrivateSpaceId(), ...accountScope.params) || null
+          .get(spaceId ?? this.getPrivateSpaceId(), ...accountScope.params, this.activeAccountId) ||
+        null
       );
     } catch (error) {
       debugLogger.error("Error getting meetings folder", { error: error.message }, "gcal");
@@ -6712,6 +6951,7 @@ class DatabaseManager {
           "UPDATE notes SET sync_status = 'synced', cloud_id = ?, left_team = 0, cloud_updated_at = ?, owner_user_id = ? WHERE id = ?"
         )
         .run(cloudId, cloudUpdatedAt, ownerUserId, id);
+      this._claimLegacyPrivateRow("notes", id);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error marking note synced", { error: error.message }, "database");
@@ -6765,7 +7005,7 @@ class DatabaseManager {
         return { success: false, outcome: "unresolved" };
       }
 
-      return this.db.transaction(() => {
+      const result = this.db.transaction(() => {
         const current = this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id);
         if (!current || current.client_note_id !== expectedClientNoteId) {
           // If the same identity exists under an unexpected numeric row, do
@@ -6929,6 +7169,11 @@ class DatabaseManager {
           );
         return { success: true, outcome: "pending", ...(cloudNote && { note: this.getNote(id) }) };
       })();
+      if (CLOUD_BOUND_ACK_OUTCOMES.has(result.outcome)) {
+        this._claimLegacyPrivateRow("notes", id);
+        if (result.note) result.note = this.getNote(id);
+      }
+      return result;
     } catch (error) {
       debugLogger.error("Error acknowledging note create", { error: error.message }, "database");
       throw error;
@@ -7028,6 +7273,7 @@ class DatabaseManager {
               snapshot.client_note_id,
               expectedCloudId
             );
+          this._claimLegacyPrivateRow("notes", id);
           return { success: true, outcome: "synced", changes: result.changes, note };
         }
 
@@ -7050,6 +7296,7 @@ class DatabaseManager {
             snapshot.client_note_id,
             expectedCloudId
           );
+        this._claimLegacyPrivateRow("notes", id);
         return { success: true, outcome: "pending", changes: 0, note };
       })();
     } catch (error) {
@@ -7590,14 +7837,23 @@ class DatabaseManager {
         });
         this._deleteSpeakerRowsForNotes(serverOwnedChildren, id);
         this.db.prepare(`DELETE FROM notes WHERE id IN (${serverOwnedChildren})`).run(id);
+        // The kept rows become the active account's private content, never
+        // device-owned rows every local account would see.
+        const accountId = this._accountIdForSpace(privateSpaceId);
         const relocateNote = this.db.prepare(
-          "UPDATE notes SET space_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
+          "UPDATE notes SET space_id = ?, account_id = ?, folder_id = ?, client_note_id = ?, cloud_id = NULL, cloud_updated_at = NULL, cloud_revision = NULL, cloud_create_rejected = 0, cloud_create_pending = NULL, owner_user_id = NULL, updated_by_user_id = NULL, sync_status = 'pending', left_team = 0, is_shared = 0, share_token = NULL, updated_at = datetime('now') WHERE id = ?"
         );
         const detachNoteConversation = this.db.prepare(
           "UPDATE agent_conversations SET space_id = NULL, folder_id = NULL WHERE note_id = ?"
         );
         for (const noteId of preservedIds) {
-          relocateNote.run(privateSpaceId, preserveFolder ? id : null, randomUUID(), noteId);
+          relocateNote.run(
+            privateSpaceId,
+            accountId,
+            preserveFolder ? id : null,
+            randomUUID(),
+            noteId
+          );
           // Note-scoped chats follow a preserved dirty note, not the revoked
           // team container. Folder-only chats are handled separately below.
           detachNoteConversation.run(noteId);
@@ -7605,6 +7861,9 @@ class DatabaseManager {
         let preservedFolder = null;
         if (preserveFolder) {
           let name = folder.name;
+          // Every account's folders count, not only this one's: a device-owned
+          // namesake would show beside it, and builds that still keep names
+          // unique per space fail to launch on a duplicate.
           const taken = this.db.prepare(
             "SELECT 1 FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
           );
@@ -7613,9 +7872,9 @@ class DatabaseManager {
           }
           this.db
             .prepare(
-              "UPDATE folders SET space_id = ?, name = ?, client_folder_id = ?, cloud_id = NULL, sync_status = 'pending', left_team = 0, updated_at = datetime('now') WHERE id = ?"
+              "UPDATE folders SET space_id = ?, account_id = ?, name = ?, client_folder_id = ?, cloud_id = NULL, sync_status = 'pending', left_team = 0, updated_at = datetime('now') WHERE id = ?"
             )
-            .run(privateSpaceId, name, randomUUID(), id);
+            .run(privateSpaceId, accountId, name, randomUUID(), id);
           preservedFolder = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
           // Folder-scoped chats follow the preserved folder into the private
           // space so their space ref doesn't dangle on the revoked space.
@@ -7689,10 +7948,11 @@ class DatabaseManager {
           updatedAt
         );
       } catch (err) {
-        // A live same-named folder already exists in this space (partial unique
-        // index idx_folders_space_name is a different conflict target than the
-        // client_folder_id upsert). Converge on the existing folder by adopting
-        // the cloud row's identity instead of wedging the pull.
+        // A live same-named folder of the same owner already exists in this
+        // space (the partial unique name indexes are a different conflict
+        // target than the client_folder_id upsert). Converge on the existing
+        // folder by adopting the cloud row's identity instead of wedging the
+        // pull.
         // Match the error code, not the message text (which SQLite could
         // reformat); the column check keeps client_folder_id collisions on
         // the rethrow path.
@@ -7726,9 +7986,11 @@ class DatabaseManager {
             );
         })();
       }
-      return this.db
+      const folder = this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
+      if (folder?.account_id) this._claimFolderNotes(folder.id, folder.account_id);
+      return folder;
     } catch (error) {
       debugLogger.error("Error upserting folder from cloud", { error: error.message }, "database");
       throw error;
@@ -7744,6 +8006,7 @@ class DatabaseManager {
           "UPDATE folders SET sync_status = 'synced', cloud_id = ?, left_team = 0 WHERE id = ?"
         )
         .run(cloudId, id);
+      this._claimLegacyPrivateRow("folders", id);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error marking folder synced", { error: error.message }, "database");
@@ -7816,6 +8079,7 @@ class DatabaseManager {
               snapshot.client_folder_id,
               expectedCloudId
             );
+          this._claimLegacyPrivateRow("folders", id);
           return { success: true, outcome: "synced", changes: result.changes };
         }
 
@@ -7834,6 +8098,7 @@ class DatabaseManager {
             snapshot.client_folder_id,
             expectedCloudId
           );
+        this._claimLegacyPrivateRow("folders", id);
         return { success: true, outcome: "pending", changes: result.changes };
       })();
     } catch (error) {
@@ -7874,6 +8139,7 @@ class DatabaseManager {
              WHERE id = ? AND client_folder_id = ? AND cloud_id = ?`
           )
           .run(id, snapshot.client_folder_id, expectedCloudId);
+        this._claimLegacyPrivateRow("folders", id);
         return { success: true, outcome: "synced", changes: result.changes };
       })();
     } catch (error) {

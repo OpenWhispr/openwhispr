@@ -1331,6 +1331,9 @@ test("Keep after a refused create keeps and delivers the note's own text", async
 test("the upgrade marks unsynced text from a release as a set, once", (t) => {
   const db = createDb(t);
   if (!db) return;
+  // Pulled while its owner is signed in, as the app does; a signed-out pull
+  // would leave rows the reopen's legacy repair hands to their owner.
+  db.setActiveAccountId(INITIAL.user_id);
   const synced = db.upsertNoteFromCloud(INITIAL, null);
   const edited = db.upsertNoteFromCloud(
     { ...INITIAL, id: "cloud-edited", client_note_id: "client-edited" },
@@ -1397,6 +1400,7 @@ test("a database from before sync status marks all its text as a set", (t) => {
 test("Keep after the upgrade keeps an offline edit made on a release", async (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveAccountId(INITIAL.user_id);
   const row = db.upsertNoteFromCloud(INITIAL, null);
   withoutRevision(db, row.id);
   downgradeToReleasedSchema(db);

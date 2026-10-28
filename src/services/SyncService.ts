@@ -42,6 +42,7 @@ import {
   isCloudBackupAllowed,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { findDefaultFolder } from "../components/notes/shared";
 import {
   buildNoteCreatePayload,
   buildNoteUpdatePayload,
@@ -149,6 +150,18 @@ const CAN_SYNC_KEYS = [
   "dataRetentionEnabled",
 ];
 
+// The account the personal pull cursors were advanced for. They are
+// device-wide, so another account's delta would skip everything older in this
+// one's cloud; each account's own are parked under `<key>@<accountId>` while
+// another account is signed in.
+const PERSONAL_CURSOR_ACCOUNT_KEY = "lastSyncedAt.personalAccountId";
+const PERSONAL_CURSOR_KEYS = ["lastSyncedAt.notes", "lastSyncedAt.folders"];
+
+function setOrRemoveItem(key: string, value: string | null): void {
+  if (value === null) localStorage.removeItem(key);
+  else localStorage.setItem(key, value);
+}
+
 // Cross-window guard against a space purge racing an in-flight pull: every
 // purge initiator records the cloud space id here, and pull/upsert paths park
 // rows for recently purged spaces instead of resurrecting them as orphaned
@@ -251,6 +264,7 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
 
 export class SyncService {
   private syncing = false;
+  private boundFoldersClaimedFor: string | null = null;
   private syncAllPending = false;
   private autoSyncStarted = false;
   private dictionaryDirty = false;
@@ -419,6 +433,34 @@ export class SyncService {
     localStorage.removeItem("notesTree.expanded");
   }
 
+  // Cursors from a build that kept no owner stay with whoever is signed in.
+  // On a switch the outgoing account's are parked and the incoming one's
+  // restored. An account with none parked starts from scratch only when it
+  // has nothing here from the cloud: a full pull lists live rows only, so a
+  // row it already holds that was deleted elsewhere would linger.
+  private async bindPersonalCursorsToAccount(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    const owner = localStorage.getItem(PERSONAL_CURSOR_ACCOUNT_KEY);
+    if (!accountId || owner === accountId) return;
+    if (owner) {
+      const parked = PERSONAL_CURSOR_KEYS.map((key) => localStorage.getItem(`${key}@${accountId}`));
+      const restore = parked.some((cursor) => cursor !== null);
+      const startFresh = !restore && !(await this.holdsCloudFolders(accountId));
+      PERSONAL_CURSOR_KEYS.forEach((key, index) => {
+        setOrRemoveItem(`${key}@${owner}`, localStorage.getItem(key));
+        localStorage.removeItem(`${key}@${accountId}`);
+        if (restore) setOrRemoveItem(key, parked[index]);
+        else if (startFresh) localStorage.removeItem(key);
+      });
+    }
+    localStorage.setItem(PERSONAL_CURSOR_ACCOUNT_KEY, accountId);
+  }
+
+  private async holdsCloudFolders(accountId: string): Promise<boolean> {
+    const folders = (await window.electronAPI.getFolders?.()) ?? [];
+    return folders.some((folder) => folder.account_id === accountId && folder.cloud_id);
+  }
+
   // lastSyncedAt is written only when a syncAll() pass completes, and
   // localStorage is shared across windows, so it doubles as the global
   // "last completed sync" stamp for throttling.
@@ -515,6 +557,7 @@ export class SyncService {
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!hasValidatedAuthContext()) return;
         if (full) {
+          await this.bindPersonalCursorsToAccount();
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
           await this.syncNotes();
@@ -1381,13 +1424,59 @@ export class SyncService {
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
-    if (!teamOnly) await this.adoptDefaultFolders();
+    if (!teamOnly) {
+      await this.claimBoundFolders();
+      await this.adoptDefaultFolders();
+    }
     await this.pushPendingFolders(teamOnly);
     await this.pushFolderDeletes(teamOnly);
     if (!teamOnly && this.teamCursorLagging("folders")) {
       await this.pullFolders(true);
     }
     await this.pullFolders(teamOnly);
+  }
+
+  // Older builds bound device-owned folders to this account's cloud folders
+  // without claiming them, and a delta pull skips them while they're
+  // unchanged. The cloud lists only the account's own folders, so a full list
+  // proves which ones are its, and which defaults are another account's and
+  // can't stand in for its own. Once per account per session, and only while
+  // such rows exist.
+  private async claimBoundFolders(): Promise<void> {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    if (!accountId || this.boundFoldersClaimedFor === accountId) return;
+    const { privateSpace } = await this.buildSpaceContext();
+    const local = (await window.electronAPI.getFolders?.(privateSpace?.id ?? null)) ?? [];
+    const unclaimed = local.filter(
+      (folder) => !folder.account_id && folder.cloud_id && !folder.deleted_at
+    );
+    if (unclaimed.length > 0) {
+      try {
+        const { folders: cloudFolders } = await FoldersService.list();
+        const ownCloudIds = new Set(
+          cloudFolders.filter((f) => !f.space_id && !f.deleted_at).map((f) => f.id)
+        );
+        const foreignDefaults: string[] = [];
+        for (const folder of unclaimed) {
+          const cloudId = folder.cloud_id!;
+          if (!ownCloudIds.has(cloudId)) {
+            if (folder.is_default) foreignDefaults.push(cloudId);
+            continue;
+          }
+          // Claiming marks the row synced, so only a settled row qualifies;
+          // a pending one is claimed when its push is acknowledged.
+          if (folder.sync_status !== "synced") continue;
+          await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, cloudId);
+        }
+        if (foreignDefaults.length > 0) {
+          await window.electronAPI.ensureAccountDefaultFolders?.(foreignDefaults);
+        }
+      } catch (err) {
+        console.error("Bound folder claim failed:", err);
+        return;
+      }
+    }
+    this.boundFoldersClaimedFor = accountId;
   }
 
   // Each platform seeds "Personal"/"Meetings" with its own random
@@ -2953,9 +3042,7 @@ export class SyncService {
         .filter((f) => f.cloud_id)
         .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
     );
-    const personalFolder = folders.find(
-      (f) => f.is_default && f.name === "Personal" && f.space_id === privateSpaceId
-    );
+    const personalFolder = findDefaultFolder(folders.filter((f) => f.space_id === privateSpaceId));
     return { cloudToLocal, defaultFolderId: personalFolder?.id ?? null };
   }
 }

@@ -10,6 +10,13 @@
 //   coalesceOnConflict an absent/null incoming field keeps the stored value
 //   staleWriteGuard    a write whose basis predates the stored row is rejected
 //   updatedAtClamp     a stored updated_at never moves backwards
+//
+// Two optional settings model a specific account, for multi-account tests:
+//   userId               stamped as user_id (the owner) on every created row,
+//                        and used as an id prefix so two clouds never share ids
+//   adoptDefaultFolders  a personal default folder whose name already exists
+//                        returns that row instead of creating a second one,
+//                        as the API's adoptExistingFolder does
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -90,6 +97,8 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    userId: null,
+    adoptDefaultFolders: false,
     ...config,
   };
 
@@ -102,7 +111,8 @@ function createFakeCloud(config = {}) {
   let seq = 0;
   let clock = () => new Date().toISOString();
 
-  const nextId = (prefix) => `${prefix}-${String(++seq).padStart(4, "0")}`;
+  const idPrefix = cfg.userId ? `${cfg.userId}-` : "";
+  const nextId = (prefix) => `${idPrefix}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
   // the client sent. Local rows carry SQLite's "YYYY-MM-DD HH:MM:SS", so echoing
@@ -167,8 +177,18 @@ function createFakeCloud(config = {}) {
     for (const key of collection.fields) {
       if (input[key] !== undefined && input[key] !== null) row[key] = input[key];
     }
+    if (cfg.userId) row.user_id = cfg.userId;
     collection.store.set(row.id, row);
     return row;
+  }
+
+  function createFolder(input) {
+    if (cfg.adoptDefaultFolders && input.is_default && !input.space_id) {
+      for (const row of folders.values()) {
+        if (row.is_default && !row.deleted_at && row.name === input.name) return row;
+      }
+    }
+    return upsertRow(folderCollection, input);
   }
 
   function findByClientId(collection, clientId) {
@@ -363,10 +383,10 @@ function createFakeCloud(config = {}) {
         return { notes: [] };
 
       case "POST /api/folders/create":
-        return upsertRow(folderCollection, body ?? {});
+        return createFolder(body ?? {});
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
-        return { created: inputs.map((input) => upsertRow(folderCollection, input)) };
+        return { created: inputs.map((input) => createFolder(input)) };
       }
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};

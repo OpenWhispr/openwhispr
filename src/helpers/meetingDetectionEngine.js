@@ -559,12 +559,8 @@ class MeetingDetectionEngine {
     const noteResult = this.databaseManager.saveNote(event.summary, "", "meeting");
     const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
-    if (!noteResult?.note?.id || !meetingsFolder?.id) {
-      debugLogger.error(
-        "Manual meeting failed — missing note or folder",
-        { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
-        "meeting"
-      );
+    if (!noteResult?.note?.id) {
+      debugLogger.error("Manual meeting failed — missing note", {}, "meeting");
       this._meetingModeActive = false;
       return;
     }
@@ -574,7 +570,8 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        folderId: meetingsFolder.id,
+        // Without a Meetings folder the note sits at the space root.
+        folderId: meetingsFolder?.id ?? null,
         event,
         trigger: "hotkey",
       },
@@ -622,12 +619,8 @@ class MeetingDetectionEngine {
     const noteResult = this.databaseManager.saveNote(calEvent.summary || "New note", "", "meeting");
     const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
-    if (!noteResult?.note?.id || !meetingsFolder?.id) {
-      debugLogger.error(
-        "Join calendar meeting failed — missing note or folder",
-        { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
-        "meeting"
-      );
+    if (!noteResult?.note?.id) {
+      debugLogger.error("Join calendar meeting failed — missing note", { eventId }, "meeting");
       this._meetingModeActive = false;
       return;
     }
@@ -643,7 +636,7 @@ class MeetingDetectionEngine {
     await this.windowManager.queueMeetingNoteNavigation(
       {
         noteId: noteResult.note.id,
-        folderId: meetingsFolder.id,
+        folderId: meetingsFolder?.id ?? null,
         event: calEvent,
         trigger,
       },
