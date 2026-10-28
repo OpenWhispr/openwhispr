@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useId, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
   needsTransfer,
@@ -46,6 +46,8 @@ export function RemoveMembersDialog({
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   // A second click can land before the running state disables the button.
   const runningRef = useRef(false);
+  const pickerLabelId = useId();
+  const pickerValueId = useId();
   // The state moves a refused pick back to you, but the error still names who was refused.
   const [refusedOwnerName, setRefusedOwnerName] = useState("");
 
@@ -203,12 +205,13 @@ export function RemoveMembersDialog({
     >
       {transferring ? (
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-muted-foreground">
+          <span id={pickerLabelId} className="text-xs font-medium text-muted-foreground">
             {t("workspaces.removeMembers.transferLabel")}
           </span>
           <DropdownMenu>
+            {/* Named by the label and the chosen owner, so both are announced. */}
             <DropdownMenuTrigger
-              aria-label={t("workspaces.removeMembers.transferLabel")}
+              aria-labelledby={`${pickerLabelId} ${pickerValueId}`}
               disabled={busy}
               className="flex h-10 w-full items-center gap-2 rounded-full border border-border/70 bg-surface-1 px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -220,7 +223,7 @@ export function RemoveMembersDialog({
                   size="sm"
                 />
               ) : null}
-              <span dir="auto" className="flex-1 truncate text-start">
+              <span id={pickerValueId} dir="auto" className="flex-1 truncate text-start">
                 {newOwner ? ownerLabel(newOwner) : ""}
               </span>
               <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />

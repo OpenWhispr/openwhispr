@@ -35,6 +35,15 @@ const isolated = (value) => `⁨${value}⁩`;
 const pickerText = (text) => text.match(/‹([^›]*)›/)?.[1] ?? null;
 const menuItems = (text) => [...text.matchAll(/«([^»]*)»/g)].map((match) => match[1]);
 
+function findById(node, id) {
+  if (node.attributes?.id === id) return node;
+  for (const child of node.childNodes ?? []) {
+    const found = findById(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
 function textOf(node) {
   if (node.nodeType === 3) return node.nodeValue;
   return [...node.childNodes].map(textOf).join("");
@@ -168,6 +177,7 @@ async function loadDialog(t) {
     return {
       events,
       removed,
+      container,
       text: () => textOf(container),
       act: (fn) => React.act(async () => fn()),
       clickPrimary: () => React.act(async () => globalThis.__actionDialogProps.primary.onClick()),
@@ -228,7 +238,18 @@ test("one content owner shows the picker with you chosen", async (t) => {
   );
   assert.match(text, /workspaces\.removeMembers\.transferBody/);
   assert.match(text, /workspaces\.removeMembers\.transferConfirm/);
-  assert.equal(globalThis.__triggerProps["aria-label"], "workspaces.removeMembers.transferLabel");
+  // Named by the visible label and the chosen owner together: "Transfer to Ronnie (you)".
+  const trigger = globalThis.__triggerProps;
+  assert.equal(trigger["aria-label"], undefined);
+  const labelledBy = trigger["aria-labelledby"].split(" ");
+  assert.equal(labelledBy.length, 2);
+  assert.deepEqual(
+    labelledBy.map((id) => textOf(findById(view.container, id))),
+    [
+      "workspaces.removeMembers.transferLabel",
+      `workspaces.removeMembers.you|{"name":"${isolated("Ronnie")}"}`,
+    ]
+  );
   assert.equal(pickerText(text), `workspaces.removeMembers.you|{"name":"${isolated("Ronnie")}"}`);
   // You first, then everyone not being removed by name, each with their email.
   assert.deepEqual(menuItems(text), [
