@@ -5,7 +5,12 @@ import remarkGfm from "remark-gfm";
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  /** Leaves out a leading "---" header block, as a SKILL.md carries. */
+  hideFrontmatter?: boolean;
 }
+
+// A byte-order mark, then "---" on the first line, closed by "---" or "..." on its own line.
+const LEADING_FRONTMATTER = /^\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
 
 const FootnotePrefixContext = createContext("");
 const InsideLinkContext = createContext(false);
@@ -147,7 +152,11 @@ const markdownComponents: Components = {
   ),
 };
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps): ReactElement {
+export function MarkdownRenderer({
+  content,
+  className,
+  hideFrontmatter,
+}: MarkdownRendererProps): ReactElement {
   const footnotePrefix = `user-content-${useId()}-`;
   return (
     <div dir="auto" className={className}>
@@ -157,7 +166,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps):
           remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
           components={markdownComponents}
         >
-          {content}
+          {hideFrontmatter ? content.replace(LEADING_FRONTMATTER, "") : content}
         </Markdown>
       </FootnotePrefixContext>
     </div>

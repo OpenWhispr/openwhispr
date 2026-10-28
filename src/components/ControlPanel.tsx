@@ -11,14 +11,13 @@ import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
+import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { manageableWorkspaces, selectWorkspaceForSpaceCreation } from "../lib/workspaceSelection";
 import { useUsage } from "../hooks/useUsage";
 import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
@@ -36,9 +35,12 @@ import {
   useSettingsStore,
 } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import {
   isAgentAllowed,
+  isAudioFeatureAllowed,
   isControlPanelViewAllowed,
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
@@ -61,6 +63,7 @@ import { navigateMeetingNotification } from "./meetingNotificationNavigation";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
+import ProfileMenu from "./ProfileMenu";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
@@ -103,7 +106,6 @@ const SIDEBAR_WIDTH_PX = 192;
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
-const InviteTeammateDialog = React.lazy(() => import("./InviteTeammateDialog"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
@@ -137,7 +139,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
-  const [showInviteTeam, setShowInviteTeam] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
     workspaceId: string;
@@ -185,14 +186,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     dismiss: dismissJoinable,
     markRequested,
   } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
-  const { workspaces, active: activeWorkspace } = useWorkspace();
-  // Invitations are owner/admin-only (server-enforced), so the sidebar row
-  // only exists when the user can manage a workspace.
-  const inviteWorkspace = selectWorkspaceForSpaceCreation(
-    manageableWorkspaces(workspaces),
-    activeWorkspace,
-    null
-  );
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -215,6 +208,38 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setShowSettings(true);
   }, []);
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
+  const workspacesLoaded = useWorkspaceStore((state) => state.loaded);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const [audioTestLink, setAudioTestLink] = useState<EnterpriseAudioTestLink | null>(null);
+  useEffect(() => {
+    const claim = (): void => {
+      void window.electronAPI?.claimEnterpriseAudioTest?.().then((link) => {
+        if (link) setAudioTestLink(link);
+      });
+    };
+    claim();
+    return window.electronAPI?.onEnterpriseAudioTestRequested?.(claim);
+  }, []);
+  // Settings consumes a link for the active workspace; any other one is dropped here.
+  useEffect(() => {
+    if (!audioTestLink || !authLoaded || (isSignedIn && !workspacesLoaded)) return;
+    setAudioTestLink(null);
+    if (isSignedIn && audioTestLink.workspaceId === activeWorkspaceId) {
+      openTranscriptionSettings();
+      return;
+    }
+    void window.electronAPI?.getPendingEnterpriseAudioTest?.(true);
+    toast({ description: t("enterprise.audio.testLinkOtherWorkspace") });
+  }, [
+    audioTestLink,
+    authLoaded,
+    isSignedIn,
+    workspacesLoaded,
+    activeWorkspaceId,
+    openTranscriptionSettings,
+    toast,
+    t,
+  ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   const { createNote } = useCreateNote();
@@ -264,6 +289,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     hideConfirmDialog,
     hideAlertDialog,
   } = useDialogs();
+  const { requestSignOut } = useSignOut({ showConfirmDialog, showAlertDialog });
 
   const loadTranscriptions = useCallback(
     async (includeDiscarded?: boolean) => {
@@ -507,9 +533,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     return () => cleanup?.();
   }, [toast, t]);
 
+  // The config is refused while the org has meetings off, so it's fetched again
+  // whenever they become allowed.
+  const meetingAllowedByPolicy = usePolicyStore((state) => isAudioFeatureAllowed(state, "meeting"));
   useEffect(() => {
-    fetchStreamingProviders();
-  }, []);
+    if (meetingAllowedByPolicy) fetchStreamingProviders();
+  }, [meetingAllowedByPolicy]);
 
   const handleMeetingRecordingRequestHandled = useCallback(
     () => setMeetingRecordingRequest(null),
@@ -944,6 +973,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         description={confirmDialog.description}
         onConfirm={confirmDialog.onConfirm}
         variant={confirmDialog.variant}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
       />
 
       <AlertDialog
@@ -985,17 +1016,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       {showReferrals && (
         <Suspense fallback={null}>
           <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
-        </Suspense>
-      )}
-
-      {showInviteTeam && inviteWorkspace && (
-        <Suspense fallback={null}>
-          <InviteTeammateDialog
-            open={showInviteTeam}
-            onOpenChange={setShowInviteTeam}
-            workspaceId={inviteWorkspace.id}
-            workspaceName={inviteWorkspace.name}
-          />
         </Suspense>
       )}
 
@@ -1064,17 +1084,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               setShowSettings(true);
             }}
             onOpenReferrals={() => setShowReferrals(true)}
-            onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
             onUpgrade={() => {
               setSettingsSection("plansBilling");
               setShowSettings(true);
             }}
             isOverLimit={usage?.isOverLimit ?? false}
-            userName={user?.name}
-            userEmail={user?.email}
-            userImage={user?.image}
             isSignedIn={isSignedIn}
-            authLoaded={authLoaded}
             upsell={upsell}
             updateAction={
               !updateStatus.isDevelopment &&
@@ -1107,10 +1122,20 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               isSidePanelLayout={isSidePanelLayout}
               onExitSidePanel={handleExitSidePanel}
               actions={
-                <NewNoteMenu
-                  onNewNote={handleNewNote}
-                  onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
-                />
+                <div className="flex items-center gap-2">
+                  <NewNoteMenu
+                    onNewNote={handleNewNote}
+                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                  />
+                  <ProfileMenu
+                    onOpenSettings={(section) => {
+                      setSettingsSection(section);
+                      setShowSettings(true);
+                    }}
+                    onOpenReferrals={() => setShowReferrals(true)}
+                    onSignOut={requestSignOut}
+                  />
+                </div>
               }
             />
             <div className="scrollbar-hidden flex-1 overflow-y-auto">

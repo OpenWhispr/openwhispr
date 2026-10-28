@@ -72,10 +72,14 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
+  "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],
+  // A skill's name and the skills search accept text in any script.
+  "src/components/skills/CreateSkillScreen.tsx": ["auto"],
+  "src/components/skills/SkillSearchInput.tsx": ["auto"],
   "src/components/ui/ApiKeyInput.tsx": ["ltr"],
   "src/components/ui/CustomModelInput.tsx": ["ltr"],
   "src/components/ui/PromptStudio.tsx": ["auto", "auto"],
@@ -113,8 +117,13 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  // A skill's description is prose; the file pickers are hidden.
+  "src/components/skills/CreateSkillScreen.tsx": ["auto", "inherit"],
+  "src/components/skills/UploadSkillsScreen.tsx": ["inherit"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
+  // A skill's instructions: Markdown prose in any script.
+  "src/components/ui/LineNumberedTextarea.tsx": ["auto"],
 };
 
 test("shared field primitives inherit unless a consumer declares its content direction", async (t) => {

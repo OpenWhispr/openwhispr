@@ -119,6 +119,8 @@ jobs:
         run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
       - name: Run keyboard touch routing tests
         run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
+      - name: Run keyboard capitalization tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-capitalization.sh
 
   mobile-status:
     name: Mobile CI

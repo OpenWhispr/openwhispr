@@ -7,22 +7,8 @@
 const AUTH_TOKEN = "harness-token";
 const AUTH_GENERATION = 0;
 
-// syncAll() asserts the whole dictionary and snippet surface exists before doing
-// any work and aborts the pass if a name is missing, so both are present but
-// inert — this harness covers notes and folders.
-function inertDictionaryApi() {
-  return {
-    getPendingDictionary: async () => [],
-    getPendingDictionaryDeletes: async () => [],
-    getDictionaryByClientId: async () => null,
-    upsertDictionaryFromCloud: async () => undefined,
-    markDictionarySynced: async () => ({ success: true, changes: 1 }),
-    hardDeleteDictionary: async () => ({ success: true }),
-    clearDictionaryCloudId: async () => ({ success: true }),
-    broadcastDictionaryUpdated: async () => undefined,
-  };
-}
-
+// syncAll() asserts the whole snippet surface exists before doing any work and
+// aborts the pass if a name is missing, so it is present but inert.
 function inertSnippetApi() {
   return {
     getPendingSnippets: async () => [],
@@ -185,7 +171,17 @@ function createElectronApi(db, options = {}) {
     markTranscriptionSynced: async (id, cloudId) => db.markTranscriptionSynced(id, cloudId),
     hardDeleteTranscription: async (id) => db.hardDeleteTranscription(id),
 
-    ...inertDictionaryApi(),
+    // Dictionary
+    getPendingDictionary: async () => db.getPendingDictionary(),
+    getPendingDictionaryDeletes: async () => db.getPendingDictionaryDeletes(),
+    getDictionaryByClientId: async (clientDictId) => db.getDictionaryEntryByClientId(clientDictId),
+    upsertDictionaryFromCloud: async (cloudEntry) => db.upsertDictionaryFromCloud(cloudEntry),
+    markDictionarySynced: async (...args) => db.markDictionaryEntrySynced(...args),
+    hardDeleteDictionary: async (id) => db.hardDeleteDictionaryEntry(id),
+    clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
+    // The real handler re-reads the words to broadcast them; there are no windows here.
+    broadcastDictionaryUpdated: async () => ({ success: true }),
+
     ...inertSnippetApi(),
     ...inertAnalyticsApi(),
   };

@@ -106,6 +106,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
   onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
+  onMeetingStartRefused: registerListener(
+    "meeting-start-refused",
+    (callback) => (_event, code) => callback(code)
+  ),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener(
@@ -211,6 +215,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("snippets-updated", listener);
     return () => ipcRenderer.removeListener("snippets-updated", listener);
   },
+  skillsList: () => ipcRenderer.invoke("skills-list"),
+  skillsGet: (name) => ipcRenderer.invoke("skills-get", name),
+  skillsReadFile: (name, path) => ipcRenderer.invoke("skills-read-file", name, path),
+  skillsSetEnabled: (name, enabled) => ipcRenderer.invoke("skills-set-enabled", name, enabled),
+  skillsUninstall: (name) => ipcRenderer.invoke("skills-uninstall", name),
+  skillsReveal: (name) => ipcRenderer.invoke("skills-reveal", name),
+  skillsPreviewUpload: (items) => ipcRenderer.invoke("skills-preview-upload", items),
+  skillsCommitUpload: (request) => ipcRenderer.invoke("skills-commit-upload", request),
+  skillsDiscardUploads: (tokens) => ipcRenderer.invoke("skills-discard-uploads", tokens),
+  skillsCreate: (input) => ipcRenderer.invoke("skills-create", input),
+  skillsAddRecommended: (id, copy) => ipcRenderer.invoke("skills-add-recommended", id, copy),
+  onSkillsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("skills-changed", listener);
+    return () => ipcRenderer.removeListener("skills-changed", listener);
+  },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);
@@ -220,7 +240,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId, transcript) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -229,7 +249,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       sourceFile,
       audioDuration,
       folderId,
-      spaceId
+      spaceId,
+      transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
   getNotes: (noteType, limit, folderId, spaceId) =>
@@ -724,8 +745,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "managed-enterprise-config-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
-  clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  clearManagedEnterpriseIdentity: (options) =>
+    ipcRenderer.invoke("clear-managed-enterprise-identity", options),
   managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
+  getPendingEnterpriseAudioTest: (consume = false) =>
+    ipcRenderer.invoke("get-pending-enterprise-audio-test", consume),
+  claimEnterpriseAudioTest: () => ipcRenderer.invoke("claim-enterprise-audio-test"),
+  onEnterpriseAudioTestRequested: registerListener(
+    "enterprise-audio-test-requested",
+    (callback) => () => callback()
+  ),
+  enterpriseAudioImportBootstrap: (data) =>
+    ipcRenderer.invoke("enterprise-audio-import-bootstrap", data),
+  enterpriseAudioStatus: (data) => ipcRenderer.invoke("enterprise-audio-status", data),
+  enterpriseAudioSaveCredential: (data) =>
+    ipcRenderer.invoke("enterprise-audio-save-credential", data),
+  enterpriseAudioTest: (data) => ipcRenderer.invoke("enterprise-audio-test", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -929,8 +964,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
-  meetingTranscriptionSend: (buffer, source) =>
-    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionSend: (buffer, source, capturedAt) =>
+    ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>
@@ -1280,8 +1315,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
   upsertDictionaryFromCloud: (cloudEntry) =>
     ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
-  markDictionarySynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-dictionary-synced", id, cloudId),
+  markDictionarySynced: (
+    id,
+    cloudId,
+    serverUpdatedAt,
+    expectedWord,
+    expectedSource,
+    serverSource
+  ) =>
+    ipcRenderer.invoke(
+      "db-mark-dictionary-synced",
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedWord,
+      expectedSource,
+      serverSource
+    ),
   hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
   clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
   broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),

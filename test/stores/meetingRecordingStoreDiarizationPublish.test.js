@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { deferred } = require("../helpers/harness/deferred");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -19,8 +20,10 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
   const state = {
     diarizationCallback: null,
     segmentCallback: null,
+    errorCallback: null,
     updatedTranscripts: [],
     stopDiarizationSessionId,
+    stopTranscript: "",
     // Runs inside meetingTranscriptionStop, before its reply, like main's
     // synchronous skip-diarization send.
     onStop: null,
@@ -41,7 +44,11 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => {
       state.onStop?.(state.stopDiarizationSessionId);
-      return { success: true, diarizationSessionId: state.stopDiarizationSessionId };
+      return {
+        success: true,
+        diarizationSessionId: state.stopDiarizationSessionId,
+        transcript: state.stopTranscript,
+      };
     },
     meetingTranscriptionSend: () => {},
     getNote: async (id) => notes.get(id) ?? null,
@@ -67,7 +74,12 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
     onMeetingSpeakerIdentified: noopListener,
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
-    onMeetingTranscriptionError: noopListener,
+    onMeetingTranscriptionError: (callback) => {
+      state.errorCallback = callback;
+      return () => {
+        state.errorCallback = null;
+      };
+    },
     onMeetingTranscriptionFatalError: noopListener,
     onMeetingSystemAudioSilent: noopListener,
   };
@@ -83,8 +95,10 @@ async function loadModules(t, api) {
     cachePrefix: "openwhispr-meeting-diarization-publish-test-",
   });
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
-  const { parseTranscriptSegments } = await vite.ssrLoadModule("/utils/parseTranscriptSegments.ts");
-  return { store, parseTranscriptSegments };
+  const { parseTranscriptSegments, parseSeedSegments } = await vite.ssrLoadModule(
+    "/utils/parseTranscriptSegments.ts"
+  );
+  return { store, parseTranscriptSegments, parseSeedSegments };
 }
 
 async function loadStore(t, api) {
@@ -227,6 +241,65 @@ test("a resumed note's diarization labels the resumed session's row, not an earl
       ["Yeah.", 3.0, "Dave"],
     ]
   );
+});
+
+test("a policy stop's early diarization waits for the resumed session's stop result and persistence", async (t) => {
+  const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "diar-policy" });
+  const { store, parseTranscriptSegments } = await loadModules(t, api);
+  const note = notes.get(NOTE_ID);
+  note.transcript = JSON.stringify([diarized("Yeah.", 1.0, "Carol")]);
+  const reply = deferred();
+  const stop = api.meetingTranscriptionStop;
+  api.meetingTranscriptionStop = async () => {
+    await reply.promise;
+    return stop();
+  };
+  t.after(() => reply.resolve());
+  assert.equal(
+    await store.startRecording({
+      ...START_ARGS,
+      seedSegments: parseTranscriptSegments(note.transcript),
+    }),
+    true
+  );
+  state.segmentCallback({
+    type: "final",
+    source: "system",
+    text: "Yeah.",
+    timestamp: 1760000100000,
+  });
+
+  state.errorCallback("policyRestricted");
+  state.diarizationCallback({
+    noteId: NOTE_ID,
+    sessionId: "diar-policy",
+    segments: [diarized("Yeah.", 2.0, "Dave")],
+  });
+  await settle();
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  assert.deepEqual(rowsOf(note)[0], ["Yeah.", 1.0, "Carol"]);
+  assert.equal(rowsOf(note).length, 2);
+
+  const finished = store.stopRecording();
+  reply.resolve();
+  await finished;
+  await settle();
+  assert.deepEqual(rowsOf(note), [
+    ["Yeah.", 1.0, "Carol"],
+    ["Yeah.", 2.0, "Dave"],
+  ]);
+});
+
+test("main ending the recording for an account change stops it with its own reason", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+
+  state.errorCallback("accountChanged");
+  await settle();
+  const { isRecording, error } = store.useMeetingRecordingStore.getState();
+  assert.equal(isRecording, false);
+  assert.equal(error, "accountChanged");
 });
 
 const diarized = (text, timestamp, speakerName) => ({
@@ -379,3 +452,70 @@ test("a skipped diarization sent before stop returns still leaves the seeded row
 
   assert.deepEqual(rowsOf(note)[0], ["Yeah.", 1.0, "Carol"]);
 });
+
+for (const completionTiming of ["while recording", "during stop", "after stop"]) {
+  test(`a stop-only transcript is replaced once on a resumed session's earlier completion (${completionTiming})`, async (t) => {
+    const { api, state, notes } = createElectronAPI();
+    const { store, parseSeedSegments } = await loadModules(t, api);
+    const note = notes.get(NOTE_ID);
+    state.stopDiarizationSessionId = "diar-first";
+    state.stopTranscript = "First sentence. Second sentence.";
+    assert.equal(await store.startRecording(START_ARGS), true);
+    await store.stopRecording();
+
+    state.stopDiarizationSessionId = "diar-resumed";
+    state.stopTranscript = completionTiming === "during stop" ? "New session." : "";
+    assert.equal(
+      await store.startRecording({
+        ...START_ARGS,
+        seedSegments: parseSeedSegments(note.transcript),
+      }),
+      true
+    );
+    if (completionTiming !== "during stop") {
+      state.segmentCallback({
+        type: "final",
+        source: "system",
+        text: "New session.",
+        timestamp: 1760000100000,
+      });
+    }
+    const earlierCompletion = async () => {
+      state.diarizationCallback({
+        noteId: NOTE_ID,
+        sessionId: "diar-first",
+        segments: [
+          diarized("First sentence.", 1.0, "Carol"),
+          diarized("Second sentence.", 2.0, "Carol"),
+        ],
+      });
+      await settle();
+    };
+
+    if (completionTiming === "while recording") {
+      await earlierCompletion();
+      await store.persistLiveTranscript();
+    } else if (completionTiming === "during stop") {
+      const stop = api.meetingTranscriptionStop;
+      api.meetingTranscriptionStop = async () => {
+        await earlierCompletion();
+        return stop();
+      };
+    }
+    await store.stopRecording();
+    if (completionTiming === "after stop") await earlierCompletion();
+
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "diar-resumed",
+      segments: [diarized("New session.", 3.0, "Dave")],
+    });
+    await settle();
+
+    assert.deepEqual(rowsOf(note), [
+      ["First sentence.", 1.0, "Carol"],
+      ["Second sentence.", 2.0, "Carol"],
+      ["New session.", 3.0, "Dave"],
+    ]);
+  });
+}

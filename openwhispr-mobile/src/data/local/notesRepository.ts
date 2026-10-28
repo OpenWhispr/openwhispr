@@ -12,11 +12,14 @@ import {
   isNotNull,
   isNull,
   inArray,
+  type SQL,
+  type SQLWrapper,
 } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system/legacy';
 import { parseRemoteTranscript, serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
 import { randomUUID } from '@/lib/uuid';
 import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
+import { LATIN_WORD_TERM, NUMBER_TERM, WHOLE_WORD_TERM } from '@/lib/chat/chatTerms';
 import {
   folderDeleteJournal,
   folders,
@@ -51,6 +54,9 @@ import type {
   RemoteFolder,
   RemoteNote,
   ConflictedNote,
+  ChatCandidateNotes,
+  ChatCandidateOptions,
+  ChatNoteWindow,
   Segment,
   NewSegment,
   Speaker,
@@ -135,6 +141,174 @@ const NOTE_PUSH_ACK_FIELDS: ReadonlyArray<keyof Note> = [
 ];
 
 const pushRejectedKey = (localId: number): string => `note.pushRejected.${localId}`;
+
+// What a word starts after: whitespace, punctuation, and the brackets, quotes (an elided "l’équipe"
+// too), slashes, dashes, tags and Markdown marks that open one. A LIKE per character skims the
+// text, where a GLOB class in front of the term would be tried at every position, several times
+// slower on notes holding the term mid-word ("report" for "port").
+const WORD_STARTS_AFTER = [
+  ' ',
+  '\u00a0',
+  '\n',
+  '\t',
+  '(',
+  '[',
+  '"',
+  "'",
+  '“',
+  '‘',
+  '’',
+  '„',
+  '‚',
+  '«',
+  '¿',
+  '¡',
+  '`',
+  '/',
+  '-',
+  '–',
+  '—',
+  '*',
+  '_',
+  '#',
+  '@',
+  ',',
+  '.',
+  ':',
+  ';',
+];
+// Transcribed speech carries no Markdown, tags or brackets, and a meeting's many segments are each
+// searched, so they look for fewer.
+const SPOKEN_WORD_STARTS_AFTER = [' ', '-', '"', "'", '’', '(', ',', '.', '—'];
+// Chinese, Japanese and Korean put no space before a Latin word ("会議でbudget"), so a term right
+// after one of their characters starts a word too: CJK punctuation, kana and ideographs, Hangul,
+// and fullwidth forms, as code point ranges.
+const CJK_CODE_POINTS: readonly (readonly [number, number])[] = [
+  [0x3000, 0x9fff],
+  [0xac00, 0xd7af],
+  [0xff00, 0xffef],
+];
+
+// Only the term's first occurrence is checked: a GLOB class in front of it would be tried at every
+// position of every note holding it mid-word. Positions line up because lower() folds ASCII only.
+const followsCjk = (column: SQLWrapper, term: string): SQL => {
+  const at = sql`instr(lower(${column}), ${term})`;
+  const before = sql`unicode(substr(${column}, ${at} - 1, 1))`;
+  return sql`(${at} > 1 AND (${sql.join(
+    CJK_CODE_POINTS.map(([low, high]) => sql`${before} BETWEEN ${low} AND ${high}`),
+    sql` OR `,
+  )}))`;
+};
+// A number matches whole numbers only: "10" never matches "100", "2010", "10:30", "1.10" or
+// "10,000", and "1.10" never matches "1.100". A `.`, `:` or `,` between digits joins them, but one
+// after a number ends it ("10.").
+const numberPatterns = (term: string): string[] => {
+  const before = ['*[^A-Za-z0-9.:,]', '*[^0-9][.:,]'];
+  const after = ['[^A-Za-z0-9.:,]*', '[.:,][^0-9]*'];
+  return before.flatMap((start) => after.map((end) => `${start}${term}${end}`));
+};
+
+// GLOB patterns for a term that must match whole, or null for one matched anywhere. Terms are
+// letters and digits, joined in a number by `.`, `,` or `:`, none of which GLOB treats specially.
+const wholeTermPatterns = (term: string): string[] | null => {
+  if (NUMBER_TERM.test(term)) return numberPatterns(term);
+  if (!WHOLE_WORD_TERM.test(term)) return null;
+  // GLOB folds no case at all.
+  const letters = Array.from(term, (character) =>
+    /[a-z]/.test(character) ? `[${character.toUpperCase()}${character}]` : character,
+  ).join('');
+  return [`*[^A-Za-z0-9]${letters}[^A-Za-z0-9]*`];
+};
+
+// Escape LIKE wildcards so a term such as "50%" matches literally.
+const escapeLike = (text: string): string => text.replace(/[\\%_]/g, '\\$&');
+
+const likeAny = (column: SQLWrapper, patterns: string[]): SQL =>
+  sql`(${sql.join(
+    patterns.map((pattern) => sql`${column} LIKE ${pattern} ESCAPE '\\'`),
+    sql` OR `,
+  )})`;
+
+// Search terms arrive lowercased. SQLite's LIKE folds ASCII case only, so a term with other letters
+// also looks for its capitalised form ("Übergabe" heading a title).
+const chatTermMatcher = (
+  term: string,
+  wordStartsAfter: readonly string[] = WORD_STARTS_AFTER,
+): ((column: SQLWrapper) => SQL) => {
+  const globs = wholeTermPatterns(term);
+  if (globs) {
+    // The GLOBs run over a padded copy of the column, so a term at its start or end meets a
+    // boundary too. That copy and the GLOBs cost several times a LIKE, so a LIKE rules out the
+    // rows that don't hold the term at all first.
+    return (column) =>
+      sql`(${likeAny(column, [`%${escapeLike(term)}%`])} AND (${sql.join(
+        globs.map((pattern) => sql`(' ' || ${column} || ' ') GLOB ${pattern}`),
+        sql` OR `,
+      )}))`;
+  }
+
+  const capitalised = `${term.charAt(0).toUpperCase()}${term.slice(1)}`;
+  const forms = (
+    /\P{ASCII}/u.test(term) && capitalised !== term ? [term, capitalised] : [term]
+  ).map(escapeLike);
+  const anywhere = forms.map((form) => `%${form}%`);
+  if (!LATIN_WORD_TERM.test(term)) return (column) => likeAny(column, anywhere);
+
+  // The single LIKE rules out most notes before the word starts are looked for.
+  const wordStart = forms.flatMap((form) => [
+    `${form}%`,
+    ...wordStartsAfter.map((before) => `%${escapeLike(before)}${form}%`),
+  ]);
+  return (column) =>
+    sql`(${likeAny(column, anywhere)} AND (${likeAny(column, wordStart)} OR ${followsCjk(column, term)}))`;
+};
+
+interface ScoredChatNote {
+  id: number;
+  recency: string;
+  /** A digit per term: 2 when it matches the title, 1 elsewhere in the note, 0 nowhere. */
+  matches: string;
+}
+
+// A term counts for less the more of the notes searched hold it, so a word in most of them
+// ("answers", "time") weighs little next to the one naming the topic. A note is kept only when it
+// scores at least half as well as the best one: one sharing only a common word with the question
+// is dropped rather than sent, while notes on equally rare topics ("pricing", "hiring") all stay.
+// The weight never reaches zero, so a library where every note holds the term still finds them.
+const rankByRarity = (
+  rows: ScoredChatNote[],
+  searched: number,
+  limit: number,
+): { id: number; total: number }[] => {
+  const flags = rows.map((row) => Array.from(row.matches, Number));
+  const weights = flags[0].map((_, term) => {
+    const holding = flags.filter((noteFlags) => noteFlags[term] > 0).length;
+    return holding === 0 ? 0 : Math.log(1 + searched / holding);
+  });
+  const scores = flags.map((noteFlags) =>
+    noteFlags.reduce((score, flag, term) => score + flag * weights[term], 0),
+  );
+  const best = Math.max(...scores);
+  const kept = rows
+    .map((row, index) => ({ id: row.id, recency: row.recency, score: scores[index] }))
+    .filter(({ score }) => score >= best / 2)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.recency === b.recency) return 0;
+      return a.recency < b.recency ? 1 : -1;
+    });
+  return kept.slice(0, limit).map(({ id }) => ({ id, total: kept.length }));
+};
+
+// Notes carry SQLite's "YYYY-MM-DD HH:MM:SS" (UTC) or the server's ISO timestamps, so both sides go
+// through datetime() to compare instants rather than strings.
+const createdIn = ({ start, end, meetingsOnly }: ChatNoteWindow): SQL | undefined =>
+  and(
+    sql`datetime(${notes.createdAt}) >= datetime(${start.toISOString()})`,
+    sql`datetime(${notes.createdAt}) < datetime(${end.toISOString()})`,
+    // An uploaded recording is a meeting too, as the note editor treats it.
+    meetingsOnly ? inArray(notes.noteType, ['meeting', 'upload']) : undefined,
+  );
 
 export class LocalNotesRepository implements NotesRepository {
   private readonly database: NotesDb;
@@ -559,6 +733,113 @@ export class LocalNotesRepository implements NotesRepository {
       ? and(textMatch, eq(notes.folderId, folderId), notDeleted)
       : and(textMatch, notDeleted);
     return this.database.select().from(notes).where(condition).orderBy(desc(notes.updatedAt)).all();
+  }
+
+  getChatCandidateNotes(terms: string[], options: ChatCandidateOptions): ChatCandidateNotes {
+    const { window } = options;
+    const visible = and(
+      isNull(notes.deletedAt),
+      eq(notes.leftTeam, 0),
+      options.includePrivate ? undefined : eq(notes.isPrivate, 0),
+      window ? createdIn(window) : undefined,
+    );
+    // A period's notes are listed by when they were made, since editing an old meeting doesn't
+    // make it one of this week's.
+    const recency = window ? sql`datetime(${notes.createdAt})` : sql`${notes.updatedAt}`;
+    // Only the ids are ranked and counted, so the heavy columns (content, transcript JSON) are read
+    // for the notes returned alone. The count runs before the limit, so it counts every match, or
+    // with no terms every note in the period.
+    const total = sql<number>`count(*) OVER ()`;
+    const ranked =
+      terms.length === 0
+        ? this.database
+            .select({ id: notes.id, total })
+            .from(notes)
+            .where(visible)
+            .orderBy(desc(recency))
+            .limit(options.limit)
+            .all()
+        : this.rankChatMatches(terms, { visible, recency, limit: options.limit });
+    if (ranked.length === 0) return { notes: [], total: 0 };
+
+    const ids = ranked.map(({ id }) => id);
+    const rows = new Map(
+      this.database
+        .select()
+        .from(notes)
+        .where(inArray(notes.id, ids))
+        .all()
+        .map((note) => [note.id, note]),
+    );
+    const found = { notes: ranked.flatMap(({ id }) => rows.get(id) ?? []), total: ranked[0].total };
+    if (terms.length === 0) return found;
+    return { ...found, transcriptMatchIds: this.findTranscriptMatches(ids, terms) };
+  }
+
+  // Scoring stops at a note's first matching field, so whether a note that matched in its title or
+  // text also matched in its transcript is asked again, for the few notes returned alone.
+  private findTranscriptMatches(noteIds: number[], terms: string[]): number[] {
+    return this.database
+      .selectDistinct({ noteId: transcriptSegments.noteId })
+      .from(transcriptSegments)
+      .where(
+        and(
+          inArray(transcriptSegments.noteId, noteIds),
+          isNull(transcriptSegments.deletedAt),
+          or(
+            ...terms.map((term) =>
+              chatTermMatcher(term, SPOKEN_WORD_STARTS_AFTER)(transcriptSegments.text),
+            ),
+          ),
+        ),
+      )
+      .all()
+      .map(({ noteId }) => noteId);
+  }
+
+  private rankChatMatches(
+    terms: string[],
+    query: { visible: SQL | undefined; recency: SQL; limit: number },
+  ): { id: number; total: number }[] {
+    const termMatches = terms.map((term) => {
+      const matches = chatTermMatcher(term);
+      const spoken = chatTermMatcher(term, SPOKEN_WORD_STARTS_AFTER);
+      // notes.transcript is JSON, whose keys ("source", "text", "speaker") would match every
+      // meeting, so a transcript is searched through its segments' text.
+      const inTranscript = sql`EXISTS (
+        SELECT 1 FROM ${transcriptSegments}
+        WHERE ${transcriptSegments.noteId} = ${notes.id}
+          AND ${transcriptSegments.deletedAt} IS NULL
+          AND ${spoken(transcriptSegments.text)}
+      )`;
+      return sql`(CASE WHEN ${matches(notes.title)} THEN 2
+        WHEN ${matches(notes.content)} OR ${matches(notes.enhancedContent)} OR ${inTranscript} THEN 1
+        ELSE 0 END)`;
+    });
+    // Each note is scored once, as a digit per term. A LIMIT, even one that keeps every row, stops
+    // SQLite inlining the subquery or pushing the filter into it, either of which would run every
+    // LIKE and EXISTS again.
+    const scored = this.database
+      .select({
+        id: notes.id,
+        recency: sql<string>`${query.recency}`.as('recency'),
+        matches: sql<string>`CAST(${sql.join(termMatches, sql` || `)} AS TEXT)`.as('matches'),
+      })
+      .from(notes)
+      .where(query.visible)
+      .limit(Number.MAX_SAFE_INTEGER)
+      .as('scored');
+    const rows = this.database
+      .select()
+      .from(scored)
+      .where(sql`${scored.matches} GLOB '*[12]*'`)
+      .all();
+    if (rows.length === 0) return [];
+    // Counted apart: a window over the scored rows makes SQLite score every note again.
+    const searched =
+      this.database.select({ searched: count() }).from(notes).where(query.visible).get()
+        ?.searched ?? rows.length;
+    return rankByRarity(rows, searched, query.limit);
   }
 
   getActions(): Action[] {
