@@ -195,7 +195,7 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/MeetingTranscriptChat.tsx", /<span\s+dir="auto"[^>]*>\s*\{text\}/],
     [
       "src/components/notes/MeetingTranscriptChat.tsx",
-      /<span\s+dir="auto"[^>]*>\s*\{segment\.suggestedName\}/,
+      /<span\s+dir="auto"[^>]*>\s*\{isYouSpeakerName\(segment\.suggestedName![^}]*\?\s*recorderLabel\s*:\s*segment\.suggestedName\}/,
     ],
     [
       "src/components/notes/MeetingTranscriptChat.tsx",

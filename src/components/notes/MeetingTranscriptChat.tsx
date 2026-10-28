@@ -510,7 +510,9 @@ function SpeakerLabel({
     return (
       <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
         <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
-          {segment.suggestedName}
+          {isYouSpeakerName(segment.suggestedName!, t("notes.speaker.you"))
+            ? recorderLabel
+            : segment.suggestedName}
         </span>
         <button
           onClick={() =>
@@ -1115,7 +1117,12 @@ export function MeetingTranscriptChat({
                     selfSide={selfSide}
                     recorderLabel={recorderLabel}
                     sameSpeaker={
-                      i > 0 && rowMeta[i - 1].key === key && rowMeta[i - 1].selfSide === selfSide
+                      i > 0 &&
+                      rowMeta[i - 1].key === key &&
+                      rowMeta[i - 1].selfSide === selfSide &&
+                      (rowMeta[i - 1].isNameFromMapping === isNameFromMapping ||
+                        !isYouSpeakerName(activeName ?? "", youLabel) ||
+                        (segment.recorderName || recorderLabel) === youLabel)
                     }
                     isFirst={i === 0}
                     isNewest={i === segments.length - 1}

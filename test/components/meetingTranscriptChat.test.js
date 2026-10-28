@@ -186,7 +186,43 @@ test("a local self mapping wins over an unlocked stored self name, but not a loc
   });
   assert.ok(locked.includes("Alice Recorder"));
   assert.doesNotMatch(locked, />You</);
+
+  const adjacent = await renderChat({
+    ...props,
+    segments: [segment, { ...segment, id: "p2", timestamp: 2, speakerLocked: true }],
+  });
+  assert.match(adjacent, />You</);
+  assert.ok(adjacent.includes("Alice Recorder"));
+  assert.ok(
+    !adjacent.includes("grid-rows-[0fr]"),
+    "the recorder's label stays visible after the viewer's line"
+  );
 });
+
+for (const [recorderName, expectedLabel] of [
+  [undefined, "Alice Recorder"],
+  ["Carol Recorder", "Carol Recorder"],
+  ["ليلى", "ليلى"],
+]) {
+  test(`stored self suggestions display ${expectedLabel} on a teammate's note`, async () => {
+    const html = await renderChat({
+      recorderLabel: "Alice Recorder",
+      segments: [
+        {
+          id: "suggested",
+          source: "mic",
+          speaker: "speaker_0",
+          suggestedName: "You",
+          suggestedProfileId: 7,
+          recorderName,
+          text: "Recorder's words",
+        },
+      ],
+    });
+    assert.match(html, new RegExp(`<span dir="auto"[^>]*>${expectedLabel}</span>`));
+    assert.doesNotMatch(html, />You</);
+  });
+}
 
 test("a later recorder's mic lines retain their name in the shared transcript", async () => {
   const html = await renderChat({
