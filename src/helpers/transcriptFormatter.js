@@ -34,6 +34,7 @@ function speakerKey(seg) {
     named,
     seg.speaker ? "" : seg.source || "",
     seg.recorderName || "",
+    isSpeakerLocked(seg),
   ].join("\u0000");
 }
 

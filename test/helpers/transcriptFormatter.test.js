@@ -351,6 +351,35 @@ test("exports keep different recorders' adjacent self lines separate", () => {
   assert.equal(JSON.parse(formatJson(note, segments, {})).segments[1].speaker, "Bob");
 });
 
+test("exports keep adjacent locked corrections separate from viewer-local self mappings", () => {
+  const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
+  const segment = {
+    source: "mic",
+    speaker: "speaker_0",
+    speakerName: "You",
+    recorderName: "Alice Recorder",
+  };
+  const segments = [
+    { ...segment, text: "Viewer commitment.", timestamp: 0 },
+    { ...segment, text: "Recorder commitment.", timestamp: 1, speakerLocked: true },
+  ];
+  const mappings = { speaker_0: "You" };
+  const json = JSON.parse(formatJson(note, segments, mappings));
+  assert.deepEqual(
+    json.segments.map(({ speaker, text }) => ({ speaker, text })),
+    [
+      { speaker: "You", text: "Viewer commitment." },
+      { speaker: "Alice Recorder", text: "Recorder commitment." },
+    ]
+  );
+  assert.match(formatTxt(note, segments, mappings), /Alice Recorder:\nRecorder commitment\./);
+  assert.match(
+    formatMd(note, segments, mappings),
+    /\*\*Alice Recorder\*\* `00:00:01`\nRecorder commitment\./
+  );
+  assert.match(formatSrt(segments, mappings, note), /Alice Recorder: Recorder commitment\./);
+});
+
 for (const [language, youLabel] of [
   ["en", "You"],
   ["de", "Du"],

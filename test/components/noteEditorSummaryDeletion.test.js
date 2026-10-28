@@ -1174,3 +1174,46 @@ test("the editor resolves the creator separately from custodian permissions and 
   assert.equal(globalThis.__embeddedChatOptions.noteOwnedByUser, false);
   await unmount();
 });
+
+test("diarization keeps stored recorder labels separate from viewer-local self mappings", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__embeddedChatOptions;
+  });
+  const { render, unmount, vite } = await loadNoteEditor(t, "editor");
+  globalThis.window.electronAPI.getSpeakerMappings = async () => [
+    { speaker_id: "speaker_2", display_name: "You" },
+  ];
+  const segments = [
+    { id: "original", source: "mic", speaker: "speaker_0", speakerName: "You", text: "Original" },
+    {
+      id: "appended",
+      source: "mic",
+      speaker: "speaker_1",
+      speakerName: "You",
+      recorderName: "Carol Recorder",
+      text: "Appended",
+    },
+    { id: "viewer", source: "mic", speaker: "speaker_2", text: "Viewer" },
+  ];
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify(segments),
+    },
+  });
+  const before = globalThis.__embeddedChatOptions.noteTranscript;
+  assert.match(before, /Note taker: Original\nCarol Recorder: Appended\nYou: Viewer$/);
+  const { useMeetingRecordingStore } = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  await React.act(async () =>
+    useMeetingRecordingStore.setState({ completedDiarization: { noteId: NOTE.id, segments } })
+  );
+  assert.equal(globalThis.__embeddedChatOptions.noteTranscript, before);
+  await unmount();
+});
