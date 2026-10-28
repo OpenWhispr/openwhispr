@@ -189,3 +189,50 @@ test("an interrupted session body stays fenced until recovery and cancellation k
   assert.equal(authContext.getValidatedAuthGeneration(), 4);
   assert.equal(browser.focusListenerCount(), 0);
 });
+
+test("a cancelled server-error binding read cannot clear a newer successful session", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const browser = installWindow({ token: "token-a", generation: 4 });
+  t.after(browser.restore);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
+  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
+  const session = authClient.$store.atoms.session;
+  const answer = () =>
+    new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  t.mock.method(globalThis, "fetch", async () => answer());
+  await session.value.refetch();
+  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+
+  let releaseScope;
+  let scopeRequested;
+  const scopeRead = new Promise((resolve) => (scopeRequested = resolve));
+  t.mock.method(globalThis.window.electronAPI, "getActiveAccountScope", () => {
+    scopeRequested();
+    return new Promise((resolve) => (releaseScope = resolve));
+  });
+  let failedSignal;
+  globalThis.fetch = async (_input, { signal }) => {
+    failedSignal = signal;
+    return new Response("{}", { status: 503 });
+  };
+  const failedRefetch = session.value.refetch();
+  await scopeRead;
+
+  globalThis.fetch = async () => answer();
+  await session.value.refetch();
+  assert.equal(failedSignal.aborted, true);
+  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+
+  releaseScope({ accountId: "user-a", authGeneration: 4 });
+  await failedRefetch;
+
+  assert.equal(session.value.data.user.id, "user-a");
+  assert.equal(session.value.error, null);
+  assert.equal(authContext.getBoundSessionGeneration("user-a"), 4);
+  assert.equal(authContext.getValidatedAuthGeneration(), 4);
+  assert.equal(authContext.getOfflineAccount(), null);
+  assert.equal(browser.focusListenerCount(), 0);
+});

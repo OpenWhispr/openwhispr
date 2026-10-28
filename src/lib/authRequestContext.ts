@@ -46,6 +46,7 @@ type AuthRequest = {
   url?: URL | string;
   headers?: Headers | Record<string, string>;
   credentials?: RequestCredentials;
+  signal?: AbortSignal | null;
   [AUTH_REQUEST_GENERATION]?: number;
 };
 
@@ -223,7 +224,7 @@ export async function authContextFetch(
       // Keep the session binding so a transient refetch failure keeps
       // presenting the account. A real 401 clears it via handleAuthRequestError.
       markRefetchFailed(requestGeneration(init));
-      await noteSessionUnreachable(requestGeneration(init));
+      await noteSessionUnreachable(requestGeneration(init), { signal: init?.signal });
     }
     throw error;
   }
@@ -345,13 +346,16 @@ export async function handleAuthRequestSuccess(context: AuthSuccessContext): Pro
 export async function handleAuthRequestError(context: AuthErrorContext): Promise<void> {
   const generation = requestGeneration(context.request);
   await assertAuthRequestCurrent(context.request);
-  if (!isGetSessionRequest(context.request)) return;
+  if (!isGetSessionRequest(context.request) || context.request.signal?.aborted) return;
   // Better Auth answers a dead credential with 401 (or 200 and no user). Any
   // other status, a 403 or 404 from a proxy or firewall included, says nothing
   // about the credential.
   if (context.response?.status !== 401) {
     markRefetchFailed(generation);
-    await noteSessionUnreachable(generation, { clearSession: true });
+    await noteSessionUnreachable(generation, {
+      clearSession: true,
+      signal: context.request.signal,
+    });
     return;
   }
   // The rejection outlives this run's generation counter only through the
@@ -388,7 +392,7 @@ function offlineEligible(current: RendererAuthContextSnapshot, generation: numbe
  */
 async function noteSessionUnreachable(
   generation: number,
-  { clearSession = false }: { clearSession?: boolean } = {}
+  { clearSession = false, signal }: { clearSession?: boolean; signal?: AbortSignal | null } = {}
 ): Promise<void> {
   const settle = (current: RendererAuthContextSnapshot): RendererAuthContextSnapshot =>
     clearSession ? withoutSessionResolution(current, generation) : current;
@@ -404,6 +408,7 @@ async function noteSessionUnreachable(
   }
   const userId = typeof scope?.accountId === "string" ? scope.accountId : null;
   update((current) => {
+    if (signal?.aborted) return current;
     const next = settle(current);
     if (!userId || scope?.authGeneration !== generation || !offlineEligible(next, generation)) {
       return next;
