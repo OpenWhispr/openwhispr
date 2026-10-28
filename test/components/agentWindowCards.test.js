@@ -1790,3 +1790,42 @@ test("a typed request awaiting a screenshot stays available if a voice take supe
     "the first request must be sent or restored"
   );
 });
+
+test("a newer follow-up selection survives an older send awaiting its screenshot", async (t) => {
+  const view = await mountWindow(t);
+  const settings = await view.vite.ssrLoadModule("/stores/settingsStore.ts");
+  await React.act(async () =>
+    settings.useSettingsStore.setState({ voiceAgentScreenContext: true })
+  );
+  const screen = defer();
+  view.happyWindow.electronAPI.captureScreenContext = () => screen.promise;
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.chat({
+    messages: [
+      { id: "answer", role: "assistant", content: "New follow-up context.", isStreaming: false },
+    ],
+  });
+  await view.settle();
+  await setDraft(view, view.host.querySelector(COMPOSER), "Initial typed request");
+  await React.act(async () => view.button("Send").click());
+  const range = view.happyWindow.document.createRange();
+  range.selectNodeContents(view.host.querySelector("[data-agent-answer]"));
+  view.happyWindow.getSelection().addRange(range);
+  await React.act(async () =>
+    view.happyWindow.document.dispatchEvent(
+      new view.happyWindow.MouseEvent("mouseup", { bubbles: true })
+    )
+  );
+  await React.act(async () => view.host.querySelector('[role="toolbar"] button').click());
+  const hasContext = () =>
+    [...view.host.querySelectorAll("button")].some((button) =>
+      /remove.*context/i.test(button.getAttribute("aria-label") ?? "")
+    );
+  assert.equal(hasContext(), true);
+  await React.act(async () => screen.resolve({ data: "screen", mediaType: "image/jpeg" }));
+  assert.equal(hasContext(), true, "the older send must not consume the newer context");
+  assert.equal(globalThis.__chat.sentOptions[0].selectedContext, undefined);
+  await setDraft(view, view.host.querySelector(COMPOSER), "Explain this selected part");
+  await React.act(async () => view.button("Send").click());
+  assert.equal(globalThis.__chat.sentOptions.at(-1).selectedContext.text, "New follow-up context.");
+});

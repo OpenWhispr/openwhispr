@@ -58,7 +58,14 @@ test("a typed request opens the modal and clears the draft; a spoken one keeps b
     attachment: { image: "AAAA", mediaType: "image/jpeg" },
   };
 
-  const typed = agentWindowReducer(typing, { type: "submitted", typed: true, draft: "typed" });
+  const submission = {
+    type: "submitted",
+    typed: true,
+    draft: "typed",
+    selectedContext: typing.selectedContext,
+    attachment: typing.attachment,
+  };
+  const typed = agentWindowReducer(typing, submission);
   assert.equal(typed.layout, "modal");
   assert.equal(typed.draft, "");
   assert.equal(typed.selectedContext, null);
@@ -66,7 +73,7 @@ test("a typed request opens the modal and clears the draft; a spoken one keeps b
 
   const spoken = agentWindowReducer(
     { ...typing, layout: "pill", input: "voice" },
-    { type: "submitted", typed: false, draft: "typed" }
+    { ...submission, typed: false }
   );
   assert.equal(spoken.layout, "pill");
   assert.equal(spoken.draft, "typed");
@@ -75,9 +82,18 @@ test("a typed request opens the modal and clears the draft; a spoken one keeps b
 
   const editedWhilePreparing = agentWindowReducer(
     { ...typing, draft: "Newer typed draft" },
-    { type: "submitted", typed: true, draft: "typed" }
+    submission
   );
   assert.equal(editedWhilePreparing.draft, "Newer typed draft");
+
+  const newerContext = { ...context, text: "Newer selection" };
+  const newerAttachment = { image: "new-image", mediaType: "image/jpeg" };
+  const selectedWhilePreparing = agentWindowReducer(
+    { ...typing, selectedContext: newerContext, attachment: newerAttachment },
+    submission
+  );
+  assert.equal(selectedWhilePreparing.selectedContext, newerContext);
+  assert.equal(selectedWhilePreparing.attachment, newerAttachment);
 });
 
 test("a take switched to typing lands in the draft after what was typed", async () => {

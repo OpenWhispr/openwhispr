@@ -399,7 +399,13 @@ export default function AgentWindow() {
         const image =
           typed || !extras ? ((await captureRequestScreen()) ?? attachment) : attachment;
         if (press !== pressRef.current) return true;
-        dispatch({ type: "submitted", typed, draft: current.draft });
+        dispatch({
+          type: "submitted",
+          typed,
+          draft: current.draft,
+          selectedContext: current.selectedContext,
+          attachment: current.attachment,
+        });
         return sendRef.current(text, {
           ...(selectedContext ? { selectedContext } : {}),
           ...(image ? { attachment: image } : {}),

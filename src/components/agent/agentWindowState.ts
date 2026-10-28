@@ -48,7 +48,13 @@ export type AgentWindowAction =
   | { type: "appendDraft"; text: string }
   | { type: "setContext"; context: AgentSelectionContext | null }
   | { type: "setAttachment"; attachment: ChatImageAttachment | null }
-  | { type: "submitted"; typed: boolean; draft: string }
+  | {
+      type: "submitted";
+      typed: boolean;
+      draft: string;
+      selectedContext: AgentSelectionContext | null;
+      attachment: ChatImageAttachment | null;
+    }
   | {
       type: "held";
       text: string;
@@ -135,8 +141,9 @@ export function agentWindowReducer(
         ...state,
         layout: action.typed ? "modal" : state.layout,
         draft: action.typed && state.draft === action.draft ? "" : state.draft,
-        selectedContext: null,
-        attachment: null,
+        selectedContext:
+          state.selectedContext === action.selectedContext ? null : state.selectedContext,
+        attachment: state.attachment === action.attachment ? null : state.attachment,
         notice: null,
       };
     case "held": {
