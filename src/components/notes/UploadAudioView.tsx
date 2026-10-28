@@ -5,6 +5,7 @@ import {
   FileAudio,
   X,
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   FolderOpen,
   Plus,
@@ -1028,8 +1029,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           <p
             id={uploadRestrictionId}
             role="status"
-            className="mb-5 rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-foreground/80"
+            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-amber-700 dark:bg-warning/10 dark:text-warning/90"
           >
+            <AlertTriangle
+              aria-hidden="true"
+              className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
+            />
             {t(uploadRestrictionKey(policyState))}
           </p>
         )}
