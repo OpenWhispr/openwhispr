@@ -1,14 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { act, createElement } = require("react");
-const { createRoot } = require("react-dom/client");
 const { renderToStaticMarkup } = require("react-dom/server");
-const {
-  createRendererServer,
-  installBrowserGlobals,
-  installHostDom,
-} = require("../lib/rendererTestHarness");
-const { findElement } = require("../lib/interactiveDom");
+const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
 async function loadProfileSection(t) {
   installBrowserGlobals(t);
@@ -45,16 +40,16 @@ test("an open password dialog becomes read-only and refuses submission", async (
   let root;
   t.after(() => act(() => root?.unmount()));
   installBrowserGlobals(t);
-  const container = installHostDom(t);
-  const state = { buttons: [], inputs: new Map(), submissions: [], submit: null };
-  globalThis.__profileTest = state;
-  t.after(() => delete globalThis.__profileTest);
+  const container = installInteractiveDom(t);
+  const submissions = [];
+  globalThis.__profileSubmissions = submissions;
+  t.after(() => delete globalThis.__profileSubmissions);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-profile-section-",
     mockModules: {
       "/lib/auth": `
         export const changePassword = async (data) => {
-          globalThis.__profileTest.submissions.push(data);
+          globalThis.__profileSubmissions.push(data);
           return {};
         };
         export const hasCredentialAccount = async () => true;
@@ -62,28 +57,11 @@ test("an open password dialog becomes read-only and refuses submission", async (
       `,
       "react-i18next": `export const useTranslation = () => ({ t: (key) => key });`,
       "/ui/useToast": "export const useToast = () => ({ toast() {} });",
-      "/ui/input": `
-        import { createElement } from "react";
-        export const Input = (props) => {
-          globalThis.__profileTest.inputs.set(props.id, props);
-          return createElement("input", props);
-        };
-      `,
-      "/ui/button": `
-        import { createElement } from "react";
-        export const Button = (props) => {
-          globalThis.__profileTest.buttons.push(props);
-          return createElement("button", props);
-        };
-      `,
       "/ui/dialog": `
         import { createElement } from "react";
         const passthrough = (props) => createElement("div", null, props.children);
         export const Dialog = (props) => props.open ? props.children : null;
-        export const DialogContent = (props) => {
-          globalThis.__profileTest.submit = props.children.props.onSubmit;
-          return passthrough(props);
-        };
+        export const DialogContent = passthrough;
         export const DialogHeader = passthrough;
         export const DialogTitle = passthrough;
         export const DialogDescription = passthrough;
@@ -94,44 +72,51 @@ test("an open password dialog becomes read-only and refuses submission", async (
   const { default: ProfileSection } = await vite.ssrLoadModule(
     "/components/settings/ProfileSection.tsx"
   );
+  const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   const render = (readOnly) =>
     act(async () =>
       root.render(createElement(ProfileSection, { name: "Ada", readOnly, onSessionRefresh() {} }))
     );
   await render(false);
-  const opener = state.buttons.findLast((props) =>
-    props.children?.includes?.("settingsPage.account.profile.password.change")
+  const opener = findElement(
+    container,
+    (node) =>
+      node.tagName === "BUTTON" &&
+      node.textContent.includes("settingsPage.account.profile.password.change")
   );
-  assert.equal(opener.disabled, false);
-  await act(async () => opener.onClick());
-  for (const [id, value] of [
+  assert.equal(opener.getAttribute("disabled"), null);
+  await act(async () => opener.dispatchEvent({ type: "click", bubbles: true, button: 0 }));
+  const passwords = [
     ["profile-current-password", "old-password"],
     ["profile-new-password", "new-password"],
     ["profile-confirm-password", "new-password"],
-  ]) {
-    await act(async () => state.inputs.get(id).onChange({ target: { value } }));
+  ];
+  const field = (id) => findElement(container, (node) => node.getAttribute("id") === id);
+  for (const [id, value] of passwords) {
+    await act(async () => {
+      const input = field(id);
+      input.value = value;
+      input.dispatchEvent({ type: "input", bubbles: true });
+    });
   }
-  const submitButton = () => state.buttons.findLast((props) => props.type === "submit");
-  assert.equal(submitButton().disabled, false);
+  const submitButton = findElement(container, (node) => node.getAttribute("type") === "submit");
+  assert.equal(submitButton.getAttribute("disabled"), null);
 
   await render(true);
-  assert.equal(submitButton().disabled, true);
-  for (const id of [
-    "profile-current-password",
-    "profile-new-password",
-    "profile-confirm-password",
-  ]) {
-    assert.equal(state.inputs.get(id).disabled, true);
+  assert.equal(submitButton.getAttribute("disabled"), "");
+  for (const [id] of passwords) {
+    assert.equal(field(id).getAttribute("disabled"), "");
   }
   const checkbox = findElement(container, (node) => node.type === "checkbox");
-  assert.equal(checkbox.hasAttribute("disabled"), true);
-  await act(async () => state.submit({ preventDefault() {} }));
-  assert.deepEqual(state.submissions, []);
+  assert.equal(checkbox.getAttribute("disabled"), "");
+  const form = findElement(container, (node) => node.tagName === "FORM");
+  await act(async () => form.dispatchEvent({ type: "submit", bubbles: true, preventDefault() {} }));
+  assert.deepEqual(submissions, []);
 
   await render(false);
-  await act(async () => state.submit({ preventDefault() {} }));
-  assert.deepEqual(state.submissions, [
+  await act(async () => form.dispatchEvent({ type: "submit", bubbles: true, preventDefault() {} }));
+  assert.deepEqual(submissions, [
     { currentPassword: "old-password", newPassword: "new-password", revokeOtherSessions: true },
   ]);
 });

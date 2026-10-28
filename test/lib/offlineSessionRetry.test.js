@@ -39,6 +39,24 @@ const sessionRequest = (generation) => ({
   openWhisprAuthGeneration: generation,
 });
 
+async function createValidatedSession(t) {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const browser = installWindow({ token: "token-a", generation: 4 });
+  t.after(browser.restore);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
+  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
+  const session = authClient.$store.atoms.session;
+  const answer = () =>
+    new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  t.mock.method(globalThis, "fetch", async () => answer());
+  await session.value.refetch();
+  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+  return { browser, authContext, authClient, session, answer };
+}
+
 test("an offline account asks for the session again until the server answers", async (t) => {
   t.mock.timers.enable({ apis: ["setInterval"] });
   const browser = installWindow({ token: "token-a", generation: 3 });
@@ -114,20 +132,7 @@ test("a session whose refetch failed asks again until it validates", async (t) =
 });
 
 test("an interrupted session body stays fenced until recovery and cancellation keeps validation", async (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const browser = installWindow({ token: "token-a", generation: 4 });
-  t.after(browser.restore);
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
-  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
-  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
-  const session = authClient.$store.atoms.session;
-  const answer = () =>
-    new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  t.mock.method(globalThis, "fetch", async () => answer());
-  await session.value.refetch();
-  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+  const { browser, authContext, authClient, session, answer } = await createValidatedSession(t);
 
   let body;
   let headersSent;
@@ -191,20 +196,7 @@ test("an interrupted session body stays fenced until recovery and cancellation k
 });
 
 test("a cancelled server-error binding read cannot clear a newer successful session", async (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const browser = installWindow({ token: "token-a", generation: 4 });
-  t.after(browser.restore);
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
-  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
-  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
-  const session = authClient.$store.atoms.session;
-  const answer = () =>
-    new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  t.mock.method(globalThis, "fetch", async () => answer());
-  await session.value.refetch();
-  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
+  const { browser, authContext, session, answer } = await createValidatedSession(t);
 
   let releaseScope;
   let scopeRequested;
@@ -238,30 +230,13 @@ test("a cancelled server-error binding read cannot clear a newer successful sess
 });
 
 test("an interrupted 401 body preserves the rejection and clears the saved account", async (t) => {
-  t.mock.timers.enable({ apis: ["setInterval"] });
-  const browser = installWindow({ token: "token-a", generation: 4 });
-  t.after(browser.restore);
+  const { browser, authContext, session } = await createValidatedSession(t);
   const profileKey = "openwhispr:accountProfile";
   const stored = new Map([[profileKey, JSON.stringify({ id: "user-a", validatedAt: Date.now() })]]);
   globalThis.window.localStorage = {
     getItem: (key) => stored.get(key) ?? null,
     removeItem: (key) => stored.delete(key),
   };
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-offline-retry-" });
-  const authContext = await vite.ssrLoadModule("/lib/authRequestContext.ts");
-  const { authClient } = await vite.ssrLoadModule("/lib/auth.ts");
-  const session = authClient.$store.atoms.session;
-  t.mock.method(
-    globalThis,
-    "fetch",
-    async () =>
-      new Response(JSON.stringify({ user: { id: "user-a" }, session: { id: "session-a" } }), {
-        headers: { "Content-Type": "application/json" },
-      })
-  );
-  await session.value.refetch();
-  assert.equal(authContext.commitValidatedAuthContext(4, "user-a"), true);
-
   globalThis.fetch = async () =>
     new Response(
       new ReadableStream({
