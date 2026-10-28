@@ -363,11 +363,12 @@ test("closure: shared-channel dictation providers have token entries under their
   }
 });
 
-test("closure: every allowed meeting provider has a token entry", async () => {
+test("closure: every personal meeting provider has a token entry", async () => {
   const { REALTIME_TOKEN_PROVIDERS } = await loadTokens();
   const { ALLOWED_MEETING_PROVIDERS } = await loadMeeting();
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    // Enterprise uses the profile's socket factory, covered by enterpriseAudioTransport.test.js.
+    if (provider === "local" || provider === "enterprise-realtime") continue;
     assert.equal(
       typeof REALTIME_TOKEN_PROVIDERS[provider],
       "function",

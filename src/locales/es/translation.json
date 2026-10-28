@@ -214,6 +214,7 @@
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
+    "managedConfigAmbiguous": "La configuración gestionada de tu organización es incoherente. Contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
     "resizePanel": "Cambiar el tamaño del panel"
   },
@@ -972,6 +973,9 @@
         "managedTranscriptionUnavailable": "La transcripción gestionada no está disponible en este momento. Inténtalo de nuevo en un momento.",
         "managedRouteInvalid": "La transcripción gestionada no pudo iniciarse debido a una discrepancia de configuración. Inténtalo de nuevo o contacta a tu administrador.",
         "managedAuthRejected": "Las credenciales de transcripción gestionada de tu organización fueron rechazadas. Contacta a tu administrador.",
+        "managedRequestRejected": "El servicio de transcripción de tu organización rechazó este audio (HTTP {{status}}). Inténtalo de nuevo o contacta a tu administrador.",
+        "managedResponseMalformed": "El servicio de transcripción de tu organización envió una respuesta que OpenWhispr no pudo leer. Inténtalo de nuevo o contacta a tu administrador.",
+        "managedChunkTooLarge": "No se pudo dividir este audio en partes lo bastante pequeñas para el servicio de transcripción de tu organización. Contacta a tu administrador.",
         "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
         "providerKeyMissing": "No hay ninguna clave de API configurada para tu proveedor de transcripción. Añádela en Ajustes → Voz a texto.",
         "cleanupTruncated": "El modelo de IA se quedó sin espacio antes de terminar de limpiar tu dictado.",
@@ -2468,6 +2472,7 @@
         "description": "Comprueba tu conexión e inténtalo de nuevo.",
         "retry": "Reintentar"
       },
+      "staleList": "No se pudo conectar con OpenWhispr. Se muestran tus espacios de trabajo de la última vez que te conectaste.",
       "tab": {
         "general": "General",
         "members": "Miembros",
@@ -3286,7 +3291,8 @@
       "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
       "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde.",
       "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes.",
-      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos."
+      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+      "disabledByOrg": "Tu organización ha desactivado la carga de audio."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -3313,7 +3319,11 @@
       "systemAudioQuiet": {
         "title": "El audio de la reunión se ha quedado en silencio",
         "description": "No se ha oído a nadie desde hace unos minutos. Si la llamada sigue en curso, revisa tu dispositivo de salida de sonido."
-      }
+      },
+      "recordingDisabledByOrg": "Tu organización ha desactivado la grabación de reuniones.",
+      "stoppedAccountChanged": "La grabación se detuvo porque cerraste sesión o cambiaste de cuenta.",
+      "stoppedPolicyUnresolved": "La grabación se detuvo porque no se pudieron comprobar los ajustes de tu organización.",
+      "stoppedWorkspaceChanged": "La grabación se detuvo porque cambiaste de espacio de trabajo."
     },
     "meetingPill": {
       "returnToNote": "Volver a la grabación",
@@ -4897,6 +4907,7 @@
     },
     "start": "Tomar notas",
     "join": "Unirse y transcribir",
+    "joinOnly": "Unirse a la reunión",
     "folders": {
       "choose": "Elegir carpeta de la reunión",
       "search": "Buscar carpetas",
@@ -4929,7 +4940,9 @@
         "CREATE_FAILED": "No se pudo completar. Vuelve a intentarlo.",
         "LINKED_NOTE_CHANGED": "Revisa el destino y vuelve a unirte.",
         "NOTE_UNAVAILABLE": "Esta nota no está disponible. Reintenta sin crear otra.",
-        "START_FAILED": "No se pudo completar. Vuelve a intentarlo."
+        "START_FAILED": "No se pudo completar. Vuelve a intentarlo.",
+        "POLICY_MEETING_RECORDING_DISABLED": "Tu organización ha desactivado la grabación de reuniones.",
+        "POLICY_UNRESOLVABLE": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento."
       }
     }
   },
@@ -5110,5 +5123,51 @@
     "permissionDenied": "Denegado",
     "permissionRestricted": "Restringido",
     "permissionNotDetermined": "No solicitado"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Configuración de audio empresarial",
+      "description": "Configura credenciales en este dispositivo y prueba la conexión de audio de tu organización.",
+      "provider": "Proveedor de audio",
+      "gateway": "Pasarela de audio",
+      "provisioned": "Credencial configurada",
+      "credentialMissing": "Se requiere una credencial",
+      "proxyCredentialFormat": "Para un proxy, introduce JSON con username y password. Para audio, introduce la clave API.",
+      "probeConsent": "Autorizo solicitudes breves de prueba de audio que pueden generar cargos.",
+      "testBatch": "Probar transcripción de archivos",
+      "testRealtime": "Probar conexión de reunión",
+      "testPassed": "La prueba se completó y se informó al administrador.",
+      "testFailed": "Falló la prueba de conexión.",
+      "setupFailed": "Falló la configuración. Revisa la sesión, el acceso al espacio y la red.",
+      "saved": "Credencial guardada en este dispositivo.",
+      "operationUnavailable": "Tu organización no ha configurado esta operación de audio.",
+      "certificateUnavailable": "El conjunto de certificados de la organización no está disponible.",
+      "partialUpload": "Fallaron {{count}} fragmentos de audio; la transcripción está incompleta.",
+      "importBootstrap": "Importar configuración de la organización",
+      "importedBootstrap": "Credenciales de configuración importadas.",
+      "bootstrapNotFound": "No se encontró el archivo de configuración.",
+      "checks": {
+        "authRejected": "El proveedor de audio rechazó las credenciales de este dispositivo. Revisa la clave aprovisionada o la configuración de identidad.",
+        "tlsFailed": "No se pudo verificar la conexión segura. Revisa los certificados de tu organización.",
+        "proxyFailed": "Falló la conexión a través del proxy de tu organización. Revisa la configuración y las credenciales del proxy.",
+        "timeout": "El proveedor de audio no respondió a tiempo. Revisa tu red o VPN.",
+        "credentialMissing": "Una credencial que necesita esta conexión no está aprovisionada en este dispositivo.",
+        "configChanged": "Tu organización cambió esta configuración de audio. Vuelve a abrir la configuración e inténtalo de nuevo.",
+        "protocolFailed": "El proveedor de audio respondió en un formato que OpenWhispr no admite. Revisa la implementación y el protocolo.",
+        "networkFailed": "No se pudo conectar con el proveedor de audio. Revisa tu red, VPN y DNS.",
+        "secureStorageUnavailable": "Este dispositivo no tiene almacenamiento seguro de credenciales. En Linux, instala y desbloquea un llavero (como GNOME Keyring o KWallet) e inténtalo de nuevo."
+      },
+      "errors": {
+        "ssoRequired": "Tu organización exige el SSO de la empresa. Inicia sesión con SSO e inténtalo de nuevo.",
+        "enterpriseRequired": "El audio empresarial requiere un plan Enterprise activo para este espacio de trabajo.",
+        "signInRequired": "Tu sesión caducó. Vuelve a iniciar sesión e inténtalo de nuevo.",
+        "accessDenied": "Tu cuenta no puede configurar el audio de este espacio de trabajo. Comprueba que eres miembro y que estás en el espacio correcto.",
+        "rateLimited": "Demasiadas solicitudes de prueba. Espera unos minutos e inténtalo de nuevo."
+      },
+      "bootstrapNotProtected": "El archivo de arranque debe ser de tu propiedad y solo tú debes poder leerlo. Pide a TI que lo vuelva a enviar.",
+      "bootstrapUnreadable": "OpenWhispr no puede leer el archivo de arranque. Pide a TI que tu cuenta pueda leerlo.",
+      "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
+      "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
+    }
   }
 }

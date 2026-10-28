@@ -1,5 +1,5 @@
 import type { SpaceItem, TeamRole } from "../types/electron";
-import type { MySpace, SpaceMemberRemoval } from "./SpacesService";
+import type { MySpace, SpaceMemberRemoval, SpaceRecord } from "./SpacesService";
 
 interface MutationResult {
   success: boolean;
@@ -18,7 +18,10 @@ export interface SpaceActionsDependencies {
       workspaceId: string,
       input: { name: string; emoji?: string | null; member_ids: string[]; team_ids: string[] }
     ) => Promise<MySpace>;
-    update: (spaceId: string, updates: { name: string; emoji: string | null }) => Promise<MySpace>;
+    update: (
+      spaceId: string,
+      updates: { name: string; emoji: string | null }
+    ) => Promise<SpaceRecord>;
     remove: (spaceId: string) => Promise<void>;
     assignTeam: (spaceId: string, teamId: string, access?: "admin" | "member") => Promise<void>;
     unassignTeam: (spaceId: string, teamId: string) => Promise<void>;
@@ -110,7 +113,7 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       return { success: true };
     }
 
-    let cloudSpace: MySpace;
+    let cloudSpace: SpaceRecord;
     try {
       cloudSpace = await deps.spaces.update(space.cloud_space_id, updates);
     } catch (err) {
@@ -124,7 +127,16 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     }
 
     try {
-      await deps.local.upsertSpaceFromCloud(cloudSpace as unknown as Record<string, unknown>);
+      // The response carries no access fields, and the upsert overwrites them all, so the
+      // caller's roles, teams and capabilities carry over from the mirror until the next sync.
+      await deps.local.upsertSpaceFromCloud({
+        my_role: space.my_role,
+        my_direct_role: space.my_direct_role,
+        member_count: space.member_count,
+        teams: space.teams,
+        capabilities: space.capabilities,
+        ...cloudSpace,
+      });
       await deps.local.setSpaceSyncStatus(space.id, "synced");
       await deps.local.loadSpaces();
     } catch (err) {

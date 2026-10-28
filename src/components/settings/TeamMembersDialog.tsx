@@ -12,7 +12,8 @@ import InviteTeammateDialog from "../InviteTeammateDialog";
 import TeamRosterSection from "../TeamRosterSection";
 import { leaveTeam } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
-import { canManageTeamRoster, canManageWorkspace } from "../../lib/spacePermissions";
+import { workspaceCan } from "../../lib/capabilities";
+import { canManageTeamRoster } from "../../lib/spacePermissions";
 import type { Team, TeamMember, Workspace } from "../../types/electron";
 
 interface TeamMembersDialogProps {
@@ -41,9 +42,10 @@ export default function TeamMembersDialog({
   const [inviteEmail, setInviteEmail] = useState<string | undefined>(undefined);
   const showLeaveSpinner = useDelayedFlag(isLeaving);
 
-  const isWorkspaceAdmin = canManageWorkspace(workspace.role);
+  // Workspace invites are 403'd without manage_members.
+  const canInviteToWorkspace = workspaceCan(workspace, "manage_members");
   const myTeamRole = teamMembers.find((m) => m.user_id === user?.id)?.role ?? null;
-  const canManage = canManageTeamRoster(myTeamRole, workspace.role);
+  const canManage = canManageTeamRoster(myTeamRole, workspace);
   // Anyone with an explicit membership row can drop it — including workspace
   // admins who added themselves (their implicit admin access survives leaving).
   const canLeave = myTeamRole !== null;
@@ -114,7 +116,7 @@ export default function TeamMembersDialog({
             workspaceMembers={roster}
             currentUserId={user?.id}
             onInvite={
-              isWorkspaceAdmin
+              canInviteToWorkspace
                 ? (email) => {
                     setInviteEmail(email);
                     setInviteOpen(true);

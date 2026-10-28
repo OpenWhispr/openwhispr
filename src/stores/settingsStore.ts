@@ -92,7 +92,7 @@ export const LLM_POLICY_PROVIDER_IDS = [
 export const LLM_ENTERPRISE_POLICY_PROVIDER_IDS = ["bedrock"] as const;
 
 // Managed transcription is Azure-only in this phase.
-export const TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS = ["azure"] as const;
+export const TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS = ["azure", "openai-compatible"] as const;
 
 const TRANSCRIPTION_POLICY_CATALOG = {
   modes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"] as const,
@@ -102,7 +102,8 @@ const TRANSCRIPTION_POLICY_CATALOG = {
 
 const MEETING_TRANSCRIPTION_POLICY_CATALOG = {
   // Self-hosted realtime is not implemented for Note Recording.
-  modes: ["openwhispr", "providers", "local"] as const,
+  modes: ["openwhispr", "providers", "local", "enterprise"] as const,
+  enterpriseProviders: TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   byokProviders: modelRegistryData.transcriptionProviders
     .filter(
       (provider) =>

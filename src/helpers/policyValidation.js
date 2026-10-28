@@ -16,7 +16,7 @@ const TRANSCRIPTION_MODES = new Set([
 ]);
 const LLM_MODES = TRANSCRIPTION_MODES;
 // Enterprise clouds with a managed transcription implementation (Azure only for now).
-const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure"]);
+const TRANSCRIPTION_ENTERPRISE_PROVIDERS = new Set(["azure", "openai-compatible"]);
 const ENTERPRISE_PROVIDERS = new Set(
   modelRegistryData.enterpriseProviders.map((provider) => provider.id)
 );
@@ -54,6 +54,10 @@ function isValidPolicyShape(policy) {
     isKnownList(policy.llm.allowedEnterpriseProviders, ENTERPRISE_PROVIDERS) &&
     typeof policy.features?.agentEnabled === "boolean" &&
     typeof policy.features?.webSearchEnabled === "boolean" &&
+    (policy.features?.meetingRecordingEnabled === undefined ||
+      typeof policy.features.meetingRecordingEnabled === "boolean") &&
+    (policy.features?.audioUploadEnabled === undefined ||
+      typeof policy.features.audioUploadEnabled === "boolean") &&
     // Additive within policy version 1: absent (older server) means allowed.
     (policy.features?.screenContextEnabled === undefined ||
       typeof policy.features.screenContextEnabled === "boolean") &&

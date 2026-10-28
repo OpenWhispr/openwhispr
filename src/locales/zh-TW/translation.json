@@ -214,6 +214,7 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
+    "managedConfigAmbiguous": "您組織的託管設定不一致。請聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
     "resizePanel": "調整面板大小"
   },
@@ -972,6 +973,9 @@
         "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
+        "managedRequestRejected": "您組織的轉錄服務拒絕了此音訊（HTTP {{status}}）。請重試或聯絡管理員。",
+        "managedResponseMalformed": "您組織的轉錄服務傳回了 OpenWhispr 無法讀取的回應。請重試或聯絡管理員。",
+        "managedChunkTooLarge": "無法將此音訊分割得夠小以供您組織的轉錄服務使用。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
@@ -2416,6 +2420,7 @@
         "description": "請檢查網路連線後再試一次。",
         "retry": "重試"
       },
+      "staleList": "無法連線至 OpenWhispr。顯示的是你上次連線時的工作區。",
       "tab": {
         "general": "一般",
         "members": "成員",
@@ -3234,7 +3239,8 @@
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
       "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
       "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。",
-      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。"
+      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
+      "disabledByOrg": "您的組織已停用音訊上傳。"
     },
     "meeting": {
       "title": "會議筆記",
@@ -3261,7 +3267,11 @@
       "systemAudioQuiet": {
         "title": "會議音訊已靜默",
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
-      }
+      },
+      "recordingDisabledByOrg": "您的組織已停用會議錄音。",
+      "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
+      "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
+      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -4897,6 +4907,7 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄",
+    "joinOnly": "加入會議",
     "folders": {
       "choose": "選擇會議資料夾",
       "search": "搜尋資料夾",
@@ -4929,7 +4940,9 @@
         "CREATE_FAILED": "無法完成，請重試。",
         "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
         "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
-        "START_FAILED": "無法完成，請重試。"
+        "START_FAILED": "無法完成，請重試。",
+        "POLICY_MEETING_RECORDING_DISABLED": "您的組織已停用會議錄音。",
+        "POLICY_UNRESOLVABLE": "貴組織的設定尚未載入完成。請稍後再試。"
       }
     }
   },
@@ -5110,5 +5123,51 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業音訊設定",
+      "description": "在此裝置設定憑證並測試組織的音訊連線。",
+      "provider": "音訊供應商",
+      "gateway": "音訊閘道",
+      "provisioned": "憑證已設定",
+      "credentialMissing": "需要憑證",
+      "proxyCredentialFormat": "代理伺服器請輸入包含 username 和 password 的 JSON；音訊請輸入 API 金鑰。",
+      "probeConsent": "我允許傳送簡短的音訊測試要求，這可能產生供應商費用。",
+      "testBatch": "測試檔案轉錄",
+      "testRealtime": "測試會議連線",
+      "testPassed": "連線測試通過，已向管理員回報。",
+      "testFailed": "連線測試失敗。",
+      "setupFailed": "設定失敗。請檢查登入狀態、工作區權限與網路設定。",
+      "saved": "憑證已儲存在此裝置。",
+      "operationUnavailable": "組織尚未設定此音訊操作。",
+      "certificateUnavailable": "組織的憑證組合無法使用。",
+      "partialUpload": "{{count}} 個音訊片段失敗，轉錄不完整。",
+      "importBootstrap": "匯入組織設定",
+      "importedBootstrap": "已匯入設定憑證。",
+      "bootstrapNotFound": "找不到設定檔。",
+      "checks": {
+        "authRejected": "音訊服務商拒絕了此裝置的憑證。請檢查已佈建的金鑰或身分設定。",
+        "tlsFailed": "無法驗證安全連線。請檢查您組織的憑證。",
+        "proxyFailed": "透過您組織的 Proxy 連線失敗。請檢查 Proxy 設定與憑證。",
+        "timeout": "音訊服務商未及時回應。請檢查您的網路或 VPN。",
+        "credentialMissing": "此裝置尚未佈建此連線所需的憑證。",
+        "configChanged": "您的組織已變更此音訊設定。請重新開啟設定後再試一次。",
+        "protocolFailed": "音訊服務商回傳了 OpenWhispr 不支援的格式。請檢查部署與通訊協定。",
+        "networkFailed": "無法連線至音訊服務商。請檢查您的網路、VPN 與 DNS。",
+        "secureStorageUnavailable": "此裝置沒有安全的憑證儲存區。在 Linux 上，請安裝並解鎖金鑰圈（例如 GNOME Keyring 或 KWallet）後再試一次。"
+      },
+      "errors": {
+        "ssoRequired": "您的組織要求使用公司 SSO。請透過 SSO 登入後再試一次。",
+        "enterpriseRequired": "企業音訊需要此工作區具備有效的 Enterprise 方案。",
+        "signInRequired": "您的工作階段已過期。請重新登入後再試一次。",
+        "accessDenied": "您的帳號無法為此工作區設定音訊。請確認您是成員，且已進入正確的工作區。",
+        "rateLimited": "測試要求過多。請稍候幾分鐘再試一次。"
+      },
+      "bootstrapNotProtected": "引導檔案必須歸您所有，且只有您能讀取。請 IT 部門重新派送。",
+      "bootstrapUnreadable": "OpenWhispr 無法讀取引導檔案。請 IT 部門讓您的帳號可以讀取。",
+      "bootstrapMismatch": "引導檔案與您的帳號、此工作區或其設定的憑證不符。",
+      "testLinkOtherWorkspace": "此測試連結對應的是其他工作區。請切換到該工作區，然後重新開啟連結。"
+    }
   }
 }
