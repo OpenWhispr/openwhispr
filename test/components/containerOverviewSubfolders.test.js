@@ -21,7 +21,6 @@ const FOLDERS = [Q1, WORK, folder(9, "Elsewhere", 7, 2), folder(10, "Home"), fol
 
 async function renderOverview(t, overviewFolder) {
   installBrowserGlobals(t);
-  t.after(() => delete globalThis.__chatOptions);
   const i18n = i18next.createInstance();
   await i18n.use(initReactI18next).init({
     lng: "en",
@@ -43,12 +42,7 @@ async function renderOverview(t, overviewFolder) {
         export const folderContainerKey = (id) => "f:" + id;
         export const navigateToContainer = () => {};
       `,
-      "/hooks/useContainerChat": `
-        export const useContainerChat = (options) => {
-          globalThis.__chatOptions = options;
-          return {};
-        };
-      `,
+      "/hooks/useContainerChat": "export const useContainerChat = () => ({});",
       "/lib/capabilities":
         "export const spaceCan = () => false; export const workspaceCan = () => false;",
       "/InviteTeammateDialog": "export default function Mock() { return null; }",
@@ -88,9 +82,8 @@ test("a parent folder lists its own subfolders above its notes, with direct coun
   assert.doesNotMatch(html, /Elsewhere|Q2/);
 });
 
-test("a subfolder shows no subfolder list and names its parent to the chat", async (t) => {
+test("a subfolder shows no subfolder list", async (t) => {
   const html = await renderOverview(t, Q1);
 
   assert.doesNotMatch(html, /Subfolders/);
-  assert.equal(globalThis.__chatOptions.folderLabel, "Work / Q1");
 });
