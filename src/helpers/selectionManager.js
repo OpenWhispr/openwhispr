@@ -647,11 +647,15 @@ class SelectionManager {
     const beforeWrite = this.clipboardManager._readClipboardTextAll();
     const sentinel = `__OPENWHISPR_SELECTION_${crypto.randomUUID()}__`;
     this.clipboardManager._writeClipboardTextAll(sentinel);
-    // A clipboard side the sentinel write didn't reach (KDE desyncs X11 from
-    // Wayland) still holds pre-copy content; snapshot it so stale text can't
-    // be mistaken for the copied selection. Known limitation: a clipboard that
-    // already held exactly the selected text reads as "no selection".
-    const baseline = new Set([...beforeWrite, ...this.clipboardManager._readClipboardTextAll()]);
+    const afterWrite = this.clipboardManager._readClipboardTextAll();
+    // macOS and Windows have one clipboard backend: observing the sentinel
+    // proves that a later copy of the original text is a fresh selection.
+    // Linux can expose a stale X11/Wayland side again after this snapshot.
+    const baseline = new Set(
+      this.platform !== "linux" && afterWrite.includes(sentinel)
+        ? afterWrite
+        : [...beforeWrite, ...afterWrite]
+    );
 
     const copyResult = await sendCopy();
     if (!copyResult?.success || !copyResult.target) {

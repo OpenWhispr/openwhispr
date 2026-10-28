@@ -263,7 +263,7 @@ test("oversized selections are rejected before creating a session", async () => 
 // Exercises the clipboard-sentinel path (Windows/Linux) with injected
 // clipboard reads, covering the KDE desync guard: a clipboard side the
 // sentinel write never reached must not be mistaken for the copied selection.
-function makeCaptureHarness({ readClipboard }) {
+function makeCaptureHarness({ readClipboard, platform = "linux" }) {
   const writes = [];
   const clipboardManager = {
     runClipboardOperation: (operation) => operation(),
@@ -275,7 +275,7 @@ function makeCaptureHarness({ readClipboard }) {
   const manager = new SelectionManager({
     clipboardManager,
     textEditMonitor: {},
-    platform: "linux",
+    platform,
     now: () => 1000,
   });
   return { manager, writes };
@@ -316,6 +316,54 @@ test("a copy that replaces the sentinel is captured and the clipboard restored",
   assert.equal(result.status, "selected");
   assert.equal(result.text, "copied selection");
   assert.equal(writes.at(-1), "user clipboard");
+});
+
+for (const platform of ["darwin", "win32"]) {
+  test(`${platform}: a selection already on the clipboard is captured after the sentinel`, async () => {
+    let copySent = false;
+    const { manager, writes } = makeCaptureHarness({
+      platform,
+      readClipboard: (written) =>
+        written.length === 0 || copySent ? ["user clipboard"] : [written[0]],
+    });
+    const result = await manager._captureViaClipboard(async () => {
+      copySent = true;
+      return { success: true, target: CAPTURE_TARGET };
+    }, null);
+
+    assert.equal(result.status, "selected");
+    assert.equal(result.text, "user clipboard");
+    assert.equal(writes.at(-1), "user clipboard");
+  });
+
+  test(`${platform}: an unobserved sentinel does not turn old clipboard text into a selection`, async () => {
+    const { manager } = makeCaptureHarness({
+      platform,
+      readClipboard: () => ["user clipboard"],
+    });
+    const result = await manager._captureViaClipboard(
+      async () => ({ success: true, target: CAPTURE_TARGET }),
+      null
+    );
+
+    assert.equal(result.status, "none");
+  });
+}
+
+test("a Linux clipboard side that reappears after the sentinel remains stale", async () => {
+  let copySent = false;
+  const { manager } = makeCaptureHarness({
+    readClipboard: (written) => {
+      if (written.length === 0 || copySent) return ["user clipboard"];
+      return [written[0]];
+    },
+  });
+  const result = await manager._captureViaClipboard(async () => {
+    copySent = true;
+    return { success: true, target: CAPTURE_TARGET };
+  }, null);
+
+  assert.equal(result.status, "none");
 });
 
 // A line copy (one line + trailing terminator) from an empty-selection Ctrl+C
