@@ -8,6 +8,7 @@ const {
   cleanProcessorName,
   parseAppleChip,
   makerModelName,
+  installedMemoryGb,
   clearCache,
 } = require("../../src/helpers/computerProfile.js");
 const { readActiveGpu } = require("../../src/utils/vulkanDetection.js");
@@ -22,7 +23,10 @@ function makeExec(responses = {}) {
   const calls = [];
   const execFileImpl = (file, args, options, callback) => {
     calls.push({ file, args, options });
-    const key = path.basename(file).toLowerCase().replace(/\.exe$/, "");
+    const key = path
+      .basename(file)
+      .toLowerCase()
+      .replace(/\.exe$/, "");
     const missing = Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     const response = responses[key] || { error: missing };
     setImmediate(() => callback(response.error || null, response.stdout || ""));
@@ -108,10 +112,7 @@ test("drops the built-in Radeon from an AMD processor name", () => {
     cleanProcessorName("AMD Ryzen 7 7840HS w/ Radeon 780M Graphics"),
     "AMD Ryzen 7 7840HS"
   );
-  assert.equal(
-    cleanProcessorName("AMD Ryzen 5 5500U with Radeon Graphics"),
-    "AMD Ryzen 5 5500U"
-  );
+  assert.equal(cleanProcessorName("AMD Ryzen 5 5500U with Radeon Graphics"), "AMD Ryzen 5 5500U");
 });
 
 test("parses Apple chip generation and tier", () => {
@@ -404,12 +405,52 @@ test("a Linux Mesa renderer drops Mesa and the codename bracket", async () => {
   assert.equal((await readComputerProfile(deps)).graphicsName, "Intel UHD Graphics 620");
 });
 
-test("rounds 15.7 GiB to 16 GB", async () => {
-  const profile = await readComputerProfile(baseDeps({ os: fakeOs({ totalmem: 15.7 * GIB }) }));
-  assert.equal(profile.memoryGb, 16);
-  clearCache();
-  const small = await readComputerProfile(baseDeps({ os: fakeOs({ totalmem: 7.4 * GIB }) }));
-  assert.equal(small.memoryGb, 7);
+test("usable memory snaps back up to the installed size it came from", async () => {
+  // Firmware and integrated graphics reserve part of it on Windows and Linux
+  for (const [usableGib, installed] of [
+    [15.7, 16],
+    [15.3, 16],
+    [13.9, 16],
+    [7.4, 8],
+    [6.9, 8],
+    [11.6, 12],
+    [31.2, 32],
+  ]) {
+    clearCache();
+    const profile = await readComputerProfile(
+      baseDeps({ os: fakeOs({ totalmem: usableGib * GIB }) })
+    );
+    assert.equal(profile.memoryGb, installed, `${usableGib} GiB usable`);
+  }
+});
+
+test("memory no installed size is close to keeps its own rounding", () => {
+  // A VM given 10 GB is not a 12 GB computer
+  assert.equal(installedMemoryGb(10 * GIB), 10);
+  assert.equal(installedMemoryGb(0), 0);
+});
+
+test("a Mac's memory is its exact size, never snapped up", async () => {
+  const { deps } = macDeps(
+    { machine_name: "MacBook Pro", chip_type: "Apple M3 Pro" },
+    { totalmem: 18 * GIB }
+  );
+  assert.equal((await readComputerProfile(deps)).memoryGb, 18);
+});
+
+test("Windows reads its installed memory modules over the usable figure", async () => {
+  const { deps } = windowsDeps(
+    {
+      Manufacturer: "LENOVO",
+      Model: "82SB",
+      PCSystemType: 2,
+      Version: "IdeaPad 5",
+      Batteries: 1,
+      InstalledMemory: 16 * GIB,
+    },
+    { totalmem: 13.4 * GIB }
+  );
+  assert.equal((await readComputerProfile(deps)).memoryGb, 16);
 });
 
 test("the system language is the lower-cased base code, with en as the fallback", async () => {
@@ -423,6 +464,9 @@ test("the system language is the lower-cased base code, with en as the fallback"
   assert.equal(await read(() => ["de_DE"]), "de");
   assert.equal(await read(() => []), "en");
   assert.equal(await read(() => [""]), "en");
+  assert.equal(await read(() => ["C"]), "en");
+  assert.equal(await read(() => ["POSIX"]), "en");
+  assert.equal(await read(() => ["C.UTF-8"]), "en");
   assert.equal(await read(() => undefined), "en");
   assert.equal(
     await read(() => {

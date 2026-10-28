@@ -20,7 +20,7 @@ const MAKER_NAMES = [
   [/Micro-Star/i, "MSI"],
 ];
 
-// One PowerShell call for everything the Windows name and form factor need.
+// One PowerShell call for everything the Windows name, form factor and memory need.
 const WINDOWS_HARDWARE_SCRIPT = [
   "$cs = Get-CimInstance Win32_ComputerSystem",
   "$csp = Get-CimInstance Win32_ComputerSystemProduct",
@@ -29,9 +29,13 @@ const WINDOWS_HARDWARE_SCRIPT = [
   "Model = $cs.Model;",
   "PCSystemType = $cs.PCSystemType;",
   "Version = $csp.Version;",
-  "Batteries = @(Get-CimInstance Win32_Battery).Count",
+  "Batteries = @(Get-CimInstance Win32_Battery).Count;",
+  "InstalledMemory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum",
   "} | ConvertTo-Json -Compress",
 ].join("\n");
+
+// Memory sizes computers ship with, in GB
+const INSTALLED_MEMORY_SIZES_GB = [4, 6, 8, 12, 16, 18, 20, 24, 32, 36, 48, 64, 96, 128, 192, 256];
 
 let profilePromise = null;
 
@@ -150,7 +154,22 @@ function resolveDeps(deps) {
   };
 }
 
-const NO_HARDWARE = { name: null, formFactor: "desktop", chipName: null };
+const NO_HARDWARE = {
+  name: null,
+  formFactor: "desktop",
+  chipName: null,
+  installedMemoryBytes: null,
+};
+
+// os.totalmem() is the memory the OS can use: Windows and Linux leave out what the
+// firmware and integrated graphics reserve, so a 16 GB laptop can report 13.9 GB.
+// That is snapped back up to the size it came from; a figure no installed size is
+// close to (a VM given 10 GB) keeps its own rounding.
+function installedMemoryGb(bytes) {
+  const gb = bytes / 2 ** 30;
+  const installed = INSTALLED_MEMORY_SIZES_GB.find((size) => size >= gb - 0.05);
+  return installed !== undefined && installed - gb <= installed * 0.15 ? installed : Math.round(gb);
+}
 
 async function readMacHardware(d) {
   const { error, stdout } = await run(
@@ -166,6 +185,7 @@ async function readMacHardware(d) {
     name: machineName,
     formFactor: machineName && /^MacBook/i.test(machineName) ? "laptop" : "desktop",
     chipName: usable(hardware?.chip_type) || usable(hardware?.cpu_type),
+    installedMemoryBytes: null,
   };
 }
 
@@ -189,6 +209,8 @@ async function readWindowsHardware(d) {
     }),
     formFactor: isLaptop ? "laptop" : "desktop",
     chipName: null,
+    installedMemoryBytes:
+      Number(hardware.InstalledMemory) > 0 ? Number(hardware.InstalledMemory) : null,
   };
 }
 
@@ -207,6 +229,7 @@ async function readLinuxHardware(d) {
       ? "laptop"
       : "desktop",
     chipName: null,
+    installedMemoryBytes: null,
   };
 }
 
@@ -226,20 +249,28 @@ async function readNvidia(d) {
 
 function baseLanguage(languages) {
   const first = Array.isArray(languages) ? languages[0] : null;
-  const base = typeof first === "string" ? first.split(/[-_]/)[0].trim().toLowerCase() : "";
-  return base || "en";
+  const base = typeof first === "string" ? first.split(/[-_.]/)[0].trim().toLowerCase() : "";
+  // Linux with no locale set reports C or POSIX, which names no language
+  return base && base !== "c" && base !== "posix" ? base : "en";
 }
 
 async function buildProfile(d) {
-  const [hardware, cpuModel, nvidia, memoryGb, parakeetSupported, systemLanguage] =
+  const [hardware, cpuModel, nvidia, usableMemoryBytes, parakeetSupported, systemLanguage] =
     await Promise.all([
       attempt(() => readHardware(d), NO_HARDWARE),
       attempt(() => d.os.cpus()[0]?.model, ""),
       attempt(() => readNvidia(d), null),
-      attempt(() => Math.round(d.os.totalmem() / 2 ** 30), 0),
+      attempt(() => d.os.totalmem(), 0),
       attempt(() => d.getParakeetCapability().supported === true, false),
       attempt(async () => baseLanguage(await d.getPreferredSystemLanguages()), "en"),
     ]);
+  // A Mac reports its exact size, and Windows its installed modules when CIM answers
+  const memoryGb =
+    d.platform === "darwin"
+      ? Math.round(usableMemoryBytes / 2 ** 30)
+      : hardware.installedMemoryBytes
+        ? Math.round(hardware.installedMemoryBytes / 2 ** 30)
+        : installedMemoryGb(usableMemoryBytes);
 
   const processorName = cleanProcessorName(cpuModel) || cleanProcessorName(hardware.chipName);
   const appleChip = parseAppleChip(processorName);
@@ -306,5 +337,6 @@ module.exports = {
   cleanProcessorName,
   parseAppleChip,
   makerModelName,
+  installedMemoryGb,
   clearCache,
 };
