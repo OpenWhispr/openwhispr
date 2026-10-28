@@ -1626,7 +1626,7 @@
     "managedAccount": "Managed account",
     "groups": {
       "account": "Account",
-      "app": "App",
+      "workspace": "Workspace",
       "aiModels": "AI Models",
       "system": "System"
     },
@@ -1637,11 +1637,19 @@
       },
       "plansBilling": {
         "description": "Plans, usage & billing",
-        "label": "Plans & Billing"
+        "label": "Plan & Billing"
       },
-      "workspace": {
-        "description": "Members, team spaces & API keys",
-        "label": "Workspace"
+      "workspaceGeneral": {
+        "label": "General",
+        "description": "Workspace name and icon"
+      },
+      "workspacePeople": {
+        "label": "People",
+        "description": "Members and teams"
+      },
+      "workspaceDeveloper": {
+        "label": "Developer",
+        "description": "Workspace API keys"
       },
       "general": {
         "description": "Appearance, sounds & startup",
@@ -1657,11 +1665,11 @@
       },
       "speechToText": {
         "description": "Engines for dictation & note recording",
-        "label": "Speech-to-Text"
+        "label": "Speech to Text"
       },
       "llms": {
         "description": "Models for chat, cleanup & summaries",
-        "label": "Language Models"
+        "label": "Language Model"
       },
       "privacyData": {
         "description": "Privacy, permissions & analytics",
@@ -1692,8 +1700,11 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Groups",
-        "developer": "Developer"
+        "teams": "Groups"
+      },
+      "people": {
+        "title": "People",
+        "description": "Manage people in your workspace and their roles."
       },
       "role": {
         "owner": "Owner",
@@ -1701,24 +1712,25 @@
         "member": "Member"
       },
       "general": {
+        "title": "General",
+        "subtitleManage": "Manage your workspace name, icons and more",
+        "subtitleView": "Your workspace name and icon.",
         "nameLabel": "Workspace name",
+        "nameHint": "Your workspace name can be up to 65 characters",
+        "iconLabel": "Workspace icon",
+        "iconHint": "This icon appears in your sidebar and notifications.",
+        "roleLabel": "Your role",
         "saved": "Workspace updated",
+        "ownerTitle": "Workspace Owner",
+        "ownerDescription": "Transfer ownership to another workspace member.",
         "dangerTitle": "Delete workspace",
-        "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
+        "dangerDescription": "Permanently delete this workspace, including all notes and files.",
         "delete": "Delete workspace",
-        "confirmTitle": "Delete {{name}}?",
-        "confirmDescription": "This cancels the subscription and removes all workspace data permanently.",
         "deleting": "Deleting…",
-        "deleted": "Workspace deleted",
         "leaveTitle": "Leave workspace",
-        "leaveDescription": "You'll lose access to this workspace and its shared notes.",
+        "leaveDescription": "Remove yourself from this workspace. You'll lose access to its teamspaces.",
         "leave": "Leave workspace",
-        "leaving": "Leaving…",
-        "leaveConfirm": {
-          "title": "Leave {{name}}?",
-          "description": "You'll lose access immediately. An admin can invite you back."
-        },
-        "left": "You left {{name}}"
+        "leaving": "Leaving…"
       },
       "members": {
         "title": "Members",
@@ -1735,10 +1747,6 @@
         "removeConfirm": {
           "title": "Remove this member?",
           "description": "{{name}} will lose access to {{workspace}} immediately."
-        },
-        "transferConfirm": {
-          "title": "Transfer ownership?",
-          "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
         }
       },
       "joinRequests": {
@@ -2550,7 +2558,7 @@
       "title": "Prompt Studio"
     },
     "speechToText": {
-      "title": "Speech-to-Text",
+      "title": "Speech to Text",
       "description": "Pick an engine for dictation and note recording",
       "tabs": {
         "dictation": "Dictation",
@@ -2560,7 +2568,7 @@
       "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
     },
     "llms": {
-      "title": "Language Models",
+      "title": "Language Model",
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
@@ -3024,7 +3032,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Workspaces",
-      "create": "Create workspace…",
       "add": "Add workspace",
       "invitePeople": "Invite people"
     },
@@ -3097,6 +3104,66 @@
       "errorTitle": "Couldn't accept invitation",
       "sentTo": "Invitation sent to {{email}}",
       "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "Leave {{name}}?",
+        "body": "You'll lose access to this workspace, its teams, and its teamspaces. A workspace admin can invite you back.",
+        "failed": "Couldn't leave {{name}}. Check your connection and try again."
+      },
+      "left": {
+        "title": "You left {{name}}"
+      },
+      "chooseAnother": "Choose another workspace to continue.",
+      "chooseWorkspace": "Choose workspace",
+      "delete": {
+        "title": "Delete {{name}}?",
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+      },
+      "deleting": {
+        "title": "Deleting {{name}}…",
+        "body": "Keep this window open while the workspace is deleted."
+      },
+      "deleteFailed": {
+        "title": "Couldn't delete workspace",
+        "body": "{{name}} is still available. Check your connection and try again."
+      },
+      "deleted": {
+        "title": "{{name}} was deleted"
+      },
+      "tryAgain": "Try again"
+    },
+    "transfer": {
+      "title": "Choose a new Owner",
+      "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
+      "newOwner": "New Owner",
+      "placeholder": "Choose a workspace member",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Transfer ownership to {{name}}?",
+      "confirmBody": "{{name}} will become the Owner of {{workspace}}. You'll become an Admin.",
+      "submit": "Transfer ownership",
+      "transferringTitle": "Transferring ownership…",
+      "transferringBody": "Keep this window open. Ownership will change when the transfer completes.",
+      "transferring": "Transferring…",
+      "failed": "Couldn't transfer ownership. You're still the Owner. Try again.",
+      "noCandidates": "Invite someone to {{workspace}} before transferring ownership.",
+      "done": "Workspace ownership transferred to {{name}}. You're now an Admin."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Your workspace is home base",
+        "body": "Everyone at your company works here. Your private notes stay private until you share them."
+      },
+      "teamspaces": {
+        "title": "Share notes in teamspaces",
+        "body": "Within a workspace, create a teamspace for a project or topic, like Customer Calls. Everyone you add can read and edit its notes."
+      },
+      "teams": {
+        "title": "Add a whole team at once",
+        "body": "Group people into a team, like Sales, then add the team to any teamspace in one step."
+      },
+      "getStarted": "Get started",
+      "progress": "Step {{current}} of {{total}}"
     }
   },
   "chat": {
@@ -3699,9 +3766,9 @@
         "actionFailed": "Action failed",
         "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "outputTruncated": "The AI model ran out of room before it finished, so the note was left as it was.",
-        "outputSpentThinking": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Turn on \"Disable thinking output\" or choose a model that thinks less in Settings → Language Models → Note Formatting, then try again.",
-        "outputSpentThinkingDisabled": "The AI model spent its whole output limit thinking and wrote no notes, even with \"Disable thinking output\" on, so the note was left as it was. Choose another model in Settings → Language Models → Note Formatting.",
-        "outputSpentThinkingOtherModel": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Choose a model that thinks less in Settings → Language Models → Note Formatting.",
+        "outputSpentThinking": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Turn on \"Disable thinking output\" or choose a model that thinks less in Settings → Language Model → Note Formatting, then try again.",
+        "outputSpentThinkingDisabled": "The AI model spent its whole output limit thinking and wrote no notes, even with \"Disable thinking output\" on, so the note was left as it was. Choose another model in Settings → Language Model → Note Formatting.",
+        "outputSpentThinkingOtherModel": "The AI model spent its whole output limit thinking and wrote no notes, so the note was left as it was. Choose a model that thinks less in Settings → Language Model → Note Formatting.",
         "nothingToSummarize": "There's nothing to summarize in this note yet, so the AI summary was left as it was.",
         "saveFailed": "Couldn't save. Check that nothing is too long and try again."
       },
@@ -4919,7 +4986,7 @@
     "unreachable": "Couldn't reach {{provider}}. Check your connection.",
     "noResponse": "Couldn't get a response from {{provider}}. Check your API key and connection.",
     "unknown": "{{provider}} returned an unexpected error.",
-    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Models.",
+    "keyMissing": "No API key is set for {{provider}}. Add it in Settings → Language Model.",
     "selfHosted": {
       "authFailed": "Your server rejected the API key.",
       "accessDenied": "Your server denied access. The key may not include this model.",

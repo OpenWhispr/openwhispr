@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 import {
   Sliders,
   Mic,
@@ -13,46 +15,36 @@ import {
   ShieldCheck,
   Users,
   SquareSparkle,
+  Settings,
+  Key,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
-import SettingsPage, { AccountAvatar, SettingsSectionType } from "./SettingsPage";
+import SettingsPage from "./SettingsPage";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useAuth } from "../hooks/useAuth";
+import { workspaceCan } from "../lib/capabilities";
+import {
+  buildSettingsNav,
+  resolveSettingsSection,
+  LEGACY_SUB_TAB,
+  type SettingsSectionType,
+} from "../lib/settingsNav";
 
 export type { SettingsSectionType };
 
-// The old AI Models sidebar had four items (transcription, meetings,
-// intelligence, agentMode) — they now collapse into two: speechToText + llms.
-// Legacy deep-links land on the matching sub-tab via LEGACY_SUB_TAB.
-// "dictationAgent" (the Home GPU banner) and "noteFormatting" (a note action's
-// error toast) are live deep-links, not legacy aliases.
-const SECTION_ALIASES: Record<string, SettingsSectionType> = {
-  aiModels: "llms",
-  agentConfig: "llms",
-  agentMode: "llms",
-  dictationAgent: "llms",
-  intelligence: "llms",
-  meetings: "llms",
-  noteFormatting: "llms",
-  prompts: "llms",
-  transcription: "speechToText",
-  uploadTranscription: "speechToText",
-  softwareUpdates: "system",
-  privacy: "privacyData",
-  permissions: "privacyData",
-  developer: "system",
-};
-
-const LEGACY_SUB_TAB: Record<string, string> = {
-  transcription: "dictation",
-  uploadTranscription: "upload",
-  dictationAgent: "dictationAgent",
-  meetings: "noteFormatting",
-  noteFormatting: "noteFormatting",
-  intelligence: "dictationCleanup",
-  agentMode: "chatIntelligence",
-  agentConfig: "chatIntelligence",
-  aiModels: "dictationCleanup",
-  prompts: "dictationCleanup",
+const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className?: string }>> = {
+  account: UserCircle,
+  general: Sliders,
+  toneStyle: SquareSparkle,
+  hotkeys: Keyboard,
+  plansBilling: CreditCard,
+  workspaceGeneral: Settings,
+  workspacePeople: Users,
+  workspaceDeveloper: Key,
+  speechToText: Mic,
+  llms: Brain,
+  privacyData: Shield,
+  system: Wrench,
 };
 
 interface SettingsModalProps {
@@ -61,90 +53,55 @@ interface SettingsModalProps {
   initialSection?: string;
 }
 
-export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
+export default function SettingsModal({
+  open,
+  onOpenChange,
+  initialSection,
+}: SettingsModalProps): React.ReactElement {
   const { t } = useTranslation();
-  const { isSignedIn, user } = useAuth();
+  const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
-  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(() => {
-    const items: SidebarItem<SettingsSectionType>[] = [
-      {
-        id: "account",
-        label: t("settingsModal.sections.account.label"),
-        icon: UserCircle,
-        description: t("settingsModal.sections.account.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "plansBilling",
-        label: t("settingsModal.sections.plansBilling.label"),
-        icon: CreditCard,
-        description: t("settingsModal.sections.plansBilling.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "workspace" as const,
-        label: t("settingsModal.sections.workspace.label"),
-        icon: Users,
-        description: t("settingsModal.sections.workspace.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "general",
-        label: t("settingsModal.sections.general.label"),
-        icon: Sliders,
-        description: t("settingsModal.sections.general.description"),
-        group: t("settingsModal.groups.app"),
-      },
-      {
-        id: "hotkeys",
-        label: t("settingsModal.sections.hotkeys.label"),
-        icon: Keyboard,
-        description: t("settingsModal.sections.hotkeys.description"),
-        group: t("settingsModal.groups.app"),
-      },
-      {
-        id: "toneStyle",
-        label: t("settingsModal.sections.toneStyle.label"),
-        icon: SquareSparkle,
-        description: t("settingsModal.sections.toneStyle.description"),
-        group: t("settingsModal.groups.app"),
-      },
-      {
-        id: "speechToText",
-        label: t("settingsModal.sections.speechToText.label"),
-        icon: Mic,
-        description: t("settingsModal.sections.speechToText.description"),
-        group: t("settingsModal.groups.aiModels"),
-      },
-      {
-        id: "llms",
-        label: t("settingsModal.sections.llms.label"),
-        icon: Brain,
-        description: t("settingsModal.sections.llms.description"),
-        group: t("settingsModal.groups.aiModels"),
-      },
-      {
-        id: "privacyData",
-        label: t("settingsModal.sections.privacyData.label"),
-        icon: Shield,
-        description: t("settingsModal.sections.privacyData.description"),
-        group: t("settingsModal.groups.system"),
-      },
-      {
-        id: "system",
-        label: t("settingsModal.sections.system.label"),
-        icon: Wrench,
-        description: t("settingsModal.sections.system.description"),
-        group: t("settingsModal.groups.system"),
-      },
-    ];
-    return isSignedIn ? items : items.filter((item) => item.id !== "workspace");
-  }, [t, isSignedIn]);
+  const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      activeWorkspaceId: s.activeWorkspaceId,
+      workspacesLoaded: s.loaded,
+    }))
+  );
+  const activeWorkspace =
+    workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
+  const hasWorkspace = activeWorkspace !== null;
+  const canManageSettings = activeWorkspace
+    ? workspaceCan(activeWorkspace, "manage_settings")
+    : false;
+  const signedIn = Boolean(isSignedIn);
 
-  const resolveSection = (section: string | undefined): SettingsSectionType => {
-    if (!section) return "account";
-    return (SECTION_ALIASES[section] ?? section) as SettingsSectionType;
-  };
+  const nav = useMemo(
+    () => buildSettingsNav({ isSignedIn: signedIn, hasWorkspace, canManageSettings }),
+    [signedIn, hasWorkspace, canManageSettings]
+  );
+  // Until the workspace list loads, which workspace pages exist is unknown; a deep link to one
+  // waits for the list rather than falling back to General.
+  const navKnown = !signedIn || workspacesLoaded;
+  const resolveSection = (section: string | undefined): SettingsSectionType =>
+    resolveSettingsSection(
+      section,
+      navKnown
+        ? nav
+        : buildSettingsNav({ isSignedIn: signedIn, hasWorkspace: true, canManageSettings: true })
+    );
+
+  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
+    () =>
+      nav.map(({ id, group }) => ({
+        id,
+        label: t(`settingsModal.sections.${id}.label`),
+        icon: SECTION_ICONS[id],
+        description: t(`settingsModal.sections.${id}.description`),
+        group: t(`settingsModal.groups.${group}`),
+      })),
+    [nav, t]
+  );
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
     resolveSection(initialSection)
@@ -153,6 +110,8 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
   );
   const [prevOpen, setPrevOpen] = useState(open);
+  // The picker menu is also opened from the General page's "Choose workspace".
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   if (open && !prevOpen && initialSection) {
     setPrevOpen(open);
@@ -163,7 +122,14 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     if (!open) setInitialSubTab(undefined);
   }
 
-  const handleSectionChange = (section: SettingsSectionType, subTab?: string) => {
+  // The open section can disappear (manage_settings revoked, the last workspace left or
+  // deleted, signed out); land on the nearest page that still exists.
+  if (navKnown && !nav.some((entry) => entry.id === activeSection)) {
+    setActiveSection(resolveSettingsSection(activeSection, nav));
+    setInitialSubTab(undefined);
+  }
+
+  const handleSectionChange = (section: SettingsSectionType, subTab?: string): void => {
     setActiveSection(section);
     setInitialSubTab(subTab);
   };
@@ -177,18 +143,18 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       activeSection={activeSection}
       onSectionChange={handleSectionChange}
       header={
-        isSignedIn && user ? (
-          <div className="flex flex-col items-center gap-2 pb-2 text-center">
-            <AccountAvatar image={user.image} name={user.name || t("settingsPage.account.user")} />
-            <div className="min-w-0 w-full">
-              <p dir="auto" className="text-[13px] font-semibold text-foreground truncate">
-                {user.name || t("settingsPage.account.user")}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                <bdi dir="ltr">{user.email}</bdi>
-              </p>
-            </div>
-          </div>
+        signedIn ? (
+          <WorkspaceSwitcher placement="settings" open={pickerOpen} onOpenChange={setPickerOpen} />
+        ) : undefined
+      }
+      compactHeader={
+        signedIn ? (
+          <WorkspaceSwitcher
+            placement="settings"
+            compact
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+          />
         ) : undefined
       }
       notice={
@@ -205,6 +171,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         activeSection={activeSection}
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
+        onChooseWorkspace={() => setPickerOpen(true)}
       />
     </SidebarModal>
   );

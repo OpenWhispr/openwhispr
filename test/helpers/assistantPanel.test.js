@@ -1110,7 +1110,7 @@ test("voice help sources stay with the answer on screen while a follow-up runs",
   const answered = {
     id: "answered",
     role: "assistant",
-    content: "Open Settings → App → Hotkeys.",
+    content: "Open Settings → Account → Hotkeys.",
     isStreaming: false,
     toolCalls: [helpCall("first", "/help/dictation/hotkeys")],
   };
@@ -1142,7 +1142,7 @@ test("voice help sources stay with the answer on screen while a follow-up runs",
         element.tagName === "A" &&
         element.getAttribute("href") === `https://docs.openwhispr.com${path}`
     );
-  assert.match(container.textContent, /Open Settings → App → Hotkeys/);
+  assert.match(container.textContent, /Open Settings → Account → Hotkeys/);
   assert.ok(link("/help/dictation/hotkeys"), "the answer on screen keeps its own source");
   assert.equal(link("/guides/local-models"), null, "the pending answer's source waits for it");
 });

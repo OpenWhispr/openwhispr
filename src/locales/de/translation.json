@@ -965,12 +965,12 @@
         "chunkLoss": "Ein Netzwerkproblem hat zu viel von der Aufnahme verloren. Transkribieren Sie sie über den Verlauf erneut.",
         "agentReasoningFailed": "Ihr Sprachassistent konnte den Befehl nicht verarbeiten – stattdessen wurde das unbearbeitete Transkript eingefügt.",
         "screenContextSkipped": "Der Screenshot konnte nicht gesendet werden, daher lief Ihr Befehl ohne Bildschirmkontext.",
-        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Sprache zu Text.",
+        "customEndpointInvalid": "Ihr benutzerdefinierter Transkriptionsendpunkt ist nicht konfiguriert oder seine URL ist ungültig. Aktualisieren Sie ihn unter Einstellungen → Spracherkennung.",
         "managedTranscriptionUnavailable": "Die verwaltete Transkription ist derzeit nicht verfügbar. Versuchen Sie es gleich noch einmal.",
         "managedRouteInvalid": "Die verwaltete Transkription konnte aufgrund einer Konfigurationsabweichung nicht gestartet werden. Versuchen Sie es erneut oder wenden Sie sich an Ihren Administrator.",
         "managedAuthRejected": "Die verwalteten Transkriptions-Anmeldedaten Ihrer Organisation wurden abgelehnt. Wenden Sie sich an Ihren Administrator.",
         "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
-        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprache zu Text hinzu.",
+        "providerKeyMissing": "Für Ihren Transkriptionsanbieter ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Spracherkennung hinzu.",
         "cleanupTruncated": "Dem KI-Modell ging der Platz aus, bevor es dein Diktat fertig bereinigt hatte.",
         "cleanupDuplicated": "Die KI-Bereinigung hat das Transkript wiederholt. Der Originaltext wurde beibehalten.",
         "cleanupEmptyReply": "Das KI-Modell lieferte eine leere Antwort statt des bereinigten Diktats."
@@ -1626,7 +1626,7 @@
     "managedAccount": "Verwaltetes Konto",
     "groups": {
       "account": "Konto",
-      "app": "App",
+      "workspace": "Workspace",
       "aiModels": "KI-Modelle",
       "system": "System"
     },
@@ -1637,11 +1637,19 @@
       },
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
-        "label": "Tarife & Abrechnung"
+        "label": "Tarif & Abrechnung"
       },
-      "workspace": {
-        "description": "Mitglieder, Team-Bereiche und API-Schlüssel",
-        "label": "Workspace"
+      "workspaceGeneral": {
+        "label": "Allgemein",
+        "description": "Name und Symbol des Workspace"
+      },
+      "workspacePeople": {
+        "label": "Personen",
+        "description": "Mitglieder und Teams"
+      },
+      "workspaceDeveloper": {
+        "label": "Entwickler",
+        "description": "API-Schlüssel des Workspace"
       },
       "general": {
         "description": "Darstellung, Töne & Start",
@@ -1661,7 +1669,7 @@
       },
       "llms": {
         "description": "Modelle für Chat, Bereinigung & Zusammenfassungen",
-        "label": "Sprachmodelle"
+        "label": "Sprachmodell"
       },
       "privacyData": {
         "description": "Datenschutz, Berechtigungen & Analyse",
@@ -1692,8 +1700,11 @@
       "tab": {
         "general": "Allgemein",
         "members": "Mitglieder",
-        "teams": "Gruppen",
-        "developer": "Entwickler"
+        "teams": "Gruppen"
+      },
+      "people": {
+        "title": "Personen",
+        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen."
       },
       "role": {
         "owner": "Inhaber",
@@ -1701,24 +1712,25 @@
         "member": "Mitglied"
       },
       "general": {
+        "title": "Allgemein",
+        "subtitleManage": "Verwalten Sie Name, Icons und mehr für Ihren Workspace",
+        "subtitleView": "Name und Icon Ihres Workspace.",
         "nameLabel": "Workspace-Name",
+        "nameHint": "Der Workspace-Name darf bis zu 65 Zeichen lang sein",
+        "iconLabel": "Workspace-Icon",
+        "iconHint": "Dieses Icon erscheint in Ihrer Seitenleiste und in Benachrichtigungen.",
+        "roleLabel": "Ihre Rolle",
         "saved": "Workspace aktualisiert",
+        "ownerTitle": "Workspace-Inhaber",
+        "ownerDescription": "Übertragen Sie die Inhaberschaft an ein anderes Workspace-Mitglied.",
         "dangerTitle": "Workspace löschen",
-        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+        "dangerDescription": "Diesen Workspace dauerhaft löschen, einschließlich aller Notizen und Dateien.",
         "delete": "Workspace löschen",
-        "confirmTitle": "{{name}} löschen?",
-        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft.",
         "deleting": "Lösche…",
-        "deleted": "Workspace gelöscht",
         "leaveTitle": "Workspace verlassen",
-        "leaveDescription": "Sie verlieren den Zugriff auf diesen Workspace und seine geteilten Notizen.",
+        "leaveDescription": "Entfernen Sie sich aus diesem Workspace. Sie verlieren den Zugriff auf seine Teamspaces.",
         "leave": "Workspace verlassen",
-        "leaving": "Verlasse…",
-        "leaveConfirm": {
-          "title": "{{name}} verlassen?",
-          "description": "Sie verlieren sofort den Zugriff. Ein Administrator kann Sie erneut einladen."
-        },
-        "left": "Sie haben {{name}} verlassen"
+        "leaving": "Verlasse…"
       },
       "members": {
         "title": "Mitglieder",
@@ -1735,10 +1747,6 @@
         "removeConfirm": {
           "title": "Dieses Mitglied entfernen?",
           "description": "{{name}} verliert sofort den Zugriff auf {{workspace}}."
-        },
-        "transferConfirm": {
-          "title": "Eigentum übertragen?",
-          "description": "{{name}} wird Inhaber von {{workspace}}. Ihre Rolle ändert sich zu Administrator und nur der neue Inhaber kann das Eigentum zurückübertragen."
         }
       },
       "joinRequests": {
@@ -2560,7 +2568,7 @@
       "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
     },
     "llms": {
-      "title": "Sprachmodelle",
+      "title": "Sprachmodell",
       "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
       "tabs": {
         "dictationCleanup": "Diktat-Bereinigung",
@@ -3024,7 +3032,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Workspaces",
-      "create": "Workspace erstellen…",
       "add": "Workspace hinzufügen",
       "invitePeople": "Personen einladen"
     },
@@ -3097,6 +3104,66 @@
       "errorTitle": "Einladung konnte nicht angenommen werden",
       "sentTo": "Einladung gesendet an {{email}}",
       "wrongAccount": "Diese Einladung wurde an {{email}} gesendet. Sie sind als {{current}} angemeldet."
+    },
+    "exit": {
+      "leave": {
+        "title": "{{name}} verlassen?",
+        "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Ein Workspace-Admin kann Sie wieder einladen.",
+        "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "left": {
+        "title": "Sie haben {{name}} verlassen"
+      },
+      "chooseAnother": "Wählen Sie einen anderen Workspace, um fortzufahren.",
+      "chooseWorkspace": "Workspace auswählen",
+      "delete": {
+        "title": "{{name}} löschen?",
+        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden."
+      },
+      "deleting": {
+        "title": "{{name}} wird gelöscht…",
+        "body": "Lassen Sie dieses Fenster geöffnet, während der Workspace gelöscht wird."
+      },
+      "deleteFailed": {
+        "title": "Workspace konnte nicht gelöscht werden",
+        "body": "{{name}} ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "deleted": {
+        "title": "{{name}} wurde gelöscht"
+      },
+      "tryAgain": "Erneut versuchen"
+    },
+    "transfer": {
+      "title": "Neuen Inhaber wählen",
+      "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",
+      "newOwner": "Neuer Inhaber",
+      "placeholder": "Mitglied des Workspace wählen",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Inhaberschaft an {{name}} übertragen?",
+      "confirmBody": "{{name}} wird Inhaber von {{workspace}}. Sie werden Administrator.",
+      "submit": "Inhaberschaft übertragen",
+      "transferringTitle": "Inhaberschaft wird übertragen…",
+      "transferringBody": "Lassen Sie dieses Fenster geöffnet. Die Inhaberschaft ändert sich, sobald die Übertragung abgeschlossen ist.",
+      "transferring": "Wird übertragen…",
+      "failed": "Die Inhaberschaft konnte nicht übertragen werden. Sie sind weiterhin Inhaber. Versuchen Sie es erneut.",
+      "noCandidates": "Laden Sie jemanden in {{workspace}} ein, bevor Sie die Inhaberschaft übertragen.",
+      "done": "Inhaberschaft des Workspace an {{name}} übertragen. Sie sind jetzt Administrator."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Ihr Workspace ist Ihre Basis",
+        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben privat, bis Sie sie teilen."
+      },
+      "teamspaces": {
+        "title": "Notizen in Teamspaces teilen",
+        "body": "Erstellen Sie in einem Workspace einen Teamspace für ein Projekt oder Thema, etwa Kundengespräche. Alle, die Sie hinzufügen, können seine Notizen lesen und bearbeiten."
+      },
+      "teams": {
+        "title": "Ein ganzes Team auf einmal hinzufügen",
+        "body": "Fassen Sie Personen in einem Team zusammen, etwa Vertrieb, und fügen Sie das Team dann in einem Schritt zu jedem Teamspace hinzu."
+      },
+      "getStarted": "Los geht's",
+      "progress": "Schritt {{current}} von {{total}}"
     }
   },
   "chat": {
@@ -3699,9 +3766,9 @@
         "actionFailed": "Aktion fehlgeschlagen",
         "noEndpoint": "Keine URL für den selbst gehosteten Server festgelegt. Konfigurieren Sie eine in den Einstellungen.",
         "outputTruncated": "Dem KI-Modell ging der Platz aus, bevor es fertig war. Die Notiz bleibt daher unverändert.",
-        "outputSpentThinking": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Aktivieren Sie unter Einstellungen → Sprachmodelle → Notizformatierung „Denkausgabe deaktivieren“ oder wählen Sie ein Modell, das weniger nachdenkt, und versuchen Sie es erneut.",
-        "outputSpentThinkingDisabled": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben, obwohl „Denkausgabe deaktivieren“ aktiv ist. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein anderes Modell.",
-        "outputSpentThinkingOtherModel": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodelle → Notizformatierung ein Modell, das weniger nachdenkt.",
+        "outputSpentThinking": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Aktivieren Sie unter Einstellungen → Sprachmodell → Notizformatierung „Denkausgabe deaktivieren“ oder wählen Sie ein Modell, das weniger nachdenkt, und versuchen Sie es erneut.",
+        "outputSpentThinkingDisabled": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben, obwohl „Denkausgabe deaktivieren“ aktiv ist. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodell → Notizformatierung ein anderes Modell.",
+        "outputSpentThinkingOtherModel": "Das KI-Modell hat sein gesamtes Ausgabelimit mit Nachdenken verbraucht und keine Notizen geschrieben. Die Notiz bleibt daher unverändert. Wählen Sie unter Einstellungen → Sprachmodell → Notizformatierung ein Modell, das weniger nachdenkt.",
         "nothingToSummarize": "Diese Notiz enthält noch nichts zum Zusammenfassen, daher bleibt die KI-Zusammenfassung unverändert.",
         "saveFailed": "Speichern nicht möglich. Prüfen Sie, dass nichts zu lang ist, und versuchen Sie es erneut."
       },
@@ -4047,7 +4114,7 @@
       "thinking": "Denkt nach...",
       "typeMessage": "Nachricht eingeben...",
       "send": "Senden",
-      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Sprache zu Text einen anderen Anbieter.",
+      "voiceDraftStreamingOnly": "Spracheingabe ist mit Ihrem Transkriptionsanbieter nicht verfügbar: Er unterstützt nur Live-Diktat. Wählen Sie unter Einstellungen → Spracherkennung einen anderen Anbieter.",
       "commands": "Befehle",
       "slashNavigate": "zum Navigieren",
       "slashSelect": "zum Auswählen",
@@ -4919,7 +4986,7 @@
     "unreachable": "{{provider}} konnte nicht erreicht werden. Überprüfen Sie Ihre Verbindung.",
     "noResponse": "Keine Antwort von {{provider}} erhalten. Überprüfen Sie Ihren API-Schlüssel und Ihre Verbindung.",
     "unknown": "{{provider}} hat einen unerwarteten Fehler zurückgegeben.",
-    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodelle hinzu.",
+    "keyMissing": "Für {{provider}} ist kein API-Schlüssel hinterlegt. Fügen Sie ihn unter Einstellungen → Sprachmodell hinzu.",
     "selfHosted": {
       "authFailed": "Ihr Server hat den API-Schlüssel abgelehnt.",
       "accessDenied": "Ihr Server hat den Zugriff verweigert. Der Schlüssel deckt dieses Modell möglicherweise nicht ab.",

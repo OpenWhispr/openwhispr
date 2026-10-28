@@ -14,6 +14,7 @@ import { useToast } from "./ui/useToast";
 import MemberAvatar from "./MemberAvatar";
 import { WorkspacesService } from "../services/WorkspacesService";
 import { afterWorkspaceJoined } from "../services/membershipActions";
+import { useModalGate } from "../stores/modalGateStore";
 import { cn } from "./lib/utils";
 import type { JoinableWorkspace } from "../types/electron";
 
@@ -47,6 +48,8 @@ export default function JoinYourTeamModal({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const open = joinable.length > 0;
+  useModalGate("joinYourTeam", open);
 
   async function handleJoin(entry: JoinableWorkspace) {
     setBusyId(entry.workspace_id);
@@ -97,7 +100,7 @@ export default function JoinYourTeamModal({
   const invited = joinable.some((entry) => entry.source === "invitation");
 
   return (
-    <Dialog open={joinable.length > 0} onOpenChange={(open) => !open && onDismiss()}>
+    <Dialog open={open} onOpenChange={(open) => !open && onDismiss()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>

@@ -887,7 +887,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -976,7 +976,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Model\..* You can still use anything already in this prompt, such as note text/
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");

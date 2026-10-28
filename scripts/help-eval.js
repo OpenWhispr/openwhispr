@@ -21,8 +21,8 @@ const checks = {
     /(?:processing|transcription|speech-to-text)/i.test(r.content),
   stt: (r) => /speech.to.text/i.test(r.content),
   llm: (r) => /language models?/i.test(r.content),
-  hotkeysRoute: (r) => /Settings[^\n.]*App[^\n.]*Hotkeys/i.test(r.content),
-  microphoneRoute: (r) => /Settings[^\n.]*App[^\n.]*Preferences/i.test(r.content),
+  hotkeysRoute: (r) => /Settings[^\n.]*Account[^\n.]*Hotkeys/i.test(r.content),
+  microphoneRoute: (r) => /Settings[^\n.]*Account[^\n.]*Preferences/i.test(r.content),
   bundledDisclosure: (r) =>
     /bundled|built.in|offline essentials/i.test(r.content) &&
     !/verified (?:against |with )?live/i.test(r.content),

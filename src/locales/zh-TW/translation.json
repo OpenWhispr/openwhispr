@@ -1532,7 +1532,7 @@
     "managedAccount": "受管理的帳戶",
     "groups": {
       "account": "帳戶",
-      "app": "應用程式",
+      "workspace": "工作區",
       "aiModels": "AI 模型",
       "system": "系統"
     },
@@ -1544,6 +1544,18 @@
       "plansBilling": {
         "description": "方案、用量與帳單",
         "label": "方案與帳單"
+      },
+      "workspaceGeneral": {
+        "label": "一般",
+        "description": "工作區名稱與圖示"
+      },
+      "workspacePeople": {
+        "label": "人員",
+        "description": "成員與團隊"
+      },
+      "workspaceDeveloper": {
+        "label": "開發者",
+        "description": "工作區 API 金鑰"
       },
       "general": {
         "description": "外觀、音效與啟動",
@@ -1572,10 +1584,6 @@
       "system": {
         "description": "更新、儲存與開發者工具",
         "label": "系統"
-      },
-      "workspace": {
-        "description": "成員、團隊空間與 API 金鑰",
-        "label": "工作區"
       }
     },
     "title": "設定"
@@ -2417,8 +2425,11 @@
       "tab": {
         "general": "一般",
         "members": "成員",
-        "teams": "群組",
-        "developer": "開發者"
+        "teams": "群組"
+      },
+      "people": {
+        "title": "人員",
+        "description": "管理工作區中的人員及其角色。"
       },
       "role": {
         "owner": "擁有者",
@@ -2426,24 +2437,25 @@
         "member": "成員"
       },
       "general": {
+        "title": "一般",
+        "subtitleManage": "管理工作區名稱、圖示等",
+        "subtitleView": "你的工作區名稱與圖示。",
         "nameLabel": "工作區名稱",
+        "nameHint": "工作區名稱最多可包含 65 個字元",
+        "iconLabel": "工作區圖示",
+        "iconHint": "此圖示會顯示在你的側邊欄與通知中。",
+        "roleLabel": "你的角色",
         "saved": "工作區已更新",
+        "ownerTitle": "工作區擁有者",
+        "ownerDescription": "將擁有權轉讓給另一位工作區成員。",
         "dangerTitle": "刪除工作區",
-        "dangerDescription": "所有共享的筆記、資料夾與整合都會被刪除。此操作無法復原。",
+        "dangerDescription": "永久刪除此工作區，包括所有筆記與檔案。",
         "delete": "刪除工作區",
-        "confirmTitle": "要刪除 {{name}} 嗎？",
-        "confirmDescription": "這會取消訂閱並永久移除所有工作區資料。",
         "deleting": "刪除中…",
-        "deleted": "工作區已刪除",
         "leaveTitle": "離開工作區",
-        "leaveDescription": "你將失去此工作區及其共享筆記的存取權。",
+        "leaveDescription": "將自己從此工作區移除。你將失去其團隊空間的存取權。",
         "leave": "離開工作區",
-        "leaving": "離開中…",
-        "leaveConfirm": {
-          "title": "要離開 {{name}} 嗎？",
-          "description": "你將立即失去存取權。管理員可以再次邀請你加入。"
-        },
-        "left": "你已離開 {{name}}"
+        "leaving": "離開中…"
       },
       "members": {
         "title": "成員",
@@ -2460,10 +2472,6 @@
         "removeConfirm": {
           "title": "要移除這位成員嗎？",
           "description": "{{name}} 將立即失去 {{workspace}} 的存取權。"
-        },
-        "transferConfirm": {
-          "title": "要轉移擁有權嗎？",
-          "description": "{{name}} 將成為 {{workspace}} 的擁有者。你的角色會變更為管理員，且只有新擁有者能將擁有權轉回。"
         }
       },
       "joinRequests": {
@@ -4762,7 +4770,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "工作區",
-      "create": "建立工作區…",
       "add": "新增工作區",
       "invitePeople": "邀請成員"
     },
@@ -4835,6 +4842,66 @@
       "errorTitle": "無法接受邀請",
       "sentTo": "邀請已傳送至 {{email}}",
       "wrongAccount": "此邀請是傳送給 {{email}} 的。你目前以 {{current}} 的身分登入。"
+    },
+    "exit": {
+      "leave": {
+        "title": "離開 {{name}}？",
+        "body": "你將失去此工作區、其團隊與團隊空間的存取權。工作區管理員可以再次邀請你。",
+        "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
+      },
+      "left": {
+        "title": "你已離開 {{name}}"
+      },
+      "chooseAnother": "請選擇另一個工作區以繼續。",
+      "chooseWorkspace": "選擇工作區",
+      "delete": {
+        "title": "刪除 {{name}}？",
+        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與團隊空間，且無法復原。"
+      },
+      "deleting": {
+        "title": "正在刪除 {{name}}…",
+        "body": "工作區刪除期間請保持此視窗開啟。"
+      },
+      "deleteFailed": {
+        "title": "無法刪除工作區",
+        "body": "{{name}} 仍可使用。請檢查網路連線後再試一次。"
+      },
+      "deleted": {
+        "title": "{{name}} 已刪除"
+      },
+      "tryAgain": "重試"
+    },
+    "transfer": {
+      "title": "選擇新的擁有者",
+      "body": "選擇一位現有的工作區成員。轉讓後你將成為管理員。",
+      "newOwner": "新擁有者",
+      "placeholder": "選擇工作區成員",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "將擁有權轉讓給 {{name}}？",
+      "confirmBody": "{{name}} 將成為 {{workspace}} 的擁有者，你將成為管理員。",
+      "submit": "轉讓擁有權",
+      "transferringTitle": "正在轉讓擁有權…",
+      "transferringBody": "請保持此視窗開啟。轉讓完成後，擁有權才會變更。",
+      "transferring": "正在轉讓…",
+      "failed": "無法轉讓擁有權。你仍是擁有者，請再試一次。",
+      "noCandidates": "轉讓擁有權之前，請先邀請其他人加入 {{workspace}}。",
+      "done": "工作區擁有權已轉讓給 {{name}}。你現在是管理員。"
+    },
+    "intro": {
+      "workspace": {
+        "title": "工作區是你的大本營",
+        "body": "公司裡的每個人都在這裡工作。你的私人筆記在你分享之前始終保持私密。"
+      },
+      "teamspaces": {
+        "title": "在 Teamspace 中分享筆記",
+        "body": "在工作區中，為專案或主題（例如「客戶通話」）建立 Teamspace。你新增的每個人都可以閱讀和編輯其中的筆記。"
+      },
+      "teams": {
+        "title": "一次新增整個團隊",
+        "body": "將成員歸入一個團隊（例如「業務」），然後一步將該團隊新增到任何 Teamspace。"
+      },
+      "getStarted": "開始使用",
+      "progress": "第 {{current}} 步，共 {{total}} 步"
     }
   },
   "dictationTranslation": {

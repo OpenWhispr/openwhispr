@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useReducer, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
 import { Trash2, MoreVertical, Mail, X, Loader2 } from "../icons";
@@ -26,6 +26,8 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import { workspaceCan } from "../../lib/capabilities";
+import { transferReducer } from "../../lib/workspaceTransferFlow";
+import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 
 interface Props {
   workspace: Workspace;
@@ -39,13 +41,13 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
-  const { members, refreshMembers, refresh } = useWorkspaceStore(
+  const { members, refreshMembers } = useWorkspaceStore(
     useShallow((s) => ({
       members: s.members,
       refreshMembers: s.refreshMembers,
-      refresh: s.refresh,
     }))
   );
+  const [transferState, dispatchTransfer] = useReducer(transferReducer, { kind: "closed" });
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [joinRequests, setJoinRequests] = useState<WorkspaceJoinRequest[]>([]);
   const [decidingId, setDecidingId] = useState<string | null>(null);
@@ -122,12 +124,10 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
 
-  async function handleRoleChange(userId: string, role: "owner" | "admin" | "member") {
+  async function handleRoleChange(userId: string, role: "admin" | "member") {
     try {
       await WorkspacesService.updateMemberRole(workspace.id, userId, role);
       await refreshMembers(workspace.id);
-      // Ownership transfer demotes the caller — refresh so workspace.role updates everywhere.
-      if (role === "owner") await refresh();
       toast({
         title: t("settingsPage.workspace.members.roleUpdated"),
       });
@@ -138,19 +138,6 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         variant: "destructive",
       });
     }
-  }
-
-  function confirmTransferOwnership(member: WorkspaceMember) {
-    showConfirmDialog({
-      title: t("settingsPage.workspace.members.transferConfirm.title"),
-      description: t("settingsPage.workspace.members.transferConfirm.description", {
-        name: member.name || member.email,
-        workspace: workspace.name,
-      }),
-      confirmText: t("settingsPage.workspace.members.transferOwnership"),
-      variant: "destructive",
-      onConfirm: () => void handleRoleChange(member.user_id, "owner"),
-    });
   }
 
   function confirmRemoveMember(member: WorkspaceMember) {
@@ -302,7 +289,11 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                       </DropdownMenuItem>
                     )}
                     {canTransferOwnership && (
-                      <DropdownMenuItem onSelect={() => confirmTransferOwnership(member)}>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          dispatchTransfer({ type: "open", candidateId: member.user_id })
+                        }
+                      >
                         {t("settingsPage.workspace.members.transferOwnership")}
                       </DropdownMenuItem>
                     )}
@@ -453,6 +444,14 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         onInvited={refreshInvitations}
+      />
+
+      <TransferOwnershipDialog
+        workspace={workspace}
+        state={transferState}
+        dispatch={dispatchTransfer}
+        // People is already showing, and the dialog toasts the outcome itself.
+        onTransferred={() => {}}
       />
 
       <ConfirmDialog

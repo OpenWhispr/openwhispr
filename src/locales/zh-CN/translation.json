@@ -1532,7 +1532,7 @@
     "managedAccount": "受管理的账户",
     "groups": {
       "account": "账户",
-      "app": "应用",
+      "workspace": "工作区",
       "aiModels": "AI 模型",
       "system": "系统"
     },
@@ -1544,6 +1544,18 @@
       "plansBilling": {
         "description": "套餐、用量与账单",
         "label": "套餐与账单"
+      },
+      "workspaceGeneral": {
+        "label": "常规",
+        "description": "工作区名称和图标"
+      },
+      "workspacePeople": {
+        "label": "人员",
+        "description": "成员和团队"
+      },
+      "workspaceDeveloper": {
+        "label": "开发者",
+        "description": "工作区 API 密钥"
       },
       "general": {
         "description": "外观、声音与启动",
@@ -1572,10 +1584,6 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
-      },
-      "workspace": {
-        "description": "成员、团队空间和 API 密钥",
-        "label": "工作区"
       }
     },
     "title": "设置"
@@ -2417,8 +2425,11 @@
       "tab": {
         "general": "常规",
         "members": "成员",
-        "teams": "群组",
-        "developer": "开发者"
+        "teams": "群组"
+      },
+      "people": {
+        "title": "人员",
+        "description": "管理工作区中的人员及其角色。"
       },
       "role": {
         "owner": "所有者",
@@ -2426,24 +2437,25 @@
         "member": "成员"
       },
       "general": {
+        "title": "常规",
+        "subtitleManage": "管理工作区名称、图标等",
+        "subtitleView": "你的工作区名称和图标。",
         "nameLabel": "工作区名称",
+        "nameHint": "工作区名称最多可包含 65 个字符",
+        "iconLabel": "工作区图标",
+        "iconHint": "此图标会显示在你的侧边栏和通知中。",
+        "roleLabel": "你的角色",
         "saved": "工作区已更新",
+        "ownerTitle": "工作区所有者",
+        "ownerDescription": "将所有权转让给另一位工作区成员。",
         "dangerTitle": "删除工作区",
-        "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
+        "dangerDescription": "永久删除此工作区，包括所有笔记和文件。",
         "delete": "删除工作区",
-        "confirmTitle": "删除 {{name}}？",
-        "confirmDescription": "这将取消订阅并永久删除工作区的所有数据。",
         "deleting": "删除中…",
-        "deleted": "工作区已删除",
         "leaveTitle": "退出工作区",
-        "leaveDescription": "你将失去对此工作区及其共享笔记的访问权限。",
+        "leaveDescription": "将自己从此工作区中移除。你将失去对其团队空间的访问权限。",
         "leave": "退出工作区",
-        "leaving": "退出中…",
-        "leaveConfirm": {
-          "title": "退出 {{name}}？",
-          "description": "你将立即失去访问权限。管理员可以重新邀请你。"
-        },
-        "left": "你已退出 {{name}}"
+        "leaving": "退出中…"
       },
       "members": {
         "title": "成员",
@@ -2460,10 +2472,6 @@
         "removeConfirm": {
           "title": "移除此成员？",
           "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
-        },
-        "transferConfirm": {
-          "title": "转让所有权？",
-          "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
         }
       },
       "joinRequests": {
@@ -4762,7 +4770,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "工作区",
-      "create": "创建工作区…",
       "add": "添加工作区",
       "invitePeople": "邀请成员"
     },
@@ -4835,6 +4842,66 @@
       "errorTitle": "无法接受邀请",
       "sentTo": "邀请已发送至 {{email}}",
       "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
+    },
+    "exit": {
+      "leave": {
+        "title": "退出 {{name}}？",
+        "body": "你将失去对此工作区、其团队和团队空间的访问权限。工作区管理员可以重新邀请你。",
+        "failed": "无法退出 {{name}}。请检查网络连接后重试。"
+      },
+      "left": {
+        "title": "你已退出 {{name}}"
+      },
+      "chooseAnother": "选择另一个工作区以继续。",
+      "chooseWorkspace": "选择工作区",
+      "delete": {
+        "title": "删除 {{name}}？",
+        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和团队空间，且无法撤销。"
+      },
+      "deleting": {
+        "title": "正在删除 {{name}}…",
+        "body": "工作区删除期间请保持此窗口打开。"
+      },
+      "deleteFailed": {
+        "title": "无法删除工作区",
+        "body": "{{name}} 仍然可用。请检查网络连接后重试。"
+      },
+      "deleted": {
+        "title": "{{name}} 已删除"
+      },
+      "tryAgain": "重试"
+    },
+    "transfer": {
+      "title": "选择新的所有者",
+      "body": "选择一位现有的工作区成员。转让后你将成为管理员。",
+      "newOwner": "新所有者",
+      "placeholder": "选择工作区成员",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "将所有权转让给 {{name}}？",
+      "confirmBody": "{{name}} 将成为 {{workspace}} 的所有者，你将成为管理员。",
+      "submit": "转让所有权",
+      "transferringTitle": "正在转让所有权…",
+      "transferringBody": "请保持此窗口打开。转让完成后，所有权才会变更。",
+      "transferring": "正在转让…",
+      "failed": "无法转让所有权。你仍是所有者，请重试。",
+      "noCandidates": "转让所有权之前，请先邀请其他人加入 {{workspace}}。",
+      "done": "工作区所有权已转让给 {{name}}。你现在是管理员。"
+    },
+    "intro": {
+      "workspace": {
+        "title": "工作区是你的大本营",
+        "body": "公司里的每个人都在这里工作。你的私人笔记在你分享之前始终保持私密。"
+      },
+      "teamspaces": {
+        "title": "在 Teamspace 中共享笔记",
+        "body": "在工作区中，为项目或主题（例如“客户通话”）创建 Teamspace。你添加的每个人都可以阅读和编辑其中的笔记。"
+      },
+      "teams": {
+        "title": "一次添加整个团队",
+        "body": "将成员归入一个团队（例如“销售”），然后一步将该团队添加到任意 Teamspace。"
+      },
+      "getStarted": "开始使用",
+      "progress": "第 {{current}} 步，共 {{total}} 步"
     }
   },
   "dictationTranslation": {

@@ -965,12 +965,12 @@
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
-        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声テキスト変換 から更新してください。",
+        "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か、URLが無効です。設定 → 音声認識 から更新してください。",
         "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
-        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
+        "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声認識 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
         "cleanupDuplicated": "AI クリーンアップが文字起こしを繰り返しました。元のテキストを保持しました。",
         "cleanupEmptyReply": "AI モデルが空の応答を返したため、クリーンアップされたテキストがありません。"
@@ -1532,7 +1532,7 @@
     "managedAccount": "管理対象アカウント",
     "groups": {
       "account": "アカウント",
-      "app": "アプリ",
+      "workspace": "ワークスペース",
       "aiModels": "AIモデル",
       "system": "システム"
     },
@@ -1544,6 +1544,18 @@
       "plansBilling": {
         "description": "プラン、使用状況、請求",
         "label": "プランと請求"
+      },
+      "workspaceGeneral": {
+        "label": "一般",
+        "description": "ワークスペースの名前とアイコン"
+      },
+      "workspacePeople": {
+        "label": "ユーザー",
+        "description": "メンバーとチーム"
+      },
+      "workspaceDeveloper": {
+        "label": "開発者",
+        "description": "ワークスペースの API キー"
       },
       "general": {
         "description": "外観、サウンド、起動設定",
@@ -1572,10 +1584,6 @@
       "system": {
         "description": "更新、ストレージ、開発者ツール",
         "label": "システム"
-      },
-      "workspace": {
-        "description": "メンバー、チームスペース、API キー",
-        "label": "ワークスペース"
       }
     },
     "title": "設定"
@@ -2417,8 +2425,11 @@
       "tab": {
         "general": "一般",
         "members": "メンバー",
-        "teams": "グループ",
-        "developer": "開発者"
+        "teams": "グループ"
+      },
+      "people": {
+        "title": "ユーザー",
+        "description": "ワークスペースのユーザーとそのロールを管理します。"
       },
       "role": {
         "owner": "オーナー",
@@ -2426,24 +2437,25 @@
         "member": "メンバー"
       },
       "general": {
+        "title": "一般",
+        "subtitleManage": "ワークスペースの名前、アイコンなどを管理します",
+        "subtitleView": "ワークスペースの名前とアイコンです。",
         "nameLabel": "ワークスペース名",
+        "nameHint": "ワークスペース名は最大 65 文字まで入力できます",
+        "iconLabel": "ワークスペースアイコン",
+        "iconHint": "このアイコンはサイドバーと通知に表示されます。",
+        "roleLabel": "あなたの役割",
         "saved": "ワークスペースを更新しました",
+        "ownerTitle": "ワークスペースのオーナー",
+        "ownerDescription": "オーナー権限を別のワークスペースメンバーに譲渡します。",
         "dangerTitle": "ワークスペースを削除",
-        "dangerDescription": "共有されているノート、フォルダ、連携がすべて削除されます。この操作は取り消せません。",
+        "dangerDescription": "このワークスペースを、すべてのノートとファイルを含めて完全に削除します。",
         "delete": "ワークスペースを削除",
-        "confirmTitle": "{{name}} を削除しますか？",
-        "confirmDescription": "サブスクリプションがキャンセルされ、ワークスペースのすべてのデータが完全に削除されます。",
         "deleting": "削除中…",
-        "deleted": "ワークスペースを削除しました",
         "leaveTitle": "ワークスペースから退出",
-        "leaveDescription": "このワークスペースと共有ノートにアクセスできなくなります。",
+        "leaveDescription": "このワークスペースから退出します。チームスペースにアクセスできなくなります。",
         "leave": "ワークスペースから退出",
-        "leaving": "退出中…",
-        "leaveConfirm": {
-          "title": "{{name}} から退出しますか？",
-          "description": "すぐにアクセスできなくなります。管理者が再度招待できます。"
-        },
-        "left": "{{name}} から退出しました"
+        "leaving": "退出中…"
       },
       "members": {
         "title": "メンバー",
@@ -2460,10 +2472,6 @@
         "removeConfirm": {
           "title": "このメンバーを削除しますか？",
           "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
-        },
-        "transferConfirm": {
-          "title": "オーナー権限を譲渡しますか？",
-          "description": "{{name}} が {{workspace}} のオーナーになります。あなたの役割は管理者に変わり、元に戻せるのは新しいオーナーのみです。"
         }
       },
       "joinRequests": {
@@ -3875,7 +3883,7 @@
       "thinking": "考え中...",
       "typeMessage": "メッセージを入力...",
       "send": "送信",
-      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声テキスト変換 で別のプロバイダーを選択してください。",
+      "voiceDraftStreamingOnly": "現在の文字起こしプロバイダーはライブ音声入力のみに対応しているため、音声入力は利用できません。設定 → 音声認識 で別のプロバイダーを選択してください。",
       "commands": "コマンド",
       "slashNavigate": "で移動",
       "slashSelect": "で選択",
@@ -4762,7 +4770,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "ワークスペース",
-      "create": "ワークスペースを作成…",
       "add": "ワークスペースを追加",
       "invitePeople": "メンバーを招待"
     },
@@ -4835,6 +4842,66 @@
       "errorTitle": "招待を承諾できませんでした",
       "sentTo": "{{email}} に送信された招待です",
       "wrongAccount": "この招待は {{email}} 宛てに送信されました。現在 {{current}} でサインインしています。"
+    },
+    "exit": {
+      "leave": {
+        "title": "{{name}} から退出しますか？",
+        "body": "このワークスペースと、そのチームおよびチームスペースにアクセスできなくなります。ワークスペースの管理者があなたを再び招待できます。",
+        "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
+      },
+      "left": {
+        "title": "{{name}} から退出しました"
+      },
+      "chooseAnother": "続行するには別のワークスペースを選択してください。",
+      "chooseWorkspace": "ワークスペースを選択",
+      "delete": {
+        "title": "{{name}} を削除しますか？",
+        "body": "ワークスペースと、そのノート、ファイル、チーム、チームスペースがすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。"
+      },
+      "deleting": {
+        "title": "{{name}} を削除しています…",
+        "body": "ワークスペースの削除中は、このウィンドウを開いたままにしてください。"
+      },
+      "deleteFailed": {
+        "title": "ワークスペースを削除できませんでした",
+        "body": "{{name}} は引き続き利用できます。接続を確認して、もう一度お試しください。"
+      },
+      "deleted": {
+        "title": "{{name}} を削除しました"
+      },
+      "tryAgain": "もう一度試す"
+    },
+    "transfer": {
+      "title": "新しいオーナーを選択",
+      "body": "既存のワークスペースメンバーを選んでください。譲渡後、あなたは管理者になります。",
+      "newOwner": "新しいオーナー",
+      "placeholder": "ワークスペースのメンバーを選択",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "{{name}} にオーナー権限を譲渡しますか？",
+      "confirmBody": "{{name}} が {{workspace}} のオーナーになり、あなたは管理者になります。",
+      "submit": "オーナー権限を譲渡",
+      "transferringTitle": "オーナー権限を譲渡しています…",
+      "transferringBody": "このウィンドウを開いたままにしてください。譲渡が完了するとオーナーが変わります。",
+      "transferring": "譲渡中…",
+      "failed": "オーナー権限を譲渡できませんでした。あなたは引き続きオーナーです。もう一度お試しください。",
+      "noCandidates": "オーナー権限を譲渡する前に、{{workspace}} に誰かを招待してください。",
+      "done": "ワークスペースのオーナー権限を {{name}} に譲渡しました。あなたは管理者になりました。"
+    },
+    "intro": {
+      "workspace": {
+        "title": "ワークスペースは活動の拠点です",
+        "body": "会社の全員がここで作業します。プライベートノートは共有するまで非公開のままです。"
+      },
+      "teamspaces": {
+        "title": "Teamspace でノートを共有",
+        "body": "ワークスペース内に、「顧客との通話」のようなプロジェクトやトピックごとの Teamspace を作成できます。追加したメンバー全員がそのノートを閲覧・編集できます。"
+      },
+      "teams": {
+        "title": "チーム全体をまとめて追加",
+        "body": "「営業」のようにメンバーをチームにまとめ、そのチームを任意の Teamspace に一度で追加できます。"
+      },
+      "getStarted": "始める",
+      "progress": "ステップ {{current}}/{{total}}"
     }
   },
   "dictationTranslation": {

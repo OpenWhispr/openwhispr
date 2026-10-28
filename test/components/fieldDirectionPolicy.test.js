@@ -75,7 +75,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
-  "src/components/settings/WorkspaceSection.tsx": ["auto"],
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
   "src/components/ui/ApiKeyInput.tsx": ["ltr"],
   "src/components/ui/CustomModelInput.tsx": ["ltr"],
   "src/components/ui/PromptStudio.tsx": ["auto", "auto"],

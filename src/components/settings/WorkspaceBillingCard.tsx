@@ -83,7 +83,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     try {
       await WorkspacesService.updateSeats(workspace.id, seatPreview.next_quantity);
       setSeatPreview(null);
-      await refresh();
+      await refresh({ fresh: true });
       toast({
         title: t("settingsPage.unifiedBilling.seatUpdated", {
           count: seatPreview.next_quantity,

@@ -750,7 +750,7 @@
     "custom": {
       "endpointWithProtocol": "Saisissez une URL de base complète avec protocole (ex : https://server/v1).",
       "httpsRequired": "HTTPS requis (HTTP autorisé seulement en réseau local).",
-      "endpointInvalid": "Le point de terminaison personnalisé est invalide ou non configuré. Vérifiez l'URL du point de terminaison dans Réglages → Modèles d'IA.",
+      "endpointInvalid": "Le point de terminaison personnalisé est invalide ou non configuré. Vérifiez l'URL du point de terminaison dans Réglages → Modèles IA.",
       "endpointUnauthorized": "Le endpoint a rejeté la requête (401/403). Ajoutez une clé API ou ajustez l'authentification du serveur.",
       "endpointTitle": "URL du endpoint",
       "endpointExamples": "Exemples :",
@@ -965,12 +965,12 @@
         "chunkLoss": "Un problème réseau a fait perdre une trop grande partie de l'enregistrement. Retranscrivez-le depuis l'historique.",
         "agentReasoningFailed": "Votre assistant vocal n'a pas pu traiter la commande ; la transcription brute a été insérée à la place.",
         "screenContextSkipped": "La capture n'a pas pu être envoyée ; votre commande a été exécutée sans contexte d'écran.",
-        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Parole en texte.",
+        "customEndpointInvalid": "Votre point de terminaison de transcription personnalisé n'est pas configuré ou son URL est invalide. Mettez-le à jour dans Réglages → Reconnaissance vocale.",
         "managedTranscriptionUnavailable": "La transcription gérée n'est pas disponible pour le moment. Réessayez dans un instant.",
         "managedRouteInvalid": "La transcription gérée n'a pas pu démarrer en raison d'une incohérence de configuration. Réessayez ou contactez votre administrateur.",
         "managedAuthRejected": "Les identifiants de transcription gérée de votre organisation ont été refusés. Contactez votre administrateur.",
         "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
-        "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Parole en texte.",
+        "providerKeyMissing": "Aucune clé API n'est définie pour votre fournisseur de transcription. Ajoutez-la dans Réglages → Reconnaissance vocale.",
         "cleanupTruncated": "Le modèle d'IA a manqué de place avant de terminer le nettoyage de votre dictée.",
         "cleanupDuplicated": "Le nettoyage par IA a répété la transcription. Le texte original a été conservé.",
         "cleanupEmptyReply": "Le modèle d'IA a renvoyé une réponse vide au lieu de la dictée nettoyée."
@@ -1626,7 +1626,7 @@
     "managedAccount": "Compte géré",
     "groups": {
       "account": "Compte",
-      "app": "Application",
+      "workspace": "Espace de travail",
       "aiModels": "Modèles IA",
       "system": "Système"
     },
@@ -1637,11 +1637,19 @@
       },
       "plansBilling": {
         "description": "Forfaits, utilisation & facturation",
-        "label": "Forfaits & facturation"
+        "label": "Forfait & facturation"
       },
-      "workspace": {
-        "description": "Membres, espaces d'équipe et clés API",
-        "label": "Espace de travail"
+      "workspaceGeneral": {
+        "label": "Général",
+        "description": "Nom et icône de l'espace de travail"
+      },
+      "workspacePeople": {
+        "label": "Personnes",
+        "description": "Membres et équipes"
+      },
+      "workspaceDeveloper": {
+        "label": "Développeur",
+        "description": "Clés API de l'espace de travail"
       },
       "general": {
         "description": "Apparence, sons & démarrage",
@@ -1661,7 +1669,7 @@
       },
       "llms": {
         "description": "Modèles pour chat, nettoyage & résumés",
-        "label": "Modèles de langage"
+        "label": "Modèle de langage"
       },
       "privacyData": {
         "description": "Confidentialité, permissions & analytique",
@@ -1692,8 +1700,11 @@
       "tab": {
         "general": "Général",
         "members": "Membres",
-        "teams": "Groupes",
-        "developer": "Développeur"
+        "teams": "Groupes"
+      },
+      "people": {
+        "title": "Personnes",
+        "description": "Gérez les personnes de votre espace de travail et leurs rôles."
       },
       "role": {
         "owner": "Propriétaire",
@@ -1701,24 +1712,25 @@
         "member": "Membre"
       },
       "general": {
+        "title": "Général",
+        "subtitleManage": "Gérez le nom, les icônes et plus encore de votre espace",
+        "subtitleView": "Le nom et l'icône de votre espace.",
         "nameLabel": "Nom",
+        "nameHint": "Le nom de l'espace peut contenir jusqu'à 65 caractères",
+        "iconLabel": "Icône de l'espace",
+        "iconHint": "Cette icône apparaît dans votre barre latérale et vos notifications.",
+        "roleLabel": "Votre rôle",
         "saved": "Espace mis à jour",
+        "ownerTitle": "Propriétaire de l'espace",
+        "ownerDescription": "Transférez la propriété à un autre membre de l'espace.",
         "dangerTitle": "Supprimer l'espace",
-        "dangerDescription": "Toutes les notes, dossiers et intégrations partagés seront supprimés. Cette action est irréversible.",
+        "dangerDescription": "Supprimez définitivement cet espace, y compris toutes ses notes et tous ses fichiers.",
         "delete": "Supprimer l'espace",
-        "confirmTitle": "Supprimer {{name}} ?",
-        "confirmDescription": "Cela annule l'abonnement et supprime définitivement toutes les données.",
         "deleting": "Suppression…",
-        "deleted": "Espace supprimé",
         "leaveTitle": "Quitter l'espace",
-        "leaveDescription": "Vous perdrez l'accès à cet espace et à ses notes partagées.",
+        "leaveDescription": "Retirez-vous de cet espace. Vous perdrez l'accès à ses espaces d'équipe.",
         "leave": "Quitter l'espace",
-        "leaving": "Départ…",
-        "leaveConfirm": {
-          "title": "Quitter {{name}} ?",
-          "description": "Vous perdrez l'accès immédiatement. Un administrateur pourra vous réinviter."
-        },
-        "left": "Vous avez quitté {{name}}"
+        "leaving": "Départ…"
       },
       "members": {
         "title": "Membres",
@@ -1735,10 +1747,6 @@
         "removeConfirm": {
           "title": "Retirer ce membre ?",
           "description": "{{name}} perdra immédiatement l'accès à {{workspace}}."
-        },
-        "transferConfirm": {
-          "title": "Transférer la propriété ?",
-          "description": "{{name}} devient propriétaire de {{workspace}}. Votre rôle passe à administrateur et seul le nouveau propriétaire pourra la retransférer."
         }
       },
       "joinRequests": {
@@ -2560,7 +2568,7 @@
       "selfHostedStreamingNote": "Nécessite un serveur qui prend en charge la transcription en streaming."
     },
     "llms": {
-      "title": "Modèles de langage",
+      "title": "Modèle de langage",
       "description": "Configurez les modèles pour le nettoyage, la mise en forme des notes et le chat",
       "tabs": {
         "dictationCleanup": "Nettoyage de la dictée",
@@ -3024,7 +3032,6 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Espaces de travail",
-      "create": "Créer un espace de travail…",
       "add": "Ajouter un espace de travail",
       "invitePeople": "Inviter des personnes"
     },
@@ -3097,6 +3104,66 @@
       "errorTitle": "Impossible d'accepter l'invitation",
       "sentTo": "Invitation envoyée à {{email}}",
       "wrongAccount": "Cette invitation a été envoyée à {{email}}. Vous êtes connecté en tant que {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "Quitter {{name}} ?",
+        "body": "Vous perdrez l'accès à cet espace, à ses équipes et à ses espaces d'équipe. Un administrateur de l'espace pourra vous réinviter.",
+        "failed": "Impossible de quitter {{name}}. Vérifiez votre connexion et réessayez."
+      },
+      "left": {
+        "title": "Vous avez quitté {{name}}"
+      },
+      "chooseAnother": "Choisissez un autre espace pour continuer.",
+      "chooseWorkspace": "Choisir un espace",
+      "delete": {
+        "title": "Supprimer {{name}} ?",
+        "body": "Cela supprime définitivement l'espace, ses notes, ses fichiers, ses équipes et ses espaces d'équipe pour tout le monde. Cette action est irréversible."
+      },
+      "deleting": {
+        "title": "Suppression de {{name}}…",
+        "body": "Gardez cette fenêtre ouverte pendant la suppression de l'espace."
+      },
+      "deleteFailed": {
+        "title": "Impossible de supprimer l'espace",
+        "body": "{{name}} est toujours disponible. Vérifiez votre connexion et réessayez."
+      },
+      "deleted": {
+        "title": "{{name}} a été supprimé"
+      },
+      "tryAgain": "Réessayer"
+    },
+    "transfer": {
+      "title": "Choisir un nouveau propriétaire",
+      "body": "Choisissez un membre existant de l'espace. Vous deviendrez administrateur après le transfert.",
+      "newOwner": "Nouveau propriétaire",
+      "placeholder": "Choisir un membre de l'espace",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Transférer la propriété à {{name}} ?",
+      "confirmBody": "{{name}} deviendra propriétaire de {{workspace}}. Vous deviendrez administrateur.",
+      "submit": "Transférer la propriété",
+      "transferringTitle": "Transfert de la propriété…",
+      "transferringBody": "Gardez cette fenêtre ouverte. La propriété changera à la fin du transfert.",
+      "transferring": "Transfert en cours…",
+      "failed": "Impossible de transférer la propriété. Vous êtes toujours propriétaire. Réessayez.",
+      "noCandidates": "Invitez quelqu'un dans {{workspace}} avant de transférer la propriété.",
+      "done": "Propriété de l'espace transférée à {{name}}. Vous êtes maintenant administrateur."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Votre espace de travail est votre point d'ancrage",
+        "body": "Toute votre entreprise travaille ici. Vos notes privées restent privées jusqu'à ce que vous les partagiez."
+      },
+      "teamspaces": {
+        "title": "Partagez des notes dans des teamspaces",
+        "body": "Dans un espace de travail, créez un teamspace pour un projet ou un sujet, comme Appels clients. Toutes les personnes que vous ajoutez peuvent lire et modifier ses notes."
+      },
+      "teams": {
+        "title": "Ajoutez toute une équipe d'un coup",
+        "body": "Regroupez des personnes dans une équipe, comme Ventes, puis ajoutez l'équipe à n'importe quel teamspace en une seule étape."
+      },
+      "getStarted": "Commencer",
+      "progress": "Étape {{current}} sur {{total}}"
     }
   },
   "chat": {
@@ -3699,9 +3766,9 @@
         "actionFailed": "L'action a échoué",
         "noEndpoint": "Aucune URL de serveur auto-hébergé définie. Configurez-en une dans les Paramètres.",
         "outputTruncated": "Le modèle d'IA a manqué de place avant d'avoir fini, la note reste donc inchangée.",
-        "outputSpentThinking": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Activez « Désactiver la sortie de raisonnement » ou choisissez un modèle qui réfléchit moins dans Réglages → Modèles de langage → Mise en forme des notes, puis réessayez.",
-        "outputSpentThinkingDisabled": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, même avec « Désactiver la sortie de raisonnement » activé, la note reste donc inchangée. Choisissez un autre modèle dans Réglages → Modèles de langage → Mise en forme des notes.",
-        "outputSpentThinkingOtherModel": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Choisissez un modèle qui réfléchit moins dans Réglages → Modèles de langage → Mise en forme des notes.",
+        "outputSpentThinking": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Activez « Désactiver la sortie de raisonnement » ou choisissez un modèle qui réfléchit moins dans Réglages → Modèle de langage → Mise en forme des notes, puis réessayez.",
+        "outputSpentThinkingDisabled": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, même avec « Désactiver la sortie de raisonnement » activé, la note reste donc inchangée. Choisissez un autre modèle dans Réglages → Modèle de langage → Mise en forme des notes.",
+        "outputSpentThinkingOtherModel": "Le modèle d'IA a consacré toute sa limite de sortie à la réflexion sans écrire de notes, la note reste donc inchangée. Choisissez un modèle qui réfléchit moins dans Réglages → Modèle de langage → Mise en forme des notes.",
         "nothingToSummarize": "Cette note n'a encore rien à résumer, donc le résumé IA est resté tel quel.",
         "saveFailed": "Enregistrement impossible. Vérifiez que rien n'est trop long, puis réessayez."
       },
@@ -4047,7 +4114,7 @@
       "thinking": "Réflexion...",
       "typeMessage": "Écrivez un message...",
       "send": "Envoyer",
-      "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Parole en texte.",
+      "voiceDraftStreamingOnly": "La saisie vocale n'est pas disponible avec votre fournisseur de transcription : il ne prend en charge que la dictée en direct. Choisissez un autre fournisseur dans Réglages → Reconnaissance vocale.",
       "commands": "Commandes",
       "slashNavigate": "pour naviguer",
       "slashSelect": "pour sélectionner",
@@ -4919,7 +4986,7 @@
     "unreachable": "Impossible de contacter {{provider}}. Vérifiez votre connexion.",
     "noResponse": "Aucune réponse de {{provider}}. Vérifiez votre clé API et votre connexion.",
     "unknown": "{{provider}} a renvoyé une erreur inattendue.",
-    "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèles de langage.",
+    "keyMissing": "Aucune clé API n’est définie pour {{provider}}. Ajoutez-la dans Réglages → Modèle de langage.",
     "selfHosted": {
       "authFailed": "Votre serveur a rejeté la clé API.",
       "accessDenied": "Votre serveur a refusé l’accès. La clé ne couvre peut-être pas ce modèle.",

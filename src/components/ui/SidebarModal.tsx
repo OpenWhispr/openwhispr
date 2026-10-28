@@ -32,6 +32,11 @@ interface SidebarModalProps<T extends string> {
   /** Rendered above the nav (hidden in compact mode), e.g. account identity. */
   header?: React.ReactNode;
   /**
+   * Rendered at the top of the narrow rail in compact mode, where `header` is hidden. It takes
+   * the same slot, so when both are the same component it keeps its state across the switch.
+   */
+  compactHeader?: React.ReactNode;
+  /**
    * Account-level notice, e.g. an organization-managed policy. Sits under the
    * header in the sidebar; when the sidebar is compact it collapses to an icon
    * badge beside the close button with `description` as its tooltip.
@@ -50,6 +55,7 @@ export default function SidebarModal<T extends string>({
   sidebarWidth = "w-52",
   version,
   header,
+  compactHeader,
   notice,
 }: SidebarModalProps<T>) {
   const { t } = useTranslation();
@@ -164,7 +170,11 @@ export default function SidebarModal<T extends string>({
                 className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
-                {header && !isCompact && <div className="px-4 pt-5 pb-1">{header}</div>}
+                {(isCompact ? compactHeader : header) && (
+                  <div className={isCompact ? "flex justify-center px-1.5 pt-4" : "px-4 pt-5 pb-1"}>
+                    {isCompact ? compactHeader : header}
+                  </div>
+                )}
                 {notice && !isCompact && (
                   <div className="flex justify-center px-4 pb-1">
                     <span
@@ -182,7 +192,7 @@ export default function SidebarModal<T extends string>({
                 {/* Navigation */}
                 <nav
                   className={`relative flex-1 pb-2 overflow-y-auto ${
-                    isCompact ? "px-1.5 pt-4" : "px-2 pt-3"
+                    isCompact ? (compactHeader ? "px-1.5 pt-2" : "px-1.5 pt-4") : "px-2 pt-3"
                   }`}
                 >
                   {groupedItems.map((group, groupIndex) => (
