@@ -187,19 +187,24 @@ function resolveResult(
     };
   }
 
+  // A seat refusal means the batch went past the ceiling and created nothing. Its count is the room
+  // that is left, and the chips go back to drafts so the user can trim the excess and send the
+  // rest. Without a count there is nothing to trim to, so the chip stays failed rather than loop.
+  const seatRoom =
+    outcome.kind === "seatLimit" && typeof outcome.available === "number"
+      ? outcome.available
+      : null;
+
   let next: RecipientState;
-  if (outcome.kind === "invalid") next = { status: "invalid" };
+  if (seatRoom !== null) next = { status: "draft" };
+  else if (outcome.kind === "invalid") next = { status: "invalid" };
   else if (outcome.kind === "alreadyMember" || outcome.kind === "alreadyInvited") {
     next = { status: "blocked", reason: outcome.kind };
   } else if (outcome.kind === "refused") {
     next = { status: "failed", kind: "refused", message: outcome.message };
   } else next = { status: "failed", kind: outcome.kind };
 
-  // A seat refusal means the batch went past the ceiling, so its count is the room that is left.
-  const seats =
-    outcome.kind === "seatLimit" && typeof outcome.available === "number"
-      ? { ...state.seats, ceilingLeft: outcome.available }
-      : state.seats;
+  const seats = seatRoom === null ? state.seats : { ...state.seats, ceilingLeft: seatRoom };
 
   return {
     ...state,

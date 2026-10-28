@@ -517,7 +517,30 @@ test("a seat failure from the server updates the seats left", () => {
   );
   assert.equal(state.seats.ceilingLeft, 1);
   assert.equal(state.seats.purchasedLeft, null);
-  assert.deepEqual(statuses(state), ["failed", "failed"]);
+  // Nothing was created, so the chips are drafts again rather than stuck failures.
+  assert.deepEqual(statuses(state), ["draft", "draft"]);
+});
+
+test("after a ceiling refusal, removing the excess lets the rest send", () => {
+  let state = run(commitText(fresh(), "a@x.com b@y.io c@z.org"), { type: "send" });
+  state = run(
+    state,
+    ...["a@x.com", "b@y.io", "c@z.org"].map((email) => ({
+      type: "result",
+      email,
+      outcome: { ok: false, kind: "seatLimit", available: 2 },
+    })),
+    { type: "finished" }
+  );
+  assert.equal(state.phase, "editing");
+  assert.deepEqual(inviteSummary(state).overCeiling, { available: 2, excess: 1 });
+  assert.equal(inviteSummary(state).canSend, false);
+
+  state = run(state, { type: "remove", email: "c@z.org" });
+  assert.equal(inviteSummary(state).overCeiling, null);
+  assert.equal(inviteSummary(state).canSend, true);
+  assert.deepEqual(inviteSummary(state).sendable, ["a@x.com", "b@y.io"]);
+  assert.deepEqual(statuses(run(state, { type: "send" })), ["sending", "sending"]);
 });
 
 test("a seat failure without a count leaves the seats alone", () => {
@@ -528,6 +551,7 @@ test("a seat failure without a count leaves the seats alone", () => {
     outcome: { ok: false, kind: "seatLimit" },
   });
   assert.equal(state.seats.ceilingLeft, null);
+  assert.deepEqual(state.recipients[0].state, { status: "failed", kind: "seatLimit" });
 });
 
 test("seats events are ignored while sending", () => {
