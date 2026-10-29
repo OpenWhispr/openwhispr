@@ -4821,7 +4821,9 @@ class DatabaseManager {
       // Subfolders move with their parent; a subfolder moved on its own
       // becomes a top-level folder in the target space. Leaving a team, they
       // stay behind top-level instead: the server keeps a teammate's subfolder
-      // in the team, and desktop can't tell whose a subfolder is.
+      // in the team, and desktop can't tell whose a subfolder is. They aren't
+      // pushed: the server un-nests them once the move lands, and after a
+      // denied move the next pull re-nests them.
       const children = this.getSubfolders(id);
       const carried = leftTeam ? [] : children;
       const folderIds = [id, ...carried.map((child) => child.id)];
@@ -4841,7 +4843,7 @@ class DatabaseManager {
         if (leftTeam) {
           this.db
             .prepare(
-              "UPDATE folders SET parent_folder_id = NULL, sync_status = 'pending', updated_at = datetime('now') WHERE parent_folder_id = ? AND deleted_at IS NULL"
+              "UPDATE folders SET parent_folder_id = NULL WHERE parent_folder_id = ? AND deleted_at IS NULL"
             )
             .run(id);
         }
@@ -8762,16 +8764,6 @@ class DatabaseManager {
         if (responseIdentityHolder) {
           return { success: true, outcome: "unresolved", changes: 0 };
         }
-        // A synced subfolder of a folder with no cloud id couldn't push its
-        // nesting (a folder leaving a team retracts top-level without backup),
-        // so it pushes the nesting now.
-        if (expectedCloudId === null) {
-          this.db
-            .prepare(
-              "UPDATE folders SET sync_status = 'pending', updated_at = datetime('now') WHERE parent_folder_id = ? AND cloud_id IS NOT NULL AND sync_status = 'synced' AND deleted_at IS NULL"
-            )
-            .run(id);
-        }
 
         const unchanged = rowMatchesSnapshot(current, snapshot, FOLDER_ACK_FIELDS);
         const leftTeam = this._leftTeamDuringPush(snapshot.space_id, current.space_id);
@@ -8841,6 +8833,10 @@ class DatabaseManager {
         }
         const unchanged = rowMatchesSnapshot(current, snapshot, FOLDER_ACK_FIELDS);
         if (!unchanged) {
+          // The PATCH still delivered the snapshot's scope retraction.
+          if (snapshot.left_team) {
+            this.db.prepare("UPDATE folders SET left_team = 0 WHERE id = ?").run(id);
+          }
           return { success: true, outcome: "pending", changes: 0 };
         }
         const result = this.db

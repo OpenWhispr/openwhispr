@@ -993,8 +993,13 @@ export class SyncService {
         // block its notes' pushes (blockedFolderIds) and re-PATCH stale state
         // over a teammate's newer rename on the next pass. Guarded settle: a
         // rename landing mid-flight stays pending so it still pushes (a blind
-        // settle would let the next pull's LWW revert it).
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id);
+        // settle would let the next pull's LWW revert it). A withheld parent
+        // keeps the row pending until it can be sent.
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          { ...folder, parent_folder_id: parentFolderId === null ? null : folder.parent_folder_id },
+          folder.cloud_id
+        );
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           this.dispatchFolderNameTaken(folder.name);
@@ -1025,19 +1030,18 @@ export class SyncService {
   // A parent travels as its cloud id: null for a top-level folder, undefined
   // while the parent has no cloud id yet or has unpushed changes (the
   // subfolder's push waits for it, since the server refuses a subfolder whose
-  // parent's space move hasn't landed). Without backup a private parent never
-  // syncs, so a folder leaving a team retracts top-level instead of waiting;
-  // acknowledgeFolderCreate queues its nesting once the parent is created.
+  // parent's space move hasn't landed). A folder leaving a team never waits
+  // and retracts top-level, since the server refuses a parent alongside the
+  // move while the folder still has team subfolders there; the row stays
+  // pending, so its nesting goes up on a later pass.
   private cloudParentFolderId(
     folder: FolderItem,
     localToCloud: Map<number, string>,
     blockedFolderIds: Set<number>
   ): string | null | undefined {
-    if (folder.parent_folder_id == null) return null;
-    const parent = blockedFolderIds.has(folder.parent_folder_id)
-      ? undefined
-      : localToCloud.get(folder.parent_folder_id);
-    return parent === undefined && folder.left_team && !this.canSync() ? null : parent;
+    if (folder.parent_folder_id == null || folder.left_team) return null;
+    if (blockedFolderIds.has(folder.parent_folder_id)) return undefined;
+    return localToCloud.get(folder.parent_folder_id);
   }
 
   // Single-folder create shared by the debounced push and the batch-create
@@ -1096,7 +1100,10 @@ export class SyncService {
       return;
     }
 
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
+    const ctx = await this.buildSpaceContext();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(
+      ctx.privateSpace?.id ?? null
+    );
     if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
       // 409'd on a name conflict): the server would reject this note's
@@ -1104,7 +1111,6 @@ export class SyncService {
       // folder settles.
       return;
     }
-    const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("note", note, ctx);
     if (!scope) return;
     const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
@@ -1780,8 +1786,13 @@ export class SyncService {
           parent_folder_id: parentFolderId,
           ...scope,
         });
-        // Settle only if the row wasn't edited while the PATCH was in flight.
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id!);
+        // Settle only if the row wasn't edited while the PATCH was in flight;
+        // a withheld parent keeps it pending until it can be sent.
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          { ...folder, parent_folder_id: parentFolderId === null ? null : folder.parent_folder_id },
+          folder.cloud_id!
+        );
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
       } catch (err) {
         if (isFolderNameTakenError(err)) {
@@ -2164,8 +2175,10 @@ export class SyncService {
     if (pending.length === 0) return;
     this.teamPassMovedWork = true;
 
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(
+      ctx.privateSpace?.id ?? null
+    );
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
       if (
@@ -3634,19 +3647,28 @@ export class SyncService {
     }
   }
 
-  private async buildLocalToCloudFolderMap(): Promise<{
+  private async buildLocalToCloudFolderMap(privateSpaceId?: number | null): Promise<{
     localToCloud: Map<number, string>;
     // Cloud-backed folders with unpushed changes: their migration PATCH
     // failed or hasn't run yet (folders push before notes in a pass), so
     // pushing a child note's folder_id + scope now could be rejected as out
-    // of scope. Those notes defer and stay pending.
+    // of scope. Those notes defer and stay pending. Note pushes pass the
+    // private space: a private folder that owes no retraction is already
+    // private in the cloud, so it never holds its notes back.
     blockedFolderIds: Set<number>;
   }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
     return {
       localToCloud: new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!])),
       blockedFolderIds: new Set(
-        folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
+        folders
+          .filter(
+            (f) =>
+              f.cloud_id &&
+              f.sync_status === "pending" &&
+              (f.left_team || f.space_id !== privateSpaceId)
+          )
+          .map((f) => f.id)
       ),
     };
   }

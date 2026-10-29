@@ -2067,7 +2067,7 @@ test("moveFolderToSpace moves a parent with its subfolders; a subfolder alone go
   );
   const stayed = db.getFolders(team.id).find((f) => f.id === sibling.id);
   assert.equal(stayed.parent_folder_id, null, "leaving a team, subfolders stay behind top-level");
-  assert.equal(stayed.sync_status, "pending");
+  assert.equal(stayed.sync_status, "synced", "the server un-nests them when the move lands");
   assert.ok(taken);
 });
 
