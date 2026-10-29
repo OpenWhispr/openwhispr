@@ -16,6 +16,7 @@ const deps = (overrides = {}) => ({
     getDeepgramKey: () => "dg-key",
     getAssemblyAIKey: () => "aai-key",
     getGeminiKey: () => "gm-key",
+    getElevenlabsKey: () => "xi-key",
     ...overrides.environmentManager,
   },
   proxyFetch: overrides.proxyFetch || (async () => jsonResponse(200, { token: "aai-token" })),
@@ -429,5 +430,39 @@ test("server tokens: only session refusals count as sign-in refusals", async () 
   assert.equal(
     isSignInRefusal(await refusal({ proxyFetch: async () => jsonResponse(500, null) })),
     false
+  );
+});
+
+test("elevenlabs uses the saved key for both streams and fails without one", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  let minted = 0;
+  const counting = deps({
+    postServerToken: async () => {
+      minted++;
+      return { token: "server-token" };
+    },
+  });
+  assert.equal(
+    await fetchRealtimeTokenForProvider("elevenlabs-realtime", counting, { mode: "byok" }),
+    "xi-key"
+  );
+  assert.deepEqual(
+    await fetchRealtimeTokenForProvider(
+      "elevenlabs-realtime",
+      counting,
+      { mode: "byok" },
+      { streams: 2 }
+    ),
+    ["xi-key", "xi-key"]
+  );
+  assert.equal(minted, 0, "OpenWhispr Cloud never mints for ElevenLabs");
+
+  await assert.rejects(
+    fetchRealtimeTokenForProvider(
+      "elevenlabs-realtime",
+      deps({ environmentManager: { getElevenlabsKey: () => "" } }),
+      { mode: "byok" }
+    ),
+    /No ElevenLabs API key configured/
   );
 });

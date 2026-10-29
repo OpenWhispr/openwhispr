@@ -68,6 +68,7 @@ export interface TranscriptionApiKeys {
   tinfoilApiKey: string;
   deepgramApiKey: string;
   assemblyaiApiKey: string;
+  elevenlabsApiKey: string;
   customTranscriptionApiKey?: string;
 }
 
@@ -89,6 +90,8 @@ export function getTranscriptionApiKey(provider: string, keys: TranscriptionApiK
       return keys.deepgramApiKey;
     case "assemblyai":
       return keys.assemblyaiApiKey;
+    case "elevenlabs":
+      return keys.elevenlabsApiKey;
     case "custom":
       return keys.customTranscriptionApiKey || "";
     default:

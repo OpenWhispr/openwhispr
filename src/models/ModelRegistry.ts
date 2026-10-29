@@ -77,6 +77,8 @@ export interface TranscriptionModelDefinition {
   description: string;
   descriptionKey?: string;
   streaming?: boolean;
+  /** Streams only in Note Recording; dictation, onboarding and upload never offer it. */
+  noteRecordingOnly?: boolean;
   legacy?: boolean;
 }
 
@@ -438,6 +440,15 @@ export function resolveInferenceProvider(
 
 export function getTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders();
+}
+
+// Providers as dictation, onboarding and upload offer them: a model that only
+// streams Note Recording would have no request to run there.
+export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
+  return getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !m.noteRecordingOnly),
+  }));
 }
 
 export function getStreamingTranscriptionProviders(): TranscriptionProviderData[] {

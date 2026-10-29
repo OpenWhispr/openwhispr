@@ -592,6 +592,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
     }),
     echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
+  elevenlabs: {
+    displayName: "ElevenLabs",
+    ipc: () => window.electronAPI?.proxyElevenlabsTranscription,
+    buildPayload: ({ audioBuffer, model, language, keyterms }) => ({
+      audioBuffer,
+      model,
+      language: language !== "auto" ? language : undefined,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
+    }),
+  },
   xai: {
     displayName: "xAI",
     ipc: () => window.electronAPI?.proxyXaiTranscription,
@@ -2844,6 +2854,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!apiKey?.trim()) {
         const err = new Error(
           "Gemini API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "elevenlabs") {
+      apiKey = s.elevenlabsApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getElevenlabsKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "ElevenLabs API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

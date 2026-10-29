@@ -27,6 +27,7 @@ const byokProviders = [
     id: "assemblyai",
     models: [{ id: "universal-streaming-english", default: true }],
   },
+  { id: "elevenlabs", models: [{ id: "scribe_v2_realtime" }] },
 ];
 
 const baseOptions = {
@@ -269,4 +270,24 @@ test("gpt-live-transcribe is never offered for Note Recording", async () => {
       "gpt-4o-mini-transcribe"
     );
   }
+});
+
+test("BYOK ElevenLabs streams Scribe Realtime with the dictionary as keyterms", async () => {
+  const { resolveMeetingTranscriptionOptions, MEETING_STREAMING_PROVIDER_IDS } = await load();
+
+  assert.ok(MEETING_STREAMING_PROVIDER_IDS.includes("elevenlabs"));
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      selectedProvider: "elevenlabs",
+      selectedModel: "scribe_v2",
+    }),
+    {
+      provider: "elevenlabs-realtime",
+      model: "scribe_v2_realtime",
+      mode: "byok",
+      language: "en",
+      keyterms: ["OpenWhispr"],
+    }
+  );
 });

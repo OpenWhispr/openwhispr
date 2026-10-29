@@ -98,6 +98,16 @@ const REALTIME_TOKEN_PROVIDERS = {
     return duplicate(streams, token);
   },
 
+  // OpenWhispr Cloud has no ElevenLabs session to mint, so the saved key is the
+  // credential in either mode. The server-side socket sends it as a header.
+  "elevenlabs-realtime": async ({ environmentManager }, options, streams) => {
+    const apiKey = environmentManager.getElevenlabsKey();
+    if (!apiKey) {
+      throw new Error("No ElevenLabs API key configured. Add your key in Settings.");
+    }
+    return duplicate(streams, apiKey);
+  },
+
   "tinfoil-realtime": async ({ environmentManager }, options, streams) => {
     const apiKey = environmentManager.getTinfoilKey();
     if (!apiKey) {

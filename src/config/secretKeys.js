@@ -80,6 +80,13 @@ const BYOK_API_KEYS = [
     save: "saveAssemblyAIKey",
     storeKey: "assemblyaiApiKey",
   },
+  {
+    base: "elevenlabs",
+    env: "ELEVENLABS_API_KEY",
+    get: "getElevenlabsKey",
+    save: "saveElevenlabsKey",
+    storeKey: "elevenlabsApiKey",
+  },
   // Per-scope Custom-endpoint keys. Dictation cleanup's counterpart predates
   // this manifest and keeps its bespoke accessors (CUSTOM_CLEANUP_API_KEY).
   {
