@@ -67,6 +67,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const pushForceStoppedRef = useRef(false);
   const stopLockRef = useRef(false);
   const preparationGenerationRef = useRef(0);
+  const mediaSessionIdRef = useRef(null);
   const dictationErrorGenerationRef = useRef(0);
   const wasRecordingRef = useRef(false);
   const pastesInFlightRef = useRef(0);
@@ -136,6 +137,13 @@ export const useAudioRecording = (toast, options = {}) => {
     if (reportedLifecycleRef.current === signature) return;
     reportedLifecycleRef.current = signature;
     window.electronAPI?.dictationLifecycleStateChanged?.(state, inputKind);
+  }, []);
+
+  const endMediaPauseSession = useCallback(() => {
+    const sessionId = mediaSessionIdRef.current;
+    if (!sessionId) return;
+    mediaSessionIdRef.current = null;
+    window.electronAPI?.resumeMediaPlayback?.(sessionId, getSettings().pauseMediaOnDictation);
   }, []);
 
   const performStartRecording = useCallback(
@@ -279,7 +287,9 @@ export const useAudioRecording = (toast, options = {}) => {
         // streaming stop) — don't pause media for a recording that already ended. See #1060.
         if (didStart && audioManagerRef.current.getState().isRecording) {
           if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
+            const sessionId = crypto.randomUUID();
+            mediaSessionIdRef.current = sessionId;
+            window.electronAPI?.pauseMediaPlayback?.(sessionId);
           }
           window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();
@@ -332,6 +342,7 @@ export const useAudioRecording = (toast, options = {}) => {
       // Contract to the stable thinking state before MediaRecorder/streaming
       // finalization can occupy the renderer on slower Windows machines.
       await waitForVisualFrames();
+      endMediaPauseSession();
 
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
         void playStopCue();
@@ -349,7 +360,7 @@ export const useAudioRecording = (toast, options = {}) => {
       stopLockRef.current = false;
       setIsStopping(false);
     }
-  }, []);
+  }, [endMediaPauseSession]);
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
@@ -523,10 +534,8 @@ export const useAudioRecording = (toast, options = {}) => {
         }
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
-          // Resume media the instant recording ends, not after transcription.
-          if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.resumeMediaPlayback?.();
-          }
+          // End the media session the instant recording ends, not after transcription.
+          if (wasRecordingRef.current) endMediaPauseSession();
         }
         wasRecordingRef.current = isRecording;
         setIsRecording(isRecording);
@@ -592,9 +601,7 @@ export const useAudioRecording = (toast, options = {}) => {
             technicalDetails: error?.technicalDetails,
           });
         }
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
+        endMediaPauseSession();
       },
       onNoAudio: () => {
         setIsPreparing(false);
@@ -605,9 +612,7 @@ export const useAudioRecording = (toast, options = {}) => {
           message: t("hooks.audioRecording.noAudio.title"),
         });
         window.electronAPI?.hideDictationPreview?.();
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
+        endMediaPauseSession();
         showDictationError({
           title: t("hooks.audioRecording.noAudio.title"),
           description: t("hooks.audioRecording.noAudio.description"),
@@ -1101,6 +1106,7 @@ export const useAudioRecording = (toast, options = {}) => {
     // Cleanup
     return () => {
       reportLifecycle("idle");
+      endMediaPauseSession();
       unsubscribePolicy();
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
@@ -1122,6 +1128,7 @@ export const useAudioRecording = (toast, options = {}) => {
     dismissDictationError,
     onDictationError,
     reportLifecycle,
+    endMediaPauseSession,
     t,
   ]);
 
@@ -1133,9 +1140,7 @@ export const useAudioRecording = (toast, options = {}) => {
       audioManagerRef.current.cancelPreparedMicCapture?.();
       window.electronAPI?.unregisterCancelHotkey?.();
       const state = audioManagerRef.current.getState();
-      if (getSettings().pauseMediaOnDictation) {
-        window.electronAPI?.resumeMediaPlayback?.();
-      }
+      endMediaPauseSession();
       // A streaming start in its mic-open phase is not yet `isStreaming`;
       // only the streaming cancel knows how to abandon it.
       if (state.isStreaming || state.isStreamingStartInProgress) {
@@ -1153,7 +1158,7 @@ export const useAudioRecording = (toast, options = {}) => {
       return audioManagerRef.current.cancelRecording();
     }
     return false;
-  }, []);
+  }, [endMediaPauseSession]);
 
   const cancelProcessing = useCallback(() => {
     if (audioManagerRef.current) {
