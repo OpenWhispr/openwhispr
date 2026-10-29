@@ -367,7 +367,7 @@ test("a question about a selection goes to the panel instead of replacing it", a
       consumeSelectionCapture: async () => capture,
       processWithReasoningModel: async (...args) => {
         modelCalls.push(args);
-        const marker = args[3].systemPrompt?.match(/__OPENWHISPR_SELECTION_COMPLETE_[^\s]+__/);
+        const marker = args[3].systemPrompt?.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/);
         return reply(marker?.[0] ?? "");
       },
     });
