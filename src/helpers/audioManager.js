@@ -5,6 +5,11 @@ import {
 } from "../services/ai/chatRequestBody";
 import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
+import {
+  cleanupSpokenParagraphs,
+  normalizeSpokenParagraphs,
+  isParagraphOnlyResult,
+} from "../utils/spokenParagraphs";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
@@ -3528,11 +3533,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 },
                 wasCancelled
               )
-            : await this.processWithReasoningModel(
+            : await cleanupSpokenParagraphs(
                 normalizedText,
-                targetModel,
-                agentName,
-                reasoningConfig
+                (paragraph) =>
+                  this.processWithReasoningModel(
+                    paragraph,
+                    targetModel,
+                    agentName,
+                    reasoningConfig
+                  ),
+                { language: settings.preferredLanguage, wasCancelled }
               );
 
         logger.logReasoning("REASONING_SUCCESS", {
@@ -3542,7 +3552,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
 
         // A blank reply must not wipe the dictation — keep the transcript (#1616).
-        return hasTextContent(result) ? result : normalizedText;
+        return hasTextContent(result) ||
+          (route.kind === "cleanup" &&
+            isParagraphOnlyResult(result, normalizedText, settings.preferredLanguage))
+          ? result
+          : normalizedText;
       } catch (error) {
         if (error.selectionEditFatal) throw error;
         if (wasCancelled()) return normalizedText;
@@ -3552,7 +3566,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           fallbackToCleanup: true,
         });
         logger.warn("Reasoning failed", { source, error: error.message }, "notes");
-        if (route?.kind === "cleanup") this.pendingCleanupFailure = cleanupFailureFromError(error);
+        if (route?.kind === "cleanup") {
+          this.pendingCleanupFailure = cleanupFailureFromError(error);
+          return normalizeSpokenParagraphs(normalizedText, settings.preferredLanguage);
+        }
         if (route?.kind === "agent") this._notifyAgentReasoningFailed();
       }
     }
