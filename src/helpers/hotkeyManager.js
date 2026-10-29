@@ -78,6 +78,13 @@ function isMouseButtonHotkey(hotkey) {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }
 
+// Electron's accelerator parser has no Pause key, so globalShortcut always
+// refuses it; windows-key-listener watches VK_PAUSE instead (#2675). Only a lone
+// Pause: with Ctrl held the key arrives as VK_CANCEL, which the listener never matches.
+function isWindowsListenerOnlyKey(hotkey) {
+  return process.platform === "win32" && /^Pause$/i.test(hotkey || "");
+}
+
 // macOS only reports a release for keys the native listener watches (Globe,
 // right-side modifiers, mouse buttons) and for modifier chords. A lone regular
 // key goes through globalShortcut, which autorepeats and never reports release.
@@ -225,7 +232,7 @@ class HotkeyManager extends EventEmitter {
     const isUsable = (hotkey) =>
       hotkey !== failedHotkey &&
       !boundHotkeys.has(hotkey) &&
-      !(listenerMissing && isModifierOnlyHotkey(hotkey));
+      !(listenerMissing && (isModifierOnlyHotkey(hotkey) || isWindowsListenerOnlyKey(hotkey)));
     const usable = suggestions.filter(isUsable);
     return (usable.length > 0 ? usable : FALLBACK_HOTKEYS.filter(isUsable)).slice(0, 3);
   }
@@ -519,7 +526,12 @@ class HotkeyManager extends EventEmitter {
       for (const hotkey of slot.hotkeys ?? []) {
         if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
         const pushToTalk = slotName === "dictation" && activationMode === "push";
-        if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
+        if (
+          pushToTalk ||
+          isModifierOnlyHotkey(hotkey) ||
+          isRightSideModifier(hotkey) ||
+          isWindowsListenerOnlyKey(hotkey)
+        ) {
           keys.push(hotkey);
         }
       }
@@ -719,7 +731,10 @@ class HotkeyManager extends EventEmitter {
       reason: deniedAccess ? "input_access_denied" : "native_listener_unavailable",
       // Only regular-key hotkeys avoid the listener that just failed.
       suggestions: this.getSuggestions(hotkey).filter(
-        (suggestion) => !isModifierOnlyHotkey(suggestion) && !isRightSideModifier(suggestion)
+        (suggestion) =>
+          !isModifierOnlyHotkey(suggestion) &&
+          !isRightSideModifier(suggestion) &&
+          !isWindowsListenerOnlyKey(suggestion)
       ),
     };
   }
@@ -780,6 +795,13 @@ class HotkeyManager extends EventEmitter {
         const unavailable = this._nativeListenerUnavailable(hotkey);
         if (unavailable) return unavailable;
         debugLogger.log(`[HotkeyManager] Modifier-only "${hotkey}" set - using native listener`);
+        return { success: true, hotkey, accelerator: null };
+      }
+
+      if (isWindowsListenerOnlyKey(hotkey)) {
+        const unavailable = this._nativeListenerUnavailable(hotkey);
+        if (unavailable) return unavailable;
+        debugLogger.log(`[HotkeyManager] "${hotkey}" set - using native listener`);
         return { success: true, hotkey, accelerator: null };
       }
 
