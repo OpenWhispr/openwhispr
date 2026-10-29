@@ -64,6 +64,7 @@ export default function InferenceConfigEditor({
         : resolved;
     })
   );
+  const { modelNeeds }: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const keepLocalModelLoaded = useSettingsStore((s) => s.keepLocalModelLoaded);
   const setKeepLocalModelLoaded = useSettingsStore((s) => s.setKeepLocalModelLoaded);
@@ -159,6 +160,7 @@ export default function InferenceConfigEditor({
       setCustomReasoningApiKey={setField("customApiKey")}
       setReasoningMode={setMode}
       mode={mode}
+      modelNeeds={modelNeeds}
     />
   );
 

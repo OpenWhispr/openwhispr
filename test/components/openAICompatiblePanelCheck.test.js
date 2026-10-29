@@ -272,3 +272,39 @@ test("a key OpenRouter refuses is never saved", async (t) => {
   await panel.unmount();
   assert.deepEqual(saved, []);
 });
+
+// Shaped like OpenRouter's /models entries.
+const HAIKU = "anthropic/claude-haiku-5.5";
+const MISTRAL = "mistralai/mistral-small-24b-instruct-2501";
+const openRouterCatalog = respond(200, {
+  data: [
+    { id: HAIKU, supported_parameters: ["tools"] },
+    { id: `${HAIKU}:batch`, supported_parameters: ["tools"] },
+    { id: MISTRAL, supported_parameters: [] },
+  ],
+});
+const openRouterList = async (t, modelNeeds) => {
+  const panel = await mount(t, {
+    fetch: openRouterCatalog,
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      apiKeyRequired: true,
+      apiKey: "sk-or-saved",
+      modelNeeds,
+    },
+  });
+  await panel.wait(0);
+  const list = panel.find((node) => Array.isArray(node.props?.models))[0];
+  return list.props.models.map((option) => option.value);
+};
+
+test("OpenRouter lists only models the scope's requests can use", async (t) => {
+  await t.test("text features skip batch variants", async (t) => {
+    assert.deepEqual(await openRouterList(t), [HAIKU, MISTRAL]);
+  });
+  await t.test("chat also needs tools", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"]), [HAIKU]);
+  });
+});

@@ -21,6 +21,8 @@ import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
 import { useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useTypingPause } from "../hooks/useTypingPause";
+import { offersOpenRouterModel } from "../utils/openRouterModels";
+import type { ModelCapability } from "../config/inferenceScopes";
 
 interface ModelOption {
   value: string;
@@ -46,6 +48,8 @@ interface OpenAICompatiblePanelProps {
   getKeyUrl?: string;
   // The connection the panel checks: the user's own server, or OpenRouter.
   provider?: "custom" | "openrouter";
+  // What the scope's requests need; OpenRouter's list leaves out models without it.
+  modelNeeds?: readonly ModelCapability[];
 }
 
 export default function OpenAICompatiblePanel({
@@ -62,6 +66,7 @@ export default function OpenAICompatiblePanel({
   apiKeyRequired = false,
   getKeyUrl,
   provider = "custom",
+  modelNeeds,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
   const [draftBase, setDraftBase] = useState(baseUrl);
@@ -224,6 +229,7 @@ export default function OpenAICompatiblePanel({
           // Coerce fields defensively: non-conformant endpoints may return
           // numeric ids or object descriptions, which would crash the render.
           return (rawModels as Array<Record<string, unknown>>)
+            .filter((item) => provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds))
             .map((item) => {
               const rawValue = item?.id ?? item?.name;
               if (rawValue === undefined || rawValue === null || rawValue === "") return null;
@@ -297,7 +303,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, lockedBaseUrl, t]
+    [baseUrl, lockedBaseUrl, provider, modelNeeds, t]
   );
 
   useEffect(() => {
