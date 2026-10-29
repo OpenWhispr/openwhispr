@@ -11,10 +11,12 @@ interface OpenRouterCatalogModel {
   architecture?: { input_modalities?: unknown };
 }
 
-const lists = (value: unknown, entry: string) => Array.isArray(value) && value.includes(entry);
+const includesEntry = (value: unknown, entry: string) =>
+  Array.isArray(value) && value.includes(entry);
 
 // Whether a /models entry can serve a request that needs `needs`. Batch variants only
-// answer OpenRouter's Batch API, and free variants have no zero-data-retention endpoint.
+// answer OpenRouter's Batch API. Free variants are left out by choice: they have no
+// zero-data-retention endpoint, so they went untested.
 export function offersOpenRouterModel(
   model: OpenRouterCatalogModel,
   needs: readonly ModelCapability[] = []
@@ -23,7 +25,7 @@ export function offersOpenRouterModel(
   if (HIDDEN_ROUTERS.has(id) || id.endsWith(":batch") || id.endsWith(":free")) return false;
   return needs.every((need) =>
     need === "tools"
-      ? lists(model.supported_parameters, "tools")
-      : lists(model.architecture?.input_modalities, "image")
+      ? includesEntry(model.supported_parameters, "tools")
+      : includesEntry(model.architecture?.input_modalities, "image")
   );
 }
