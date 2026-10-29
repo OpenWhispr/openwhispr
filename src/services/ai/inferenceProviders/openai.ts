@@ -36,8 +36,16 @@ const PROBE_TIMEOUT_MS = 2_000;
 const endpointPreferenceCache = new Map<string, "responses" | "chat">();
 const probedBases = new Set<string>();
 
-function readStoredPreference(base: string): "responses" | "chat" | undefined {
-  if (endpointPreferenceCache.has(base)) {
+function preferenceKey(base: string, model?: string): string {
+  return model ? `${base}#${model}` : base;
+}
+
+function readStoredPreference(base: string, model?: string): "responses" | "chat" | undefined {
+  const key = preferenceKey(base, model);
+  if (endpointPreferenceCache.has(key)) {
+    return endpointPreferenceCache.get(key);
+  }
+  if (model && endpointPreferenceCache.has(base)) {
     return endpointPreferenceCache.get(base);
   }
 
@@ -50,10 +58,15 @@ function readStoredPreference(base: string): "responses" | "chat" | undefined {
     if (!raw) return undefined;
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return undefined;
-    const value = parsed[base];
-    if (value === "responses" || value === "chat") {
-      endpointPreferenceCache.set(base, value);
-      return value;
+    const modelValue = parsed[key];
+    if (modelValue === "responses" || modelValue === "chat") {
+      endpointPreferenceCache.set(key, modelValue);
+      return modelValue;
+    }
+    const baseValue = parsed[base];
+    if (baseValue === "responses" || baseValue === "chat") {
+      endpointPreferenceCache.set(base, baseValue);
+      return baseValue;
     }
   } catch {
     return undefined;
@@ -62,8 +75,9 @@ function readStoredPreference(base: string): "responses" | "chat" | undefined {
   return undefined;
 }
 
-function rememberPreference(base: string, preference: "responses" | "chat"): void {
-  endpointPreferenceCache.set(base, preference);
+function rememberPreference(base: string, preference: "responses" | "chat", model?: string): void {
+  const key = preferenceKey(base, model);
+  endpointPreferenceCache.set(key, preference);
 
   if (typeof window === "undefined" || !window.localStorage) {
     return;
@@ -73,12 +87,12 @@ function rememberPreference(base: string, preference: "responses" | "chat"): voi
     const raw = window.localStorage.getItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     const data = typeof parsed === "object" && parsed !== null ? parsed : {};
-    data[base] = preference;
+    data[key] = preference;
     window.localStorage.setItem(OPENAI_ENDPOINT_PREF_STORAGE_KEY, JSON.stringify(data));
   } catch {}
 }
 
-function getEndpointCandidates(base: string): Array<{ url: string; type: "responses" | "chat" }> {
+function getEndpointCandidates(base: string, model?: string): Array<{ url: string; type: "responses" | "chat" }> {
   const lower = base.toLowerCase();
 
   if (lower.endsWith("/responses") || lower.endsWith("/chat/completions")) {
@@ -86,7 +100,7 @@ function getEndpointCandidates(base: string): Array<{ url: string; type: "respon
     return [{ url: base, type }];
   }
 
-  const preference = readStoredPreference(base);
+  const preference = readStoredPreference(base, model);
   if (preference === "chat") {
     return [{ url: buildApiUrl(base, "/chat/completions"), type: "chat" }];
   }
@@ -98,8 +112,8 @@ function getEndpointCandidates(base: string): Array<{ url: string; type: "respon
 }
 
 /** Probe `/v1/models` to detect llama.cpp and prefer `/chat/completions`. */
-async function detectServerType(base: string): Promise<void> {
-  if (probedBases.has(base) || readStoredPreference(base) !== undefined) {
+async function detectServerType(base: string, model?: string): Promise<void> {
+  if (probedBases.has(base) || readStoredPreference(base, model) !== undefined) {
     return;
   }
 
@@ -203,8 +217,8 @@ export const openaiProvider: InferenceProvider = {
     if (isOpenRouter || dialect) {
       endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
     } else {
-      await detectServerType(openAiBase);
-      endpointCandidates = getEndpointCandidates(openAiBase);
+      await detectServerType(openAiBase, model);
+      endpointCandidates = getEndpointCandidates(openAiBase, model);
     }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
     // Only the user's own endpoint is self-hosted; isCustomEndpoint also covers OpenRouter.
@@ -222,7 +236,7 @@ export const openaiProvider: InferenceProvider = {
       base: openAiBase,
       isCustomEndpoint,
       candidates: endpointCandidates.map((candidate) => candidate.url),
-      preference: readStoredPreference(openAiBase) || null,
+      preference: readStoredPreference(openAiBase, model) || null,
     });
 
     if (isCustomEndpoint) {
@@ -325,7 +339,7 @@ export const openaiProvider: InferenceProvider = {
                 body: errorData,
                 headers: res.headers,
               });
-              rememberPreference(openAiBase, "chat");
+              rememberPreference(openAiBase, "chat", model);
               logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
                 attemptedEndpoint: endpoint,
                 error: redactProviderBody(errorMessage),
@@ -341,7 +355,7 @@ export const openaiProvider: InferenceProvider = {
             });
           }
 
-          rememberPreference(openAiBase, type);
+          rememberPreference(openAiBase, type, model);
           readingBody = true;
           return await res.json();
         } catch (error) {
