@@ -235,8 +235,8 @@ test("speaker expectation reports cap as other-speaker count in every system-mod
   );
   assert.deepEqual(
     resolve({}),
-    { numSpeakers: -1, cap: 1 },
-    "the default total of 2 means a single other speaker, not 2"
+    { numSpeakers: -1, cap: 7 },
+    "the fallback without explicit count auto-clusters up to MAX_SPEAKER_COUNT - 1"
   );
 });
 
@@ -252,8 +252,8 @@ test("mic mode counts the user among the expected speakers", () => {
   );
   assert.deepEqual(
     resolve({ diarizedSource: "mic" }),
-    { numSpeakers: -1, cap: 2 },
-    "the no-signal fallback caps at the default expected total, user included"
+    { numSpeakers: -1, cap: 8 },
+    "the no-signal fallback in mic mode auto-clusters up to MAX_SPEAKER_COUNT"
   );
 });
 

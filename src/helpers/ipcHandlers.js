@@ -8882,8 +8882,12 @@ class IPCHandlers {
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
     const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      const config = this.activeMeetingSpeakerConfig;
+      if (config?.expectedCount && config?.explicit) {
+        return Math.max(1, Math.min(config.expectedCount, MAX_SPEAKER_COUNT) - 1);
+      }
+      const count = config?.expectedCount;
+      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : MAX_SPEAKER_COUNT;
       return Math.max(1, total - 1);
     };
 
@@ -14014,12 +14018,12 @@ class IPCHandlers {
     }
 
     if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+      return { numSpeakers: -1, cap: MAX_SPEAKER_COUNT };
     }
 
     // Only system audio reaches the diarizer (the mic track is "you"), so the cap
-    // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    // counts other speakers — up to MAX_SPEAKER_COUNT - 1.
+    return { numSpeakers: -1, cap: MAX_SPEAKER_COUNT - 1 };
   }
 
   _startOrSkipDiarization(
