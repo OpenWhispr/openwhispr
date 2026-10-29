@@ -6,11 +6,11 @@
 
 let
   pname = "openwhispr";
-  version = "1.7.4";
+  version = "1.11.0";
 
   src = fetchurl {
     url = "https://github.com/OpenWhispr/openwhispr/releases/download/v${version}/OpenWhispr-${version}-linux-x86_64.AppImage";
-    hash = "sha256-hp7FVUi5/K+QiQam8YAOrRsemFkC8MnupT+hhroP+6Y=";
+    hash = "sha256-fI8RCYVybv/sDSrm8Kw0O2TzX5Z+Cf/9z6pL/wwpMH4=";
   };
 
   appimageContents = appimageTools.extractType2 { inherit pname version src; };
