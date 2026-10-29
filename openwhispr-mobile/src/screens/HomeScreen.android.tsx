@@ -35,6 +35,8 @@ export default function AndroidHome() {
   const usage = useUsageStore((s) => s.usage);
   const { register } = useSuperwallGate();
   const action = useRef(false);
+  const retryController = useRef<AbortController | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
   const { isProcessing, currentText, stage, cancel, pickAndTranscribeFile } = useFileUpload({
     onError: (error) => Alert.alert(t('errorTitle'), error.message),
@@ -79,22 +81,31 @@ export default function AndroidHome() {
     if (action.current) return;
     action.current = true;
     setWorking(true);
+    setRetrying(true);
+    const controller = new AbortController();
+    retryController.current = controller;
     try {
-      await useTranscriptStore.getState().retryTranscript(id);
+      await useTranscriptStore.getState().retryTranscript(id, controller.signal);
     } catch (error) {
-      Alert.alert(t('errorTitle'), (error as Error).message);
+      if (!controller.signal.aborted && (error as Error)?.name !== 'AbortError') {
+        Alert.alert(t('errorTitle'), (error as Error).message);
+      }
     } finally {
-      await applyHistoryRetention().catch(() => undefined);
+      if (!controller.signal.aborted) await applyHistoryRetention().catch(() => undefined);
+      retryController.current = null;
       action.current = false;
+      setRetrying(false);
       setWorking(false);
     }
   };
+  useEffect(() => () => retryController.current?.abort(), [user?.id]);
   useEffect(() => {
     applyHistoryRetention().catch(() => undefined);
   }, []);
   useFocusEffect(
     useCallback(() => {
       void refreshInsights();
+      return () => retryController.current?.abort();
     }, [user?.id, syncInsights, historyEnabled]),
   );
   useEffect(() => {
@@ -142,11 +153,18 @@ export default function AndroidHome() {
         <Text style={styles.body}>{t('acrossBody')}</Text>
         <Button disabled={working} label={t('practiceTitle')} onPress={() => setPractice(true)} />
       </Card>
-      {isProcessing && (
+      {(isProcessing || retrying) && (
         <Card>
-          <Text>{t(stage === 'cleaning' ? 'cleanup' : 'processing')}</Text>
-          {currentText ? <Text>{currentText}</Text> : null}
-          <Button secondary label={t('cancel')} onPress={cancel} />
+          <Text>{t(!retrying && stage === 'cleaning' ? 'cleanup' : 'processing')}</Text>
+          {!retrying && currentText ? <Text>{currentText}</Text> : null}
+          <Button
+            secondary
+            label={t('cancel')}
+            onPress={() => {
+              if (retryController.current) retryController.current.abort();
+              else cancel();
+            }}
+          />
         </Card>
       )}
       {pending.text || pending.error ? (

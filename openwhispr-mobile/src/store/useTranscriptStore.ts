@@ -1,3 +1,4 @@
+import { abortError } from '@/services/providers/NativeProviderTransport';
 import { Platform } from 'react-native';
 import { isProviderJobActive } from '@/lib/providerJobActivity';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
@@ -57,7 +58,7 @@ interface TranscriptState {
   loadTranscripts: () => Promise<void>;
   addTranscript: (transcript: AddTranscriptInput) => Promise<void>;
   addFailedTranscript: (transcript: FailedTranscriptInput) => Promise<void>;
-  retryTranscript: (id: string) => Promise<Transcript>;
+  retryTranscript: (id: string, signal?: AbortSignal) => Promise<Transcript>;
   updateTranscript: (id: string, updates: Partial<Transcript>) => Promise<void>;
   deleteTranscript: (id: string) => Promise<void>;
   setCurrentTranscript: (transcript: Transcript | null) => void;
@@ -332,13 +333,20 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       });
     },
 
-    retryTranscript: async (id) => {
+    retryTranscript: async (id, signal) => {
+      const assertActive = () => {
+        if (signal?.aborted) throw abortError('Transcription cancelled.');
+      };
+      assertActive();
       await ensureLoaded();
+      assertActive();
       const current = get().transcripts.find((t) => t.id === id);
       if (!current) throw new Error('Transcript not found');
       if (!current.audioUrl) throw new Error('Audio file not found');
 
-      if (!(await transcriptAudioExists(current.audioUrl))) {
+      const audioExists = await transcriptAudioExists(current.audioUrl);
+      assertActive();
+      if (!audioExists) {
         const message = 'Audio file not found';
         await get().updateTranscript(id, {
           status: 'failed',
@@ -393,7 +401,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           tempUris.push(transcoded.uri);
         }
 
+        assertActive();
         const processed = await transcribeAndCleanup({
+          signal,
           audioUri,
           provider,
           inferenceRoute,
@@ -417,6 +427,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
         });
 
+        assertActive();
         const updated: Transcript = {
           ...current,
           text: processed.text,
@@ -435,6 +446,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           updatedAt: Date.now(),
         };
         await exclusive(async () => {
+          assertActive();
           const transcripts = get().transcripts.map((t) => (t.id === id ? updated : t));
           await StorageService.saveTranscripts(transcripts);
           set({ transcripts, isLoading: false });
@@ -454,6 +466,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         });
         return updated;
       } catch (error) {
+        if (signal?.aborted || (error as Error)?.name === 'AbortError') {
+          set({ isLoading: false });
+          throw abortError('Transcription cancelled.');
+        }
         const updated: Transcript = {
           ...current,
           // A rerouted Cloud or On-Device recording keeps its own route, so the next
@@ -472,12 +488,14 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           updatedAt: Date.now(),
         };
         await exclusive(async () => {
+          assertActive();
           const transcripts = get().transcripts.map((t) => (t.id === id ? updated : t));
           await StorageService.saveTranscripts(transcripts);
           set({ transcripts, isLoading: false });
         });
         throw error;
       } finally {
+        set({ isLoading: false });
         // The row keeps its own audio and result, so the retry's recovery entry is
         // never needed once the retry settles.
         clearKeyboardProviderRecovery(retryJobId);

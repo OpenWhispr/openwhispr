@@ -1025,3 +1025,84 @@ describe('Android Local Mode retry privacy', () => {
     expect(mockTranscodeToWav).not.toHaveBeenCalled();
   });
 });
+
+describe('cancelling a history retry', () => {
+  it('keeps the failed row and retained audio when a cancelled provider returns late', async () => {
+    const original = failedTranscript({ audioFileName: 'clip.wav', audioMimeType: 'audio/wav' });
+    mockIsWavAudioFile.mockReturnValue(true);
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    let finish!: (value: unknown) => void;
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mockTranscribeAndCleanup.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await ready;
+    controller.abort();
+    finish({
+      text: 'Discard this late result',
+      originalText: 'late',
+      transcription: { text: 'late', duration: 3, provider: 'cloud' },
+    });
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(useTranscriptStore.getState().isLoading).toBe(false);
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({
+      status: 'completed',
+      text: 'clean transcript',
+    });
+  });
+
+  it('passes cancellation to the active transport and preserves audio on abort', async () => {
+    const original = failedTranscript();
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mockTranscribeAndCleanup.mockImplementationOnce((request) => {
+      started();
+      return new Promise((_, reject) => {
+        request.signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
+        );
+      });
+    });
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await ready;
+    expect(mockTranscribeAndCleanup.mock.calls[0][0].signal).toBe(controller.signal);
+    controller.abort();
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+  });
+
+  it('does not send audio when cancellation happens during format conversion', async () => {
+    const original = failedTranscript();
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    mockTranscodeToWav.mockImplementationOnce(async () => {
+      controller.abort();
+      return { uri: 'file://tmp/cancelled.wav', durationMs: 3000 };
+    });
+    mockProcessingModeState.activeMode = 'private';
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(mockAudioToolsCleanup).toHaveBeenCalledWith(['file://tmp/cancelled.wav']);
+  });
+});

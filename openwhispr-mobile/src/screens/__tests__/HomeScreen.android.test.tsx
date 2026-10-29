@@ -1,8 +1,9 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
+const mockRetryTranscript = jest.fn();
 let mockUser: { id: string } | null = null;
 let mockSync = false;
 let mockInsights = {
@@ -35,30 +36,37 @@ jest.mock('@/lib/superwall', () => ({}));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockUser }));
 jest.mock('@/store/useUsageStore', () => ({ useUsageStore: () => null }));
 jest.mock('@/store/useTranscriptStore', () => ({
-  useTranscriptStore: () => [
-    { id: 'done', text: 'Hello there.', status: 'completed', createdAt: 1, provider: 'local' },
-    { id: 'legacy', text: 'One more dictation.', createdAt: 2, provider: 'local' },
-    {
-      id: 'failed',
-      text: 'Unfinished raw audio',
-      status: 'failed',
-      createdAt: 3,
-      provider: 'local',
-      errorMessage: 'Unreadable audio',
-      audioUrl: 'file:///invalid.wav',
-    },
-  ],
+  useTranscriptStore: Object.assign(
+    () => [
+      { id: 'done', text: 'Hello there.', status: 'completed', createdAt: 1, provider: 'local' },
+      { id: 'legacy', text: 'One more dictation.', createdAt: 2, provider: 'local' },
+      {
+        id: 'failed',
+        text: 'Unfinished raw audio',
+        status: 'failed',
+        createdAt: 3,
+        provider: 'local',
+        errorMessage: 'Unreadable audio',
+        audioUrl: 'file:///invalid.wav',
+      },
+    ],
+    { getState: () => ({ retryTranscript: mockRetryTranscript }) },
+  ),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/android/ui', () => {
-  const { View, Text } = require('react-native');
+  const { View, Text, Pressable } = require('react-native');
   return {
     Page: View,
     Card: View,
     Row: () => null,
     styles: {},
-    Button: ({ label }: { label: string }) => <Text>{label}</Text>,
+    Button: ({ label, ...props }: { label: string }) => (
+      <Pressable {...props}>
+        <Text>{label}</Text>
+      </Pressable>
+    ),
   };
 });
 
@@ -142,4 +150,45 @@ it('shows device counts with a paused label after an opt-out fails to persist', 
   expect(screen.getByText('42')).toBeTruthy();
   expect(screen.getByText('statsPaused')).toBeTruthy();
   expect(screen.queryByText('statsLoading')).toBeNull();
+});
+
+describe('history retry controls', () => {
+  let signal: AbortSignal | undefined;
+  beforeEach(() => {
+    signal = undefined;
+    mockRetryTranscript.mockImplementation((_id, cancellation) => {
+      signal = cancellation;
+      return new Promise((_, reject) => {
+        signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
+        );
+      });
+    });
+  });
+
+  it('shows Cancel during a history retry and aborts that request', async () => {
+    render(<AndroidHome />);
+    await act(async () => fireEvent.press(screen.getByText('retry')));
+    expect(screen.getByText('processing')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByText('cancel')));
+    expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('processing')).toBeNull();
+    expect(screen.getByText('Unreadable audio')).toBeTruthy();
+  });
+
+  it('aborts a pending retry when the screen unmounts', async () => {
+    const view = render(<AndroidHome />);
+    await act(async () => fireEvent.press(screen.getByText('retry')));
+    await act(async () => view.unmount());
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('aborts a pending retry when the account changes', async () => {
+    mockUser = { id: 'a' };
+    const view = render(<AndroidHome />);
+    await act(async () => fireEvent.press(screen.getByText('retry')));
+    mockUser = { id: 'b' };
+    await act(async () => view.rerender(<AndroidHome />));
+    expect(signal?.aborted).toBe(true);
+  });
 });
