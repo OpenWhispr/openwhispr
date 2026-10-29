@@ -1,6 +1,7 @@
 import type { ReactNativeOptions } from '@sentry/react-native';
 
 const mockSaveConfig = jest.fn();
+const mockGetConfig = jest.fn();
 const mockAppsFlyerInit = jest.fn(() => Promise.resolve());
 const mockStart = jest.fn(() => Promise.resolve());
 const mockStop = jest.fn(() => Promise.resolve());
@@ -11,7 +12,10 @@ let mockSessionReady: (() => void) | undefined;
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 jest.mock('@/services/storage/StorageService', () => ({
-  StorageService: { saveConfig: (config: unknown) => mockSaveConfig(config) },
+  StorageService: {
+    saveConfig: (config: unknown) => mockSaveConfig(config),
+    getConfig: () => mockGetConfig(),
+  },
 }));
 jest.mock('@/store/useProcessingModeStore', () => ({
   useProcessingModeStore: { getState: () => ({ resetToDefault: jest.fn() }) },
@@ -102,6 +106,15 @@ it.each(['resolve', 'reject'] as const)(
       else reject(new Error('disk full'));
       await update;
     }
+    mockGetConfig.mockResolvedValue({
+      defaultMode: 'cloud',
+      usageAnalyticsEnabled: true,
+      localModeUpgraded: true,
+      noteChatSplit: true,
+      notesLocalModeSplit: true,
+    });
+    await useConfigStore.getState().loadConfig();
+    expect(useConfigStore.getState().error).toBe(outcome === 'reject' ? 'disk full' : null);
     appsFlyer.logAppsFlyerEvent('withdrawn_after_save');
     await flush();
     expect(mockLogEvent).not.toHaveBeenCalled();

@@ -29,53 +29,77 @@ const defaultConfig: UserConfig = {
 let configUpdate: Promise<void> | null = null;
 let pendingUpdates = 0;
 let analyticsConsentRevision = 0;
+let analyticsConsentOverride: boolean | null = null;
+let analyticsPersistenceError: string | null = null;
+
+function withCurrentConsent(config: UserConfig): UserConfig {
+  return analyticsConsentOverride === null
+    ? config
+    : { ...config, usageAnalyticsEnabled: analyticsConsentOverride };
+}
+
+function enqueueConfigOperation(operation: () => Promise<void>): Promise<void> {
+  const result = configUpdate ? configUpdate.then(operation) : operation();
+  configUpdate = result;
+  return result.finally(() => {
+    if (configUpdate === result) configUpdate = null;
+  });
+}
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: null,
   isLoading: false,
   error: null,
 
-  loadConfig: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const config = await StorageService.getConfig();
-      // A config from before Local Mode's Cloud defaults is upgraded before anything reads it, so
-      // its uploads and cleanup never reach Cloud; one from before note chat had a selection of its
-      // own keeps the one it shared; and one from before note formatting left Local Mode keeps its
-      // notes on this iPhone. A selection of a model its provider shut down moves to the
-      // replacement. A failed save upgrades it again next launch.
-      const localModeConfig =
-        !config || config.localModeUpgraded
-          ? config
-          : { ...config, ...localModeUpgradeConfig(config) };
-      const noteChatConfig =
-        !localModeConfig || localModeConfig.noteChatSplit
-          ? localModeConfig
-          : { ...localModeConfig, ...noteChatSplitConfig(localModeConfig) };
-      const resolvedConfig = withoutRetiredModels(
-        !noteChatConfig
-          ? defaultConfig
-          : noteChatConfig.notesLocalModeSplit
-            ? noteChatConfig
-            : { ...noteChatConfig, ...notesLocalModeSplitConfig(noteChatConfig) },
-      );
-      if (config && resolvedConfig !== config) {
-        await StorageService.saveConfig(resolvedConfig).catch(() => undefined);
+  loadConfig: () => {
+    pendingUpdates += 1;
+    set({ isLoading: true, error: analyticsPersistenceError });
+    return enqueueConfigOperation(async () => {
+      try {
+        const config = await StorageService.getConfig();
+        // A config from before Local Mode's Cloud defaults is upgraded before anything reads it, so
+        // its uploads and cleanup never reach Cloud; one from before note chat had a selection of its
+        // own keeps the one it shared; and one from before note formatting left Local Mode keeps its
+        // notes on this iPhone. A selection of a model its provider shut down moves to the
+        // replacement. A failed save upgrades it again next launch.
+        const localModeConfig =
+          !config || config.localModeUpgraded
+            ? config
+            : { ...config, ...localModeUpgradeConfig(config) };
+        const noteChatConfig =
+          !localModeConfig || localModeConfig.noteChatSplit
+            ? localModeConfig
+            : { ...localModeConfig, ...noteChatSplitConfig(localModeConfig) };
+        const resolvedConfig = withoutRetiredModels(
+          !noteChatConfig
+            ? defaultConfig
+            : noteChatConfig.notesLocalModeSplit
+              ? noteChatConfig
+              : { ...noteChatConfig, ...notesLocalModeSplitConfig(noteChatConfig) },
+        );
+        if (config && resolvedConfig !== config) {
+          await StorageService.saveConfig(withCurrentConsent(resolvedConfig)).catch(
+            () => undefined,
+          );
+        }
+        useProcessingModeStore.getState().resetToDefault(resolvedConfig.defaultMode);
+        set({ config: withCurrentConsent(resolvedConfig), error: analyticsPersistenceError });
+      } catch (error) {
+        set({
+          error: analyticsPersistenceError ?? (error as Error).message,
+          config: withCurrentConsent(defaultConfig),
+        });
+        useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
+      } finally {
+        pendingUpdates -= 1;
+        set({ isLoading: pendingUpdates > 0 });
       }
-      useProcessingModeStore.getState().resetToDefault(resolvedConfig.defaultMode);
-      set({ config: resolvedConfig, isLoading: false });
-    } catch (error) {
-      set({
-        error: (error as Error).message,
-        isLoading: false,
-        config: defaultConfig,
-      });
-      useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
-    }
+    });
   },
 
   updateConfig: (updates: Partial<UserConfig>) => {
     if (updates.usageAnalyticsEnabled !== undefined) analyticsConsentRevision += 1;
+    if (updates.usageAnalyticsEnabled === false) analyticsConsentOverride = false;
     const consentRevision = analyticsConsentRevision;
     pendingUpdates += 1;
 
@@ -89,20 +113,29 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     });
 
     const preserveNewerConsent = (config: UserConfig): UserConfig =>
-      consentRevision === analyticsConsentRevision
-        ? config
-        : { ...config, usageAnalyticsEnabled: get().config?.usageAnalyticsEnabled };
+      consentRevision === analyticsConsentRevision ? config : withCurrentConsent(config);
 
     const save = async () => {
       const newConfig = preserveNewerConsent({ ...(get().config || defaultConfig), ...updates });
       try {
         await StorageService.saveConfig(newConfig);
+        if (
+          consentRevision === analyticsConsentRevision &&
+          updates.usageAnalyticsEnabled === true
+        ) {
+          analyticsConsentOverride = true;
+        }
+        if (newConfig.usageAnalyticsEnabled === analyticsConsentOverride) {
+          analyticsPersistenceError = null;
+        }
         const modeStore = useProcessingModeStore.getState();
         if (!modeStore.isUserOverride) {
           modeStore.resetToDefault(newConfig.defaultMode);
         }
-        set({ config: preserveNewerConsent(newConfig), error: null });
+        set({ config: withCurrentConsent(newConfig), error: analyticsPersistenceError });
       } catch (error) {
+        if (analyticsConsentOverride === false)
+          analyticsPersistenceError = (error as Error).message;
         set({ error: (error as Error).message });
       } finally {
         pendingUpdates -= 1;
@@ -111,21 +144,30 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     };
 
     // An older disk write must not finish after a newer consent withdrawal.
-    const operation = configUpdate ? configUpdate.then(save) : save();
-    configUpdate = operation;
-    return operation.finally(() => {
-      if (configUpdate === operation) configUpdate = null;
-    });
+    return enqueueConfigOperation(save);
   },
 
-  resetConfig: async () => {
+  resetConfig: () => {
+    const consentRevision = ++analyticsConsentRevision;
+    pendingUpdates += 1;
     set({ isLoading: true, error: null });
-    try {
-      await StorageService.clearConfig();
-      useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
-      set({ config: defaultConfig, isLoading: false });
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false });
-    }
+    return enqueueConfigOperation(async () => {
+      try {
+        await StorageService.clearConfig();
+        if (consentRevision === analyticsConsentRevision) {
+          analyticsConsentOverride = null;
+          analyticsPersistenceError = null;
+        }
+        useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
+        set({ config: withCurrentConsent(defaultConfig), error: analyticsPersistenceError });
+      } catch (error) {
+        if (analyticsConsentOverride === false)
+          analyticsPersistenceError = (error as Error).message;
+        set({ error: (error as Error).message });
+      } finally {
+        pendingUpdates -= 1;
+        set({ isLoading: pendingUpdates > 0 });
+      }
+    });
   },
 }));
