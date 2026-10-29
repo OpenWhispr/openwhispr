@@ -241,3 +241,13 @@ test("without Tone & Style the prompt has no writing style", async () => {
   const { getAgentSystemPrompt } = await load();
   assert.doesNotMatch(getAgentSystemPrompt([], undefined, {}), /WRITING STYLE/);
 });
+
+test("connector rules keep dictated email content out of email_draft", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([
+    { name: "email_draft", connectorId: "email", promptInstruction: "Use email_draft…" },
+  ]);
+
+  assert.match(prompt, /Dictating the text of an email or a reply[^.]*is not an email action/);
+  assert.match(prompt, /only open email_draft when the user asks to draft, write, compose or send/);
+});
