@@ -4,7 +4,7 @@ const path = require("path");
 const http = require("http");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
-const { isPortAvailable } = require("../utils/serverUtils");
+const { isPortAvailable, getAvailableParallelism } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
@@ -23,6 +23,15 @@ const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_CONTEXT_SIZE = 4096;
 const PREFLIGHT_TIMEOUT_MS = 10000;
+const DEFAULT_THREADS = 4;
+
+// LLAMA_CPU_THREADS: unset or invalid keeps 4, 0 leaves the count to llama.cpp,
+// and N is capped at the logical CPU count. See #2808.
+function resolveLlamaThreads(value = process.env.LLAMA_CPU_THREADS) {
+  const normalized = String(value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) return DEFAULT_THREADS;
+  return Math.min(Number(normalized), getAvailableParallelism());
+}
 
 /**
  * llama-server reports a prompt that overflows the context as a 400 whose body
@@ -217,8 +226,6 @@ class LlamaServerManager {
       "127.0.0.1",
       "--port",
       String(port),
-      "--threads",
-      String(options.threads || 4),
       // Unset, this defaults to the model's full trained context (128K+),
       // whose KV cache can exceed total RAM with --fit disabled. See #1203.
       // Sized per request against a memory budget by llamaContextPolicy.
@@ -226,6 +233,9 @@ class LlamaServerManager {
       String(options.contextSize || DEFAULT_CONTEXT_SIZE),
       "--jinja",
     ];
+
+    const threads = options.threads ?? DEFAULT_THREADS;
+    if (threads > 0) args.push("--threads", String(threads));
 
     // llama-server otherwise reserves 8192 MiB of host RAM for the prompt
     // cache, on top of the KV cache, which would undo the memory budget. Cap
@@ -927,3 +937,4 @@ class LlamaServerManager {
 }
 
 module.exports = LlamaServerManager;
+module.exports.resolveLlamaThreads = resolveLlamaThreads;

@@ -229,7 +229,7 @@ class ModelManager {
         SERVER_CONTEXT_SIZE,
         modelInfo.model.contextLength || SERVER_CONTEXT_SIZE
       ),
-      threads: 4,
+      threads: LlamaServerManager.resolveLlamaThreads(),
       gpuLayers: 99,
     };
   }
