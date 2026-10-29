@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/Text';
 const SCROLL_PADDING = 16;
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useNotesStore } from '@/store/useNotesStore';
+import { getNotesRouteOwner, withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { FolderRow } from '@/components/notes/FolderRow';
@@ -37,9 +38,13 @@ import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
 export default function NotesListScreen() {
   const { t } = useTranslation('android');
   const { copy } = useAndroidCopy();
-  const params = useLocalSearchParams<{ folderId?: string; spaceId?: string }>();
-  const folderId = params.folderId ? Number(params.folderId) : null;
-  const spaceId = params.spaceId ? Number(params.spaceId) : null;
+  const params = useLocalSearchParams<{
+    folderId?: string;
+    spaceId?: string;
+    dataOwner?: string;
+  }>();
+  const requestedFolderId = params.folderId ? Number(params.folderId) : null;
+  const requestedSpaceId = params.spaceId ? Number(params.spaceId) : null;
 
   const {
     folders,
@@ -64,6 +69,16 @@ export default function NotesListScreen() {
     loadVoiceProfiles,
   } = useNotesStore();
 
+  const dataOwner = getNotesRouteOwner();
+  const staleOwner =
+    Platform.OS === 'android' &&
+    (requestedFolderId != null || requestedSpaceId != null) &&
+    (dataOwner === undefined || params.dataOwner !== dataOwner);
+  const folderId = staleOwner
+    ? ((folders.find((folder) => folder.isDefault) ?? folders[0])?.id ?? null)
+    : requestedFolderId;
+  const spaceId = staleOwner ? null : requestedSpaceId;
+
   const [newFolderVisible, setNewFolderVisible] = useState(false);
   const [renamingFolder, setRenamingFolder] = useState<{ id: number; name: string } | null>(null);
 
@@ -77,18 +92,28 @@ export default function NotesListScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Only re-assert when the store drifted to another scope — descending into
-      // a folder rewrites it, so coming back would otherwise leave this screen
-      // showing the child's notes. A no-op refocus (returning from a note) must
-      // not run, or it would clear an open search.
-      const { activeFolderId: storeFolderId, activeSpaceId: storeSpaceId } =
-        useNotesStore.getState();
+      if (!isInitialized) return;
+      // Selection validates against the current database and preserves search on a no-op focus.
       if (spaceId != null) {
-        if (storeSpaceId !== spaceId) setActiveSpaceId(spaceId);
-      } else if (storeFolderId !== folderId) {
+        setActiveSpaceId(spaceId);
+      } else {
         setActiveFolderId(folderId);
       }
-    }, [folderId, spaceId, setActiveFolderId, setActiveSpaceId]),
+      const selected = useNotesStore.getState();
+      if (
+        staleOwner ||
+        (spaceId != null
+          ? selected.activeSpaceId !== spaceId
+          : selected.activeFolderId !== folderId)
+      ) {
+        router.setParams(
+          withNotesRouteOwner({
+            folderId: selected.activeFolderId == null ? undefined : String(selected.activeFolderId),
+            spaceId: selected.activeSpaceId == null ? undefined : String(selected.activeSpaceId),
+          }),
+        );
+      }
+    }, [folderId, spaceId, staleOwner, isInitialized, setActiveFolderId, setActiveSpaceId]),
   );
 
   const activeFolder =
@@ -162,7 +187,7 @@ export default function NotesListScreen() {
     safeHaptics('selection');
     router.push({
       pathname: '/(tabs)/(notes)/notes',
-      params: { folderId: String(targetFolderId) },
+      params: withNotesRouteOwner({ folderId: String(targetFolderId) }),
     });
   }, []);
 

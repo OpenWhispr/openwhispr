@@ -1,8 +1,13 @@
-import { render } from '@testing-library/react-native';
-import { router } from 'expo-router';
+import { act, render } from '@testing-library/react-native';
+import { Platform } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import NotesListScreen from '../NotesListScreen';
 
 let mockParams: Record<string, string> = {};
+let mockDataOwner = 'local';
+jest.mock('@/android/accountData', () => ({
+  useAccountData: { getState: () => ({ owner: mockDataOwner }) },
+}));
 jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 let mockFabActionPress: ((id: string) => void) | null = null;
 const mockState = {
@@ -11,7 +16,8 @@ const mockState = {
   folderCounts: {},
   notes: [],
   spaces: [],
-  activeFolderId: null,
+  activeFolderId: null as number | null,
+  activeSpaceId: null as number | null,
   isInitialized: true,
   initialize: jest.fn(),
   setActiveFolderId: jest.fn(),
@@ -29,7 +35,7 @@ const mockState = {
 };
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), setParams: jest.fn() },
   useFocusEffect: jest.fn(),
   useLocalSearchParams: () => mockParams,
 }));
@@ -82,6 +88,56 @@ const recordMeeting = (params: Record<string, string>): void => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFabActionPress = null;
+  Platform.OS = 'ios';
+  mockDataOwner = 'local';
+  mockState.folders = [];
+  mockState.activeFolderId = null;
+  mockState.activeSpaceId = null;
+  mockState.setActiveFolderId.mockImplementation((id: number | null) => {
+    mockState.activeFolderId = id;
+    mockState.activeSpaceId = null;
+  });
+  mockState.setActiveSpaceId.mockImplementation((id: number | null) => {
+    mockState.activeSpaceId = id;
+    mockState.activeFolderId = null;
+  });
+});
+
+describe('NotesListScreen account-scoped routes', () => {
+  it.each(['account:account-a', undefined])(
+    'replaces a stale or unbound Android folder route (%s), even when IDs collide',
+    (owner) => {
+      Platform.OS = 'android';
+      mockState.folders = [
+        { id: 1, name: 'Personal', isDefault: 1 },
+        { id: 5, name: 'Local folder', isDefault: 0 },
+      ] as never[];
+      mockState.activeFolderId = 1;
+      mockParams = { folderId: '5', ...(owner ? { dataOwner: owner } : {}) };
+      render(<NotesListScreen />);
+      act(() => {
+        jest.mocked(useFocusEffect).mock.calls.at(-1)?.[0]();
+      });
+      expect(mockState.setActiveFolderId).toHaveBeenCalledWith(1);
+      expect(router.setParams).toHaveBeenCalledWith({
+        folderId: '1',
+        spaceId: undefined,
+        dataOwner: 'local',
+      });
+    },
+  );
+
+  it('keeps a folder route owned by the active Android account', () => {
+    Platform.OS = 'android';
+    mockState.folders = [{ id: 5, name: 'Local folder', isDefault: 1 }] as never[];
+    mockParams = { folderId: '5', dataOwner: 'local' };
+    render(<NotesListScreen />);
+    act(() => {
+      jest.mocked(useFocusEffect).mock.calls.at(-1)?.[0]();
+    });
+    expect(mockState.setActiveFolderId).toHaveBeenCalledWith(5);
+    expect(router.setParams).not.toHaveBeenCalled();
+  });
 });
 
 describe('NotesListScreen Record meeting', () => {

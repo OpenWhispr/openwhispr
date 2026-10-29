@@ -62,6 +62,9 @@ jest.mock('@/hooks/useManualSyncRefresh', () => ({
 jest.mock('@/components/ui/Fab', () => ({ FAB_BOTTOM_PADDING: 0, Fab: () => null }));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+jest.mock('@/android/accountData', () => ({
+  useAccountData: { getState: () => ({ owner: 'local' }) },
+}));
 jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 jest.mock('@/components/notes/NotesTopBar', () => ({ NotesTopBar: () => null }));
 jest.mock('@/components/notes/GroupedList', () => {

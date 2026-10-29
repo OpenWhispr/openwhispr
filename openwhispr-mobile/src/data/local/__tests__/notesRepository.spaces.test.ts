@@ -433,6 +433,44 @@ describe('LocalNotesRepository.createFolder', () => {
 });
 
 describe('LocalNotesRepository.createNote scope', () => {
+  it.each(['missing', 'deleted'] as const)(
+    'uses the real private default for a %s folder',
+    (kind) => {
+      const { repo, db } = createMemoryRepository();
+      const privateId = privateSpaceId(db);
+      db.insert(folders)
+        .values({ id: 41, name: 'Personal', isDefault: 1, spaceId: privateId })
+        .run();
+      if (kind === 'deleted') {
+        db.insert(folders)
+          .values({ id: 88, name: 'Removed', spaceId: privateId, deletedAt: '2026-10-29' })
+          .run();
+      }
+      const created = repo.createNote('Retained title', 'Retained body', 88);
+      expect(created).toMatchObject({
+        folderId: 41,
+        spaceId: privateId,
+        title: 'Retained title',
+        content: 'Retained body',
+      });
+      expect(repo.getNotesByFolder(41).map((note) => note.id)).toContain(created.id);
+    },
+  );
+
+  it('does not retain a missing space when creating a note', () => {
+    const { repo, db } = createMemoryRepository();
+    const privateId = privateSpaceId(db);
+    db.insert(folders).values({ id: 41, name: 'Personal', isDefault: 1, spaceId: privateId }).run();
+    const created = repo.createNote('Local note', 'Local body', undefined, 999);
+    expect(created).toMatchObject({ folderId: 41, spaceId: privateId });
+  });
+
+  it('leaves a private note unfoldered rather than inventing folder 1 when no live folder exists', () => {
+    const { repo, db } = createMemoryRepository();
+    const created = repo.createNote('Local note', 'Local body', 999);
+    expect(created).toMatchObject({ folderId: null, spaceId: privateSpaceId(db) });
+  });
+
   it('files a note created directly in a space into that space, in no folder', () => {
     const { repo, db } = createMemoryRepository();
     const teamSpaceId = createTeamSpace(db);

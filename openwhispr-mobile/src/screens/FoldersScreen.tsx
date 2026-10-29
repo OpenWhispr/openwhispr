@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 const SCROLL_PADDING = 16;
 import { router } from 'expo-router';
 import { useNotesStore } from '@/store/useNotesStore';
+import { withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { notesRepository } from '@/data';
 import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
@@ -78,7 +79,10 @@ export default function FoldersScreen() {
     (folderId: number) => {
       safeHaptics('selection');
       setActiveFolderId(folderId);
-      router.push({ pathname: '/(tabs)/(notes)/notes', params: { folderId: String(folderId) } });
+      router.push({
+        pathname: '/(tabs)/(notes)/notes',
+        params: withNotesRouteOwner({ folderId: String(folderId) }),
+      });
     },
     [setActiveFolderId],
   );
@@ -87,7 +91,10 @@ export default function FoldersScreen() {
     (spaceId: number) => {
       safeHaptics('selection');
       setActiveSpaceId(spaceId);
-      router.push({ pathname: '/(tabs)/(notes)/notes', params: { spaceId: String(spaceId) } });
+      router.push({
+        pathname: '/(tabs)/(notes)/notes',
+        params: withNotesRouteOwner({ spaceId: String(spaceId) }),
+      });
     },
     [setActiveSpaceId],
   );

@@ -163,6 +163,14 @@ const diarizerAfterModelDownload = (
 const DEFAULT_FOLDER_ID = 1;
 const MEETINGS_FOLDER_NAME = 'meetings';
 
+const currentPrivateFolderId = (): number | null => {
+  const folders = notesRepository.getPrivateFolders();
+  return (folders.find((folder) => folder.isDefault) ?? folders[0])?.id ?? null;
+};
+
+const currentFolderId = (id: number): number | null =>
+  notesRepository.getFolders().some((folder) => folder.id === id) ? id : currentPrivateFolderId();
+
 export type CreateMeetingNoteContext = {
   expectedSpeakerCount?: number;
   calendarEventId?: string | null;
@@ -620,21 +628,29 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   setActiveNoteId: (id) => set({ activeNoteId: id }),
 
   setActiveFolderId: (id) => {
+    const targetId = id == null ? null : currentFolderId(id);
+    if (get().isInitialized && get().activeFolderId === targetId && get().activeSpaceId == null)
+      return;
     set({
-      activeFolderId: id,
+      activeFolderId: targetId,
       activeSpaceId: null,
       activeNoteId: null,
       searchQuery: '',
       isSearching: false,
     });
-    if (id != null) {
-      set({ notes: notesRepository.getNotesByFolder(id) });
+    if (targetId != null) {
+      set({ notes: notesRepository.getNotesByFolder(targetId) });
     } else {
       set({ notes: notesRepository.getAllNotes() });
     }
   },
 
   setActiveSpaceId: (id) => {
+    if (id != null && !spacesRepository.listSpaces().some((space) => space.id === id)) {
+      get().setActiveFolderId(currentPrivateFolderId());
+      return;
+    }
+    if (get().isInitialized && get().activeSpaceId === id && get().activeFolderId == null) return;
     set({
       activeSpaceId: id,
       activeFolderId: null,
@@ -661,13 +677,25 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   createNote: (title = 'Untitled', content = '', folderId) => {
-    const { activeFolderId, activeSpaceId } = get();
+    let { activeFolderId, activeSpaceId } = get();
+    const requestedFolderId = folderId ?? activeFolderId;
+    if (folderId == null && activeSpaceId != null) {
+      get().setActiveSpaceId(activeSpaceId);
+      ({ activeFolderId, activeSpaceId } = get());
+    } else {
+      const targetId =
+        requestedFolderId == null ? currentPrivateFolderId() : currentFolderId(requestedFolderId);
+      if (targetId !== requestedFolderId) get().setActiveFolderId(targetId);
+      folderId = targetId ?? undefined;
+      activeFolderId = targetId;
+      activeSpaceId = null;
+    }
     // Browsing a space (mutually exclusive with browsing a folder): the note
     // belongs to that space, not to the personal default folder.
     const note =
       folderId == null && activeSpaceId != null
         ? notesRepository.createNote(title, content, undefined, activeSpaceId)
-        : notesRepository.createNote(title, content, folderId ?? activeFolderId ?? 1);
+        : notesRepository.createNote(title, content, folderId ?? activeFolderId ?? undefined);
 
     if (useProcessingModeStore.getState().activeMode === 'private') {
       notesRepository.setNotePrivacy(note.id, true);

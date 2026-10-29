@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import type { Folder } from '@/data/types';
 
 const mockFiles = new Map<string, InstanceType<typeof Database>>();
 const mockDeleteAudio = jest.fn().mockResolvedValue(undefined);
@@ -166,6 +167,41 @@ it('keeps the original local collection separate from both signed-in accounts', 
     await useAuthStore.getState().signOut();
     expect(notesRepository.getNoteById(81)?.content).toBe('Local-only text');
   }
+});
+
+it('keeps a new Local note visible after a stale account folder is selected and another account is visited', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { useNotesStore } = require('@/store/useNotesStore');
+  const { notesRepository } = require('@/data');
+  await useAuthStore.getState().initialize();
+  let oldFolder: Folder = notesRepository.createFolder('A first folder');
+  for (let index = 0; index < 5; index += 1)
+    oldFolder = notesRepository.createFolder(`A folder ${index}`);
+  notesRepository.createNote('A only', 'Account A body', oldFolder.id);
+  await useAuthStore.getState().signOut();
+  const localDefault = notesRepository
+    .getPrivateFolders()
+    .find((folder: { isDefault: number }) => folder.isDefault);
+  expect(
+    notesRepository.getFolders().some((folder: { id: number }) => folder.id === oldFolder.id),
+  ).toBe(false);
+  useNotesStore.getState().setActiveFolderId(oldFolder.id);
+  const created = useNotesStore.getState().createNote('Local fixture', 'Exact Local fixture body');
+  expect(created.folderId).toBe(localDefault.id);
+  expect(useNotesStore.getState().activeFolderId).toBe(localDefault.id);
+  expect(
+    notesRepository.getNotesByFolder(localDefault.id).map((note: { id: number }) => note.id),
+  ).toContain(created.id);
+  await useAuthStore.getState().signIn('account-b', 'synthetic');
+  expect(notesRepository.searchNotes('Exact Local fixture body')).toHaveLength(0);
+  await useAuthStore.getState().signOut();
+  expect(
+    notesRepository
+      .getNotesByFolder(localDefault.id)
+      .find((note: { id: number }) => note.id === created.id)?.content,
+  ).toBe('Exact Local fixture body');
+  expect(notesRepository.searchNotes('Account A body')).toHaveLength(0);
 });
 
 it('keeps saved chats with Local, A and B while clearing the previous account from the screen', async () => {
