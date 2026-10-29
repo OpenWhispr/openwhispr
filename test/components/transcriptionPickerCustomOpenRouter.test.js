@@ -121,7 +121,12 @@ test("leaving a Custom endpoint set to OpenRouter keeps the Custom setup", async
         (props) => typeof props.onBlur === "function" && props.value === OPENROUTER_URL
       );
       assert.ok(urlInput, `${context}: the Custom endpoint field renders`);
-      await React.act(async () => urlInput.props.onBlur());
+      // Focus leaves the field for good: not a window switch, nor a move inside it.
+      const leave = {
+        currentTarget: { contains: () => false, ownerDocument: { activeElement: null } },
+        relatedTarget: null,
+      };
+      await React.act(async () => urlInput.props.onBlur(leave));
 
       const state = useSettingsStore.getState();
       assert.equal(state[key(context, "cloudTranscriptionProvider")], "custom", context);

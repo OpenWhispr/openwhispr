@@ -69,27 +69,14 @@ test("a 200 is the whole signal for providers with no OpenAI-shaped model list",
 
 test("a transcription test checks the OpenRouter key, not its public catalog", () => {
   // OpenRouter's catalogs list every model for any caller, so only its key
-  // endpoint can tell a valid key from a mistyped one.
-  assert.equal(
-    resolveProviderRequest({ provider: "openrouter", scope: "transcription", apiKey: "secret" })
-      .endpoint,
-    "https://openrouter.ai/api/v1/key"
-  );
-
-  // The reasoning scope keeps the plain catalog.
-  for (const scope of ["reasoning", undefined]) {
+  // endpoint can tell a valid key from a mistyped one, whichever scope asks.
+  for (const scope of ["transcription", "reasoning", undefined]) {
     assert.equal(
       resolveProviderRequest({ provider: "openrouter", scope, apiKey: "secret" }).endpoint,
-      "https://openrouter.ai/api/v1/models",
+      "https://openrouter.ai/api/v1/key",
       String(scope)
     );
   }
-
-  // The override is OpenRouter-only; no other provider splits its catalog.
-  assert.equal(
-    resolveProviderRequest({ provider: "groq", scope: "transcription", apiKey: "secret" }).endpoint,
-    "https://api.groq.com/openai/v1/models"
-  );
 });
 
 test("the OpenRouter transcription test passes a valid key and rejects a bad one", async () => {

@@ -55,6 +55,28 @@ async function mountDictionary(t) {
       "/SnippetsView": "export default function SnippetsView() { return null; }",
       "/ui/useToast": "export function useToast() { return { toast() {} }; }",
       "/utils/agentName": "export function getAgentName() { return 'Nova'; }",
+      // Signed out with no shared dictionary, so the page shows Personal alone and
+      // starts no account or shared-list requests that outlive the test.
+      "/hooks/useAuth": "export function useAuth() { return { isSignedIn: false, user: null }; }",
+      "/hooks/useWorkspace": `
+        export function useWorkspace() { return { active: null, role: null, workspaces: [] }; }
+      `,
+      "/stores/sharedDictionaryStore": `
+        const state = {
+          status: "unavailable",
+          snapshot: null,
+          movedPersonal: [],
+          syncing: false,
+          lastSyncedAt: null,
+          requestedList: null,
+          setRequestedList() {},
+          reload: async () => {},
+          generation: 0,
+          markSynced() {},
+        };
+        export function useSharedDictionaryStore(selector) { return selector(state); }
+        useSharedDictionaryStore.getState = () => state;
+      `,
     },
   });
   globalThis.__dictionaryWords = [];
@@ -72,7 +94,7 @@ async function mountDictionary(t) {
   function Harness() {
     const [, setTick] = React.useState(0);
     rerender = () => setTick((tick) => tick + 1);
-    tree = DictionaryView();
+    tree = DictionaryView({ onUpgrade() {} });
     return null;
   }
   const root = createRoot(container);
