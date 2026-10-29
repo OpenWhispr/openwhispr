@@ -3847,7 +3847,8 @@
         "incAria": "Increase expected speaker count",
         "decAria": "Decrease expected speaker count"
       },
-      "consentNotice": "Always get consent when recording others"
+      "consentNotice": "Always get consent when recording others",
+      "author": "Author"
     },
     "overview": {
       "subtitle": {

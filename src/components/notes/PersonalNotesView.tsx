@@ -29,6 +29,8 @@ import {
   speakerlessTranscriptText,
 } from "../../utils/parseTranscriptSegments";
 import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../../utils/participants";
+import { ownsNote } from "../../lib/spacePermissions";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import {
   buildLlmTranscript,
   buildMeetingContext,
@@ -770,9 +772,29 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
+      const ownedByUser = ownsNote(editorNote, user?.id);
+      let authorName: string | null = null;
+      let authorEmail: string | null = null;
+      if (!ownedByUser) {
+        const noteOwnerUserId = editorNote.owner_user_id || editorNote.created_by_user_id || null;
+        const currentSpace = spaces.find((s) => s.id === editorNote.space_id);
+        if (noteOwnerUserId && currentSpace?.cloud_space_id) {
+          try {
+            const roster = await fetchSpaceRoster(currentSpace.cloud_space_id);
+            const member = roster.find((m) => m.user_id === noteOwnerUserId);
+            if (member) {
+              authorName = member.name ?? member.email;
+              authorEmail = member.email ?? null;
+            }
+          } catch {
+            // ignore roster lookup failure
+          }
+        }
+      }
+
       const identity: MeetingIdentity = {
-        selfName: user?.name?.trim() || null,
-        selfEmail: user?.email?.trim() || null,
+        selfName: (ownedByUser ? user?.name?.trim() : authorName) || null,
+        selfEmail: (ownedByUser ? user?.email?.trim() : authorEmail) || null,
         participants: parseNoteParticipants(editorNote.participants),
       };
       if (segments.length > 0 && speakerlessText === null) {
@@ -782,7 +804,7 @@ export default function PersonalNotesView({
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const selfLabel = identity.selfName || t("notes.speaker.you");
+        const selfLabel = identity.selfName || (ownedByUser ? t("notes.speaker.you") : t("notes.speaker.author"));
         meetingContext = buildMeetingContext(identity, selfLabel);
         formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);

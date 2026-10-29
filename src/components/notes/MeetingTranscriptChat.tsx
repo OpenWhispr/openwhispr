@@ -461,6 +461,8 @@ function SpeakerLabel({
   participants,
   colorIdx,
   isOriginallyYou,
+  isOwnNote = true,
+  authorName,
   self,
   onMap,
   onConfirm,
@@ -474,6 +476,8 @@ function SpeakerLabel({
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
   isOriginallyYou: boolean;
+  isOwnNote?: boolean;
+  authorName?: string | null;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
@@ -523,7 +527,9 @@ function SpeakerLabel({
     resolvedName ||
     segment.speakerName ||
     (isOriginallyYou
-      ? t("notes.speaker.you")
+      ? isOwnNote
+        ? t("notes.speaker.you")
+        : authorName || t("notes.speaker.author")
       : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
   const isUnmapped = !resolvedName && !segment.speakerName;
 
@@ -656,6 +662,8 @@ interface SegmentRowProps {
   isNewest: boolean;
   colorIdx: number;
   isSelected: boolean;
+  isOwnNote?: boolean;
+  authorName?: string | null;
   activeName?: string;
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
@@ -686,6 +694,8 @@ const SegmentRow = memo(function SegmentRow({
   isNewest,
   colorIdx,
   isSelected,
+  isOwnNote,
+  authorName,
   activeName,
   matchedProfile,
   speakerProfiles,
@@ -725,6 +735,8 @@ const SegmentRow = memo(function SegmentRow({
         participants={participants}
         colorIdx={colorIdx}
         isOriginallyYou={isOriginallyYou}
+        isOwnNote={isOwnNote}
+        authorName={authorName}
         self={self}
         onMap={onMapSpeaker}
         onConfirm={onConfirmSuggestion}
@@ -803,6 +815,8 @@ interface MeetingTranscriptChatProps {
   speakerMappings?: Record<string, string>;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
+  isOwnNote?: boolean;
+  authorName?: string | null;
   selectedSegmentIds?: Set<string>;
   isRecording?: boolean;
   isDiarizing?: boolean;
@@ -833,6 +847,8 @@ export function MeetingTranscriptChat({
   speakerMappings,
   speakerProfiles,
   participants,
+  isOwnNote = true,
+  authorName,
   selectedSegmentIds,
   isRecording,
   isDiarizing,
@@ -895,9 +911,9 @@ export function MeetingTranscriptChat({
       segments.map((segment) => ({
         key: getEffectiveSpeakerKey(segment, speakerMappings),
         activeName: resolveSegmentSpeakerName(segment, speakerMappings),
-        selfSide: isSelfSideSegment(segment, speakerMappings, youLabel),
+        selfSide: isOwnNote ? isSelfSideSegment(segment, speakerMappings, youLabel) : false,
       })),
-    [segments, speakerMappings, youLabel]
+    [segments, speakerMappings, youLabel, isOwnNote]
   );
 
   const colorByKey = useMemo(() => {
@@ -1067,6 +1083,8 @@ export function MeetingTranscriptChat({
                     isNewest={i === segments.length - 1}
                     colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
                     isSelected={selectedSegmentIds?.has(segment.id) ?? false}
+                    isOwnNote={isOwnNote}
+                    authorName={authorName}
                     activeName={activeName}
                     matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
                     speakerProfiles={speakerProfiles}

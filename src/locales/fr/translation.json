@@ -3847,7 +3847,8 @@
         "incAria": "Augmenter le nombre d'intervenants attendus",
         "decAria": "Diminuer le nombre d'intervenants attendus"
       },
-      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes"
+      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes",
+      "author": "Auteur"
     },
     "overview": {
       "subtitle": {

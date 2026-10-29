@@ -432,6 +432,29 @@ export default function NoteEditor({
       cancelled = true;
     };
   }, [conflictEditorId, conflictSpaceId]);
+
+  const [authorName, setAuthorName] = useState<string | null>(null);
+  const noteOwnerUserId = note.owner_user_id || note.created_by_user_id || null;
+  useEffect(() => {
+    if (ownedByUser || !noteOwnerUserId || !space?.cloud_space_id) {
+      setAuthorName(null);
+      return;
+    }
+    let cancelled = false;
+    fetchSpaceRoster(space.cloud_space_id)
+      .then((roster) => {
+        if (cancelled) return;
+        const member = roster.find((m) => m.user_id === noteOwnerUserId);
+        setAuthorName(member ? (member.name ?? member.email) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setAuthorName(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ownedByUser, noteOwnerUserId, space?.cloud_space_id]);
+
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -1421,6 +1444,8 @@ export default function NoteEditor({
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
                   participants={parsedParticipants}
+                  isOwnNote={ownedByUser}
+                  authorName={authorName}
                   isDiarizing={isDiarizing}
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}

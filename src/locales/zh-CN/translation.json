@@ -3495,7 +3495,8 @@
         "incAria": "增加预计发言人数",
         "decAria": "减少预计发言人数"
       },
-      "consentNotice": "录制他人时请务必征得同意"
+      "consentNotice": "录制他人时请务必征得同意",
+      "author": "作者"
     },
     "overview": {
       "subtitle": {

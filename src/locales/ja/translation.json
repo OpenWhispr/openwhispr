@@ -3423,7 +3423,8 @@
       "nameOrEmailPlaceholder": "名前またはメールを入力",
       "addContact": "連絡先を追加",
       "save": "保存",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "author": "作成者"
     },
     "overview": {
       "subtitle": {

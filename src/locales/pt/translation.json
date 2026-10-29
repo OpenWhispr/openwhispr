@@ -3495,7 +3495,8 @@
         "incAria": "Aumentar número esperado de participantes",
         "decAria": "Diminuir número esperado de participantes"
       },
-      "consentNotice": "Sempre obtenha consentimento ao gravar outras pessoas"
+      "consentNotice": "Sempre obtenha consentimento ao gravar outras pessoas",
+      "author": "Autor"
     },
     "overview": {
       "subtitle": {

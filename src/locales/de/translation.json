@@ -3847,7 +3847,8 @@
         "incAria": "Erwartete Sprecheranzahl erhöhen",
         "decAria": "Erwartete Sprecheranzahl verringern"
       },
-      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst"
+      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst",
+      "author": "Autor"
     },
     "overview": {
       "subtitle": {

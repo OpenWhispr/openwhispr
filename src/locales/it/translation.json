@@ -3495,7 +3495,8 @@
         "incAria": "Aumenta il numero di partecipanti previsti",
         "decAria": "Diminuisci il numero di partecipanti previsti"
       },
-      "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
+      "consentNotice": "Ottieni sempre il consenso quando registri altre persone",
+      "author": "Autore"
     },
     "overview": {
       "subtitle": {

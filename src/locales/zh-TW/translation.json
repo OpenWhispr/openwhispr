@@ -3495,7 +3495,8 @@
         "incAria": "增加預期發言人數",
         "decAria": "減少預期發言人數"
       },
-      "consentNotice": "錄製他人時請務必徵得同意"
+      "consentNotice": "錄製他人時請務必徵得同意",
+      "author": "作者"
     },
     "overview": {
       "subtitle": {
