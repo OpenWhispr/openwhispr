@@ -69,6 +69,15 @@
       "instruction": "LANGUAGE CONTEXT: The user's preferred language is Bulgarian. The transcribed text will be in Bulgarian. You MUST write your entire output in Bulgarian while maintaining proper Bulgarian grammar, spelling, and punctuation. If the user naturally uses English words or technical terms, preserve those as-is."
     },
     {
+      "code": "yue",
+      "label": "Cantonese",
+      "flag": "\uD83C\uDDED\uD83C\uDDF0",
+      "whisper": true,
+      "parakeet": false,
+      "assemblyai": false,
+      "instruction": "LANGUAGE CONTEXT: The user's preferred language is Cantonese (廣東話). The transcribed text will be in written Cantonese. You MUST write your entire output in written Cantonese using Traditional Chinese characters, keeping Cantonese words and particles as spoken (e.g., 冇, 嘅, 嘢, 係, 唔, 咗, 喺). Do not rewrite into Standard Written Chinese (Mandarin). Preserve any English technical terms as the user spoke them."
+    },
+    {
       "code": "ca",
       "label": "Catalan",
       "flag": "\uD83C\uDDEA\uD83C\uDDF8",
