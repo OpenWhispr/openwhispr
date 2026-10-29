@@ -1997,8 +1997,11 @@ async function startApp() {
       });
     }
 
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
+    windowManager.initializeNativeKeyListeners().catch((err) => {
+      debugLogger.warn("[Push-to-Talk] Native key listener startup failed", {
+        error: err.message,
+      });
+    });
 
     ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();

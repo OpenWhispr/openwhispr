@@ -89,10 +89,12 @@ class LinuxKeyManager extends EventEmitter {
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
+      if (this.listeners.get(key) !== entry) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
       for (const raw of lines) {
+        if (this.listeners.get(key) !== entry) return;
         const line = raw.trim();
         if (line) this.handleOutputLine(line, key);
       }
@@ -107,13 +109,16 @@ class LinuxKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) === entry) this._stopKey(key);
+      if (this.listeners.get(key) !== entry) return;
+      this._stopKey(key);
       this.reportError(error);
     });
 
     child.on("exit", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine) this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === entry) {
+        this.handleOutputLine(trailingLine, key);
+      }
 
       // wasTracked is false for intentional stops (_stopKey deletes first), so this
       // reports only unexpected exits — including signal crashes, where code is null.

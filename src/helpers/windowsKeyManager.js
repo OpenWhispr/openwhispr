@@ -75,10 +75,12 @@ class WindowsKeyManager extends EventEmitter {
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
+      if (this.listeners.get(key) !== child) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
       for (const raw of lines) {
+        if (this.listeners.get(key) !== child) return;
         const line = raw.trim();
         if (line) this.handleOutputLine(line, key);
       }
@@ -94,13 +96,16 @@ class WindowsKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) === child) this.listeners.delete(key);
+      if (this.listeners.get(key) !== child) return;
+      this.listeners.delete(key);
       this.reportError(error);
     });
 
     child.on("exit", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine) this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === child) {
+        this.handleOutputLine(trailingLine, key);
+      }
 
       // wasTracked is false for intentional stops (_stopKey deletes first), so this
       // reports only unexpected exits — including signal crashes, where code is null.
