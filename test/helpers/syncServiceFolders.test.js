@@ -713,3 +713,38 @@ test("a subfolder PATCH the cloud refuses to nest goes top-level and pushes that
   assert.equal(folderByName(db, "Q2").sync_status, "synced");
   assert.equal(cloud.folder(quarterCloudId).parent_folder_id, null);
 });
+
+test("a folder leaving a team pushes its retraction under a private parent that never syncs", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  db.setActiveAccountId("test-account");
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order, cloud_space_id) VALUES (?, 'team', ?, 1, ?)"
+    )
+    .run("team-leaving", "Growth", "cloud-growth").lastInsertRowid;
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team, "test-account");
+  const roadmap = db.createFolder("Roadmap", team).folder;
+  const cloudRoadmap = cloud.seedFolder({
+    client_folder_id: roadmap.client_folder_id,
+    name: "Roadmap",
+    is_default: false,
+    sort_order: 1,
+  });
+  db.markFolderSynced(roadmap.id, cloudRoadmap.id);
+  db.moveFolderToSpace(roadmap.id, db.getPrivateSpaceId());
+  db.setFolderParent(roadmap.id, db.createFolder("Clients").folder.id);
+
+  browserLocalStorage.removeItem("cloudBackupEnabled");
+  browserLocalStorage.setItem("teamSpacesCapability", "true");
+  await (await newSyncService(t)).pushPendingFolders(true);
+
+  assert.deepEqual(
+    cloud.logFor("/api/folders/update").map((call) => [call.body.id, call.body.parent_folder_id]),
+    [[cloudRoadmap.id, null]]
+  );
+});

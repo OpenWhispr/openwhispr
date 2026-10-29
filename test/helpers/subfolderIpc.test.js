@@ -226,6 +226,44 @@ test("a pulled un-nest moves the subfolder's directory out of its old parent's",
   assert.ok(fs.existsSync(path.join(basePath, "Q1", "1-plan.md")));
 });
 
+test("a pulled space move takes the subfolder's directory out of its old parent's", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+    )
+    .run("team-pulled-move", "Growth");
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team.lastInsertRowid, "test-account");
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
+  const note = db.saveNote("Plan", "Body", "personal", null, null, child.id).note;
+  markdownMirror.writeNote(note, ["Client A", "Q1"]);
+  await settle();
+
+  await handlers.get("db-upsert-folder-from-cloud")(
+    null,
+    {
+      id: "c-child",
+      client_folder_id: child.client_folder_id,
+      name: "Q1",
+      sort_order: 0,
+      created_at: child.created_at,
+      updated_at: "2027-01-01T00:00:00.000Z",
+    },
+    team.lastInsertRowid
+  );
+  await settle();
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Q1", `${note.id}-plan.md`)
+  );
+});
+
 test("a subfolder's directory survives while another space's folder shares its path", async (t) => {
   const ctx = setup(t);
   if (!ctx) return;

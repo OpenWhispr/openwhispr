@@ -3125,8 +3125,18 @@ class IPCHandlers {
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
     ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
+      // A pulled rename or space move changes the folder's mirror path.
+      const local = this._noteFilesEnabled
+        ? this.databaseManager.getFolderByClientId(cloudFolder.client_folder_id)
+        : null;
+      const previousMirrorFolder = local && this._getMirrorFolder(local.id);
       const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
-      if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
+      if (folder) {
+        setImmediate(() => {
+          broadcastToWindows("folder-synced", folder);
+          this._mirrorMoveFolder(previousMirrorFolder, local?.id);
+        });
+      }
       return folder;
     });
     ipcMain.handle(
