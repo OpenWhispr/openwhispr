@@ -60,7 +60,8 @@ function createDatabaseManager() {
       participants TEXT,
       deleted_at TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      imported_at TEXT
     );
     CREATE UNIQUE INDEX idx_notes_client_note_id ON notes(client_note_id);
     CREATE TABLE agent_conversations (

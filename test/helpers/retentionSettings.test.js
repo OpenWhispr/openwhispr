@@ -18,6 +18,8 @@ test("reports a change when a retention period is shortened", () => {
       settings: {
         audioRetentionDays: 1,
         transcriptRetentionDays: 1,
+        chatRetentionDays: 0,
+        meetingTranscriptRetentionDays: 0,
         dataRetentionEnabled: true,
         localHistoryPolicyResolved: false,
       },
@@ -33,10 +35,34 @@ test("is idempotent when both values are unchanged — dual-window mount sync", 
   assert.equal(changed, false);
 });
 
+test("a renderer from before chat and meeting transcript retention keeps them forever", () => {
+  const { changed, settings } = applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
+    audioRetentionDays: 30,
+    transcriptRetentionDays: 0,
+  });
+
+  assert.equal(changed, false);
+  assert.equal(settings.chatRetentionDays, 0);
+  assert.equal(settings.meetingTranscriptRetentionDays, 0);
+});
+
+test("reports a change when the chat or meeting transcript period changes", () => {
+  for (const key of ["chatRetentionDays", "meetingTranscriptRetentionDays"]) {
+    const { changed, settings } = applyRetentionSettings(DEFAULT_RETENTION_SETTINGS, {
+      ...DEFAULT_RETENTION_SETTINGS,
+      [key]: 30,
+    });
+    assert.equal(changed, true, key);
+    assert.equal(settings[key], 30, key);
+  }
+});
+
 test("keeps the current value when an incoming value is missing or unusable", () => {
   const current = {
     audioRetentionDays: 7,
     transcriptRetentionDays: 1,
+    chatRetentionDays: 14,
+    meetingTranscriptRetentionDays: 60,
     dataRetentionEnabled: true,
     localHistoryPolicyResolved: false,
   };
@@ -44,6 +70,7 @@ test("keeps the current value when an incoming value is missing or unusable", ()
     undefined,
     {},
     { audioRetentionDays: "abc", transcriptRetentionDays: -5 },
+    { chatRetentionDays: "abc", meetingTranscriptRetentionDays: -5 },
   ]) {
     assert.deepEqual(applyRetentionSettings(current, incoming), {
       changed: false,
@@ -58,6 +85,8 @@ test("only the main renderer can replace process-global retention settings", () 
   const managedSettings = {
     audioRetentionDays: 7,
     transcriptRetentionDays: 30,
+    chatRetentionDays: 0,
+    meetingTranscriptRetentionDays: 0,
     dataRetentionEnabled: true,
     localHistoryPolicyResolved: false,
   };
@@ -95,6 +124,8 @@ test("only the main renderer can replace process-global retention settings", () 
   assert.deepEqual(current, {
     audioRetentionDays: 90,
     transcriptRetentionDays: 0,
+    chatRetentionDays: 0,
+    meetingTranscriptRetentionDays: 0,
     dataRetentionEnabled: true,
     localHistoryPolicyResolved: false,
   });
@@ -165,6 +196,8 @@ test("a disabled retention setting reaches the sweep before it can delete", () =
     {
       audioRetentionDays: 0,
       transcriptRetentionDays: 0,
+      chatRetentionDays: 0,
+      meetingTranscriptRetentionDays: 0,
       dataRetentionEnabled: true,
       localHistoryPolicyResolved: false,
     },

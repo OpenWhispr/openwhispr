@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { syncService } from "../services/SyncService.js";
 import { resolveRendererCloudNoteCreateBatch } from "../services/noteCreateAck";
 import {
+  clearTranscriptsInLists,
   createClearedAccountNoteState,
   invalidateKeyedLoadGenerations,
   removeNoteFromLists,
@@ -195,6 +196,18 @@ function ensureIpcListeners() {
           syncService.debouncedPush("note", note.id);
         }
       }
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
+  // A retention clean-up clears old transcripts on this computer only, so nothing is
+  // pushed; lists update the notes they already hold.
+  if (window.electronAPI.onNoteTranscriptsCleared) {
+    const dispose = window.electronAPI.onNoteTranscriptsCleared(({ ids }) => {
+      const result = clearTranscriptsInLists(useNoteStore.getState(), ids);
+      if (result.changed) applyContainers(result.notesByContainer, { notes: result.notes });
     });
     if (typeof dispose === "function") {
       disposers.push(dispose);

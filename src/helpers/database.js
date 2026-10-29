@@ -1744,6 +1744,13 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      // When an import (e.g. a Granola CSV) brought the note to this computer.
+      // Imports keep the meeting's own dates, so retention ages them from here.
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN imported_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Space vector purges owed to Qdrant while the sidecar was down/booting;
       // drained on the next semantic search activation.
@@ -2456,9 +2463,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       // Resolve the cutoff once so the ids we report are exactly the rows we purge.
-      const cutoff = this.db
-        .prepare("SELECT datetime('now', ?) AS cutoff")
-        .get(`-${retentionDays} days`).cutoff;
+      const cutoff = this._retentionCutoff(retentionDays);
       const expired = this.db
         .prepare("SELECT id FROM transcriptions WHERE deleted_at IS NULL AND created_at < ?")
         .all(cutoff)
@@ -2500,6 +2505,125 @@ class DatabaseManager {
     } catch (error) {
       debugLogger.error(
         "Error purging expired transcriptions",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  _retentionCutoff(retentionDays) {
+    return this.db.prepare("SELECT datetime('now', ?) AS cutoff").get(`-${retentionDays} days`)
+      .cutoff;
+  }
+
+  // Chats idle since before the cutoff. updated_at moves with every message, so a
+  // long chat still in use never expires by its start date; datetime() reads the
+  // ISO timestamps cloud rows carry as well as SQLite's own.
+  _expiredConversationsWhere(cutoff) {
+    return { sql: "deleted_at IS NULL AND datetime(updated_at) < ?", params: [cutoff] };
+  }
+
+  // Notes holding a recording's transcript, unchanged since before the cutoff: meeting
+  // notes and notes recorded from New note alike. An upload's transcript is also the
+  // note's own text, so uploads are left out. A recording resumed into an older note
+  // moves updated_at, so its fresh transcript never expires by the note's creation
+  // date. An imported meeting keeps its own dates, so it ages from its import unless
+  // edited since. Team space notes belong to their workspace, so a personal retention
+  // period leaves them alone.
+  _expiredMeetingTranscriptsWhere(cutoff) {
+    const accountScope = this._accountScopeCondition("notes");
+    return {
+      sql: `deleted_at IS NULL AND note_type <> 'upload' AND COALESCE(transcript, '') <> ''
+        AND max(datetime(updated_at), datetime(COALESCE(imported_at, updated_at))) < ?
+        AND ${accountScope.sql}
+        AND NOT EXISTS (SELECT 1 FROM spaces team WHERE team.id = notes.space_id AND team.kind = 'team')`,
+      params: [cutoff, ...accountScope.params],
+    };
+  }
+
+  countConversationsExpiredBefore(retentionDays) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const where = this._expiredConversationsWhere(this._retentionCutoff(retentionDays));
+      return this.db
+        .prepare(`SELECT COUNT(*) AS count FROM agent_conversations WHERE ${where.sql}`)
+        .get(...where.params).count;
+    } catch (error) {
+      debugLogger.error(
+        "Error counting expired conversations",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  /** Removes chats idle past the retention window, with every message. Synced chats
+   *  tombstone so the cloud copy and other devices follow on the next sync. */
+  deleteConversationsExpiredBefore(retentionDays) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const where = this._expiredConversationsWhere(this._retentionCutoff(retentionDays));
+      return this.db.transaction(() => {
+        const ids = this.db
+          .prepare(`SELECT id FROM agent_conversations WHERE ${where.sql}`)
+          .all(...where.params)
+          .map((row) => row.id);
+        this._retireConversationsWhere(where.sql, where.params, { scrubSyncedMessages: true });
+        return { ids };
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error purging expired conversations",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  countMeetingTranscriptsExpiredBefore(retentionDays) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const where = this._expiredMeetingTranscriptsWhere(this._retentionCutoff(retentionDays));
+      return this.db
+        .prepare(`SELECT COUNT(*) AS count FROM notes WHERE ${where.sql}`)
+        .get(...where.params).count;
+    } catch (error) {
+      debugLogger.error(
+        "Error counting expired meeting transcripts",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  /** Clears the transcript and speaker labels from meeting notes past the retention
+   *  window; the note, its own notes and summary stay. On this computer only: the row
+   *  is not queued for sync, so a backed-up copy stays in the cloud. */
+  clearMeetingTranscriptsExpiredBefore(retentionDays) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const where = this._expiredMeetingTranscriptsWhere(this._retentionCutoff(retentionDays));
+      return this.db.transaction(() => {
+        const ids = this.db
+          .prepare(`SELECT id FROM notes WHERE ${where.sql}`)
+          .all(...where.params)
+          .map((row) => row.id);
+        const noteIds = JSON.stringify(ids);
+        this._deleteSpeakerRowsForNotes("SELECT value FROM json_each(?)", noteIds);
+        this.db
+          .prepare(
+            "UPDATE notes SET transcript = NULL WHERE id IN (SELECT value FROM json_each(?))"
+          )
+          .run(noteIds);
+        return { ids };
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error clearing expired meeting transcripts",
         { error: error.message },
         "database"
       );
@@ -3990,8 +4114,9 @@ class DatabaseManager {
   /**
    * Bulk-insert externally imported notes (e.g. a Granola CSV export).
    * Unlike saveNote, rows carry their own client_note_id and original
-   * created_at/updated_at; the UNIQUE client_note_id index makes re-imports
-   * idempotent (duplicates are skipped, never overwritten).
+   * created_at/updated_at, and imported_at records the import itself; the UNIQUE
+   * client_note_id index makes re-imports idempotent (duplicates are skipped,
+   * never overwritten).
    */
   importNotes(rows, { noteType = "meeting", folderName = "Imported" } = {}) {
     try {
@@ -4019,9 +4144,10 @@ class DatabaseManager {
 
       const insert = this.db.prepare(`
         INSERT INTO notes (client_note_id, title, content, content_sync_operation, note_type, source_file,
-          folder_id, space_id, account_id, transcript, participants, sync_status, created_at, updated_at)
+          folder_id, space_id, account_id, transcript, participants, sync_status, created_at, updated_at,
+          imported_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending',
-          COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+          COALESCE(?, datetime('now')), COALESCE(?, datetime('now')), datetime('now'))
         ON CONFLICT(client_note_id) DO NOTHING
       `);
 

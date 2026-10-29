@@ -194,6 +194,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   syncRetentionSettings: (settings) => ipcRenderer.send("retention-settings-changed", settings),
+  retentionPreview: (kind, days) => ipcRenderer.invoke("retention-preview", kind, days),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
   updateTranscriptionText: (id, text, rawText) =>
     ipcRenderer.invoke("update-transcription-text", id, text, rawText),
@@ -367,6 +368,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event, data) => callback?.(data);
     ipcRenderer.on("note-deleted", listener);
     return () => ipcRenderer.removeListener("note-deleted", listener);
+  },
+  onNoteTranscriptsCleared: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("note-transcripts-cleared", listener);
+    return () => ipcRenderer.removeListener("note-transcripts-cleared", listener);
   },
   onNoteSynced: (callback) => {
     const listener = (_event, note) => callback?.(note);
@@ -1200,6 +1206,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addAgentMessage: (conversationId, role, content, metadata) =>
     ipcRenderer.invoke("db-add-agent-message", conversationId, role, content, metadata),
   getAgentMessages: (conversationId) => ipcRenderer.invoke("db-get-agent-messages", conversationId),
+  onConversationsDeleted: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("conversations-deleted", listener);
+    return () => ipcRenderer.removeListener("conversations-deleted", listener);
+  },
   getAgentConversationsWithPreview: (limit, offset, includeArchived) =>
     ipcRenderer.invoke("db-get-agent-conversations-with-preview", limit, offset, includeArchived),
   searchAgentConversations: (query, limit) =>

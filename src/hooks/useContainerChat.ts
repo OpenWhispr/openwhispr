@@ -52,6 +52,7 @@ export function useContainerChat({
 
   const persistence = useChatPersistence({
     onConversationCreated: (id) => setConversationId(id),
+    onConversationDeleted: () => setConversationId(null),
   });
 
   const containerContext = useMemo(() => {
@@ -100,6 +101,11 @@ export function useContainerChat({
       stale = true;
     };
   }, [fetchConversations]);
+
+  useEffect(
+    () => window.electronAPI?.onConversationsDeleted?.(() => void fetchConversations()),
+    [fetchConversations]
+  );
 
   // useChatStreaming returns a fresh object every render; cancelStream is
   // stable. Leaving a conversation cancels its turn, as in useEmbeddedChat: a

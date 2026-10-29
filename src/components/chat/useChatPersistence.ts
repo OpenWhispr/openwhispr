@@ -6,6 +6,8 @@ import { withoutSkillCardDrafts } from "./skillCardRecord";
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
   onConversationCreated?: (id: number, title: string) => void;
+  /** The open conversation was deleted elsewhere; the session has already started over. */
+  onConversationDeleted?: () => void;
 }
 
 export interface ChatPersistence {
@@ -134,6 +136,24 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     conversationIdRef.current = null;
     setConversationId(null);
   }, []);
+
+  const onConversationDeletedRef = useRef(options.onConversationDeleted);
+  onConversationDeletedRef.current = options.onConversationDeleted;
+
+  // Deleted while open, e.g. by a retention period or from another window: start
+  // over, as a load of a missing conversation does, or every later save silently
+  // no-ops against the missing row.
+  useEffect(
+    () =>
+      window.electronAPI?.onConversationsDeleted?.(({ ids }) => {
+        if (conversationIdRef.current === null || !ids.includes(conversationIdRef.current)) {
+          return;
+        }
+        handleNewChat();
+        onConversationDeletedRef.current?.();
+      }),
+    [handleNewChat]
+  );
 
   return {
     messages,

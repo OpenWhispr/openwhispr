@@ -96,8 +96,10 @@ import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
+import { HistoryRetentionRows } from "./settings/HistoryRetentionRows";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import { RETENTION_DAY_OPTIONS, RETENTION_SELECT_CLASS } from "./settings/retentionOptions";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
@@ -199,11 +201,6 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
   { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
 ];
-
-const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
-
-const RETENTION_SELECT_CLASS =
-  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
 
@@ -4435,6 +4432,7 @@ EOF`,
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <HistoryRetentionRows showConfirmDialog={showConfirmDialog} />
               </SettingsPanel>
             </div>
 

@@ -17,6 +17,7 @@ import type { Snippet } from "../utils/snippets";
 import type { SharedHintWords } from "../utils/sharedDictionaryHints";
 import {
   effectiveAudioRetentionDays,
+  effectiveHistoryRetentionDays,
   effectiveLocalHistoryEnabled,
   isLocalHistoryPolicyResolved,
   isPolicySettled,
@@ -114,6 +115,8 @@ export interface PrivacySettings {
   telemetryEnabled: boolean;
   audioRetentionDays: number;
   transcriptRetentionDays: number;
+  chatRetentionDays: number;
+  meetingTranscriptRetentionDays: number;
   dataRetentionEnabled: boolean;
   saveDiscardedTranscriptions: boolean;
 }
@@ -199,9 +202,21 @@ function useSettingsInternal() {
   }, []);
 
   // Retention periods are enforced by the main process cleanup sweep
-  const { audioRetentionDays, transcriptRetentionDays, dataRetentionEnabled } = store;
+  const {
+    audioRetentionDays,
+    transcriptRetentionDays,
+    chatRetentionDays,
+    meetingTranscriptRetentionDays,
+    dataRetentionEnabled,
+  } = store;
   const enforcedAudioRetentionDays = usePolicyStore((policyState) =>
     effectiveAudioRetentionDays(policyState, audioRetentionDays)
+  );
+  const enforcedChatRetentionDays = usePolicyStore((policyState) =>
+    effectiveHistoryRetentionDays(policyState, chatRetentionDays)
+  );
+  const enforcedMeetingTranscriptRetentionDays = usePolicyStore((policyState) =>
+    effectiveHistoryRetentionDays(policyState, meetingTranscriptRetentionDays)
   );
   // Sent alongside the periods because the main process reconstructs Insights
   // history from stored transcripts, and that must answer to the same switch.
@@ -215,12 +230,16 @@ function useSettingsInternal() {
     window.electronAPI?.syncRetentionSettings?.({
       audioRetentionDays: enforcedAudioRetentionDays,
       transcriptRetentionDays,
+      chatRetentionDays: enforcedChatRetentionDays,
+      meetingTranscriptRetentionDays: enforcedMeetingTranscriptRetentionDays,
       dataRetentionEnabled: enforcedDataRetentionEnabled,
       localHistoryPolicyResolved,
     });
   }, [
     enforcedAudioRetentionDays,
     transcriptRetentionDays,
+    enforcedChatRetentionDays,
+    enforcedMeetingTranscriptRetentionDays,
     enforcedDataRetentionEnabled,
     localHistoryPolicyResolved,
   ]);
@@ -461,6 +480,10 @@ function useSettingsInternal() {
     setAudioRetentionDays: store.setAudioRetentionDays,
     transcriptRetentionDays: store.transcriptRetentionDays,
     setTranscriptRetentionDays: store.setTranscriptRetentionDays,
+    chatRetentionDays: store.chatRetentionDays,
+    setChatRetentionDays: store.setChatRetentionDays,
+    meetingTranscriptRetentionDays: store.meetingTranscriptRetentionDays,
+    setMeetingTranscriptRetentionDays: store.setMeetingTranscriptRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
     saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
