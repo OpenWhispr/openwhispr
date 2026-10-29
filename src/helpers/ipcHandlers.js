@@ -6023,7 +6023,7 @@ class IPCHandlers {
             model: modelId,
             messages: [{ role: "user", content: userContent }],
             system: systemPrompt,
-            max_tokens: config?.maxTokens || Math.max(100, Math.min(text.length * 2, 4096)),
+            max_tokens: config?.maxTokens || 4096,
             ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
           };
 
