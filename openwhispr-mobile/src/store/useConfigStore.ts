@@ -20,6 +20,7 @@ interface ConfigState {
 
 const defaultConfig: UserConfig = {
   defaultMode: 'cloud',
+  minimalKeyboardEnabled: false,
   appleLocalIntelligenceEnabled: true,
   localModeUpgraded: true,
   noteChatSplit: true,

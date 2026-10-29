@@ -287,6 +287,7 @@ export const APP_GROUP_KEYS = {
   KEYBOARD_TRANSCRIPTION_ERROR: 'keyboard_transcription_error',
   KEYBOARD_TRANSCRIPTION_STATUS_UPDATED_AT_MS: 'keyboard_transcription_status_updated_at_ms',
   KEYBOARD_DICTATION_TONE: 'keyboard_dictation_tone',
+  KEYBOARD_MINIMAL_ENABLED: 'keyboard_minimal_enabled',
   KEYBOARD_RECORDING_TONE: 'keyboard_recording_tone',
   KEYBOARD_RECORDING_TONE_JOB_ID: 'keyboard_recording_tone_job_id',
   KEYBOARD_TONE_APPLICABLE: 'keyboard_tone_applicable',

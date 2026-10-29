@@ -44,6 +44,8 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  // Hide the typing rows, keeping only the voice toolbar. Default off.
+  minimalKeyboardEnabled?: boolean;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
