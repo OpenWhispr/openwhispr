@@ -39,6 +39,24 @@ test("keeps a quoted phrase at one end intact", async () => {
   assert.equal(sanitizeGeneratedTitle("Discussing «Le Projet»"), "Discussing «Le Projet»");
 });
 
+test("keeps quoted phrases at both ends intact", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  assert.equal(sanitizeGeneratedTitle("“Dune” vs “Arrival”"), "“Dune” vs “Arrival”");
+  assert.equal(sanitizeGeneratedTitle('"Q3" vs "Q4"'), '"Q3" vs "Q4"');
+  assert.equal(sanitizeGeneratedTitle("'Q3' vs 'Q4'"), "'Q3' vs 'Q4'");
+  assert.equal(sanitizeGeneratedTitle("«Le Projet» et «La Suite»"), "«Le Projet» et «La Suite»");
+  assert.equal(sanitizeGeneratedTitle("„Plan A“ und „Plan B“"), "„Plan A“ und „Plan B“");
+  assert.equal(sanitizeGeneratedTitle("「設計」と「実装」"), "「設計」と「実装」");
+});
+
+test("peels a wrapper around a title with quoted phrases inside", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  assert.equal(sanitizeGeneratedTitle('"“Dune” vs “Arrival”"'), "“Dune” vs “Arrival”");
+  assert.equal(sanitizeGeneratedTitle("“Notes on ‘Dune’”"), "Notes on ‘Dune’");
+  assert.equal(sanitizeGeneratedTitle("‘Workin’ late’"), "Workin’ late");
+  assert.equal(sanitizeGeneratedTitle("『「設計」と「実装」』"), "「設計」と「実装」");
+});
+
 test("strips an unterminated wrapper with no counterpart", async () => {
   const { sanitizeGeneratedTitle } = await load();
   assert.equal(sanitizeGeneratedTitle('"Weekly standup'), "Weekly standup");
