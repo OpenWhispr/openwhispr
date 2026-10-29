@@ -38,9 +38,22 @@ function withCurrentConsent(config: UserConfig): UserConfig {
     : { ...config, usageAnalyticsEnabled: analyticsConsentOverride };
 }
 
-function enqueueConfigOperation(operation: () => Promise<void>): Promise<void> {
-  const result = configUpdate ? configUpdate.then(operation) : operation();
+function enqueueConfigOperation(
+  operation: () => Promise<void>,
+  publish: () => void,
+): Promise<void> {
+  const previous = configUpdate;
+  let start!: () => void;
+  const result = new Promise<void>((resolve, reject) => {
+    start = () => {
+      operation().then(resolve, reject);
+    };
+  });
+  // Subscribers can synchronously enqueue another change, so reserve our place first.
   configUpdate = result;
+  publish();
+  if (previous) previous.then(start, start);
+  else start();
   return result.finally(() => {
     if (configUpdate === result) configUpdate = null;
   });
@@ -53,48 +66,50 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   loadConfig: () => {
     pendingUpdates += 1;
-    set({ isLoading: true, error: analyticsPersistenceError });
-    return enqueueConfigOperation(async () => {
-      try {
-        const config = await StorageService.getConfig();
-        // A config from before Local Mode's Cloud defaults is upgraded before anything reads it, so
-        // its uploads and cleanup never reach Cloud; one from before note chat had a selection of its
-        // own keeps the one it shared; and one from before note formatting left Local Mode keeps its
-        // notes on this iPhone. A selection of a model its provider shut down moves to the
-        // replacement. A failed save upgrades it again next launch.
-        const localModeConfig =
-          !config || config.localModeUpgraded
-            ? config
-            : { ...config, ...localModeUpgradeConfig(config) };
-        const noteChatConfig =
-          !localModeConfig || localModeConfig.noteChatSplit
-            ? localModeConfig
-            : { ...localModeConfig, ...noteChatSplitConfig(localModeConfig) };
-        const resolvedConfig = withoutRetiredModels(
-          !noteChatConfig
-            ? defaultConfig
-            : noteChatConfig.notesLocalModeSplit
-              ? noteChatConfig
-              : { ...noteChatConfig, ...notesLocalModeSplitConfig(noteChatConfig) },
-        );
-        if (config && resolvedConfig !== config) {
-          await StorageService.saveConfig(withCurrentConsent(resolvedConfig)).catch(
-            () => undefined,
+    return enqueueConfigOperation(
+      async () => {
+        try {
+          const config = await StorageService.getConfig();
+          // A config from before Local Mode's Cloud defaults is upgraded before anything reads it, so
+          // its uploads and cleanup never reach Cloud; one from before note chat had a selection of its
+          // own keeps the one it shared; and one from before note formatting left Local Mode keeps its
+          // notes on this iPhone. A selection of a model its provider shut down moves to the
+          // replacement. A failed save upgrades it again next launch.
+          const localModeConfig =
+            !config || config.localModeUpgraded
+              ? config
+              : { ...config, ...localModeUpgradeConfig(config) };
+          const noteChatConfig =
+            !localModeConfig || localModeConfig.noteChatSplit
+              ? localModeConfig
+              : { ...localModeConfig, ...noteChatSplitConfig(localModeConfig) };
+          const resolvedConfig = withoutRetiredModels(
+            !noteChatConfig
+              ? defaultConfig
+              : noteChatConfig.notesLocalModeSplit
+                ? noteChatConfig
+                : { ...noteChatConfig, ...notesLocalModeSplitConfig(noteChatConfig) },
           );
+          if (config && resolvedConfig !== config) {
+            await StorageService.saveConfig(withCurrentConsent(resolvedConfig)).catch(
+              () => undefined,
+            );
+          }
+          useProcessingModeStore.getState().resetToDefault(resolvedConfig.defaultMode);
+          set({ config: withCurrentConsent(resolvedConfig), error: analyticsPersistenceError });
+        } catch (error) {
+          set({
+            error: analyticsPersistenceError ?? (error as Error).message,
+            config: withCurrentConsent(defaultConfig),
+          });
+          useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
+        } finally {
+          pendingUpdates -= 1;
+          set({ isLoading: pendingUpdates > 0 });
         }
-        useProcessingModeStore.getState().resetToDefault(resolvedConfig.defaultMode);
-        set({ config: withCurrentConsent(resolvedConfig), error: analyticsPersistenceError });
-      } catch (error) {
-        set({
-          error: analyticsPersistenceError ?? (error as Error).message,
-          config: withCurrentConsent(defaultConfig),
-        });
-        useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
-      } finally {
-        pendingUpdates -= 1;
-        set({ isLoading: pendingUpdates > 0 });
-      }
-    });
+      },
+      () => set({ isLoading: true, error: analyticsPersistenceError }),
+    );
   },
 
   updateConfig: (updates: Partial<UserConfig>) => {
@@ -102,15 +117,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (updates.usageAnalyticsEnabled === false) analyticsConsentOverride = false;
     const consentRevision = analyticsConsentRevision;
     pendingUpdates += 1;
-
-    // Withdrawal takes effect before storage; granting consent still requires a successful save.
-    set({
-      ...(updates.usageAnalyticsEnabled === false && {
-        config: { ...(get().config || defaultConfig), usageAnalyticsEnabled: false },
-      }),
-      isLoading: true,
-      error: null,
-    });
 
     const preserveNewerConsent = (config: UserConfig): UserConfig =>
       consentRevision === analyticsConsentRevision ? config : withCurrentConsent(config);
@@ -144,30 +150,41 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     };
 
     // An older disk write must not finish after a newer consent withdrawal.
-    return enqueueConfigOperation(save);
+    return enqueueConfigOperation(save, () => {
+      // Withdrawal takes effect before storage; granting consent requires a successful save.
+      set({
+        ...(updates.usageAnalyticsEnabled === false && {
+          config: { ...(get().config || defaultConfig), usageAnalyticsEnabled: false },
+        }),
+        isLoading: true,
+        error: null,
+      });
+    });
   },
 
   resetConfig: () => {
     const consentRevision = ++analyticsConsentRevision;
     pendingUpdates += 1;
-    set({ isLoading: true, error: null });
-    return enqueueConfigOperation(async () => {
-      try {
-        await StorageService.clearConfig();
-        if (consentRevision === analyticsConsentRevision) {
-          analyticsConsentOverride = null;
-          analyticsPersistenceError = null;
+    return enqueueConfigOperation(
+      async () => {
+        try {
+          await StorageService.clearConfig();
+          if (consentRevision === analyticsConsentRevision) {
+            analyticsConsentOverride = null;
+            analyticsPersistenceError = null;
+          }
+          useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
+          set({ config: withCurrentConsent(defaultConfig), error: analyticsPersistenceError });
+        } catch (error) {
+          if (analyticsConsentOverride === false)
+            analyticsPersistenceError = (error as Error).message;
+          set({ error: (error as Error).message });
+        } finally {
+          pendingUpdates -= 1;
+          set({ isLoading: pendingUpdates > 0 });
         }
-        useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
-        set({ config: withCurrentConsent(defaultConfig), error: analyticsPersistenceError });
-      } catch (error) {
-        if (analyticsConsentOverride === false)
-          analyticsPersistenceError = (error as Error).message;
-        set({ error: (error as Error).message });
-      } finally {
-        pendingUpdates -= 1;
-        set({ isLoading: pendingUpdates > 0 });
-      }
-    });
+      },
+      () => set({ isLoading: true, error: null }),
+    );
   },
 }));

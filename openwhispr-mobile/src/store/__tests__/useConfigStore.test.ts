@@ -209,6 +209,32 @@ describe('analytics consent persistence', () => {
     );
   });
 
+  it('persists withdrawal requested synchronously by a reset subscriber after clearing storage', async () => {
+    let durableConfig: unknown = { defaultMode: 'cloud', usageAnalyticsEnabled: true };
+    mockClearConfig.mockImplementationOnce(async () => {
+      durableConfig = null;
+    });
+    mockSaveConfig.mockImplementationOnce(async (config: unknown) => {
+      durableConfig = config;
+    });
+    let withdrawal: Promise<void> | undefined;
+    let requested = false;
+    const unsubscribe = useConfigStore.subscribe((state) => {
+      if (state.isLoading && !requested) {
+        requested = true;
+        withdrawal = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+      }
+    });
+    try {
+      await useConfigStore.getState().resetConfig();
+      await withdrawal;
+      expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+      expect(durableConfig).toMatchObject({ usageAnalyticsEnabled: false });
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('keeps disabled consent if an explicit reset fails', async () => {
     useConfigStore.setState({ config: { defaultMode: 'cloud', usageAnalyticsEnabled: false } });
     mockClearConfig.mockRejectedValueOnce(new Error('clear failed'));
