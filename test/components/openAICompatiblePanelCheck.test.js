@@ -283,7 +283,7 @@ const openRouterCatalog = respond(200, {
     { id: MISTRAL, supported_parameters: [] },
   ],
 });
-const openRouterList = async (t, modelNeeds) => {
+const openRouterList = async (t, modelNeeds, model = "") => {
   const panel = await mount(t, {
     fetch: openRouterCatalog,
     overrides: {
@@ -292,6 +292,7 @@ const openRouterList = async (t, modelNeeds) => {
       lockedBaseUrl: true,
       apiKeyRequired: true,
       apiKey: "sk-or-saved",
+      model,
       modelNeeds,
     },
   });
@@ -306,5 +307,8 @@ test("OpenRouter lists only models the scope's requests can use", async (t) => {
   });
   await t.test("chat also needs tools", async (t) => {
     assert.deepEqual(await openRouterList(t, ["tools"]), [HAIKU]);
+  });
+  await t.test("a saved pick stays listed even when the scope can't use it", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [HAIKU, MISTRAL]);
   });
 });

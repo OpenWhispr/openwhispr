@@ -81,14 +81,16 @@ export default function OpenAICompatiblePanel({
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
   const keyDraft = useCredentialDraft();
   const apiKey = keyDraft.value("apiKey", savedApiKey);
-  // The list reads the key and the address setter through refs, so neither a key change nor
-  // a parent's new setter on each render reloads it.
+  // The list reads the key, the model and the address setter through refs, so neither a key
+  // change, a pick nor a parent's new setter on each render reloads it.
   const apiKeyRef = useRef(apiKey);
+  const modelRef = useRef(model);
   const setBaseUrlRef = useRef(setBaseUrl);
   useEffect(() => {
     apiKeyRef.current = apiKey;
+    modelRef.current = model;
     setBaseUrlRef.current = setBaseUrl;
-  }, [apiKey, setBaseUrl]);
+  }, [apiKey, model, setBaseUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -229,7 +231,13 @@ export default function OpenAICompatiblePanel({
           // Coerce fields defensively: non-conformant endpoints may return
           // numeric ids or object descriptions, which would crash the render.
           return (rawModels as Array<Record<string, unknown>>)
-            .filter((item) => provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds))
+            .filter(
+              (item) =>
+                provider !== "openrouter" ||
+                // A saved pick stays listed even when the scope can't use it.
+                item.id === modelRef.current ||
+                offersOpenRouterModel(item, modelNeeds)
+            )
             .map((item) => {
               const rawValue = item?.id ?? item?.name;
               if (rawValue === undefined || rawValue === null || rawValue === "") return null;
