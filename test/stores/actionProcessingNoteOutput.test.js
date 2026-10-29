@@ -688,6 +688,24 @@ test("a write the database refused offers no Undo and reports the failure", asyn
   assert.deepEqual(store.consumeAppliedEvents(), []);
 });
 
+test("an action that finishes after its note was removed writes nothing and reports nothing", async (t) => {
+  const { store, updates } = await loadStore(t);
+  globalThis.window.electronAPI.getNote = async () => null;
+  globalThis.__updateNoteFails = true;
+  store.runBackgroundAction(
+    41,
+    "notes",
+    "hash-41",
+    ACTION,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: false },
+    LABELS
+  );
+  await waitFor(() => !store.useActionProcessingStore.getState().noteStates[41], "the run to end");
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeErrorEvents(), []);
+  assert.deepEqual(store.consumeAppliedEvents(), []);
+});
+
 test("material with nothing to summarize leaves the note as it was and says so", async (t) => {
   const { store, calls, updates } = await loadStore(t);
   globalThis.__generatedTitle = "Should not be asked for";

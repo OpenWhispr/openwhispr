@@ -323,6 +323,7 @@ test("getNotesForSpace includes foldered notes, unlike the root-only getNotes", 
 
   const rootNote = db.saveNote("Root", "", "personal", null, null, null, space.id).note;
   const folderNote = db.saveNote("Foldered", "", "personal", null, null, folder.id, space.id).note;
+  db.markNoteSynced(folderNote.id, "cloud-note-foldered");
   db.deleteNote(folderNote.id);
   const keptNote = db.saveNote("Kept", "", "personal", null, null, folder.id, space.id).note;
 
@@ -344,6 +345,7 @@ test("getNoteIdsInFolder excludes deleted notes", (t) => {
 
   const kept = db.saveNote("Kept", "", "personal", null, null, folder.id, space.id).note;
   const removed = db.saveNote("Removed", "", "personal", null, null, folder.id, space.id).note;
+  db.markNoteSynced(removed.id, "cloud-note-removed");
   db.deleteNote(removed.id);
 
   assert.deepEqual(db.getNoteIdsInFolder(folder.id), [kept.id]);
@@ -360,6 +362,7 @@ test("getNoteIdsInScope validates vector candidates against the current SQLite s
   const engFiled = db.saveNote("Eng filed", "", "personal", null, null, engFolder.id, eng.id).note;
   const designRoot = db.saveNote("Design root", "", "personal", null, null, null, design.id).note;
   const deleted = db.saveNote("Deleted", "", "personal", null, null, null, eng.id).note;
+  db.markNoteSynced(deleted.id, "cloud-note-deleted");
   db.deleteNote(deleted.id);
 
   assert.deepEqual(new Set(db.getNoteIdsInScope(eng.id)), new Set([engRoot.id, engFiled.id]));
@@ -507,6 +510,7 @@ test("live cloud upserts never rehydrate local conversation tombstones", (t) => 
   );
 
   const inFlightCreate = db.createAgentConversation("Delete raced create");
+  assert.equal(db.markConversationCreateAttempted(inFlightCreate.id).success, true);
   assert.equal(db.deleteAgentConversation(inFlightCreate.id).success, true);
   assert.equal(db.markConversationSynced(inFlightCreate.id, "cloud-conv-late-ack").success, true);
   const queuedLateAck = db.db
@@ -580,6 +584,7 @@ test("purge rejects late writes and conversations for stale parents", (t) => {
   assert.ok(db.createAgentConversation("Unscoped chat"), "global chats remain valid");
 
   const deletedNote = db.saveNote("Soft-deleted", "body").note;
+  db.markNoteSynced(deletedNote.id, "cloud-note-soft-deleted");
   db.deleteNote(deletedNote.id);
   assert.equal(db.createAgentConversation("Deleted note chat", deletedNote.id), null);
 
@@ -1156,5 +1161,71 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
     db.db.prepare("SELECT COUNT(*) AS n FROM agent_conversations WHERE id = ?").get(droppedConv.id)
       .n,
     0
+  );
+});
+
+test("deleting a never-synced chat removes it with every message", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const chat = db.createAgentConversation("Private chat");
+  db.addAgentMessage(chat.id, "user", "one");
+  db.addAgentMessage(chat.id, "assistant", "two");
+
+  assert.deepEqual(db.deleteAgentConversation(chat.id), { success: true });
+
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM agent_conversations WHERE id = ?").get(chat.id).n,
+    0
+  );
+  assert.equal(db.getAgentMessages(chat.id).length, 0);
+  assert.deepEqual(db.deleteAgentConversation(chat.id), { success: false });
+});
+
+test("rows held by a pending folder delete survive a repeated delete and roll back intact", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const space = createTestTeamSpace(db, { name: "Eng" }).space;
+  const folder = db.createFolder("Docs", space.id).folder;
+  db.markFolderSynced(folder.id, "cloud-folder-held");
+  const note = db.saveNote("Held draft", "never uploaded", "personal", null, null, folder.id).note;
+  const chat = db.createAgentConversation("Held chat", null, space.id, folder.id);
+  db.addAgentMessage(chat.id, "user", "keep me");
+  assert.equal(db.deleteFolder(folder.id).success, true);
+
+  assert.equal(db.deleteNote(note.id).success, false);
+  db.deleteAgentConversation(chat.id);
+
+  assert.equal(db.restoreFolderAfterDeniedDelete(folder.id).success, true);
+  assert.equal(db.getNote(note.id).deleted_at, null);
+  assert.equal(db.getAgentConversation(chat.id).messages.length, 1);
+});
+
+test("a chat whose create was sent stays a tombstone for its late receipt when its note is removed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Never synced", "body").note;
+  const chat = db.createAgentConversation("Chat in flight", note.id);
+  db.addAgentMessage(chat.id, "user", "sent with the create");
+  const sent = db.getAgentConversation(chat.id);
+  db.markConversationCreateAttempted(chat.id);
+
+  assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
+  assert.equal(db.getAgentMessages(chat.id).length, 0);
+
+  const receipt = db.acknowledgeConversationCreate(
+    chat.id,
+    {
+      client_conversation_id: sent.client_conversation_id,
+      title: sent.title,
+      updated_at: sent.updated_at,
+      message_count: sent.messages.length,
+    },
+    "cloud-conv-late"
+  );
+  assert.equal(receipt.outcome, "delete-pending");
+  assert.ok(
+    db
+      .getPendingConversationDeletes()
+      .some((pending) => pending.id === chat.id && pending.cloud_id === "cloud-conv-late")
   );
 });

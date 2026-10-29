@@ -209,3 +209,10 @@ export function resolveRendererCloudNoteCreateBatch(
     rendererOptions(options)
   );
 }
+
+// Recorded before a create request is sent, so a note deleted while the request
+// is in flight stays a tombstone its late receipt can link. A note deleted or
+// given a new identity since it was read is left out and must not be sent.
+export async function recordNoteCreateAttempts(clientNoteIds: string[]): Promise<Set<string>> {
+  return new Set((await window.electronAPI.markNoteCreatesAttempted?.(clientNoteIds)) ?? []);
+}
