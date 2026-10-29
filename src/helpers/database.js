@@ -8498,14 +8498,20 @@ class DatabaseManager {
           for (let n = 2; taken.get(name, privateSpaceId, id); n++) {
             name = `${folder.name} (${n})`;
           }
-          // A subfolder keeps its parent only once the parent is private too.
+          // Its subfolders stay in the team, top-level, as the server leaves
+          // them (and as ON DELETE SET NULL does when the folder is deleted).
+          this.db
+            .prepare(
+              "UPDATE folders SET parent_folder_id = NULL WHERE parent_folder_id = ? AND deleted_at IS NULL"
+            )
+            .run(id);
           this.db
             .prepare(
               `UPDATE folders SET space_id = ?, name = ?, client_folder_id = ?, cloud_id = NULL, sync_status = 'pending', left_team = 0, updated_at = datetime('now'),
-                 parent_folder_id = (CASE WHEN parent_folder_id IN (SELECT id FROM folders WHERE space_id = ? AND deleted_at IS NULL) THEN parent_folder_id END)
+                 parent_folder_id = NULL
                WHERE id = ?`
             )
-            .run(privateSpaceId, name, randomUUID(), privateSpaceId, id);
+            .run(privateSpaceId, name, randomUUID(), id);
           preservedFolder = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
           // Folder-scoped chats follow the preserved folder into the private
           // space so their space ref doesn't dangle on the revoked space.
@@ -8755,6 +8761,16 @@ class DatabaseManager {
           .get(responseClientFolderId, id);
         if (responseIdentityHolder) {
           return { success: true, outcome: "unresolved", changes: 0 };
+        }
+        // A synced subfolder of a folder with no cloud id couldn't push its
+        // nesting (a folder leaving a team retracts top-level without backup),
+        // so it pushes the nesting now.
+        if (expectedCloudId === null) {
+          this.db
+            .prepare(
+              "UPDATE folders SET sync_status = 'pending', updated_at = datetime('now') WHERE parent_folder_id = ? AND cloud_id IS NOT NULL AND sync_status = 'synced' AND deleted_at IS NULL"
+            )
+            .run(id);
         }
 
         const unchanged = rowMatchesSnapshot(current, snapshot, FOLDER_ACK_FIELDS);

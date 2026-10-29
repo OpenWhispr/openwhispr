@@ -2178,7 +2178,7 @@ test("a parent's hard delete frees its children", (t) => {
   assert.equal(db.getFolders().find((f) => f.id === other.id)?.parent_folder_id, null);
 });
 
-test("relocateRevokedFolder keeps a subfolder's parent only once the parent is private", (t) => {
+test("relocateRevokedFolder leaves subfolders top-level in the team", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
@@ -2196,6 +2196,7 @@ test("relocateRevokedFolder keeps a subfolder's parent only once the parent is p
   assert.equal(first.folder.parent_folder_id, null, "its parent is still in the team space");
 
   db.relocateRevokedFolder(parent.id, privateId, true);
-  const second = db.relocateRevokedFolder(sibling.id, privateId, true);
-  assert.equal(second.folder.parent_folder_id, parent.id);
+  const left = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(sibling.id);
+  assert.equal(left.space_id, team.id);
+  assert.equal(left.parent_folder_id, null);
 });

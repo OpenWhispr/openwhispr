@@ -1025,16 +1025,19 @@ export class SyncService {
   // A parent travels as its cloud id: null for a top-level folder, undefined
   // while the parent has no cloud id yet or has unpushed changes (the
   // subfolder's push waits for it, since the server refuses a subfolder whose
-  // parent's space move hasn't landed). A folder leaving a team never waits:
-  // its scope retraction must land even if its private parent never syncs.
+  // parent's space move hasn't landed). Without backup a private parent never
+  // syncs, so a folder leaving a team retracts top-level instead of waiting;
+  // acknowledgeFolderCreate queues its nesting once the parent is created.
   private cloudParentFolderId(
     folder: FolderItem,
     localToCloud: Map<number, string>,
     blockedFolderIds: Set<number>
   ): string | null | undefined {
-    if (folder.parent_folder_id == null || folder.left_team) return null;
-    if (blockedFolderIds.has(folder.parent_folder_id)) return undefined;
-    return localToCloud.get(folder.parent_folder_id);
+    if (folder.parent_folder_id == null) return null;
+    const parent = blockedFolderIds.has(folder.parent_folder_id)
+      ? undefined
+      : localToCloud.get(folder.parent_folder_id);
+    return parent === undefined && folder.left_team && !this.canSync() ? null : parent;
   }
 
   // Single-folder create shared by the debounced push and the batch-create

@@ -714,11 +714,9 @@ test("a subfolder PATCH the cloud refuses to nest goes top-level and pushes that
   assert.equal(cloud.folder(quarterCloudId).parent_folder_id, null);
 });
 
-test("a folder leaving a team pushes its retraction under a private parent that never syncs", async (t) => {
-  const ctx = await setup(t);
-  if (!ctx) return;
-  const { db, cloud } = ctx;
-
+// A synced team folder "Roadmap" moved to the private space and nested under a
+// new private folder "Clients" before it syncs again.
+function nestLeavingTeamFolder(db, cloud) {
   db.setActiveAccountId("test-account");
   const team = db.db
     .prepare(
@@ -737,14 +735,48 @@ test("a folder leaving a team pushes its retraction under a private parent that 
   });
   db.markFolderSynced(roadmap.id, cloudRoadmap.id);
   db.moveFolderToSpace(roadmap.id, db.getPrivateSpaceId());
-  db.setFolderParent(roadmap.id, db.createFolder("Clients").folder.id);
+  const clients = db.createFolder("Clients").folder;
+  db.setFolderParent(roadmap.id, clients.id);
+  browserLocalStorage.setItem("teamSpacesCapability", "true");
+  return { cloudRoadmap, clients };
+}
+
+test("a folder leaving a team waits for its new parent and lands nested with backup on", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const { cloudRoadmap, clients } = nestLeavingTeamFolder(db, cloud);
+
+  await (await newSyncService(t)).pushPendingFolders();
+  const clientsCloudId = folderByName(db, "Clients").cloud_id;
+  assert.equal(cloud.folder(cloudRoadmap.id).parent_folder_id, clientsCloudId);
+
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(folderByName(db, "Roadmap").parent_folder_id, clients.id);
+});
+
+test("a folder leaving a team pushes its retraction under a private parent that never syncs", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const { cloudRoadmap, clients } = nestLeavingTeamFolder(db, cloud);
 
   browserLocalStorage.removeItem("cloudBackupEnabled");
-  browserLocalStorage.setItem("teamSpacesCapability", "true");
   await (await newSyncService(t)).pushPendingFolders(true);
-
   assert.deepEqual(
     cloud.logFor("/api/folders/update").map((call) => [call.body.id, call.body.parent_folder_id]),
     [[cloudRoadmap.id, null]]
   );
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(folderByName(db, "Roadmap").parent_folder_id, clients.id);
+
+  // Once backup is on, the parent is created and the nesting follows.
+  browserLocalStorage.setItem("cloudBackupEnabled", "true");
+  await (await newSyncService(t)).syncAll(true);
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(
+    cloud.folder(cloudRoadmap.id).parent_folder_id,
+    folderByName(db, "Clients").cloud_id
+  );
+  assert.equal(folderByName(db, "Roadmap").parent_folder_id, clients.id);
 });
