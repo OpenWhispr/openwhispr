@@ -15,10 +15,126 @@ jest.mock('@/store/useProcessingModeStore', () => ({
 
 import { useConfigStore } from '../useConfigStore';
 
+function deferredSave() {
+  let resolve!: () => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<void>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockSaveConfig.mockResolvedValue(undefined);
   useConfigStore.setState({ config: null, isLoading: false, error: null });
+});
+
+describe('analytics consent persistence', () => {
+  beforeEach(() => {
+    useConfigStore.setState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+    });
+  });
+
+  it('withdraws consent and notifies subscribers before storage completes', async () => {
+    const save = deferredSave();
+    mockSaveConfig.mockReturnValueOnce(save.promise);
+    const observed: boolean[] = [];
+    const unsubscribe = useConfigStore.subscribe((state) => {
+      observed.push(state.config?.usageAnalyticsEnabled ?? true);
+    });
+    const update = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+    try {
+      expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+      expect(observed).not.toContain(true);
+      expect(observed).toContain(false);
+    } finally {
+      save.resolve();
+      await update;
+      unsubscribe();
+    }
+  });
+
+  it('keeps consent withdrawn when persistence fails and reports the save error', async () => {
+    mockSaveConfig.mockRejectedValueOnce(new Error('disk full'));
+    await useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+    expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+    expect(useConfigStore.getState().error).toBe('disk full');
+  });
+
+  it('enables collection only after opt-in is successfully persisted', async () => {
+    useConfigStore.setState({ config: { defaultMode: 'cloud', usageAnalyticsEnabled: false } });
+    const save = deferredSave();
+    mockSaveConfig.mockReturnValueOnce(save.promise);
+    const update = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: true });
+    expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+    save.resolve();
+    await update;
+    expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(true);
+  });
+
+  it('keeps collection disabled after a failed opt-in', async () => {
+    useConfigStore.setState({ config: { defaultMode: 'cloud', usageAnalyticsEnabled: false } });
+    mockSaveConfig.mockRejectedValueOnce(new Error('disk full'));
+    await useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: true });
+    expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+  });
+
+  it('does not let an older config save restore consent or overwrite its durable withdrawal', async () => {
+    const olderSave = deferredSave();
+    mockSaveConfig.mockReturnValueOnce(olderSave.promise);
+    const olderUpdate = useConfigStore.getState().updateConfig({ cloudBackupEnabled: true });
+    const withdrawal = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+    try {
+      expect(useConfigStore.getState().config?.usageAnalyticsEnabled).toBe(false);
+      expect(mockSaveConfig).toHaveBeenCalledTimes(1);
+    } finally {
+      olderSave.resolve();
+      await Promise.all([olderUpdate, withdrawal]);
+    }
+    expect(useConfigStore.getState().config).toMatchObject({
+      usageAnalyticsEnabled: false,
+      cloudBackupEnabled: true,
+    });
+    expect(mockSaveConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ usageAnalyticsEnabled: false, cloudBackupEnabled: true }),
+    );
+  });
+
+  it('does not publish an opt-in overtaken by a newer withdrawal', async () => {
+    useConfigStore.setState({ config: { defaultMode: 'cloud', usageAnalyticsEnabled: false } });
+    const olderSave = deferredSave();
+    mockSaveConfig.mockReturnValueOnce(olderSave.promise);
+    const observed: boolean[] = [];
+    const unsubscribe = useConfigStore.subscribe((state) => {
+      observed.push(state.config?.usageAnalyticsEnabled ?? true);
+    });
+    const optIn = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: true });
+    const withdrawal = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+    olderSave.resolve();
+    await Promise.all([optIn, withdrawal]);
+    unsubscribe();
+    expect(observed).not.toContain(true);
+    expect(mockSaveConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({ usageAnalyticsEnabled: false }),
+    );
+  });
+
+  it('continues after an older save fails and clears its error when withdrawal is persisted', async () => {
+    const olderSave = deferredSave();
+    mockSaveConfig.mockReturnValueOnce(olderSave.promise);
+    const olderUpdate = useConfigStore.getState().updateConfig({ cloudBackupEnabled: true });
+    const withdrawal = useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false });
+    olderSave.reject(new Error('temporary storage failure'));
+    await Promise.all([olderUpdate, withdrawal]);
+    expect(useConfigStore.getState()).toMatchObject({
+      config: { usageAnalyticsEnabled: false },
+      error: null,
+      isLoading: false,
+    });
+  });
 });
 
 // A config from before Local Mode's Cloud defaults must never reach Cloud with them.

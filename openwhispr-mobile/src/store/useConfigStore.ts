@@ -26,6 +26,10 @@ const defaultConfig: UserConfig = {
   notesLocalModeSplit: true,
 };
 
+let configUpdate: Promise<void> | null = null;
+let pendingUpdates = 0;
+let analyticsConsentRevision = 0;
+
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: null,
   isLoading: false,
@@ -70,21 +74,48 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     }
   },
 
-  updateConfig: async (updates: Partial<UserConfig>) => {
-    const currentConfig = get().config || defaultConfig;
-    const newConfig = { ...currentConfig, ...updates };
+  updateConfig: (updates: Partial<UserConfig>) => {
+    if (updates.usageAnalyticsEnabled !== undefined) analyticsConsentRevision += 1;
+    const consentRevision = analyticsConsentRevision;
+    pendingUpdates += 1;
 
-    set({ isLoading: true, error: null });
-    try {
-      await StorageService.saveConfig(newConfig);
-      const modeStore = useProcessingModeStore.getState();
-      if (!modeStore.isUserOverride) {
-        modeStore.resetToDefault(newConfig.defaultMode);
+    // Withdrawal takes effect before storage; granting consent still requires a successful save.
+    set({
+      ...(updates.usageAnalyticsEnabled === false && {
+        config: { ...(get().config || defaultConfig), usageAnalyticsEnabled: false },
+      }),
+      isLoading: true,
+      error: null,
+    });
+
+    const preserveNewerConsent = (config: UserConfig): UserConfig =>
+      consentRevision === analyticsConsentRevision
+        ? config
+        : { ...config, usageAnalyticsEnabled: get().config?.usageAnalyticsEnabled };
+
+    const save = async () => {
+      const newConfig = preserveNewerConsent({ ...(get().config || defaultConfig), ...updates });
+      try {
+        await StorageService.saveConfig(newConfig);
+        const modeStore = useProcessingModeStore.getState();
+        if (!modeStore.isUserOverride) {
+          modeStore.resetToDefault(newConfig.defaultMode);
+        }
+        set({ config: preserveNewerConsent(newConfig), error: null });
+      } catch (error) {
+        set({ error: (error as Error).message });
+      } finally {
+        pendingUpdates -= 1;
+        set({ isLoading: pendingUpdates > 0 });
       }
-      set({ config: newConfig, isLoading: false });
-    } catch (error) {
-      set({ error: (error as Error).message, isLoading: false });
-    }
+    };
+
+    // An older disk write must not finish after a newer consent withdrawal.
+    const operation = configUpdate ? configUpdate.then(save) : save();
+    configUpdate = operation;
+    return operation.finally(() => {
+      if (configUpdate === operation) configUpdate = null;
+    });
   },
 
   resetConfig: async () => {

@@ -8,7 +8,7 @@ let closing: Promise<void> | null = null;
 
 // Consent is unknown until the stored preferences hydrate, so every channel
 // fails closed until then. Once loaded, the saved preference (default on) is
-// authoritative — including while a later save is in flight.
+// authoritative; the store applies withdrawal immediately, before saving it.
 function analyticsEnabled(): boolean {
   return isUsageAnalyticsAllowed(useConfigStore.getState().config);
 }
