@@ -525,15 +525,19 @@ it('retains acknowledged progress but stops further batches until a fresh opt-in
   events.forEach((item) => recordInsight(insightsScope(), item));
   mockConfig.insightsSyncEnabled = true;
   const secondResponse = deferred<{ accepted: string[]; rejected: string[] }>();
+  const secondStarted = deferred<void>();
   jest
     .mocked(api.post)
     .mockResolvedValueOnce({
       accepted: events.slice(0, 200).map((item) => item.event_id),
       rejected: [],
     })
-    .mockReturnValueOnce(secondResponse.promise);
+    .mockImplementationOnce(() => {
+      secondStarted.resolve();
+      return secondResponse.promise;
+    });
   const pending = refreshInsights();
-  await Promise.resolve();
+  await secondStarted.promise;
   const signal = jest.mocked(api.post).mock.calls[1]?.[2]?.signal;
   try {
     expect(api.post).toHaveBeenCalledTimes(2);
@@ -559,4 +563,131 @@ it('retains acknowledged progress but stops further batches until a fresh opt-in
   expect(jest.mocked(api.post).mock.calls[2][1]).toEqual({ events: events.slice(200, 400) });
   expect(jest.mocked(api.post).mock.calls[3][1]).toEqual({ events: events.slice(400) });
   expect(useInsights.getState().ledger.acknowledged).toHaveLength(401);
+});
+
+it.each(['upload', 'summary'] as const)(
+  'bounds a stalled %s request, permits retry, and ignores a late response',
+  async (phase) => {
+    jest.useFakeTimers();
+    recordInsight(insightsScope(), event);
+    mockConfig.insightsSyncEnabled = true;
+    const heldUpload = deferred<{ accepted: string[]; rejected: string[] }>();
+    const heldSummary = deferred<{ totalWords: number; totalDictations: number }>();
+    if (phase === 'upload') jest.mocked(api.post).mockReturnValueOnce(heldUpload.promise);
+    else jest.mocked(api.get).mockReturnValueOnce(heldSummary.promise);
+    let settled = false;
+    const pending = refreshInsights().then(() => {
+      settled = true;
+    });
+    try {
+      await jest.advanceTimersByTimeAsync(0);
+      const signal =
+        phase === 'upload'
+          ? jest.mocked(api.post).mock.calls[0][2]?.signal
+          : jest.mocked(api.get).mock.calls[0][1]?.signal;
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(signal?.aborted).toBe(true);
+      expect(settled).toBe(true);
+      expect(useInsights.getState().status).toBe('offline');
+      expect(useInsights.getState().ledger.events).toEqual([event]);
+      expect(useInsights.getState().ledger.acknowledged).toEqual(phase === 'upload' ? [] : ['one']);
+      expect(mockAuthListeners.size).toBe(0);
+      expect(mockConfigListeners.size).toBe(0);
+      // A retry can complete before the old transport settles. The upload retry
+      // deliberately leaves the ID unacknowledged to detect a late old ack.
+      if (phase === 'upload')
+        jest.mocked(api.post).mockResolvedValueOnce({ accepted: [], rejected: [] });
+      await refreshInsights();
+      expect(useInsights.getState().status).toBe('idle');
+      expect(useInsights.getState().ledger.summary).toEqual({ totalWords: 10, totalDictations: 3 });
+      heldUpload.resolve({ accepted: ['one'], rejected: [] });
+      heldSummary.resolve({ totalWords: 999, totalDictations: 999 });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(useInsights.getState().ledger.acknowledged).toEqual(phase === 'upload' ? [] : ['one']);
+      expect(useInsights.getState().ledger.summary).toEqual({ totalWords: 10, totalDictations: 3 });
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      heldUpload.resolve({ accepted: ['one'], rejected: [] });
+      heldSummary.resolve({ totalWords: 999, totalDictations: 999 });
+      await pending;
+      jest.useRealTimers();
+    }
+  },
+);
+
+it('gives each batch its own deadline and retries only the unacknowledged remainder', async () => {
+  jest.useFakeTimers();
+  const events = Array.from({ length: 401 }, (_, index) => ({ ...event, event_id: String(index) }));
+  events.forEach((item) => recordInsight(insightsScope(), item));
+  mockConfig.insightsSyncEnabled = true;
+  const first = deferred<{ accepted: string[]; rejected: string[] }>();
+  const second = deferred<{ accepted: string[]; rejected: string[] }>();
+  jest.mocked(api.post).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  const pending = refreshInsights();
+  try {
+    await jest.advanceTimersByTimeAsync(20_000);
+    first.resolve({ accepted: events.slice(0, 200).map((item) => item.event_id), rejected: [] });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(api.post).toHaveBeenCalledTimes(2);
+    const signal = jest.mocked(api.post).mock.calls[1][2]?.signal;
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(signal?.aborted).toBe(false);
+    expect(useInsights.getState().status).toBe('loading');
+    await jest.advanceTimersByTimeAsync(10_000);
+    await pending;
+    expect(signal?.aborted).toBe(true);
+    expect(useInsights.getState().status).toBe('offline');
+    expect(useInsights.getState().ledger.acknowledged).toHaveLength(200);
+    expect(api.post).toHaveBeenCalledTimes(2);
+    jest.mocked(api.post).mockImplementation(async (_path, body) => ({
+      accepted: (body as { events: InsightEvent[] }).events.map((item) => item.event_id),
+      rejected: [],
+    }));
+    await refreshInsights();
+    expect(jest.mocked(api.post).mock.calls[2][1]).toEqual({ events: events.slice(200, 400) });
+    expect(jest.mocked(api.post).mock.calls[3][1]).toEqual({ events: events.slice(400) });
+    expect(useInsights.getState().ledger.acknowledged).toHaveLength(401);
+    expect(useInsights.getState().status).toBe('idle');
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    first.resolve({ accepted: [], rejected: [] });
+    second.resolve({ accepted: [], rejected: [] });
+    await pending;
+    jest.useRealTimers();
+  }
+});
+
+it('removes the old deadline when accounts change without marking the new account offline early', async () => {
+  jest.useFakeTimers();
+  mockConfig.insightsSyncEnabled = true;
+  const oldSummary = deferred<{ totalWords: number; totalDictations: number }>();
+  const newSummary = deferred<{ totalWords: number; totalDictations: number }>();
+  jest
+    .mocked(api.get)
+    .mockReturnValueOnce(oldSummary.promise)
+    .mockReturnValueOnce(newSummary.promise);
+  const first = refreshInsights();
+  let second: Promise<void> | undefined;
+  try {
+    await jest.advanceTimersByTimeAsync(10_000);
+    changeAccount('b');
+    second = refreshInsights();
+    await jest.advanceTimersByTimeAsync(20_000);
+    expect(useInsights.getState().scope).toBe('account:b');
+    expect(useInsights.getState().status).toBe('loading');
+    expect(jest.mocked(api.get).mock.calls[1][1]?.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(10_000);
+    await Promise.all([first, second]);
+    expect(useInsights.getState().status).toBe('offline');
+    oldSummary.resolve({ totalWords: 999, totalDictations: 999 });
+    newSummary.resolve({ totalWords: 888, totalDictations: 888 });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(useInsights.getState().ledger.summary).toBeUndefined();
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    oldSummary.resolve({ totalWords: 999, totalDictations: 999 });
+    newSummary.resolve({ totalWords: 888, totalDictations: 888 });
+    await Promise.all([first, second]);
+    jest.useRealTimers();
+  }
 });

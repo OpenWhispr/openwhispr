@@ -205,6 +205,27 @@ export function refreshInsights(): Promise<void> {
     headers: { 'x-openwhispr-source': 'mobile' },
     signal: run.controller.signal,
   };
+  const boundedRequest = async <T>(request: Promise<T>): Promise<T> => {
+    const { signal } = run.controller;
+    let rejectAborted = () => {};
+    const aborted = new Promise<never>((_, reject) => {
+      rejectAborted = () => reject(new Error('Statistics request interrupted.'));
+      signal.addEventListener('abort', rejectAborted, { once: true });
+      if (signal.aborted) rejectAborted();
+    });
+    const timer = setTimeout(() => {
+      if (isCurrent(run)) useInsights.setState({ status: 'offline' });
+      run.controller.abort();
+    }, 30_000);
+    try {
+      // Some transports settle slowly after abort. Release the run now so retry
+      // can proceed, and never publish the old request's eventual response.
+      return await Promise.race([request, aborted]);
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', rejectAborted);
+    }
+  };
   const sync = async () => {
     useInsights.setState({ status: 'loading' });
     try {
@@ -214,10 +235,12 @@ export function refreshInsights(): Promise<void> {
       for (let offset = 0; offset < pending.length; offset += 200) {
         if (!isCurrent(run)) return;
         const batch = pending.slice(offset, offset + 200);
-        const response = await api.post<{ accepted: string[]; rejected: string[] }>(
-          '/api/analytics/events/batch',
-          { events: batch },
-          requestOptions,
+        const response = await boundedRequest(
+          api.post<{ accepted: string[]; rejected: string[] }>(
+            '/api/analytics/events/batch',
+            { events: batch },
+            requestOptions,
+          ),
         );
         if (!isCurrent(run)) return;
         if (!Array.isArray(response.accepted) || !Array.isArray(response.rejected))
@@ -230,9 +253,11 @@ export function refreshInsights(): Promise<void> {
       }
       if (!isCurrent(run)) return;
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const response = await api.get<Summary>(
-        `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`,
-        requestOptions,
+      const response = await boundedRequest(
+        api.get<Summary>(
+          `/api/analytics/summary?timeZone=${encodeURIComponent(timeZone)}`,
+          requestOptions,
+        ),
       );
       if (!isCurrent(run)) return;
       if (
