@@ -133,6 +133,7 @@ const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
+const { transcribeWithElevenLabs } = require("./elevenLabsTranscription");
 const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
 const { registerSkillsIpc } = require("./skills/skillsIpc");
@@ -5349,6 +5350,23 @@ class IPCHandlers {
       })
     );
 
+    // ElevenLabs Scribe authenticates with xi-api-key and takes model_id /
+    // language_code, so it has no OpenAI-compatible path either.
+    ipcMain.handle(
+      "proxy-elevenlabs-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }) => {
+        return await transcribeWithElevenLabs({
+          audioBuffer: Buffer.from(audioBuffer),
+          model,
+          fileName: "audio.webm",
+          contentType: "audio/webm",
+          language,
+          keyterms,
+          apiKey: this.environmentManager.getElevenlabsKey(),
+        });
+      })
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -7702,6 +7720,19 @@ class IPCHandlers {
             apiKey: this.environmentManager.getGeminiKey(),
           });
           result = { text, source: "gemini", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "elevenlabs") {
+          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
+            throw new Error(byokSizeCapError(route.sizeCapBytes));
+          }
+          const { text } = await transcribeWithElevenLabs({
+            audioBuffer: buffer,
+            model: route.model,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language: route.language,
+            apiKey: this.environmentManager.getElevenlabsKey(),
+          });
+          result = { text, source: "elevenlabs", model: route.model };
         } else {
           // mistral/xai have no OpenAI-compatible endpoint — main talks to them
           // directly; everything else consumes the route endpoint as-is.
@@ -11764,6 +11795,20 @@ class IPCHandlers {
                 model: route.model,
                 contentType: providerContentType(realByok),
                 apiKey: apiKey || this.environmentManager.getGeminiKey(),
+              });
+              return { success: true, text };
+            }
+
+            if (route.transport === "proxied" && route.provider === "elevenlabs") {
+              // No language hint, as for the other uploads: a file is often not
+              // in the dictation language.
+              const { text } = await transcribeWithElevenLabs({
+                audioBuffer: fs.readFileSync(realByok),
+                signal,
+                model: route.model,
+                fileName: path.basename(realByok),
+                contentType: providerContentType(realByok),
+                apiKey: apiKey || this.environmentManager.getElevenlabsKey(),
               });
               return { success: true, text };
             }

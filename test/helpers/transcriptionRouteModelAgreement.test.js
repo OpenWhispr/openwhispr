@@ -20,6 +20,7 @@ const PREFIX_VALIDATED_PROVIDERS = [
   "gemini",
   "deepgram",
   "assemblyai",
+  "elevenlabs",
 ];
 
 test("every shipping registry model survives resolveByokModel", async () => {
@@ -84,4 +85,5 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
   assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-6-pro");
+  assert.equal(resolveByokModel("elevenlabs", "whisper-1"), "scribe_v2");
 });

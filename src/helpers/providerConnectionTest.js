@@ -17,6 +17,10 @@ const ENDPOINTS = {
   deepgram: "https://api.deepgram.com/v1/auth/token",
   // AssemblyAI exposes no model list; listing transcripts is its 200-vs-401 probe.
   assemblyai: "https://api.assemblyai.com/v2/transcript?limit=1",
+  // ElevenLabs keys can be scoped so /v1/user or /v1/models refuse a key that transcribes.
+  // The transcription route checks the key before the body, so a request without audio is
+  // refused as unauthorised or as invalid, and transcribes nothing.
+  elevenlabs: "https://api.elevenlabs.io/v1/speech-to-text",
 };
 // Listing the key's projects proves the key too: used only if Deepgram retires the route above.
 const DEEPGRAM_PROJECTS_ENDPOINT = "https://api.deepgram.com/v1/projects";
@@ -233,6 +237,8 @@ function resolveProviderRequest(config) {
       headers.Authorization = `Token ${apiKey}`;
     } else if (provider === "assemblyai") {
       headers.Authorization = apiKey;
+    } else if (provider === "elevenlabs") {
+      headers["xi-api-key"] = apiKey;
     } else {
       headers.Authorization = `Bearer ${apiKey}`;
     }
@@ -417,6 +423,7 @@ async function testProviderConnection(
 
   const provider = String(config?.provider || "").toLowerCase();
   if (provider === "deepgram") return testDeepgramKey(request, fetchImpl);
+  if (provider === "elevenlabs") return testElevenLabsKey(request, fetchImpl);
 
   const model = String(config?.model || "").trim();
   let failure = null;
@@ -499,6 +506,31 @@ async function testDeepgramKey(request, fetchImpl) {
     return Array.isArray((await readJson(response))?.projects) ? null : {};
   });
   return fallback ? { success: false, ...fallback } : { success: true };
+}
+
+// ElevenLabs is checked by key alone: a transcription request with a model and no audio is
+// refused as invalid (400 or 422) once the key is accepted. A key out of quota is still
+// the user's key, so it passes; transcription then reports the quota.
+async function testElevenLabsKey(request, fetchImpl) {
+  const body = new FormData();
+  body.append("model_id", "scribe_v2");
+  const failure = await probe(
+    request.endpoint,
+    request,
+    fetchImpl,
+    async (response) => {
+      if (response.ok || response.status === 400 || response.status === 422) return null;
+      if (
+        response.status === 401 &&
+        (await readJson(response))?.detail?.status === "quota_exceeded"
+      ) {
+        return null;
+      }
+      return describeStatusFailure(response.status, "elevenlabs");
+    },
+    { method: "POST", body }
+  );
+  return failure ? { success: false, ...failure } : { success: true };
 }
 
 // Runs once Tinfoil's public model list has vouched for the model. A valid key pays for one

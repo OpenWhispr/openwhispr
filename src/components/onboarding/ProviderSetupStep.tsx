@@ -235,6 +235,8 @@ function providerCredential(provider: string, store: ReturnType<typeof useSettin
       return { value: store.deepgramApiKey, set: store.setDeepgramApiKey };
     case "assemblyai":
       return { value: store.assemblyaiApiKey, set: store.setAssemblyaiApiKey };
+    case "elevenlabs":
+      return { value: store.elevenlabsApiKey, set: store.setElevenlabsApiKey };
     default:
       return { value: "", set: (_value: string) => undefined };
   }
