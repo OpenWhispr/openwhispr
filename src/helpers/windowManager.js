@@ -118,6 +118,8 @@ class WindowManager {
     this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
+    this._mainWindowConcealed = false;
+    this._mainWindowCapturesMouse = false;
     this._panelStartPosition = "bottom-right";
     this._activeHorizontalDirection = null;
     this._isDictatingToggle = false;
@@ -231,7 +233,7 @@ class WindowManager {
       if (this._assistantPanelOpen) {
         // The window may have been hidden while the command was in flight
         // (PTT tap, auto-hide, tray); focus() is a no-op on a hidden window.
-        if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+        this._surfaceMainWindow();
         this.mainWindow.setFocusable(true);
         // macOS: never request app activation for the overlay. focus() calls
         // NSApp activate, and when another OpenWhispr window (control panel)
@@ -297,6 +299,9 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return;
     }
+    this._mainWindowCapturesMouse = shouldCapture;
+    // A concealed window stays click-through; revealing it applies the latest state.
+    if (this._mainWindowConcealed) return;
 
     if (process.platform === "win32") {
       // Windows click-through forwarding is unreliable for this floating panel.
@@ -1642,8 +1647,8 @@ class WindowManager {
     this._sendAgentDictationPreview("preview-text", text);
     // Partials arrive several times a second; re-showing a visible window
     // restacks it (and re-fires "show") on every chunk (#1262).
-    if (!this.mainWindow.isVisible()) {
-      this.mainWindow.showInactive();
+    if (!this._isMainWindowShown()) {
+      this._surfaceMainWindow();
       this.enforceMainWindowOnTop();
     }
   }
@@ -1815,7 +1820,7 @@ class WindowManager {
     if (this._assistantPanelOpen) {
       // The open panel owns geometry (no reposition), but it must never be
       // left invisible: surface the window if something hid it.
-      if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+      this._surfaceMainWindow();
       if (focus) this.mainWindow.focus();
       return;
     }
@@ -1825,13 +1830,7 @@ class WindowManager {
     if (this.mainWindow.isMinimized()) {
       this.mainWindow.restore();
     }
-    if (!this.mainWindow.isVisible()) {
-      if (typeof this.mainWindow.showInactive === "function") {
-        this.mainWindow.showInactive();
-      } else {
-        this.mainWindow.show();
-      }
-    }
+    this._surfaceMainWindow();
     if (focus) {
       this.mainWindow.focus();
     }
@@ -2069,7 +2068,39 @@ class WindowManager {
     // opened invisibly and nothing could show it again).
     if (this._assistantPanelOpen || this._assistantPanelBusy) return;
     this._mainWindowPlacementCoordinator.cancelPending();
-    if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.hide();
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (process.platform === "darwin" && this.mainWindow.isVisible()) {
+      this._concealMainWindow();
+    } else {
+      this.mainWindow.hide();
+    }
+  }
+
+  // macOS: hide() drops the window from the accessibility window list that
+  // tiling window managers (AeroSpace, yabai) track, so every show adds it as a
+  // new window and can switch the user to another workspace. Concealing keeps
+  // the window: fully transparent and click-through until it is surfaced.
+  _concealMainWindow() {
+    this._mainWindowConcealed = true;
+    this.mainWindow.setOpacity(0);
+    this.mainWindow.setIgnoreMouseEvents(true);
+  }
+
+  // Shows the dictation window without activating the app.
+  _surfaceMainWindow() {
+    if (this._mainWindowConcealed) {
+      this._mainWindowConcealed = false;
+      this.mainWindow.setOpacity(1);
+      this.setMainWindowInteractivity(this._mainWindowCapturesMouse);
+      // No "show" event fires for a concealed window; do what its listener does.
+      this.enforceMainWindowOnTop();
+      if (this._assistantPanelOpen) this.showAgentDictationPill();
+    }
+    if (!this.mainWindow.isVisible()) this.mainWindow.showInactive();
+  }
+
+  _isMainWindowShown() {
+    return this.mainWindow.isVisible() && !this._mainWindowConcealed;
   }
 
   positionAgentDictationPill() {
@@ -2248,7 +2279,7 @@ class WindowManager {
       return false;
     }
 
-    return this.mainWindow.isVisible();
+    return this._isMainWindowShown();
   }
 
   registerMainWindowEvents() {
@@ -2322,6 +2353,7 @@ class WindowManager {
       const pillWindow = this.agentDictationPillWindow;
       if (pillWindow && !pillWindow.isDestroyed()) pillWindow.close();
       this.mainWindow = null;
+      this._mainWindowConcealed = false;
     });
   }
 
