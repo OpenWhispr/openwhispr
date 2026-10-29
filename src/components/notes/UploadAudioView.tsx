@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect, useId } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Upload,
   FileAudio,
   X,
   AlertCircle,
@@ -20,6 +19,7 @@ import { CARD_SURFACE_CLASS } from "../ui/surfaces";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { Toggle } from "../ui/toggle";
 import EmptyStateCard from "../ui/EmptyStateCard";
+import { DropZone } from "../ui/DropZone";
 import { cn } from "../lib/utils";
 import {
   Select,
@@ -160,7 +160,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [diarizationWarning, setDiarizationWarning] = useState(false);
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [chunkProgress, setChunkProgress] = useState<{
@@ -593,17 +592,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     batch.addFiles(items);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
+  const handleDroppedFiles = (files: File[]) => {
     if (!isAudioFeatureAllowed(usePolicyStore.getState(), "upload")) return;
-    const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
-
     const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
     const skippedNames: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
+    for (const f of files) {
       if (!isSupportedUploadFile(f.name)) {
         skippedNames.push(f.name);
         continue;
@@ -1047,10 +1040,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             <IdleView
               t={t}
               getActiveModelLabel={getActiveModelLabel}
-              handleDrop={handleDrop}
+              handleDroppedFiles={handleDroppedFiles}
               handleBrowse={handleBrowse}
-              isDragOver={isDragOver}
-              setIsDragOver={setIsDragOver}
               onOpenSettings={onOpenSettings}
               disabled={!uploadFeatureAllowed}
               describedBy={uploadRestrictionDescription}
@@ -1508,10 +1499,8 @@ function NoProviderView({ t, onOpenSettings }: NoProviderViewProps) {
 interface IdleViewProps {
   t: (key: string, options?: Record<string, unknown>) => string;
   getActiveModelLabel: () => string;
-  handleDrop: (e: React.DragEvent) => void;
+  handleDroppedFiles: (files: File[]) => void;
   handleBrowse: () => void;
-  isDragOver: boolean;
-  setIsDragOver: (v: boolean) => void;
   onOpenSettings?: (section: string) => void;
   disabled: boolean;
   describedBy?: string;
@@ -1520,21 +1509,12 @@ interface IdleViewProps {
 function IdleView({
   t,
   getActiveModelLabel,
-  handleDrop,
+  handleDroppedFiles,
   handleBrowse,
-  isDragOver,
-  setIsDragOver,
   onOpenSettings,
   disabled,
   describedBy,
 }: IdleViewProps) {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleBrowse();
-    }
-  };
-
   return (
     <>
       <div className="flex flex-col items-center gap-2 text-center">
@@ -1549,59 +1529,15 @@ function IdleView({
         />
       </div>
 
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={t("notes.upload.dropOrBrowse")}
-        aria-disabled={disabled || undefined}
-        aria-describedby={describedBy}
-        onDrop={handleDrop}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!disabled) setIsDragOver(true);
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-        }}
-        onClick={handleBrowse}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          "group mt-6 flex flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center",
-          "transition-[background-color,border-color,transform] duration-200",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          disabled
-            ? "cursor-not-allowed border-border bg-card/50 opacity-50 dark:border-white/15 dark:bg-surface-2/60"
-            : isDragOver
-              ? "cursor-pointer scale-[1.01] border-primary/60 bg-primary/5 dark:bg-primary/10"
-              : "cursor-pointer border-border bg-card/50 hover:border-primary/40 hover:bg-primary/5 dark:border-white/15 dark:bg-surface-2/60 dark:hover:bg-primary/10"
-        )}
-        style={isDragOver ? { animation: "drag-pulse 1.5s ease-in-out infinite" } : undefined}
-      >
-        <span
-          className={cn(
-            "flex h-11 w-11 items-center justify-center rounded-xl transition-colors",
-            isDragOver
-              ? "bg-primary/15 text-primary"
-              : cn("bg-surface-3 text-foreground/70", !disabled && "group-hover:text-primary")
-          )}
-        >
-          <Upload size={20} />
-        </span>
-        <p
-          className={cn(
-            "mt-4 text-[15px] font-medium",
-            isDragOver ? "text-primary" : "text-foreground"
-          )}
-        >
-          {isDragOver ? t("notes.upload.dropToUpload") : t("notes.upload.dropOrBrowse")}
-        </p>
-        {!isDragOver && (
-          <p className="mt-1 max-w-md text-[13px] leading-relaxed text-foreground/60">
-            {t("notes.upload.supportedFormats")}
-          </p>
-        )}
-      </div>
+      <DropZone
+        label={t("notes.upload.dropOrBrowse")}
+        activeLabel={t("notes.upload.dropToUpload")}
+        hint={t("notes.upload.supportedFormats")}
+        onFiles={handleDroppedFiles}
+        onBrowse={handleBrowse}
+        disabled={disabled}
+        describedBy={describedBy}
+      />
     </>
   );
 }

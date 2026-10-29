@@ -342,6 +342,7 @@
       "all": "全部",
       "manual": "手動",
       "learned": "已學習",
+      "hiddenForYou": "對你隱藏",
       "customDictionary": "自訂字典",
       "dictionaryDescription": "新增轉錄模型應辨識的詞語、姓名或術語。",
       "firstWord": "新增第一個詞語",

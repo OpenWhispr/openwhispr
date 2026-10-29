@@ -342,6 +342,7 @@
       "all": "Tout",
       "manual": "Manuel",
       "learned": "Appris",
+      "hiddenForYou": "Masqué pour vous",
       "customDictionary": "Dictionnaire personnalisé",
       "dictionaryDescription": "Ajoutez des mots, noms ou termes que le modèle de transcription doit reconnaître.",
       "firstWord": "Ajoutez votre premier mot",

@@ -74,4 +74,25 @@ test("personal meeting options preserve manual enterprise preference while requi
     assert.equal(options.managedContext?.setupMode ?? options.enterpriseSetupMode, setupMode);
     assert.equal(options.enterpriseIdentity.workspaceId, "workspace-a");
   }
+
+  useSettingsStore.setState({
+    meetingTranscriptionMode: "providers",
+    meetingCloudTranscriptionProvider: "corti",
+    enterpriseTranscriptionSetupMode: "manual",
+    customDictionary: ["Personal"],
+    sharedDictionaryHints: { space: ["Team"], workspace: ["Company"] },
+  });
+  useEnterpriseIdentityStore.setState({
+    config: { generation: 1, providers: [record] },
+  });
+  await prepareTranscription();
+  const options = calls.at(-1);
+  assert.equal(options.provider, "corti-realtime");
+  assert.deepEqual(options.keyterms, ["Personal", "Team", "Company"]);
+  assert.equal(options.enterpriseSetupMode, "manual");
+  assert.deepEqual(options.enterpriseIdentity, {
+    accountId: "account-a",
+    workspaceId: "workspace-a",
+    authGeneration: 1,
+  });
 });

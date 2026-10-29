@@ -13,8 +13,10 @@ import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { IntegrationsNav } from "./integrations/IntegrationsNav";
 import { IntegrationsPane, UpsellBar } from "./integrations/IntegrationsPane";
 import { CalendarsPane } from "./integrations/CalendarsPane";
+import { SkillsPane } from "./integrations/SkillsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
+import type { SkillChatStart, SkillOpenRequest } from "../types/skills";
 import {
   INTEGRATIONS_SECTION_ICONS,
   INTEGRATIONS_SECTIONS,
@@ -31,6 +33,10 @@ interface IntegrationsViewProps {
   onUpgrade: () => void;
   section: IntegrationsSection;
   onSectionChange: (section: IntegrationsSection) => void;
+  /** Absent where the assistant isn't allowed: the Skills page then offers no chat. */
+  onStartSkillChat?: (start: SkillChatStart) => void;
+  openSkillRequest?: SkillOpenRequest | null;
+  onOpenSkillRequestHandled?: () => void;
 }
 
 export default function IntegrationsView({
@@ -38,6 +44,9 @@ export default function IntegrationsView({
   onUpgrade,
   section,
   onSectionChange,
+  onStartSkillChat,
+  openSkillRequest,
+  onOpenSkillRequestHandled,
 }: IntegrationsViewProps): ReactElement {
   const { t } = useTranslation();
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
@@ -110,6 +119,15 @@ export default function IntegrationsView({
       >
         <ConnectorsSection onUpgrade={onUpgrade} />
       </IntegrationsPane>
+    ),
+    skills: (
+      <SkillsPane
+        title={titleOf("skills")}
+        active={section === "skills"}
+        onStartSkillChat={onStartSkillChat}
+        openSkillRequest={openSkillRequest}
+        onOpenSkillRequestHandled={onOpenSkillRequestHandled}
+      />
     ),
     calendars: <CalendarsPane title={titleOf("calendars")} />,
     api: (

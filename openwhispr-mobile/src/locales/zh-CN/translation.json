@@ -342,6 +342,7 @@
       "all": "全部",
       "manual": "手动",
       "learned": "已学习",
+      "hiddenForYou": "对你隐藏",
       "customDictionary": "自定义词典",
       "dictionaryDescription": "添加转录模型应识别的词语、姓名或术语。",
       "firstWord": "添加第一个词语",

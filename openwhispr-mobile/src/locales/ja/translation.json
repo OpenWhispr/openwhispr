@@ -342,6 +342,7 @@
       "all": "すべて",
       "manual": "手動",
       "learned": "学習済み",
+      "hiddenForYou": "自分には非表示",
       "customDictionary": "カスタム辞書",
       "dictionaryDescription": "文字起こしモデルに認識させたい単語、名前、用語を追加します。",
       "firstWord": "最初の単語を追加",

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
-import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ReasoningService, resolveReasoningPlacement } from '@/services/reasoning/ReasoningService';
 import { useConfigStore } from '@/store/useConfigStore';
 import { generateNoteTitle } from '@/utils/generateTitle';
 import {
@@ -8,6 +8,8 @@ import {
   isDefaultGenerateNotesAction,
   type GenerateNotesInputKind,
 } from '@/lib/notes/generateNotesPrompt';
+import { fitDictionaryOnDevice } from '@/lib/onDeviceDictionary';
+import { splitLlmDictionary, type LlmDictionary } from '@/lib/snippets';
 import type { Action } from '@/data';
 import {
   DESKTOP_DEFAULT_NOTE_ACTION,
@@ -20,7 +22,8 @@ export type ProcessingState = 'idle' | 'processing' | 'success';
 
 export interface RunActionOptions {
   inputKind?: GenerateNotesInputKind;
-  customDictionary?: string[];
+  /** Dictionary hints by tier (buildDictationHintTiers): personal, space, workspace. */
+  dictionaryTiers?: string[][];
   routing?: ReasoningRoutingOptions;
   /** Recheck ownership after asynchronous work before continuing or publishing a result. */
   isCurrent?: () => boolean;
@@ -71,21 +74,33 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
           inputKind === 'plain-note' &&
           isDefaultGenerateNotesAction(action);
         const actionPrompt = usesDesktopDefaultNotes ? DESKTOP_DEFAULT_NOTE_ACTION : action.prompt;
-        const systemPrompt = buildActionSystemPrompt({
-          actionPrompt,
-          inputKind,
-          isDefaultGenerateNotesAction: isDefaultGenerateNotesAction(action),
-          customDictionary: options.customDictionary,
-          desktopDefaultNotes: usesDesktopDefaultNotes,
-        });
+        const buildPrompt = ({ personal, shared }: LlmDictionary): string =>
+          buildActionSystemPrompt({
+            actionPrompt,
+            inputKind,
+            isDefaultGenerateNotesAction: isDefaultGenerateNotesAction(action),
+            customDictionary: personal,
+            sharedDictionary: shared,
+            desktopDefaultNotes: usesDesktopDefaultNotes,
+          });
+        const tiers = options.dictionaryTiers ?? [];
+        const placement = { inferenceScope: 'notes' as const, routing: options.routing };
+        // Shared hints must fit alongside the note in the selected local model's context.
+        const dictionary = resolveReasoningPlacement(placement).localRequired
+          ? await fitDictionaryOnDevice(tiers, (candidate) => ({
+              instructions: buildPrompt(candidate),
+              prompt: noteContent,
+            }))
+          : splitLlmDictionary(tiers);
+        if (!isCurrent()) return;
+        const systemPrompt = buildPrompt(dictionary);
         const cfg = useConfigStore.getState().config;
 
         const result = await ReasoningService.processText({
-          inferenceScope: 'notes',
+          ...placement,
           text: noteContent,
           systemPrompt,
           temperature: 0.3,
-          routing: options.routing,
           signal: controller.signal,
         });
 

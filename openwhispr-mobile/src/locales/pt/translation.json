@@ -342,6 +342,7 @@
       "all": "Todas",
       "manual": "Manual",
       "learned": "Aprendido",
+      "hiddenForYou": "Oculto para você",
       "customDictionary": "Dicionário personalizado",
       "dictionaryDescription": "Adicione palavras, nomes ou termos que o modelo de transcrição deve reconhecer.",
       "firstWord": "Adicione sua primeira palavra",

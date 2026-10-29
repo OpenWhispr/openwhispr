@@ -134,6 +134,8 @@ const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
+const { SkillLibrary } = require("./skills/skillLibrary");
+const { registerSkillsIpc } = require("./skills/skillsIpc");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
@@ -724,10 +726,18 @@ class IPCHandlers {
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
+    // The active workspace's applying shared words, as the renderer last sent
+    // them (dictionary-set-shared-hints). Empty until the first send.
+    this._sharedDictionaryHints = { space: [], workspace: [] };
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
+    this.skillLibrary = new SkillLibrary({
+      userDataDir: app.getPath("userData"),
+      database: this.databaseManager,
+      recommendedDir: path.join(__dirname, "skills", "recommended"),
+    });
     this.localModelDownloadStatus = new LocalModelDownloadStatus();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
@@ -1304,12 +1314,20 @@ class IPCHandlers {
     return folder?.name || "Personal";
   }
 
+  // Every word that already reaches the transcription prompt: personal plus the
+  // active workspace's shared words that fit beside them. The renderer sends
+  // only those (sharedWordsReachingPrompt in settingsStore), so a team word cut
+  // from the prompt, or a hidden, paused or other workspace's word, can still
+  // be learned into Personal.
   _getDictionarySafe() {
+    let personal;
     try {
-      return this.databaseManager.getDictionary();
+      personal = this.databaseManager.getDictionary();
     } catch {
-      return [];
+      personal = [];
     }
+    const { space, workspace } = this._sharedDictionaryHints;
+    return [...personal, ...space, ...workspace];
   }
 
   _cleanupTextEditMonitor() {
@@ -2227,14 +2245,24 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-mark-dictionary-synced",
-      async (_event, id, cloudId, serverUpdatedAt, expectedWord, expectedSource, serverSource) => {
+      async (
+        _event,
+        id,
+        cloudId,
+        serverUpdatedAt,
+        expectedWord,
+        expectedSource,
+        serverSource,
+        pushed
+      ) => {
         return this.databaseManager.markDictionaryEntrySynced(
           id,
           cloudId,
           serverUpdatedAt,
           expectedWord,
           expectedSource,
-          serverSource
+          serverSource,
+          pushed
         );
       }
     );
@@ -2245,6 +2273,100 @@ class IPCHandlers {
 
     ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id) => {
       return this.databaseManager.clearDictionaryCloudId(id);
+    });
+
+    ipcMain.handle("db-get-dictionary-entries-by-words", async (_event, words) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.getDictionaryEntriesByWords(words);
+    });
+
+    ipcMain.handle("db-mark-dictionary-words-shared", async (_event, words, sharedAt, options) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      const pendingWords = options?.pendingWords ?? [];
+      if (!Array.isArray(pendingWords)) throw new Error("pendingWords must be an array");
+      return this.databaseManager.markDictionaryWordsShared(words, sharedAt, { pendingWords });
+    });
+
+    ipcMain.handle("db-retire-moved-dictionary-words", async (_event, words, options) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.retireMovedDictionaryWords(words, {
+        includeSynced: options?.includeSynced !== false,
+      });
+    });
+
+    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words) => {
+      if (!Array.isArray(words)) throw new Error("words must be an array");
+      return this.databaseManager.reviveRetiredDictionaryWords(words);
+    });
+
+    ipcMain.handle("db-get-moved-dictionary-words", async () => {
+      return this.databaseManager.getMovedDictionaryWords();
+    });
+
+    const requireWorkspaceId = (workspaceId) => {
+      if (typeof workspaceId !== "string" || !workspaceId) {
+        throw new Error("workspaceId must be a non-empty string");
+      }
+    };
+
+    ipcMain.handle("db-shared-dictionary-get", async (_event, workspaceId) => {
+      requireWorkspaceId(workspaceId);
+      return this.databaseManager.getSharedDictionary(workspaceId);
+    });
+
+    ipcMain.handle("db-shared-dictionary-apply-pull", async (_event, workspaceId, change) => {
+      requireWorkspaceId(workspaceId);
+      const { upserts = [], deletedIds = [], meta } = change ?? {};
+      if (!Array.isArray(upserts) || !Array.isArray(deletedIds)) {
+        throw new Error("upserts and deletedIds must be arrays");
+      }
+      return this.databaseManager.applySharedDictionaryPull(workspaceId, {
+        upserts,
+        deletedIds,
+        meta,
+      });
+    });
+
+    ipcMain.handle("db-shared-dictionary-replace", async (_event, workspaceId, full) => {
+      requireWorkspaceId(workspaceId);
+      if (!Array.isArray(full?.entries)) throw new Error("entries must be an array");
+      return this.databaseManager.replaceSharedDictionary(workspaceId, {
+        entries: full.entries,
+        meta: full.meta,
+      });
+    });
+
+    ipcMain.handle("db-shared-dictionary-apply-hides", async (_event, workspaceId, change) => {
+      requireWorkspaceId(workspaceId);
+      const { hidden = [], unhidden = [] } = change ?? {};
+      if (!Array.isArray(hidden) || !Array.isArray(unhidden)) {
+        throw new Error("hidden and unhidden must be arrays");
+      }
+      return this.databaseManager.applySharedDictionaryHides(workspaceId, { hidden, unhidden });
+    });
+
+    ipcMain.handle("db-shared-dictionary-replace-hides", async (_event, workspaceId, hidden) => {
+      requireWorkspaceId(workspaceId);
+      if (!Array.isArray(hidden)) throw new Error("hidden must be an array");
+      return this.databaseManager.replaceSharedDictionaryHides(workspaceId, hidden);
+    });
+
+    ipcMain.handle("db-shared-dictionary-clear", async (_event, workspaceId) => {
+      if (workspaceId != null) requireWorkspaceId(workspaceId);
+      return this.databaseManager.clearSharedDictionary(workspaceId);
+    });
+
+    ipcMain.handle("db-shared-dictionary-prune", async (_event, keepWorkspaceIds) => {
+      if (!Array.isArray(keepWorkspaceIds)) throw new Error("keepWorkspaceIds must be an array");
+      keepWorkspaceIds.forEach(requireWorkspaceId);
+      return this.databaseManager.pruneSharedDictionary(keepWorkspaceIds);
+    });
+
+    ipcMain.handle("dictionary-set-shared-hints", async (_event, hints) => {
+      const isWordList = (value) =>
+        Array.isArray(value) && value.every((word) => typeof word === "string");
+      if (!isWordList(hints?.space) || !isWordList(hints?.workspace)) return;
+      this._sharedDictionaryHints = { space: [...hints.space], workspace: [...hints.workspace] };
     });
 
     ipcMain.handle("db-broadcast-dictionary-updated", async () => {
@@ -2370,8 +2492,8 @@ class IPCHandlers {
       return this.databaseManager.getNote(id);
     });
 
-    ipcMain.handle("db-get-notes", async (event, noteType, limit, folderId, spaceId) => {
-      return this.databaseManager.getNotes(noteType, limit, folderId, spaceId);
+    ipcMain.handle("db-get-notes", async (event, noteType, limit, folderId, spaceId, spaceIds) => {
+      return this.databaseManager.getNotes(noteType, limit, folderId, spaceId, spaceIds);
     });
 
     ipcMain.handle("db-get-space-notes", async (event, spaceId, limit) => {
@@ -2413,8 +2535,8 @@ class IPCHandlers {
       return this.deleteNoteInternal(id);
     });
 
-    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId) => {
-      return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
+    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId, spaceIds) => {
+      return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
     });
 
     ipcMain.handle(
@@ -3409,14 +3531,29 @@ class IPCHandlers {
         return { success: true, pasted: false };
       }
 
+      // A raw paste (a command from a code block) lands exactly as given: no smart
+      // space, and no AutoLearn watching the user edit it. One for the assistant panel goes
+      // only to the app its voice command was spoken over, never to wherever the last
+      // dictation went or to OpenWhispr itself (assistantPasteTarget.js).
+      const { raw, assistantTarget: toAssistantTarget, ...pasteOptions } = options ?? {};
+      const assistantPasteTarget = this.windowManager?.assistantPasteTarget;
+      const assistantTarget =
+        toAssistantTarget === true ? ((await assistantPasteTarget?.current()) ?? null) : undefined;
+      const noTarget = { success: false, pasted: false, reason: "no-target" };
+      if (assistantTarget === null) return noTarget;
+
       const mainWindow = this.windowManager?.mainWindow;
-      const targetPid = this.textEditMonitor?.lastTargetPid || null;
+      const targetPid = assistantTarget?.pid ?? (this.textEditMonitor?.lastTargetPid || null);
 
       // Activating the target by PID is more reliable than hide()'s implicit
       // focus hand-off for Chromium apps like Claude desktop and Brave (#668).
       let activated = false;
       if (process.platform === "darwin" && this.textEditMonitor) {
-        activated = await this.textEditMonitor.activateTargetPid();
+        activated = assistantTarget
+          ? await this.textEditMonitor.activatePid(assistantTarget.pid)
+          : await this.textEditMonitor.activateTargetPid();
+        // The command's app couldn't be brought forward; whatever is in front isn't it.
+        if (assistantTarget && !activated) return noTarget;
       }
 
       if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
@@ -3433,11 +3570,20 @@ class IPCHandlers {
         }
       }
 
+      // macOS confirmed the app came forward above; elsewhere what's in front gets the paste.
+      if (
+        process.platform !== "darwin" &&
+        assistantTarget &&
+        !(await assistantPasteTarget.isInFront(assistantTarget))
+      ) {
+        return noTarget;
+      }
+
       // Smart spacing (#856): append a trailing space so the next paste's leading
       // space self-corrects the gap. Reading the char before the cursor to space
       // the front instead would take a macOS Accessibility read costing hundreds
       // of ms — too slow for the paste hot path.
-      const textToPaste = applySmartSpacing(text);
+      const textToPaste = raw === true ? text : applySmartSpacing(text);
 
       // Windows: restore the foreground window captured at record start so the
       // paste lands in the field the user was dictating into, not wherever focus
@@ -3445,7 +3591,7 @@ class IPCHandlers {
       // activateTargetPid above; Linux re-detects the target inside pasteLinux.
       const winTarget =
         process.platform === "win32"
-          ? ((await this.selectionManager?.getWinTarget?.()) ?? null)
+          ? (assistantTarget?.window ?? (await this.selectionManager?.getWinTarget?.()) ?? null)
           : null;
       const targetWindow =
         winTarget &&
@@ -3462,7 +3608,7 @@ class IPCHandlers {
       let pasteResult;
       try {
         pasteResult = await this.clipboardManager.pasteText(textToPaste, {
-          ...options,
+          ...pasteOptions,
           webContents: event.sender,
           targetWindow,
           silentAccessibilityCheck: true,
@@ -3485,7 +3631,7 @@ class IPCHandlers {
         targetPid,
         pasted,
       });
-      if (pasted && this.textEditMonitor && this._autoLearnEnabled) {
+      if (raw !== true && pasted && this.textEditMonitor && this._autoLearnEnabled) {
         setTimeout(() => {
           try {
             debugLogger.debug("[AutoLearn] Starting monitoring", {
@@ -4547,8 +4693,9 @@ class IPCHandlers {
         errors.push(`Enterprise audio credentials: ${error.message}`);
       }
       // "connectors" holds encrypted connector logins (Slack, Gmail), all
-      // revoked above.
-      for (const directoryName of ["bin", "llama-cpp", "connectors"]) {
+      // revoked above. "skills" holds the user's assistant skills, and
+      // "skill-versions" the copies Undo restores.
+      for (const directoryName of ["bin", "llama-cpp", "connectors", "skills", "skill-versions"]) {
         try {
           fs.rmSync(path.join(app.getPath("userData"), directoryName), {
             recursive: true,
@@ -6278,6 +6425,17 @@ class IPCHandlers {
       return { success: true };
     });
 
+    // The panel takes the app its voice command was spoken over as Paste into app's target
+    // ("adopt"), or drops any target when it opens without one ("forget"). True when there is
+    // a target that isn't OpenWhispr.
+    ipcMain.handle("assistant-paste-target", async (event, action) => {
+      const target = this.windowManager?.assistantPasteTarget;
+      if (!target || event.sender !== this.windowManager?.mainWindow?.webContents) return false;
+      if (action === "adopt") return target.adopt();
+      target.clear();
+      return false;
+    });
+
     // Busy state is enforced in the main process so a hotkey cannot trigger
     // native capture side effects before the renderer has a chance to reject it.
     ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
@@ -6809,6 +6967,12 @@ class IPCHandlers {
         }),
       });
     }
+    registerSkillsIpc({
+      ipcMain,
+      library: this.skillLibrary,
+      shell,
+      broadcast: broadcastToWindows,
+    });
     const { createEnterpriseAudioCredentials } = require("./enterpriseAudioCredentials");
     const {
       createEnterpriseAudioTransport,
@@ -10805,6 +10969,8 @@ class IPCHandlers {
             model: opts.model,
             agentName: opts.agentName,
             customDictionary: opts.customDictionary,
+            // Teammates' words, which the API quotes as data; absent when none.
+            sharedDictionary: opts.sharedDictionary,
             customPrompt: opts.customPrompt,
             systemPrompt: opts.systemPrompt,
             requestPurpose: opts.requestPurpose,

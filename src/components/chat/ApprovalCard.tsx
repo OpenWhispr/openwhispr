@@ -29,6 +29,9 @@ import {
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
 
+export const APPROVAL_CARD_CLASS =
+  "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
 // The draft lives in the store, so edit mode only changes how it is shown:
 // Send always commits exactly what the card displays.
 export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement {
@@ -130,7 +133,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       data-approval-card={entry.key}
       data-state={entry.state}
       onKeyDown={showEditor ? onEditorKeyDown : undefined}
-      className="my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className={APPROVAL_CARD_CLASS}
     >
       <p className="font-medium text-foreground">
         {t(`connectors.approval.headers.${preview.verbKey}`, {

@@ -447,6 +447,13 @@ export function runMigrations(
   addColumnIfMissing(rawDb, 'notes', 'cloud_updated_at', 'TEXT');
   addColumnIfMissing(rawDb, 'notes', 'conflict_server_note', 'TEXT');
   addColumnIfMissing(rawDb, 'notes', 'left_team', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(rawDb, 'dictionary_entries', 'shared_at', 'TEXT');
+  addColumnIfMissing(
+    rawDb,
+    'dictionary_entries',
+    'shared_at_cleared',
+    'INTEGER NOT NULL DEFAULT 0',
+  );
 
   tryAlter(
     rawDb,

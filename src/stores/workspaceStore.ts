@@ -24,7 +24,10 @@ interface WorkspaceState {
 // Shared by every window of this origin; the dictation window mirrors it (lib/accountScopeMirror).
 export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
-function readActiveWorkspaceId(): string | null {
+// The workspace every window uses right now. A window's store follows it
+// through storage events, which arrive a task later; work that must not run for
+// a workspace another window just left reads this instead.
+export function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
 }
@@ -175,6 +178,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
         const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        // Written before the state changes, as setActiveWorkspaceId does: the
+        // subscribers publish for the workspace localStorage names.
+        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
@@ -182,7 +188,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           error: false,
           activeWorkspaceId: resolvedActiveId,
         });
-        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
         writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
@@ -238,3 +243,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+// Another window switched, auto-selected or cleared the workspace: follow it,
+// or this window keeps dictating, syncing and publishing shared words for the
+// old one. Nothing is written back, and the managed enterprise identity is
+// left to the window's own refresh (the dictation window re-resolves it in
+// accountScopeMirror on this same event).
+export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key !== ACTIVE_WORKSPACE_KEY) return;
+  const id = event.newValue;
+  if (id === useWorkspaceStore.getState().activeWorkspaceId) return;
+  // The old workspace's roster must not land under the new one.
+  membersRequestSeq++;
+  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [] });
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("storage", handleActiveWorkspaceStorage);
+}

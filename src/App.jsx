@@ -834,6 +834,9 @@ export default function App() {
             onCommandSettled={assistant.handleCommandSettled}
             initialConversationId={assistant.conversationId}
             onConversationIdChange={assistant.setConversationId}
+            skillChoice={assistant.skillChoice}
+            onSkillChoiceChange={assistant.setSkillChoice}
+            canPasteIntoApp={assistant.canPasteIntoApp}
             voiceState={assistantVoiceState}
             thinking={assistant.thinking && assistant.open}
             open={assistant.open}

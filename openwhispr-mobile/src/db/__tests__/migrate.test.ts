@@ -392,4 +392,27 @@ describe('runMigrations — spaces', () => {
     ).map((column) => column.name);
     expect(conversationColumns).toEqual(['id', 'title', 'created_at', 'updated_at']);
   });
+
+  it('adds shared dictionary columns to each selected account database without changing existing words', () => {
+    const { runMigrations } = loadMigrate();
+    const account = new Database(':memory:');
+    try {
+      account.exec(`CREATE TABLE dictionary_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual', created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      ); INSERT INTO dictionary_entries(word) VALUES ('Amber');`);
+      const db = makeFakeExpoDb(account);
+      runMigrations(db as Parameters<typeof runMigrations>[0], false);
+      runMigrations(db as Parameters<typeof runMigrations>[0], false);
+      expect(
+        account.prepare('SELECT word, shared_at, shared_at_cleared FROM dictionary_entries').all(),
+      ).toEqual([{ word: 'Amber', shared_at: null, shared_at_cleared: 0 }]);
+      expect(
+        raw.prepare("SELECT name FROM sqlite_master WHERE name = 'dictionary_entries'").all(),
+      ).toEqual([]);
+    } finally {
+      account.close();
+    }
+  });
 });

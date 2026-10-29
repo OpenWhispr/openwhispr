@@ -342,6 +342,7 @@
       "all": "Alle",
       "manual": "Manuell",
       "learned": "Gelernt",
+      "hiddenForYou": "Für dich ausgeblendet",
       "customDictionary": "Eigenes Wörterbuch",
       "dictionaryDescription": "Füge Wörter, Namen oder Begriffe hinzu, die das Transkriptionsmodell erkennen soll.",
       "firstWord": "Erstes Wort hinzufügen",

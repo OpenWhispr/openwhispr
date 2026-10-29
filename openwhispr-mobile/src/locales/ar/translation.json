@@ -342,6 +342,7 @@
       "all": "الكل",
       "manual": "يدوي",
       "learned": "متعلَّم",
+      "hiddenForYou": "مخفي عنك",
       "customDictionary": "قاموس مخصص",
       "dictionaryDescription": "أضف كلمات أو أسماء أو مصطلحات ينبغي لنموذج التفريغ الصوتي التعرف عليها.",
       "firstWord": "أضف كلمتك الأولى",

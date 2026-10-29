@@ -20,6 +20,11 @@ export interface AffiliateOffer {
   redemptionUrl: string;
   expiresAt: string;
 }
+const OFFER_PERCENT_OFF = 20;
+// Apple price tiers can't always hit exactly 20% off, so a storefront may use the highest tier
+// below it. Anything deeper than this is a catalog typo (7.1 for 71), not a price tier.
+const TIER_MAX_PERCENT_OFF = 30;
+const MINOR_UNIT_TOLERANCE = 0.000001;
 export function validAffiliateOffer(value: unknown, country: string): value is AffiliateOffer {
   if (!value || typeof value !== 'object') return false;
   const v = value as AffiliateOffer;
@@ -28,6 +33,8 @@ export function validAffiliateOffer(value: unknown, country: string): value is A
     const digits =
       new Intl.NumberFormat('en', { style: 'currency', currency: v.currency }).resolvedOptions()
         .maximumFractionDigits ?? 2;
+    const regularMinor = v.regularPrice * 10 ** digits;
+    const offerMinor = v.offerPrice * 10 ** digits;
     return (
       typeof v.campaign === 'string' &&
       typeof v.productId === 'string' &&
@@ -37,8 +44,9 @@ export function validAffiliateOffer(value: unknown, country: string): value is A
       Number.isFinite(v.regularPrice) &&
       v.regularPrice > 0 &&
       Number.isFinite(v.offerPrice) &&
-      Math.abs(v.offerPrice * 10 ** digits - Math.round(v.regularPrice * 10 ** digits * 0.8)) <
-        0.000001 &&
+      Math.abs(offerMinor - Math.round(offerMinor)) < MINOR_UNIT_TOLERANCE &&
+      offerMinor <= regularMinor * (1 - OFFER_PERCENT_OFF / 100) + MINOR_UNIT_TOLERANCE &&
+      offerMinor >= regularMinor * (1 - TIER_MAX_PERCENT_OFF / 100) - MINOR_UNIT_TOLERANCE &&
       Date.parse(v.expiresAt) > Date.now() &&
       url.protocol === 'https:' &&
       url.hostname === 'apps.apple.com' &&
@@ -95,7 +103,7 @@ export async function loadAffiliateOffer(
     if (!(await permitted())) return null;
     const result = await api.post<{ data: unknown }>(
       '/api/affiliate/apple-offer',
-      { country },
+      { country, priceTiers: true },
       { authenticated: false, headers: { Cookie: sessionCookie }, signal: controller.signal },
     );
     if (!current() || controller.signal.aborted || !validAffiliateOffer(result.data, country))

@@ -16,6 +16,7 @@ import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
+import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
@@ -91,14 +92,17 @@ import BackgroundActionToastListener from "./notes/BackgroundActionToastListener
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
 import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
+import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
+import { useInvitationNotesEntry } from "../hooks/useInvitationNotesEntry";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
+import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 
 const platform = getCachedPlatform();
 
@@ -140,14 +144,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
-  const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
-    workspaceId: string;
-    teamIds: string[];
-    spaceIds: string[];
-  } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [invitationNotesEntry, setInvitationNotesEntry] = useInvitationNotesEntry(
+    activeView === "personal-notes"
+  );
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
@@ -172,6 +174,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     folderId: number | null;
     event: any;
   } | null>(null);
+  // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
+  const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
+  const [openSkillRequest, setOpenSkillRequest] = useState<SkillOpenRequest | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
@@ -248,6 +253,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     await createNote();
     setActiveView("personal-notes");
   }, [createNote]);
+  const showDictionary = useCallback(() => setActiveView("dictionary"), []);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -422,6 +428,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
   const meetingNavigationMounted = useRef(false);
+  const recordingIdentityRef = useRef({ user, t });
+  recordingIdentityRef.current = { user, t };
   useEffect(() => {
     meetingNavigationMounted.current = true;
     const isCurrent = () => meetingNavigationMounted.current;
@@ -439,7 +447,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           isCurrent,
           () => import("./notes/PersonalNotesView"),
           (note) => {
-            void startRecordingForNote(note)
+            const { user: recordingUser, t: translate } = recordingIdentityRef.current;
+            void startRecordingForNote(note, recordingRecorderName(note, recordingUser, translate))
               .then((accepted) => {
                 if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
               })
@@ -544,6 +553,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     () => setMeetingRecordingRequest(null),
     []
   );
+
+  const startSkillChat = useCallback((start: SkillChatStart) => {
+    setSkillChatRequest({ ...start, id: Date.now() });
+    setActiveView("chat");
+  }, []);
+  const handleSkillChatRequestHandled = useCallback(() => setSkillChatRequest(null), []);
+  const openSkill = useCallback((name: string) => {
+    setIntegrationsSection("skills");
+    setOpenSkillRequest({ id: Date.now(), name });
+    setActiveView("integrations");
+  }, []);
+  const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.
@@ -1283,7 +1304,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "chat" && agentAllowedByPolicy && (
                 <Suspense fallback={null}>
-                  <ChatView />
+                  <ChatView
+                    skillRequest={skillChatRequest}
+                    onSkillRequestHandled={handleSkillChatRequestHandled}
+                    onOpenSkill={openSkill}
+                  />
                 </Suspense>
               )}
               {activeView === "personal-notes" && (
@@ -1302,7 +1327,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "dictionary" && (
                 <Suspense fallback={null}>
-                  <DictionaryView />
+                  <DictionaryView
+                    onUpgrade={() => {
+                      setSettingsSection("plansBilling");
+                      setShowSettings(true);
+                    }}
+                  />
                 </Suspense>
               )}
               {activeView === "upload" && policyActionsAllowed && (
@@ -1330,6 +1360,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     }}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
+                    onStartSkillChat={agentAllowedByPolicy ? startSkillChat : undefined}
+                    openSkillRequest={openSkillRequest}
+                    onOpenSkillRequestHandled={handleOpenSkillRequestHandled}
                   />
                 </Suspense>
               )}
@@ -1340,6 +1373,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       <BackgroundActionToastListener />
       <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
+      <SharedDictionaryArrivalToastListener onViewWords={showDictionary} />
     </div>
   );
 }

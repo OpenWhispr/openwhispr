@@ -35,6 +35,14 @@ import {
   collectKnownPeople,
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
+import {
+  isNoteRecorder,
+  noteRecorderUserId,
+  recorderLlmLabel,
+  resolveNoteRecorder,
+  recordingRecorderName,
+} from "../../utils/noteRecorder";
+import { fetchSpaceRoster } from "../../hooks/useSpaceRoster";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
 import type { CalendarAttendee, CalendarEvent } from "../../types/calendar";
 import {
@@ -76,6 +84,7 @@ import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import type { InvitationNotesEntry } from "../../hooks/useInvitationNotesEntry";
 import {
   applyNoteDraftMutation,
   collectPendingNoteWrites,
@@ -130,7 +139,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
+  invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
 }
 
@@ -332,9 +341,15 @@ export default function PersonalNotesView({
 
   // Arriving via an accepted invitation reopens the structure intro even when
   // this device has already seen it, and even before notes onboarding is done
-  // (the dialog also renders in the onboarding branch below).
+  // (the dialog also renders in the onboarding branch below). Once per
+  // invitation: the entry outlives the dialog while its space syncs, and a
+  // layout change in that time must not bring the dialog back.
+  const structureIntroShownForRef = useRef<InvitationNotesEntry | null>(null);
   useEffect(() => {
-    if (invitationEntry && !isSidePanelLayout) setShowStructureIntro(true);
+    if (!invitationEntry || isSidePanelLayout) return;
+    if (structureIntroShownForRef.current === invitationEntry) return;
+    structureIntroShownForRef.current = invitationEntry;
+    setShowStructureIntro(true);
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
@@ -416,7 +431,11 @@ export default function PersonalNotesView({
       : undefined;
   const calendarEventName = linkedEvent?.summary ?? null;
 
-  const startRecording = useCallback(() => startRecordingForNote(activeNote ?? null), [activeNote]);
+  const startRecording = useCallback(
+    () =>
+      startRecordingForNote(activeNote ?? null, recordingRecorderName(activeNote ?? null, user, t)),
+    [activeNote, user, t]
+  );
 
   const stopRecording = useCallback(async () => {
     await storeStopRecording();
@@ -716,6 +735,7 @@ export default function PersonalNotesView({
         noteTitle: note?.title ?? null,
         folderId: note ? note.folder_id : (meetingRecordingRequest.folderId ?? null),
         seedSegments,
+        recorderName: recordingRecorderName(note, user, t),
         diarizationEnabled:
           note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
         expectedCount: resolveExpectedSpeakerCount(note),
@@ -736,7 +756,14 @@ export default function PersonalNotesView({
         "meeting"
       );
     });
-  }, [meetingRecordingRequest, activeNoteId, activeNote, onMeetingRecordingRequestHandled]);
+  }, [
+    meetingRecordingRequest,
+    activeNoteId,
+    activeNote,
+    onMeetingRecordingRequestHandled,
+    user,
+    t,
+  ]);
 
   // Final and periodic transcript persistence live in MeetingRecordingMount /
   // the store — this view can be unmounted when an auto-end stop fires.
@@ -770,11 +797,21 @@ export default function PersonalNotesView({
     let hasPlainTranscript = false;
     let knownPeople: MentionPerson[] = [];
     if (transcriptText) {
-      const identity: MeetingIdentity = {
-        selfName: user?.name?.trim() || null,
-        selfEmail: user?.email?.trim() || null,
+      const recordedByUser = isNoteRecorder(editorNote, user?.id);
+      const noteSpace = spaces.find((s) => s.id === editorNote.space_id);
+      const recorderId = noteRecorderUserId(editorNote);
+      const recorder =
+        !recordedByUser && recorderId && noteSpace?.kind === "team" && noteSpace.cloud_space_id
+          ? ((await fetchSpaceRoster(noteSpace.cloud_space_id).catch(() => [])).find(
+              (member) => member.user_id === recorderId
+            ) ?? null)
+          : null;
+      const identity: MeetingIdentity = resolveNoteRecorder({
+        recordedByUser,
+        user,
+        recorder,
         participants: parseNoteParticipants(editorNote.participants),
-      };
+      });
       if (segments.length > 0 && speakerlessText === null) {
         isMeetingNote = true;
         const mappingRows =
@@ -782,9 +819,16 @@ export default function PersonalNotesView({
         const speakerMappings: Record<string, string> = {};
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
-        const selfLabel = identity.selfName || t("notes.speaker.you");
+        const selfLabel = recorderLlmLabel(identity, recordedByUser, t);
+        const viewerLabel = user?.name?.trim() || user?.email?.trim() || t("notes.speaker.you");
         meetingContext = buildMeetingContext(identity, selfLabel);
-        formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
+        formattedTranscript = buildLlmTranscript(
+          segments,
+          speakerMappings,
+          selfLabel,
+          t,
+          viewerLabel
+        );
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);
       } else {
         // Plain text shows no speakers, so the run gets no Meeting Context: the model

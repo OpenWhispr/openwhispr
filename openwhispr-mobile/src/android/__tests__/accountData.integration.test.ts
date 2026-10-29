@@ -647,3 +647,54 @@ it('retains the legacy collection for its recorded account when upgrading while 
     { trigger: 'retained fixture', replacement: 'Keep this legacy snippet.' },
   ]);
 });
+
+it('clears shared words and invalidates pending loads across A → Local → B → A', async () => {
+  require('@/db/migrate').runMigrations();
+  const { prepareAccountData } = require('../accountData');
+  const { notesRepository } = require('@/data');
+  const {
+    useSharedDictionaryStore,
+    loadSharedDictionaryIfOwnedBy,
+  } = require('@/store/useSharedDictionaryStore');
+  const { saveSharedDictionaryState } = require('@/sync/sharedDictionaryState');
+  prepareAccountData({ id: 'account-a' });
+  notesRepository.setSyncState('sync.user_id', 'account-a');
+  await saveSharedDictionaryState({
+    workspaceId: 'workspace-a',
+    workspaceName: 'Account A team',
+    entries: { 'word-a': { spaceId: null, word: 'Amber' } },
+    hiddenIds: [],
+    scopes: [{ space_id: null }],
+    paused: false,
+  });
+  await loadSharedDictionaryIfOwnedBy('account-a');
+  expect(useSharedDictionaryStore.getState().hints.workspace).toEqual(['Amber']);
+  const pendingA = useSharedDictionaryStore.getState().load();
+  prepareAccountData(null);
+  await pendingA;
+  expect(useSharedDictionaryStore.getState().hints).toEqual({ space: [], workspace: [] });
+  expect(notesRepository.getSyncState('shared_dictionary.state')).toBeNull();
+  prepareAccountData({ id: 'account-b' });
+  notesRepository.setSyncState('sync.user_id', 'account-b');
+  await loadSharedDictionaryIfOwnedBy('account-b');
+  expect(useSharedDictionaryStore.getState().summary).toBeNull();
+  prepareAccountData({ id: 'account-a' });
+  await loadSharedDictionaryIfOwnedBy('account-a');
+  expect(useSharedDictionaryStore.getState().hints.workspace).toEqual(['Amber']);
+});
+
+it('clears shared hints even when switching the account database fails', async () => {
+  require('@/db/migrate').runMigrations();
+  const { prepareAccountData, useAccountData } = require('../accountData');
+  const { useSharedDictionaryStore } = require('@/store/useSharedDictionaryStore');
+  prepareAccountData({ id: 'account-a' });
+  useSharedDictionaryStore.setState({
+    hints: { space: [], workspace: ['Amber'] },
+    summary: { count: 1, workspaceName: 'Account A team' },
+  });
+  localStorage.setItem('android.local-accounts.v1', 'invalid-json');
+  expect(() => prepareAccountData({ id: 'account-b' })).toThrow();
+  expect(useAccountData.getState().blocked).toBe(true);
+  expect(useSharedDictionaryStore.getState().hints).toEqual({ space: [], workspace: [] });
+  expect(useSharedDictionaryStore.getState().summary).toBeNull();
+});

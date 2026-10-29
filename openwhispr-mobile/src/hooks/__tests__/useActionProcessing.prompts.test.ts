@@ -35,6 +35,7 @@ const desktopAction = desktop.action;
 const desktopPrompt = desktop.systemPrompt;
 
 jest.mock('@/services/reasoning/ReasoningService', () => ({
+  resolveReasoningPlacement: () => ({ localRequired: false }),
   ReasoningService: { processText: jest.fn() },
 }));
 const mockConfig = { autoGenerateNoteTitle: false };
@@ -87,7 +88,7 @@ it('retains normalized dictionary spellings with the desktop prompt', async () =
   );
   await act(() =>
     result.current.runAction(action, 'a note', {
-      customDictionary: [' OpenWhispr ', 'OpenWhispr'],
+      dictionaryTiers: [[' OpenWhispr ', 'OpenWhispr'], [], []],
     }),
   );
   expect(ReasoningService.processText).toHaveBeenCalledWith(

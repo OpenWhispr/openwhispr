@@ -1,3 +1,4 @@
+import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { Action } from '@/data';
 import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from './desktopDefaultNotesPrompt';
 
@@ -10,6 +11,8 @@ export interface BuildActionSystemPromptInput {
   customDictionary?: string[];
   outputFormat?: 'markdown' | 'json';
   desktopDefaultNotes?: boolean;
+  // Teammates' words, quoted as data after the personal list.
+  sharedDictionary?: string[];
 }
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes - possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
@@ -76,13 +79,10 @@ const appendCustomDictionarySuffix = (prompt: string, words: string[] | undefine
 };
 
 export const buildActionSystemPrompt = (input: BuildActionSystemPromptInput): string => {
-  if (
+  const usesDesktopDefaultNotes =
     input.desktopDefaultNotes &&
     input.inputKind === 'plain-note' &&
-    input.isDefaultGenerateNotesAction
-  ) {
-    return appendCustomDictionarySuffix(DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT, input.customDictionary);
-  }
+    input.isDefaultGenerateNotesAction;
   const basePrompt =
     input.inputKind === 'meeting-transcript' && input.isDefaultGenerateNotesAction
       ? input.outputFormat === 'json'
@@ -90,5 +90,12 @@ export const buildActionSystemPrompt = (input: BuildActionSystemPromptInput): st
         : MEETING_SYSTEM_PROMPT
       : BASE_SYSTEM_PROMPT;
 
-  return appendCustomDictionarySuffix(`${basePrompt}${input.actionPrompt}`, input.customDictionary);
+  const prompt = appendCustomDictionarySuffix(
+    usesDesktopDefaultNotes
+      ? DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT
+      : `${basePrompt}${input.actionPrompt}`,
+    input.customDictionary,
+  );
+  const shared = normalizedDictionaryWords(input.sharedDictionary);
+  return shared.length > 0 ? `${prompt}\n\n${sharedDictionaryHint(shared)}` : prompt;
 };

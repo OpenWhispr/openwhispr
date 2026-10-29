@@ -56,7 +56,7 @@ import {
   resolveNotePermission,
   sharedNoteBlocksDelete,
 } from "../../lib/notePermissions";
-import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
+import { spacesInWorkspaceScope } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -1119,7 +1119,7 @@ export default function SpacesTree({
   const { toast, dismiss } = useToast();
   const fileManagerName = getFileManagerName();
 
-  const spaces = useSpaces();
+  const allSpaces = useSpaces();
   const folders = useFolders();
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
@@ -1134,7 +1134,12 @@ export default function SpacesTree({
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const { workspaces, loaded: workspacesLoaded } = useWorkspace();
+  const { workspaces, active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
+  // Other workspaces' teamspaces stay out of the tree until the user switches.
+  const spaces = useMemo(
+    () => spacesInWorkspaceScope(allSpaces, activeWorkspace?.id ?? null, workspaces),
+    [allSpaces, activeWorkspace?.id, workspaces]
+  );
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
 
@@ -1160,13 +1165,6 @@ export default function SpacesTree({
     ? expanded.has(spaceContainerKey(privateSpace.id))
     : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
-  const showWorkspaceGroups = workspaces.length > 1;
-  const {
-    groups: teamSpaceGroups,
-    ungrouped: ungroupedTeamSpaces,
-    ordered: groupedTeamSpaces,
-  } = useMemo(() => groupTeamSpacesByWorkspace(workspaces, teamSpaces), [teamSpaces, workspaces]);
-  const orderedTeamSpaces = showWorkspaceGroups ? groupedTeamSpaces : teamSpaces;
   const visibleSpaces = teamCapability ? spaces : privateSpaces;
   const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
   // Valid move destinations per source space (the source itself stays listed —
@@ -1537,11 +1535,11 @@ export default function SpacesTree({
       });
     };
     privateSpaces.forEach(pushPrivateSpace);
-    if (teamCapability) orderedTeamSpaces.forEach(pushSpace);
+    if (teamCapability) teamSpaces.forEach(pushSpace);
     return rows;
   }, [
     privateSpaces,
-    orderedTeamSpaces,
+    teamSpaces,
     folders,
     notesByContainer,
     expanded,
@@ -2055,11 +2053,7 @@ export default function SpacesTree({
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
-              label={
-                showWorkspaceGroups
-                  ? t("workspaces.switcher.workspaces")
-                  : t("notes.spaces.teamSpaces")
-              }
+              label={t("notes.spaces.teamSpaces")}
               className="mt-4"
               action={
                 <div className="flex items-center gap-px">
@@ -2074,14 +2068,12 @@ export default function SpacesTree({
                       <Info size={11} />
                     </Button>
                   )}
-                  {/* With one workspace the header + is unambiguous; with several,
-                      each workspace row carries its own + instead. */}
-                  {canCreateTeamSpace && !showWorkspaceGroups && (
+                  {canCreateTeamSpace && (
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label={t("notes.spaces.newSpace")}
-                      onClick={() => openCreateSpace()}
+                      onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
                       className={cn(HOVER_REVEAL_BUTTON_CLASS, "group-hover/section:opacity-100")}
                     >
                       <Plus size={12} />
@@ -2094,47 +2086,7 @@ export default function SpacesTree({
               <SkeletonRows />
             ) : (
               <>
-                {showWorkspaceGroups
-                  ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
-                      <div
-                        key={workspace.id}
-                        role="group"
-                        aria-label={workspace.name}
-                        className="mt-1 group/workspace"
-                      >
-                        <div
-                          role="none"
-                          className="flex items-center justify-between h-5 ps-4 pe-2"
-                        >
-                          <span
-                            dir="auto"
-                            title={workspace.name}
-                            className="min-w-0 text-[10px] font-medium text-foreground/60 truncate"
-                          >
-                            {workspace.name}
-                          </span>
-                          {workspaceCan(workspace, "create_spaces") && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t("notes.spaces.newSpaceInWorkspace", {
-                                workspace: workspace.name,
-                              })}
-                              onClick={() => openCreateSpace(workspace.id)}
-                              className={cn(
-                                HOVER_REVEAL_BUTTON_CLASS,
-                                "group-hover/workspace:opacity-100"
-                              )}
-                            >
-                              <Plus size={12} />
-                            </Button>
-                          )}
-                        </div>
-                        {workspaceSpaces.map(renderSpace)}
-                      </div>
-                    ))
-                  : teamSpaces.map(renderSpace)}
-                {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
+                {teamSpaces.map(renderSpace)}
                 {teamSpaces.length === 0 && (
                   <div role="none" className="flex flex-col items-center px-3 py-6 text-center">
                     <ThemedEmptyIllustration
@@ -2149,11 +2101,11 @@ export default function SpacesTree({
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
-                    {canCreateTeamSpace && !showWorkspaceGroups && (
+                    {canCreateTeamSpace && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => openCreateSpace()}
+                        onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
                         className="mt-3 h-7 gap-1 text-xs text-primary"
                       >
                         <Plus size={11} />

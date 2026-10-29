@@ -342,6 +342,7 @@
       "all": "All",
       "manual": "Manual",
       "learned": "Learned",
+      "hiddenForYou": "Hidden for you",
       "customDictionary": "Custom Dictionary",
       "dictionaryDescription": "Add words, names, or terms the transcription model should recognize.",
       "firstWord": "Add your first word",

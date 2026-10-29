@@ -29,6 +29,7 @@ test("team space creation is offered to workspace managers and to users with non
       "/useWorkspace": `
         export const useWorkspace = () => ({
           workspaces: globalThis.__state.workspaces,
+          active: globalThis.__state.active ?? null,
           loaded: globalThis.__state.loaded,
         });
       `,
@@ -84,4 +85,9 @@ test("team space creation is offered to workspace managers and to users with non
     }),
     true
   );
+  // The tree shows only the active workspace: managing another one doesn't count.
+  const member = { id: "w1", role: "member" };
+  const owner = { id: "w2", role: "owner" };
+  assert.equal(await canCreate({ workspaces: [member, owner], active: member }), false);
+  assert.equal(await canCreate({ workspaces: [member, owner], active: owner }), true);
 });

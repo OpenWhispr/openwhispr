@@ -246,6 +246,10 @@ export function prepareAccountData(user: User): void {
     const { useChatStore } =
       require('@/store/useChatStore') as typeof import('@/store/useChatStore');
     useChatStore.getState().reset();
+    const { useSharedDictionaryStore } =
+      require('@/store/useSharedDictionaryStore') as typeof import('@/store/useSharedDictionaryStore');
+    // Invalidate pending loads before changing databases, including failed switches.
+    useSharedDictionaryStore.getState().reset();
     selectAccountData(user);
     const { useNotesStore } =
       require('@/store/useNotesStore') as typeof import('@/store/useNotesStore');

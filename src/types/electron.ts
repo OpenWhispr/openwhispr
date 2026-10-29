@@ -37,6 +37,31 @@ import type {
   NoteAttendee,
   NoteAttendeesRequest,
 } from "./connectors";
+import type {
+  SkillCommitResult,
+  SkillCreateInput,
+  SkillDetail,
+  SkillForModel,
+  SkillInvalidRequest,
+  SkillProposal,
+  SkillProposalCheck,
+  SkillRef,
+  SkillSaveResult,
+  SkillSummary,
+  SkillUpdate,
+  SkillUploadItem,
+  SkillUploadPreview,
+  SkillWriteError,
+} from "./skills";
+import type {
+  CloudSharedEntry,
+  SharedDictionaryHideRecord,
+  SharedDictionaryMeta,
+  SharedDictionarySnapshot,
+} from "./sharedDictionary";
+import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+
+export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
@@ -106,6 +131,7 @@ export interface DictationRealtimeSessionOptions {
   pipelineOptions?: {
     agentName?: string;
     customDictionary?: string[];
+    sharedDictionary?: string[];
     customPrompt?: string;
     tone?: DictationTone;
     appCategory?: ToneAppCategory;
@@ -707,6 +733,12 @@ export interface DictionaryEntryItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // Set once the word was shared into a team list; the row stays live.
+  shared_at: string | null;
+  // 1 while a local set or clear of shared_at awaits its push.
+  shared_at_dirty?: number;
+  // 1 on a local tombstone of a moved word whose shared copy went.
+  fallback_retired?: number;
 }
 
 export interface SnippetEntryItem {
@@ -1418,6 +1450,10 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          /** Paste exactly this text: no smart spacing, no AutoLearn. */
+          raw?: boolean;
+          /** Paste only into the app the assistant panel's voice command was spoken over. */
+          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -1431,6 +1467,8 @@ declare global {
             code: "ACCESSIBILITY_PERMISSION_REQUIRED";
             clipboardCopied: true;
           }
+        /** assistantTarget: no app to paste into, so nothing was pasted or copied. */
+        | { success: false; pasted: false; reason: "no-target" }
       >;
       captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
@@ -1731,6 +1769,49 @@ declare global {
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
       ) => () => void;
+      skillsList?: () => Promise<{ skills: SkillSummary[] }>;
+      skillsGet?: (name: string) => Promise<SkillDetail | null>;
+      /** A text file inside the skill, or null for anything else. */
+      skillsReadFile?: (name: string, path: string) => Promise<{ text: string } | null>;
+      skillsSetEnabled?: (
+        name: string,
+        enabled: boolean
+      ) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsUninstall?: (
+        name: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      skillsReveal?: (name: string) => Promise<{ ok: boolean }>;
+      skillsPreviewUpload?: (
+        items: SkillUploadItem[]
+      ) => Promise<{ items: SkillUploadPreview[] } | SkillInvalidRequest>;
+      skillsCommitUpload?: (request: {
+        tokens: string[];
+        replace: string[];
+      }) => Promise<SkillCommitResult | SkillInvalidRequest>;
+      /** Frees previewed uploads that will not be installed. */
+      skillsDiscardUploads?: (tokens: string[]) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsCreate?: (input: SkillCreateInput) => Promise<SkillSaveResult>;
+      skillsAddRecommended?: (
+        id: string,
+        copy: { title: string; description: string }
+      ) => Promise<SkillSaveResult>;
+      /** The built-in creator, or a skill that is on and valid; null for anything else. */
+      skillsReadForModel?: (
+        ref: SkillRef & { file?: string; withFiles?: boolean }
+      ) => Promise<SkillForModel | null>;
+      skillsCheckProposal?: (
+        request:
+          { kind: "create"; proposal: SkillProposal } | { kind: "update"; update: SkillUpdate }
+      ) => Promise<SkillProposalCheck | SkillInvalidRequest>;
+      skillsSaveProposal?: (proposal: SkillProposal) => Promise<SkillSaveResult>;
+      skillsApplyUpdate?: (update: SkillUpdate) => Promise<SkillSaveResult>;
+      skillsMarkUsed?: (name: string) => Promise<void>;
+      /** Puts back the copy a save or update kept, then forgets it. */
+      skillsUndo?: (
+        name: string,
+        versionId: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      onSkillsChanged?: (callback: () => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -1751,7 +1832,8 @@ declare global {
         noteType?: string | null,
         limit?: number,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       getSpaceNotes: (spaceId: number, limit?: number) => Promise<NoteItem[]>;
       updateNote: (
@@ -1800,7 +1882,8 @@ declare global {
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       semanticSearchNotes: (
         query: string,
@@ -2332,6 +2415,8 @@ declare global {
         surfaceHeight: number
       ) => Promise<{ success: boolean; bounds?: Electron.Rectangle; message?: string }>;
       setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+      /** Adopt the app the panel's voice command was spoken over, or forget it; true if usable. */
+      assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
       setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
       // App management
@@ -2759,6 +2844,7 @@ declare global {
           model?: string;
           agentName?: string;
           customDictionary?: string[];
+          sharedDictionary?: string[];
           customPrompt?: string;
           systemPrompt?: string;
           requestPurpose?: "agent";
@@ -3843,17 +3929,67 @@ declare global {
       upsertDictionaryFromCloud?: (
         cloudEntry: Record<string, unknown>
       ) => Promise<DictionaryEntryItem | null>;
+      /** `pushed` (the row as pushed) keeps a row edited since then pending. */
       markDictionarySynced?: (
         id: number,
         cloudId: string,
         serverUpdatedAt?: string,
         expectedWord?: string,
         expectedSource?: DictionaryEntryItem["source"],
-        serverSource?: DictionaryEntryItem["source"]
+        serverSource?: DictionaryEntryItem["source"],
+        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">
       ) => Promise<{ success: boolean; changes: number }>;
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
+      /** Live personal words matching `words` case-insensitively, in their stored spelling. */
+      getDictionaryEntriesByWords?: (
+        words: string[]
+      ) => Promise<Array<{ word: string; cloudId: string | null }>>;
+      /**
+       * Records a share the server accepted; sync state is left unchanged, except
+       * for `pendingWords`, which went as plain words and still need shared_at pushed.
+       */
+      markDictionaryWordsShared?: (
+        words: string[],
+        sharedAt: string,
+        options?: { pendingWords?: string[] }
+      ) => Promise<{ marked: string[] }>;
+      /** Live personal words that were shared into a team list. */
+      getMovedDictionaryWords?: () => Promise<string[]>;
+      /** Removes moved personal words whose shared copy is gone for the sharer. */
+      /** `includeSynced: false` leaves rows the cloud has to the personal pull. */
+      retireMovedDictionaryWords?: (
+        words: string[],
+        options?: { includeSynced?: boolean }
+      ) => Promise<{ retired: string[] }>;
+      /** Brings back fallbacks retired for these words, once their shared copy returns. */
+      reviveRetiredDictionaryWords?: (words: string[]) => Promise<{ revived: string[] }>;
+
+      getSharedDictionary?: (workspaceId: string) => Promise<SharedDictionarySnapshot>;
+      applySharedDictionaryPull?: (
+        workspaceId: string,
+        change: { upserts: CloudSharedEntry[]; deletedIds: string[]; meta?: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      /** Snapshot write: the workspace's entries become exactly `full.entries`. */
+      replaceSharedDictionary?: (
+        workspaceId: string,
+        full: { entries: CloudSharedEntry[]; meta: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      applySharedDictionaryHides?: (
+        workspaceId: string,
+        change: { hidden: SharedDictionaryHideRecord[]; unhidden: string[] }
+      ) => Promise<{ changed: number }>;
+      replaceSharedDictionaryHides?: (
+        workspaceId: string,
+        hidden: SharedDictionaryHideRecord[]
+      ) => Promise<{ changed: number }>;
+      /** With no workspace, clears every workspace's shared words. `changed` counts rows removed. */
+      clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
+      /** Clears every workspace's shared words except these workspaces'. */
+      pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
+      /** Tells main which shared words apply, so auto-learn skips them. */
+      setSharedDictionaryHints?: (hints: SharedHintWords) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;

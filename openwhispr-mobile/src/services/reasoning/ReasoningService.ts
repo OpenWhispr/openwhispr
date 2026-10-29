@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '../../types';
+import type { InferenceSelection } from '@/lib/mobileProviders';
 import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
@@ -43,6 +44,7 @@ interface CallApiOptions {
   language?: string;
   locale?: string;
   customDictionary?: string[];
+  sharedDictionary?: string[];
   tone?: string;
   agentName?: string;
   signal?: AbortSignal;
@@ -52,6 +54,46 @@ interface CallApiOptions {
    * whole prompt, notes included, would show as the answer.
    */
   keepTextOnEmptyReply?: boolean;
+}
+
+export interface ReasoningPlacement {
+  selection: InferenceSelection | undefined;
+  usesProviders: boolean;
+  localSelected: boolean;
+  chosenProvider: boolean;
+  privateContent: boolean;
+  /** The request must try the local model first. */
+  localRequired: boolean;
+}
+
+/** Where processText sends a request, so callers can fit a prompt to that route first. */
+export function resolveReasoningPlacement(
+  request: Pick<ReasoningRequest, 'inferenceScope' | 'inferenceRoute' | 'routing'>,
+): ReasoningPlacement {
+  const { getInferenceSelection } =
+    require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+  const { routing } = request;
+  const scope = request.inferenceScope ?? 'cleanup';
+  const configuredSelection = request.inferenceRoute ?? getInferenceSelection(scope);
+  const selection = configuredSelection ? { ...configuredSelection } : undefined;
+  const usesProviders = selection?.mode === 'providers';
+  const localSelected = selection?.mode === 'local';
+  const chosenProvider = usesProviders && routing?.sendToChosenProvider === true;
+  let privateContent = !chosenProvider && routing?.isPrivateNote === true;
+  // Local Mode keeps requests on Android local unless the user chose otherwise. On iOS,
+  // note formatting follows its own selection; cleanup and note chat retain the local preference.
+  if (
+    (Platform.OS === 'android' || scope !== 'notes') &&
+    ((usesProviders && !chosenProvider) || localSelected)
+  ) {
+    const { useProcessingModeStore } =
+      require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
+    privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
+  }
+  const localRequired =
+    localSelected ||
+    (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
+  return { selection, usesProviders, localSelected, chosenProvider, privateContent, localRequired };
 }
 
 export class ReasoningService {
@@ -77,6 +119,9 @@ export class ReasoningService {
       if (options.locale) body.locale = options.locale;
       if (options.customDictionary && options.customDictionary.length > 0) {
         body.customDictionary = options.customDictionary;
+      }
+      if (options.sharedDictionary && options.sharedDictionary.length > 0) {
+        body.sharedDictionary = options.sharedDictionary;
       }
       if (options.tone && options.tone !== 'default') {
         body.tone = options.tone;
@@ -131,35 +176,25 @@ export class ReasoningService {
       language,
       locale,
       customDictionary,
+      sharedDictionary,
       signal,
       timeoutMs,
       tone,
       agentName,
       routing,
     } = request;
-    const { getInferenceSelection, resolveMobileProviderRoute } =
+    const { resolveMobileProviderRoute } =
       require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const scope = request.inferenceScope ?? 'cleanup';
-    const configuredSelection = request.inferenceRoute ?? getInferenceSelection(scope);
-    const selection = configuredSelection ? { ...configuredSelection } : undefined;
-    const usesProviders = selection?.mode === 'providers';
-    const localSelected = selection?.mode === 'local';
+    const {
+      selection,
+      usesProviders,
+      localSelected,
+      chosenProvider,
+      privateContent,
+      localRequired,
+    } = resolveReasoningPlacement(request);
     const allowCloudFallback = routing?.allowCloudFallback === true;
-    const chosenProvider = usesProviders && routing?.sendToChosenProvider === true;
-    let privateContent = !chosenProvider && routing?.isPrivateNote === true;
-    // Local Mode keeps cleanup and note chat on this iPhone unless the user chose otherwise; note
-    // formatting follows its own selection there.
-    if (
-      (Platform.OS === 'android' || scope !== 'notes') &&
-      ((usesProviders && !chosenProvider) || localSelected)
-    ) {
-      const { useProcessingModeStore } =
-        require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
-      privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
-    }
-    const localRequired =
-      localSelected ||
-      (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
     const localRequest =
       (usesProviders || localSelected) && !systemPrompt
         ? { ...request, ...buildProviderPrompt(request) }
@@ -248,6 +283,7 @@ export class ReasoningService {
       language,
       locale,
       customDictionary,
+      sharedDictionary,
       signal,
       timeoutMs,
       tone,

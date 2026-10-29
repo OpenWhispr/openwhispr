@@ -27,6 +27,8 @@ import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../type
 import { formatRelativeTime } from "../utils/dateFormatting";
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
+import { useWorkspace } from "../hooks/useWorkspace";
+import { spacesInWorkspaceScope } from "../lib/workspaceSelection";
 
 interface ConversationResult {
   id: number;
@@ -91,6 +93,7 @@ export default function CommandSearch({
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
+  const { workspaces, active: activeWorkspace } = useWorkspace();
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -102,8 +105,10 @@ export default function CommandSearch({
   const [prevNotes, setPrevNotes] = useState(notes);
   const [prevQuery, setPrevQuery] = useState(query);
 
+  // Read on every open: a space created since would otherwise be missing from
+  // the workspace's list, and its notes filtered out with the hidden ones.
   useEffect(() => {
-    if (isConversationsMode) return;
+    if (!open || isConversationsMode) return;
     window.electronAPI
       .getFolders()
       .then(setFolders)
@@ -112,7 +117,18 @@ export default function CommandSearch({
       .getSpaces?.()
       .then((items) => setSpaces(items ?? []))
       .catch(() => {});
-  }, [isConversationsMode]);
+  }, [open, isConversationsMode]);
+
+  // Other workspaces' spaces and notes stay out of search, as in the tree.
+  const visibleSpaces = useMemo(
+    () => spacesInWorkspaceScope(spaces, activeWorkspace?.id ?? null, workspaces),
+    [spaces, activeWorkspace?.id, workspaces]
+  );
+  // null when nothing is hidden, so the queries stay unscoped.
+  const visibleSpaceIds = useMemo(
+    () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),
+    [visibleSpaces, spaces.length]
+  );
 
   if (open && !prevOpen) {
     setPrevOpen(open);
@@ -139,11 +155,11 @@ export default function CommandSearch({
       });
     } else {
       window.electronAPI
-        .getNotes()
+        .getNotes(null, undefined, null, null, visibleSpaceIds)
         .then(setNotes)
         .catch(() => {});
     }
-  }, [open, isConversationsMode]);
+  }, [open, isConversationsMode, visibleSpaceIds]);
 
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -185,14 +201,20 @@ export default function CommandSearch({
     } else {
       if (!query.trim()) {
         window.electronAPI
-          .getNotes()
+          .getNotes(null, undefined, null, null, visibleSpaceIds)
           .then(setNotes)
           .catch(() => {});
         return;
       }
       searchTimerRef.current = setTimeout(async () => {
         try {
-          const results = await window.electronAPI.searchNotes(query, undefined, scopeSpaceId);
+          const results = await window.electronAPI.searchNotes(
+            query,
+            undefined,
+            scopeSpaceId,
+            null,
+            visibleSpaceIds
+          );
           setNotes(results);
         } catch {
           /* keep current */
@@ -203,7 +225,7 @@ export default function CommandSearch({
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [query, isConversationsMode, scopeSpaceId]);
+  }, [query, isConversationsMode, scopeSpaceId, visibleSpaceIds]);
 
   if (notes !== prevNotes || query !== prevQuery) {
     setPrevNotes(notes);
@@ -223,11 +245,13 @@ export default function CommandSearch({
   }, []);
 
   // The search leg scopes at the DB; this also covers browsed (empty-query)
-  // results and stale in-flight results after a scope switch.
-  const scopedNotes = useMemo(
-    () => (scopeSpaceId == null ? notes : notes.filter((n) => n.space_id === scopeSpaceId)),
-    [notes, scopeSpaceId]
-  );
+  // results and stale in-flight results after a scope or workspace switch.
+  const scopedNotes = useMemo(() => {
+    if (scopeSpaceId != null) return notes.filter((n) => n.space_id === scopeSpaceId);
+    if (!visibleSpaceIds) return notes;
+    const visible = new Set(visibleSpaceIds);
+    return notes.filter((n) => visible.has(n.space_id));
+  }, [notes, scopeSpaceId, visibleSpaceIds]);
 
   const spaceLabel = useCallback(
     (space: SpaceItem) =>
@@ -252,14 +276,15 @@ export default function CommandSearch({
     const q = query.trim().toLowerCase();
     if (!q || isConversationsMode) return [];
     const targets: JumpTarget[] = [];
-    for (const space of spaces) {
+    const visibleIds = new Set(visibleSpaces.map((space) => space.id));
+    for (const space of visibleSpaces) {
       const label = spaceLabel(space);
       if (label.toLowerCase().includes(q)) {
         targets.push({ key: `s:${space.id}`, spaceId: space.id, folderId: null, label, space });
       }
     }
     for (const folder of folders) {
-      if (folderMatchesQuery(folder, t, q)) {
+      if (visibleIds.has(folder.space_id) && folderMatchesQuery(folder, t, q)) {
         targets.push({
           key: `f:${folder.id}`,
           spaceId: folder.space_id,
@@ -270,7 +295,7 @@ export default function CommandSearch({
       }
     }
     return targets.slice(0, 5);
-  }, [query, spaces, folders, spaceMap, spaceLabel, isConversationsMode, t]);
+  }, [query, visibleSpaces, folders, spaceMap, spaceLabel, isConversationsMode, t]);
 
   const filteredTranscripts = useMemo(() => {
     const slice = query.trim()
@@ -364,7 +389,7 @@ export default function CommandSearch({
           {/* Search input */}
           <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-border/70">
             <Search size={14} className="shrink-0 text-muted-foreground/70" />
-            {!isConversationsMode && spaces.length > 1 && (
+            {!isConversationsMode && visibleSpaces.length > 1 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -396,7 +421,7 @@ export default function CommandSearch({
                     {t("commandSearch.allSpaces")}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {spaces.map((space) => (
+                  {visibleSpaces.map((space) => (
                     <DropdownMenuItem key={space.id} onSelect={() => selectScope(space.id)}>
                       <span dir="auto">{spaceLabel(space)}</span>
                     </DropdownMenuItem>
@@ -496,7 +521,7 @@ export default function CommandSearch({
                         <ContainerRow
                           key={target.key}
                           target={target}
-                          showSpaceHint={target.folderId != null && spaces.length > 1}
+                          showSpaceHint={target.folderId != null && visibleSpaces.length > 1}
                           spaceLabel={spaceLabel}
                           idx={idx}
                           isSelected={selectedIndex === idx}
