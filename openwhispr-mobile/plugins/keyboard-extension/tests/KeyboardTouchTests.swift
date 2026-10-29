@@ -10,7 +10,9 @@ private enum TestEnvironment {
   /// A compact vertical size class: a phone in landscape.
   static var landscape = false
   static var tablet = false
-  static var fullAccess = false
+  // Layout and touch-routing checks exercise the keyboard, not the permissions
+  // overlay. Permission-specific checks explicitly show and dismiss that panel.
+  static var fullAccess = true
   static var proxy = TestTextProxy()
 
   static func install() {
@@ -37,7 +39,7 @@ private enum TestEnvironment {
     globe = false
     landscape = false
     tablet = false
-    fullAccess = false
+    fullAccess = true
     proxy = TestTextProxy()
   }
 }
@@ -196,7 +198,12 @@ private extension KeyboardViewController {
     checks.check("ending recording restores compact height",
       controller.keyboardHeightConstraint?.constant == compactHeight)
 
-    controller.toneButton.sendActions(for: .touchUpInside)
+    // This headless UIKit executable has no UIApplication event loop. Check
+    // target/action wiring, then invoke the same production handler directly.
+    checks.check("tone button is wired to compact menu handler",
+      controller.toneButton.actions(forTarget: controller, forControlEvent: .touchUpInside)?
+        .contains("handleCompactToneTapped") == true)
+    controller.handleCompactToneTapped()
     layout()
     checks.check("tone menu expands minimal keyboard",
       controller.view.bounds.height == compactHeight + Self.compactToneMenuHeight
@@ -206,7 +213,7 @@ private extension KeyboardViewController {
     checks.check("compact menu offers the formal tone", formal != nil)
     if let formal {
       checkTappable("formal tone", formal)
-      formal.sendActions(for: .touchUpInside)
+      controller.selectCompactTone("formal")
     }
     layout()
     checks.check("tone selection persists to App Group",
@@ -214,13 +221,13 @@ private extension KeyboardViewController {
     checks.check("tone selection collapses keyboard",
       controller.view.bounds.height == compactHeight && controller.compactToneMenu.isHidden)
 
-    controller.toneButton.sendActions(for: .touchUpInside)
-    controller.toneButton.sendActions(for: .touchUpInside)
+    controller.handleCompactToneTapped()
+    controller.handleCompactToneTapped()
     layout()
     checks.check("tapping tone icon again collapses keyboard",
       controller.view.bounds.height == compactHeight && controller.compactToneMenu.isHidden)
 
-    controller.toneButton.sendActions(for: .touchUpInside)
+    controller.handleCompactToneTapped()
     controller.viewWillDisappear(false)
     // The same preference refresh runs when this controller reappears.
     controller.refreshMinimalKeyboardPreference()
@@ -321,6 +328,15 @@ private enum KeyboardTouchTests {
   static func main() {
     var checks = TouchChecks()
     TestEnvironment.install()
+    // Opt-in fast path for iterating on compact-layout transitions; CI runs
+    // the complete suite unless this is explicitly requested.
+    if ProcessInfo.processInfo.environment["KEYBOARD_MINIMAL_ONLY"] == "1" {
+      KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 402)
+      KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 375, globe: true)
+      KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 852, landscape: true)
+      print("Minimal keyboard: \(checks.count - checks.failures.count)/\(checks.count) passed")
+      exit(checks.failures.isEmpty ? 0 : 1)
+    }
     checkSyntheticRows(&checks)
     checkEdgeTies(&checks)
     checkOtherControls(&checks)
@@ -600,13 +616,17 @@ private enum KeyboardTouchTests {
     var dropped = 0
     var hiddenHits = 0
     for y in stride(from: top, to: root.bounds.height, by: 1) {
-      for x in stride(from: 0, to: root.bounds.width, by: 0.5) {
-        guard let hit = root.hitTest(CGPoint(x: x, y: y), with: nil) as? KeyButton else {
-          dropped += 1
-          continue
-        }
-        if !visibleKeys.contains(ObjectIdentifier(hit)) {
-          hiddenHits += 1
+      // UIKit produces autoreleased objects during hit testing. Bound their
+      // lifetime while checking every half-point across the entire keyboard.
+      autoreleasepool {
+        for x in stride(from: 0, to: root.bounds.width, by: 0.5) {
+          guard let hit = root.hitTest(CGPoint(x: x, y: y), with: nil) as? KeyButton else {
+            dropped += 1
+            continue
+          }
+          if !visibleKeys.contains(ObjectIdentifier(hit)) {
+            hiddenHits += 1
+          }
         }
       }
     }

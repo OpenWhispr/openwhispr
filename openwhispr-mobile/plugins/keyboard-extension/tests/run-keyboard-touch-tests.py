@@ -36,7 +36,7 @@ def main():
         )
         executable = str(Path(directory) / "keyboard-touch-tests")
         subprocess.run([
-            "xcrun", "--sdk", "macosx", "swiftc", "-swift-version", "5", "-parse-as-library",
+            "xcrun", "--sdk", "macosx", "swiftc", "-O", "-swift-version", "5", "-parse-as-library",
             "-sdk", sdk,
             "-target", f"{platform.machine()}-apple-ios{DEPLOYMENT_TARGET}-macabi",
             "-Fsystem", f"{sdk}/System/iOSSupport/System/Library/Frameworks",
