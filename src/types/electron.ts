@@ -78,12 +78,11 @@ export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcr
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
-/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
 // Result of asking the Windows key listener for the foreground window's keyboard layout.
 export type LayoutProbeResult =
-  | { ok: true; klid: string; iso: string; layoutName: string }
-  | { ok: false; reason: string };
+  { ok: true; klid: string; iso: string; layoutName: string } | { ok: false; reason: string };
 
+/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
 export interface LocalServerPrefs {
   useCleanupModel: boolean;
   cleanupMode: InferenceMode;
