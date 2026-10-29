@@ -5317,6 +5317,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} hat diese Anfrage aus Gründen der Inhaltssicherheit gefiltert. Formuliere deine Anfrage neu und versuche es erneut.",
     "authFailed": "{{provider}} hat Ihren API-Schlüssel abgelehnt.",
     "accessDenied": "{{provider}} hat den Zugriff verweigert. Ihr Schlüssel deckt dieses Modell möglicherweise nicht ab.",
     "quotaExhausted": "Ihr {{provider}}-Konto hat kein Guthaben mehr.",
@@ -5355,6 +5356,7 @@
       "llm": "KI-Anfrage fehlgeschlagen"
     },
     "details": {
+      "exceptionType": "Fehlercode",
       "provider": "Anbieter",
       "requestId": "Anfrage-ID"
     }

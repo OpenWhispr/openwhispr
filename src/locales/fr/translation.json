@@ -5335,6 +5335,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} a filtré cette demande pour des raisons de sécurité du contenu. Reformulez votre demande et réessayez.",
     "authFailed": "{{provider}} a rejeté votre clé API.",
     "accessDenied": "{{provider}} a refusé l’accès. Votre clé ne couvre peut-être pas ce modèle.",
     "quotaExhausted": "Votre compte {{provider}} n’a plus de crédit.",
@@ -5373,6 +5374,7 @@
       "llm": "Échec de la requête IA"
     },
     "details": {
+      "exceptionType": "Code d’erreur",
       "provider": "Fournisseur",
       "requestId": "ID de requête"
     }

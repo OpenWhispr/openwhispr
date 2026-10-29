@@ -45,7 +45,12 @@ test("formatProviderErrorDetails labels provider details generically", async () 
   const { formatProviderErrorDetails } = await load();
   assert.equal(
     formatProviderErrorDetails(
-      { provider: "Mistral", status: 401, requestId: "r1", underlyingError: '{"detail":"Invalid API Key"}' },
+      {
+        provider: "Mistral",
+        status: 401,
+        requestId: "r1",
+        underlyingError: '{"detail":"Invalid API Key"}',
+      },
       t
     ),
     [
@@ -148,4 +153,23 @@ test("toast props: a classified error gets actions, an unclassified one stays a 
   assert.deepEqual(providerErrorToastProps(new Error("Network down"), t), {
     description: "Network down",
   });
+});
+
+test("formatProviderErrorDetails uses a neutral error-code label for Azure and Vertex", async () => {
+  const { formatProviderErrorDetails } = await load();
+  for (const provider of ["Azure OpenAI", "Vertex AI"]) {
+    const text = formatProviderErrorDetails(
+      { provider, exceptionType: "invalid_request_error" },
+      t
+    );
+    assert.match(text, /providerErrors\.details\.exceptionType: invalid_request_error/);
+    assert.doesNotMatch(text, /awsException/);
+  }
+  assert.match(
+    formatProviderErrorDetails(
+      { provider: "AWS Bedrock", exceptionType: "ThrottlingException" },
+      t
+    ),
+    /reasoning\.enterprise\.technicalDetails\.awsException: ThrottlingException/
+  );
 });

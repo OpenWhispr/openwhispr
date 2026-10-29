@@ -265,6 +265,9 @@ export interface MeetingAutoEndRequest {
 /** Fields a main-process handler resolves with in place of a rejected Error. */
 export interface IpcErrorFields {
   error: string;
+  action?: string;
+  actionKey?: string;
+  retryable?: boolean;
   code?: string;
   messageKey?: string;
   messageParams?: Record<string, string | number>;
@@ -2329,15 +2332,16 @@ declare global {
         modelId: string;
         config: Record<string, unknown>;
         options: Record<string, unknown>;
-      }) => Promise<{ success: boolean; error?: string }>;
+      }) => Promise<{ success: boolean } & Partial<IpcErrorFields>>;
       enterpriseStreamCancel?: (streamId: string) => Promise<void>;
       onEnterpriseStreamPart?: (
-        callback: (payload: {
-          streamId: string;
-          part?: unknown;
-          done?: boolean;
-          error?: string;
-        }) => void
+        callback: (
+          payload: {
+            streamId: string;
+            part?: unknown;
+            done?: boolean;
+          } & Partial<IpcErrorFields>
+        ) => void
       ) => () => void;
       listBedrockModels?: (config: Record<string, unknown>) => Promise<{
         success: boolean;

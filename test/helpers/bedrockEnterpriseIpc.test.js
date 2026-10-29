@@ -10,6 +10,8 @@ const generateCalls = [];
 let generateBehavior = async () => ({ text: "hello", finishReason: "stop" });
 let resolveManagedRuntime = async () => ({ managed: false });
 let handlerContext;
+let streamBehavior;
+const streamLogs = [];
 
 const electronStub = {
   app: {
@@ -66,7 +68,15 @@ Module._load = function loadWithMocks(request, parent, isMain) {
   }
   if (parent?.filename === handlersModulePath) {
     if (request === "./debugLogger") {
-      return new Proxy({}, { get: () => () => {} });
+      return new Proxy(
+        {},
+        {
+          get:
+            () =>
+            (...args) =>
+              streamLogs.push(args),
+        }
+      );
     }
     if (request === "ai") {
       return {
@@ -80,7 +90,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         getEnterpriseAIModel: async (_provider, _model, _apiKey, enterprise) => {
           await enterprise?.managedCredentialProvider?.();
-          return { provider: "bedrock-test-model" };
+          return { provider: "bedrock-test-model", doStream: (options) => streamBehavior(options) };
         },
       };
     }
@@ -691,4 +701,353 @@ test("dictation cleanup returns preserved AWS diagnostics to the renderer", asyn
     requestId: "cleanup-request-id",
     underlyingError: "Not allowed to invoke model",
   });
+});
+
+async function chatProxy(t, behavior) {
+  const { EventEmitter } = require("node:events");
+  const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+  const webContents = new EventEmitter();
+  Object.assign(webContents, { id: 500, isDestroyed: () => false });
+  const messages = [];
+  let listener;
+  let completion;
+  let cancelled = 0;
+  streamBehavior = behavior;
+  streamLogs.length = 0;
+  webContents.send = (_channel, payload) => {
+    const cloned = structuredClone(payload);
+    messages.push(cloned);
+    listener?.(cloned);
+  };
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        onEnterpriseStreamPart: (callback) => {
+          listener = callback;
+          return () => {
+            listener = undefined;
+          };
+        },
+        enterpriseStreamStart: (payload) => {
+          completion = handlers.get("enterprise-stream-start")({ sender: webContents }, payload);
+          return completion;
+        },
+        enterpriseStreamCancel: (streamId) => {
+          cancelled += 1;
+          return handlers.get("enterprise-stream-cancel")({ sender: webContents }, streamId);
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    mockModules: {
+      "/enterpriseSettings": `export const getEnterpriseCallSettings = () => ({});`,
+    },
+  });
+  const { createEnterpriseChatModel } = await vite.ssrLoadModule(
+    "/services/ai/enterpriseChatModel.ts"
+  );
+  return {
+    model: createEnterpriseChatModel("azure", "test-deployment"),
+    messages,
+    completion: () => completion,
+    cancelled: () => cancelled,
+    assertClean() {
+      assert.equal(listener, undefined);
+      assert.equal(handlerContext.enterpriseStreamAborts.size, 0);
+      assert.equal(webContents.listenerCount("destroyed"), 0);
+      assert.equal(webContents.listenerCount("did-start-navigation"), 0);
+    },
+  };
+}
+
+for (const failureMode of ["event", "throw"]) {
+  test(`enterprise Chat safely maps ${failureMode} errors across the actual IPC relay and renderer proxy`, async (t) => {
+    let cancelled = false;
+    const failure = {
+      type: "error",
+      sequence_number: 1,
+      error: {
+        code: "rate_limit_exceeded",
+        message: "TooManyRequests private-prompt Bearer fixture-token",
+        status: 429,
+      },
+      request_id: "request-123",
+      responseHeaders: { authorization: "Bearer fixture-secret" },
+      responseBody: "private-prompt",
+    };
+    const proxy = await chatProxy(t, async () => {
+      if (failureMode === "throw") throw failure;
+      return {
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "error", error: failure });
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      };
+    });
+    const { stream } = await proxy.model.doStream({ prompt: [] });
+    await assert.rejects(
+      async () => {
+        for await (const part of stream)
+          assert.notEqual(part.type, "error", "raw provider errors must not cross IPC");
+      },
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.messageKey, "providerErrors.rateLimited");
+        assert.equal(error.technicalDetails.status, 429);
+        assert.equal(error.technicalDetails.exceptionType, "rate_limit_exceeded");
+        assert.equal(error.technicalDetails.requestId, "request-123");
+        assert.doesNotMatch(error.message, /object Object/);
+        return true;
+      }
+    );
+    assert.equal((await proxy.completion()).success, false);
+    const serialized = JSON.stringify([proxy.messages, streamLogs]);
+    assert.doesNotMatch(
+      serialized,
+      /private-prompt|fixture-token|fixture-secret|responseBody|authorization/
+    );
+    if (failureMode === "event") assert.equal(cancelled, true);
+    proxy.assertClean();
+  });
+}
+
+test("enterprise Chat relays normal text and tool parts unchanged and removes abort listeners", async (t) => {
+  const parts = [
+    { type: "text-start", id: "text-1" },
+    { type: "text-delta", id: "text-1", delta: "hello" },
+    { type: "tool-call", toolCallId: "call-1", toolName: "lookup", input: "{}" },
+    { type: "text-end", id: "text-1" },
+  ];
+  const proxy = await chatProxy(t, async () => ({
+    stream: new ReadableStream({
+      start(controller) {
+        for (const part of parts) controller.enqueue(part);
+        controller.close();
+      },
+    }),
+  }));
+  const abort = new AbortController();
+  const { stream } = await proxy.model.doStream({ prompt: [], abortSignal: abort.signal });
+  assert.deepEqual(await Array.fromAsync(stream), parts);
+  assert.equal((await proxy.completion()).success, true);
+  abort.abort();
+  assert.equal(proxy.cancelled(), 0);
+  proxy.assertClean();
+});
+
+test("enterprise Chat abort terminates the relay without a provider failure log", async (t) => {
+  const proxy = await chatProxy(t, async ({ abortSignal }) => ({
+    stream: new ReadableStream({
+      start(controller) {
+        abortSignal.addEventListener("abort", () => controller.error(abortSignal.reason), {
+          once: true,
+        });
+      },
+    }),
+  }));
+  const abort = new AbortController();
+  const { stream } = await proxy.model.doStream({ prompt: [], abortSignal: abort.signal });
+  const reading = Array.fromAsync(stream);
+  await new Promise((resolve) => setImmediate(resolve));
+  abort.abort();
+  await assert.rejects(reading, { name: "AbortError" });
+  await proxy.completion();
+  assert.equal(
+    streamLogs.some(([message]) => message === "Enterprise stream error:"),
+    false
+  );
+  proxy.assertClean();
+});
+
+test("enterprise Chat emits an Error with safe metadata through streamText", async (t) => {
+  const { streamText } = await import("ai");
+  const proxy = await chatProxy(t, async () => ({
+    stream: new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          type: "error",
+          error: {
+            type: "error",
+            sequence_number: 1,
+            error: {
+              code: "invalid_request_error",
+              message: "private-prompt",
+              param: "private-prompt",
+            },
+          },
+        });
+        controller.close();
+      },
+    }),
+  }));
+  const errors = [];
+  const result = streamText({
+    model: proxy.model,
+    prompt: "unused mock input",
+    onError: ({ error }) => errors.push(error),
+  });
+  await assert.rejects(
+    async () => {
+      for await (const part of result.fullStream) {
+        if (part.type === "error") throw part.error;
+      }
+    },
+    (error) => {
+      assert.ok(error instanceof Error);
+      if (errors.length) assert.equal(error, errors[0]);
+      assert.equal(error.technicalDetails.exceptionType, "invalid_request_error");
+      assert.equal(error.messageKey, "providerErrors.badRequest");
+      assert.doesNotMatch(error.message, /object Object|private-prompt/);
+      return true;
+    }
+  );
+  await proxy.completion();
+  proxy.assertClean();
+});
+
+test("enterprise stream normalization handles malformed and nested causes without serializing them", () => {
+  const { mapEnterpriseStreamError } = require("../../src/helpers/enterpriseProviderErrors");
+  const cyclic = { message: "private-prompt" };
+  cyclic.cause = cyclic;
+  for (const error of [
+    null,
+    undefined,
+    3,
+    {},
+    "private-prompt",
+    cyclic,
+    { message: { secret: "private-prompt" } },
+  ]) {
+    const mapped = mapEnterpriseStreamError("azure", error);
+    assert.equal(mapped.messageKey, "providerErrors.unknown");
+    assert.doesNotMatch(JSON.stringify(mapped), /object Object|private-prompt|secret/);
+  }
+  const mapped = mapEnterpriseStreamError(
+    "azure",
+    Object.assign(new Error("private-prompt"), {
+      statusCode: 400,
+      responseHeaders: {
+        "Apim-Request-Id": "azure-request-123",
+        authorization: "Bearer fixture-secret",
+      },
+      code: "invalid_request_error",
+      responseBody: { secret: "private-prompt" },
+    })
+  );
+  assert.equal(mapped.messageKey, "providerErrors.badRequest");
+  assert.deepEqual(mapped.technicalDetails, {
+    provider: "Azure OpenAI",
+    status: 400,
+    exceptionType: "invalid_request_error",
+    requestId: "azure-request-123",
+  });
+  assert.doesNotMatch(JSON.stringify(mapped), /private-prompt|fixture-secret/);
+  const unsafeIdentifiers = mapEnterpriseStreamError("azure", {
+    code: "sk-proj-fixturesecret",
+    requestId: "x".repeat(129),
+  });
+  assert.deepEqual(unsafeIdentifiers.technicalDetails, { provider: "Azure OpenAI" });
+  const bedrock = mapEnterpriseStreamError(
+    "bedrock",
+    Object.assign(new Error("private-prompt"), { statusCode: 503 })
+  );
+  assert.equal(bedrock.messageKey, "reasoning.enterprise.errors.bedrock.serviceUnavailable");
+  assert.doesNotMatch(JSON.stringify(bedrock), /private-prompt/);
+});
+
+test("enterprise stream code-only errors retain classification without inventing HTTP status", () => {
+  const { mapEnterpriseStreamError } = require("../../src/helpers/enterpriseProviderErrors");
+  for (const [code, messageKey] of [
+    ["DeploymentNotFound", "providerErrors.modelNotFoundNoModel"],
+    ["rate_limit_exceeded", "providerErrors.rateLimited"],
+    ["content_filter", "providerErrors.contentFiltered"],
+    ["invalid_request_error", "providerErrors.badRequest"],
+    ["constructor", "providerErrors.unknown"],
+    ["AUTH_EXPIRED", "common.managedConfigUnavailable"],
+    ["PROVIDER_NOT_ALLOWED", "common.managedPolicyConflict"],
+  ]) {
+    const mapped = mapEnterpriseStreamError("azure", {
+      error: { code, message: "private-prompt" },
+    });
+    assert.equal(mapped.messageKey, messageKey, code);
+    assert.equal(mapped.technicalDetails.exceptionType, code);
+    assert.equal(mapped.technicalDetails.status, undefined);
+    assert.doesNotMatch(JSON.stringify(mapped), /private-prompt/);
+  }
+});
+
+test("enterprise stream preserves safe network and message-only provider classifications", () => {
+  const { mapEnterpriseStreamError } = require("../../src/helpers/enterpriseProviderErrors");
+  const fixtures = [
+    ["azure", new TypeError("fetch failed private-prompt"), "providerErrors.unreachable"],
+    [
+      "azure",
+      new Error("DeploymentNotFound private-prompt"),
+      "providerErrors.modelNotFoundNoModel",
+    ],
+    [
+      "azure",
+      { error: { message: "TooManyRequests private-prompt" } },
+      "providerErrors.rateLimited",
+    ],
+    ["azure", { message: "ContentFilter private-prompt" }, "providerErrors.contentFiltered"],
+    ["azure", { code: "ENOTFOUND", message: "private-prompt" }, "providerErrors.unreachable"],
+    ["azure", { code: "ETIMEDOUT", message: "private-prompt" }, "providerErrors.unreachable"],
+    [
+      "vertex",
+      { code: "PERMISSION_DENIED", message: "private-prompt" },
+      "providerErrors.accessDenied",
+    ],
+    [
+      "vertex",
+      { code: "RESOURCE_EXHAUSTED", message: "private-prompt" },
+      "providerErrors.rateLimited",
+    ],
+    ["vertex", { message: "NOT_FOUND private-prompt" }, "providerErrors.modelNotFoundNoModel"],
+    ["vertex", { message: "INVALID_ARGUMENT private-prompt" }, "providerErrors.badRequest"],
+    ["vertex", { message: "UNAUTHENTICATED private-prompt" }, "providerErrors.authFailed"],
+  ];
+  for (const [provider, error, messageKey] of fixtures) {
+    const mapped = mapEnterpriseStreamError(provider, error);
+    assert.equal(mapped.messageKey, messageKey, `${provider}: ${error.code || error.message}`);
+    assert.equal(mapped.technicalDetails.status, undefined);
+    assert.doesNotMatch(JSON.stringify(mapped), /private-prompt|cause|responseBody/);
+  }
+});
+
+test("enterprise Chat preserves specific content-filter guidance without echoing provider text", () => {
+  const { mapEnterpriseStreamError } = require("../../src/helpers/enterpriseProviderErrors");
+  for (const error of [
+    { error: { code: "content_filter", message: "private-prompt" } },
+    { code: "ContentFilter", message: "private-prompt", statusCode: 400 },
+    { error: { message: "content safety filtering rejected private-prompt" } },
+  ]) {
+    const mapped = mapEnterpriseStreamError("azure", error);
+    assert.equal(mapped.messageKey, "providerErrors.contentFiltered");
+    assert.equal(mapped.code, "PROVIDER_CONTENT_FILTERED");
+    assert.match(mapped.error, /filtered this request for content safety/);
+    assert.equal(mapped.technicalDetails.status, error.statusCode);
+    assert.doesNotMatch(JSON.stringify(mapped), /private-prompt/);
+  }
+});
+
+test("Vertex request quota failures do not claim the account is out of credit", () => {
+  const { mapEnterpriseStreamError } = require("../../src/helpers/enterpriseProviderErrors");
+  for (const error of [
+    { code: "RESOURCE_EXHAUSTED", message: "Requests per minute quota exceeded. Try again later." },
+    { message: "Requests per minute quota exceeded. Try again later." },
+  ]) {
+    const mapped = mapEnterpriseStreamError("vertex", error);
+    assert.equal(mapped.messageKey, "providerErrors.rateLimited");
+    assert.equal(mapped.code, "PROVIDER_RATE_LIMITED");
+    assert.equal(mapped.technicalDetails.status, undefined);
+    assert.doesNotMatch(mapped.error, /credit|billing|Requests per minute/);
+  }
+  const explicitCredit = mapEnterpriseStreamError("vertex", { code: "insufficient_quota" });
+  assert.equal(explicitCredit.messageKey, "providerErrors.quotaExhausted");
 });

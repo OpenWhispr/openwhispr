@@ -5,12 +5,13 @@ import type {
 } from "@ai-sdk/provider";
 import type { EnterpriseProvider } from "../../models/ModelRegistry";
 import { getEnterpriseCallSettings } from "./enterpriseSettings";
+import { errorFromIpcResult } from "../../helpers/ipcErrorFields.js";
 import type { InferenceScope } from "../../config/inferenceScopes";
 
 // Enterprise SDKs (Bedrock/Azure/Vertex) must run in the main process — SigV4
 // signing and CORS rule out renderer fetches. This LanguageModelV3 shim keeps
 // streamText and tool execution in the renderer while proxying doStream over
-// IPC: main runs the provider stream and relays each part verbatim.
+// IPC: main relays stream parts and maps provider errors to safe IPC fields.
 
 // Structured-clone whitelist — abortSignal and other non-serializable call
 // options must not cross the IPC boundary.
@@ -62,26 +63,29 @@ export function createEnterpriseChatModel(
 
       const streamId = crypto.randomUUID();
       const config = getEnterpriseCallSettings(provider, inferenceScope);
+      options.abortSignal?.throwIfAborted();
       let unsubscribe: (() => void) | undefined;
+      let onAbort: (() => void) | undefined;
       const stopListening = () => {
         unsubscribe?.();
         unsubscribe = undefined;
+        if (onAbort) options.abortSignal?.removeEventListener("abort", onAbort);
       };
 
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
           let settled = false;
-          const fail = (message: string) => {
+          const fail = (error: Error) => {
             if (settled) return;
             settled = true;
             stopListening();
-            controller.error(new Error(message));
+            controller.error(error);
           };
 
           unsubscribe = api.onEnterpriseStreamPart!((payload) => {
-            if (payload.streamId !== streamId) return;
+            if (settled || payload.streamId !== streamId) return;
             if (payload.error) {
-              fail(payload.error);
+              fail(errorFromIpcResult(payload));
             } else if (payload.done) {
               if (settled) return;
               settled = true;
@@ -92,9 +96,11 @@ export function createEnterpriseChatModel(
             }
           });
 
-          options.abortSignal?.addEventListener("abort", () => {
-            api.enterpriseStreamCancel?.(streamId);
-          });
+          onAbort = () => {
+            fail(options.abortSignal?.reason ?? new DOMException("Aborted", "AbortError"));
+            void api.enterpriseStreamCancel?.(streamId);
+          };
+          options.abortSignal?.addEventListener("abort", onAbort, { once: true });
 
           api.enterpriseStreamStart!({
             streamId,
@@ -104,9 +110,9 @@ export function createEnterpriseChatModel(
             options: pickSerializableOptions(options),
           })
             .then((result) => {
-              if (result && !result.success) fail(result.error || "Enterprise stream failed");
+              if (result && !result.success) fail(errorFromIpcResult(result));
             })
-            .catch((error: Error) => fail(error.message));
+            .catch((error: Error) => fail(error));
         },
         cancel: () => {
           stopListening();

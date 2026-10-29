@@ -5317,6 +5317,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} がコンテンツの安全性のためにこのリクエストをフィルタリングしました。リクエストを言い換えて、もう一度お試しください。",
     "authFailed": "{{provider}} がAPIキーを拒否しました。",
     "accessDenied": "{{provider}} がアクセスを拒否しました。お使いのキーがこのモデルに対応していない可能性があります。",
     "quotaExhausted": "{{provider}} アカウントのクレジットが不足しています。",
@@ -5355,6 +5356,7 @@
       "llm": "AIリクエストに失敗しました"
     },
     "details": {
+      "exceptionType": "エラーコード",
       "provider": "プロバイダー",
       "requestId": "リクエストID"
     }

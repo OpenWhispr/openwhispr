@@ -50,7 +50,11 @@ export function formatProviderErrorDetails(
       ? `${t("reasoning.enterprise.technicalDetails.httpStatus")}: ${details.status}`
       : "",
     details.exceptionType
-      ? `${t("reasoning.enterprise.technicalDetails.awsException")}: ${details.exceptionType}`
+      ? `${t(
+          !isProvider || details.provider === "AWS Bedrock" || details.provider === "bedrock"
+            ? "reasoning.enterprise.technicalDetails.awsException"
+            : "providerErrors.details.exceptionType"
+        )}: ${details.exceptionType}`
       : "",
     details.requestId
       ? `${t(

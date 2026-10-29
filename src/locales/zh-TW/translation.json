@@ -5317,6 +5317,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} 基於內容安全考量篩選了此請求。請重新表述請求後再試一次。",
     "authFailed": "{{provider}} 拒絕了你的 API 金鑰。",
     "accessDenied": "{{provider}} 拒絕存取。你的金鑰可能不包含此模型。",
     "quotaExhausted": "你的 {{provider}} 帳戶額度已用盡。",
@@ -5355,6 +5356,7 @@
       "llm": "AI 請求失敗"
     },
     "details": {
+      "exceptionType": "錯誤代碼",
       "provider": "服務商",
       "requestId": "請求 ID"
     }

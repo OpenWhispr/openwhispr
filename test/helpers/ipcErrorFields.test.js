@@ -36,11 +36,22 @@ test("errorFromIpcResult rebuilds an Error with the same fields", async () => {
     technicalDetails: { status: 503 },
     status: 503,
     surface: "transcription",
+    action: "Try again",
+    actionKey: "retry",
+    retryable: true,
   });
   const rebuilt = errorFromIpcResult(ipcErrorFields(original));
   assert.ok(rebuilt instanceof Error);
   assert.equal(rebuilt.message, "x");
-  for (const key of ["code", "messageKey", "status", "surface"]) {
+  for (const key of [
+    "code",
+    "messageKey",
+    "status",
+    "surface",
+    "action",
+    "actionKey",
+    "retryable",
+  ]) {
     assert.equal(rebuilt[key], original[key]);
   }
   assert.deepEqual(rebuilt.messageParams, original.messageParams);

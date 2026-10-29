@@ -5317,6 +5317,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} filtered this request for content safety. Rephrase your request and try again.",
     "authFailed": "{{provider}} rejected your API key.",
     "accessDenied": "{{provider}} denied access. Your key may not include this model.",
     "quotaExhausted": "Your {{provider}} account is out of credit.",
@@ -5355,6 +5356,7 @@
       "llm": "AI request failed"
     },
     "details": {
+      "exceptionType": "Error code",
       "provider": "Provider",
       "requestId": "Request ID"
     }

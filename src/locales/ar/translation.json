@@ -5527,6 +5527,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "قام {{provider}} بتصفية هذا الطلب لأسباب تتعلق بسلامة المحتوى. أعد صياغة طلبك وحاول مرة أخرى.",
     "authFailed": "رفض {{provider}} مفتاح API الخاص بك.",
     "accessDenied": "رفض {{provider}} الوصول. قد لا يشمل مفتاحك هذا النموذج.",
     "quotaExhausted": "نفذ الرصيد في حساب {{provider}} الخاص بك.",
@@ -5565,6 +5566,7 @@
       "llm": "فشل طلب الذكاء الاصطناعي"
     },
     "details": {
+      "exceptionType": "رمز الخطأ",
       "provider": "المزوّد",
       "requestId": "معرّف الطلب"
     }

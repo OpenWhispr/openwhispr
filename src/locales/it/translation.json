@@ -5335,6 +5335,7 @@
     }
   },
   "providerErrors": {
+    "contentFiltered": "{{provider}} ha filtrato questa richiesta per motivi di sicurezza dei contenuti. Riformula la richiesta e riprova.",
     "authFailed": "{{provider}} ha rifiutato la tua chiave API.",
     "accessDenied": "{{provider}} ha negato l’accesso. La tua chiave potrebbe non includere questo modello.",
     "quotaExhausted": "Il tuo account {{provider}} ha esaurito il credito.",
@@ -5373,6 +5374,7 @@
       "llm": "Richiesta IA non riuscita"
     },
     "details": {
+      "exceptionType": "Codice errore",
       "provider": "Provider",
       "requestId": "ID richiesta"
     }

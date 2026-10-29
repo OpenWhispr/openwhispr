@@ -5654,12 +5654,12 @@ class IPCHandlers {
     });
 
     // Runs doStream for the renderer's enterprise chat model shim; parts are
-    // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
+    // relayed over enterprise-stream-part; errors cross only as safe mapped fields.
     this.enterpriseStreamAborts = new Map();
     ipcMain.handle("enterprise-stream-start", async (event, payload) => {
       const {
         isEnterpriseProvider,
-        mapEnterpriseError,
+        mapEnterpriseStreamError,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
       const { streamId, provider, modelId, config, options } = payload || {};
@@ -5709,22 +5709,29 @@ class IPCHandlers {
               abortController.abort();
               break;
             }
+            if (value.type === "error") throw value.error;
             send({ part: value });
           }
         } finally {
+          // An error part is terminal even when the SDK keeps its stream open.
+          await reader.cancel().catch(() => {});
           reader.releaseLock();
         }
         send({ done: true });
         return { success: true };
       } catch (err) {
-        debugLogger.error("Enterprise stream error:", err);
+        if (abortController.signal.aborted) {
+          send({ done: true });
+          return { success: true };
+        }
         const mappingConfig =
           runtime?.provider === "bedrock" && runtime.enterprise?.bedrockRegion
             ? { ...(config || {}), bedrockRegion: runtime.enterprise.bedrockRegion }
             : config || {};
-        const mapped = mapEnterpriseError(provider, err, mappingConfig);
-        send({ error: mapped.message });
-        return { success: false, error: mapped.message };
+        const mapped = mapEnterpriseStreamError(provider, err, mappingConfig);
+        debugLogger.error("Enterprise stream error:", mapped);
+        send(mapped);
+        return { success: false, ...mapped };
       } finally {
         this.enterpriseStreamAborts.delete(streamId);
         if (!event.sender.isDestroyed()) {
