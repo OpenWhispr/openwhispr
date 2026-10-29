@@ -198,3 +198,31 @@ test("outside a dictation 'keyboard' reads as auto", async (t) => {
   assert.equal(probeCalls.length, 0);
   assert.deepEqual(languages, [null]);
 });
+
+// A cleanup prompt told the language is "ru" is ordered to write everything in
+// Russian, so it translates English or Ukrainian speech. The layout only hints STT.
+test("keyboard mode: cleanup is not told the layout language, STT still is", async (t) => {
+  const { manager } = await setup(t, { replies: [LAYOUT.ru] });
+  const languages = captureLanguages(t);
+
+  await manager.startRecording();
+  await manager.processWithOpenAIAPI(audioBlob(), {});
+
+  assert.deepEqual(languages, ["ru"]);
+  assert.equal(manager.getCleanupLanguage({ preferredLanguage: "ru" }), "auto");
+});
+
+test("explicit preferredLanguage still reaches cleanup", async (t) => {
+  const { manager } = await setup(t, { settings: { preferredLanguage: "ru" } });
+
+  assert.equal(manager.getCleanupLanguage({ preferredLanguage: "ru" }), "ru");
+});
+
+test("translation mode keeps its source language for cleanup even with the keyboard setting", async (t) => {
+  const { manager } = await setup(t, {
+    settings: { translationSourceLanguage: "de" },
+    overrides: { translationRequested: true },
+  });
+
+  assert.equal(manager.getCleanupLanguage({ translationSourceLanguage: "de" }), "de");
+});

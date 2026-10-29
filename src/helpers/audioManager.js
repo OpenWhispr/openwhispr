@@ -937,7 +937,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Cleanup runs before the translate step, so it still works in the STT language.
+  // "By keyboard layout" only hints STT: a cleanup prompt told the language is "ru"
+  // must write its whole output in Russian, so it translates English or Ukrainian speech.
   getCleanupLanguage(settings) {
+    if (
+      !this.translationRequested &&
+      isKeyboardLayoutLanguage(getStoreSettings().preferredLanguage)
+    ) {
+      return "auto";
+    }
     return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
   }
 
