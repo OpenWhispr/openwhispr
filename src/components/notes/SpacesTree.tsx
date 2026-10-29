@@ -789,7 +789,7 @@ function FolderRow({
                     onSearchChange={setFolderSearch}
                     searchPlaceholder={t("notes.context.searchFolders")}
                   >
-                    {isSubfolder && !folderSearch && (
+                    {isSubfolder && (
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1716,7 +1716,7 @@ export default function SpacesTree({
     showConfirmDialog({
       title: t("notes.folders.deleteTitle"),
       description:
-        subfolders.length > 0
+        subfolders.length > 0 && count > 0
           ? t("notes.folders.deleteDescriptionSubfolders", {
               name: folder.name,
               subfolders: t("notes.folders.subfolderCount", { count: subfolders.length }),
