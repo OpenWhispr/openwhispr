@@ -335,10 +335,9 @@ class DatabaseManager {
     if (parent.parent_folder_id != null) return "Subfolders cannot contain folders";
     if (!folder) return null;
     if (folder.is_default) return "Cannot nest default folders";
-    const child = this.db
-      .prepare("SELECT 1 FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL")
-      .get(folder.id);
-    return child ? "Folders that contain subfolders cannot be nested" : null;
+    return this.getSubfolders(folder.id).length
+      ? "Folders that contain subfolders cannot be nested"
+      : null;
   }
 
   // Child notes owned by another local account are invisible to the active
@@ -4223,6 +4222,16 @@ class DatabaseManager {
     return this.getNoteIdsInScope(null, folderId);
   }
 
+  getSubfolders(folderId) {
+    const accountScope = this._accountScopeCondition("folders");
+    return this.db
+      .prepare(
+        `SELECT * FROM folders
+         WHERE parent_folder_id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
+      )
+      .all(folderId, ...accountScope.params);
+  }
+
   // Authoritative scope membership for semantic-search candidates. Qdrant
   // payload writes are asynchronous/best-effort, so its filters are only an
   // optimization and must not decide which space or folder a hit belongs to.
@@ -4624,18 +4633,9 @@ class DatabaseManager {
       if (folder?.deleted_at) return { success: false, error: "Folder not found" };
       if (!folder) return { success: false, error: "Folder not found" };
       if (folder.is_default) return { success: false, error: "Cannot delete default folders" };
-      const folderScope = this._accountScopeCondition("folders");
       // Subfolders go first, each with its own delete journal, so a denied or
       // confirmed DELETE settles every folder on its own.
-      const folders = [
-        ...this.db
-          .prepare(
-            `SELECT * FROM folders
-             WHERE parent_folder_id = ? AND deleted_at IS NULL AND ${folderScope.sql}`
-          )
-          .all(id, ...folderScope.params),
-        folder,
-      ];
+      const folders = [...this.getSubfolders(id), folder];
       const noteIds = [];
       const relocatedNotes = [];
       this.db.transaction(() => {
@@ -4822,12 +4822,7 @@ class DatabaseManager {
       // becomes a top-level folder in the target space. Leaving a team, they
       // stay behind top-level instead: the server keeps a teammate's subfolder
       // in the team, and desktop can't tell whose a subfolder is.
-      const children = this.db
-        .prepare(
-          `SELECT id, name FROM folders
-           WHERE parent_folder_id = ? AND deleted_at IS NULL AND ${folderScope.sql}`
-        )
-        .all(id, ...folderScope.params);
+      const children = this.getSubfolders(id);
       const carried = leftTeam ? [] : children;
       const folderIds = [id, ...carried.map((child) => child.id)];
       const names = [folder.name, ...carried.map((child) => child.name)];

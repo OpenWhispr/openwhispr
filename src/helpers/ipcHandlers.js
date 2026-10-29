@@ -3177,13 +3177,7 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-folder", (_, id) => {
       const mirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
       // The server keeps a deleted parent's live subfolders, now top-level.
-      const subfolders = mirrorFolder
-        ? this.databaseManager.db
-            .prepare(
-              "SELECT id, name FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL"
-            )
-            .all(id)
-        : [];
+      const subfolders = mirrorFolder ? this.databaseManager.getSubfolders(id) : [];
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
@@ -3208,13 +3202,7 @@ class IPCHandlers {
     });
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const previousMirrorFolder = this._noteFilesEnabled ? this._getMirrorFolder(id) : null;
-      const subfolders = previousMirrorFolder
-        ? this.databaseManager.db
-            .prepare(
-              "SELECT id, name FROM folders WHERE parent_folder_id = ? AND deleted_at IS NULL"
-            )
-            .all(id)
-        : [];
+      const subfolders = previousMirrorFolder ? this.databaseManager.getSubfolders(id) : [];
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
