@@ -57,10 +57,8 @@ export function decideNoteWorkspaceScope(input: {
   workspaces: Workspace[];
   contextSpace: ScopedSpace | null;
   noteSpace: ScopedSpace | null;
-  /** A note is open but not loaded yet, so its space is unknown. */
-  noteUnresolved?: boolean;
 }): NoteWorkspaceScopeDecision {
-  const { reason, activeWorkspaceId, workspaces, contextSpace, noteSpace, noteUnresolved } = input;
+  const { reason, activeWorkspaceId, workspaces, contextSpace, noteSpace } = input;
   const hidden = (space: ScopedSpace | null): boolean =>
     space != null && !isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces);
   const noteHidden = hidden(noteSpace);
@@ -77,9 +75,7 @@ export function decideNoteWorkspaceScope(input: {
   const keepsNote = noteSpace != null && !noteHidden;
   return {
     kind: "leaveHidden",
-    // A note not loaded yet belongs to the container being left; kept open, it
-    // would pull the user back into that workspace once it loads.
-    clearNote: noteHidden || (Boolean(noteUnresolved) && contextHidden),
+    clearNote: noteHidden,
     context: !contextHidden ? "keep" : keepsNote ? "note" : "default",
   };
 }

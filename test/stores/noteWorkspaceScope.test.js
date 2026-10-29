@@ -10,17 +10,20 @@ const spaces = [
 ];
 const folders = [
   { id: 10, space_id: 1, name: "Personal", is_default: 1 },
+  { id: 11, space_id: 1, name: "Ideas", is_default: 0 },
   { id: 30, space_id: 3, name: "Beta docs", is_default: 0 },
 ];
 const notes = [
   { id: 100, space_id: 1, folder_id: 10, title: "Personal note" },
+  { id: 110, space_id: 1, folder_id: 11, title: "Idea" },
   { id: 300, space_id: 3, folder_id: 30, title: "Beta note" },
 ];
 
 async function fixture(t) {
+  const liveSpaces = [...spaces];
   installBrowserGlobals(t, { initialStorage: { activeWorkspaceId: "a" } });
   globalThis.window.electronAPI = {
-    getSpaces: async () => spaces,
+    getSpaces: async () => [...liveSpaces],
     getFolders: async () => folders,
     getFolderNoteCounts: async () => [],
     getNotes: async (_type, _limit, folderId, spaceId) =>
@@ -67,6 +70,11 @@ async function fixture(t) {
     settle,
     activeWorkspaceId: () => useWorkspaceStore.getState().activeWorkspaceId,
     switchTo: (id) => useWorkspaceStore.getState().setActiveWorkspaceId(id),
+    putSpace: (space) => {
+      const index = liveSpaces.findIndex((s) => s.id === space.id);
+      if (index === -1) liveSpaces.push(space);
+      else liveSpaces[index] = space;
+    },
     context: () => ({
       folderId: store.getActiveFolderIdValue(),
       noteId: store.getActiveNoteIdValue(),
@@ -134,7 +142,7 @@ test("the open note moving into another workspace closes it without switching", 
   assert.deepEqual(f.context(), { folderId: 10, noteId: null });
 });
 
-test("a switch closes a note that hadn't loaded, so its load can't pull the user back", async (t) => {
+test("a note that hadn't loaded when the user switched can't pull them back", async (t) => {
   const f = await fixture(t);
   f.switchTo("b");
   f.store.setActiveFolderId(30);
@@ -142,9 +150,51 @@ test("a switch closes a note that hadn't loaded, so its load can't pull the user
   f.store.setActiveNoteId(999);
 
   f.switchTo("a");
-  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
   f.store.addNote({ id: 999, space_id: 3, folder_id: 30, title: "Late" });
   assert.equal(f.activeWorkspaceId(), "a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+});
+
+test("a switch keeps a Personal note that hadn't loaded open", async (t) => {
+  const f = await fixture(t);
+  f.switchTo("b");
+  f.store.setActiveFolderId(30);
+  await f.settle();
+  // An upload or a chat link opens the note without moving the container.
+  f.store.setActiveNoteId(110);
+
+  f.switchTo("a");
+  await f.store.loadContainerNotes(f.store.folderContainerKey(11));
+  assert.equal(f.context().noteId, 110);
+  assert.equal(f.activeWorkspaceId(), "a");
+});
+
+test("opening a space before it loads switches to its workspace once it arrives", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  // A teamspace just created in B: the dialog opens it before the reload
+  // that brings it into the store.
+  f.putSpace({ id: 4, kind: "team", workspace_id: "b", name: "New in B" });
+  f.store.setActiveContext(4, null);
+  assert.equal(f.activeWorkspaceId(), "a");
+
+  await f.store.loadSpaces();
+  assert.equal(f.activeWorkspaceId(), "b");
+  // On the new space's root, not Personal's default folder.
+  assert.equal(f.context().folderId, null);
+});
+
+test("an open space moving into another workspace leaves it without switching", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  f.store.setActiveContext(2, null);
+  await f.settle();
+
+  // Alpha, already loaded and open, turns out to belong to B after a sync.
+  f.putSpace({ ...spaces[1], workspace_id: "b" });
+  await f.store.loadSpaces();
+  assert.equal(f.activeWorkspaceId(), "a");
+  assert.equal(f.context().folderId, 10);
 });
 
 test("a workspace switch cancels a pending open, so its load closes it instead", async (t) => {
