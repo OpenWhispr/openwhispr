@@ -903,6 +903,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "不可用"
     },
+    "modelCompatibility": {
+      "englishOnly": "仅支持英语",
+      "unsupported": "不支持{{language}}",
+      "englishFallback": "自动检测时使用英语"
+    },
     "apiKeyOptional": "API Key（可选）",
     "getKey": "获取密钥 ->",
     "endpointUrl": "端点 URL",

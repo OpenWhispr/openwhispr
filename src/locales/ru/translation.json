@@ -903,6 +903,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "Недоступно"
     },
+    "modelCompatibility": {
+      "englishOnly": "Только английский",
+      "unsupported": "Не поддерживает {{language}}",
+      "englishFallback": "При автоопределении используется английский"
+    },
     "apiKeyOptional": "API-ключ (необязательно)",
     "getKey": "Получить ключ ->",
     "endpointUrl": "URL конечной точки",

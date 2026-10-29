@@ -16,6 +16,7 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  getParakeetLanguageCompatibility,
   isSherpaLocalProvider,
 } from "../models/ModelRegistry";
 import {
@@ -57,6 +58,7 @@ import {
 import { getCachedPlatform } from "../utils/platform";
 import { pickWhisperGpuBackend } from "../utils/whisperGpuPack";
 import logger from "../utils/logger";
+import { getLanguageLabel } from "../utils/languageSupport";
 import type { ParakeetCheckResult } from "../types/electron";
 
 interface LocalModel {
@@ -79,6 +81,7 @@ interface LocalModelCardProps {
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
+  isLanguageUnsupported?: boolean;
   modelCardUrl?: string;
   onSelect: () => void;
   onDelete: () => void;
@@ -101,6 +104,7 @@ function LocalModelCard({
   recommended,
   provider,
   languageLabel,
+  isLanguageUnsupported,
   modelCardUrl,
   onSelect,
   onDelete,
@@ -110,7 +114,7 @@ function LocalModelCard({
 }: LocalModelCardProps) {
   const { t } = useTranslation();
   const handleClick = () => {
-    if (isDownloaded && !isSelected) {
+    if (isDownloaded && !isSelected && !isLanguageUnsupported) {
       onSelect();
     }
   };
@@ -120,7 +124,9 @@ function LocalModelCard({
       onClick={handleClick}
       className={`relative w-full text-start overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
-      } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
+      } ${isDownloaded && !isSelected && !isLanguageUnsupported ? "cursor-pointer" : ""} ${
+        isLanguageUnsupported ? "opacity-60" : ""
+      }`}
     >
       <div className="flex items-center gap-1.5 p-2">
         <div className="shrink-0">
@@ -151,7 +157,14 @@ function LocalModelCard({
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {languageLabel && (
-            <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
+            <span
+              title={languageLabel}
+              className={`max-w-44 truncate text-xs font-medium shrink-0 ${
+                isLanguageUnsupported
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground/70"
+              }`}
+            >
               {languageLabel}
             </span>
           )}
@@ -479,6 +492,7 @@ export default function TranscriptionModelPicker({
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -1010,6 +1024,9 @@ export default function TranscriptionModelPicker({
 
   const handleParakeetModelSelect = useCallback(
     (modelId: string) => {
+      // Downloads can finish after the selected language changes.
+      const language = useSettingsStore.getState().preferredLanguage;
+      if (getParakeetLanguageCompatibility(modelId, language) === "unsupported") return;
       const organization = getASRModelOrganization(modelId);
       const provider = organization === "cohere" ? "cohere" : "nvidia";
       setInternalLocalProvider(organization);
@@ -1353,6 +1370,21 @@ export default function TranscriptionModelPicker({
             language: "en",
             recommended: false,
           };
+          const languageCompatibility = getParakeetLanguageCompatibility(
+            modelId,
+            preferredLanguage
+          );
+          const isLanguageUnsupported = languageCompatibility === "unsupported";
+          let languageLabel: string | undefined;
+          if (languageCompatibility === "english-only") {
+            languageLabel = t("transcription.modelCompatibility.englishOnly");
+          } else if (languageCompatibility === "english-fallback") {
+            languageLabel = t("transcription.modelCompatibility.englishFallback");
+          } else if (languageCompatibility === "unsupported") {
+            languageLabel = t("transcription.modelCompatibility.unsupported", {
+              language: getLanguageLabel(preferredLanguage),
+            });
+          }
 
           return (
             <LocalModelCard
@@ -1370,6 +1402,8 @@ export default function TranscriptionModelPicker({
               recommended={info.recommended}
               provider={getASRModelOrganization(modelId)}
               modelCardUrl={info.modelCardUrl}
+              languageLabel={languageLabel}
+              isLanguageUnsupported={isLanguageUnsupported}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>

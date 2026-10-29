@@ -4849,6 +4849,11 @@
       "requiresMacOS": "macOS {{version}}+",
       "unavailable": "غير متوفر"
     },
+    "modelCompatibility": {
+      "englishOnly": "الإنجليزية فقط",
+      "unsupported": "لا يدعم {{language}}",
+      "englishFallback": "يستخدم الإنجليزية عند الاكتشاف التلقائي"
+    },
     "apiKeyOptional": "API Key (اختياري)",
     "getKey": "الحصول على مفتاح ←",
     "endpointUrl": "عنوان URL لنقطة النهاية",
