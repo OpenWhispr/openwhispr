@@ -121,6 +121,33 @@ test("decideNoteWorkspaceScope: opening another workspace's space or note switch
   );
 });
 
+test("decideNoteWorkspaceScope: data changing under the open note never switches", () => {
+  // A sync or an undone move put the open Personal note into B's teamspace.
+  assert.deepEqual(
+    decide({ reason: "dataChanged", contextSpace: personal, noteSpace: teamIn(3, "b") }),
+    {
+      kind: "leaveHidden",
+      clearNote: true,
+      context: "keep",
+    }
+  );
+  assert.deepEqual(decide({ reason: "dataChanged", contextSpace: teamIn(3, "b") }), {
+    kind: "leaveHidden",
+    clearNote: false,
+    context: "default",
+  });
+});
+
+test("decideNoteWorkspaceScope: leaving a container closes its note that hasn't loaded", () => {
+  assert.deepEqual(decide({ contextSpace: teamIn(3, "b"), noteUnresolved: true }), {
+    kind: "leaveHidden",
+    clearNote: true,
+    context: "default",
+  });
+  // A visible container keeps its note open while it loads.
+  assert.deepEqual(decide({ contextSpace: personal, noteUnresolved: true }), { kind: "none" });
+});
+
 test("selectWorkspaceForSpaceCreation: preselected id wins when manageable", () => {
   const manageable = [workspace("a", "owner"), workspace("b", "admin")];
   assert.equal(selectWorkspaceForSpaceCreation(manageable, null, "b")?.id, "b");

@@ -107,3 +107,55 @@ test("opening another workspace's folder or note switches to that workspace", as
   assert.deepEqual(f.context(), { folderId: 30, noteId: 300 });
   assert.equal(f.activeWorkspaceId(), "b");
 });
+
+test("opening another workspace's note before it loads switches once it loads", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  f.store.setActiveNoteId(300);
+  assert.equal(f.activeWorkspaceId(), "a");
+  await f.store.loadContainerNotes(f.store.folderContainerKey(30));
+  assert.equal(f.activeWorkspaceId(), "b");
+  assert.equal(f.context().noteId, 300);
+});
+
+test("the open note moving into another workspace closes it without switching", async (t) => {
+  const f = await fixture(t);
+  // B's folder loaded earlier in the session.
+  f.switchTo("b");
+  f.store.setActiveFolderId(30);
+  await f.settle();
+  f.switchTo("a");
+  await f.settle();
+  f.store.setActiveNoteId(100);
+
+  // A sync (or an undone move) puts the note into B's teamspace.
+  f.store.updateNoteInStore({ ...f.store.getNoteFromStore(100), space_id: 3, folder_id: 30 });
+  assert.equal(f.activeWorkspaceId(), "a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+});
+
+test("a switch closes a note that hadn't loaded, so its load can't pull the user back", async (t) => {
+  const f = await fixture(t);
+  f.switchTo("b");
+  f.store.setActiveFolderId(30);
+  await f.settle();
+  f.store.setActiveNoteId(999);
+
+  f.switchTo("a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+  f.store.addNote({ id: 999, space_id: 3, folder_id: 30, title: "Late" });
+  assert.equal(f.activeWorkspaceId(), "a");
+});
+
+test("a workspace switch cancels a pending open, so its load closes it instead", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  // Opened from Personal before B's folder loaded, then the user switches
+  // away and back.
+  f.store.setActiveNoteId(300);
+  f.switchTo("b");
+  f.switchTo("a");
+  await f.store.loadContainerNotes(f.store.folderContainerKey(30));
+  assert.equal(f.activeWorkspaceId(), "a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
+});

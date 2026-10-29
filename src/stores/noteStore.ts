@@ -14,7 +14,11 @@ import {
   removeNoteConflictId,
 } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
-import { decideNoteWorkspaceScope, spacesInWorkspaceScope } from "../lib/workspaceSelection";
+import {
+  decideNoteWorkspaceScope,
+  spacesInWorkspaceScope,
+  type NoteWorkspaceScopeReason,
+} from "../lib/workspaceSelection";
 import { useWorkspaceStore } from "./workspaceStore";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
@@ -110,19 +114,29 @@ useNoteStore.subscribe((state) => {
 // first would read as navigating back into the workspace just left, so
 // reconciling pauses while they apply.
 let applyingWorkspaceScope = false;
-function reconcileWorkspaceScope(reason: "workspaceSwitched" | "navigated"): void {
+// A note opened before it loaded: its first load still counts as the user's
+// navigation, so it may switch workspace then. A workspace switch cancels that.
+let awaitingOpenedNoteId: number | null = null;
+function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
   const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
   const spaceById = (id: number): SpaceItem | null =>
     state.spaces.find((space) => space.id === id) ?? null;
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
+  const noteSpace = activeNote ? spaceById(activeNote.space_id) : null;
+  let reason = trigger;
+  if (noteSpace && awaitingOpenedNoteId === state.activeNoteId) {
+    awaitingOpenedNoteId = null;
+    reason = "navigated";
+  }
   const decision = decideNoteWorkspaceScope({
     reason,
     activeWorkspaceId,
     workspaces,
     contextSpace: state.activeContext ? spaceById(state.activeContext.spaceId) : null,
-    noteSpace: activeNote ? spaceById(activeNote.space_id) : null,
+    noteSpace,
+    noteUnresolved: state.activeNoteId != null && !noteSpace,
   });
   if (decision.kind === "none") return;
   if (decision.kind === "enterWorkspace") {
@@ -149,18 +163,24 @@ function reconcileWorkspaceScope(reason: "workspaceSwitched" | "navigated"): voi
 }
 
 useNoteStore.subscribe((state, previous) => {
+  if (state.activeNoteId !== previous.activeNoteId) {
+    awaitingOpenedNoteId = state.activeNoteId;
+  }
   if (
     state.activeContext !== previous.activeContext ||
-    state.activeNoteId !== previous.activeNoteId ||
-    state.spaces !== previous.spaces ||
-    // The open note may only resolve once its container loads.
-    state.notesByContainer !== previous.notesByContainer
+    state.activeNoteId !== previous.activeNoteId
   ) {
     reconcileWorkspaceScope("navigated");
+  } else if (
+    state.spaces !== previous.spaces ||
+    state.notesByContainer !== previous.notesByContainer
+  ) {
+    reconcileWorkspaceScope("dataChanged");
   }
 });
 useWorkspaceStore.subscribe((state, previous) => {
   if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
+    awaitingOpenedNoteId = null;
     reconcileWorkspaceScope("workspaceSwitched");
   } else if (state.workspaces !== previous.workspaces) {
     // A workspace that just arrived (an accepted invitation) can claim the

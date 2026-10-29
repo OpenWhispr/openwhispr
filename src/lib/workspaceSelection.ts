@@ -42,19 +42,25 @@ export type NoteWorkspaceScopeDecision =
   | { kind: "enterWorkspace"; workspaceId: string }
   | { kind: "leaveHidden"; clearNote: boolean; context: "keep" | "note" | "default" };
 
+export type NoteWorkspaceScopeReason = "workspaceSwitched" | "navigated" | "dataChanged";
+
 /**
  * Keeps the open note and container inside the active workspace. Switching
  * workspaces leaves whatever the switch hid; opening a space or note of
  * another workspace (a search result, a link, an invitation) switches to it.
+ * Data changing under the open note (a sync, an undone move) never switches:
+ * it leaves what it hid, like a switch.
  */
 export function decideNoteWorkspaceScope(input: {
-  reason: "workspaceSwitched" | "navigated";
+  reason: NoteWorkspaceScopeReason;
   activeWorkspaceId: string | null;
   workspaces: Workspace[];
   contextSpace: ScopedSpace | null;
   noteSpace: ScopedSpace | null;
+  /** A note is open but not loaded yet, so its space is unknown. */
+  noteUnresolved?: boolean;
 }): NoteWorkspaceScopeDecision {
-  const { reason, activeWorkspaceId, workspaces, contextSpace, noteSpace } = input;
+  const { reason, activeWorkspaceId, workspaces, contextSpace, noteSpace, noteUnresolved } = input;
   const hidden = (space: ScopedSpace | null): boolean =>
     space != null && !isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces);
   const noteHidden = hidden(noteSpace);
@@ -71,7 +77,9 @@ export function decideNoteWorkspaceScope(input: {
   const keepsNote = noteSpace != null && !noteHidden;
   return {
     kind: "leaveHidden",
-    clearNote: noteHidden,
+    // A note not loaded yet belongs to the container being left; kept open, it
+    // would pull the user back into that workspace once it loads.
+    clearNote: noteHidden || (Boolean(noteUnresolved) && contextHidden),
     context: !contextHidden ? "keep" : keepsNote ? "note" : "default",
   };
 }
