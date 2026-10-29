@@ -10,6 +10,7 @@ import {
 } from "./managedTranscription";
 import { getTranscriptionProviders } from "../models/ModelRegistry";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import { resolveApiKey } from "../utils/resolveApiKey";
 
 export interface FileTranscriptionResult {
   success: boolean;
@@ -188,7 +189,7 @@ export async function transcribeFile(
     requestId: opts.requestId,
     purpose: opts.purpose,
     managed: managed?.kind === "managed" ? managed : undefined,
-    apiKey: cfg.getApiKey(),
+    apiKey: await resolveApiKey(cfg.getApiKey()),
     baseUrl: cfg.cloudTranscriptionBaseUrl,
     model: cfg.cloudTranscriptionModel,
     diarize: diarize || undefined,

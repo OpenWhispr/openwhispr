@@ -7,22 +7,44 @@ const { deferred } = require("./harness/deferred");
 const bindings = [
   ...BYOK_API_KEYS.map((key) => ({ ...key, channel: `save-${key.base}-key` })),
   ...[
-    ["corti-client-id", "cortiClientId", "saveCortiClientId"],
-    ["corti-client-secret", "cortiClientSecret", "saveCortiClientSecret"],
-    ["custom-transcription-key", "customTranscriptionApiKey", "saveCustomTranscriptionKey"],
-    ["cleanup-custom-key", "cleanupCustomApiKey", "saveCleanupCustomKey"],
-    ["bedrock-access-key-id", "bedrockAccessKeyId", "saveBedrockAccessKeyId"],
-    ["bedrock-secret-access-key", "bedrockSecretAccessKey", "saveBedrockSecretAccessKey"],
-    ["bedrock-session-token", "bedrockSessionToken", "saveBedrockSessionToken"],
-    ["azure-api-key", "azureApiKey", "saveAzureApiKey"],
-    ["vertex-api-key", "vertexApiKey", "saveVertexApiKey"],
-  ].map(([channel, storeKey, save]) => ({
+    ["corti-client-id", "cortiClientId", "saveCortiClientId", "CORTI_CLIENT_ID"],
+    ["corti-client-secret", "cortiClientSecret", "saveCortiClientSecret", "CORTI_CLIENT_SECRET"],
+    [
+      "custom-transcription-key",
+      "customTranscriptionApiKey",
+      "saveCustomTranscriptionKey",
+      "CUSTOM_TRANSCRIPTION_API_KEY",
+    ],
+    ["cleanup-custom-key", "cleanupCustomApiKey", "saveCleanupCustomKey", "CUSTOM_CLEANUP_API_KEY"],
+    [
+      "bedrock-access-key-id",
+      "bedrockAccessKeyId",
+      "saveBedrockAccessKeyId",
+      "BEDROCK_ACCESS_KEY_ID",
+    ],
+    [
+      "bedrock-secret-access-key",
+      "bedrockSecretAccessKey",
+      "saveBedrockSecretAccessKey",
+      "BEDROCK_SECRET_ACCESS_KEY",
+    ],
+    [
+      "bedrock-session-token",
+      "bedrockSessionToken",
+      "saveBedrockSessionToken",
+      "BEDROCK_SESSION_TOKEN",
+    ],
+    ["azure-api-key", "azureApiKey", "saveAzureApiKey", "AZURE_OPENAI_API_KEY"],
+    ["vertex-api-key", "vertexApiKey", "saveVertexApiKey", "VERTEX_API_KEY"],
+  ].map(([channel, storeKey, save, env]) => ({
     channel: `save-${channel}`,
     storeKey,
     save,
+    env,
     get: save.replace(/^save/, "get"),
   })),
 ];
+const storeKeyForEnv = Object.fromEntries(bindings.map(({ env, storeKey }) => [env, storeKey]));
 const handlers = new Map();
 const keys = new Map();
 const notifications = [];
@@ -42,7 +64,8 @@ let policyRevision = 0;
 let workspacePolicy = { ...UNMANAGED_POLICY, authGeneration, revision: policyRevision };
 const environmentManager = Object.fromEntries(
   bindings.flatMap(({ get, save, storeKey }) => [
-    [get, () => keys.get(storeKey) || ""],
+    // Getters expand a stored $VAR reference; the IPC layer compares raw values.
+    [get, () => (keys.get(storeKey) || "").replace(/^\$\w+$/, "expanded-placeholder")],
     [
       save,
       (key) => {
@@ -52,6 +75,7 @@ const environmentManager = Object.fromEntries(
     ],
   ])
 );
+environmentManager.getRawKey = (env) => keys.get(storeKeyForEnv[env]) || "";
 
 // The warm-socket contract the real clients share: a warmup records its options
 // only when it opens the socket (one already open or opening wins), cleanup
@@ -266,6 +290,33 @@ test("every secret saver notifies peers by name only, including removal", () => 
     () => invoke("save-custom-transcription-key", { key: "secret-sentinel" }),
     TypeError
   );
+});
+
+test("re-saving an unedited $VAR reference is no change", () => {
+  notifications.length = 0;
+  invoke("save-custom-transcription-key", "$OPENAI_API_KEY");
+  assert.deepEqual(notifications, [[2, "api-key-updated", "customTranscriptionApiKey"]]);
+  notifications.length = 0;
+  invoke("save-custom-transcription-key", "$OPENAI_API_KEY");
+  assert.deepEqual(notifications, []);
+  invoke("save-custom-transcription-key", "");
+});
+
+test("a rejected $VAR reference notifies no one", (t) => {
+  const save = environmentManager.saveCustomTranscriptionKey;
+  t.after(() => {
+    environmentManager.saveCustomTranscriptionKey = save;
+  });
+  environmentManager.saveCustomTranscriptionKey = () => ({
+    success: false,
+    reason: "unknown-ref",
+  });
+  notifications.length = 0;
+  assert.deepEqual(invoke("save-custom-transcription-key", "$MY_COMPANY_KEY"), {
+    success: false,
+    reason: "unknown-ref",
+  });
+  assert.deepEqual(notifications, []);
 });
 
 // provider, the instance it keeps, the saver of the key it reads, and the session

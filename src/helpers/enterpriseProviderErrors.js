@@ -572,6 +572,14 @@ function validateEnterpriseEndpoint(endpoint) {
  * Extracts the enterprise credential/config subset from an IPC payload
  * so SDK factories receive only the fields they expect.
  */
+const ENTERPRISE_SECRET_FIELDS = [
+  "bedrockAccessKeyId",
+  "bedrockSecretAccessKey",
+  "bedrockSessionToken",
+  "azureApiKey",
+  "vertexApiKey",
+];
+
 function pickEnterpriseConfig(config = {}) {
   return {
     bedrockRegion: config.bedrockRegion,
@@ -581,16 +589,38 @@ function pickEnterpriseConfig(config = {}) {
     bedrockSessionToken: config.bedrockSessionToken,
     azureEndpoint: config.azureEndpoint,
     azureApiVersion: config.azureApiVersion,
+    azureApiKey: config.azureApiKey,
     vertexProject: config.vertexProject,
     vertexLocation: config.vertexLocation,
+    vertexApiKey: config.vertexApiKey,
   };
+}
+
+// Clone + resolve each secret field in place. Never OR Azure/Vertex keys into
+// a shared apiKey unless that provider is the one being called.
+function resolveManualEnterpriseRuntime(config = {}, provider, model, resolveSecretRef) {
+  const { usableSecret } = require("./envRef.cjs");
+  const resolve = (value) => {
+    const out = resolveSecretRef ? resolveSecretRef(value || "") : usableSecret(value);
+    return usableSecret(out);
+  };
+  const picked = { ...pickEnterpriseConfig(config) };
+  for (const key of ENTERPRISE_SECRET_FIELDS) {
+    if (picked[key]) picked[key] = resolve(picked[key]);
+  }
+  let apiKey = resolve(config.apiKey);
+  if (!apiKey && provider === "azure") apiKey = picked.azureApiKey || "";
+  if (!apiKey && provider === "vertex") apiKey = picked.vertexApiKey || "";
+  return { provider, model, apiKey, enterprise: picked };
 }
 
 module.exports = {
   ENTERPRISE_PROVIDERS,
+  ENTERPRISE_SECRET_FIELDS,
   isEnterpriseProvider,
   mapEnterpriseError,
   pickEnterpriseConfig,
+  resolveManualEnterpriseRuntime,
   runAbortableOperation,
   runBedrockRequest,
   unwrapRetryError,
