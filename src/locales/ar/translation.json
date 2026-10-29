@@ -4141,10 +4141,10 @@
         "resetToDefault": "إعادة التعيين إلى {{hotkey}}",
         "title": "مفتاح اختصار الإملاء",
         "linuxPttPermissionTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا إضافيًا",
-        "linuxPttPermissionDescription": "قم بتشغيل هذا الأمر وتسجيل الخروج/الدخول: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "شغّل هذا الأمر، ثم سجّل الخروج من حساب مستخدم Linux الخاص بك وسجّل الدخول مجددًا: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "يتطلب وضع «اضغط مع الاستمرار للتحدث» إعدادًا",
         "linuxPttSetupDescription": "يحتاج المستخدم الخاص بك إلى الوصول إلى أجهزة إدخال لوحة المفاتيح.",
-        "linuxPttSetupNote": "بعد تشغيل الأمر، قم بتسجيل الخروج وتسجيل الدخول مرة أخرى.",
+        "linuxPttSetupNote": "بعد تشغيل الأمر، سجّل الخروج من حساب مستخدم Linux الخاص بك، ثم سجّل الدخول مجددًا.",
         "hyprlandConfigWriteWarningTitle": "لن يتم حفظ اختصارات Hyprland بشكل دائم",
         "hyprlandConfigWriteWarningDescription": "لا يمكن لـ OpenWhispr الكتابة إلى {{path}}، لذلك لن تبقى الاختصارات بعد إعادة تحميل تكوين Hyprland. تأكد من وجود الملف وقابليته للكتابة.",
         "hyprlandUnbindDescription": "في Hyprland، يستحوذ OpenWhispr على الاختصار المحدد. سيتم فك أي ارتباط Hyprland موجود يستخدم مجموعة المفاتيح نفسها عندما يسجل OpenWhispr اختصاره."
