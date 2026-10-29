@@ -235,6 +235,39 @@ describe('analytics consent persistence', () => {
     }
   });
 
+  it.each(['once', 'always'] as const)(
+    'persists withdrawal and keeps later operations usable when a subscriber throws %s',
+    async (frequency) => {
+      let durableConfig: unknown = { defaultMode: 'cloud', usageAnalyticsEnabled: true };
+      mockSaveConfig.mockImplementation(async (config: unknown) => {
+        durableConfig = config;
+      });
+      let didThrow = false;
+      const unsubscribe = useConfigStore.subscribe(() => {
+        if (frequency === 'always' || !didThrow) {
+          didThrow = true;
+          throw new Error('native subscriber failed');
+        }
+      });
+      try {
+        await expect(
+          Promise.resolve().then(() =>
+            useConfigStore.getState().updateConfig({ usageAnalyticsEnabled: false }),
+          ),
+        ).rejects.toThrow('native subscriber failed');
+      } finally {
+        unsubscribe();
+      }
+      expect(durableConfig).toMatchObject({ usageAnalyticsEnabled: false });
+      await useConfigStore.getState().updateConfig({ preferredLanguage: 'fr' });
+      expect(durableConfig).toMatchObject({
+        usageAnalyticsEnabled: false,
+        preferredLanguage: 'fr',
+      });
+      expect(useConfigStore.getState().isLoading).toBe(false);
+    },
+  );
+
   it('keeps disabled consent if an explicit reset fails', async () => {
     useConfigStore.setState({ config: { defaultMode: 'cloud', usageAnalyticsEnabled: false } });
     mockClearConfig.mockRejectedValueOnce(new Error('clear failed'));

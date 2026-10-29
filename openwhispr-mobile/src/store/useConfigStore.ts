@@ -51,12 +51,21 @@ function enqueueConfigOperation(
   });
   // Subscribers can synchronously enqueue another change, so reserve our place first.
   configUpdate = result;
-  publish();
+  let publicationFailure: { error: unknown } | undefined;
+  try {
+    publish();
+  } catch (error) {
+    publicationFailure = { error };
+  }
   if (previous) previous.then(start, start);
   else start();
-  return result.finally(() => {
-    if (configUpdate === result) configUpdate = null;
-  });
+  return result
+    .finally(() => {
+      if (configUpdate === result) configUpdate = null;
+    })
+    .then(() => {
+      if (publicationFailure) throw publicationFailure.error;
+    });
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
