@@ -172,6 +172,7 @@ export type TranscriptionErrorCode =
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
   | "PROVIDER_RATE_LIMITED"
+  | "OPENROUTER_OUT_OF_CREDITS"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
@@ -3010,8 +3011,13 @@ declare global {
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
+        messageKey?: string;
         diarized?: boolean;
         segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
+        warning?: string;
+        failedChunks?: number;
+        totalChunks?: number;
       }>;
 
       // Usage limit events

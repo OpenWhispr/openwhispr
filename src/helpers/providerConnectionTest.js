@@ -168,6 +168,7 @@ function buildTranscriptionEndpoint(base) {
 
 function resolveProviderRequest(config) {
   const provider = String(config?.provider || "").toLowerCase();
+  const scope = String(config?.scope || "").toLowerCase();
   const apiKey = typeof config?.apiKey === "string" ? config.apiKey.trim() : "";
   let endpoints = ENDPOINTS[provider] ? [ENDPOINTS[provider]] : [];
   // A hosted provider's fixed endpoint never redirects. Following one would carry
@@ -176,6 +177,7 @@ function resolveProviderRequest(config) {
   // servers may redirect within themselves, such as adding a trailing slash.
   let redirect = "error";
   let transcriptionEndpoint;
+  let checksOpenRouterKey = false;
 
   if (provider === "openai") {
     const override = normalizeBaseUrl(
@@ -210,6 +212,21 @@ function resolveProviderRequest(config) {
     endpoints = buildModelEndpoints(parsed.toString());
     transcriptionEndpoint = buildTranscriptionEndpoint(parsed.toString());
     redirect = "follow";
+    // OpenRouter lists speech-to-text models only when asked for that output
+    // modality, so its default catalog reads every STT id as missing (#1764).
+    // The catalog answers any caller, so the key is checked on its own first.
+    const host = parsed.hostname;
+    if (
+      scope === "transcription" &&
+      (host === "openrouter.ai" || host.endsWith(".openrouter.ai"))
+    ) {
+      checksOpenRouterKey = true;
+      endpoints = endpoints.map((endpoint) => {
+        const url = new URL(endpoint);
+        url.searchParams.set("output_modalities", "transcription");
+        return url.toString();
+      });
+    }
   }
 
   if (endpoints.length === 0) {
@@ -238,7 +255,14 @@ function resolveProviderRequest(config) {
     }
   }
 
-  return { endpoint: endpoints[0], endpoints, headers, redirect, transcriptionEndpoint };
+  return {
+    endpoint: endpoints[0],
+    endpoints,
+    headers,
+    redirect,
+    transcriptionEndpoint,
+    checksOpenRouterKey,
+  };
 }
 
 // When several candidate endpoints fail, report the most actionable failure. An answer that
@@ -413,6 +437,14 @@ async function testProviderConnection(
       errorCode: error.errorCode || "invalidUrl",
       error: error.message,
     };
+  }
+
+  if (request.checksOpenRouterKey) {
+    const keyCheck = await testProviderConnection(
+      { provider: "openrouter", scope: "transcription", apiKey: config.apiKey },
+      fetchImpl
+    );
+    if (!keyCheck.success) return keyCheck;
   }
 
   const provider = String(config?.provider || "").toLowerCase();

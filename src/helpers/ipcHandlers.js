@@ -270,6 +270,7 @@ const {
   createUploadSlots,
   withoutChunkAnalytics,
 } = require("./cloudChunkPolicy");
+const { transcribeOpenRouterChunks } = require("./openRouterChunkedUpload");
 const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 
 // Chunk retries need their own connection pool: recovering a wedged chunk pool
@@ -703,8 +704,8 @@ class IPCHandlers {
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     // requestId -> AbortControllers for in-flight audio-upload work (cloud
-    // upload, or local transcription + diarization sharing one id), so a
-    // cancel can abort the exact job.
+    // upload, bring-your-own-key upload, or local transcription + diarization
+    // sharing one id), so a cancel can abort the exact job.
     this._uploadCancelRegistry = createUploadCancelRegistry();
     this._agentStreamRequests = new AgentStreamRequestRegistry();
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
@@ -7505,7 +7506,8 @@ class IPCHandlers {
           preferredLanguage && preferredLanguage !== "auto"
             ? preferredLanguage.split("-")[0]
             : undefined;
-        const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+        const { resolveTranscriptionRoute, batchTranscriptionHttpError } =
+          await import("./transcriptionRoute.ts");
         const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
@@ -7721,7 +7723,9 @@ class IPCHandlers {
                   ? this.environmentManager.getCustomTranscriptionKey()
                   : route.auth.keyRef === "groq"
                     ? this.environmentManager.getGroqKey()
-                    : this.environmentManager.getOpenAIKey();
+                    : route.auth.keyRef === "openrouter"
+                      ? this.environmentManager.getOpenrouterKey()
+                      : this.environmentManager.getOpenAIKey();
           if (!apiKey && provider !== "custom") {
             throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
               provider: transcriptionProviderName(provider),
@@ -7787,12 +7791,15 @@ class IPCHandlers {
               status: response.status,
               body: redactProviderBody(errorText),
             });
-            throw providerHttpError({
-              ...providerErrorContext,
-              status: response.status,
-              body: errorText,
-              headers: response.headers,
-            });
+            throw Object.assign(
+              providerHttpError({
+                ...providerErrorContext,
+                status: response.status,
+                body: errorText,
+                headers: response.headers,
+              }),
+              batchTranscriptionHttpError(response.status, endpoint)
+            );
           }
           const data = await response.json();
           result = { text: data?.text, source: provider, model: route.model };
@@ -11638,7 +11645,8 @@ class IPCHandlers {
             const sourcePath = resolveAllowedAudioPath(filePath);
             if (!sourcePath) return { success: false, error: "File path not allowed" };
 
-            const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");
+            const { resolveTranscriptionRoute, batchTranscriptionHttpError, uploadsInChunks } =
+              await import("./transcriptionRoute.ts");
             const route = resolveTranscriptionRoute({
               settings: {
                 transcriptionMode,
@@ -11675,17 +11683,74 @@ class IPCHandlers {
               return { success: true, ...result };
             }
 
-            const upload = await prepareProviderUpload(sourcePath, { signal });
-            cleanupUpload = upload.cleanup;
-            const realByok = upload.path;
-
-            // Every branch below calls a BYOK provider or the user's own server.
-            providerErrorContext = {
+            // Every branch but the managed one calls a BYOK provider or the user's own server.
+            const byokErrorContext = {
               provider: transcriptionProviderName(route.provider),
               selfHosted: route.provider === "self-hosted" || route.provider === "custom",
               model: route.model,
               surface: "transcription",
             };
+
+            // OpenRouter's upstream providers stop after ~60 s of work per request,
+            // so its uploads go out in 4-minute pieces, cut straight from the source
+            // with any video dropped. The whole-file cap below never applies.
+            if (uploadsInChunks(route)) {
+              providerErrorContext = byokErrorContext;
+              if (!apiKey && route.provider !== "custom") {
+                throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+                  provider: byokErrorContext.provider,
+                  surface: "transcription",
+                });
+              }
+              const url = new URL(route.endpoint);
+              const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
+              const { text, warning, failedChunks, totalChunks } = await transcribeOpenRouterChunks(
+                {
+                  inputPath: sourcePath,
+                  split: require("./ffmpegUtils").splitAudioFile,
+                  transcribeChunk: async (chunkPath, attemptSignal) => {
+                    const { body, boundary } = buildMultipartBody(
+                      fs.readFileSync(chunkPath),
+                      path.basename(chunkPath),
+                      "audio/mpeg",
+                      { model: route.model }
+                    );
+                    const data = await postMultipart(url, body, boundary, headers, {
+                      signal: attemptSignal,
+                    });
+                    if (data.statusCode === 200) return { text: data.data?.text ?? "" };
+                    debugLogger.warn("OpenRouter upload piece failed", {
+                      piece: path.basename(chunkPath),
+                      status: data.statusCode,
+                      body: redactProviderBody(data.data),
+                    });
+                    // The handler's catch classifies it (asProviderError) by status and body.
+                    throw Object.assign(
+                      new Error(
+                        data.data?.error?.message ||
+                          data.data?.error ||
+                          `API error: ${data.statusCode}`
+                      ),
+                      { statusCode: data.statusCode, responseBody: data.data },
+                      batchTranscriptionHttpError(data.statusCode, route.endpoint)
+                    );
+                  },
+                  onProgress: (payload) =>
+                    event.sender.send("upload-transcription-progress", payload),
+                  signal,
+                }
+              );
+              return {
+                success: true,
+                text,
+                ...(warning ? { warning, failedChunks, totalChunks } : {}),
+              };
+            }
+
+            const upload = await prepareProviderUpload(sourcePath, { signal });
+            cleanupUpload = upload.cleanup;
+            const realByok = upload.path;
+            providerErrorContext = byokErrorContext;
 
             if (route.transport === "http-batch" && route.provider === "self-hosted") {
               // User's own server, so the 25 MB third-party cap does not apply.

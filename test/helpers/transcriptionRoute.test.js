@@ -42,7 +42,16 @@ test("self-hosted routes to the configured server and wins over stale flags", as
 });
 
 test("self-hosted mode without a URL fails closed unless the provider is custom", async () => {
-  for (const provider of ["openai", "groq", "mistral", "xai", "corti", "gemini", "tinfoil"]) {
+  for (const provider of [
+    "openai",
+    "groq",
+    "mistral",
+    "xai",
+    "corti",
+    "gemini",
+    "tinfoil",
+    "openrouter",
+  ]) {
     const route = await resolve({
       transcriptionMode: "self-hosted",
       remoteTranscriptionUrl: "",
@@ -310,6 +319,100 @@ test("openai and groq route to fixed endpoints with provider-validated models", 
   assert.equal(groqStale.endpoint, "https://api.groq.com/openai/v1/audio/transcriptions");
   assert.equal(groqStale.model, "whisper-large-v3-turbo", "mismatched model degrades to default");
   assert.deepEqual(groqStale.auth, { scheme: "bearer", keyRef: "groq" });
+});
+
+test("openrouter routes to its own base and keeps vendor-prefixed model ids", async () => {
+  const route = await resolve({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "openai/gpt-transcribe",
+  });
+  assert.equal(route.transport, "http-batch");
+  assert.equal(route.provider, "openrouter");
+  assert.equal(route.endpoint, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.equal(route.model, "openai/gpt-transcribe");
+  assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "openrouter" });
+  assert.equal(route.sizeCapBytes, 25 * 1024 * 1024);
+
+  // The registry list is a shortlist, not a whitelist: OpenRouter's catalog
+  // moves faster than our releases, so any vendor-prefixed id must survive.
+  const unlisted = await resolve({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "qwen/qwen3-asr-flash-2026-02-10",
+  });
+  assert.equal(unlisted.model, "qwen/qwen3-asr-flash-2026-02-10");
+
+  // A bare id is another provider's leftover — OpenRouter would 400 on it.
+  const stale = await resolve({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "whisper-large-v3-turbo",
+  });
+  assert.equal(stale.model, "openai/gpt-transcribe");
+});
+
+test("a Custom endpoint pointed at OpenRouter stays on the custom key slot", async () => {
+  // Users configured OpenRouter by hand long before it had a tab. Adding the
+  // provider must not move their key slot out from under them.
+  const route = await resolve({
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://openrouter.ai/api/v1",
+    cloudTranscriptionModel: "openai/gpt-transcribe",
+  });
+  assert.equal(route.provider, "custom");
+  assert.equal(route.endpoint, "https://openrouter.ai/api/v1/audio/transcriptions");
+  assert.deepEqual(route.auth, { scheme: "bearer", keyRef: "custom" });
+});
+
+test("a 402 from OpenRouter reads as out of credits, whichever tab sent it", async () => {
+  const { batchTranscriptionHttpError } = await load();
+  const outOfCredits = {
+    code: "OPENROUTER_OUT_OF_CREDITS",
+    messageKey: "hooks.audioRecording.errorDescriptions.openRouterOutOfCredits",
+  };
+  // The OpenRouter tab and a Custom endpoint typed by hand post to the same host.
+  assert.deepEqual(
+    batchTranscriptionHttpError(402, "https://openrouter.ai/api/v1/audio/transcriptions"),
+    outOfCredits
+  );
+  assert.equal(batchTranscriptionHttpError(401, "https://openrouter.ai/api/v1"), null);
+  assert.equal(
+    batchTranscriptionHttpError(402, "https://api.openai.com/v1/audio/transcriptions"),
+    null,
+    "another provider's 402 is not OpenRouter's credit balance"
+  );
+});
+
+test("OpenRouter is recognised by its host, not by a lookalike", async () => {
+  const { isOpenRouterEndpoint } = await load();
+  assert.equal(isOpenRouterEndpoint("https://openrouter.ai/api/v1/audio/transcriptions"), true);
+  assert.equal(isOpenRouterEndpoint("https://openrouter.ai.example.com/v1"), false);
+  assert.equal(isOpenRouterEndpoint("https://api.openai.com/v1/audio/transcriptions"), false);
+  assert.equal(isOpenRouterEndpoint(""), false);
+});
+
+test("OpenRouter uploads go out in pieces, from its tab or a Custom endpoint", async () => {
+  const { uploadsInChunks } = await load();
+  const tab = await resolve({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "google/chirp-3",
+  });
+  const custom = await resolve({
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionBaseUrl: "https://openrouter.ai/api/v1",
+  });
+  assert.equal(uploadsInChunks(tab), true, "OpenRouter tab");
+  assert.equal(uploadsInChunks(custom), true, "Custom endpoint on OpenRouter");
+  for (const settings of [
+    { cloudTranscriptionProvider: "openai" },
+    { cloudTranscriptionProvider: "groq" },
+    {
+      cloudTranscriptionProvider: "custom",
+      cloudTranscriptionBaseUrl: "https://gateway.example.com/v1",
+    },
+    { transcriptionMode: "self-hosted", remoteTranscriptionUrl: "https://openrouter.ai/api/v1" },
+    { cloudTranscriptionProvider: "deepgram" },
+  ]) {
+    assert.equal(uploadsInChunks(await resolve(settings)), false, JSON.stringify(settings));
+  }
 });
 
 test("managed policy is a fail-closed floor", async () => {

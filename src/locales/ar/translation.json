@@ -9,7 +9,8 @@
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
         "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
-        "providerRateLimited": "تم تقييد المعدل من قبل المزود"
+        "providerRateLimited": "تم تقييد المعدل من قبل المزود",
+        "outOfCredits": "نفد الرصيد"
       },
       "fallback": {
         "title": "الوضع الاحتياطي",
@@ -40,6 +41,7 @@
         "offline": "أنت غير متصل بالإنترنت. يتطلب التفريغ السحابي اتصالًا بالإنترنت.",
         "dailyLimitReached": "لقد وصلت إلى حد التفريغ اليومي. حاول مرة أخرى غدًا أو قم بترقية خطتك.",
         "providerRateLimited": "قام مزود التفريغ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+        "openRouterOutOfCredits": "نفد رصيد حسابك على OpenRouter. اشحن رصيدك على openrouter.ai، ثم حاول مرة أخرى.",
         "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد تفريغه من السجل.",
         "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص المفرَّغ الخام بدلًا من ذلك.",
         "screenContextSkipped": "تعذر إرسال لقطة الشاشة، لذا تم تشغيل أمرك بدون سياق الشاشة.",
@@ -282,7 +284,11 @@
         "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
         "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
         "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
-        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)",
+        "openrouter_openai_gpt_transcribe": "نموذج التفريغ الحالي من OpenAI",
+        "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
+        "openrouter_google_chirp_3": "تحويل الكلام إلى نص من Google بأكثر من 100 لغة",
+        "openrouter_mistralai_voxtral_mini_transcribe": "تفريغ متعدد اللغات منخفض التكلفة"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -1915,7 +1921,8 @@
       },
       "hiddenWord": "تم إخفاء \"{{word}}\" لك",
       "stillIn": "لا تزال \"{{word}}\" في {{list}}"
-    }
+    },
+    "openRouterIgnoredNotice": "لا يمرّر OpenRouter قاموسك إلى نماذج الكلام لديه، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء."
   },
   "promptStudio": {
     "common": {

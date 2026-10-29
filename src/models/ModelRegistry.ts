@@ -78,6 +78,13 @@ export interface TranscriptionModelDefinition {
   descriptionKey?: string;
   streaming?: boolean;
   legacy?: boolean;
+  /**
+   * Offered in Audio Upload but not dictation (e.g. a route that drops the
+   * dictionary). This filters the lists and the picker/store reconcilers only;
+   * flagging a model users already have saved for dictation also needs a
+   * saved-selection migration, since Retry sends the stored id as-is.
+   */
+  uploadOnly?: boolean;
 }
 
 export interface TranscriptionProviderData {
@@ -445,6 +452,14 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
     .getTranscriptionProviders()
     .map((p) => ({ ...p, models: p.models.filter((m) => m.streaming) }))
     .filter((p) => p.models.length > 0);
+}
+
+// Dictation's list (the Settings picker's and onboarding's): Upload is the
+// only screen that offers uploadOnly models.
+export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry
+    .getTranscriptionProviders()
+    .map((p) => ({ ...p, models: p.models.filter((m) => !m.uploadOnly) }));
 }
 
 // Streaming providers note recording can actually run (see
