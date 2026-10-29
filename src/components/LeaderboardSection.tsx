@@ -28,6 +28,7 @@ import {
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
+  leaderboardInviteScope,
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
   shouldFetchLeaderboardWeekStarts,
@@ -175,6 +176,7 @@ export default function LeaderboardSection({
   const loaded = useWorkspaceStore((state) => state.loaded);
   const refresh = useWorkspaceStore((state) => state.refresh);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
@@ -794,11 +796,12 @@ export default function LeaderboardSection({
   };
   const domainNeedsWorkspace =
     selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
-  const inviteableWorkspace = canInviteToScope(selectedScope)
-    ? selectedScope
-    : selectedScope.kind === "domain"
-      ? scopes.find(canInviteToScope)
-      : undefined;
+  const inviteableWorkspace = leaderboardInviteScope(
+    selectedScope,
+    scopes,
+    activeWorkspaceId,
+    canInviteToScope
+  );
   const canGrowLeaderboard = domainNeedsWorkspace || Boolean(inviteableWorkspace);
   const openLeaderboardGrowthAction = () => {
     if (domainNeedsWorkspace) {
