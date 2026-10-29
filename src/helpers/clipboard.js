@@ -514,10 +514,10 @@ class ClipboardManager {
     return this._ydotoolLegacyChecked;
   }
 
-  _canAccessUinput() {
+  _canAccessUinput({ refresh = false } = {}) {
     if (process.platform !== "linux") return false;
     const now = Date.now();
-    if (this._uinputCache && now < this._uinputCache.expiresAt) {
+    if (!refresh && this._uinputCache && now < this._uinputCache.expiresAt) {
       return this._uinputCache.accessible;
     }
     let accessible = false;
@@ -1975,6 +1975,10 @@ class ClipboardManager {
           if (this.uinputTimedOut) {
             throw new Error("uinput timed out earlier this session, skipping");
           }
+          // Setup may have changed permissions since the cached diagnostics probe.
+          if (!this._canAccessUinput({ refresh: true })) {
+            throw new Error("/dev/uinput is not writable, skipping uinput");
+          }
           const args = ["--uinput", "--shift-insert"];
           try {
             await spawnFastPaste(args, "uinput");
@@ -1986,9 +1990,9 @@ class ClipboardManager {
             }
             throw error;
           }
-          this.safeLog("✅ Paste successful using native linux-fast-paste (uinput)");
+          this.safeLog("✅ Paste injection dispatched using native linux-fast-paste (uinput)");
           debugLogger.info(
-            "Paste successful",
+            "Paste injection dispatched",
             { tool: "linux-fast-paste", method: "uinput", detectedWindowClass },
             "clipboard"
           );
