@@ -2902,7 +2902,6 @@
       "personal": "个人",
       "privateTooltip": "只有你可以看到你的个人空间",
       "newSpace": "新建团队空间",
-      "newSpaceInWorkspace": "在 {{workspace}} 中新建团队空间",
       "createTitle": "创建团队空间",
       "createDescription": "工作区内的共享区域，供你添加的人员和群组访问。",
       "nameAndIconLabel": "名称和图标",

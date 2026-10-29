@@ -264,6 +264,17 @@ function contactSource(provider, accountEmail = null) {
   return accountEmail ? `${provider}:${accountEmail}` : provider;
 }
 
+// Limits a note query to a list of space ids (the spaces the active workspace
+// shows). Without a list nothing is filtered; an empty list matches nothing.
+function noteSpaceListCondition(column, spaceIds) {
+  if (!Array.isArray(spaceIds)) return null;
+  const ids = spaceIds.filter((id) => Number.isInteger(id));
+  return {
+    sql: `${column} IN (SELECT value FROM json_each(?))`,
+    param: JSON.stringify(ids),
+  };
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -4117,7 +4128,7 @@ class DatabaseManager {
     }
   }
 
-  getNotes(noteType = null, limit = 100, folderId = null, spaceId = null) {
+  getNotes(noteType = null, limit = 100, folderId = null, spaceId = null, spaceIds = null) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
@@ -4141,6 +4152,11 @@ class DatabaseManager {
       if (spaceId != null) {
         conditions.push("space_id = ?");
         params.push(spaceId);
+      }
+      const spaceList = noteSpaceListCondition("space_id", spaceIds);
+      if (spaceList) {
+        conditions.push(spaceList.sql);
+        params.push(spaceList.param);
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
       const stmt = this.db.prepare(`SELECT * FROM notes ${where} ORDER BY updated_at DESC LIMIT ?`);
@@ -5932,7 +5948,7 @@ class DatabaseManager {
     }
   }
 
-  searchNotes(query, limit = 50, spaceId = null, folderId = null) {
+  searchNotes(query, limit = 50, spaceId = null, folderId = null, spaceIds = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const ftsQuery = buildNoteSearchQuery(query);
@@ -5947,6 +5963,11 @@ class DatabaseManager {
       if (folderId != null) {
         scopeFilter += " AND n.folder_id = ?";
         params.push(folderId);
+      }
+      const spaceList = noteSpaceListCondition("n.space_id", spaceIds);
+      if (spaceList) {
+        scopeFilter += ` AND ${spaceList.sql}`;
+        params.push(spaceList.param);
       }
       params.push(limit);
       return this.db

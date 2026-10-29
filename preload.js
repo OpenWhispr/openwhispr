@@ -259,8 +259,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
-  getNotes: (noteType, limit, folderId, spaceId) =>
-    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
+  getNotes: (noteType, limit, folderId, spaceId, spaceIds) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId, spaceIds),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
   getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
@@ -271,8 +271,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
-  searchNotes: (query, limit, spaceId, folderId) =>
-    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
+  searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
+    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
   semanticSearchNotes: (query, limit, spaceId, folderId) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),

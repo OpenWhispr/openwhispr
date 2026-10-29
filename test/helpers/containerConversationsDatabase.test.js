@@ -315,6 +315,25 @@ test("searchNotes filters by folder", (t) => {
   assert.equal(folderHits[0].folder_id, folder.id);
 });
 
+test("getNotes and searchNotes keep to the listed spaces", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const shown = createTestTeamSpace(db, { name: "Shown" }).space;
+  const hidden = createTestTeamSpace(db, { name: "Hidden" }).space;
+  const folder = db.createFolder("Docs", hidden.id).folder;
+
+  const shownNote = db.saveNote("Roadmap", "roadmap", "personal", null, null, null, shown.id).note;
+  db.saveNote("Roadmap too", "roadmap", "personal", null, null, folder.id, hidden.id);
+
+  const ids = (notes) => notes.map((n) => n.id);
+  assert.deepEqual(ids(db.getNotes(null, 50, null, null, [shown.id])), [shownNote.id]);
+  assert.deepEqual(ids(db.searchNotes("roadmap", 10, null, null, [shown.id])), [shownNote.id]);
+  assert.deepEqual(db.getNotes(null, 50, null, null, []), []);
+  // No list scopes nothing.
+  assert.equal(db.getNotes(null, 50).length, 2);
+  assert.equal(db.searchNotes("roadmap", 10).length, 2);
+});
+
 test("getNotesForSpace includes foldered notes, unlike the root-only getNotes", (t) => {
   const db = createDb(t);
   if (!db) return;

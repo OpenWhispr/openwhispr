@@ -2441,7 +2441,6 @@
       "personal": "شخصي",
       "privateTooltip": "أنت فقط من يمكنه رؤية مساحتك الشخصية",
       "newSpace": "مساحة فريق جديدة",
-      "newSpaceInWorkspace": "مساحة فريق جديدة في {{workspace}}",
       "createTitle": "إنشاء مساحة فريق",
       "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
       "nameAndIconLabel": "الاسم والأيقونة",

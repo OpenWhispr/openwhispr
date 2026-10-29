@@ -3254,7 +3254,6 @@
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
       "newSpace": "New team space",
-      "newSpaceInWorkspace": "New team space in {{workspace}}",
       "createTitle": "Create team space",
       "createDescription": "A shared area inside a workspace for the people and groups you add.",
       "nameAndIconLabel": "Name and icon",

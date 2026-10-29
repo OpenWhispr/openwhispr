@@ -2954,7 +2954,6 @@
       "personal": "Personal",
       "privateTooltip": "Solo tú puedes ver tu espacio personal",
       "newSpace": "Nuevo espacio de equipo",
-      "newSpaceInWorkspace": "Nuevo espacio de equipo en {{workspace}}",
       "createTitle": "Crear espacio de equipo",
       "createDescription": "Un área compartida dentro de un workspace para las personas y grupos que añadas.",
       "nameAndIconLabel": "Nombre e icono",

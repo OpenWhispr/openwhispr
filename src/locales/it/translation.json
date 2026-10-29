@@ -2902,7 +2902,6 @@
       "personal": "Personale",
       "privateTooltip": "Solo tu puoi vedere il tuo spazio personale",
       "newSpace": "Nuovo spazio del team",
-      "newSpaceInWorkspace": "Nuovo spazio del team in {{workspace}}",
       "createTitle": "Crea spazio del team",
       "createDescription": "Un'area condivisa all'interno di un workspace per le persone e i gruppi che aggiungi.",
       "nameAndIconLabel": "Nome e icona",

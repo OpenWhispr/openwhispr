@@ -2492,8 +2492,8 @@ class IPCHandlers {
       return this.databaseManager.getNote(id);
     });
 
-    ipcMain.handle("db-get-notes", async (event, noteType, limit, folderId, spaceId) => {
-      return this.databaseManager.getNotes(noteType, limit, folderId, spaceId);
+    ipcMain.handle("db-get-notes", async (event, noteType, limit, folderId, spaceId, spaceIds) => {
+      return this.databaseManager.getNotes(noteType, limit, folderId, spaceId, spaceIds);
     });
 
     ipcMain.handle("db-get-space-notes", async (event, spaceId, limit) => {
@@ -2535,8 +2535,8 @@ class IPCHandlers {
       return this.deleteNoteInternal(id);
     });
 
-    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId) => {
-      return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
+    ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId, spaceIds) => {
+      return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
     });
 
     ipcMain.handle(

@@ -37,10 +37,6 @@ test("dynamic prose and identity values keep their own direction", () => {
       /<span\s+dir="auto"[^>]*>\s*\{displayName\}\s*<\/span>/,
     ],
     ["src/components/notes/SpacesTree.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}\s*<\/span>/],
-    [
-      "src/components/notes/SpacesTree.tsx",
-      /<span\s+dir="auto"[^>]*\s+title=\{workspace\.name\}[\s\S]*?\{workspace\.name\}/,
-    ],
     ["src/components/EmailVerificationStep.tsx", /<span\s+dir="ltr"[^>]*>\s*\{email\}/],
     [
       "src/components/SettingsModal.tsx",

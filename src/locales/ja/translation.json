@@ -2830,7 +2830,6 @@
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
-      "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
       "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
       "nameAndIconLabel": "名前とアイコン",
