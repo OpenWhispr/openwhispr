@@ -74,7 +74,7 @@ export interface DictionaryActions {
   isHiddenInTarget: (target: AddTarget, word: string) => boolean;
   // Unhides that copy; resolves true once it's back.
   unhideInTarget: (target: AddTarget, word: string) => Promise<boolean>;
-  // Resolves true once nothing is left to add, which clears the field.
+  // Resolves true once nothing is left to add; false puts the text back in the field.
   addWords: (text: string, target: AddTarget) => Promise<boolean>;
   // Resolves why the edit failed, to show in the open editor, or null to close it.
   editRow: (row: DictionaryRow, word: string) => Promise<EditFailure | null>;
@@ -99,8 +99,8 @@ export interface DictionaryActions {
   clearPersonal: () => void;
 }
 
-// How many left-out words a toast names before it only counts the rest.
-const SKIPPED_NAMES_SHOWN = 3;
+// How many words a toast names before it only counts the rest.
+const WORDS_NAMED_IN_TOAST = 3;
 // As long as the app's other Undo toasts stay up.
 const UNDO_TOAST_MS = 6000;
 
@@ -216,14 +216,18 @@ export function useDictionaryActions({
     shareable: words.filter(isTermLikeSharedWord),
     skipped: words.filter((word) => !isTermLikeSharedWord(word)),
   });
-  // Names the first few words left out and counts them all.
+  // Names the first few words; the message counts them all.
+  const nameFirstFew = (words: string[]): string => {
+    const named = words.slice(0, WORDS_NAMED_IN_TOAST).join(", ");
+    return words.length > WORDS_NAMED_IN_TOAST ? `${named}, …` : named;
+  };
+
   const reportSkipped = (skipped: string[], nothingSent: boolean): void => {
     if (skipped.length === 0) return;
-    const named = skipped.slice(0, SKIPPED_NAMES_SHOWN).join(", ");
     toast({
       title: t("dictionary.shared.skipped", {
         count: skipped.length,
-        words: skipped.length > SKIPPED_NAMES_SHOWN ? `${named}, …` : named,
+        words: nameFirstFew(skipped),
       }),
       description: t("dictionary.shared.notTermLike"),
       variant: nothingSent ? "destructive" : "default",
@@ -254,7 +258,13 @@ export function useDictionaryActions({
     kind: PartialKind,
     applied: number,
     notApplied: number,
-    failure: { reason: SharedDictionaryActionReason; listName: string; target?: ShareTarget },
+    failure: {
+      reason: SharedDictionaryActionReason;
+      listName: string;
+      target?: ShareTarget;
+      // An add's failed words, named when nothing went in.
+      notAdded?: string[];
+    },
     actions?: ToastActionConfig[]
   ): void => {
     toast({
@@ -268,7 +278,14 @@ export function useDictionaryActions({
               list: failure.listName,
             }),
       description:
-        applied === 0 ? undefined : failureLine(failure.reason, failure.listName, failure.target),
+        applied !== 0
+          ? failureLine(failure.reason, failure.listName, failure.target)
+          : failure.notAdded
+            ? t("dictionary.shared.add.notAdded", {
+                count: failure.notAdded.length,
+                words: nameFirstFew(failure.notAdded),
+              })
+            : undefined,
       variant: "destructive",
       duration: actions ? UNDO_TOAST_MS : undefined,
       actions,
@@ -307,10 +324,12 @@ export function useDictionaryActions({
     const result = await addSharedWords(workspaceId, target, shareable);
     if (result.failed) {
       reportSkipped(skipped, result.added.length === 0);
+      // The field may no longer hold these words, so the toast names them.
       reportPartial("add", result.added.length, result.failed.words.length, {
         reason: result.failed.reason,
         listName: listLabel(target),
         target,
+        notAdded: result.failed.words,
       });
       return false;
     }

@@ -3605,7 +3605,9 @@
         "placeholder": "用逗號分隔新增多個詞",
         "to": "新增到 {{list}}",
         "chooseList": "選擇要新增到的清單",
-        "hiddenForYou": "在 {{list}} 中已對你隱藏"
+        "hiddenForYou": "在 {{list}} 中已對你隱藏",
+        "notAdded_one": "{{count}} 個詞語未新增：{{words}}",
+        "notAdded_other": "{{count}} 個詞語未新增：{{words}}"
       },
       "alreadyIn": "已在 {{list}} 中",
       "importTo": "匯入到 {{list}}",

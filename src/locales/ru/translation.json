@@ -3631,7 +3631,11 @@
         "placeholder": "Добавьте слова через запятую",
         "to": "в {{list}}",
         "chooseList": "Выберите список для добавления",
-        "hiddenForYou": "Скрыто для вас в {{list}}"
+        "hiddenForYou": "Скрыто для вас в {{list}}",
+        "notAdded_one": "Не добавлено {{count}} слово: {{words}}",
+        "notAdded_few": "Не добавлено {{count}} слова: {{words}}",
+        "notAdded_many": "Не добавлено {{count}} слов: {{words}}",
+        "notAdded_other": "Не добавлено {{count}} слова: {{words}}"
       },
       "alreadyIn": "Уже есть в {{list}}",
       "importTo": "Импортировать в {{list}}",

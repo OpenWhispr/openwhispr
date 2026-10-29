@@ -1711,7 +1711,13 @@
         "placeholder": "أضف كلمات مفصولة بفواصل",
         "to": "إلى {{list}}",
         "chooseList": "اختر القائمة التي تريد الإضافة إليها",
-        "hiddenForYou": "مخفية عنك في {{list}}"
+        "hiddenForYou": "مخفية عنك في {{list}}",
+        "notAdded_zero": "لم تتم إضافة {{count}} كلمة: {{words}}",
+        "notAdded_one": "لم تتم إضافة كلمة واحدة ({{count}}): {{words}}",
+        "notAdded_two": "لم تتم إضافة كلمتين ({{count}}): {{words}}",
+        "notAdded_few": "لم تتم إضافة {{count}} كلمات: {{words}}",
+        "notAdded_many": "لم تتم إضافة {{count}} كلمةً: {{words}}",
+        "notAdded_other": "لم تتم إضافة {{count}} كلمة: {{words}}"
       },
       "alreadyIn": "موجودة بالفعل في {{list}}",
       "importTo": "استيراد إلى {{list}}",

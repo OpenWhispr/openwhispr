@@ -3957,7 +3957,9 @@
         "placeholder": "Add words separated by commas",
         "to": "to {{list}}",
         "chooseList": "Choose the list to add to",
-        "hiddenForYou": "Hidden for you in {{list}}"
+        "hiddenForYou": "Hidden for you in {{list}}",
+        "notAdded_one": "{{count}} word wasn't added: {{words}}",
+        "notAdded_other": "{{count}} words weren't added: {{words}}"
       },
       "alreadyIn": "Already in {{list}}",
       "importTo": "Import to {{list}}",

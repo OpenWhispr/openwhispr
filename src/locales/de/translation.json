@@ -3957,7 +3957,9 @@
         "placeholder": "Wörter durch Kommas getrennt hinzufügen",
         "to": "zu {{list}}",
         "chooseList": "Liste zum Hinzufügen wählen",
-        "hiddenForYou": "In {{list}} für dich ausgeblendet"
+        "hiddenForYou": "In {{list}} für dich ausgeblendet",
+        "notAdded_one": "{{count}} Wort wurde nicht hinzugefügt: {{words}}",
+        "notAdded_other": "{{count}} Wörter wurden nicht hinzugefügt: {{words}}"
       },
       "alreadyIn": "Bereits in {{list}}",
       "importTo": "In {{list}} importieren",

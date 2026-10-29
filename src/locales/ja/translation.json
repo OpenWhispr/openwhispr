@@ -3533,7 +3533,9 @@
         "placeholder": "カンマ区切りで単語を追加",
         "to": "{{list}} に追加",
         "chooseList": "追加先のリストを選択",
-        "hiddenForYou": "{{list}} で非表示にしています"
+        "hiddenForYou": "{{list}} で非表示にしています",
+        "notAdded_one": "{{count}} 個の単語を追加できませんでした：{{words}}",
+        "notAdded_other": "{{count}} 個の単語を追加できませんでした：{{words}}"
       },
       "alreadyIn": "{{list}} に追加済み",
       "importTo": "{{list}} にインポート",

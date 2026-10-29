@@ -3958,7 +3958,10 @@
         "placeholder": "Ajoutez des mots séparés par des virgules",
         "to": "à {{list}}",
         "chooseList": "Choisir la liste où ajouter",
-        "hiddenForYou": "Masqué pour vous dans {{list}}"
+        "hiddenForYou": "Masqué pour vous dans {{list}}",
+        "notAdded_one": "{{count}} mot n'a pas été ajouté : {{words}}",
+        "notAdded_many": "{{count}} de mots n'ont pas été ajoutés : {{words}}",
+        "notAdded_other": "{{count}} mots n'ont pas été ajoutés : {{words}}"
       },
       "alreadyIn": "Déjà dans {{list}}",
       "importTo": "Importer dans {{list}}",

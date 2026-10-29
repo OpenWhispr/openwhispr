@@ -3606,7 +3606,10 @@
         "placeholder": "Adicione palavras separadas por vírgulas",
         "to": "em {{list}}",
         "chooseList": "Escolher a lista onde adicionar",
-        "hiddenForYou": "Oculta para você em {{list}}"
+        "hiddenForYou": "Oculta para você em {{list}}",
+        "notAdded_one": "{{count}} palavra não foi adicionada: {{words}}",
+        "notAdded_many": "{{count}} de palavras não foram adicionadas: {{words}}",
+        "notAdded_other": "{{count}} palavras não foram adicionadas: {{words}}"
       },
       "alreadyIn": "Já está em {{list}}",
       "importTo": "Importar para {{list}}",
