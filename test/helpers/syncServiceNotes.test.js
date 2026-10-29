@@ -316,6 +316,88 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
   assert.equal(noteCount(db), 0);
 });
 
+test("an untitled cloud note is saved as Untitled Note and does not stall the pull", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const errors = silenceConsoleErrors(t);
+
+  const cursor = "2026-07-01T00:00:00.000Z";
+  localStorageStub.setItem("lastSyncedAt.notes", cursor);
+  // Notes created through the public API without a title arrive with none.
+  cloud.seedNote({
+    client_note_id: "client-untitled",
+    content: "Recap saved from Claude",
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
+  });
+  // An edit made on another device afterwards sits behind it in the delta feed.
+  cloud.seedNote({
+    client_note_id: "client-later",
+    title: "Edited on another device",
+    content: "later body",
+    created_at: "2026-07-20T10:00:00.000Z",
+    updated_at: "2026-07-20T10:00:00.000Z",
+  });
+
+  await service.syncAll(true);
+
+  const untitled = db.getNoteByClientId("client-untitled");
+  assert.equal(untitled?.title, "Untitled Note", "a missing cloud title takes the local default");
+  assert.equal(untitled?.content, "Recap saved from Claude");
+  assert.equal(db.getNoteByClientId("client-later")?.content, "later body");
+  assert.notEqual(localStorageStub.getItem("lastSyncedAt.notes"), cursor, "the cursor advances");
+  assert.ok(!errorMessages(errors).some((m) => m.includes("Note pull failed")));
+});
+
+test("a cloud note that fails to save is retried without blocking the rest of the pull", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const errors = silenceConsoleErrors(t);
+
+  const cursor = "2026-07-01T00:00:00.000Z";
+  localStorageStub.setItem("lastSyncedAt.notes", cursor);
+  const failing = cloud.seedNote({
+    client_note_id: "client-failing",
+    title: "Fails once",
+    content: "retry me",
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
+  });
+  cloud.seedNote({
+    client_note_id: "client-after",
+    title: "Behind it",
+    content: "still arrives",
+    created_at: "2026-07-20T10:00:00.000Z",
+    updated_at: "2026-07-20T10:00:00.000Z",
+  });
+  const upsert = api.upsertNoteFromCloud;
+  let failuresLeft = 1;
+  t.mock.method(api, "upsertNoteFromCloud", async (cloudNote, ...rest) => {
+    if (cloudNote.id === failing.id && failuresLeft-- > 0) throw new Error("disk I/O error");
+    return upsert(cloudNote, ...rest);
+  });
+
+  await service.syncAll(true);
+
+  assert.equal(db.getNoteByClientId("client-after")?.content, "still arrives");
+  assert.equal(db.getNoteByClientId("client-failing"), null);
+  assert.equal(
+    localStorageStub.getItem("lastSyncedAt.notes"),
+    cursor,
+    "the cursor holds so the next pass retries the failed note"
+  );
+  assert.ok(
+    errorMessages(errors).some((m) => m.includes(`Note pull failed for cloud note ${failing.id}`))
+  );
+
+  await service.syncAll(true);
+
+  assert.equal(db.getNoteByClientId("client-failing")?.content, "retry me");
+  assert.notEqual(localStorageStub.getItem("lastSyncedAt.notes"), cursor);
+});
+
 test("a pending local delete issues the DELETE and then hard-deletes locally", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
