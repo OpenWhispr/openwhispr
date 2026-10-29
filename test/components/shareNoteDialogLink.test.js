@@ -109,7 +109,7 @@ const MOCK_MODULES = {
     export const persistNoteShareState = async (noteId, updates) => {
       globalThis.__shareTest.persisted.push({ noteId, updates });
     };
-    export const useFolders = () => [];
+    export const useFolders = () => globalThis.__shareTest.folders;
     export const useSpaces = () => [];
     export const useShareCacheEntry = (id) => (id ? (cache().get(id) ?? null) : null);
   `,
@@ -161,7 +161,10 @@ function textOf(node) {
   return textOf(node.props?.children);
 }
 
-async function setupDialog(t, { entry, server, updateResult = null, rotateResult = null }) {
+async function setupDialog(
+  t,
+  { entry, server, updateResult = null, rotateResult = null, folders = [] }
+) {
   const clipboardWrites = [];
   installBrowserGlobals(t, {
     window: { setTimeout: () => 1, clearTimeout: () => {}, electronAPI: {} },
@@ -181,6 +184,7 @@ async function setupDialog(t, { entry, server, updateResult = null, rotateResult
     server,
     updateResult,
     rotateResult,
+    folders,
   };
   globalThis.__shareTest = state;
   t.after(() => {
@@ -211,9 +215,9 @@ function dialogProps(note, extra = {}) {
 
 async function renderDialog(t, { note, ...options }) {
   const { state, clipboardWrites, callsTo, ShareNoteDialog } = await setupDialog(t, options);
-  renderToStaticMarkup(createElement(ShareNoteDialog, dialogProps(note)));
+  const html = renderToStaticMarkup(createElement(ShareNoteDialog, dialogProps(note)));
 
-  return { state, linkButton: latestLinkButton(state), clipboardWrites, callsTo };
+  return { state, html, linkButton: latestLinkButton(state), clipboardWrites, callsTo };
 }
 
 function latestLinkButton(state) {
@@ -542,4 +546,36 @@ test("synthetic scope rows offer no permission or remove controls", async (t) =>
   );
   assert.ok(targeted.includes(direct.id), "the direct grant keeps its controls");
   assert.ok(!targeted.includes(scope.id), `scope row was offered controls: ${targeted}`);
+});
+
+test("a grant to a synced subfolder names it with its parent", async (t) => {
+  const folder = (id, name, cloud_id, parent_folder_id = null) => ({
+    id,
+    name,
+    cloud_id,
+    parent_folder_id,
+    space_id: 1,
+    is_default: 0,
+  });
+  const { html } = await renderDialog(t, {
+    folders: [folder(1, "Work", "cloud-work"), folder(2, "Q1", "cloud-q1", 1)],
+    entry: {
+      share: shareSettings("invited", PREFIX),
+      invitations: [],
+      rawToken: null,
+      access: {
+        owner: { type: "user", id: "owner", email: "owner@acme.com", name: null, image: null },
+        grants: [
+          accessGrant("grant-folder", {
+            principal: { type: "folder", id: "cloud-q1", email: null, name: "Q1", image: null },
+          }),
+        ],
+        my_permission: "owner",
+        can_manage_access: true,
+        can_manage_inherited_access: true,
+      },
+    },
+  });
+
+  assert.match(html, /Work \/ Q1/);
 });

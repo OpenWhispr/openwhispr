@@ -94,7 +94,10 @@ export function ContainerOverview({
     };
   }, [folder, notesByContainer]);
 
-  const notes = folder ? containerNotes : (spaceNotes ?? []);
+  const notes = useMemo(
+    () => (folder ? containerNotes : (spaceNotes ?? [])),
+    [folder, containerNotes, spaceNotes]
+  );
   const folderKey = folder ? folderContainerKey(folder.id) : null;
   const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
   const isLoaded = folder ? folderNotesLoaded : spaceNotes !== null;
@@ -102,11 +105,35 @@ export function ContainerOverview({
     ? folderNotesError && !folderNotesLoaded
     : spaceNotesError && spaceNotes === null;
 
+  const subfolders = useMemo(
+    () =>
+      folder
+        ? (folderTree(folders).find((node) => node.folder.id === folder.id)?.subfolders ?? [])
+        : [],
+    [folder, folders]
+  );
+
+  // Folder chat covers the subfolders too, so its context lists their notes.
+  useEffect(() => {
+    for (const subfolder of subfolders) {
+      void ensureContainerLoaded(folderContainerKey(subfolder.id)).catch(() => {});
+    }
+  }, [subfolders]);
+  const chatNotes = useMemo(
+    () => [
+      ...notes,
+      ...subfolders.flatMap(
+        (subfolder) => notesByContainer[folderContainerKey(subfolder.id)] ?? []
+      ),
+    ],
+    [notes, subfolders, notesByContainer]
+  );
+
   const chat = useContainerChat({
     space,
     folder,
     folderLabel: folder ? folderPathLabel(folder, folders, t) : null,
-    notes,
+    notes: chatNotes,
   });
 
   const workspace = space.workspace_id
@@ -123,13 +150,6 @@ export function ContainerOverview({
   const spaceFolders = useMemo(
     () => folders.filter((f) => f.space_id === space.id),
     [folders, space.id]
-  );
-  const subfolders = useMemo(
-    () =>
-      folder
-        ? (folderTree(folders).find((node) => node.folder.id === folder.id)?.subfolders ?? [])
-        : [],
-    [folder, folders]
   );
   // DB-backed counts, as in SpacesTree: the visible list is capped at the
   // container page size, so notes.length undercounts large containers.

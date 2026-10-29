@@ -370,7 +370,10 @@ function ensureIpcListeners() {
       // that survive it (a delete pulled from the cloud) stay loaded.
       const teardown = teardownNoteContainers(state, [folderContainerKey(id)]);
       persistExpandedContainers(teardown.expandedContainers);
+      // Dropped now, so the next event of a parent-then-subfolder delete
+      // doesn't fall back to the parent.
       const extra: Partial<NoteState> = {
+        folders: state.folders.filter((f) => f.id !== id),
         expandedContainers: teardown.expandedContainers,
         activeNoteId: teardown.activeNoteId,
       };
@@ -880,13 +883,15 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
     activeNoteId: teardown.activeNoteId,
   });
 
-  await loadFolders();
+  // Before the reload: main's folder-deleted echo lands during it and would
+  // otherwise move the view with the listener's own fallback.
   const activeFolderId = getActiveFolderIdValue();
   if (folder && activeFolderId != null && keys.includes(folderContainerKey(activeFolderId))) {
-    const { folders } = useNoteStore.getState();
-    const spaceFolders = folders.filter((f) => f.space_id === folder.space_id);
+    const spaceFolders = state.folders.filter(
+      (f) => f.space_id === folder.space_id && !keys.includes(folderContainerKey(f.id))
+    );
     const fallback =
-      folders.find((f) => f.id === folder.parent_folder_id) ??
+      state.folders.find((f) => f.id === folder.parent_folder_id) ??
       findDefaultFolder(spaceFolders) ??
       spaceFolders[0];
     setActiveContext(folder.space_id, fallback?.id ?? null);
@@ -897,6 +902,7 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
       if (notes.length > 0) setActiveNoteId(notes[0].id);
     }
   }
+  await loadFolders();
   syncService.requestSyncAll("manual");
   return result;
 }

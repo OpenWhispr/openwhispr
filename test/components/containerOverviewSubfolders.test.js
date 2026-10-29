@@ -21,6 +21,7 @@ const FOLDERS = [Q1, WORK, folder(9, "Elsewhere", 7, 2), folder(10, "Home"), fol
 
 async function renderOverview(t, overviewFolder) {
   installBrowserGlobals(t);
+  t.after(() => delete globalThis.__chatOptions);
   const i18n = i18next.createInstance();
   await i18n.use(initReactI18next).init({
     lng: "en",
@@ -35,14 +36,19 @@ async function renderOverview(t, overviewFolder) {
         "export const useWorkspaceStore = (selector) => selector({ workspaces: [] });",
       "/stores/noteStore": `
         export const useNotes = () => [];
-        export const useNotesByContainer = () => ({ "f:7": [], "f:8": [] });
+        export const useNotesByContainer = () => ({ "f:7": [], "f:8": [{ id: 81, folder_id: 8 }] });
         export const useFolders = () => ${JSON.stringify(FOLDERS)};
         export const useFolderCounts = () => ({ 7: 1, 8: 3 });
         export const useSpaceRootCounts = () => ({});
         export const folderContainerKey = (id) => "f:" + id;
         export const navigateToContainer = () => {};
       `,
-      "/hooks/useContainerChat": "export const useContainerChat = () => ({});",
+      "/hooks/useContainerChat": `
+        export const useContainerChat = (options) => {
+          globalThis.__chatOptions = options;
+          return {};
+        };
+      `,
       "/lib/capabilities":
         "export const spaceCan = () => false; export const workspaceCan = () => false;",
       "/InviteTeammateDialog": "export default function Mock() { return null; }",
@@ -86,4 +92,19 @@ test("a subfolder shows no subfolder list", async (t) => {
   const html = await renderOverview(t, Q1);
 
   assert.doesNotMatch(html, /Subfolders/);
+});
+
+test("a parent folder's chat gets its subfolders' notes too", async (t) => {
+  await renderOverview(t, WORK);
+
+  assert.deepEqual(
+    globalThis.__chatOptions.notes.map((note) => note.id),
+    [81]
+  );
+});
+
+test("a subfolder's chat names it with its parent", async (t) => {
+  await renderOverview(t, Q1);
+
+  assert.equal(globalThis.__chatOptions.folderLabel, "Work / Q1");
 });

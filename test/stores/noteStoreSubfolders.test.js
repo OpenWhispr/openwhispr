@@ -12,20 +12,49 @@ const folder = (id, name, parent_folder_id = null, is_default = 0) => ({
 const PERSONAL = folder(1, "Personal", null, 1);
 const WORK = folder(11, "Work");
 const Q1 = folder(12, "Q1", 11);
-const note = (id, folder_id) => ({ id, folder_id, space_id: 1, title: `Note ${id}` });
-const NOTES = { 1: [note(101, 1)], 11: [note(111, 11)], 12: [note(112, 12)] };
+const note = (id, folder_id, space_id = 1) => ({ id, folder_id, space_id, title: `Note ${id}` });
 
-// The real store over a fake main process whose folder list the test edits,
-// as main's own delete would.
+// The real store over a fake main process that keeps the folder list. Like
+// main, a delete answers first and then sends one folder-deleted event per
+// folder, subfolders first; they land before the store's folder reload does.
 async function loadStore(t) {
-  const main = { folders: [PERSONAL, WORK, Q1], onFolderDeleted: null };
+  const main = { folders: [PERSONAL, WORK, Q1], echoes: [], onFolderDeleted: null };
+  const syncPushes = [];
   const { storage } = installBrowserGlobals(t, {
     window: {
+      syncPushes,
       electronAPI: {
-        getFolders: async () => main.folders,
+        getFolders: async () => {
+          for (const id of main.echoes.splice(0)) main.onFolderDeleted({ id });
+          return main.folders;
+        },
         getFolderNoteCounts: async () => [],
-        getNotes: async (_type, _limit, folderId) => NOTES[folderId] ?? [],
-        deleteFolder: async () => ({ success: true }),
+        // Each folder holds one note, in the folder's current space.
+        getNotes: async (_type, _limit, folderId) => {
+          const home = main.folders.find((f) => f.id === folderId);
+          return home ? [note(100 + folderId, folderId, home.space_id)] : [];
+        },
+        createFolder: async (name, space_id, parentFolderId) => {
+          const created = { ...folder(13, name, parentFolderId), space_id };
+          main.folders = [...main.folders, created];
+          return { success: true, folder: created };
+        },
+        setFolderParent: async (id, parent_folder_id) => {
+          main.folders = main.folders.map((f) => (f.id === id ? { ...f, parent_folder_id } : f));
+          return { success: true };
+        },
+        moveFolderToSpace: async (id, space_id) => {
+          main.folders = main.folders.map((f) =>
+            f.id === id || f.parent_folder_id === id ? { ...f, space_id } : f
+          );
+          return { success: true };
+        },
+        deleteFolder: async (id) => {
+          const subfolders = main.folders.filter((f) => f.parent_folder_id === id);
+          main.echoes = [...subfolders.map((f) => f.id), id];
+          main.folders = main.folders.filter((f) => !main.echoes.includes(f.id));
+          return { success: true };
+        },
         onFolderDeleted: (callback) => {
           main.onFolderDeleted = callback;
           return () => {};
@@ -36,8 +65,11 @@ async function loadStore(t) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-note-store-subfolders-",
     mockModules: {
-      "/services/SyncService.js":
-        "export const syncService = { setNoteOpen() {}, requestSyncAll() {} };",
+      "/services/SyncService.js": `export const syncService = {
+        setNoteOpen() {},
+        requestSyncAll() {},
+        debouncedPush: (...args) => window.syncPushes.push(args),
+      };`,
     },
   });
   const store = await vite.ssrLoadModule("/stores/noteStore.ts");
@@ -45,7 +77,7 @@ async function loadStore(t) {
   await store.loadFolders();
   await Promise.all(["f:1", "f:11", "f:12"].map((key) => store.loadContainerNotes(key)));
   const expanded = () => JSON.parse(storage.getItem("notesTree.expanded") ?? "[]").sort();
-  return { main, store, expanded };
+  return { main, store, expanded, syncPushes };
 }
 
 test("revealing a subfolder expands its parent folder too", async (t) => {
@@ -57,10 +89,9 @@ test("revealing a subfolder expands its parent folder too", async (t) => {
 });
 
 test("deleting the active subfolder falls back to its parent folder", async (t) => {
-  const { main, store } = await loadStore(t);
+  const { store } = await loadStore(t);
   store.setActiveContext(1, 12);
 
-  main.folders = [PERSONAL, WORK];
   await store.deleteFolder(12);
 
   assert.equal(store.getActiveFolderIdValue(), 11);
@@ -68,11 +99,10 @@ test("deleting the active subfolder falls back to its parent folder", async (t) 
 });
 
 test("deleting a parent tears down its subfolders' containers too", async (t) => {
-  const { main, store, expanded } = await loadStore(t);
+  const { store, expanded } = await loadStore(t);
   store.revealContainer(1, 12);
   store.setActiveContext(1, 12);
 
-  main.folders = [PERSONAL];
   await store.deleteFolder(11);
 
   assert.equal(store.getActiveFolderIdValue(), 1);
@@ -106,4 +136,46 @@ test("a parent deleted elsewhere leaves its surviving subfolder open", async (t)
   assert.equal(store.getActiveNoteIdValue(), 112);
   assert.ok(store.getNoteFromStore(112));
   assert.deepEqual(expanded(), ["f:12", "s:1"]);
+});
+
+test("a parent and then its subfolder deleted elsewhere leave the view on the space root", async (t) => {
+  const { main, store } = await loadStore(t);
+  store.setActiveContext(1, 12);
+
+  main.folders = [PERSONAL];
+  main.onFolderDeleted({ id: 11 });
+  main.onFolderDeleted({ id: 12 });
+
+  assert.equal(store.getActiveFolderIdValue(), null);
+});
+
+test("creating a subfolder and moving it reload the folders and push the folder", async (t) => {
+  const { store, syncPushes } = await loadStore(t);
+
+  await store.createFolder("Q2", 1, 11);
+  await store.setFolderParent(12, null);
+
+  assert.deepEqual(
+    store.getFoldersValue().map((f) => [f.id, f.parent_folder_id]),
+    [
+      [1, null],
+      [11, null],
+      [12, null],
+      [13, 11],
+    ]
+  );
+  assert.deepEqual(syncPushes, [
+    ["folder", 13],
+    ["folder", 12],
+  ]);
+});
+
+test("moving a parent to another space refreshes its subfolder's loaded notes", async (t) => {
+  const { store } = await loadStore(t);
+
+  await store.moveFolderToSpace(11, 2);
+
+  assert.equal(store.getNoteFromStore(111).space_id, 2);
+  assert.equal(store.getNoteFromStore(112).space_id, 2);
+  assert.equal(store.getNoteFromStore(101).space_id, 1);
 });

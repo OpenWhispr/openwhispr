@@ -87,11 +87,15 @@ const NOTE_STORE = `
   export const toggleContainerExpanded = () => {};
   export const revealContainer = () => {};
   export const loadContainerNotes = async () => [];
-  export const createFolder = async () => ({ success: true });
+  const record = (name) => async (...args) => {
+    globalThis.__calls.push([name, ...args]);
+    return { success: true };
+  };
+  export const createFolder = record("createFolder");
   export const renameFolder = async () => ({ success: true });
   export const deleteFolder = async () => ({ success: true });
   export const moveFolderToSpace = async () => ({ success: true });
-  export const setFolderParent = async () => ({ success: true });
+  export const setFolderParent = record("setFolderParent");
 `;
 
 const MOCKS = {
@@ -114,7 +118,15 @@ const MOCKS = {
       hideConfirmDialog: () => {},
     });
   `,
-  "/ui/useToast": 'export const useToast = () => ({ toast: () => "toast", dismiss: () => {} });',
+  "/ui/useToast": `
+    export const useToast = () => ({
+      toast: (props) => {
+        globalThis.__toasts.push(props);
+        return "toast";
+      },
+      dismiss: () => {},
+    });
+  `,
   "/stores/settingsStore":
     "export const useSettingsStore = (selector) => selector({ noteFilesEnabled: false });",
   "/utils/platform": 'export const getCachedPlatform = () => "darwin";',
@@ -131,14 +143,28 @@ const MOCKS = {
     export const resolveNotePermission = () => "owner";
     export const sharedNoteBlocksDelete = () => false;
   `,
+  // Every menu renders open inside its row. Picking an item closes the menu,
+  // which then runs its onCloseAutoFocus, as Radix does.
   "/ui/dropdown-menu": `
+    import { createElement } from "react";
+    const div = (props) => ({ children }) => createElement("div", props, children);
     export const DropdownMenu = ({ children }) => children;
     export const DropdownMenuTrigger = ({ children }) => children;
-    export const DropdownMenuContent = () => null;
-    export const DropdownMenuItem = () => null;
-    export const DropdownMenuSub = ({ children }) => children;
-    export const DropdownMenuSubTrigger = () => null;
-    export const DropdownMenuSubContent = () => null;
+    export const DropdownMenuContent = ({ children, onCloseAutoFocus }) =>
+      createElement(
+        "div",
+        {
+          role: "menu",
+          onClickCapture: () =>
+            queueMicrotask(() => onCloseAutoFocus?.({ preventDefault: () => {} })),
+        },
+        children
+      );
+    export const DropdownMenuItem = ({ children, disabled, onClick, onSelect }) =>
+      createElement("button", { role: "menuitem", disabled, onClick: onClick ?? onSelect }, children);
+    export const DropdownMenuSub = div({ "data-submenu": "" });
+    export const DropdownMenuSubTrigger = div({ role: "menuitem" });
+    export const DropdownMenuSubContent = div({});
     export const DropdownMenuSeparator = () => null;
   `,
   "/ui/dialog": "export const ConfirmDialog = () => null;",
@@ -160,6 +186,8 @@ async function mountTree(t, tree) {
     }
     delete globalThis.__confirmDialogs;
     delete globalThis.__tree;
+    delete globalThis.__calls;
+    delete globalThis.__toasts;
   });
   const { Window } = await import("happy-dom");
   dom = new Window({ url: "http://localhost:5173" });
@@ -178,6 +206,8 @@ async function mountTree(t, tree) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   globalThis.__confirmDialogs = [];
   globalThis.__tree = tree;
+  globalThis.__calls = [];
+  globalThis.__toasts = [];
   globalThis.window.electronAPI = {};
 
   const i18n = i18next.createInstance();
@@ -222,6 +252,16 @@ const keyDown = (key) =>
       new globalThis.KeyboardEvent("keydown", { key, metaKey: key === "Backspace", bubbles: true })
     );
   });
+
+const rowTitled = (rows, title) => rows.find((row) => row.getAttribute("title") === title);
+
+const menuItems = (row) => [...row.querySelectorAll('[role="menuitem"]')];
+
+const menuLabels = (row) => menuItems(row).map((item) => item.textContent.trim());
+
+const menuItem = (row, label) => menuItems(row).find((item) => item.textContent.trim() === label);
+
+const click = (element) => React.act(async () => element.click());
 
 const rowSummary = (rows) =>
   rows.map((row) => [
@@ -289,4 +329,67 @@ test("deleting a parent folder counts its subfolders and all their notes", async
     globalThis.__confirmDialogs.at(-1).description,
     'This will permanently delete "Work", including 1 subfolder and 9 notes. This cannot be undone.'
   );
+});
+
+test("only a top-level folder offers New subfolder, and only one without subfolders can move into a folder", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  const work = menuLabels(rowTitled(rows, "Work"));
+  const q1 = menuLabels(rowTitled(rows, "Q1"));
+  assert.ok(work.includes("New subfolder"));
+  assert.ok(!work.includes("Move to folder"));
+  assert.ok(!q1.includes("New subfolder"));
+  assert.ok(q1.includes("Move to folder"));
+});
+
+test("Move to folder offers Top level and the space's top-level folders, the current parent ticked", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  const submenu = [...rowTitled(rows, "Q1").querySelectorAll("[data-submenu]")].find(
+    (sub) => sub.firstChild.textContent.trim() === "Move to folder"
+  );
+  assert.deepEqual(
+    [...submenu.querySelectorAll("button")].map((item) => [
+      item.textContent,
+      item.disabled,
+      item.querySelector("svg") !== null,
+    ]),
+    [
+      ["Top level", false, false],
+      ["Work", true, true],
+    ]
+  );
+});
+
+test("New subfolder creates the folder inside its parent", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  await click(menuItem(rowTitled(rows, "Work"), "New subfolder"));
+  const input = globalThis.document.querySelector('input[placeholder="Folder name"]');
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(globalThis.window.HTMLInputElement.prototype, "value").set.call(
+      input,
+      "Q2"
+    );
+    input.dispatchEvent(new globalThis.window.Event("input", { bubbles: true }));
+  });
+  await React.act(async () => {
+    input.dispatchEvent(new globalThis.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  assert.deepEqual(globalThis.__calls, [["createFolder", "Q2", 1, 11]]);
+});
+
+test("moving a subfolder to the top level can be undone", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+
+  await click(menuItem(rowTitled(rows, "Q1"), "Top level"));
+  const moved = globalThis.__toasts.at(-1);
+  await React.act(async () => moved.action.props.onClick());
+
+  assert.equal(moved.title, "Moved \u201cQ1\u201d to Top level");
+  assert.deepEqual(globalThis.__calls, [
+    ["setFolderParent", 12, null],
+    ["setFolderParent", 12, 11],
+  ]);
 });
