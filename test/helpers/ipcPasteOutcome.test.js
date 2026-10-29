@@ -126,6 +126,41 @@ test("paste-text preserves a clipboard-only fallback as not pasted", async () =>
   assert.deepEqual(result, { success: true, pasted: false });
 });
 
+test("paste-text on Linux hands back the keyboard the assistant panel took before pasting", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["linux", ["blur", "return", "paste"]],
+      ["win32", ["blur", "paste"]],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const order = [];
+      target.windowManager = {
+        isOnboardingDemoActive: () => false,
+        mainWindow: {
+          isDestroyed: () => false,
+          isFocused: () => true,
+          blur: () => order.push("blur"),
+        },
+        // blur() leaves X focus on the Linux pill, so the paste would land in
+        // the panel instead of the user's app.
+        returnLinuxKeyboardFocus: () => order.push("return"),
+      };
+      target.clipboardManager = {
+        pasteText: async () => {
+          order.push("paste");
+        },
+      };
+
+      await handlers.get("paste-text")({ sender: { id: 1 } }, "dictated with the panel open");
+
+      assert.deepEqual(order, expected, platform);
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
 test("paste-text tells the renderer why a paste was held back", async () => {
   target.windowManager = { isOnboardingDemoActive: () => false };
   target.clipboardManager = {
@@ -249,4 +284,232 @@ test("Accessibility settings opens the macOS system pane and reports launch fail
     success: false,
     error: "launch failed",
   });
+});
+
+test("raw paste skips smart spacing and AutoLearn", async (t) => {
+  const originalSetTimeout = global.setTimeout;
+  t.after(() => {
+    global.setTimeout = originalSetTimeout;
+    target._autoLearnEnabled = false;
+    target.textEditMonitor = null;
+  });
+  global.setTimeout = (callback) => {
+    callback();
+    return 1;
+  };
+  const monitored = [];
+  target._autoLearnEnabled = true;
+  target.textEditMonitor = {
+    lastTargetPid: 42,
+    activateTargetPid: async () => true,
+    startMonitoring: (...args) => monitored.push(args),
+  };
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  const pastes = [];
+  target.clipboardManager = {
+    pasteText: async (text, options) => {
+      pastes.push({ text, options });
+    },
+  };
+
+  const result = await handlers.get("paste-text")({ sender: { id: 1 } }, "ls -la", { raw: true });
+
+  assert.deepEqual(result, { success: true, pasted: true });
+  assert.deepEqual(
+    pastes.map((paste) => paste.text),
+    ["ls -la"]
+  );
+  assert.equal("raw" in pastes[0].options, false, "the option stays in this handler");
+  assert.deepEqual(monitored, []);
+});
+
+test("a normal paste still adds its smart space", async () => {
+  target.windowManager = { isOnboardingDemoActive: () => false };
+  const pastes = [];
+  target.clipboardManager = {
+    pasteText: async (text) => {
+      pastes.push(text);
+    },
+  };
+
+  await handlers.get("paste-text")({ sender: { id: 1 } }, "ls -la");
+
+  assert.deepEqual(pastes, ["ls -la "]);
+});
+
+test("raw paste still hands focus back on Linux and Windows", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["linux", ["blur", "return", "paste ls -la"]],
+      ["win32", ["blur", "paste ls -la"]],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const order = [];
+      target.windowManager = {
+        isOnboardingDemoActive: () => false,
+        mainWindow: {
+          isDestroyed: () => false,
+          isFocused: () => true,
+          blur: () => order.push("blur"),
+        },
+        returnLinuxKeyboardFocus: () => order.push("return"),
+      };
+      target.clipboardManager = {
+        pasteText: async (text) => {
+          order.push(`paste ${text}`);
+        },
+      };
+
+      await handlers.get("paste-text")({ sender: { id: 1 } }, "ls -la", { raw: true });
+
+      assert.deepEqual(order, expected, platform);
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+async function onPlatform(platform, run) {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform, configurable: true });
+  try {
+    return await run();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+}
+
+test("Paste into app pastes nothing when the panel has no app to paste into", async () => {
+  let pasted = 0;
+  target.windowManager = {
+    isOnboardingDemoActive: () => false,
+    assistantPasteTarget: { current: async () => null },
+  };
+  target.clipboardManager = { pasteText: async () => (pasted += 1) };
+
+  const result = await handlers.get("paste-text")({ sender: {} }, "ls -la", {
+    raw: true,
+    assistantTarget: true,
+  });
+
+  assert.deepEqual(result, { success: false, pasted: false, reason: "no-target" });
+  assert.equal(pasted, 0);
+});
+
+test("Paste into app on macOS brings forward the command's app, never the last dictation's", async (t) => {
+  t.after(() => {
+    target.textEditMonitor = null;
+  });
+  const activated = [];
+  const pastes = [];
+  target.textEditMonitor = {
+    lastTargetPid: 111,
+    activateTargetPid: async () => assert.fail("must not use the last dictation's app"),
+    activatePid: async (pid) => {
+      activated.push(pid);
+      return pid === 222;
+    },
+  };
+  target.windowManager = {
+    isOnboardingDemoActive: () => false,
+    assistantPasteTarget: { current: async () => ({ pid: 222 }) },
+  };
+  target.clipboardManager = { pasteText: async (text) => pastes.push(text) };
+
+  await onPlatform("darwin", async () => {
+    const ok = await handlers.get("paste-text")({ sender: {} }, "ls -la", {
+      raw: true,
+      assistantTarget: true,
+    });
+    assert.deepEqual(ok, { success: true, pasted: true });
+
+    // The app quit or can't come forward: what is in front isn't it.
+    target.windowManager.assistantPasteTarget = { current: async () => ({ pid: 333 }) };
+    const refused = await handlers.get("paste-text")({ sender: {} }, "ls -la", {
+      raw: true,
+      assistantTarget: true,
+    });
+    assert.deepEqual(refused, { success: false, pasted: false, reason: "no-target" });
+  });
+
+  assert.deepEqual(activated, [222, 333]);
+  assert.deepEqual(pastes, ["ls -la"]);
+});
+
+test("Paste into app on Windows restores the command's window", async () => {
+  const options = [];
+  let inFront = true;
+  target.selectionManager = {
+    getWinTarget: async () => assert.fail("must not use the last dictation's window"),
+  };
+  target.windowManager = {
+    isOnboardingDemoActive: () => false,
+    assistantPasteTarget: {
+      current: async () => ({ window: { kind: "win-hwnd", id: "0xbeef", exeName: "pwsh.exe" } }),
+      isInFront: async () => inFront,
+    },
+  };
+  target.clipboardManager = {
+    pasteText: async (_text, pasteOptions) => options.push(pasteOptions),
+  };
+  const paste = () =>
+    handlers.get("paste-text")({ sender: {} }, "dir", { raw: true, assistantTarget: true });
+
+  await onPlatform("win32", async () => {
+    assert.deepEqual(await paste(), { success: true, pasted: true });
+    // The window was closed, or Windows refused to bring it forward: the helper would
+    // paste into whatever is in front instead.
+    inFront = false;
+    assert.deepEqual(await paste(), { success: false, pasted: false, reason: "no-target" });
+  });
+  target.selectionManager = null;
+
+  assert.equal(options.length, 1);
+  assert.equal(options[0].targetWindow, "0xbeef");
+  assert.equal("assistantTarget" in options[0], false);
+});
+
+test("Paste into app on Linux pastes only once focus is back on the command's app", async () => {
+  let pasted = 0;
+  let focused = false;
+  target.windowManager = {
+    isOnboardingDemoActive: () => false,
+    assistantPasteTarget: {
+      current: async () => ({ window: { kind: "x11-window", id: "7" } }),
+      isInFront: async () => focused,
+    },
+  };
+  target.clipboardManager = { pasteText: async () => (pasted += 1) };
+  const paste = () =>
+    handlers.get("paste-text")({ sender: {} }, "ls", { raw: true, assistantTarget: true });
+
+  await onPlatform("linux", async () => {
+    assert.deepEqual(await paste(), { success: false, pasted: false, reason: "no-target" });
+    focused = true;
+    assert.deepEqual(await paste(), { success: true, pasted: true });
+  });
+
+  assert.equal(pasted, 1);
+});
+
+test("only the dictation window can adopt or forget the panel's paste target", async () => {
+  const handler = handlers.get("assistant-paste-target");
+  const calls = [];
+  const webContents = {};
+  target.windowManager = {
+    mainWindow: { webContents },
+    assistantPasteTarget: {
+      adopt: async () => {
+        calls.push("adopt");
+        return true;
+      },
+      clear: () => calls.push("clear"),
+    },
+  };
+
+  assert.equal(await handler({ sender: {} }, "adopt"), false);
+  assert.equal(await handler({ sender: webContents }, "adopt"), true);
+  assert.equal(await handler({ sender: webContents }, "forget"), false);
+  assert.deepEqual(calls, ["adopt", "clear"]);
 });

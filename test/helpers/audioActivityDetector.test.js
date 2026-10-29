@@ -786,6 +786,143 @@ test("linux: reconciles source-output ownership at startup and on events", async
   detector.stop();
 });
 
+test("linux: production and sink-monitor streams do not drive meeting prompts", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "101",
+              "media.role": "production",
+            },
+          },
+          {
+            properties: {
+              "application.process.id": "102",
+              "stream.capture.sink": "true",
+            },
+          },
+        ]),
+      },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+
+  assert.equal(detector._sustainedTimer, null);
+  assert.deepEqual(detector.getExternalMicState(), {
+    reliable: true,
+    externalMicActive: true,
+  });
+  detector.stop();
+});
+
+test("linux: browser captures prompt and unattributed streams stay in the fallback count", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      {
+        stdout: JSON.stringify([
+          {
+            properties: {
+              "application.process.id": "202",
+              "application.process.binary": "chromium",
+            },
+          },
+          { properties: {} },
+        ]),
+      },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+
+  assert.equal(detector._activeSources, 2);
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("linux: a process with a meeting stream prompts beside its own sink-monitor capture", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("linux", {
+    execResponses: [
+      { stdout: "[]" },
+      {
+        // A browser call sharing system audio holds a mic stream and a monitor stream.
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "202" } },
+          { properties: { "application.process.id": "202", "stream.capture.sink": "true" } },
+        ]),
+      },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("linux: a failed exclusion provider falls back to meeting streams only", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const production = {
+    properties: { "application.process.id": "101", "media.role": "production" },
+  };
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => {
+      throw new Error("process tree unavailable");
+    },
+    execResponses: [
+      { stdout: "[]" },
+      { stdout: JSON.stringify([production]) },
+      { stdout: JSON.stringify([production, { properties: { "application.process.id": "202" } }]) },
+    ],
+  });
+
+  await detector.start();
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #1\n");
+  await flushImmediate();
+  assert.equal(detector.getExternalMicState().reliable, false);
+  assert.equal(detector._sustainedTimer, null);
+
+  t.mock.timers.tick(RECONCILE_SPACING_MS);
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  await flushImmediate();
+  assert.notEqual(detector._sustainedTimer, null);
+  detector.stop();
+});
+
+test("linux: polling uses the same prompt classification", async () => {
+  const { detector } = createDetector("linux", {
+    execResponses: [
+      {
+        stdout: JSON.stringify([
+          { properties: { "application.process.id": "101", "media.role": "production" } },
+          { properties: { "application.process.id": "102", "stream.capture.sink": "true" } },
+        ]),
+      },
+      { stdout: JSON.stringify([{ properties: { "application.process.id": "103" } }]) },
+    ],
+  });
+
+  assert.equal(await detector._checkLinux(), false);
+  assert.equal(await detector._checkLinux(), true);
+});
+
 test("linux: a subscribe-event burst runs one leading and one spaced trailing reconcile", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children, execCalls } = createDetector("linux", {
@@ -1333,9 +1470,9 @@ test("win32: our own capture cannot cancel a real meeting already in progress", 
 });
 
 const RECONCILE_SPACING = 1000;
-const linuxStream = (index, processId) => ({
+const linuxStream = (index, processId, properties = {}) => ({
   index,
-  properties: { "application.process.id": String(processId) },
+  properties: { "application.process.id": String(processId), ...properties },
 });
 const linuxStreams = (...processIds) =>
   JSON.stringify(processIds.map((processId, index) => linuxStream(index + 1, processId)));
@@ -1401,6 +1538,46 @@ test("linux: a later capture process re-prompts while the same process does not"
   await flushImmediate();
   t.mock.timers.tick(SUSTAINED_MS);
   assert.equal(detections, 2);
+  detector.stop();
+});
+
+test("linux: a later call re-prompts while a production capture keeps running", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const OBS = 900;
+  const CHROME = 17111;
+  const ZOOM = 22222;
+  const obs = linuxStream(1, OBS, { "media.role": "production" });
+  const { detector, children } = createDetector("linux", {
+    excludedProcessIds: () => [700],
+    execResponses: [
+      { stdout: JSON.stringify([obs]) },
+      { stdout: JSON.stringify([obs, linuxStream(2, CHROME)]) },
+      { stdout: JSON.stringify([obs]) },
+      { stdout: JSON.stringify([obs, linuxStream(3, ZOOM)]) },
+    ],
+  });
+  let detections = 0;
+  detector.on("sustained-audio-detected", () => detections++);
+
+  await detector.start();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 0, "a production capture alone is not a meeting");
+
+  children[0].stdout.emit("data", "Event 'new' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 1);
+
+  children[0].stdout.emit("data", "Event 'remove' on source-output #2\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+
+  children[0].stdout.emit("data", "Event 'new' on source-output #3\n");
+  t.mock.timers.tick(RECONCILE_SPACING);
+  await flushImmediate();
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections, 2, "the capture still running must not block the next call's prompt");
   detector.stop();
 });
 

@@ -6,6 +6,7 @@
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { isRetryableTranscriptionError, transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
 import { cleanupTranscript } from '@/lib/cleanupTranscript';
+import { transcriptionPolicyErrorFromResponse } from '@/services/transcription/policyErrors';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 jest.mock('@/services/transcription/TranscriptionService', () => ({
@@ -21,7 +22,6 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
 jest.mock('@/lib/cleanupTranscript', () => ({
   cleanupTranscript: jest.fn(async (text: string) => `cleaned:${text}`),
   CLEANUP_TIMEOUT_MS: 12_000,
-  AGENT_ACTION_TIMEOUT_MS: 30_000,
 }));
 jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
@@ -127,5 +127,48 @@ describe('transcription retry classification', () => {
     ['network failure', { retryable: true }],
   ])('retries %s failures', (_label, error) => {
     expect(isRetryableTranscriptionError(error)).toBe(true);
+  });
+});
+
+describe('org policy and version refusals', () => {
+  const refusals = [
+    ['POLICY_AUDIO_UPLOAD_DISABLED', 403, { code: 'POLICY_AUDIO_UPLOAD_DISABLED' }],
+    ['POLICY_MEETING_RECORDING_DISABLED', 403, { code: 'POLICY_MEETING_RECORDING_DISABLED' }],
+    ['POLICY_MODE_BLOCKED', 403, { code: 'POLICY_MODE_BLOCKED' }],
+    ['an upgrade-required response', 426, {}],
+  ] as const;
+  const refusal = (status: number, body: object): Error => {
+    const error = transcriptionPolicyErrorFromResponse(status, JSON.stringify(body));
+    if (!error) throw new Error(`HTTP ${status} was not mapped to a policy error`);
+    return error;
+  };
+
+  it.each(refusals)('never retries %s', (_label, status, body) => {
+    expect(isRetryableTranscriptionError(refusal(status, body))).toBe(false);
+  });
+
+  it.each(refusals)('sends %s once on the fused path', async (_label, status, body) => {
+    mockCustomPrompt = undefined;
+    const error = refusal(status, body);
+    mockFused.mockRejectedValue(error);
+    await expect(
+      transcribeAndCleanup({ audioUri: 'file://a.wav', provider: 'cloud', requestContext: 'file' }),
+    ).rejects.toBe(error);
+    expect(mockFused).toHaveBeenCalledTimes(1);
+    expect(mockTranscribe).not.toHaveBeenCalled();
+  });
+
+  it.each(refusals)('sends %s once on the serial path', async (_label, status, body) => {
+    const error = refusal(status, body);
+    mockTranscribe.mockRejectedValue(error);
+    await expect(
+      transcribeAndCleanup({
+        audioUri: 'file://a.wav',
+        provider: 'cloud',
+        requestContext: 'recording',
+      }),
+    ).rejects.toBe(error);
+    expect(mockFused).not.toHaveBeenCalled();
+    expect(mockTranscribe).toHaveBeenCalledTimes(1);
   });
 });

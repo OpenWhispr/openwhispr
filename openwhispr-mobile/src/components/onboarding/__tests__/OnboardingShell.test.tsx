@@ -70,7 +70,7 @@ it('reports an unexpected failure and shows the fallback instead of its text', a
 });
 
 it('shows a failure written for the user as is', async () => {
-  const message = 'Cloud needs a connection to set up. Try again or use Local for now.';
+  const message = 'Cloud needs a connection to set up. Try again or use Local Mode for now.';
   render(
     <OnboardingShell
       title="Mode"

@@ -20,6 +20,32 @@ const LISTENER_RESPAWN_BASE_MS = 5 * 1000;
 const LISTENER_RESPAWN_MAX_MS = 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8" };
 
+function isLinuxMeetingPromptSourceOutput(sourceOutput) {
+  const properties = sourceOutput?.properties ?? {};
+  return properties["media.role"] !== "production" && properties["stream.capture.sink"] !== "true";
+}
+
+// Every pid holding a capture stream, and those whose streams are all
+// production or sink-monitor capture, which are not meeting evidence.
+function classifyLinuxCapturePids(sourceOutputs) {
+  const capturePids = new Set();
+  const meetingCapturePids = new Set();
+  for (const sourceOutput of sourceOutputs) {
+    // Audio-server plumbing (module-echo-cancel, loopbacks) legitimately
+    // lacks application.process.id — client streams always carry it. Skip
+    // such streams instead of surrendering PID reliability, or systems
+    // with these modules loaded could never arm auto-end.
+    const processId = Number(sourceOutput?.properties?.["application.process.id"]);
+    if (!Number.isInteger(processId) || processId <= 0) continue;
+    capturePids.add(processId);
+    if (isLinuxMeetingPromptSourceOutput(sourceOutput)) meetingCapturePids.add(processId);
+  }
+  const nonMeetingCapturePids = new Set(
+    [...capturePids].filter((processId) => !meetingCapturePids.has(processId))
+  );
+  return { capturePids, nonMeetingCapturePids };
+}
+
 class AudioActivityDetector extends EventEmitter {
   // `getExcludedProcessIds` lists every pid whose mic use is OpenWhispr's own:
   // the Electron process tree by default, plus any live capture helpers when
@@ -42,6 +68,7 @@ class AudioActivityDetector extends EventEmitter {
     this._checking = false;
     this._listenerProcess = null;
     this._activeMicPids = new Set();
+    this._nonMeetingCapturePids = new Set();
     this._activeSources = 0;
     this._sustainedTimer = null;
     this._running = false;
@@ -225,6 +252,7 @@ class AudioActivityDetector extends EventEmitter {
   // still-running call as gone.
   _resetListenerState() {
     this._activeMicPids.clear();
+    this._nonMeetingCapturePids.clear();
     this._activeSources = 0;
     this._lastKnownMicState = false;
     this._externalCapturePids.clear();
@@ -623,27 +651,20 @@ class AudioActivityDetector extends EventEmitter {
       const sourceOutputs = JSON.parse(stdout);
       if (!Array.isArray(sourceOutputs)) throw new Error("pactl returned a non-array response");
 
-      const activeMicPids = new Set();
-      for (const sourceOutput of sourceOutputs) {
-        // Audio-server plumbing (module-echo-cancel, loopbacks) legitimately
-        // lacks application.process.id — client streams always carry it. Skip
-        // such streams instead of surrendering PID reliability, or systems
-        // with these modules loaded could never arm auto-end.
-        const processId = Number(sourceOutput?.properties?.["application.process.id"]);
-        if (!Number.isInteger(processId) || processId <= 0) continue;
-        activeMicPids.add(processId);
-      }
-
-      this._activeMicPids = activeMicPids;
+      const { capturePids, nonMeetingCapturePids } = classifyLinuxCapturePids(sourceOutputs);
+      this._activeMicPids = capturePids;
+      this._nonMeetingCapturePids = nonMeetingCapturePids;
       // Raw total, matching the subscribe-event counter: it is the only signal
       // left if a later reconcile cannot parse pactl's JSON.
       this._activeSources = sourceOutputs.length;
       this._setPidScopedCapability(true);
       // A live listener makes the snapshot reliable unless the excluded-pid
-      // provider itself failed. It is external and can, so keep the raw total as
-      // the fallback signal rather than reporting a silent mic.
+      // provider itself failed. It is external and can, so fall back to any
+      // meeting stream rather than reporting a silent mic.
       this._onMicStateChanged(
-        this._externalMicReliable ? this._externalMicActive : this._activeSources > 0
+        this._externalMicReliable
+          ? this._externalCapturePids.size > 0
+          : sourceOutputs.some(isLinuxMeetingPromptSourceOutput)
       );
     } catch (err) {
       if (this._isStale(generation) || request !== this._linuxOwnershipRequest) return;
@@ -699,7 +720,11 @@ class AudioActivityDetector extends EventEmitter {
     const externalPids = [...this._activeMicPids].filter(
       (processId) => !excludedProcessIds.has(processId)
     );
-    this._externalCapturePids = new Set(externalPids);
+    // Only meeting evidence arms and re-arms the prompt; auto-end still counts
+    // every capture as holding the mic.
+    this._externalCapturePids = new Set(
+      externalPids.filter((processId) => !this._nonMeetingCapturePids.has(processId))
+    );
     const externalMicActive = externalPids.length > 0;
     if (!this._pidScopedCapability || !this._isOwnershipSnapshotLive()) {
       this._setExternalMicSnapshot(false, false, emitChange);
@@ -944,21 +969,22 @@ class AudioActivityDetector extends EventEmitter {
       const sourceOutputs = JSON.parse(stdout);
       if (!Array.isArray(sourceOutputs)) throw new Error("pactl returned a non-array response");
 
-      const capturePids = sourceOutputs
-        .map((sourceOutput) => Number(sourceOutput?.properties?.["application.process.id"]))
-        .filter((processId) => Number.isInteger(processId) && processId > 0);
+      const { capturePids, nonMeetingCapturePids } = classifyLinuxCapturePids(sourceOutputs);
       // A stream without application.process.id carries no ownership
       // information. When nothing in a non-empty listing is attributable, the
       // unfiltered listings below still answer "is anything capturing" — far
       // better than reporting silence and never detecting a meeting.
-      if (sourceOutputs.length > 0 && capturePids.length === 0) {
+      if (sourceOutputs.length > 0 && capturePids.size === 0) {
         throw new Error("no source-output reported an application.process.id");
       }
 
       const excludedProcessIds = this._getExcludedProcessIdSet();
-      this._activeMicPids = new Set(capturePids);
+      this._activeMicPids = capturePids;
+      this._nonMeetingCapturePids = nonMeetingCapturePids;
       this._setPidScopedCapability(true);
-      return capturePids.some((processId) => !excludedProcessIds.has(processId));
+      return [...capturePids].some(
+        (processId) => !excludedProcessIds.has(processId) && !nonMeetingCapturePids.has(processId)
+      );
     } catch (err) {
       this._setPidScopedCapability(false);
       debugLogger.debug(

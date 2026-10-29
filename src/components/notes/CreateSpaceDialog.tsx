@@ -22,7 +22,7 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import SpaceNameField from "./SpaceNameField";
-import { canManageWorkspace } from "../../lib/spacePermissions";
+import { workspaceCan } from "../../lib/capabilities";
 import {
   manageableWorkspaces as findManageableWorkspaces,
   selectWorkspaceForSpaceCreation,
@@ -162,7 +162,9 @@ export default function CreateSpaceDialog({
   // cancelling closes everything.
   const handleWorkspaceDialogChange = (nextOpen: boolean) => {
     if (nextOpen) return;
-    const created = useWorkspaceStore.getState().workspaces.some((w) => canManageWorkspace(w.role));
+    const created = useWorkspaceStore
+      .getState()
+      .workspaces.some((w) => workspaceCan(w, "create_spaces"));
     if (!created) onOpenChange(false);
   };
 

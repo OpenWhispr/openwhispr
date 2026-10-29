@@ -296,7 +296,7 @@ export default function ModelDownloadScreen() {
       >
         <Text className="mb-1.5 text-sm font-semibold text-label">Which model do I need?</Text>
         <Text className="text-xs text-secondaryLabel leading-[18px]">
-          One model is enough — private mode picks the right engine from your dictation language.
+          One model is enough — Local Mode picks the right engine from your dictation language.
           Parakeet is the fastest and most accurate for English (v2) and 25 European languages (v3).
           Whisper base covers everything else, including auto-detect. Downloads stay on your device.
         </Text>

@@ -58,6 +58,7 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
           {
             id: "event-1",
             summary: "Event Page 1",
+            htmlLink: "https://www.google.com/calendar/event?eid=abc",
             start: { dateTime: "2026-08-12T10:00:00Z" },
             transparency: "transparent",
             attendees: [{ self: true, responseStatus: "declined" }],
@@ -95,6 +96,12 @@ test("_syncCalendar fetches all pages when nextPageToken is returned", async () 
   assert.equal(upsertedEvents[0].id, "event-1");
   assert.equal(upsertedEvents[0].availability_status, "free");
   assert.equal(upsertedEvents[0].self_response_status, "declined");
+  assert.equal(
+    upsertedEvents[0].web_link,
+    "https://www.google.com/calendar/event?eid=abc&authuser=test%40example.com",
+    "the link opens under the calendar's own account, not the browser's default one"
+  );
+  assert.equal(upsertedEvents[1].web_link, null);
   assert.equal(upsertedEvents[1].id, "event-2");
   assert.equal(savedSyncToken, "sync-token-final", "should save nextSyncToken from final page");
   assert.deepEqual(
@@ -378,7 +385,7 @@ test("_syncCalendar trusts self as the user only on the account's primary calend
   );
 });
 
-async function syncGoogleResponse(calendar, attendees) {
+async function syncGoogleRow(calendar, attendees) {
   const rows = [];
   const GoogleCalendarManager = loadManagerModule();
   const manager = new GoogleCalendarManager(
@@ -405,7 +412,11 @@ async function syncGoogleResponse(calendar, attendees) {
     ],
   });
   await manager._syncCalendar(calendar);
-  return rows[0].self_response_status;
+  return rows[0];
+}
+
+async function syncGoogleResponse(calendar, attendees) {
+  return (await syncGoogleRow(calendar, attendees)).self_response_status;
 }
 
 test("Google RSVP on a shared calendar uses the connected account's attendee", async () => {
@@ -426,4 +437,57 @@ test("Google RSVP on a shared calendar uses the connected account's attendee", a
     ]),
     "unknown"
   );
+});
+
+test("a stored attendee is self only when it is the user, on shared calendars too", async () => {
+  const shared = { id: "colleague@example.com", account_email: "me@example.com" };
+  const colleague = { email: "colleague@example.com", self: true };
+  const flags = async (calendar, attendees) =>
+    JSON.parse((await syncGoogleRow(calendar, attendees)).attendees).map((a) => [a.email, a.self]);
+
+  assert.deepEqual(await flags(shared, [colleague, { email: "ME@example.com" }]), [
+    ["colleague@example.com", false],
+    ["ME@example.com", true],
+  ]);
+  assert.deepEqual(
+    await flags({ id: "me@example.com", account_email: "me@example.com" }, [
+      { email: "alias@example.com", self: true },
+      { email: "dana@example.com" },
+    ]),
+    [
+      ["alias@example.com", true],
+      ["dana@example.com", false],
+    ],
+    "on the user's own calendar Google's flag still marks them, under an alias too"
+  );
+});
+
+test("_syncCalendar full sync looks back CALENDAR_LOOKBACK_DAYS", async () => {
+  const GoogleCalendarManager = loadManagerModule();
+  const { CALENDAR_LOOKBACK_MS } = require("../../src/helpers/calendarCacheWindow.js");
+  const databaseManager = {
+    getGoogleAccounts: () => [],
+    removeStaleCalendarEvents: () => {},
+    upsertCalendarEvents: () => {},
+    removeCalendarEvents: () => {},
+    updateCalendarSyncToken: () => {},
+    syncCalendarContacts: () => {},
+  };
+  const manager = new GoogleCalendarManager(databaseManager, null, {
+    scheduleNextMeeting: () => {},
+    reset: () => {},
+  });
+  const paths = [];
+  manager._apiGet = async (path) => {
+    paths.push(path);
+    return { items: [], nextSyncToken: "token" };
+  };
+
+  await manager._syncCalendar({ id: "cal-1", account_email: "test@example.com", is_primary: 1 });
+
+  const params = new URL(paths[0], "https://www.googleapis.com").searchParams;
+  const now = Date.now();
+  assert.ok(Math.abs(Date.parse(params.get("timeMin")) - (now - CALENDAR_LOOKBACK_MS)) < 5_000);
+  const lookaheadMs = (33 * 24 + 48) * 3_600_000;
+  assert.ok(Math.abs(Date.parse(params.get("timeMax")) - (now + lookaheadMs)) < 5_000);
 });

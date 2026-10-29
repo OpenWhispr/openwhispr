@@ -84,7 +84,7 @@ test("a model belonging to another provider degrades to the provider default", a
   assert.equal(resolveByokModel("corti", "whisper-1"), "corti-transcribe");
   assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
   assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
-  assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-5-pro");
+  assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-6-pro");
 });
 
 // OpenRouter brokers batch HTTP transcription only — it has no realtime socket.

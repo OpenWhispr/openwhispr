@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.7.x   | :white_check_mark: |
-| < 1.7   | :x:                |
+| 1.10.x  | :white_check_mark: |
+| < 1.10  | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -51,6 +51,12 @@ Out of scope:
   utilities) are compiled from source during the build process.
 - **Context isolation** — The Electron renderer runs with context isolation
   enabled and a restricted preload bridge.
+
+## Automated Scanning
+
+[`.oss-scanner/`](.oss-scanner/) holds the build image and threat model for Anthropic's
+[OSS Scanner](https://github.com/anthropics/oss-scanner), which sends its model-generated
+vulnerability reports for both the desktop and mobile apps to security@openwhispr.com.
 
 ## Disclosure Policy
 

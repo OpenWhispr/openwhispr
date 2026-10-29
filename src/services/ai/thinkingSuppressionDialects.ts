@@ -37,7 +37,7 @@ export function suppressThinking(
   const family = getModelFamilyConstraints(model);
 
   if (providerKey === "gemini") {
-    requestBody.reasoning_effort = "minimal";
+    requestBody.reasoning_effort = family?.reasoningEffort?.suppressValue ?? "minimal";
     return;
   }
 

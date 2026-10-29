@@ -281,3 +281,44 @@ test("history keeps the last 20 messages", async () => {
   assert.equal(history.length, 20);
   assert.equal(history[0].content, "m5");
 });
+
+test("historical built-in help remains readable without inventing a model tool", async () => {
+  const { toHistoryMessages, toolTrace } = await load();
+  const help = call("grounded_product_help", {}, { metadata: { topics: ["hotkeys"] } });
+  assert.equal(toolTrace([help]), "");
+  assert.equal(
+    toolTrace([help, call("web_search", { query: "official docs" })]),
+    '[Tools used: web_search ("official docs")]'
+  );
+  assert.deepEqual(
+    toHistoryMessages([assistant("Earlier guidance.", [help])], { includeToolTrace: true }),
+    [{ role: "assistant", content: "Earlier guidance." }]
+  );
+});
+
+test("a skill card's outcome is named, never the skill's text or title", async () => {
+  const { toolTrace } = await load();
+  const card = (name, status) =>
+    call(name, "{}", {
+      metadata: {
+        status,
+        kind: name === "update_skill" ? "update" : "create",
+        name: "weekly-recap",
+        title: "Weekly recap",
+        message: "Saved the weekly-recap skill.",
+      },
+    });
+
+  assert.equal(
+    toolTrace([
+      card("propose_skill", "saved"),
+      card("update_skill", "skipped"),
+      card("update_skill", "changed"),
+      card("propose_skill", "not_saved"),
+      card("propose_skill", "failed"),
+    ]),
+    "[Tools used: propose_skill (saved), update_skill (skipped by the user), " +
+      "update_skill (not saved, the skill had changed), propose_skill (not saved), " +
+      "propose_skill (failed)]"
+  );
+});

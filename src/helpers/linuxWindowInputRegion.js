@@ -33,7 +33,7 @@ function createLinuxWindowInputRegion(win) {
   const onClose = () => stop();
   const fail = (error) => {
     if (failure) return;
-    debugLogger.warn("Linux input region unavailable", { error: error.message });
+    debugLogger.warn("Linux input region helper unavailable", { error: error.message });
     stop(error);
   };
 
@@ -74,11 +74,32 @@ function createLinuxWindowInputRegion(win) {
     });
   };
 
-  const set = (region) => {
-    if (failure)
-      return stopped.then(() => {
-        throw failure;
+  const rejectWithFailure = () =>
+    stopped.then(() => {
+      throw failure;
+    });
+
+  const send = (line) => {
+    if (failure) return rejectWithFailure();
+    return new Promise((resolve, reject) => {
+      pending.push({
+        resolve,
+        reject,
+        timer: setTimeout(
+          () => fail(new Error("Linux input region helper timed out")),
+          APPLY_TIMEOUT_MS
+        ),
       });
+      try {
+        if (!child) start();
+        child.stdin.write(line);
+      } catch (error) {
+        fail(error);
+      }
+    });
+  };
+
+  const set = (region) => {
     let line = "full\n";
     if (region !== null) {
       const values = [
@@ -97,33 +118,18 @@ function createLinuxWindowInputRegion(win) {
         values[5] < 0
       ) {
         fail(new Error("Invalid input region"));
-        return stopped.then(() => {
-          throw failure;
-        });
+        return rejectWithFailure();
       }
       line = `${values.join(" ")}\n`;
     }
-    return new Promise((resolve, reject) => {
-      pending.push({
-        resolve,
-        reject,
-        timer: setTimeout(
-          () => fail(new Error("Linux input region update timed out")),
-          APPLY_TIMEOUT_MS
-        ),
-      });
-      try {
-        if (!child) start();
-        child.stdin.write(line);
-      } catch (error) {
-        fail(error);
-      }
-    });
+    return send(line);
   };
+
+  const focus = () => send("focus\n");
 
   app.once("before-quit", onClose);
   win.once("closed", onClose);
-  return { set, stop };
+  return { set, focus, stop };
 }
 
 module.exports = { createLinuxWindowInputRegion };

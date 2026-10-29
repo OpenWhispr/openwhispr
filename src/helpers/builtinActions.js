@@ -1,10 +1,9 @@
 // Built-in note templates and actions. The database seeds any that are missing
 // on startup and only rewrites a row whose prompt still equals a previous
 // default, so a user's edited prompt is never touched. A template writes the AI
-// summary: AI Summary, the default (Generate Notes' key), wraps its prompt in the
-// generic system prompt, and Detailed Notes is compiled from sections (see
-// templatePrompts.js). An action either edits the summary or answers in the note
-// chat.
+// summary: AI Summary, the default (Generate Notes' key), uses the detailed
+// sections compiled by templatePrompts.js. An action either edits the summary
+// or answers in the note chat.
 
 export const GENERATE_NOTES_KEY = "notes.actions.builtin.generateNotes";
 export const DETAILED_NOTES_KEY = "notes.actions.builtin.detailedNotes";
@@ -137,7 +136,7 @@ export const NOTHING_TO_SUMMARIZE = "NOTHING_TO_SUMMARIZE";
 const NON_SUBSTANTIVE_NOTES_INSTRUCTIONS = `For material with no substantive discussion or notes (for example, only greetings, filler, or recording checks), reply with exactly ${NOTHING_TO_SUMMARIZE} and nothing else. This rule overrides the section structure and bullet counts above: do not return an empty response or invent topics, decisions, or action items. Consider both the transcript and any manual notes before applying this rule.`;
 
 const GENERATE_NOTES_PROMPT_1_10_2 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
-const GENERATE_NOTES_PROMPT = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
+const GENERATE_NOTES_PROMPT_1_10_3 = `${GENERATE_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
 // The last flat Detailed Notes prompt; a row still holding it moves to sections.
 const DETAILED_NOTES_PROMPT_1_10_2 = `${DETAILED_NOTES_PROMPT_1_10_1}\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_2}`;
 
@@ -394,6 +393,37 @@ export const NOTE_INPUT_PREAMBLE = `The material is the user's own notes, possib
 
 `;
 
+// A transcript that is only plain text (a recording that captured no speaker
+// segments, or one made before 1.6.6) shows no speakers, so an owner or a
+// deadline can only come from what was said or written, never a guess (#2666).
+// The owner still goes last, where tagActionItemOwners reads it.
+const PLAIN_TRANSCRIPT_OWNER_RULE = `Add an owner or a deadline only when the transcript or the user's notes state it. The owner is the person named as taking the action on or being asked to: "Alice, can you fix the build by Friday?" becomes \`- [ ] Fix the build by Friday — Alice\`, with the deadline inside the action text. When no owner is named, end the line after the action, as in \`- [ ] Send the revised proposal\`. Never guess an owner from who seems to be speaking, never use "You" or "Them" as one, and never write a placeholder such as "Owner not specified" or "TBD".`;
+
+export const PLAIN_TRANSCRIPT_SYSTEM_PROMPT = `You are a professional meeting notes assistant. You will receive a meeting transcript in plain text: its lines carry no speaker labels, so it doesn't show who said what. Manual notes the user took may be included as well.
+
+Your job is to produce clean, actionable meeting notes in markdown. Follow these rules:
+
+FORMAT RULES (strict):
+- Do NOT include any preamble: no title, no "# Meeting Notes", no date/time/location, no attendee list, no topic header. Start directly with the summary.
+- Do NOT use horizontal rules or block quotes. Use a table only when the instructions ask for one.
+- NEVER guess or invent who said something; name a person only where the transcript or the user's notes name them.
+- Start with a concise 1–2 sentence summary of what the meeting was about.
+- Use clear section headings: ## Key Discussion Points, ## Decisions Made, ## Action Items, ## Follow-ups (omit any section that has no content).
+- Under Action Items, write one checkbox per item in the form \`- [ ] Action — Owner\`, never a table unless the instructions ask for one. ${PLAIN_TRANSCRIPT_OWNER_RULE}
+
+CONTENT RULES:
+- Preserve important quotes or specific commitments verbatim when they carry meaning.
+- Remove filler, small talk, false starts, and repeated/redundant content.
+- Where the same topic comes up more than once, consolidate it into a coherent point rather than listing every utterance.
+- If the user included manual notes alongside the transcript, integrate them — they represent the user's emphasis on what matters most.
+- Keep the tone professional and concise. Bias toward brevity.
+
+Instructions: `;
+
+export const PLAIN_TRANSCRIPT_INPUT_PREAMBLE = `The material is a transcript in plain text: its lines carry no speaker labels, so it doesn't show who said what. Manual notes the user took may precede the transcript. Never guess or invent who said something; name a person only where the transcript or the user's notes name them. For action items: ${PLAIN_TRANSCRIPT_OWNER_RULE} Where an instruction below says to use "You" or "Them" when no name is available, end the line after the action instead. Where an instruction below asks to attribute points by label or to each person, attribute a point only to someone the transcript or the user's notes name, and group the rest by topic. Never write "[name unclear]" in place of who said or owns something.
+
+`;
+
 // A summary action rewrites the summary the note already has; the rest of the
 // input is only there to keep the rewrite accurate.
 export const SUMMARY_ACTION_SYSTEM_PROMPT = `You revise an existing AI summary of a note. The input starts with the current summary under "## Current Summary". The user's own notes under "## My Notes" and a "## Meeting Context" block may follow; they are reference material for accuracy, never something to reproduce.
@@ -474,41 +504,44 @@ const builtinAction = ({
   sortOrder,
 });
 
+// Retained only to recognize old defaults and preserve customized legacy templates.
+export const LEGACY_DETAILED_NOTES = {
+  translationKey: DETAILED_NOTES_KEY,
+  // The prompt 1.10.2's Generate AI Summary button used.
+  name: "Detailed Notes",
+  description: "Accurate, comprehensive meeting notes with decisions and action items",
+  prompt: "",
+  sections: DETAILED_NOTES_SECTIONS,
+  previousPrompts: [
+    DETAILED_NOTES_PROMPT_1_10_0,
+    DETAILED_NOTES_PROMPT_1_10_1,
+    DETAILED_NOTES_PROMPT_1_10_2,
+  ],
+  icon: "sparkles",
+  sortOrder: 1,
+};
+
 // previousPrompts only upgrades a row that is still a flat prompt; a later change
 // to a built-in's default sections needs its own history.
 export const BUILTIN_ACTIONS = [
-  {
-    translationKey: DETAILED_NOTES_KEY,
-    kind: "template",
-    // The prompt 1.10.2's Generate AI Summary button used.
-    name: "Detailed Notes",
-    description: "Accurate, comprehensive meeting notes with decisions and action items",
-    prompt: "",
-    sections: DETAILED_NOTES_SECTIONS,
-    output: null,
-    previousPrompts: [
-      DETAILED_NOTES_PROMPT_1_10_0,
-      DETAILED_NOTES_PROMPT_1_10_1,
-      DETAILED_NOTES_PROMPT_1_10_2,
-    ],
-    icon: "sparkles",
-    sortOrder: 1,
-  },
   {
     translationKey: GENERATE_NOTES_KEY,
     kind: "template",
     // The default template.
     name: "AI Summary",
     description: "Clean up, structure, and enhance your notes",
-    prompt: GENERATE_NOTES_PROMPT,
-    sections: null,
+    prompt: "",
+    sections: DETAILED_NOTES_SECTIONS,
     output: null,
     // A pre-release build briefly shipped the detailed prompt under this key.
     previousPrompts: [
       DETAILED_NOTES_PROMPT_1_10_0,
       GENERATE_NOTES_PROMPT_1_10_1,
       GENERATE_NOTES_PROMPT_1_10_2,
+      GENERATE_NOTES_PROMPT_1_10_3,
     ],
+    // Unchanged, so a description the user edited survives the move to sections.
+    previousDescriptions: ["Clean up, structure, and enhance your notes"],
     icon: "sparkles",
     sortOrder: 0,
   },

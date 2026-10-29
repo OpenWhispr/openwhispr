@@ -9,7 +9,10 @@ import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
 import {
+  isSelfSideSegment,
   isTranscriptSpeakerLocked,
+  isYouSpeakerName,
+  resolveMappedSpeakerName,
   resolveSegmentSpeakerName,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
@@ -152,6 +155,10 @@ interface SpeakerPickerProps {
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   onSelectName: (name: string, email?: string | null, profileId?: number) => void;
+  // "offer": a voice that may be the user's gets a "This is me" row, which the
+  // user's own voice profile folds into. "exclude": a call's remote voice is
+  // never the user, so it can't be named after them.
+  self?: "offer" | "exclude";
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
 
@@ -244,11 +251,39 @@ function AddContactButton({
   );
 }
 
-function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: SpeakerPickerProps) {
+function SpeakerPicker({
+  speakerProfiles,
+  participants,
+  onSelectName,
+  self,
+  t,
+}: SpeakerPickerProps) {
   const [search, setSearch] = useState("");
   const lower = search.toLowerCase();
   const trimmed = search.trim();
   const trimmedLower = trimmed.toLowerCase();
+
+  const youLabel = t("notes.speaker.you");
+  const youLower = youLabel.trim().toLowerCase();
+  const thisIsMe = t("notes.speaker.thisIsMe");
+  const selfProfiles = self
+    ? (speakerProfiles || []).filter((p) => isYouSpeakerName(p.display_name, youLabel))
+    : [];
+  // Naming the speaker after the existing profile adds this voice to it rather
+  // than to a second "You" profile.
+  const selfProfile = selfProfiles.find((p) => p.id != null) ?? selfProfiles[0];
+  const matchesSelf =
+    !!self &&
+    !!trimmed &&
+    (isYouSpeakerName(trimmed, youLabel) ||
+      selfProfiles.some((p) => p.email?.toLowerCase() === trimmedLower));
+  const showSelf =
+    self === "offer" &&
+    (!trimmed ||
+      matchesSelf ||
+      youLower.includes(trimmedLower) ||
+      thisIsMe.toLowerCase().includes(trimmedLower) ||
+      !!selfProfile?.email?.toLowerCase().includes(trimmedLower));
 
   const filteredParticipants = (participants || []).filter(
     (p) =>
@@ -258,12 +293,14 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
   );
   const filteredProfiles = (speakerProfiles || []).filter(
     (p) =>
-      !search ||
-      p.display_name.toLowerCase().includes(lower) ||
-      (p.email && p.email.toLowerCase().includes(lower))
+      !selfProfiles.includes(p) &&
+      (!search ||
+        p.display_name.toLowerCase().includes(lower) ||
+        (p.email && p.email.toLowerCase().includes(lower)))
   );
 
   const hasExactMatch =
+    matchesSelf ||
     filteredParticipants.some(
       (p) =>
         (p.displayName || "").toLowerCase() === trimmedLower ||
@@ -288,14 +325,26 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
     setSearch("");
   };
 
+  const selectSelf = () =>
+    onSelectName(
+      selfProfile?.display_name ?? youLabel,
+      selfProfile?.email ?? null,
+      selfProfile?.id
+    );
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && canCreate) {
+    if (e.key !== "Enter") return;
+    if (showSelf && matchesSelf) {
+      e.preventDefault();
+      selectSelf();
+    } else if (canCreate) {
       e.preventDefault();
       submitCreate();
     }
   };
 
-  const isEmpty = !filteredParticipants.length && !filteredProfiles.length && !canCreate;
+  const isEmpty =
+    !showSelf && !filteredParticipants.length && !filteredProfiles.length && !canCreate;
 
   return (
     <>
@@ -311,6 +360,18 @@ function SpeakerPicker({ speakerProfiles, participants, onSelectName, t }: Speak
         />
       </div>
       <div className="max-h-52 overflow-y-auto">
+        {showSelf && (
+          <div className="p-1 border-b border-border/70">
+            <button
+              onClick={selectSelf}
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+            >
+              <span dir="auto" className="truncate flex-1 text-start">
+                {thisIsMe}
+              </span>
+            </button>
+          </div>
+        )}
         {filteredParticipants.length > 0 && (
           <div className="p-1 border-b border-border/70">
             <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
@@ -397,10 +458,13 @@ function SpeakerLabel({
   speakerId,
   segment,
   resolvedName,
+  isNameFromMapping,
   speakerProfiles,
   participants,
   colorIdx,
   isOriginallyYou,
+  recorderLabel,
+  self,
   onMap,
   onConfirm,
   onDismiss,
@@ -409,12 +473,21 @@ function SpeakerLabel({
   speakerId: string;
   segment: TranscriptSegment;
   resolvedName?: string;
+  isNameFromMapping: boolean;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   colorIdx: number;
   isOriginallyYou: boolean;
-  onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
-  onConfirm?: (speakerId: string, name: string, profileId: number) => void;
+  recorderLabel: string;
+  self?: "offer" | "exclude";
+  onMap?: (
+    speakerId: string,
+    name: string,
+    email?: string | null,
+    profileId?: number,
+    recorderName?: string
+  ) => void;
+  onConfirm?: (speakerId: string, name: string, profileId: number, recorderName?: string) => void;
   onDismiss?: (speakerId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
@@ -437,11 +510,18 @@ function SpeakerLabel({
     return (
       <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
         <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
-          {segment.suggestedName}
+          {isYouSpeakerName(segment.suggestedName!, t("notes.speaker.you"))
+            ? recorderLabel
+            : segment.suggestedName}
         </span>
         <button
           onClick={() =>
-            onConfirm?.(speakerId, segment.suggestedName!, segment.suggestedProfileId!)
+            onConfirm?.(
+              speakerId,
+              segment.suggestedName!,
+              segment.suggestedProfileId!,
+              segment.recorderName
+            )
           }
           className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
         >
@@ -457,11 +537,17 @@ function SpeakerLabel({
     );
   }
 
+  // A "You" stored on the segment was named where the note was recorded, so it
+  // is the recorder; a "You" from this device's own mappings is the viewer.
+  const shownName =
+    resolvedName && !isNameFromMapping && isYouSpeakerName(resolvedName, t("notes.speaker.you"))
+      ? recorderLabel
+      : resolvedName;
   const displayLabel =
-    resolvedName ||
+    shownName ||
     segment.speakerName ||
     (isOriginallyYou
-      ? t("notes.speaker.you")
+      ? recorderLabel
       : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
   const isUnmapped = !resolvedName && !segment.speakerName;
 
@@ -487,9 +573,12 @@ function SpeakerLabel({
           speakerProfiles={speakerProfiles}
           participants={participants}
           onSelectName={(name, email, profileId) => {
-            onMap?.(speakerId, name, email, profileId);
+            if (segment.recorderName)
+              onMap?.(speakerId, name, email, profileId, segment.recorderName);
+            else onMap?.(speakerId, name, email, profileId);
             setOpen(false);
           }}
+          self={self}
           t={t}
         />
       </PopoverContent>
@@ -527,28 +616,33 @@ function SelectCheckbox({
 }
 
 export function SelectionBar({
-  count,
   onClear,
   speakerProfiles,
   participants,
   onAssignName,
+  selectedSegments,
+  speakerMappings,
   t,
 }: {
-  count: number;
   onClear: () => void;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   onAssignName: (name: string, email?: string | null, profileId?: number) => void;
+  selectedSegments: TranscriptSegment[];
+  speakerMappings?: Record<string, string>;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const [open, setOpen] = useState(false);
+  const offerSelf = selectedSegments.some(
+    (segment) => !isSelfSideSegment(segment, speakerMappings, t("notes.speaker.you"))
+  );
   return (
     <div
       className="flex items-center gap-3 rounded-md border border-border/70 bg-surface-2/95 backdrop-blur px-3 py-1.5 text-xs shadow-lg"
       style={{ animation: "agent-message-in 150ms ease-out both" }}
     >
       <span className="text-foreground/70 tabular-nums">
-        {t("notes.speaker.selected", { n: count })}
+        {t("notes.speaker.selected", { n: selectedSegments.length })}
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -565,6 +659,7 @@ export function SelectionBar({
               onAssignName(name, email, profileId);
               setOpen(false);
             }}
+            self={offerSelf ? "offer" : undefined}
             t={t}
           />
         </PopoverContent>
@@ -582,12 +677,14 @@ export function SelectionBar({
 interface SegmentRowProps {
   segment: TranscriptSegment;
   selfSide: boolean;
+  recorderLabel: string;
   sameSpeaker: boolean;
   isFirst: boolean;
   isNewest: boolean;
   colorIdx: number;
   isSelected: boolean;
   activeName?: string;
+  isNameFromMapping: boolean;
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
@@ -595,9 +692,15 @@ interface SegmentRowProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
@@ -612,12 +715,14 @@ interface SegmentRowProps {
 const SegmentRow = memo(function SegmentRow({
   segment,
   selfSide,
+  recorderLabel,
   sameSpeaker,
   isFirst,
   isNewest,
   colorIdx,
   isSelected,
   activeName,
+  isNameFromMapping,
   matchedProfile,
   speakerProfiles,
   participants,
@@ -631,24 +736,34 @@ const SegmentRow = memo(function SegmentRow({
   const hasSpeaker = !!segment.speaker;
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
+  // Only an in-person mic cluster may be the user: diarization can't tell which
+  // voice is theirs. A call's remote voices never are, and its mic is already
+  // "you", where naming one line remaps every line of the mic.
+  const self =
+    segment.source === "system" ? "exclude" : !selfSide && !isOriginallyYou ? "offer" : undefined;
   const selectable = !!onToggleSelect;
 
+  // The user's own voice profile isn't a contact.
   const canAddContact =
     !!matchedProfile &&
     matchedProfile.id != null &&
     !matchedProfile.email &&
+    !isYouSpeakerName(matchedProfile.display_name, t("notes.speaker.you")) &&
     !!onAttachSpeakerEmail;
 
-  const labelElement = hasSpeaker && (
+  const labelElement = hasSpeaker ? (
     <div className="flex items-center gap-1">
       <SpeakerLabel
         speakerId={segment.speaker!}
         segment={segment}
         resolvedName={activeName}
+        isNameFromMapping={isNameFromMapping}
         speakerProfiles={speakerProfiles}
         participants={participants}
         colorIdx={colorIdx}
         isOriginallyYou={isOriginallyYou}
+        recorderLabel={segment.recorderName || recorderLabel}
+        self={self}
         onMap={onMapSpeaker}
         onConfirm={onConfirmSuggestion}
         onDismiss={onDismissSuggestion}
@@ -662,7 +777,13 @@ const SegmentRow = memo(function SegmentRow({
         />
       )}
     </div>
-  );
+  ) : segment.source === "mic" ? (
+    <span className="text-[11px] font-medium mb-0.5 px-1.5" dir="auto">
+      {activeName && !isYouSpeakerName(activeName, t("notes.speaker.you"))
+        ? activeName
+        : segment.recorderName || recorderLabel}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -738,13 +859,21 @@ interface MeetingTranscriptChatProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
   contentClassName?: string;
+  /** Label for the recorder's own lines; "You" unless the note is someone else's. */
+  recorderLabel?: string;
 }
 
 export function MeetingTranscriptChat({
@@ -770,6 +899,7 @@ export function MeetingTranscriptChat({
   onAttachSpeakerEmail,
   onToggleSelect,
   contentClassName,
+  recorderLabel: recorderLabelProp,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
@@ -812,13 +942,17 @@ export function MeetingTranscriptChat({
 
   // Per-segment derivations hoisted out of the row map: rows receive them as
   // stable props, so partial ticks (which change neither input) skip every row.
+  const youLabel = t("notes.speaker.you");
+  const recorderLabel = recorderLabelProp ?? youLabel;
   const rowMeta = useMemo(
     () =>
       segments.map((segment) => ({
-        key: getEffectiveSpeakerKey(segment, speakerMappings),
+        key: `${getEffectiveSpeakerKey(segment, speakerMappings)}:${segment.recorderName ?? ""}`,
         activeName: resolveSegmentSpeakerName(segment, speakerMappings),
+        isNameFromMapping: !!resolveMappedSpeakerName(segment, speakerMappings),
+        selfSide: isSelfSideSegment(segment, speakerMappings, youLabel),
       })),
-    [segments, speakerMappings]
+    [segments, speakerMappings, youLabel]
   );
 
   const colorByKey = useMemo(() => {
@@ -826,7 +960,8 @@ export function MeetingTranscriptChat({
     let nextIdx = 0;
     segments.forEach((segment, i) => {
       if (segment.source === "mic" && !segment.speaker) return;
-      if (segment.speaker === "you") return;
+      // Bubbles on the user's side aren't colored, so they take no slot.
+      if (rowMeta[i].selfSide) return;
       const key = rowMeta[i].key;
       if (!map.has(key)) {
         map.set(key, nextIdx % SPEAKER_COLORS.length);
@@ -858,14 +993,6 @@ export function MeetingTranscriptChat({
       </div>
     );
   }
-
-  const isSelfSide = (segment: TranscriptSegment): boolean => {
-    const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-    if (mapped) return mapped.trim().toLowerCase() === t("notes.speaker.you").toLowerCase();
-    if (segment.speaker === "you") return true;
-    if (segment.speakerName) return false;
-    return segment.source === "mic";
-  };
 
   const showAssumedHint =
     !isDiarizing &&
@@ -969,9 +1096,8 @@ export function MeetingTranscriptChat({
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const i = virtualItem.index;
               const segment = segments[i];
-              const selfSide = isSelfSide(segment);
+              const { key, activeName, isNameFromMapping, selfSide } = rowMeta[i];
               const isSystemSpeaker = !!segment.speaker && !selfSide;
-              const { key, activeName } = rowMeta[i];
               return (
                 <div
                   key={segment.id}
@@ -989,12 +1115,21 @@ export function MeetingTranscriptChat({
                   <SegmentRow
                     segment={segment}
                     selfSide={selfSide}
-                    sameSpeaker={i > 0 && rowMeta[i - 1].key === key}
+                    recorderLabel={recorderLabel}
+                    sameSpeaker={
+                      i > 0 &&
+                      rowMeta[i - 1].key === key &&
+                      rowMeta[i - 1].selfSide === selfSide &&
+                      (rowMeta[i - 1].isNameFromMapping === isNameFromMapping ||
+                        !isYouSpeakerName(activeName ?? "", youLabel) ||
+                        (segment.recorderName || recorderLabel) === youLabel)
+                    }
                     isFirst={i === 0}
                     isNewest={i === segments.length - 1}
                     colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
                     isSelected={selectedSegmentIds?.has(segment.id) ?? false}
                     activeName={activeName}
+                    isNameFromMapping={isNameFromMapping}
                     matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
                     speakerProfiles={speakerProfiles}
                     participants={participants}

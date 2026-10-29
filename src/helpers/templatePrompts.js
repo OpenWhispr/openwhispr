@@ -13,6 +13,8 @@ import {
   MEETING_INPUT_PREAMBLE,
   MEETING_SYSTEM_PROMPT,
   NOTE_INPUT_PREAMBLE,
+  PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+  PLAIN_TRANSCRIPT_SYSTEM_PROMPT,
   SECTIONED_NOTES_FOOTER,
   SECTIONED_NOTES_FORMAT,
   SECTIONED_NOTES_INSTRUCTIONS,
@@ -38,15 +40,34 @@ export function normalizeSections(value) {
     .filter((section) => section.heading);
 }
 
+// Speaker segments make a meeting. A transcript in plain text has no speakers to
+// label, so it is its own case (#2666). Anything else is the user's own notes.
+const inputPreamble = ({ isMeetingNote, hasPlainTranscript }) =>
+  isMeetingNote
+    ? MEETING_INPUT_PREAMBLE
+    : hasPlainTranscript
+      ? PLAIN_TRANSCRIPT_INPUT_PREAMBLE
+      : NOTE_INPUT_PREAMBLE;
+
+const flatSystemPrompt = ({ isMeetingNote, hasPlainTranscript }) =>
+  isMeetingNote
+    ? MEETING_SYSTEM_PROMPT
+    : hasPlainTranscript
+      ? PLAIN_TRANSCRIPT_SYSTEM_PROMPT
+      : BASE_SYSTEM_PROMPT;
+
 /**
  * A template with sections is compiled around the shared notes rules. One with
  * only a prompt keeps the request it always had after the shared fidelity rule:
  * standalone built-ins get the material preamble, everything else the generic
  * system prompt.
  */
-export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) {
+export function compileTemplatePrompt(
+  template,
+  { isMeetingNote = false, hasPlainTranscript = false } = {}
+) {
   const preamble =
-    SOURCE_FIDELITY_RULE + "\n\n" + (isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE);
+    SOURCE_FIDELITY_RULE + "\n\n" + inputPreamble({ isMeetingNote, hasPlainTranscript });
   const sections = normalizeSections(template.sections);
   if (sections.length > 0) {
     const context = (template.prompt ?? "").trim();
@@ -72,15 +93,18 @@ export function compileTemplatePrompt(template, { isMeetingNote = false } = {}) 
   return (
     SOURCE_FIDELITY_RULE +
     "\n\n" +
-    (isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT) +
+    flatSystemPrompt({ isMeetingNote, hasPlainTranscript }) +
     template.prompt
   );
 }
 
-export function compileSummaryActionPrompt(action, { fromSummary, isMeetingNote = false }) {
+export function compileSummaryActionPrompt(
+  action,
+  { fromSummary, isMeetingNote = false, hasPlainTranscript = false }
+) {
   if (fromSummary)
     return SOURCE_FIDELITY_RULE + "\n\n" + SUMMARY_ACTION_SYSTEM_PROMPT + action.prompt;
-  const preamble = isMeetingNote ? MEETING_INPUT_PREAMBLE : NOTE_INPUT_PREAMBLE;
+  const preamble = inputPreamble({ isMeetingNote, hasPlainTranscript });
   return (
     SOURCE_FIDELITY_RULE + "\n\n" + preamble + SUMMARY_ACTION_FROM_MATERIAL_PROMPT + action.prompt
   );

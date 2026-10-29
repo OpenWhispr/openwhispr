@@ -124,7 +124,7 @@ export interface TranscriptionRouteSettings {
 export type ManagedTranscriptionResolution =
   | {
       kind: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
     }
@@ -179,7 +179,7 @@ export type TranscriptionRoute =
       // Workspace-managed Azure STT. Executed only in the main process, which
       // re-validates the context and holds the Entra token.
       transport: "managed";
-      provider: "azure";
+      provider: "azure" | "openai-compatible";
       deployment: string;
       context: ManagedEnterpriseRequestContext;
       sizeCapBytes: number;
@@ -248,7 +248,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
   if (provider === "deepgram") return "nova-3";
-  if (provider === "assemblyai") return "universal-3-5-pro";
+  if (provider === "assemblyai") return "universal-3-6-pro";
   if (provider === "openrouter") return "openai/gpt-transcribe";
   return "gpt-transcribe";
 }

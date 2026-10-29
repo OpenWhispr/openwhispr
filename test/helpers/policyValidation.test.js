@@ -92,9 +92,9 @@ test("rejects a malformed requiredLocalModels", () => {
   }
 });
 
-test("tolerates the server-only memoryEnabled flag", () => {
-  // The API gates Mem0 agent memory itself and the app never reads the field,
-  // so its presence must not invalidate an otherwise valid policy.
+test("tolerates the retired memoryEnabled flag", () => {
+  // Older API versions still send it after memory was removed
+  // (openwhispr-api#243); the app ignores it, so it must not invalidate a policy.
   for (const value of [true, false]) {
     const policy = validPolicy();
     policy.features.memoryEnabled = value;
@@ -270,4 +270,19 @@ test("accepts null or canonical minAppVersion, rejects malformed versions", () =
   const noVersion = validPolicy();
   delete noVersion.minAppVersion;
   assert.equal(isValidPolicyShape(noVersion), false);
+});
+
+test("meeting and upload controls are optional booleans for backward compatibility", () => {
+  for (const key of ["meetingRecordingEnabled", "audioUploadEnabled"]) {
+    for (const value of [true, false]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), true);
+    }
+    for (const value of ["false", 0, null]) {
+      const policy = validPolicy();
+      policy.features[key] = value;
+      assert.equal(isValidPolicyShape(policy), false);
+    }
+  }
 });

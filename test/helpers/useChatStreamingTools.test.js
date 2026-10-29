@@ -6,6 +6,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const {
   SIGNED_OUT_AUTH_MOCK,
+  addTeardown,
   createRendererServer,
   installBrowserGlobals,
 } = require("../lib/rendererTestHarness");
@@ -51,7 +52,7 @@ async function renderChatStreaming(
   // The app's i18n module (loaded with the tools) follows the machine's locale.
   await (await vite.ssrLoadModule("/i18n.ts")).default.changeLanguage("en");
   const reasoningService = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
-  t.after(() => reasoningService.destroy());
+  addTeardown(t, () => reasoningService.destroy());
 
   const offeredTools = [];
   const sentMessages = [];
@@ -131,6 +132,7 @@ test("a surface that doesn't opt in (container chat) never offers them", async (
   await captured.sendToAI("Reply to Maria", []);
   assert.ok(offeredTools[0].length > 0);
   assert.equal(offersConnectors(offeredTools[0]), false);
+  assert.ok(offeredTools[0].includes("search_openwhispr_help"));
 });
 
 test("a signed-out chat never offers them", async (t) => {
@@ -722,8 +724,8 @@ test("a note's chat answers from its note and adds no other notes up front", asy
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, []);
-  // So the server marks its memories as past conversations.
-  assert.equal(configs[0].noteChat, true);
+  // The API no longer keeps memories, so a note chat's request is an ordinary one.
+  assert.equal("noteChat" in configs[0], false);
   assert.match(prompts[0], /inside the note below\.[^\n]*\n\nNote ID: 7\nTitle: Kickoff/);
   assert.doesNotMatch(prompts[0], /notes from the user's library/);
 });
@@ -738,7 +740,7 @@ test("a chat that isn't about a note still lists the library notes a question fi
   await captured.sendToAI("What price are we testing?", []);
 
   assert.deepEqual(searches, ["What price are we testing?"]);
-  assert.equal(configs[0].noteChat, undefined);
+  assert.equal("noteChat" in configs[0], false);
   assert.match(
     prompts[0],
     /notes from the user's library[^]*<note id="3" title="Pricing sync Sep 29">\nTesting \$15 against \$12/
@@ -974,7 +976,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\. You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");
@@ -1027,12 +1029,230 @@ test("a reply that is only a tool note settles as an empty response, announced o
 test("the onboarding demo isn't told to send the user off to enable anything", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(
     t,
-    { inferenceScope: "dictationAgent", nameUnavailableCapabilities: false },
+    {
+      inferenceScope: "dictationAgent",
+      nameUnavailableCapabilities: false,
+      productHelpEnabled: false,
+    },
     { settings: { isSignedIn: false } }
   );
   await captured.sendToAI("Reply with times I'm free", []);
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /Not available in this conversation/);
 });
+
+test("official help is offered to the model on Cloud Free without automatic lookup", async (t) => {
+  const calls = [];
+  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    subscribed: false,
+    electronAPI: { productHelp: async (...args) => calls.push(args) },
+  });
+  await captured.sendToAI("How do I change an OpenWhispr shortcut?", []);
+  for (const name of ["search_openwhispr_help", "read_openwhispr_help", "get_openwhispr_context"])
+    assert.ok(offeredTools[0].includes(name), name);
+  assert.equal(calls.length, 0, "only an explicit model tool call fetches documentation");
+});
+
+for (const [surface, hookOptions] of [
+  ["chat", {}],
+  ["voice", { inferenceScope: "dictationAgent" }],
+  [
+    "onboarding",
+    {
+      inferenceScope: "dictationAgent",
+      nameUnavailableCapabilities: false,
+      productHelpEnabled: false,
+    },
+  ],
+]) {
+  test(`${surface} sends product words and follow-ups to the model in the original language`, async (t) => {
+    const delivered = [];
+    const { captured, sentMessages, reasoningService, getMessages } = await renderChatStreaming(
+      t,
+      hookOptions,
+      {
+        electronAPI: {
+          productHelp: async () => {
+            throw new Error("unexpected automatic help lookup");
+          },
+        },
+      }
+    );
+    t.mock.method(reasoningService, "processTextStreamingCloud", (messages) => {
+      sentMessages.push(messages);
+      return (async function* () {
+        yield { type: "content", text: "Antwort in der Sprache der Frage." };
+        yield { type: "done", finishReason: "stop" };
+      })();
+    });
+    const previous = {
+      id: "old-help",
+      role: "assistant",
+      content: "Earlier built-in shortcut guidance.",
+      toolCalls: [
+        {
+          id: "old-help-call",
+          name: "grounded_product_help",
+          arguments: "{}",
+          status: "completed",
+          metadata: { kind: "grounded-help", topics: ["hotkeys"] },
+        },
+      ],
+    };
+    for (const prompt of [
+      "Hey OpenWhispr, what is the weather today?",
+      "What did I say about OpenWhispr in my notes?",
+      "What is activation energy in chemistry?",
+      "How do I record a meeting in Zoom?",
+      "Would you like to connect over coffee?",
+      "Wie ändere ich die Tastenkombination in OpenWhispr?",
+      "Und wie ändere ich das?",
+      "How do I use OpenWhispr Hold mode and then write an email to my boss?",
+      "What about it now?",
+    ]) {
+      await captured.sendToAI(
+        prompt,
+        [previous, { id: "question", role: "user", content: prompt }],
+        {
+          onComplete: (result) => delivered.push(result.content),
+          onHoldDelivery: () => assert.fail("ordinary replies must keep normal delivery"),
+        }
+      );
+      assert.equal(sentMessages.at(-1).at(-1).content, prompt);
+      assert.match(sentMessages.at(-1)[1].content, /Earlier built-in shortcut guidance/);
+      assert.doesNotMatch(sentMessages.at(-1)[1].content, /Tools used|grounded_product_help/);
+      assert.equal(getMessages().at(-1).content, "Antwort in der Sprache der Frage.");
+      assert.equal(delivered.at(-1), "Antwort in der Sprache der Frage.");
+    }
+    assert.equal(sentMessages.length, delivered.length);
+  });
+}
+
+test("product questions retain note, scoped search, selected text and screenshot context", async (t) => {
+  const searchCalls = [];
+  const { captured, sentMessages } = await renderChatStreaming(
+    t,
+    {
+      noteContext: "The note says OpenWhispr should be discussed next Tuesday.",
+      searchScope: { spaceId: 12, folderId: 34 },
+    },
+    {
+      settings: BYOK_SETTINGS,
+      electronAPI: {
+        semanticSearchNotes: async (...args) => {
+          searchCalls.push(args);
+          return [{ id: 7, title: "Planning" }];
+        },
+        getNote: async () => ({ id: 7, title: "Planning", content: "Follow up with Alex." }),
+      },
+    }
+  );
+  const prompt = "What does this say about OpenWhispr?";
+  await captured.sendToAI(prompt, [{ id: "question", role: "user", content: prompt }], {
+    selectedContext: { text: "Selected OpenWhispr passage", sourceMessageId: "earlier" },
+    attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
+  });
+  assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
+  assert.match(systemPromptOf(sentMessages[0]), /next Tuesday/);
+  assert.match(systemPromptOf(sentMessages[0]), /Follow up with Alex/);
+  const content = sentMessages[0].at(-1).content;
+  assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
+  assert.match(content[0].text, /Selected OpenWhispr passage/);
+  assert.equal(content[1].type, "image");
+  assert.equal(content[1].image, "data:image/png;base64,c3ludGhldGlj");
+});
+
+test("onboarding excludes product-help tools", async (t) => {
+  const { captured, offeredTools } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    nameUnavailableCapabilities: false,
+    productHelpEnabled: false,
+  });
+  await captured.sendToAI("Can we connect over coffee?", []);
+  assert.ok(offeredTools[0].length > 0);
+  assert.ok(!offeredTools[0].includes("search_openwhispr_help"));
+  assert.ok(!offeredTools[0].includes("get_openwhispr_context"));
+});
+
+for (const provider of ["Cloud", "BYOK"]) {
+  test(`${provider} help tools expose evidence to the model but persist no articles or settings snapshot`, async (t) => {
+    const modelOutputs = [];
+    const { captured, reasoningService, getMessages } = await renderChatStreaming(
+      t,
+      {},
+      {
+        settings: {
+          ...(provider === "BYOK" ? BYOK_SETTINGS : {}),
+          dictationKey: "Control+Alt+Q",
+          activeDictationKey: "Control+Alt+Q",
+        },
+        electronAPI: {
+          productHelpBasics: async () => ({ platform: "darwin", version: "1.10.2" }),
+          productHelp: async () => ({
+            source: "live",
+            reason: null,
+            retrievedAt: "2026-10-07T12:00:00Z",
+            articles: [
+              {
+                title: "Hotkeys",
+                path: "/help/dictation/hotkeys",
+                url: "https://docs.openwhispr.com/help/dictation/hotkeys",
+                text: "ARTICLE_BODY_SENTINEL: use Settings to change hotkeys.",
+              },
+            ],
+          }),
+          cancelProductHelp() {},
+        },
+      }
+    );
+    async function* stream(execute) {
+      for (const name of ["search_openwhispr_help", "get_openwhispr_context"]) {
+        const id = `call-${name}`;
+        yield { type: "tool_calls", calls: [{ id, name, arguments: '{"topic":"hotkeys"}' }] };
+        const result = await execute(name, id);
+        modelOutputs.push(result.data);
+        yield {
+          type: "tool_result",
+          callId: id,
+          toolName: name,
+          displayText: result.displayText,
+          metadata: result.metadata,
+        };
+      }
+      yield { type: "content", text: "Your shortcut can be changed in Settings." };
+      yield { type: "done", finishReason: "stop" };
+    }
+    if (provider === "Cloud") {
+      reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+        stream((name, id) => config.executeToolCall(name, '{"topic":"hotkeys"}', id))
+      );
+    } else {
+      reasoningService.processTextStreamingAI.mock.mockImplementation(
+        (_messages, _model, _provider, _config, tools) =>
+          stream(async (name, id) => {
+            const output = await tools[name].execute(
+              { topic: "hotkeys" },
+              { toolCallId: id, messages: [] }
+            );
+            return { data: output, metadata: output, displayText: "Done" };
+          })
+      );
+    }
+    await captured.sendToAI("What is my OpenWhispr shortcut?", []);
+    assert.match(JSON.stringify(modelOutputs), /ARTICLE_BODY_SENTINEL/);
+    assert.match(JSON.stringify(modelOutputs), /Control\+Alt\+Q/);
+    const saved = getMessages().find((message) => message.role === "assistant").toolCalls;
+    assert.match(
+      JSON.stringify(saved),
+      /https:\/\/docs\.openwhispr\.com\/help\/dictation\/hotkeys/
+    );
+    assert.doesNotMatch(
+      JSON.stringify(saved),
+      /ARTICLE_BODY_SENTINEL|Control\+Alt\+Q|activationMode/
+    );
+    assert.equal(saved[1].metadata.settingsRead, true);
+    assert.ok(saved[1].metadata.readAt);
+  });
+}
 
 // Sends capture the prompt the cloud agent receives.
 async function promptsFor(t, mockModules) {
@@ -1066,4 +1286,26 @@ test("with no account name the prompt asks for no signature rather than a placeh
   const prompts = await promptsFor(t);
   assert.doesNotMatch(prompts[0], /The user's name is/);
   assert.match(prompts[0], /You don't know the user's name/);
+});
+
+test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+  const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: true, toneStyles: tones },
+  });
+  await captured.sendToAI("Email Josh that I'm in", []);
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+
+  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
+  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
+  assert.match(pasted, /typed at the user's cursor in a work chat app/);
+  assert.match(pasted, /work message style: casual and friendly/);
+});
+
+test("without Tone & Style no send carries a writing style", async (t) => {
+  const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    settings: { toneStyleEnabled: false },
+  });
+  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
 });

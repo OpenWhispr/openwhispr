@@ -1,14 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { OnboardingProgressState } from "./flow";
-import { Copy, Minus, Square, Undo2, X } from "../icons";
+import { ArrowLeft, Copy, Minus, Square, X } from "../icons";
 import { Button } from "../ui/button";
 import { BRAND_GLASS_SURFACE } from "../ui/gradientCircle";
 import { cn } from "../lib/utils";
 import { useTranslation } from "react-i18next";
 import { getPlatform } from "../../utils/platform";
 import { useWindowControls } from "../../hooks/useWindowControls";
+import { DitheredHero } from "./DitheredHero";
 // Imported (not referenced by path) so Vite fingerprints it and it resolves
-// under the packaged app's file:// origin. See .onboarding-compact-hero.
+// under the packaged app's file:// origin. See .onboarding-canvas.
 import onboardingBackgroundLight from "@/assets/onboarding-bg-light.svg";
 import onboardingBackgroundDark from "@/assets/onboarding-bg-dark.svg";
 
@@ -295,7 +296,7 @@ export default function OnboardingShell({
                   }`}
                   aria-label={t("common.back")}
                 >
-                  <Undo2 className="size-4" />
+                  <ArrowLeft className="size-4 rtl:rotate-180" />
                   {/* The label collapses on a 0fr/1fr grid track rather than through
                       TextMorph. Morphing to "" sends torph down its collapse path,
                       which pins the span at its previous width for the full duration
@@ -354,7 +355,7 @@ export function CompactOnboardingFrame({
 
   return (
     <section className="relative flex h-full min-h-screen w-full flex-col overflow-hidden bg-[var(--onboarding-surface)] text-[var(--onboarding-text-primary)]">
-      <div className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33" />
+      <DitheredHero className="onboarding-compact-hero pointer-events-none absolute inset-x-0 top-0 h-33 w-full" />
       {showBrandMark && (
         <div
           className={cn(

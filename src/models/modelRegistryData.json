@@ -49,6 +49,19 @@
       "extractDir": "sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming",
       "descriptionKey": "models.descriptions.parakeet.parakeet_unified_en_0_6b"
     },
+    "parakeet-tdt-110m-en": {
+      "name": "Parakeet TDT 110M EN",
+      "sherpaModelType": "nemo_transducer",
+      "description": "Lightweight English ASR with punctuation for low-end machines",
+      "size": "136MB",
+      "sizeMb": 136,
+      "expectedSizeBytes": 108035095,
+      "language": "en",
+      "supportedLanguages": ["en"],
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8.tar.bz2",
+      "extractDir": "sherpa-onnx-nemo-parakeet_tdt_transducer_110m-en-36000-int8",
+      "descriptionKey": "models.descriptions.parakeet.parakeet_tdt_110m_en"
+    },
     "nemotron-speech-streaming-en-0.6b": {
       "name": "Nemotron Speech Streaming EN 0.6B",
       "description": "English streaming ASR from NVIDIA Nemotron",
@@ -238,6 +251,16 @@
       "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
       "descriptionKey": "models.descriptions.whisper.large"
     },
+    "large-q5": {
+      "name": "Large (Q5)",
+      "description": "Large at a third of the download",
+      "size": "1.1GB",
+      "sizeMb": 1081,
+      "expectedSizeBytes": 1081140203,
+      "fileName": "ggml-large-v3-q5_0.bin",
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin",
+      "descriptionKey": "models.descriptions.whisper.large_q5"
+    },
     "turbo": {
       "name": "Turbo",
       "description": "Fast with good quality",
@@ -247,6 +270,16 @@
       "fileName": "ggml-large-v3-turbo.bin",
       "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
       "descriptionKey": "models.descriptions.whisper.turbo"
+    },
+    "turbo-q5": {
+      "name": "Turbo (Q5)",
+      "description": "Turbo at a third of the download",
+      "size": "574MB",
+      "sizeMb": 574,
+      "expectedSizeBytes": 574041195,
+      "fileName": "ggml-large-v3-turbo-q5_0.bin",
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+      "descriptionKey": "models.descriptions.whisper.turbo_q5"
     }
   },
   "transcriptionProviders": [
@@ -325,6 +358,18 @@
           "name": "Voxtral Mini",
           "description": "Fast multilingual transcription",
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
+        },
+        {
+          "id": "voxtral-mini-transcribe-3-0",
+          "name": "Voxtral Mini Transcribe 3",
+          "description": "Fast transcription in 50+ languages (preview)",
+          "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_transcribe_3_0"
+        },
+        {
+          "id": "voxtral-small-transcribe-3-0",
+          "name": "Voxtral Small Transcribe 3",
+          "description": "Most accurate Voxtral, 50+ languages (preview)",
+          "descriptionKey": "models.descriptions.transcription.mistral_voxtral_small_transcribe_3_0"
         }
       ]
     },
@@ -430,6 +475,13 @@
       "baseUrl": "https://api.assemblyai.com/v2",
       "models": [
         {
+          "id": "universal-3-6-pro",
+          "name": "Universal-3.6 Pro",
+          "description": "Highest accuracy realtime, 32 languages",
+          "descriptionKey": "models.descriptions.transcription.assemblyai_universal_3_6_pro",
+          "streaming": true
+        },
+        {
           "id": "universal-3-5-pro",
           "name": "Universal-3.5 Pro",
           "description": "Highest accuracy realtime, 18 languages",
@@ -465,7 +517,36 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_6_astra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high", "xhigh", "max"]
+          }
+        },
+        {
+          "id": "gpt-6.1-sol",
+          "name": "GPT-6.1 Sol",
+          "description": "Near-Astra capability for chat and agentic work at lower cost, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_6_1_sol",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
+        },
+        {
+          "id": "gpt-6-luna",
+          "name": "GPT-6 Luna",
+          "description": "Fastest and lowest-cost GPT-6 model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_6_luna",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.6-sol",
@@ -474,7 +555,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.6-terra",
@@ -483,7 +568,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.6-luna",
@@ -492,7 +581,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh", "max"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.5",
@@ -501,7 +594,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5.2",
@@ -510,7 +607,11 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "none"
+          }
         },
         {
           "id": "gpt-5-mini",
@@ -519,7 +620,12 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          },
+          "legacy": true
         },
         {
           "id": "gpt-5-nano",
@@ -528,7 +634,12 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          },
+          "legacy": true
         },
         {
           "id": "gpt-4.1",
@@ -537,7 +648,8 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "legacy": true
         },
         {
           "id": "gpt-4.1-mini",
@@ -546,16 +658,8 @@
           "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": true,
-          "supportsVision": true
-        },
-        {
-          "id": "gpt-4.1-nano",
-          "name": "GPT-4.1 Nano",
-          "description": "Lowest latency GPT-4.1",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
-          "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "legacy": true
         }
       ]
     },
@@ -576,6 +680,30 @@
           "name": "Claude Fable 5",
           "description": "Previous Mythos-class flagship, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+          "supportsTemperature": false,
+          "supportsVision": true
+        },
+        {
+          "id": "claude-opus-5-5",
+          "name": "Claude Opus 5.5",
+          "description": "Latest Opus model for complex reasoning, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5_5",
+          "supportsTemperature": false,
+          "supportsVision": true
+        },
+        {
+          "id": "claude-sonnet-5-5",
+          "name": "Claude Sonnet 5.5",
+          "description": "Latest Sonnet: fast and capable for everyday work, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5_5",
+          "supportsTemperature": false,
+          "supportsVision": true
+        },
+        {
+          "id": "claude-haiku-5-5",
+          "name": "Claude Haiku 5.5",
+          "description": "Fastest, lowest-cost Claude model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_5_5",
           "supportsTemperature": false,
           "supportsVision": true
         },
@@ -606,7 +734,7 @@
         {
           "id": "claude-opus-5",
           "name": "Claude Opus 5",
-          "description": "Most capable Opus model, 1M context",
+          "description": "Previous Opus flagship, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_5",
           "supportsTemperature": false,
           "supportsVision": true
@@ -641,7 +769,8 @@
           "description": "Previous Sonnet generation",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
           "supportsTemperature": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "legacy": true
         },
         {
           "id": "claude-opus-4-5",
@@ -658,12 +787,53 @@
       "name": "Google Gemini",
       "models": [
         {
+          "id": "gemini-3.6-flash",
+          "name": "Gemini 3.6 Flash",
+          "description": "Fast, high-capability Gemini model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_6_flash",
+          "supportsThinking": true,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          }
+        },
+        {
+          "id": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "description": "Most capable Flash model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_8_flash",
+          "supportsThinking": true,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "medium"
+          }
+        },
+        {
+          "id": "gemini-4-argon",
+          "name": "Gemini 4 Argon",
+          "description": "Google's frontier reasoning model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_4_argon",
+          "supportsThinking": true,
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "medium"
+          }
+        },
+        {
           "id": "gemini-3.5-flash",
           "name": "Gemini 3.5 Flash",
-          "description": "Latest fast, high-capability Gemini model",
+          "description": "Fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "medium"
+          },
+          "legacy": true
         },
         {
           "id": "gemini-3.5-flash-lite",
@@ -671,7 +841,11 @@
           "description": "Fastest, most cost-effective 3.5 model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash_lite",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "minimal"
+          }
         },
         {
           "id": "gemini-3.1-pro-preview",
@@ -679,14 +853,21 @@
           "description": "Next-gen flagship model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"],
+            "defaultValue": "high"
+          }
         },
         {
           "id": "gemini-3.1-flash-lite",
           "name": "Gemini 3.1 Flash Lite",
           "description": "Frontier-class performance at low cost",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_flash_lite",
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gemini-3-flash-preview",
@@ -694,7 +875,11 @@
           "description": "Ultra-fast, high-capability next-gen model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
           "supportsThinking": true,
-          "supportsVision": true
+          "supportsVision": true,
+          "reasoningEffort": {
+            "options": ["minimal", "low", "medium", "high"],
+            "defaultValue": "high"
+          }
         },
         {
           "id": "gemini-2.5-flash-lite",
@@ -726,26 +911,27 @@
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"]
+          }
+        },
+        {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B",
+          "description": "Fast Qwen model, 450 T/sec, 131K context",
+          "disableThinking": true,
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_8_27b"
         },
         {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
-        },
-        {
-          "id": "groq/compound",
-          "name": "Compound",
-          "description": "Groq's compound system, 450 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_compound"
-        },
-        {
-          "id": "groq/compound-mini",
-          "name": "Compound Mini",
-          "description": "Fast compound system, 3x lower latency",
-          "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
+          "reasoningEffort": {
+            "options": ["low", "medium", "high"]
+          }
         }
       ]
     },
@@ -829,6 +1015,24 @@
       "allowCustomModelId": true,
       "models": [
         {
+          "id": "us.anthropic.claude-sonnet-5-5",
+          "name": "Claude Sonnet 5.5",
+          "description": "Balanced workhorse. Best default for Agent Mode.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5_5"
+        },
+        {
+          "id": "us.anthropic.claude-haiku-5-5",
+          "name": "Claude Haiku 5.5",
+          "description": "Fastest Claude model. Great default for text cleanup.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_5_5"
+        },
+        {
+          "id": "us.anthropic.claude-opus-5-5",
+          "name": "Claude Opus 5.5",
+          "description": "Max intelligence. Best for complex Agent Mode tasks.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_5_5"
+        },
+        {
           "id": "us.anthropic.claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Most capable Claude model, Mythos-class. Best for the hardest Agent Mode tasks.",
@@ -837,13 +1041,13 @@
         {
           "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
           "name": "Claude Haiku 4.5",
-          "description": "Fast and cheap. Great default for text cleanup.",
+          "description": "Previous Haiku. Fast and cheap for text cleanup.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
         },
         {
           "id": "us.anthropic.claude-sonnet-5",
           "name": "Claude Sonnet 5",
-          "description": "Balanced workhorse. Best default for Agent Mode.",
+          "description": "Previous Sonnet. Fast and capable for Agent Mode.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
         },
         {
@@ -884,16 +1088,22 @@
       "allowCustomModelId": true,
       "models": [
         {
-          "id": "gemini-2.5-flash",
-          "name": "Gemini 2.5 Flash",
-          "description": "Fast multimodal model via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_flash"
+          "id": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "description": "Most capable Flash model via Vertex",
+          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_3_8_flash"
         },
         {
-          "id": "gemini-2.5-pro",
-          "name": "Gemini 2.5 Pro",
-          "description": "Advanced reasoning via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_pro"
+          "id": "gemini-3.5-flash-lite",
+          "name": "Gemini 3.5 Flash Lite",
+          "description": "Fastest, lowest-cost model via Vertex",
+          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_3_5_flash_lite"
+        },
+        {
+          "id": "gemini-4-argon",
+          "name": "Gemini 4 Argon",
+          "description": "Google's frontier reasoning model via Vertex",
+          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_4_argon"
         }
       ]
     }
@@ -945,6 +1155,45 @@
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_2b_q4_k_m"
         },
         {
+          "id": "qwen3.5-0.8b-q4_k_m",
+          "name": "Qwen3.5 0.8B",
+          "size": "0.58GB",
+          "sizeBytes": 579615840,
+          "description": "Tiny Qwen3.5 for the fastest cleanup",
+          "fileName": "Qwen_Qwen3.5-0.8B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "bartowski/Qwen_Qwen3.5-0.8B-GGUF",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_0_8b_q4_k_m"
+        },
+        {
+          "id": "qwen3.8-27b-q4_k_m",
+          "name": "Qwen3.8 27B",
+          "size": "17.4GB",
+          "sizeBytes": 17442399968,
+          "description": "Most capable Qwen model for 32 GB machines",
+          "fileName": "Qwen3.8-27B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "bartowski/Qwen3.8-27B-GGUF",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_8_27b_q4_k_m"
+        },
+        {
+          "id": "qwen3.6-35b-a3b-q4_k_m",
+          "name": "Qwen3.6 35B MoE",
+          "size": "20.4GB",
+          "sizeBytes": 20419565568,
+          "description": "Fast mixture-of-experts model, 3B active parameters",
+          "fileName": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "ggml-org/Qwen3.6-35B-A3B-GGUF",
+          "supportsThinking": true,
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_6_35b_a3b_q4_k_m"
+        },
+        {
           "id": "qwen3-8b-q4_k_m",
           "name": "Qwen3 8B",
           "size": "5.0GB",
@@ -954,6 +1203,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q4_k_m"
         },
@@ -967,6 +1217,7 @@
           "quantization": "q5_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q5_k_m"
         },
@@ -980,6 +1231,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-4B-GGUF",
+          "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_4b_q4_k_m"
         },
@@ -993,6 +1245,7 @@
           "quantization": "q8_0",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-1.7B-GGUF",
+          "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_1_7b_q8_0"
         },
@@ -1006,6 +1259,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-32B-GGUF",
+          "legacy": true,
           "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_32b_q4_k_m"
         },
@@ -1019,6 +1273,7 @@
           "quantization": "q5_k_m",
           "contextLength": 32768,
           "hfRepo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_1_5b_instruct_q5_k_m"
         },
         {
@@ -1031,6 +1286,7 @@
           "quantization": "q5_k_m",
           "contextLength": 32768,
           "hfRepo": "Qwen/Qwen2.5-3B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_3b_instruct_q5_k_m"
         },
         {
@@ -1043,6 +1299,7 @@
           "quantization": "q4_k_m",
           "contextLength": 128000,
           "hfRepo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_7b_instruct_q4_k_m"
         },
         {
@@ -1055,6 +1312,7 @@
           "quantization": "q5_k_m",
           "contextLength": 128000,
           "hfRepo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen2_5_7b_instruct_q5_k_m"
         }
       ]
@@ -1065,6 +1323,43 @@
       "baseUrl": "https://huggingface.co",
       "models": [
         {
+          "id": "ministral-3-8b-instruct-2512-q4_k_m",
+          "name": "Ministral 3 8B",
+          "size": "5.2GB",
+          "sizeBytes": 5198911904,
+          "description": "Fast non-thinking model for cleanup and tools",
+          "fileName": "Ministral-3-8B-Instruct-2512-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "mistralai/Ministral-3-8B-Instruct-2512-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.mistral_ministral_3_8b_instruct_2512_q4_k_m"
+        },
+        {
+          "id": "ministral-3-14b-instruct-2512-q4_k_m",
+          "name": "Ministral 3 14B",
+          "size": "8.2GB",
+          "sizeBytes": 8239593024,
+          "description": "Mistral's 14B model with tool use, 256K context",
+          "fileName": "Ministral-3-14B-Instruct-2512-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "mistralai/Ministral-3-14B-Instruct-2512-GGUF",
+          "descriptionKey": "models.descriptions.local.mistral_ministral_3_14b_instruct_2512_q4_k_m"
+        },
+        {
+          "id": "ministral-3-3b-instruct-2512-q4_k_m",
+          "name": "Ministral 3 3B",
+          "size": "2.1GB",
+          "sizeBytes": 2147023008,
+          "description": "Small and fast for dictation cleanup",
+          "fileName": "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "mistralai/Ministral-3-3B-Instruct-2512-GGUF",
+          "descriptionKey": "models.descriptions.local.mistral_ministral_3_3b_instruct_2512_q4_k_m"
+        },
+        {
           "id": "mistral-nemo-12b-instruct-q4_k_m",
           "name": "Mistral Nemo 12B",
           "size": "7.5GB",
@@ -1074,7 +1369,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "mradermacher/Mistral-Nemo-12B-Instruct-GGUF",
-          "recommended": true,
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_nemo_12b_instruct_q4_k_m"
         },
         {
@@ -1087,6 +1382,7 @@
           "quantization": "q4_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q4_k_m"
         },
         {
@@ -1099,6 +1395,7 @@
           "quantization": "q5_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q5_k_m"
         }
       ]
@@ -1118,6 +1415,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.llama_llama_3_2_1b_instruct_q4_k_m"
         },
         {
@@ -1130,7 +1428,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
-          "recommended": true,
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.llama_llama_3_2_3b_instruct_q4_k_m"
         },
         {
@@ -1143,6 +1441,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.llama_llama_3_1_8b_instruct_q4_k_m"
         }
       ]
@@ -1228,6 +1527,21 @@
           "descriptionKey": "models.descriptions.local.gemma_gemma_4_26b_a4b_it_qat_q4_0"
         },
         {
+          "id": "gemma-4-12b-it-qat-q4_0",
+          "name": "Gemma 4 12B QAT",
+          "size": "7.2GB",
+          "sizeBytes": 6975879296,
+          "description": "Google's official QAT build, best fit for 16 GB machines",
+          "fileName": "gemma-4-12b-it-qat-q4_0.gguf",
+          "quantization": "q4_0",
+          "contextLength": 262144,
+          "hfRepo": "google/gemma-4-12B-it-qat-q4_0-gguf",
+          "draftHfRepo": "unsloth/gemma-4-12B-it-qat-GGUF",
+          "draftFileName": "mtp-gemma-4-12B-it.gguf",
+          "draftSizeBytes": 253708800,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_4_12b_it_qat_q4_0"
+        },
+        {
           "id": "gemma-4-e4b-it-q4_k_m",
           "name": "Gemma 4 E4B",
           "size": "5.4GB",
@@ -1292,6 +1606,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/google_gemma-3-12b-it-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_3_12b_it_q4_k_m"
         },
         {
@@ -1304,6 +1619,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/google_gemma-3-4b-it-GGUF",
+          "legacy": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_3_4b_it_q4_k_m"
         },
         {

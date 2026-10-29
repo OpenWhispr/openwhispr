@@ -10,6 +10,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { buildSpeakerRenumber } = require("./speakerIndexBase");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -22,34 +23,11 @@ const {
 } = require("./transcriptionTimeout");
 
 const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
-const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
-const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
-
-const dedupeMicAgainstSystem = (segments) => {
-  const systemSegments = segments.filter((seg) => seg.source === "system" && seg.text);
-  if (!systemSegments.length) return segments;
-
-  return segments.filter((seg) => {
-    if (seg.source !== "mic" || !seg.text) return true;
-    if (
-      !seg.likelyRenderBleed &&
-      !seg.hasBleedEvidence &&
-      seg.suppressionReason !== "double_talk"
-    ) {
-      return true;
-    }
-
-    const matcher =
-      seg.suppressionReason === "double_talk" ? transcriptsLooselyOverlap : transcriptsOverlap;
-    const candidates = buildMergedCandidates({
-      segments: systemSegments,
-      timestamp: seg.timestamp,
-      windowMs: POST_MERGE_CONTEXT_WINDOW_MS,
-      mergeLimit: POST_MERGE_CONTEXT_MERGE_LIMIT,
-    });
-    return !candidates.some((candidateText) => matcher(seg.text, candidateText));
-  });
-};
+// splitMicEchoDuplicates runs on timestamps already normalized to seconds from
+// the start of the recording, so this window is in seconds too, though
+// buildMergedCandidates calls it windowMs.
+const ECHO_DUPLICATE_WINDOW_S = 6;
+const ECHO_DUPLICATE_MERGE_LIMIT = 3;
 
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
@@ -429,6 +407,39 @@ class DiarizationManager {
     return segments;
   }
 
+  // Splits out echo-flagged mic segments whose text matches nearby system audio.
+  // `removed` holds the same objects that were passed in, so callers can map
+  // them back to their original rows.
+  splitMicEchoDuplicates(segments) {
+    const systemSegments = segments.filter((seg) => seg.source === "system" && seg.text);
+    if (!systemSegments.length) return { kept: segments, removed: [] };
+
+    const kept = [];
+    const removed = [];
+    for (const seg of segments) {
+      if (
+        seg.source !== "mic" ||
+        !seg.text ||
+        (!seg.likelyRenderBleed && !seg.hasBleedEvidence && seg.suppressionReason !== "double_talk")
+      ) {
+        kept.push(seg);
+        continue;
+      }
+
+      const matcher =
+        seg.suppressionReason === "double_talk" ? transcriptsLooselyOverlap : transcriptsOverlap;
+      const candidates = buildMergedCandidates({
+        segments: systemSegments,
+        timestamp: seg.timestamp,
+        windowMs: ECHO_DUPLICATE_WINDOW_S,
+        mergeLimit: ECHO_DUPLICATE_MERGE_LIMIT,
+      });
+      const isEcho = candidates.some((candidateText) => matcher(seg.text, candidateText));
+      (isEcho ? removed : kept).push(seg);
+    }
+    return { kept, removed };
+  }
+
   capSpeakerClusters(segments, cap) {
     if (!cap || !segments?.length) return segments;
     const totals = new Map();
@@ -443,21 +454,21 @@ class DiarizationManager {
     return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
   }
 
-  mergeWithTranscript(transcriptSegments, diarizationSegments, { diarizedSource = "system" } = {}) {
+  // Expects echo duplicates already removed with splitMicEchoDuplicates, so
+  // the caller can report them to the renderer.
+  mergeWithTranscript(
+    transcriptSegments,
+    diarizationSegments,
+    { diarizedSource = "system", speakerIndexBase = 0 } = {}
+  ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
-    const deduped = dedupeMicAgainstSystem(transcriptSegments);
     if (!diarizationSegments || diarizationSegments.length === 0) {
-      return deduped.map((seg) => ({ ...seg }));
+      return transcriptSegments.map((seg) => ({ ...seg }));
     }
 
-    // Build speaker renumbering map (e.g., speaker_00 → speaker_0)
+    // Renumber clusters (speaker_00 → speaker_0), offset past a resumed note's ids.
     const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
-    const speakerMap = new Map();
-    let idx = 0;
-    for (const sp of speakerSet) {
-      speakerMap.set(sp, `speaker_${idx}`);
-      idx++;
-    }
+    const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
     // Mic-mode softening: a single cluster on a mic-only session is the user
     // talking alone (e.g. a call where the remote never spoke audibly), so it
@@ -465,8 +476,8 @@ class DiarizationManager {
     const micSingleCluster = diarizedSource === "mic" && speakerSet.size === 1;
 
     const nextTimestampAt = (startIndex, source) => {
-      for (let i = startIndex + 1; i < deduped.length; i += 1) {
-        const candidate = deduped[i];
+      for (let i = startIndex + 1; i < transcriptSegments.length; i += 1) {
+        const candidate = transcriptSegments[i];
         if (candidate.source === source && candidate.timestamp != null) {
           return candidate.timestamp;
         }
@@ -474,7 +485,7 @@ class DiarizationManager {
       return null;
     };
 
-    return deduped.map((seg, index) => {
+    return transcriptSegments.map((seg, index) => {
       const enriched = { ...seg };
 
       if (seg.source === "mic" && (diarizedSource !== "mic" || micSingleCluster)) {

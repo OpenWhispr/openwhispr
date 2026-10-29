@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 let applyInputRegion;
+let focusInputRegion;
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -30,6 +31,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       createLinuxWindowInputRegion: () => ({
         set: (region) => applyInputRegion(region),
+        focus: () => focusInputRegion(),
         stop: () => undefined,
       }),
     };
@@ -154,7 +156,9 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   const notifications = [];
   win.isVisible = () => visible;
   win.isMinimized = () => minimized;
-  win.webContents = { send: (...args) => notifications.push(args) };
+  win.webContents = Object.assign(new EventEmitter(), {
+    send: (...args) => notifications.push(args),
+  });
   try {
     WindowManager.prototype.registerMainWindowEvents.call({
       mainWindow: win,
@@ -175,6 +179,119 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
       ["main-window-visibility-changed", false],
       ["main-window-visibility-changed", true],
     ]);
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("a failed Linux keyboard focus request settles quietly", async () => {
+  const win = { ...fakeWindow(), isVisible: () => true, isMinimized: () => false };
+  const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+  let rejectFocus;
+  focusInputRegion = () =>
+    new Promise((_, reject) => {
+      rejectFocus = reject;
+    });
+  manager._focusLinuxMainWindow();
+  // The writer logs its own failure; a rejected request would skip a closing
+  // panel's deferred hand-back.
+  rejectFocus(new Error("helper closed"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(manager._linuxFocusRequest, null);
+});
+
+test("clicks on an unfocused panel share the focus request already in flight", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  const win = new EventEmitter();
+  win.isFocused = () => false;
+  win.isVisible = () => true;
+  win.isMinimized = () => false;
+  win.isDestroyed = () => false;
+  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+  const manager = Object.assign(Object.create(WindowManager.prototype), {
+    mainWindow: win,
+    _assistantPanelOpen: true,
+    enforceMainWindowOnTop: () => {},
+  });
+  const lands = [];
+  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
+  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
+  try {
+    WindowManager.prototype.registerMainWindowEvents.call(manager);
+    win.emit("ready-to-show");
+    mouseDown();
+    mouseDown();
+    // Each request can wait on the window manager, and queued repeats would
+    // run into the helper's timeout, which ends the input region with it.
+    assert.equal(lands.length, 1);
+    lands[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    mouseDown();
+    assert.equal(lands.length, 2, "a click after the request landed asks again");
+    lands[1]();
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("only Linux listens for clicks that re-take keyboard focus", () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  try {
+    for (const [platform, expected] of [
+      ["linux", 1],
+      ["win32", 0],
+      ["darwin", 0],
+    ]) {
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const win = new EventEmitter();
+      win.isVisible = () => true;
+      win.isMinimized = () => false;
+      win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+      WindowManager.prototype.registerMainWindowEvents.call({
+        mainWindow: win,
+        enforceMainWindowOnTop: () => {},
+      });
+      win.emit("ready-to-show");
+      assert.equal(win.webContents.listenerCount("input-event"), expected, platform);
+    }
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("Linux takes keyboard focus again when an unfocused open assistant panel is clicked", () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
+  const win = new EventEmitter();
+  let focused = false;
+  win.isFocused = () => focused;
+  win.isVisible = () => true;
+  win.isMinimized = () => false;
+  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+  const focusRequests = [];
+  const manager = {
+    mainWindow: win,
+    _assistantPanelOpen: false,
+    enforceMainWindowOnTop: () => {},
+    _focusLinuxMainWindow: () => focusRequests.push("focus"),
+  };
+  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
+  try {
+    WindowManager.prototype.registerMainWindowEvents.call(manager);
+    win.emit("ready-to-show");
+    mouseDown();
+    assert.deepEqual(focusRequests, [], "a pill click must leave the user's app focused");
+    manager._assistantPanelOpen = true;
+    win.webContents.emit("input-event", {}, { type: "mouseMove" });
+    focused = true;
+    mouseDown();
+    assert.deepEqual(focusRequests, [], "the panel already has the keyboard");
+    // Back from another app: the window manager never refocuses the
+    // override-redirect pill on a click.
+    focused = false;
+    mouseDown();
+    assert.deepEqual(focusRequests, ["focus"]);
   } finally {
     Object.defineProperty(process, "platform", original);
   }

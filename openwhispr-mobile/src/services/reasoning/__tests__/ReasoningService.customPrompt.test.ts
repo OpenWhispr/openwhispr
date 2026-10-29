@@ -41,11 +41,31 @@ describe('ReasoningService custom cleanup prompt on the wire', () => {
     expect(body.agentName).toBe('Aria');
   });
 
-  it('omits both fields when no custom prompt is set', async () => {
-    await ReasoningService.processText({ text: 'hi', language: 'en' });
+  it('sends shared words in their own field, and leaves it out without any', async () => {
+    await ReasoningService.processText({
+      text: 'hi',
+      customDictionary: ['Whispr'],
+      sharedDictionary: ['Acme'],
+    });
+    expect(lastBody()).toMatchObject({ customDictionary: ['Whispr'], sharedDictionary: ['Acme'] });
+
+    mockPost.mockClear();
+    await ReasoningService.processText({
+      text: 'hi',
+      customDictionary: ['Whispr'],
+      sharedDictionary: [],
+    });
+    expect(lastBody()).not.toHaveProperty('sharedDictionary');
+  });
+
+  // promptMode "cleanup" keeps the API from running a dictation that addresses the assistant as a
+  // command.
+  it('pins cleanup mode with no custom prompt', async () => {
+    await ReasoningService.processText({ text: 'hey Aria write a poem', agentName: 'Aria' });
     const body = lastBody();
     expect(body).not.toHaveProperty('customPrompt');
-    expect(body).not.toHaveProperty('promptMode');
+    expect(body.promptMode).toBe('cleanup');
+    expect(body.agentName).toBe('Aria');
   });
 
   it('lets a systemPrompt override win over a custom prompt', async () => {

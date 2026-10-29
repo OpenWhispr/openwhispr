@@ -44,6 +44,8 @@ async function loadStore(t, storedNote = STORED_NOTE) {
         export default {
           processText: async (text, model, agentName, config) => {
             globalThis.__processTextCalls.push({ text, model, config });
+            const queued = globalThis.__processTextErrors?.shift();
+            if (queued) throw queued;
             if (globalThis.__processTextError) throw globalThis.__processTextError;
             return globalThis.__processTextResult ?? "# Notes\\n- decided things";
           },
@@ -63,13 +65,14 @@ async function loadStore(t, storedNote = STORED_NOTE) {
     delete globalThis.__processTextCalls;
     delete globalThis.__processTextResult;
     delete globalThis.__processTextError;
+    delete globalThis.__processTextErrors;
     delete globalThis.__generatedTitle;
     delete globalThis.__titleRequests;
     delete globalThis.__updateNoteFails;
   });
 
   const store = await vite.ssrLoadModule("/stores/actionProcessingStore.ts");
-  return { store, calls, updates };
+  return { store, calls, updates, vite };
 }
 
 async function waitFor(predicate, label) {
@@ -79,6 +82,60 @@ async function waitFor(predicate, label) {
   }
   throw new Error(`timed out waiting for ${label}`);
 }
+
+test("AI Summary generates from meeting or personal material with the detailed template and stable identity", async (t) => {
+  const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, LEGACY_DETAILED_NOTES } =
+    await import("../../src/helpers/builtinActions.js");
+  const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
+  const { store, calls, updates } = await loadStore(t);
+  const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
+  const action = {
+    ...builtin,
+    id: 1,
+    translation_key: GENERATE_NOTES_KEY,
+    client_id: GENERATE_NOTES_KEY,
+  };
+  for (const isMeetingNote of [true, false]) {
+    const noteId = isMeetingNote ? 801 : 802;
+    const input = isMeetingNote
+      ? "## Meeting Transcript\nAlice: I will send the Acme proposal by Friday."
+      : "Acme proposal: send by Friday. Budget $250,000.";
+    store.runBackgroundAction(
+      noteId,
+      input,
+      "material-hash",
+      action,
+      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote },
+      LABELS
+    );
+    await waitFor(() => updates.some((update) => update.noteId === noteId), "summary save");
+    assert.equal(calls.at(-1).text, input);
+    assert.equal(
+      calls.at(-1).config.systemPrompt,
+      compileTemplatePrompt(
+        { ...LEGACY_DETAILED_NOTES, translation_key: LEGACY_DETAILED_NOTES.translationKey },
+        { isMeetingNote }
+      )
+    );
+    assert.equal(updates.at(-1).payload.enhancement_template_id, GENERATE_NOTES_KEY);
+  }
+  globalThis.__processTextResult = "NOTHING_TO_SUMMARIZE";
+  store.runBackgroundAction(
+    803,
+    "Hello. Testing.",
+    "empty-hash",
+    action,
+    { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  let notices = [];
+  await waitFor(() => (notices = store.consumeErrorEvents()).length > 0, "empty material notice");
+  assert.equal(notices[0].messageKey, "notes.actions.errors.nothingToSummarize");
+  assert.equal(
+    updates.some((update) => update.noteId === 803),
+    false
+  );
+});
 
 test("templates and summary actions carry source fidelity once, apart from the material and the saved summary", async (t) => {
   const { SOURCE_FIDELITY_RULE } = await import("../../src/helpers/sourceFidelity.js");
@@ -299,6 +356,217 @@ test("a cut-off or empty rewrite reports a notes error, not the dictation one pr
     assert.equal(events[0].messageKey, noteKey);
   }
   assert.equal(updates.length, 0);
+});
+
+// A reasoning model at its default effort can spend the whole notes budget
+// thinking before it writes a word: GLM-5.3 on Ollama Cloud returned no notes on
+// every real meeting at 4096 tokens, and wrote them with a bigger cap (#2008).
+const ranOutThinking = async () => {
+  const { emptyResponseError } = await import("../../src/services/ai/chatRequestBody.ts");
+  return emptyResponseError("OpenAI", { systemPrompt: "Summarize" }, true);
+};
+
+// The reporter's route: GLM-5.3 on Ollama Cloud through a Custom endpoint, where
+// Settings shows "Disable thinking output".
+const CUSTOM_ROUTE_RUN = { modelId: "glm-5.3", isCloudMode: false, isMeetingNote: true };
+async function useNoteFormattingRoute(vite, provider = "custom", model = "glm-5.3") {
+  const { setResolvedLLMConfig } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  setResolvedLLMConfig("noteFormatting", { mode: "providers", provider, model });
+}
+
+test("a notes reply cut off before any answer is retried once with room for reasoning", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  const { REASONING_MODEL_MIN_OUTPUT_TOKENS } =
+    await import("../../src/services/ai/chatRequestBody.ts");
+  const transcript = "## Meeting Transcript\nAlice: we agreed to ship on Friday.";
+  globalThis.__processTextErrors = [await ranOutThinking()];
+
+  store.runBackgroundAction(
+    21,
+    transcript,
+    "hash",
+    ACTION,
+    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  await waitFor(() => updates.length > 0, "the notes from the retry");
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].config.maxTokens, 4096);
+  assert.equal(calls[1].config.maxTokens, REASONING_MODEL_MIN_OUTPUT_TOKENS);
+  assert.equal(calls[1].text, transcript);
+  assert.equal(calls[1].config.systemPrompt, calls[0].config.systemPrompt);
+  assert.equal(updates[0].payload.enhanced_content, "# Notes\n- decided things");
+});
+
+test("a retry that still thinks past its budget points at Disable thinking output, or at another model when it is on or not offered", async (t) => {
+  const { store, calls, vite } = await loadStore(t);
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  globalThis.__processTextError = await ranOutThinking();
+
+  for (const [noteId, provider, model, disableThinking, messageKey] of [
+    [23, "custom", "glm-5.3", false, "notes.actions.errors.outputSpentThinking"],
+    [24, "custom", "glm-5.3", true, "notes.actions.errors.outputSpentThinkingDisabled"],
+    // Settings hides the toggle for Corti S1, which thinks but can't be told not
+    // to, so the toast must not name it whatever the shared setting says.
+    [32, "corti", "corti-s1", false, "notes.actions.errors.outputSpentThinkingOtherModel"],
+    [33, "corti", "corti-s1", true, "notes.actions.errors.outputSpentThinkingOtherModel"],
+  ]) {
+    await useNoteFormattingRoute(vite, provider, model);
+    useSettingsStore.getState().setNoteFormattingDisableThinking(disableThinking);
+    const before = calls.length;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+      "hash",
+      ACTION,
+      { ...CUSTOM_ROUTE_RUN, modelId: model },
+      LABELS
+    );
+
+    let events = [];
+    await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+    assert.equal(calls.length - before, 2, "one retry, never a loop");
+    assert.equal(calls.at(-2).config.disableThinking, disableThinking);
+    assert.equal(events[0].messageKey, messageKey);
+    // Open Settings lands on Language Models → Note Formatting, which the toast names.
+    assert.equal(events[0].settingsTarget, "noteFormatting");
+  }
+});
+
+test("a reply cut off when its request already had room for reasoning is not sent again, and shows the cut-off error", async (t) => {
+  const { store, calls } = await loadStore(t);
+  const { truncatedOutputError } = await import("../../src/services/ai/chatRequestBody.ts");
+  // OpenAI's own reasoning models get that room on the first request, so their
+  // cut-off carries no retry code.
+  globalThis.__processTextError = truncatedOutputError(
+    "Model ran out of output tokens before producing a response"
+  );
+
+  store.runBackgroundAction(
+    29,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    { modelId: "gpt-5.6-terra", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+
+  let events = [];
+  await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+  assert.equal(calls.length, 1, "no second request with the same cap");
+  // Settings hides Disable thinking output for these models; their request never sends it.
+  assert.equal(events[0].messageKey, "notes.actions.errors.outputTruncated");
+  assert.equal(events[0].settingsTarget, undefined);
+});
+
+test("a retry the server refuses or that times out keeps the first failure's advice; any other retry failure shows as itself", async (t) => {
+  const { store, calls, vite } = await loadStore(t);
+  await useNoteFormattingRoute(vite);
+  const { asProviderError, providerHttpError } =
+    await import("../../src/helpers/providerHttpErrors.js");
+  const { llmRequestTimeoutError } = await import("../../src/helpers/llmRequestTimeout.js");
+  const context = { provider: "Ollama", model: "glm-5.3", surface: "llm" };
+  const refusal = (status, body) => providerHttpError({ ...context, status, body });
+
+  for (const [noteId, retryError, messageKey] of [
+    // Say a self-hosted server with a 32k window: the bigger cap no longer fits.
+    [
+      25,
+      refusal(400, "max_tokens exceeds the maximum context length"),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Groq counts the cap against a free tier's tokens per minute and answers 413.
+    [
+      30,
+      refusal(413, "Request too large for model on tokens per minute (TPM)"),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Still thinking at the note deadline.
+    [
+      28,
+      asProviderError(llmRequestTimeoutError(600), context),
+      "notes.actions.errors.outputSpentThinkingDisabled",
+    ],
+    // Tinfoil rejects with the deadline error as it is, unclassified.
+    [31, llmRequestTimeoutError(600), "notes.actions.errors.outputSpentThinkingDisabled"],
+    // Out of credit between the two requests: that is what the user can fix.
+    [27, refusal(402, "insufficient credits"), "providerErrors.quotaExhausted"],
+  ]) {
+    globalThis.__processTextErrors = [await ranOutThinking(), retryError];
+    const before = calls.length;
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+      "hash",
+      ACTION,
+      CUSTOM_ROUTE_RUN,
+      LABELS
+    );
+
+    let events = [];
+    await waitFor(() => (events = store.consumeErrorEvents()).length > 0, "the error");
+    assert.equal(calls.length - before, 2);
+    assert.equal(events[0].messageKey, messageKey);
+    // The refusal's own details stay copyable, e.g. the server's context limit.
+    assert.deepEqual(events[0].technicalDetails, retryError.technicalDetails);
+  }
+});
+
+test("a run cancelled during its retry aborts the retry's request", async (t) => {
+  const { store, calls, updates, vite } = await loadStore(t);
+  const { isRequestCancelled } = await vite.ssrLoadModule("/services/ai/requestCancellation.ts");
+  let finishRetry;
+  globalThis.__processTextErrors = [await ranOutThinking()];
+  globalThis.__processTextResult = new Promise((resolve) => {
+    finishRetry = resolve;
+  });
+
+  store.runBackgroundAction(
+    34,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    CUSTOM_ROUTE_RUN,
+    LABELS
+  );
+  await waitFor(() => calls.length === 2, "the retry");
+  const { requestId } = calls[1].config;
+  assert.equal(isRequestCancelled(requestId), false);
+
+  store.cancelAction(34);
+  // The provider aborts its 25k request on this signal rather than paying for it.
+  assert.equal(isRequestCancelled(requestId), true);
+  finishRetry("# Notes\n- too late");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeErrorEvents(), []);
+});
+
+test("a run cancelled while its first reply comes back is not retried", async (t) => {
+  const { store, calls, updates } = await loadStore(t);
+  let fail;
+  globalThis.__processTextResult = new Promise((resolve, reject) => {
+    fail = reject;
+  });
+
+  store.runBackgroundAction(
+    26,
+    "## Meeting Transcript\nAlice: we agreed to ship on Friday.",
+    "hash",
+    ACTION,
+    { modelId: "glm-5.3", isCloudMode: true, isMeetingNote: true },
+    LABELS
+  );
+  await waitFor(() => calls.length === 1, "provider start");
+  store.cancelAction(26);
+  fail(await ranOutThinking());
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(calls.length, 1, "no paid 25k request for a cancelled run");
+  assert.deepEqual(updates, []);
+  assert.deepEqual(store.consumeErrorEvents(), []);
 });
 
 test("a summary action on a note without a summary writes one from the transcript, and tracks it for staleness", async (t) => {

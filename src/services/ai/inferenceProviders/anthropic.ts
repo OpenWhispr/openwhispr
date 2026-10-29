@@ -17,7 +17,7 @@ export const anthropicProvider: InferenceProvider = {
 
     logger.logReasoning("ANTHROPIC_IPC_CALL", { model, textLength: text.length });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, config.toneStyle);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     // Claude models from Opus 4.7 onward reject `temperature` with a 400, so
     // unknown models default to omitting it, which every model accepts.

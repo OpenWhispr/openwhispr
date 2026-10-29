@@ -51,6 +51,11 @@ test("web search is for anything that may have changed, and when in doubt the mo
   );
   assert.match(prompt, /whenever the user asks you to look something up/);
   assert.match(prompt, /search rather than decline/);
+  assert.match(
+    prompt,
+    /OpenWhispr topics outside the offered help catalog, search official OpenWhispr documentation/
+  );
+  assert.doesNotMatch(prompt, /documentation for products other than OpenWhispr/);
 });
 
 test("web search stays on public information the context doesn't already answer", async () => {
@@ -176,4 +181,63 @@ test("the name joins the prompt as one plain line", async () => {
 
   const long = getAgentSystemPrompt([], undefined, { userName: "A".repeat(500) });
   assert.match(long, /The user's name is A{100}\./);
+});
+
+const TONES = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
+
+test("Tone & Style lists the user's style for each kind of writing, after the sign-off rule", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    userName: "Alex",
+    writingStyle: { tones: TONES },
+  });
+
+  assert.match(prompt, /WRITING STYLE: When you write something the user will send/);
+  assert.match(prompt, /^- Personal messages \([^)]*\): very casual, like texting a friend\./m);
+  assert.match(prompt, /^- Work messages \([^)]*\): casual and friendly/m);
+  assert.match(prompt, /^- Emails \([^)]*email_draft[^)]*\): formal and polished\./m);
+  assert.match(prompt, /^- Everything else \([^)]*\): upbeat and enthusiastic\./m);
+  assert.match(prompt, /Your own answers, explanations and summaries keep your usual voice\./);
+  assert.match(
+    prompt,
+    /Names, acronyms and dictionary terms keep their exact spelling and capitalization\./
+  );
+  assert.ok(prompt.indexOf("sign it with their name") < prompt.indexOf("WRITING STYLE"));
+});
+
+test("an answer typed at the cursor gets that app's style, and tool text keeps its own kind", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    writingStyle: { tones: TONES, destination: "work" },
+  });
+
+  assert.match(
+    prompt,
+    /WRITING STYLE: Your reply will be typed at the user's cursor in a work chat app, as their own words\. Write the reply as only the text that goes there \(no subject line or label\), in the user's work message style: casual and friendly/
+  );
+  // An email_draft spoken with the cursor in Slack is still written as an email.
+  const replyOnly = prompt.indexOf("That style is for the reply only.");
+  assert.ok(replyOnly > 0);
+  assert.ok(
+    prompt.indexOf("- Emails (any email, including an email_draft body): formal") > replyOnly
+  );
+});
+
+test("an answer typed at the cursor in another app reads naturally", async () => {
+  const { getAgentSystemPrompt } = await load();
+  const prompt = getAgentSystemPrompt([], undefined, {
+    writingStyle: { tones: TONES, destination: "other" },
+  });
+
+  assert.match(
+    prompt,
+    /cursor in an app other than chat or email, as their own words\. .* in the user's general writing style: upbeat and enthusiastic\./
+  );
+  assert.doesNotMatch(prompt, /Everything else style|cursor in an app,/);
+  assert.match(prompt, /code and commands, with their strings and comments, are never restyled/);
+});
+
+test("without Tone & Style the prompt has no writing style", async () => {
+  const { getAgentSystemPrompt } = await load();
+  assert.doesNotMatch(getAgentSystemPrompt([], undefined, {}), /WRITING STYLE/);
 });

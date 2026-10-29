@@ -62,16 +62,16 @@ export function SlowDownloadSheet({
               Download taking a while?
             </Text>
             <Text className="mt-1.5 text-[15px] leading-[20px] text-secondaryLabel">
-              No need to wait. Continue setup on Cloud now — we&apos;ll finish your Private download
-              in the background.
+              No need to wait. Continue setup on Cloud now — we&apos;ll finish your Local Mode
+              download in the background.
             </Text>
 
             <View className="mt-4 rounded-2xl border border-separator bg-secondarySystemGroupedBackground p-4">
               <View className="flex-row items-center gap-2">
                 <SystemIcon name="lock.fill" mdName="Lock" size={16} color="brand" />
                 <Text className="flex-1 text-[13px] leading-[18px] text-secondaryLabel">
-                  Turn on <Text className="font-semibold text-label">Private Mode</Text> in Account
-                  → AI Models to switch once it&apos;s ready.
+                  Set <Text className="font-semibold text-label">Dictation</Text> to On-Device in
+                  Account → AI Models to switch once it&apos;s ready.
                 </Text>
               </View>
             </View>

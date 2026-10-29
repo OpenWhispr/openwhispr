@@ -51,6 +51,20 @@ test("remaps every other Tinfoil model the app has offered and Tinfoil has since
   assert.equal(storage.map.get("noteFormattingModel"), "deepseek-v4-1-flash");
 });
 
+test("remaps a scope pinned to the GPT-4.1 Nano OpenAI shut down onto a current model", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  const modelData = require("../../src/models/modelRegistryData.json");
+  const storage = makeStorage({ cleanupProvider: "openai", cleanupModel: "gpt-4.1-nano" });
+
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), [
+    { storeKey: "cleanupModel", provider: "openai", from: "gpt-4.1-nano", to: "gpt-6-luna" },
+  ]);
+  const openai = modelData.cloudProviders.find((provider) => provider.id === "openai");
+  const replacement = openai.models.find((model) => model.id === "gpt-6-luna");
+  assert.ok(replacement && !replacement.legacy, "the replacement is a current registry model");
+  assert.ok(!openai.models.some((model) => model.id === "gpt-4.1-nano"));
+});
+
 test("still remaps the models Groq retired", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
   const storage = makeStorage({
@@ -64,6 +78,44 @@ test("still remaps the models Groq retired", async () => {
 
   assert.equal(storage.map.get("cleanupModel"), "openai/gpt-oss-120b");
   assert.equal(storage.map.get("chatAgentModel"), "openai/gpt-oss-120b");
+});
+
+test("remaps the Compound systems Groq shut down, even after the first Groq sweep ran", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  // Groq shut down groq/compound and groq/compound-mini on 2026-09-21, after
+  // shipped builds had already written the original Groq sentinel. The rotated
+  // key also re-sweeps the August ids, which is harmless: they are retired too.
+  const storage = makeStorage({
+    _retiredGroqModelsMigrated: "1",
+    cleanupProvider: "groq",
+    cleanupModel: "groq/compound",
+    chatAgentProvider: "groq",
+    chatAgentModel: "groq/compound-mini",
+    noteFormattingProvider: "groq",
+    noteFormattingModel: "llama-3.3-70b-versatile",
+  });
+
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP, CHAT, NOTES]), [
+    {
+      storeKey: "cleanupModel",
+      provider: "groq",
+      from: "groq/compound",
+      to: "openai/gpt-oss-120b",
+    },
+    {
+      storeKey: "chatAgentModel",
+      provider: "groq",
+      from: "groq/compound-mini",
+      to: "openai/gpt-oss-20b",
+    },
+    {
+      storeKey: "noteFormattingModel",
+      provider: "groq",
+      from: "llama-3.3-70b-versatile",
+      to: "openai/gpt-oss-120b",
+    },
+  ]);
+  assert.equal(storage.map.get("_retiredGroqModelsMigrated2"), "1");
 });
 
 test("leaves a model the provider still serves alone", async () => {
@@ -112,7 +164,7 @@ test("Groq's already-shipped sentinel does not suppress another provider's remap
 test("a provider whose sentinel is already set is skipped", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
   const storage = makeStorage({
-    _retiredGroqModelsMigrated: "1",
+    _retiredGroqModelsMigrated2: "1",
     cleanupProvider: "groq",
     cleanupModel: "llama-3.3-70b-versatile",
   });
@@ -174,12 +226,22 @@ test("each provider's sentinel is pinned to the exact set of ids it covers", asy
 
   assert.deepEqual(covered, {
     groq: {
-      migratedKey: "_retiredGroqModelsMigrated",
-      retired: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "qwen/qwen3-32b"],
+      migratedKey: "_retiredGroqModelsMigrated2",
+      retired: [
+        "groq/compound",
+        "groq/compound-mini",
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "qwen/qwen3-32b",
+      ],
     },
     tinfoil: {
       migratedKey: "_retiredTinfoilModelsMigrated2",
       retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+    },
+    openai: {
+      migratedKey: "_retiredOpenAIModelsMigrated",
+      retired: ["gpt-4.1-nano"],
     },
   });
 });
@@ -194,5 +256,5 @@ test("a storage that cannot be written leaves the sentinel unset, so the next la
   assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), []);
   assert.equal(storage.map.get("_retiredTinfoilModelsMigrated2"), undefined);
   // Groq shares the storage but not the failure's blast radius.
-  assert.equal(storage.map.get("_retiredGroqModelsMigrated"), undefined);
+  assert.equal(storage.map.get("_retiredGroqModelsMigrated2"), undefined);
 });

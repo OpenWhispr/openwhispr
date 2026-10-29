@@ -1,3 +1,6 @@
+jest.mock('@/lib/affiliateOffer', () => ({
+  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
+}));
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
@@ -29,6 +32,11 @@ const mockAuthState: {
   signOut: jest.fn(),
   deleteAccount: jest.fn(),
 };
+const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
+jest.mock('@/store/useAffiliateStore', () => ({
+  useAffiliateStore: { getState: () => ({ prepare: mockPrepareAffiliate }) },
+}));
+jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();
@@ -86,6 +94,7 @@ const mockUsageStoreState: {
 
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
   router: {
     push: (...args: unknown[]) => mockRouterPush(...args),
     replace: (...args: unknown[]) => mockRouterReplace(...args),
@@ -180,6 +189,7 @@ const anonymousUser = {
 // the API. What it needs is a way to create the account.
 describe('AccountScreen with an anonymous session', () => {
   beforeEach(() => {
+    mockPrepareAffiliate.mockResolvedValue(true);
     jest.clearAllMocks();
     mockAuthState.user = anonymousUser;
     mockAuthState.sessionCookie = 'session-cookie';

@@ -1,7 +1,14 @@
 import catalog from '@/config/providerCatalog.json';
 import { isSecureHttpEndpoint, normalizeBaseUrl } from '@/lib/providerEndpoints';
 
-export type InferenceScope = 'dictation' | 'upload' | 'meeting' | 'cleanup' | 'notes' | 'agent';
+export type InferenceScope =
+  | 'dictation'
+  | 'upload'
+  | 'meeting'
+  | 'cleanup'
+  | 'notes'
+  | 'noteChat'
+  | 'agent';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 export interface InferenceSelection {
   mode: InferenceMode;
@@ -13,6 +20,8 @@ export interface InferenceSelection {
 export interface ProviderModel {
   id: string;
   name: string;
+  // Superseded: offered only while it is the selection, so a saved one keeps working.
+  legacy?: boolean;
 }
 export interface ProviderDefinition {
   id: string;
@@ -144,7 +153,7 @@ export function resolveMobileInferenceRoute(input: {
     const scopedPolicy = isTranscriptionScope(scope) ? policy.transcription : policy.llm;
     if (
       !isAllowedByScopePolicy(scopedPolicy, selection) ||
-      (scope === 'agent' && policy.agentEnabled === false)
+      ((scope === 'agent' || scope === 'noteChat') && policy.agentEnabled === false)
     )
       return { ok: false, code: 'POLICY_BLOCKED' };
   }

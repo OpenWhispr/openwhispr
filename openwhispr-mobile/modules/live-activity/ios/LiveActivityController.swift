@@ -24,9 +24,13 @@ final class LiveActivityController {
   private var statusNotificationName: String { "\(bundleId).keyboardStatusChanged" }
   private var dictationModeNotificationName: String { "\(bundleId).dictationModeChanged" }
   private var endMeetingNotificationName: String { "\(bundleId).endMeetingRequested" }
+  /// In-process, posted by AppGroupStorageModule when it stops the warm mic.
+  private var warmMicReleasedNotificationName: String { "\(bundleId).warmMicReleased" }
   private var sharedDefaults: UserDefaults? { UserDefaults(suiteName: "group.\(bundleId)") }
   private var isObserving = false
   private var foregroundObserverToken: NSObjectProtocol?
+  private var terminateObserverToken: NSObjectProtocol?
+  private var backgroundObserverTokens: [NSObjectProtocol] = []
 
   /// Non-nil while MeetingRecordScreen has a meeting recording or processing.
   private var meeting: MeetingSnapshot?
@@ -66,6 +70,11 @@ final class LiveActivityController {
     sharedDefaults?.string(forKey: "keyboard_recording_active") == "1"
   }
 
+  // The warm mic's audio session is what keeps a backgrounded app running.
+  private func isWarmMicHeld() -> Bool {
+    sharedDefaults?.string(forKey: "background_session_warm_mic") == "1"
+  }
+
   // MARK: - Observation
 
   func startObserving() {
@@ -89,7 +98,28 @@ final class LiveActivityController {
         // The controller is a process-lifetime singleton, like the Darwin boxes.
         self.reconcile(requestOnly: true)
       }
-      self.log.info("Observing keyboard, dictation-mode, and end-meeting notifications")
+      // ActivityKit keeps a card up for hours after its process dies, so a swiped-away
+      // app would leave the pill claiming a session (or meeting) that no longer exists.
+      self.terminateObserverToken = NotificationCenter.default.addObserver(
+        forName: UIApplication.willTerminateNotification,
+        object: nil,
+        queue: .main
+      ) { _ in
+        self.endAllBeforeTermination()
+      }
+      // Once the app can suspend, the idle session card has to go: a suspended app
+      // is killed without willTerminate. Covers backgrounding without a warm mic
+      // and the warm mic's release (idle timeout, interruption) in the background.
+      // Request-only, so a card that stays keeps its timer.
+      self.backgroundObserverTokens = [
+        UIApplication.didEnterBackgroundNotification,
+        Notification.Name(self.warmMicReleasedNotificationName),
+      ].map { name in
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+          self.reconcileBeforeSuspension()
+        }
+      }
+      self.log.info("Observing keyboard, dictation-mode, end-meeting, and app lifecycle notifications")
     }
   }
 
@@ -212,6 +242,20 @@ final class LiveActivityController {
     backgroundTask = .invalid
   }
 
+  /// The app can suspend as soon as the notification handler returns, before the
+  /// queued end lands, so a short background task holds it until the reconcile is done.
+  private func reconcileBeforeSuspension() {
+    var task = UIBackgroundTaskIdentifier.invalid
+    let finish = {
+      guard task != .invalid else { return }
+      UIApplication.shared.endBackgroundTask(task)
+      task = .invalid
+    }
+    task = UIApplication.shared.beginBackgroundTask(
+      withName: "OpenWhisprLiveActivitySuspend", expirationHandler: finish)
+    reconcile(requestOnly: true, completion: finish)
+  }
+
   // MARK: - Resolve + apply
 
   private func onMain(_ work: @escaping () -> Void) {
@@ -276,6 +320,7 @@ final class LiveActivityController {
         meeting: meeting,
         keyboardRecording: isRecordingActive(),
         dictationMode: isDictationModeEnabled(),
+        appAwake: UIApplication.shared.applicationState != .background || isWarmMicHeld(),
         now: now)
     else {
       await endAllActivities()
@@ -326,6 +371,29 @@ final class LiveActivityController {
     }
   }
   #endif
+
+  /// The process exits as soon as willTerminate returns, so the end must land before
+  /// this does. It bypasses the op queue: that runs on the main actor, which the wait
+  /// below blocks. iOS only sends willTerminate to a running app (the warm mic or a
+  /// meeting kept it awake); a suspended app is killed without it.
+  private func endAllBeforeTermination() {
+    #if canImport(ActivityKit)
+    if #available(iOS 16.2, *) {
+      let done = DispatchSemaphore(value: 0)
+      // High priority: the blocked main thread can't donate its priority through a semaphore.
+      Task.detached(priority: .high) {
+        for activity in Activity<RecordingActivityAttributes>.activities {
+          await activity.end(nil, dismissalPolicy: .immediate)
+        }
+        done.signal()
+      }
+      // willTerminate gets about 5 seconds before iOS kills the process.
+      if done.wait(timeout: .now() + 2) == .timedOut {
+        log.error("Timed out ending Live Activities before termination")
+      }
+    }
+    #endif
+  }
 }
 
 /// Carries a Darwin observer's handler through the C callback's context pointer.

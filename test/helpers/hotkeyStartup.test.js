@@ -48,6 +48,7 @@ function fixture(backend, savedHotkey = "Scrolllock", registrationResult = true)
     "./kdeShortcut": { isKDE: () => backend === "KDE" },
     "./i18nMain": { i18nMain: { t: (key) => key } },
     "./hotkeyList": require("../../src/helpers/hotkeyList"),
+    "./hotkeyRepeatGate": require("../../src/helpers/hotkeyRepeatGate"),
   };
   const context = {
     module: { exports: {} },
@@ -214,6 +215,19 @@ for (const backend of ["GNOME", "Hyprland"]) {
     assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
   });
 }
+
+// gnomeShortcut.js answers with a reason when the keymap leaves GNOME nothing to grab.
+test("GNOME startup falls back to F8 when GNOME can't grab the saved key", async () => {
+  const f = fixture("GNOME", "F19");
+  const register = f.gnome.registerKeybinding;
+  f.gnome.registerKeybinding = async (shortcut) =>
+    shortcut === "F19" ? "keysym_missing" : register(shortcut);
+  await f.manager.initializeHotkey(f.window, () => {});
+  f.timers.shift().callback();
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(f.manager.currentHotkey, "F8");
+  assert.deepEqual(f.registrations, [{ hotkey: "F8", push: false }]);
+});
 
 // Without its evdev listener a Linux session cannot hold through globalShortcut.
 test("KDE that cannot register falls back to globalShortcut and checks Hold again", async () => {

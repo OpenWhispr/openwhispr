@@ -1,3 +1,4 @@
+import { productHelpTools } from "./productHelpTools";
 import { ToolRegistry } from "./ToolRegistry";
 import { createSearchNotesTool } from "./searchNotesTool";
 import { getNoteTool } from "./getNoteTool";
@@ -14,6 +15,12 @@ import {
   registerConnectorTools,
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
+import {
+  createLoadSkillTool,
+  createProposeSkillTool,
+  createUpdateSkillTool,
+  type SkillToolDeps,
+} from "./skillTools";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -21,6 +28,8 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
+  productHelpEnabled?: boolean;
   calendarConnected: boolean;
   cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
@@ -32,10 +41,14 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
+  /** The user's skills; load_skill is offered once one is usable. */
+  skills?: SkillToolDeps;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
   const registry = new ToolRegistry();
+  if (settings.productHelpEnabled !== false)
+    for (const tool of productHelpTools) registry.register(tool);
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
   registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
@@ -62,6 +75,20 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+
+  if (settings.skills) {
+    const hasSkills = settings.skills.usable.length > 0;
+    if (hasSkills) {
+      registry.register(createLoadSkillTool(settings.skills));
+      registry.register(createUpdateSkillTool(settings.skills.usable));
+    }
+    // A skill card writes only on this computer, so it needs no sign-in, plan or connector.
+    // Someone with no skills makes their first through the skill creator, so every other
+    // request leaves the tool out.
+    if (hasSkills || settings.skills.creatorAttached) {
+      registry.register(createProposeSkillTool());
+    }
+  }
 
   return registry;
 }

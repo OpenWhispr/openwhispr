@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 static Display *display;
@@ -75,15 +76,61 @@ static void assert_rectangle(Window window, int kind, int expected_count,
   if (rectangles) XFree(rectangles);
 }
 
-static void apply(Window window, const char *command, int native_width, int native_height,
-                  int count, int x, int y, int width, int height)
+static void send_command(const char *command)
 {
   char response[32];
   require(fputs(command, helper_input) >= 0 && fflush(helper_input) == 0, "helper write failed");
   require(fgets(response, sizeof(response), helper_output) != NULL, "helper exited before ACK");
   require(strcmp(response, "OK\n") == 0, "unexpected helper ACK");
+}
+
+static void apply(Window window, const char *command, int native_width, int native_height,
+                  int count, int x, int y, int width, int height)
+{
+  send_command(command);
   assert_rectangle(window, ShapeInput, count, x, y, width, height);
   assert_rectangle(window, ShapeBounding, 1, 0, 0, native_width, native_height);
+}
+
+static Window focused_window(void)
+{
+  Window focus;
+  int revert_to;
+  XGetInputFocus(display, &focus, &revert_to);
+  return focus;
+}
+
+static int focus_in_delivered(Window window)
+{
+  XEvent event;
+  int delivered = 0;
+  XSync(display, False);
+  while (XCheckTypedWindowEvent(display, window, FocusIn, &event)) delivered = 1;
+  return delivered;
+}
+
+/* Stands in for a window manager: answers every pending WM_Sn conversion. */
+static void answer_selection_requests(Window owner)
+{
+  XEvent request;
+  XSync(display, False);
+  while (XCheckTypedWindowEvent(display, owner, SelectionRequest, &request)) {
+    XEvent reply = { 0 };
+    reply.xselection.type = SelectionNotify;
+    reply.xselection.requestor = request.xselectionrequest.requestor;
+    reply.xselection.selection = request.xselectionrequest.selection;
+    reply.xselection.target = request.xselectionrequest.target;
+    reply.xselection.property = None;
+    XSendEvent(display, reply.xselection.requestor, False, 0, &reply);
+  }
+  XSync(display, False);
+}
+
+static long elapsed_ms(const struct timespec *since)
+{
+  struct timespec now;
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  return (now.tv_sec - since->tv_sec) * 1000L + (now.tv_nsec - since->tv_nsec) / 1000000L;
 }
 
 static void assert_click_target(Window expected, int x, int y)
@@ -114,7 +161,7 @@ int main(int argc, char **argv)
   Window background = XCreateSimpleWindow(display, root, 20, 20, 416, 240, 0, 0, 0);
   Window foreground = XCreateSimpleWindow(display, root, 20, 20, 208, 120, 0, 0, 0);
   XSelectInput(display, background, ButtonPressMask);
-  XSelectInput(display, foreground, ButtonPressMask);
+  XSelectInput(display, foreground, ButtonPressMask | FocusChangeMask);
   XMapWindow(display, background);
   XMapRaised(display, foreground);
   XSync(display, False);
@@ -136,6 +183,39 @@ int main(int argc, char **argv)
   assert_click_target(background, 340, 160);
   apply(foreground, "full\n", 416, 240, 1, 0, 0, 416, 240);
   assert_click_target(foreground, 10, 10);
+
+  /* No window manager owns WM_S0 here, so the server answers the round trip. */
+  send_command("focus\n");
+  require(focused_window() == foreground, "focus did not reach the window");
+  focus_in_delivered(foreground);
+  send_command("focus\n");
+  require(focused_window() == foreground, "focusing again lost the window");
+  require(focus_in_delivered(foreground),
+          "focusing a window that already has X focus sent no FocusIn");
+
+  /* A window manager that answers after the helper gave up waiting must not
+   * satisfy the next round trip with that late reply. */
+  Window manager = XCreateSimpleWindow(display, root, 0, 0, 1, 1, 0, 0, 0);
+  char selection_name[16];
+  snprintf(selection_name, sizeof(selection_name), "WM_S%d", DefaultScreen(display));
+  Atom selection = XInternAtom(display, selection_name, False);
+  XSetSelectionOwner(display, selection, manager, CurrentTime);
+  XSync(display, False);
+  send_command("focus\n");
+  answer_selection_requests(manager);
+  struct timespec started;
+  clock_gettime(CLOCK_MONOTONIC, &started);
+  send_command("focus\n");
+  require(elapsed_ms(&started) >= 50, "a late window manager reply ended a later round trip");
+  answer_selection_requests(manager);
+  XSetSelectionOwner(display, selection, None, CurrentTime);
+  XUnmapWindow(display, foreground);
+  XSync(display, False);
+  send_command("focus\n");
+  require(focused_window() != PointerRoot, "focusing an unmapped window dropped X focus");
+  XMapRaised(display, foreground);
+  XSync(display, False);
+  apply(foreground, "full\n", 416, 240, 1, 0, 0, 416, 240);
 
   require(fclose(helper_input) == 0, "cannot close helper input");
   int status;

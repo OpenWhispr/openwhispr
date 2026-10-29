@@ -225,3 +225,22 @@ it('requires a credential and a model without changing the selection', () => {
     }),
   ).toEqual({ ok: false, code: 'MODEL_REQUIRED' });
 });
+
+it.each(['agent', 'noteChat'] as const)(
+  'blocks %s when the organization turns the assistant off',
+  (scope) => {
+    const allowAll = { allowedModes: ['providers'], allowedByokProviders: ['openai'] };
+    expect(
+      resolveMobileInferenceRoute({
+        scope,
+        selection: {
+          mode: 'providers',
+          providerId: 'openai',
+          modelId: 'gpt-4.1-mini',
+          credentialRef: 'provider.openai',
+        },
+        policy: { status: 'managed', transcription: allowAll, llm: allowAll, agentEnabled: false },
+      }),
+    ).toEqual({ ok: false, code: 'POLICY_BLOCKED' });
+  },
+);

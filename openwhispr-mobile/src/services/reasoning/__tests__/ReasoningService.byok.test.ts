@@ -148,9 +148,10 @@ it('never falls back to OpenWhispr when provider setup or execution fails', asyn
   expect(api.post).not.toHaveBeenCalled();
 });
 
-it('routes note chat through the agent scope and retains its bounded chat prompt', async () => {
+it('routes note chat by the Note Chat selection, not the voice assistant', async () => {
   await ReasoningService.chatOverNote({ context: 'note context', question: 'why?', history: [] });
-  expect(resolveMobileProviderRoute).toHaveBeenCalledWith('agent', route, false, false);
+  expect(getInferenceSelection).toHaveBeenCalledWith('noteChat');
+  expect(resolveMobileProviderRoute).toHaveBeenCalledWith('noteChat', route, false, false);
   expect(processProviderText).toHaveBeenCalledWith(
     expect.objectContaining({
       text: expect.stringContaining('NOTE OR TRANSCRIPT CONTEXT:\nnote context'),

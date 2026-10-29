@@ -15,6 +15,7 @@ export default class FakeAudioManager {
     this.translationRequested = false;
     this.sttConfig = { success: true };
     this.pasteCalls = 0;
+    this.shownNotices = [];
     globalThis.__cleanupFallbackManager = this;
   }
   setCallbacks(callbacks) { this.callbacks = callbacks; }
@@ -22,14 +23,16 @@ export default class FakeAudioManager {
   shouldUseStreaming() { return false; }
   async safePaste() {
     this.pasteCalls += 1;
-    return { pasted: globalThis.__cleanupFallbackPasteOutcome?.pasted === true };
+    const outcome = globalThis.__cleanupFallbackPasteOutcome || {};
+    return { pasted: outcome.pasted === true, ...(outcome.reason ? { reason: outcome.reason } : {}) };
   }
+  markCleanupNoticeShown(failure) { this.shownNotices.push(failure); }
   async saveTranscription() { return true; }
   cleanup() {}
 }
 `;
 
-test("raw cleanup fallback is reported only after the original dictation is pasted", async (t) => {
+test("a raw cleanup fallback is reported with whether the dictation was pasted", async (t) => {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -49,12 +52,14 @@ test("raw cleanup fallback is reported only after the original dictation is past
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
         completeDictationPreview: async () => {},
+        writeClipboard: async () => ({ success: true }),
         hideDictationPreview: async () => {},
         dictationLifecycleStateChanged: () => {},
       },
     },
   });
   const container = installHookDom(t);
+  localStorage.setItem("onboardingCompleted", "true");
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-cleanup-fallback-hook-",
     mockModules: {
@@ -94,19 +99,41 @@ test("raw cleanup fallback is reported only after the original dictation is past
     cleanupFailure,
   };
 
-  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: true };
-  await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
-  assert.equal(manager.pasteCalls, 1);
-  assert.equal(useCleanupFailureStore.getState().pending, 1);
-  assert.deepEqual(useCleanupFailureStore.getState().lastFailure, cleanupFailure);
+  const recorded = async (pasteOutcome) => {
+    useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
+    manager.shownNotices = [];
+    globalThis.__cleanupFallbackPasteOutcome = pasteOutcome;
+    await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
+    const { pending, lastFailure } = useCleanupFailureStore.getState();
+    return { pending, lastFailure, shown: manager.shownNotices };
+  };
 
-  useCleanupFailureStore.setState({ pending: 0, lastFailure: null });
-  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: false };
-  await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
-  assert.equal(useCleanupFailureStore.getState().pending, 0);
+  let report = await recorded({ success: true, pasted: true });
+  assert.equal(manager.pasteCalls, 1);
+  assert.equal(report.pending, 1);
+  assert.deepEqual(report.lastFailure, { ...cleanupFailure, pasted: true });
+  assert.deepEqual(report.shown, [cleanupFailure]);
+
+  // A paste that did not land still reports the cause, without claiming the paste.
+  report = await recorded({ success: true, pasted: false });
+  assert.equal(report.pending, 1);
+  assert.equal(report.lastFailure.pasted, false);
+
+  // Held back for still-held modifiers: the pill shows and the cause is reported too.
+  report = await recorded({ success: true, pasted: false, reason: "modifiers-held" });
+  assert.equal(report.pending, 1);
+  assert.equal(report.lastFailure.pasted, false);
 
   useSettingsStore.setState({ autoPasteEnabled: false, keepTranscriptionInClipboard: false });
-  globalThis.__cleanupFallbackPasteOutcome = { success: true, pasted: true };
-  await React.act(async () => manager.callbacks.onTranscriptionComplete({ ...result }));
-  assert.equal(useCleanupFailureStore.getState().pending, 0);
+  report = await recorded({ success: true, pasted: true });
+  assert.equal(report.pending, 1);
+  assert.equal(report.lastFailure.pasted, false);
+
+  // The onboarding demo's paste is a no-op into its own text box: nothing is
+  // reported, and an unconfigured-cleanup warning is not used up.
+  useSettingsStore.setState({ autoPasteEnabled: true });
+  localStorage.setItem("onboardingCompleted", "false");
+  report = await recorded({ success: true, pasted: false });
+  assert.equal(report.pending, 0);
+  assert.deepEqual(report.shown, []);
 });

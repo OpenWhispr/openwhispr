@@ -1,9 +1,6 @@
 /**
- * Tests for agentName defensive path in transcribeAndCleanup:
- * - when fused result has cleanupApplied:true + mention detected → one serial reason call with agentName
- * - when fused result has cleanupApplied:true + no mention → no extra reason call
- * - when fused result has cleanupApplied:false → normal cleanup path (no extra reason call)
- * - when agent is disabled → no extra reason call even if mention detected
+ * A dictation that addresses the assistant by name is cleaned like any other: the fused
+ * transcribe-and-clean result is used as it is, with no second call to run it as a command.
  */
 import { TranscriptionService } from '@/services/transcription/TranscriptionService';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
@@ -25,7 +22,7 @@ jest.mock('@/services/transcription/TranscriptionService', () => ({
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(async (req: { text: string }) => ({
-      text: `agent-action:${req.text}`,
+      text: `reasoned:${req.text}`,
       model: 'm',
     })),
   },
@@ -80,216 +77,39 @@ beforeEach(() => {
   mockConfig = { defaultMode: 'cloud', cleanupEnabled: true };
 });
 
-describe('transcribeAndCleanup defensive agent path (fused cleanupApplied: true)', () => {
-  it('makes one serial reason call with agentName when fused result has cleanupApplied:true + mention detected', async () => {
-    mockConfig = {
-      defaultMode: 'cloud',
-      cleanupEnabled: true,
-      dictationAgentEnabled: true,
-      dictationAgentName: 'OpenWhispr',
-    };
-
-    const rawText = 'hey OpenWhispr write a summary of this meeting';
-    mockFused.mockResolvedValue({
-      text: 'fused cleaned text',
-      originalText: rawText,
-      provider: 'cloud',
-      duration: 1,
-      cleanupApplied: true,
-      fusedCleanup: true,
-    });
-
-    const result = await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-    });
-
-    expect(mockReason).toHaveBeenCalledTimes(1);
-    const req = mockReason.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBe('OpenWhispr');
-    expect(req.text).toBe(rawText);
-    expect(result.text).toBe(`agent-action:${rawText}`);
-  });
-
-  it('does NOT make extra reason call when mention is NOT detected in the raw text', async () => {
-    mockConfig = {
-      defaultMode: 'cloud',
-      cleanupEnabled: true,
-      dictationAgentEnabled: true,
-      dictationAgentName: 'OpenWhispr',
-    };
-
-    const rawText = 'just a regular dictation without the wake word';
-    mockFused.mockResolvedValue({
-      text: 'fused cleaned text',
-      originalText: rawText,
-      provider: 'cloud',
-      duration: 1,
-      cleanupApplied: true,
-      fusedCleanup: true,
-    });
-
-    const result = await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-    });
-
-    expect(mockReason).not.toHaveBeenCalled();
-    expect(result.text).toBe('fused cleaned text');
-  });
-
-  it('does NOT make extra reason call when agent is disabled', async () => {
-    mockConfig = {
-      defaultMode: 'cloud',
-      cleanupEnabled: true,
-      dictationAgentEnabled: false,
-    };
-
-    const rawText = 'hey OpenWhispr write a summary';
-    mockFused.mockResolvedValue({
-      text: 'fused cleaned text',
-      originalText: rawText,
-      provider: 'cloud',
-      duration: 1,
-      cleanupApplied: true,
-      fusedCleanup: true,
-    });
-
-    const result = await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-    });
-
-    expect(mockReason).not.toHaveBeenCalled();
-    expect(result.text).toBe('fused cleaned text');
-  });
-
-  it('does NOT make extra reason call when cleanupApplied is false on fused result', async () => {
-    mockConfig = {
-      defaultMode: 'cloud',
-      cleanupEnabled: true,
-      dictationAgentEnabled: true,
-    };
-
-    const rawText = 'hey OpenWhispr write a summary';
-    mockFused.mockResolvedValue({
-      text: rawText,
-      originalText: rawText,
-      provider: 'cloud',
-      duration: 1,
-      cleanupApplied: false,
-      fusedCleanup: true,
-    });
-
-    const result = await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-    });
-
-    expect(mockReason).not.toHaveBeenCalled();
-    expect(result.text).toBe(`cleaned:${rawText}`);
-  });
-
-  it('forces serial path (not fused) when tone is non-default — no defensive reason call', async () => {
-    mockConfig = {
-      defaultMode: 'cloud',
-      cleanupEnabled: true,
-      dictationAgentEnabled: true,
-    };
-
-    mockTranscribe.mockResolvedValue({
-      text: 'hey OpenWhispr write a summary',
-      provider: 'cloud',
-      duration: 1,
-    });
-
-    await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-      keyboardTone: 'formal',
-    });
-
-    expect(mockFused).not.toHaveBeenCalled();
-    expect(mockReason).not.toHaveBeenCalled();
-  });
-});
-
-describe('transcribeAndCleanup defensive agent path — privacy hint', () => {
-  const agentConfig = {
-    defaultMode: 'cloud',
-    cleanupEnabled: true,
-    dictationAgentEnabled: true,
-    dictationAgentName: 'OpenWhispr',
-  };
-  const rawText = 'hey OpenWhispr write a summary of this meeting';
-
-  beforeEach(() => {
-    mockConfig = agentConfig;
-    mockFused.mockResolvedValue({
-      text: 'fused cleaned text',
-      originalText: rawText,
-      provider: 'cloud',
-      duration: 1,
-      cleanupApplied: true,
-      fusedCleanup: true,
-    });
-  });
-
-  it('sends no privacy hint when the agent runs on OpenWhispr Cloud', async () => {
-    await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
-      agentRoute: { mode: 'openwhispr', scope: 'agent' },
-    });
-    const req = mockReason.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.routing).toBeUndefined();
-  });
-
-  it('keeps the privacy hint when the agent runs on a provider', async () => {
-    const agentRoute = {
-      mode: 'providers',
-      scope: 'agent',
-      providerId: 'openai',
-      modelId: 'gpt-4o-mini',
-      endpoint: 'https://api.openai.com/v1',
-      credentialRef: 'provider.openai',
-    } as const;
-    await transcribeAndCleanup({
-      audioUri: 'file://a.wav',
-      provider: 'cloud',
-      requestContext: 'keyboard',
-      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
-      agentRoute,
-    });
-    const req = mockReason.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.routing).toEqual({ isPrivateNote: false });
-  });
-});
-
-it('keeps the fused cleaned text when the voice assistant returns only thinking', async () => {
-  mockConfig = {
-    defaultMode: 'cloud',
-    cleanupEnabled: true,
-    dictationAgentEnabled: true,
-    dictationAgentName: 'OpenWhispr',
-  };
-  const rawText = 'hey OpenWhispr write a summary of this meeting';
-  mockFused.mockResolvedValue({
-    text: 'fused cleaned text',
+function fusedResult(rawText: string, cleanupApplied: boolean): Record<string, unknown> {
+  return {
+    text: cleanupApplied ? 'fused cleaned text' : rawText,
     originalText: rawText,
     provider: 'cloud',
     duration: 1,
-    cleanupApplied: true,
+    cleanupApplied,
     fusedCleanup: true,
-  });
-  mockReason.mockResolvedValueOnce({ text: '', model: 'm' });
+  };
+}
+
+it.each(['keyboard', 'recording'] as const)(
+  'keeps the fused cleanup of an addressed %s dictation, running no command',
+  async (requestContext) => {
+    mockFused.mockResolvedValue(
+      fusedResult('hey OpenWhispr write a summary of this meeting', true),
+    );
+
+    const result = await transcribeAndCleanup({
+      audioUri: 'file://a.wav',
+      provider: 'cloud',
+      requestContext,
+    });
+
+    expect(mockReason).not.toHaveBeenCalled();
+    expect(result.text).toBe('fused cleaned text');
+    expect(result.transcription.cleanupWarning).toBeUndefined();
+  },
+);
+
+it('cleans an addressed dictation separately when fused cleanup did not apply', async () => {
+  const rawText = 'hey OpenWhispr write a summary';
+  mockFused.mockResolvedValue(fusedResult(rawText, false));
 
   const result = await transcribeAndCleanup({
     audioUri: 'file://a.wav',
@@ -297,8 +117,24 @@ it('keeps the fused cleaned text when the voice assistant returns only thinking'
     requestContext: 'keyboard',
   });
 
-  expect(result.text).toBe('fused cleaned text');
-  expect(result.transcription.cleanupWarning).toBe(
-    'The voice assistant returned no text. Your transcript is saved.',
-  );
+  expect(mockReason).not.toHaveBeenCalled();
+  expect(result.text).toBe(`cleaned:${rawText}`);
+});
+
+it('cleans a toned keyboard dictation serially, running no command', async () => {
+  mockTranscribe.mockResolvedValue({
+    text: 'hey OpenWhispr write a summary',
+    provider: 'cloud',
+    duration: 1,
+  });
+
+  await transcribeAndCleanup({
+    audioUri: 'file://a.wav',
+    provider: 'cloud',
+    requestContext: 'keyboard',
+    keyboardTone: 'formal',
+  });
+
+  expect(mockFused).not.toHaveBeenCalled();
+  expect(mockReason).not.toHaveBeenCalled();
 });

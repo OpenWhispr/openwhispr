@@ -1,0 +1,58 @@
+{
+  "hotkeys": {
+    "query": "OpenWhispr dictation hotkeys shortcuts hold tap activation mode",
+    "path": "/help/dictation/hotkeys",
+    "text": "Set your shortcut and choose when dictation records.\n\n1. **Change the shortcut.** Open Settings → App → Hotkeys. Click the shortcut field and press your combination. It saves when registration succeeds; there is no separate Save or Apply button.\n2. **Choose Tap or Hold.** Activation Mode is directly below Dictation Hotkey. Tap: press once to start and again to stop. Hold: hold while speaking and release to stop.\n\n- **Availability:** Hold applies to dictation only and depends on your platform and shortcut. Voice Assistant, Translation and Meeting Mode have separate shortcuts.\n- **Privacy:** Activation mode controls when recording starts and stops. It does not decide where audio is processed or guarantee local-only processing.",
+    "paths": ["/help/dictation/hotkeys", "/help/dictation/hold-or-tap"],
+    "reviewedAt": "2026-10-07"
+  },
+  "microphone": {
+    "query": "OpenWhispr choose microphone permissions no audio",
+    "path": "/help/customise/choose-your-microphone",
+    "text": "Choose an input, then check that it picks up your voice.\n\n1. **Choose your microphone.** Open Settings → App → Preferences → Input Device. Choose a microphone or System Default.\n2. **Check the input.** Speak and check the input level. “Waiting for microphone” can mean the device is unavailable, still opening or recovering; it does not necessarily mean permission was denied.\n3. **Review permission.** If access is denied, check Settings → System → Privacy & Data.\n\n**Keep in mind:** System Default follows your operating system’s input choice. A saved device choice or granted permission does not prove recording works.",
+    "paths": ["/help/customise/choose-your-microphone", "/help/fix/microphone-not-working"],
+    "reviewedAt": "2026-10-07"
+  },
+  "models": {
+    "query": "OpenWhispr local models speech to text language models configuration",
+    "path": "/guides/local-models",
+    "text": "Speech-to-text turns audio into words. Language models handle cleanup, Voice Assistant and Chat answers.\n\n1. **Offline dictation.** Choose and download a local speech model under Settings → AI Models → Speech-to-Text → Dictation → Local.\n2. **Local Chat.** Separately choose and download a supported local language model under Settings → AI Models → Language Models → Chat → Local.\n3. **Before going offline.** Use the in-app catalog for available models and download the ones you need.\n\n- **Separate selections:** Dictation, Note Recording and Audio Upload each have their own speech-to-text choice. Cleanup and Voice Assistant have independent language-model selections too.\n- **Privacy:** A local speech model alone does not make Chat local. Hold is an activation mode, not a processing/privacy control. Cloud backup and connected tools are separate network features; these selections do not guarantee the whole app is offline.",
+    "paths": ["/guides/local-models", "/help/agent/chat-agent"],
+    "reviewedAt": "2026-10-07"
+  },
+  "meetings": {
+    "query": "OpenWhispr record meeting system audio permission speaker labels",
+    "path": "/help/meetings/record-a-meeting",
+    "text": "Meeting recordings use your microphone for your voice and system audio for other participants.\n\n1. **Check permissions.** Open Settings → System → Privacy & Data. Connecting a calendar is optional for starting a recording and does not grant audio permissions.\n2. **Choose the recording engine.** Open Settings → AI Models → Speech-to-Text → Note Recording.\n3. **Check the input.** If you see “Waiting for microphone,” check your selected device and its connection, then review microphone permission. The input may be reconnecting or unavailable; permission was not necessarily denied.\n\n**Keep in mind:** A saved permission status is not a recording test.",
+    "paths": ["/help/meetings/record-a-meeting"],
+    "reviewedAt": "2026-10-07"
+  },
+  "calendar": {
+    "query": "OpenWhispr connect calendar Google Microsoft Apple meetings",
+    "path": "/help/meetings/connect-google-calendar",
+    "text": "Review your calendar connections under Integrations → Calendars.\n\n- **Calendar access:** Connecting a calendar is separate from capturing meeting audio.\n- **Audio permissions:** A calendar connection does not grant microphone or system audio permission.",
+    "paths": ["/help/meetings/connect-google-calendar"],
+    "reviewedAt": "2026-10-07"
+  },
+  "language": {
+    "query": "OpenWhispr interface language transcription language translation",
+    "path": "/help/dictation/languages",
+    "text": "Open Settings → App → Preferences to review language choices.\n\n- **Interface language:** Controls the app’s interface, separately from transcription.\n- **Transcription language:** Applies across recording activities.\n- **Translation:** A separate feature with its own shortcut and target language.",
+    "paths": ["/help/dictation/languages"],
+    "reviewedAt": "2026-10-07"
+  },
+  "backup": {
+    "query": "OpenWhispr cloud backup sync notes devices local storage",
+    "path": "/help/notes/sync-across-devices",
+    "text": "Cloud backup controls syncing notes across devices.\n\n- **Processing:** Backup is separate from the model used for transcription or assistant answers.\n- **Organization policy:** Your organization may restrict backup or processing choices.",
+    "paths": ["/help/notes/sync-across-devices"],
+    "reviewedAt": "2026-10-07"
+  },
+  "assistant": {
+    "query": "OpenWhispr chat agent tools model availability voice assistant",
+    "path": "/help/agent/chat-agent",
+    "text": "Chat has its own language-model selection.\n\n1. **Choose the Chat model.** Open Settings → AI Models → Language Models → Chat. Speech-to-text, cleanup and Voice Assistant use separate selections.\n2. **If a provider request fails.** Retry or review the selected Chat provider and model.\n\n- **Tools:** Availability depends on the model, connections and organization policy. Small or unrecognized local models may run without tools.\n- **Product help:** When the selected model supports tools, Chat can retrieve official documentation and read-only current settings to answer product questions. Help answers require a working model; open the official documentation if it is unavailable. Help cannot verify credentials or service availability from saved settings.",
+    "paths": ["/help/agent/chat-agent"],
+    "reviewedAt": "2026-10-07"
+  }
+}

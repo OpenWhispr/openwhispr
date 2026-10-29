@@ -19,7 +19,9 @@ function timestampRequestFields(provider, model) {
 
 // verbose_json (OpenAI/Groq) and Mistral's segment granularity both carry
 // `segments: [{ text, start, end }]`. Null when the response has nothing
-// usable, so callers fall back to the plain transcript.
+// usable, or when the kept segments don't hold every word of the response's
+// text (whitespace aside, so CJK joins match), so callers fall back to the
+// plain transcript rather than store a timed one with words missing.
 function mapVerboseSegments(responseData) {
   const segments = responseData?.segments;
   if (!Array.isArray(segments)) return null;
@@ -37,7 +39,14 @@ function mapVerboseSegments(responseData) {
       end,
     });
   }
-  return mapped.length ? mapped : null;
+  if (!mapped.length) return null;
+  if (typeof responseData.text === "string") {
+    const compact = (value) => value.replace(/\s+/g, "");
+    if (compact(mapped.map((seg) => seg.text).join("")) !== compact(responseData.text)) {
+      return null;
+    }
+  }
+  return mapped;
 }
 
 module.exports = { timestampRequestFields, mapVerboseSegments };

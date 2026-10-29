@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -9,6 +11,7 @@ const originalLoad = Module._load;
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+let policySnapshot = { success: true, managed: false };
 let fetchResponse = () => ({
   ok: true,
   status: 200,
@@ -40,15 +43,22 @@ const electronStub = {
     static getAllWindows() {
       return [];
     }
-    static fromWebContents() {
-      return null;
+    // Cloud retries need a window to read auth from; a sender opts in with one.
+    static fromWebContents(sender) {
+      return sender?.window ?? null;
     }
   },
   shell: {},
   dialog: {},
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
   systemPreferences: { getMediaAccessStatus: () => "granted" },
-  session: { fromPartition: () => ({}) },
+  session: {
+    fromPartition: () => ({
+      webRequest: { onBeforeSendHeaders: () => {} },
+      fetch: (url, init) => electronStub.net.fetch(url, init),
+      closeAllConnections: async () => {},
+    }),
+  },
   clipboard: {},
   nativeImage: {},
   globalShortcut: {},
@@ -64,6 +74,9 @@ const WAV_BUFFER = Buffer.concat([
   Buffer.alloc(32),
 ]);
 const CONVERTED_WAV = Buffer.concat([WAV_BUFFER, Buffer.from("converted")]);
+// Just over the inline upload limit, so an OpenWhispr Cloud retry is chunked.
+const CHUNKED_BUFFER = Buffer.alloc(4 * 1024 * 1024 + 1);
+const CLOUD_CHUNKS = ["chunk-000.mp3", "chunk-001.mp3", "chunk-002.mp3", "chunk-003.mp3"];
 
 // Conversion is mocked rather than run: spawning ffmpeg from a unit test would
 // make it slow and dependent on the runner having a usable binary.
@@ -87,9 +100,19 @@ const piecesOf = (count) => async (_inputPath, outputDir) => {
   return { chunkPaths, durationSeconds: count * 240 };
 };
 let splitBehavior = piecesOf(1);
+// The OpenWhispr Cloud retry's chunker, faked: four tiny pieces.
+const cloudChunks = async (_inputPath, chunkDir) => {
+  const chunkPaths = CLOUD_CHUNKS.map((name) => path.join(chunkDir, name));
+  for (const chunkPath of chunkPaths) fs.writeFileSync(chunkPath, "audio");
+  return { chunkPaths, durationSeconds: 120 };
+};
 
 const cortiCalls = [];
 const tinfoilCalls = [];
+const textUpdates = [];
+const statusUpdates = [];
+let parakeetBehavior = async () => ({ success: true, text: "local text" });
+let whisperBehavior = async () => ({ success: true, text: "whisper text" });
 let cortiBehavior = async () => ({ text: "corti text" });
 
 // Kept installed for the whole file: the corti client is require()d lazily at
@@ -113,6 +136,16 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         },
         getTinfoilChatModels: () => [],
       };
+    }
+    if (request === "./workspacePolicyManager")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async () => policySnapshot,
+        }),
+      };
+    if (request === "./tokenStore") {
+      return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
     }
     if (request === "./windowBroadcast") {
       return { broadcastToWindows: () => {} };
@@ -155,20 +188,34 @@ function buildFakeThis() {
   ]);
   const target = {
     sessionId: "test-session",
-    // The real registry: the upload handler registers OpenRouter uploads in it,
-    // and the fallback proxy would hand back a fake "signal" that looks aborted.
-    _uploadCancelRegistry: require("../../src/helpers/uploadCancelRegistry")
-      .createUploadCancelRegistry(),
+    _uploadCancelRegistry:
+      require("../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry(),
     audioStorageManager: {
-      // 7 is a stored WebM recording, 8 one already in WAV.
-      getAudioBuffer: (id) => (id === 7 ? Buffer.from([1, 2, 3]) : id === 8 ? WAV_BUFFER : null),
+      // 7 is a stored WebM recording, 8 one already in WAV, 9 one too large to
+      // upload inline.
+      getAudioBuffer: (id) =>
+        id === 7
+          ? Buffer.from([1, 2, 3])
+          : id === 8
+            ? WAV_BUFFER
+            : id === 9
+              ? CHUNKED_BUFFER
+              : null,
     },
     databaseManager: {
-      updateTranscriptionText: () => {},
-      updateTranscriptionStatus: () => {},
+      updateTranscriptionText: (id, text) => textUpdates.push({ id, text }),
+      updateTranscriptionStatus: (id, status) => statusUpdates.push({ id, status }),
       updateTranscriptionAudio: () => {},
       getTranscriptionById: (id) => dbRows.get(id),
     },
+    parakeetManager: {
+      transcribeLocalParakeet: (buffer, options) => parakeetBehavior(buffer, options),
+    },
+    whisperManager: {
+      serverManager: { isAvailable: () => true },
+      transcribeLocalWhisper: (buffer, options) => whisperBehavior(buffer, options),
+    },
+    _resolveWhisperVadOptions: () => ({}),
     environmentManager: {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
@@ -390,6 +437,205 @@ test("retry: a custom URL on Tinfoil's host is refused in the main process", asy
   assert.match(result.error, /attested main-process proxy/);
   assert.equal(fetches.length, 0);
   assert.equal(tinfoilCalls.length, 0);
+});
+
+const PARAKEET_SETTINGS = {
+  transcriptionMode: "local",
+  useLocalWhisper: true,
+  localTranscriptionProvider: "nvidia",
+  parakeetModel: "parakeet-tdt-0.6b-v3",
+};
+const WHISPER_SETTINGS = {
+  transcriptionMode: "local",
+  useLocalWhisper: true,
+  localTranscriptionProvider: "whisper",
+  whisperModel: "base",
+};
+
+async function withLocalResult(behavior, settings, run) {
+  const key = settings === WHISPER_SETTINGS ? "whisper" : "parakeet";
+  const original = key === "whisper" ? whisperBehavior : parakeetBehavior;
+  if (key === "whisper") whisperBehavior = behavior;
+  else parakeetBehavior = behavior;
+  textUpdates.length = 0;
+  statusUpdates.length = 0;
+  try {
+    return await run(await invoke(settings));
+  } finally {
+    if (key === "whisper") whisperBehavior = original;
+    else parakeetBehavior = original;
+  }
+}
+
+test("retry: a clean local decode reports no warning", async () => {
+  await withLocalResult(
+    async () => ({ success: true, text: "local text" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, true);
+      assert.equal("warning" in result, false);
+      assert.deepEqual(textUpdates, [{ id: 7, text: "local text" }]);
+    }
+  );
+});
+
+test("retry: a truncated Parakeet decode keeps its text and returns the warning", async () => {
+  await withLocalResult(
+    async () => ({ success: true, text: "first half", warning: "truncated" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, true);
+      assert.equal(result.warning, "truncated", "the renderer needs it for the partial toast");
+      assert.deepEqual(textUpdates, [{ id: 7, text: "first half" }]);
+      assert.deepEqual(statusUpdates, [{ id: 7, status: "completed" }]);
+    }
+  );
+});
+
+test("retry: an all-empty Parakeet decode reports the invalid response, not a missing engine", async () => {
+  await withLocalResult(
+    async () => ({
+      success: false,
+      error: "invalid_response",
+      message: "Transcription engine returned an unexpected response",
+    }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, false);
+      assert.equal(result.code, "INVALID_RESPONSE");
+      assert.equal(result.messageKey, "controlPanel.history.retryErrors.invalidResponse");
+      assert.equal(result.error, "Transcription engine returned an unexpected response");
+      assert.equal(textUpdates.length, 0, "a failed retry must leave the row alone");
+      assert.equal(statusUpdates.length, 0);
+    }
+  );
+});
+
+test("retry: no speech from a local engine is reported as such", async (t) => {
+  for (const [name, settings, failure] of [
+    [
+      "parakeet",
+      PARAKEET_SETTINGS,
+      { success: false, code: "NO_SPEECH_DETECTED", message: "No audio detected" },
+    ],
+    ["whisper", WHISPER_SETTINGS, { success: false, message: "No audio detected" }],
+  ]) {
+    await t.test(name, () =>
+      withLocalResult(
+        async () => failure,
+        settings,
+        (result) => {
+          assert.equal(result.success, false);
+          assert.equal(result.code, "NO_SPEECH_DETECTED");
+          assert.equal(result.messageKey, "notes.upload.noSpeechDetected");
+          assert.equal(textUpdates.length, 0);
+        }
+      )
+    );
+  }
+});
+
+test("retry: an unclassified local failure keeps the engine's own message", async () => {
+  await withLocalResult(
+    async () => ({ success: false, error: "decode_failed", message: "Decoder crashed" }),
+    PARAKEET_SETTINGS,
+    (result) => {
+      assert.equal(result.success, false);
+      assert.equal(result.error, "Decoder crashed");
+      assert.equal(result.messageKey, undefined);
+    }
+  );
+});
+
+const CLOUD_SETTINGS = {
+  transcriptionMode: "providers",
+  cloudTranscriptionMode: "openwhispr",
+  cloudTranscriptionProvider: "openai",
+};
+
+async function withCloudResponse(t, respond, id) {
+  const originalFetchResponse = fetchResponse;
+  const originalSplitBehavior = splitBehavior;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+    splitBehavior = originalSplitBehavior;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  splitBehavior = cloudChunks;
+  fetchResponse = (url, init) => {
+    const { status, body } = respond(init);
+    return { ok: status === 200, status, text: async () => JSON.stringify(body) };
+  };
+  textUpdates.length = 0;
+  return retryHandler({ sender: { window: {} } }, id, CLOUD_SETTINGS);
+}
+
+test("retry: no speech from OpenWhispr Cloud is translated like a local engine's", async (t) => {
+  const result = await withCloudResponse(
+    t,
+    () => ({
+      status: 422,
+      body: { code: "NO_SPEECH_DETECTED", error: "No speech detected in audio" },
+    }),
+    7
+  );
+  assert.equal(result.success, false);
+  assert.equal(result.code, "NO_SPEECH_DETECTED");
+  assert.equal(result.messageKey, "notes.upload.noSpeechDetected");
+  assert.equal(textUpdates.length, 0);
+});
+
+test("retry: an empty answer from a BYOK engine is no speech, not a missing engine", async (t) => {
+  const originalFetchResponse = fetchResponse;
+  const originalCortiBehavior = cortiBehavior;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+    cortiBehavior = originalCortiBehavior;
+  });
+  fetchResponse = () => ({ ok: true, status: 200, json: async () => ({ text: "" }) });
+  cortiBehavior = async () => ({ text: "" });
+  for (const [name, settings] of [
+    ["custom", CUSTOM_SETTINGS],
+    [
+      "corti",
+      {
+        cloudTranscriptionProvider: "corti",
+        cloudTranscriptionMode: "byok",
+        transcriptionMode: "providers",
+      },
+    ],
+  ]) {
+    textUpdates.length = 0;
+    const result = await invoke(settings);
+    assert.equal(result.success, false, name);
+    assert.equal(result.code, "NO_SPEECH_DETECTED", name);
+    assert.equal(result.messageKey, "notes.upload.noSpeechDetected", name);
+    assert.equal(textUpdates.length, 0, name);
+  }
+});
+
+test("retry: a chunked cloud retry that lost a chunk saves the rest and returns the warning", async (t) => {
+  const result = await withCloudResponse(
+    t,
+    (init) =>
+      init.body.includes("chunk-001.mp3")
+        ? { status: 400, body: { error: "Bad chunk" } }
+        : { status: 200, body: { text: "part" } },
+    9
+  );
+  assert.equal(result.success, true, JSON.stringify(result));
+  assert.equal(result.warning, "1 of 4 chunks failed");
+  assert.equal(textUpdates.length, 1);
+  assert.match(textUpdates[0].text, /part/);
+});
+
+test("retry: a clean chunked cloud retry reports no warning", async (t) => {
+  const result = await withCloudResponse(t, () => ({ status: 200, body: { text: "part" } }), 9);
+  assert.equal(result.success, true, JSON.stringify(result));
+  assert.equal("warning" in result, false);
 });
 
 test("retry: mistral goes to Mistral with x-api-key", async () => {
@@ -1032,4 +1278,251 @@ test("upload: an HTTP failure logs its status and a redacted body", async (t) =>
   assert.equal(failure.meta.status, 401);
   assert.match(failure.meta.body, /Incorrect API key provided/);
   assert.equal(failure.meta.body.includes("sk-proj-leakedKey12345"), false);
+});
+
+test("file IPCs preserve dictation when uploads are disabled, including cloud source metadata", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalLocal = fakeThis.transcribeLocalFile;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.transcribeLocalFile = originalLocal;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({
+      success: true,
+      managed: true,
+      policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: false } },
+    }),
+  });
+  let localCalls = 0;
+  fakeThis.transcribeLocalFile = async () => {
+    localCalls++;
+    return { success: true, text: "dictation" };
+  };
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+  // Only a recording main saved as a voice draft may claim to be dictation.
+  const { path: draftFile } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, draftFile));
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+  ]) {
+    const invokeFile = (filePath, purpose) => {
+      const options = {
+        purpose,
+        apiKey: "sk-test",
+        provider: "openai",
+        model: "whisper-1",
+        transcriptionMode: "providers",
+      };
+      return channel.endsWith("-byok")
+        ? handlers.get(channel)({ sender: {} }, { filePath, ...options })
+        : handlers.get(channel)({ sender: {} }, filePath, options);
+    };
+    fetches.length = 0;
+    assert.equal((await invokeFile(draftFile, "dictation")).success, true, channel);
+    if (channel.endsWith("-cloud")) {
+      assert.match(fetches[0].init.body.toString(), /name="source"\r\n\r\ndictation\r\n/);
+    }
+    const networkCalls = fetches.length;
+    for (const [filePath, purpose] of [
+      [uploadTempFile, undefined],
+      [uploadTempFile, "dictation"],
+    ]) {
+      const refused = await invokeFile(filePath, purpose);
+      assert.equal(refused.code, "POLICY_AUDIO_UPLOAD_DISABLED", channel);
+    }
+    assert.equal(fetches.length, networkCalls, channel);
+  }
+  assert.equal(localCalls, 1);
+
+  // A deleted draft's path is an upload again.
+  await handlers.get("delete-temp-audio")({}, draftFile);
+  const deleted = await handlers.get("transcribe-audio-file")({ sender: {} }, draftFile, {
+    purpose: "dictation",
+  });
+  assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
+});
+
+test("cancelling during policy lookup prevents every upload handler's later side effects", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalDiarization = fakeThis.diarizationManager;
+  fakeThis.diarizationManager = { isModelDownloaded: () => true };
+  const local = t.mock.method(fakeThis, "transcribeLocalFile", async () => ({ success: true }));
+  const downloader = require("../../src/helpers/urlAudioDownloader");
+  const download = t.mock.method(downloader, "download", async () => ({ tempPath: "/tmp/audio" }));
+  const diarization = t.mock.method(fakeThis.diarizationManager, "isModelDownloaded", () => true);
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.diarizationManager = originalDiarization;
+  });
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+    "diarize-audio-file",
+    "download-url-audio",
+  ]) {
+    const policy = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => policy.promise });
+    const requestId = `cancel-${channel}`;
+    const options = { requestId };
+    const args = channel.endsWith("-byok")
+      ? [{ filePath: uploadTempFile, ...options }]
+      : channel === "download-url-audio"
+        ? ["https://example.com/audio.mp3", requestId]
+        : [uploadTempFile, options];
+    fetches.length = 0;
+    const pending = handlers.get(channel)({ sender: {} }, ...args);
+    const cancellationChannel =
+      channel === "download-url-audio" ? "cancel-url-download" : "cancel-upload-transcription";
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, true, channel);
+    policy.resolve({ success: true, managed: false });
+    const result = await pending;
+    assert.equal(result.success, false, channel);
+    assert.equal(
+      result.code,
+      channel === "download-url-audio" ? "DOWNLOAD_CANCELLED" : "UPLOAD_CANCELLED",
+      channel
+    );
+    assert.equal(fetches.length, 0, channel);
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, false, channel);
+  }
+  assert.equal(local.mock.callCount(), 0);
+  assert.equal(download.mock.callCount(), 0);
+  assert.equal(diarization.mock.callCount(), 0);
+});
+
+test("enterprise credential retirement preserves an actionable string code through IPC serialization", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const credential = deferred();
+  const activeMeeting = fakeThis._activeEnterpriseAudioMeeting;
+  fakeThis._activeEnterpriseAudioMeeting = false;
+  t.after(() => {
+    fakeThis._activeEnterpriseAudioMeeting = activeMeeting;
+    credential.resolve("rotated-key");
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => ({
+    managed: true,
+    provider: "openai-compatible",
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+    },
+  }));
+  const read = t.mock.method(fakeThis.enterpriseAudioCredentials, "read", () => credential.promise);
+  const request = t.mock.method(fakeThis.enterpriseAudioTransport, "request", async () => {
+    throw new Error("Retired audio must not be sent");
+  });
+  const profile = await fakeThis.enterpriseAudioRuntime.resolve({});
+  const pending = profile.request({});
+  await new Promise(setImmediate);
+  assert.equal(read.mock.callCount(), 1);
+  fakeThis._retireEnterpriseAudio();
+  await assert.rejects(pending, (error) => {
+    const result = ipcErrorFields(error);
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+    assert.equal(result.messageKey, "common.managedConfigUnavailable");
+    assert.equal(result.error, "Enterprise audio configuration changed");
+    return true;
+  });
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("main enterprise audio resolution honors provider and mode policy before HTTP or socket creation", async (t) => {
+  t.after(() => {
+    policySnapshot = { success: true, managed: false };
+  });
+  const resolved = {
+    managed: true,
+    provider: "openai-compatible",
+    mode: "managed_default",
+    allowManualSetup: true,
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+      realtime: {
+        endpoint: "wss://gateway.test/realtime",
+        defaultDeployment: "speech",
+        protocol: "openai-transcription-ga",
+        authentication: { type: "bearer", credentialSlot: "socket" },
+      },
+    },
+  };
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => resolved);
+  t.mock.method(fakeThis.enterpriseAudioCredentials, "read", async () => "device-key");
+  const request = t.mock.method(
+    fakeThis.enterpriseAudioTransport,
+    "request",
+    async () => new Response('{"text":"allowed"}')
+  );
+  const socket = t.mock.method(fakeThis.enterpriseAudioTransport, "createSocket", async () => ({}));
+  for (const transcription of [
+    { allowedModes: ["local"], allowedEnterpriseProviders: [] },
+    { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
+  ]) {
+    policySnapshot = { success: true, managed: true, policy: { transcription } };
+    for (const operation of ["batch", "realtime"]) {
+      resolved.mode = "managed_default";
+      resolved.allowManualSetup = true;
+      assert.equal(await fakeThis.enterpriseAudioRuntime.resolve({}, operation), null);
+      for (const [mode, allowManualSetup] of [
+        ["managed_required", true],
+        ["managed_default", false],
+      ]) {
+        Object.assign(resolved, { mode, allowManualSetup });
+        await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, operation), {
+          code: "PROVIDER_POLICY_CONFLICT",
+          messageKey: "common.managedPolicyConflict",
+        });
+      }
+    }
+  }
+  assert.equal(request.mock.callCount(), 0);
+  assert.equal(socket.mock.callCount(), 0);
+
+  Object.assign(resolved, { mode: "managed_default", allowManualSetup: true });
+  policySnapshot = { success: true, managed: false };
+  const batch = await fakeThis.enterpriseAudioRuntime.resolve({}, "batch");
+  const realtime = await fakeThis.enterpriseAudioRuntime.resolve({}, "realtime");
+  await batch.request({});
+  await realtime.createSocket();
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = {
+    success: true,
+    managed: true,
+    policy: { transcription: { allowedModes: ["local"], allowedEnterpriseProviders: [] } },
+  };
+  await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
+  await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = { success: false };
+  await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
 });

@@ -23,8 +23,9 @@ jest.mock('@/lib/permissions', () => ({
   isNoSpeechError: jest.fn(() => false),
 }));
 
+let mockConfig: Record<string, unknown> = { cleanupEnabled: true };
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: { getState: () => ({ config: { cleanupEnabled: true } }) },
+  useConfigStore: { getState: () => ({ config: mockConfig }) },
 }));
 
 // Snippets merged into this pipeline: transcribeAndCleanup now reads the snippet
@@ -55,9 +56,18 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
   },
 }));
 
+let mockActiveMode = 'cloud';
 jest.mock('@/store/useProcessingModeStore', () => ({
-  useProcessingModeStore: { getState: () => ({ activeMode: 'cloud' }) },
+  useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
+
+const PROVIDER_ROUTE = {
+  mode: 'providers' as const,
+  scope: 'cleanup' as const,
+  providerId: 'groq',
+  modelId: 'llama',
+  endpoint: 'https://api.groq.com/openai/v1',
+};
 
 const mockTranscribe = TranscriptionService.transcribe as jest.Mock;
 const mockFused = TranscriptionService.transcribeWithCloudCleanup as jest.Mock;
@@ -66,6 +76,8 @@ const mockCleanup = cleanupTranscript as jest.Mock;
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser = { id: 'u', isAnonymous: false };
+  mockActiveMode = 'cloud';
+  mockConfig = { cleanupEnabled: true };
   mockTranscribe.mockResolvedValue({ text: 'hello world', provider: 'cloud', duration: 1 });
 });
 
@@ -168,4 +180,54 @@ describe('transcribeAndCleanup tone', () => {
       );
     },
   );
+
+  // Tones are a Cloud cleanup option, so a tone picked before Private mode never reaches its
+  // cleanup, and On-Device cleanup never gets one.
+  it.each([
+    ['a cleanup provider in Local Mode', 'private', PROVIDER_ROUTE],
+    [
+      'On-Device cleanup in Local Mode',
+      'private',
+      { mode: 'local' as const, scope: 'cleanup' as const },
+    ],
+    [
+      'On-Device cleanup outside Local Mode',
+      'cloud',
+      { mode: 'local' as const, scope: 'cleanup' as const },
+    ],
+  ])('passes no tone to %s', async (_label, activeMode, cleanupRoute) => {
+    mockActiveMode = activeMode;
+    mockConfig = { cleanupEnabled: true, inference: { cleanup: { mode: cleanupRoute.mode } } };
+    mockTranscribe.mockResolvedValue({ text: 'hello world', provider: 'local', duration: 1 });
+
+    await transcribeAndCleanup({
+      audioUri: 'file://a.wav',
+      provider: 'local',
+      requestContext: 'keyboard',
+      keyboardTone: 'formal',
+      cleanupRoute,
+    });
+
+    expect(mockCleanup).toHaveBeenCalledWith(
+      'hello world',
+      expect.objectContaining({ tone: undefined, inferenceRoute: cleanupRoute }),
+    );
+  });
+
+  it('passes the tone to a cleanup provider outside Local Mode', async () => {
+    mockActiveMode = 'providers';
+
+    await transcribeAndCleanup({
+      audioUri: 'file://a.wav',
+      provider: 'cloud',
+      requestContext: 'keyboard',
+      keyboardTone: 'formal',
+      cleanupRoute: PROVIDER_ROUTE,
+    });
+
+    expect(mockCleanup).toHaveBeenCalledWith(
+      'hello world',
+      expect.objectContaining({ tone: 'formal', inferenceRoute: PROVIDER_ROUTE }),
+    );
+  });
 });
