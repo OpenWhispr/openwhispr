@@ -75,6 +75,7 @@
       "./plugins/provider-networking/withProviderNetworking",
       "./plugins/ios-cxx-standard/withIosCxxStandard",
       "./plugins/pod-deployment-target/withPodDeploymentTarget",
+      "./plugins/scene-lifecycle/withSceneLifecycle",
       "./plugins/storekit/withStoreKitConfiguration",
       "./plugins/keyboard-extension/withKeyboardExtension",
       "./plugins/activity-extension/withActivityExtension",
