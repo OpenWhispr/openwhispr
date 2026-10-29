@@ -819,7 +819,7 @@ function FolderRow({
                         </DropdownMenuItem>
                       );
                     })}
-                    {folderSearch && filteredParents.length === 0 && (
+                    {folderSearch && !isSubfolder && filteredParents.length === 0 && (
                       <p className="text-xs text-foreground/50 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
