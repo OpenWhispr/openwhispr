@@ -38,6 +38,11 @@ interface UseModelDownloadOptions {
   modelType: ModelType;
   onDownloadComplete?: () => void;
   onModelsCleared?: () => void;
+  /**
+   * false: a failure is only recorded in downloadErrors, and a refused request
+   * raises no "download in progress" toast, for screens that show both inline.
+   */
+  showErrorDialog?: boolean;
 }
 
 interface ModelDownloadTerminalEvent {
@@ -94,6 +99,7 @@ export function useModelDownload({
   modelType,
   onDownloadComplete,
   onModelsCleared,
+  showErrorDialog = true,
 }: UseModelDownloadOptions) {
   const { t } = useTranslation();
   const { showAlertDialog } = useDialogs();
@@ -171,6 +177,30 @@ export function useModelDownload({
     [clearCancelling, removeDownload]
   );
 
+  // Screens that show progress inline (showErrorDialog false) say nothing extra here.
+  const reportInProgress = useCallback(() => {
+    if (!showErrorDialog) return;
+    toast({
+      title: t("hooks.modelDownload.downloadInProgress.title"),
+      description: t("hooks.modelDownload.downloadInProgress.description"),
+    });
+  }, [showErrorDialog, t, toast]);
+
+  const reportError = useCallback(
+    (modelId: string, message: string, code?: string) => {
+      setDownloadErrors((current) => ({ ...current, [modelId]: message }));
+      if (!showErrorDialog) return;
+      showAlertDialog({
+        title:
+          code === "EXTRACTION_FAILED"
+            ? t("hooks.modelDownload.installationFailed.title")
+            : t("hooks.modelDownload.downloadFailed.title"),
+        description: message,
+      });
+    },
+    [showAlertDialog, showErrorDialog, t]
+  );
+
   const handleTerminalDownload = useCallback(
     async (
       modelId: string,
@@ -196,18 +226,11 @@ export function useModelDownload({
           error || t("hooks.modelDownload.errors.unknown"),
           code
         );
-        setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-        showAlertDialog({
-          title:
-            code === "EXTRACTION_FAILED"
-              ? t("hooks.modelDownload.installationFailed.title")
-              : t("hooks.modelDownload.downloadFailed.title"),
-          description: message,
-        });
+        reportError(modelId, message, code);
       }
       await settleDownload(modelId, sequence);
     },
-    [settleDownload, showAlertDialog, t]
+    [reportError, settleDownload, t]
   );
 
   const handleNativeProgress = useCallback(
@@ -292,18 +315,16 @@ export function useModelDownload({
     };
   }, [updateDownload]);
 
+  // Resolves true only when this request put the model on disk.
   const downloadModel = useCallback(
-    async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
+    async (modelId: string, onSelectAfterDownload?: (id: string) => void): Promise<boolean> => {
       if (
         ownedRequestsRef.current.has(modelId) ||
         downloads[modelId] ||
         (modelType !== "llm" && Object.keys(downloads).length > 0)
       ) {
-        toast({
-          title: t("hooks.modelDownload.downloadInProgress.title"),
-          description: t("hooks.modelDownload.downloadInProgress.description"),
-        });
-        return;
+        reportInProgress();
+        return false;
       }
 
       ownedRequestsRef.current.set(modelId, null);
@@ -325,6 +346,7 @@ export function useModelDownload({
 
       let keepActiveDownloadState = false;
       let isDuplicateRequest = false;
+      let succeeded = false;
 
       try {
         const result =
@@ -335,12 +357,13 @@ export function useModelDownload({
               : await window.electronAPI?.modelDownload?.(modelId);
 
         if (result?.success) {
+          succeeded = true;
           notifyLocalModelsChanged();
           onSelectAfterDownload?.(modelId);
         } else if (result?.code === "DOWNLOAD_IN_PROGRESS") {
           isDuplicateRequest = true;
           const activeDownloads = await window.electronAPI?.modelGetActiveDownloads?.();
-          if (ownedRequestsRef.current.get(modelId)) return;
+          if (ownedRequestsRef.current.get(modelId)) return false;
           const activeDownload = activeDownloads?.find(
             (status) =>
               status.modelType === modelType && (modelType !== "llm" || status.modelId === modelId)
@@ -349,34 +372,19 @@ export function useModelDownload({
             updateDownload(activeDownload);
             keepActiveDownloadState = activeDownload.modelId === modelId;
           }
-          toast({
-            title: t("hooks.modelDownload.downloadInProgress.title"),
-            description: t("hooks.modelDownload.downloadInProgress.description"),
-          });
+          reportInProgress();
         } else if (!isCancellation(result?.error, result?.code)) {
           const message = getDownloadErrorMessage(
             t,
             result?.error || t("hooks.modelDownload.errors.unknown"),
             result?.code
           );
-          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-          showAlertDialog({
-            title:
-              result?.code === "EXTRACTION_FAILED"
-                ? t("hooks.modelDownload.installationFailed.title")
-                : t("hooks.modelDownload.downloadFailed.title"),
-            description: message,
-          });
+          reportError(modelId, message, result?.code);
         }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         if (!isCancellation(errorMessage)) {
-          const message = getDownloadErrorMessage(t, errorMessage);
-          setDownloadErrors((current) => ({ ...current, [modelId]: message }));
-          showAlertDialog({
-            title: t("hooks.modelDownload.downloadFailed.title"),
-            description: message,
-          });
+          reportError(modelId, getDownloadErrorMessage(t, errorMessage));
         }
       } finally {
         const terminalEvent = ownedRequestsRef.current.get(modelId);
@@ -394,15 +402,16 @@ export function useModelDownload({
           await settleDownload(modelId);
         }
       }
+      return succeeded;
     },
     [
       downloads,
       handleTerminalDownload,
       modelType,
+      reportError,
+      reportInProgress,
       settleDownload,
-      showAlertDialog,
       t,
-      toast,
       updateDownload,
     ]
   );

@@ -355,34 +355,10 @@
           "features": {
             "device": "Funziona sul tuo dispositivo",
             "offline": "Funziona offline dopo la configurazione",
-            "models": "Scegli i modelli per dettatura e assistente",
+            "setup": "Configurato per questo computer",
             "free": "Gratis per sempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Il tuo provider gestisce i tuoi dati",
-            "description": "Aggiungerai le credenziali per provider separati di dettatura e Assistant. Si applicano i prezzi e i criteri di conservazione del provider.",
-            "continue": "Configura il provider API",
-            "steps": {
-              "1": "Scegli i provider per dettatura e Assistant",
-              "2": "Aggiungi le credenziali con l’archiviazione sicura",
-              "3": "Prova ogni connessione prima dell’attivazione"
-            }
-          },
-          "local": {
-            "title": "La configurazione locale richiede qualche passaggio in più",
-            "description": "L’elaborazione locale mantiene la tua voce su questo dispositivo, ma richiede una configurazione iniziale e almeno {{minimumSpace}} GB di spazio libero.",
-            "continue": "Configura in locale",
-            "steps": {
-              "1": "Scegli un motore di trascrizione",
-              "2": "Configura o scarica un modello, circa {{modelSize}}",
-              "3": "Attendi installazione e attivazione"
-            }
-          }
-        },
-        "useCloud": "Usa Cloud invece",
-        "continueSetup": "Continua la configurazione",
         "showMore": "Mostra altre opzioni",
         "moreOptions": {
           "title": "Scegli la tua configurazione API",
@@ -437,20 +413,81 @@
         }
       },
       "local": {
-        "title": "Configura i modelli locali",
-        "description": "Scegli i modelli da eseguire sul tuo dispositivo.",
-        "descriptionLineOne": "Scegli i modelli da eseguire",
-        "descriptionLineTwo": "sul tuo dispositivo.",
-        "providerLabel": "Provider",
-        "download": "Scarica",
         "downloadingShort": "Download",
-        "selected": "Selezionato",
-        "use": "Usa",
         "downloadInProgress": "Download in corso",
         "cancelDownload": "Annulla il download di {{model}}",
         "downloads": "Download dei modelli",
         "downloading": "Download in corso… {{progress}}%",
         "installing": "Installazione"
+      },
+      "localSetup": {
+        "title": "Ti consigliamo queste impostazioni",
+        "subtitle": "Scelte per il tuo {{computer}} e per {{language}}. Tutto funziona su questo dispositivo.",
+        "subtitleOrganizationText": "Scelte per il tuo {{computer}} e per {{language}}. La dettatura funziona su questo dispositivo; chat e note con IA usano il servizio scelto dalla tua organizzazione.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Processore",
+          "memory": "Memoria",
+          "graphics": "Grafica",
+          "builtIn": "Integrata nel chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Portatile Windows",
+          "windowsDesktop": "Desktop Windows",
+          "linuxLaptop": "Portatile Linux",
+          "linuxDesktop": "Desktop Linux"
+        },
+        "rows": {
+          "dictation": "Dettatura",
+          "cleanup": "Correzione",
+          "assistant": "Assistente"
+        },
+        "badge": {
+          "fast": "Veloce, preciso",
+          "slower": "Preciso, più lento",
+          "cloud": "Cloud consigliato"
+        },
+        "line": {
+          "dictationSeconds": "Il testo appare circa {{seconds}} s dopo che smetti di parlare",
+          "dictationFewSeconds": "Il testo appare pochi secondi dopo che smetti di parlare",
+          "cleanupUnderSecond": "Rifinisce il tuo testo in meno di un secondo",
+          "cleanupAddsSeconds": "Aggiunge circa {{seconds}} s a ogni dettatura",
+          "assistantSeconds": "Circa {{seconds}} s prima che inizi a rispondere",
+          "requiredByOrganization": "Richiesto dalla tua organizzazione",
+          "off": "Disattivato. Puoi attivarlo più tardi nelle Impostazioni",
+          "offToFit": "Disattivato per rientrare nello spazio libero di questo computer",
+          "failed": "Download non riuscito. Controlla la connessione e riprova"
+        },
+        "unavailable": {
+          "tooSlow": "Troppo lento",
+          "notEnoughMemory": "Memoria insufficiente",
+          "memoryUnread": "Impossibile verificare la memoria",
+          "tooSlowMinutes": "{{model}} impiegherebbe più di {{minutes}} minuti per iniziare a rispondere",
+          "tooSlowAboutMinute": "{{model}} impiegherebbe circa un minuto per iniziare a rispondere",
+          "tooSlowCleanupSeconds": "{{model}} impiegherebbe più di {{seconds}} s per rifinire ogni dettatura",
+          "tooSlowAssistantSeconds": "{{model}} impiegherebbe circa {{seconds}} s per iniziare a rispondere",
+          "memoryMac": "{{model}} richiede {{needed}} GB di memoria, questo Mac ne ha {{have}} GB",
+          "memoryComputer": "{{model}} richiede {{needed}} GB di memoria, questo computer ne ha {{have}} GB",
+          "memoryUnreadLine": "{{model}} richiede {{needed}} GB di memoria. Se questo computer ne ha così tanta, attivalo più tardi nelle Impostazioni"
+        },
+        "button": {
+          "download": "Scarica i modelli",
+          "downloading": "Download in corso",
+          "proceed": "Procedi",
+          "noSpace": "Spazio libero insufficiente"
+        },
+        "retry": "Riprova",
+        "retryRow": "Riprova {{row}}",
+        "downloaded": "Scaricato",
+        "foot": {
+          "default": "Puoi modificare tutto questo più tardi nelle Impostazioni.",
+          "finishesInBackground": "Il resto continua a scaricarsi dopo che prosegui e si attiva quando è pronto.",
+          "failedStaysOff": "Ciò che non è stato scaricato resta disattivato. Puoi aggiungerlo più tardi nelle Impostazioni.",
+          "needsMac": "Servono {{needed}} GB e questo Mac ha {{free}} GB liberi.",
+          "needsComputer": "Servono {{needed}} GB e questo computer ha {{free}} GB liberi.",
+          "noSpaceMac": "La dettatura richiede {{needed}} GB liberi e questo Mac ne ha {{free}} GB. Libera spazio per continuare.",
+          "noSpaceComputer": "La dettatura richiede {{needed}} GB liberi e questo computer ne ha {{free}} GB. Libera spazio per continuare."
+        }
       }
     },
     "steps": {
@@ -3939,7 +3976,8 @@
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
       "sharedNotes": "Evidenzia le mie note condivise"
-    }
+    },
+    "localModelMissing": "Scegli un modello per Chat nelle Impostazioni per chattare su questo dispositivo."
   },
   "support": {
     "documentation": "Documentazione",

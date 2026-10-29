@@ -359,6 +359,7 @@ body:has(.onboarding-canvas) {
   --onboarding-link: var(--color-link);
   --onboarding-danger: #ef4444;
   --onboarding-success: #22c55e;
+  --onboarding-success-foreground: #0a0a0a;
   /* Keycap. The cap is lit from above, so it needs its own top/bottom pair rather
      than reusing the surface tokens: in dark it has to sit *above* the page fill
      while still reading as a physical key. */
@@ -403,6 +404,7 @@ body.dark:has(.onboarding-canvas) {
   --onboarding-inverse-text: #0a0a0a;
   --onboarding-danger: #f87171;
   --onboarding-success: #4ade80;
+  --onboarding-success-foreground: #0a0a0a;
   --onboarding-keycap-top: #3a3a3a;
   --onboarding-keycap-bottom: #262626;
   --onboarding-keycap-bevel: #4d4d4d;

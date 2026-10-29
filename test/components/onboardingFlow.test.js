@@ -56,6 +56,61 @@ test("onboarding permission checks use the resolved macOS feature gate", () => {
   );
 });
 
+test("no onboarding route hands an older build's pending pick to the tray", () => {
+  // The tray applies a pending pick, switching cleanup and the assistant on, only
+  // while this flag is set. The local route has already written the user's own
+  // switches by then, so no finish may set it.
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  assert.doesNotMatch(source, /setItem\(\s*"localSetupPending"/);
+  assert.doesNotMatch(source, /hasPendingLocalModels/);
+});
+
+test("the local setup step is wired through its helpers", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  // Plan inputs and Proceed live in localSetupFlow.ts, where they are tested.
+  assert.match(source, /planLocalSetup\(\{/);
+  assert.match(source, /proceedWithLocalSetup\(localSetupPlan, handOff, \(beforeComplete\) =>/);
+  assert.match(source, /finalizeOnboarding\("local", beforeComplete\)/);
+  // A policy refresh that is loading or failed keeps the plan the step is using.
+  assert.match(source, /const localSetupPlan = computedLocalSetupPlan \?\? latchedLocalSetupPlan;/);
+  assert.doesNotMatch(source, /buildLocalSetupPlan|applyLocalSetupSettings/);
+  // The space read runs only around the choice.
+  const steps = String.raw`currentStepId === "setup-choice" \|\| currentStepId === "local-setup"`;
+  assert.match(source, new RegExp(String.raw`useLocalSetupSpace\(\s*${steps}\s*\)`));
+  // A policy that couldn't be read gets a line instead of a blank card.
+  const placeholder = String.raw`<LocalSetupStepPlaceholder\s+message=\{policy\.status === "error"`;
+  assert.match(source, new RegExp(String.raw`${placeholder} \? t\("common\.policyUnresolved"\)`));
+});
+
+test("each step asks for its window size, local setup a taller one", async () => {
+  const { getOnboardingWindowMode } = await load();
+  assert.equal(getOnboardingWindowMode("auth"), "compact");
+  assert.equal(getOnboardingWindowMode("permissions"), "compact");
+  assert.equal(getOnboardingWindowMode("local-setup"), "local-setup");
+  for (const id of [
+    "required-models",
+    "languages",
+    "use-cases",
+    "dictation-hotkey",
+    "dictation-demo",
+    "notes",
+    "assistant-hotkey",
+    "assistant-demo",
+    "setup-choice",
+    "byok-dictation",
+    "byok-assistant",
+  ]) {
+    assert.equal(getOnboardingWindowMode(id), "expanded", id);
+  }
+});
+
+test("onboarding sizes the window from the current step", () => {
+  const source = readFileSync("src/components/OnboardingFlow.tsx", "utf8");
+  // The plan placeholder renders on local-setup too, so it gets the same size.
+  assert.match(source, /const windowMode = getOnboardingWindowMode\(currentStepId\);/);
+  assert.match(source, /setOnboardingWindowMode\?\.\(windowMode\);\s*\}, \[windowMode\]\);/);
+});
+
 test("guest flow keeps permissions and the hotkey before setup choice", async () => {
   const { getOnboardingRoute } = await load();
   // finalizeOnboarding registers the dictation hotkey on every path, so guests
@@ -76,16 +131,76 @@ test("policy removes assistant states", async () => {
   assert.equal(route.at(-1), "setup-choice");
 });
 
-test("setup choice appends the selected two-stage route", async () => {
+test("setup choice appends the selected two-stage BYOK route", async () => {
   const { getOnboardingRoute } = await load();
   assert.deepEqual(
     getOnboardingRoute({ authPath: "guest", setupMode: "byok", agentAllowed: true }),
     ["auth", "permissions", "dictation-hotkey", "setup-choice", "byok-dictation", "byok-assistant"]
   );
+});
+
+test("choosing local appends one step", async () => {
+  const { getOnboardingRoute } = await load();
+  const route = getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: true });
+  assert.deepEqual(route.slice(-2), ["setup-choice", "local-setup"]);
+  // The one screen covers the assistant row itself, so the policy keeps the step.
   assert.deepEqual(
-    getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: false }).slice(-2),
-    ["setup-choice", "local-dictation"]
+    getOnboardingRoute({ authPath: "account", setupMode: "local", agentAllowed: false }).slice(-1),
+    ["local-setup"]
   );
+  assert.deepEqual(
+    getOnboardingRoute({ authPath: "guest", setupMode: "local", agentAllowed: true }),
+    ["auth", "permissions", "dictation-hotkey", "setup-choice", "local-setup"]
+  );
+  assert.equal(route.includes("local-dictation"), false);
+  assert.equal(route.includes("local-assistant"), false);
+});
+
+// Builds before this one saved sessions on the two-stage local picker, with the
+// picker's model draft in resume.localModels.
+test("a session saved on an old local stage resumes on local-setup", async () => {
+  const flow = await load();
+  const { createOnboardingSession, getOnboardingRoute, parseOnboardingSession } = flow;
+  const { reconcileStepWithRoute } = flow;
+  const localRoute = getOnboardingRoute({
+    authPath: "account",
+    setupMode: "local",
+    agentAllowed: true,
+  });
+  for (const stepId of ["local-dictation", "local-assistant"]) {
+    const saved = {
+      ...createOnboardingSession(),
+      currentStepId: stepId,
+      authPath: "account",
+      setupMode: "local",
+      history: ["auth", "setup-choice"],
+    };
+    saved.resume = {
+      ...saved.resume,
+      localModels: { [stepId]: { provider: "qwen", modelId: "qwen3.5-4b-q4_k_m" } },
+    };
+    const parsed = parseOnboardingSession(JSON.stringify(saved));
+    assert.ok(parsed, `${stepId} still parses`);
+    assert.equal(parsed.currentStepId, stepId);
+    assert.equal(reconcileStepWithRoute(parsed.currentStepId, localRoute), "local-setup");
+  }
+});
+
+test("progress gains one dot when local is chosen", async () => {
+  const { getOnboardingProgress, getOnboardingRoute } = await load();
+  for (const context of [
+    { authPath: "account", agentAllowed: true },
+    { authPath: "account", agentAllowed: false },
+    { authPath: "guest", agentAllowed: true },
+  ]) {
+    const cloud = getOnboardingRoute({ ...context, setupMode: "cloud" });
+    const local = getOnboardingRoute({ ...context, setupMode: "local" });
+    const cloudTotal = getOnboardingProgress("setup-choice", cloud).total;
+    assert.deepEqual(getOnboardingProgress("local-setup", local), {
+      index: cloudTotal,
+      total: cloudTotal + 1,
+    });
+  }
 });
 
 test("a confirmed enterprise workspace ends the account route at the last guided step", async () => {
@@ -252,10 +367,6 @@ test("v2 sessions retain safe within-step state without accepting secrets", asyn
     baseUrl: "https://self-hosted.example.com",
     customModel: "whisper-local",
   };
-  session.resume.localModels["local-assistant"] = {
-    provider: "qwen",
-    modelId: "qwen-9b",
-  };
 
   const serialized = JSON.stringify(session);
   assert.doesNotMatch(serialized, /password|apiKey|cortiClientId|clientSecret/);
@@ -270,11 +381,22 @@ test("v2 sessions retain safe within-step state without accepting secrets", asyn
   const malformedDraft = JSON.parse(serialized);
   malformedDraft.resume.auth.authMode = "unknown";
   malformedDraft.resume.byok["byok-dictation"].selectedProvider = 42;
-  malformedDraft.resume.localModels["local-assistant"].modelId = false;
   const parsed = parseOnboardingSession(JSON.stringify(malformedDraft));
   assert.equal(parsed.resume.auth.authMode, null);
   assert.equal(parsed.resume.byok["byok-dictation"].selectedProvider, "");
-  assert.equal(parsed.resume.localModels["local-assistant"].modelId, "");
+});
+
+test("an old build's local model drafts are parsed past and dropped", async () => {
+  const { createOnboardingSession, parseOnboardingSession } = await load();
+  const session = createOnboardingSession();
+  const old = JSON.parse(JSON.stringify(session));
+  old.resume.localModels = {
+    "local-dictation": { provider: "oruk", modelId: "orukeet-v0.1.0" },
+    "local-assistant": { provider: "qwen", modelId: false },
+  };
+  const parsed = parseOnboardingSession(JSON.stringify(old));
+  assert.deepEqual(parsed, session);
+  assert.equal("localModels" in parsed.resume, false);
 });
 
 test("an explicit restart clears every persisted route choice and returns to auth", async () => {
@@ -473,27 +595,38 @@ test("the required-models step is counted in progress", async () => {
   assert.deepEqual(getOnboardingProgress("languages", route), { index: 1, total: 9 });
 });
 
-test("the tray suppression predicate matches only an active required-models session", async () => {
-  const { createOnboardingSession, isRequiredModelsOnboardingStepActive } = await load();
+test("the tray suppression predicate matches only a step that owns its downloads", async () => {
+  const { createOnboardingSession, isDownloadOwningOnboardingStepActive } = await load();
+  const on = (currentStepId) =>
+    isDownloadOwningOnboardingStepActive(
+      JSON.stringify({ ...createOnboardingSession(), currentStepId })
+    );
 
-  assert.equal(isRequiredModelsOnboardingStepActive(null), false);
-  assert.equal(isRequiredModelsOnboardingStepActive("not json"), false);
-
-  const session = createOnboardingSession();
-  assert.equal(isRequiredModelsOnboardingStepActive(JSON.stringify(session)), false);
-  assert.equal(
-    isRequiredModelsOnboardingStepActive(
-      JSON.stringify({ ...session, currentStepId: "required-models" })
-    ),
-    true
-  );
+  assert.equal(isDownloadOwningOnboardingStepActive(null), false);
+  assert.equal(isDownloadOwningOnboardingStepActive("not json"), false);
+  assert.equal(on("auth"), false);
+  assert.equal(on("required-models"), true);
   // A completed/cleared session (the post-onboarding state) never suppresses.
-  assert.equal(
-    isRequiredModelsOnboardingStepActive(
-      JSON.stringify({ ...session, currentStepId: "permissions" })
-    ),
-    false
-  );
+  assert.equal(on("permissions"), false);
+});
+
+test("tray ignores local-setup downloads", async () => {
+  const { createOnboardingSession, isDownloadOwningOnboardingStepActive } = await load();
+  const session = { ...createOnboardingSession(), authPath: "account", setupMode: "local" };
+  const on = (currentStepId) =>
+    isDownloadOwningOnboardingStepActive(JSON.stringify({ ...session, currentStepId }));
+  assert.equal(on("local-setup"), true);
+  assert.equal(on("notes"), false);
+  assert.equal(on("setup-choice"), false);
+});
+
+test("SetupChoiceStep sends Local straight to its step, with no warning dialog", () => {
+  const source = readFileSync("src/components/onboarding/SetupChoiceStep.tsx", "utf8");
+  assert.doesNotMatch(source, /warnings\.local|warnings\.\$\{/);
+  assert.doesNotMatch(source, /onboarding-setup-warning-hero/);
+  assert.match(source, /onClick=\{\(\) => onSelect\("local"\)\}/);
+  assert.match(source, /setupChoice\.local\.features\.setup/);
+  assert.doesNotMatch(source, /setupChoice\.local\.features\.models/);
 });
 
 test("a session written before the resume flags infers its hotkey confirmations", async () => {

@@ -1296,6 +1296,30 @@ export interface VulkanGpuResult {
   error?: string;
 }
 
+export interface ComputerProfile {
+  platform: "darwin" | "win32" | "linux";
+  arch: string; // process.arch
+  name: string | null; // "MacBook Pro", "Dell XPS 13 9310"; null = use the generic name
+  formFactor: "laptop" | "desktop";
+  processorName: string; // "Apple M5 Pro", "Intel Core i5-1235U"
+  appleChip: { generation: number; tier: "" | "Pro" | "Max" | "Ultra" } | null;
+  memoryGb: number; // Math.round(os.totalmem() / 2**30)
+  graphicsName: string | null; // null on Apple chips (UI shows "Built into chip")
+  nvidia: { name: string; vramMb: number | null } | null;
+  parakeetSupported: boolean; // getParakeetCapability().supported (macOS 15.5 rule)
+  systemLanguage: string; // base code of the first preferred system language, e.g. "pt"
+}
+
+/** What onboarding's local setup downloads: a speech model, a text model or the graphics pack. */
+export type LocalSetupDownloadKind = "whisper" | "parakeet" | "llm" | "llamaVulkan";
+
+/** Free space where local models download, and the room each download kind reserves. */
+export interface LocalSetupSpace {
+  availableBytes: number;
+  /** The room each kind reserves while it downloads and unpacks (main's disk checks). */
+  factors: Record<LocalSetupDownloadKind, number>;
+}
+
 export interface LlamaVulkanStatus {
   supported: boolean;
   downloaded: boolean;
@@ -1409,7 +1433,9 @@ declare global {
   interface Window {
     electronAPI: {
       // Basic window operations
-      setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
+      setOnboardingWindowMode?: (
+        mode: "compact" | "expanded" | "local-setup" | "restore"
+      ) => Promise<boolean>;
       setOnboardingActive?: (active: boolean) => Promise<boolean>;
       openPermissionGuide?: (state: PermissionGuideState) => Promise<boolean>;
       closePermissionGuide?: () => Promise<boolean>;
@@ -2355,6 +2381,8 @@ declare global {
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getComputerProfile: () => Promise<ComputerProfile>;
+      getLocalSetupSpace: () => Promise<LocalSetupSpace>;
       getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
       downloadLlamaVulkanBinary?: () => Promise<{
         success: boolean;

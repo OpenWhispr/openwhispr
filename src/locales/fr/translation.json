@@ -355,34 +355,10 @@
           "features": {
             "device": "Fonctionne sur votre appareil",
             "offline": "Fonctionne hors ligne après la configuration",
-            "models": "Choisissez les modèles pour la dictée et l’assistant",
+            "setup": "Configuré pour cet ordinateur",
             "free": "Gratuit pour toujours"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Votre fournisseur traite vos données",
-            "description": "Vous ajouterez des identifiants pour des fournisseurs distincts de dictée et d’Assistant. Les tarifs et les politiques de conservation du fournisseur s’appliquent.",
-            "continue": "Configurer le fournisseur d’API",
-            "steps": {
-              "1": "Choisir des fournisseurs pour la dictée et l’Assistant",
-              "2": "Ajouter les identifiants via le stockage sécurisé",
-              "3": "Tester chaque connexion avant l’activation"
-            }
-          },
-          "local": {
-            "title": "La configuration locale demande quelques étapes supplémentaires",
-            "description": "Le traitement local garde votre voix sur cet appareil, mais nécessite une configuration initiale et au moins {{minimumSpace}} Go d’espace libre.",
-            "continue": "Configurer en local",
-            "steps": {
-              "1": "Choisir un moteur de transcription",
-              "2": "Configurer ou télécharger un modèle, environ {{modelSize}}",
-              "3": "Attendre l’installation et l’activation"
-            }
-          }
-        },
-        "useCloud": "Utiliser Cloud à la place",
-        "continueSetup": "Poursuivre la configuration",
         "showMore": "Afficher plus d’options",
         "moreOptions": {
           "title": "Choisissez votre configuration d’API",
@@ -437,20 +413,81 @@
         }
       },
       "local": {
-        "title": "Configurer les modèles locaux",
-        "description": "Choisissez les modèles à exécuter sur votre appareil.",
-        "descriptionLineOne": "Choisissez les modèles à exécuter",
-        "descriptionLineTwo": "sur votre appareil.",
-        "providerLabel": "Fournisseur",
-        "download": "Télécharger",
         "downloadingShort": "Téléchargement",
-        "selected": "Sélectionné",
-        "use": "Utiliser",
         "downloadInProgress": "Téléchargement en cours",
         "cancelDownload": "Annuler le téléchargement de {{model}}",
         "downloads": "Téléchargements de modèles",
         "downloading": "Téléchargement… {{progress}}%",
         "installing": "Installation"
+      },
+      "localSetup": {
+        "title": "Nous vous recommandons ces réglages",
+        "subtitle": "Choisis pour votre {{computer}} et {{language}}. Tout s’exécute sur cet appareil.",
+        "subtitleOrganizationText": "Choisis pour votre {{computer}} et {{language}}. La dictée s’exécute sur cet appareil ; le chat et les notes IA utilisent le service choisi par votre organisation.",
+        "computer": {
+          "chip": "Puce",
+          "processor": "Processeur",
+          "memory": "Mémoire",
+          "graphics": "Graphismes",
+          "builtIn": "Intégrés à la puce",
+          "memoryValue": "{{gb}} Go",
+          "mac": "Mac",
+          "windowsLaptop": "PC portable Windows",
+          "windowsDesktop": "PC de bureau Windows",
+          "linuxLaptop": "PC portable Linux",
+          "linuxDesktop": "PC de bureau Linux"
+        },
+        "rows": {
+          "dictation": "Dictée",
+          "cleanup": "Correction",
+          "assistant": "Assistant"
+        },
+        "badge": {
+          "fast": "Rapide, précis",
+          "slower": "Précis, plus lent",
+          "cloud": "Cloud recommandé"
+        },
+        "line": {
+          "dictationSeconds": "Le texte apparaît environ {{seconds}} s après que vous arrêtez de parler",
+          "dictationFewSeconds": "Le texte apparaît quelques secondes après que vous arrêtez de parler",
+          "cleanupUnderSecond": "Peaufine votre texte en moins d’une seconde",
+          "cleanupAddsSeconds": "Ajoute environ {{seconds}} s à chaque dictée",
+          "assistantSeconds": "Environ {{seconds}} s avant qu’il commence à répondre",
+          "requiredByOrganization": "Imposé par votre organisation",
+          "off": "Désactivé. Vous pourrez l’activer plus tard dans les Paramètres",
+          "offToFit": "Désactivé pour tenir dans l’espace libre de cet ordinateur",
+          "failed": "Téléchargement impossible. Vérifiez votre connexion et réessayez"
+        },
+        "unavailable": {
+          "tooSlow": "Trop lent",
+          "notEnoughMemory": "Mémoire insuffisante",
+          "memoryUnread": "Mémoire non vérifiée",
+          "tooSlowMinutes": "{{model}} mettrait plus de {{minutes}} minutes à commencer à répondre",
+          "tooSlowAboutMinute": "{{model}} mettrait environ une minute à commencer à répondre",
+          "tooSlowCleanupSeconds": "{{model}} mettrait plus de {{seconds}} s à peaufiner chaque dictée",
+          "tooSlowAssistantSeconds": "{{model}} mettrait environ {{seconds}} s à commencer à répondre",
+          "memoryMac": "{{model}} nécessite {{needed}} Go de mémoire, ce Mac en a {{have}} Go",
+          "memoryComputer": "{{model}} nécessite {{needed}} Go de mémoire, cet ordinateur en a {{have}} Go",
+          "memoryUnreadLine": "{{model}} nécessite {{needed}} Go de mémoire. Si cet ordinateur en a autant, vous pourrez l’activer plus tard dans les Paramètres"
+        },
+        "button": {
+          "download": "Télécharger les modèles",
+          "downloading": "Téléchargement",
+          "proceed": "Continuer",
+          "noSpace": "Espace libre insuffisant"
+        },
+        "retry": "Réessayer",
+        "retryRow": "Réessayer {{row}}",
+        "downloaded": "Téléchargé",
+        "foot": {
+          "default": "Vous pourrez modifier tout cela plus tard dans les Paramètres.",
+          "finishesInBackground": "Le reste continue de se télécharger une fois que vous continuez et s’active dès qu’il est prêt.",
+          "failedStaysOff": "Ce qui n’a pas pu être téléchargé reste désactivé. Vous pourrez l’ajouter plus tard dans les Paramètres.",
+          "needsMac": "Il faut {{needed}} Go, et ce Mac a {{free}} Go d’espace libre.",
+          "needsComputer": "Il faut {{needed}} Go, et cet ordinateur a {{free}} Go d’espace libre.",
+          "noSpaceMac": "La dictée nécessite {{needed}} Go d’espace libre et ce Mac en a {{free}} Go. Libérez de l’espace pour continuer.",
+          "noSpaceComputer": "La dictée nécessite {{needed}} Go d’espace libre et cet ordinateur en a {{free}} Go. Libérez de l’espace pour continuer."
+        }
       }
     },
     "steps": {
@@ -3158,7 +3195,8 @@
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
-    }
+    },
+    "localModelMissing": "Choisissez un modèle pour Chat dans les Paramètres pour discuter sur cet appareil."
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",

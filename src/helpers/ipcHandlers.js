@@ -137,6 +137,7 @@ const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
 const { registerSkillsIpc } = require("./skills/skillsIpc");
 const LocalModelDownloadStatus = require("./localModelDownloadStatus");
+const { readLocalSetupSpace } = require("./localSetupSpace");
 const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -6183,6 +6184,12 @@ class IPCHandlers {
         return { available: false, error: error.message };
       }
     });
+
+    ipcMain.handle("get-computer-profile", () =>
+      require("./computerProfile").readComputerProfile()
+    );
+
+    ipcMain.handle("get-local-setup-space", () => readLocalSetupSpace());
 
     ipcMain.handle("get-llama-vulkan-status", async () => {
       try {

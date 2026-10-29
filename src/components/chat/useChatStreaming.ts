@@ -415,6 +415,14 @@ export function useChatStreaming({
           responseAnnounced = true;
           if (!options?.suppressResponseContent) onResponseContent?.();
         };
+        // Answers the already-appended user message with one line instead of a dead end.
+        const answerWithLine = (content: string) => {
+          announceResponse();
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: "assistant", content, isStreaming: false },
+          ]);
+        };
         const settings = getSettings();
         const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
           inferenceScope,
@@ -434,20 +442,19 @@ export function useChatStreaming({
           !isAgentAllowed(policyState) ||
           !isLlmSelectionAllowed(policyState, { mode: llmMode, provider: policyProvider })
         ) {
-          // The user message is already appended; answer it instead of dead-ending silently.
-          const restriction = !isAgentAllowed(policyState)
-            ? t("common.policyAgentRestricted")
-            : t("common.policyAiProcessingRestricted");
-          announceResponse();
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: restriction,
-              isStreaming: false,
-            },
-          ]);
+          answerWithLine(
+            !isAgentAllowed(policyState)
+              ? t("common.policyAgentRestricted")
+              : t("common.policyAiProcessingRestricted")
+          );
+          return;
+        }
+
+        // Local mode with no model picked (e.g. the assistant was switched off
+        // at setup): nothing on this device can answer, and Cloud is not the
+        // fallback. Say where to pick one.
+        if (llmMode === "local" && !llmConfig.model.trim()) {
+          answerWithLine(t("chat.localModelMissing"));
           return;
         }
 

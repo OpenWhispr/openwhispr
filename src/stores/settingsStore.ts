@@ -3106,9 +3106,12 @@ export const selectResolvedLLMConfig = (
   scope: InferenceScope
 ): ResolvedLLMConfig => {
   const def: InferenceScopeDefinition = INFERENCE_SCOPES[scope];
-  const fallback = def.fallbackScope
+  const mode = state[def.storeKeys.mode] as InferenceMode;
+  const parent = def.fallbackScope
     ? selectResolvedLLMConfig(state, def.fallbackScope as InferenceScope)
     : undefined;
+  // A local scope runs only local models, so a fallback in another mode has none to lend.
+  const fallback = mode === "local" && parent?.mode !== "local" ? undefined : parent;
 
   const read = (field: keyof InferenceScopeStoreKeys): string | undefined => {
     const key = def.storeKeys[field];
@@ -3121,7 +3124,7 @@ export const selectResolvedLLMConfig = (
 
   const localConfig: ResolvedLLMConfig = {
     scope,
-    mode: state[def.storeKeys.mode] as InferenceMode,
+    mode,
     provider: read("provider") || fallback?.provider || "",
     model: read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
@@ -3354,6 +3357,14 @@ export function selectPolicyEffectiveSettings(
     if (definition.storeKeys.cloudMode) {
       writable[definition.storeKeys.cloudMode] =
         selection.mode === "openwhispr" ? "openwhispr" : "byok";
+    }
+
+    // A local scope with no model is switched off on this device (onboarding's
+    // local setup, a deleted model); a default would name a model nobody downloaded.
+    if (selection.mode === "local" && config.mode === "local" && !config.model) {
+      writable[definition.storeKeys.provider] = config.provider;
+      writable[definition.storeKeys.model] = "";
+      continue;
     }
 
     let provider = selection.provider;

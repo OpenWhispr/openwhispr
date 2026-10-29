@@ -355,34 +355,10 @@
           "features": {
             "device": "在你的裝置上執行",
             "offline": "設定完成後可離線使用",
-            "models": "為語音輸入與助理選擇模型",
+            "setup": "為這台電腦量身設定",
             "free": "永久免費使用"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "你的資料由服務商處理",
-            "description": "你需要分別為語音輸入與 Assistant 服務商新增憑證。將適用服務商的定價與資料保留政策。",
-            "continue": "設定 API 服務商",
-            "steps": {
-              "1": "為語音輸入與 Assistant 選擇服務商",
-              "2": "使用安全儲存新增憑證",
-              "3": "啟用前測試每個連線"
-            }
-          },
-          "local": {
-            "title": "本機設定需要多幾個步驟",
-            "description": "本機處理會把你的語音保留在這台裝置上，但需要一次性設定和至少 {{minimumSpace}} GB 可用空間。",
-            "continue": "本機設定",
-            "steps": {
-              "1": "選擇逐字稿引擎",
-              "2": "設定或下載模型，約 {{modelSize}}",
-              "3": "等待安裝與啟用"
-            }
-          }
-        },
-        "useCloud": "改用雲端",
-        "continueSetup": "繼續設定",
         "showMore": "顯示更多選項",
         "moreOptions": {
           "title": "選擇你的 API 設定方式",
@@ -437,20 +413,81 @@
         }
       },
       "local": {
-        "title": "設定本機模型",
-        "description": "選擇你想在裝置上執行的模型。",
-        "descriptionLineOne": "選擇你想在裝置上",
-        "descriptionLineTwo": "執行的模型。",
-        "providerLabel": "服務商",
-        "download": "下載",
         "downloadingShort": "下載中",
-        "selected": "已選擇",
-        "use": "使用",
         "downloadInProgress": "下載進行中",
         "cancelDownload": "取消下載 {{model}}",
         "downloads": "模型下載",
         "downloading": "正在下載… {{progress}}%",
         "installing": "安裝中"
+      },
+      "localSetup": {
+        "title": "我們推薦以下設定",
+        "subtitle": "根據你的 {{computer}} 和 {{language}} 挑選。一切都在這台裝置上執行。",
+        "subtitleOrganizationText": "根據你的 {{computer}} 和 {{language}} 挑選。聽寫在這台裝置上執行；聊天和 AI 筆記使用你的組織選擇的服務。",
+        "computer": {
+          "chip": "晶片",
+          "processor": "處理器",
+          "memory": "記憶體",
+          "graphics": "圖形",
+          "builtIn": "晶片內建",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows 筆記型電腦",
+          "windowsDesktop": "Windows 桌上型電腦",
+          "linuxLaptop": "Linux 筆記型電腦",
+          "linuxDesktop": "Linux 桌上型電腦"
+        },
+        "rows": {
+          "dictation": "語音輸入",
+          "cleanup": "文字整理",
+          "assistant": "助理"
+        },
+        "badge": {
+          "fast": "快速、準確",
+          "slower": "準確、較慢",
+          "cloud": "建議使用雲端"
+        },
+        "line": {
+          "dictationSeconds": "停止說話後約 {{seconds}} 秒出現文字",
+          "dictationFewSeconds": "停止說話後幾秒鐘出現文字",
+          "cleanupUnderSecond": "不到一秒即可整理你的文字",
+          "cleanupAddsSeconds": "每次語音輸入增加約 {{seconds}} 秒",
+          "assistantSeconds": "約 {{seconds}} 秒後開始回答",
+          "requiredByOrganization": "你的組織要求使用",
+          "off": "已關閉。之後可以在設定中開啟",
+          "offToFit": "已關閉，以符合這台電腦的可用空間",
+          "failed": "無法下載。請檢查網路連線後重試"
+        },
+        "unavailable": {
+          "tooSlow": "太慢",
+          "notEnoughMemory": "記憶體不足",
+          "memoryUnread": "無法偵測記憶體",
+          "tooSlowMinutes": "{{model}} 需要超過 {{minutes}} 分鐘才能開始回答",
+          "tooSlowAboutMinute": "{{model}} 需要約一分鐘才能開始回答",
+          "tooSlowCleanupSeconds": "{{model}} 整理每次語音輸入需要超過 {{seconds}} 秒",
+          "tooSlowAssistantSeconds": "{{model}} 需要約 {{seconds}} 秒才能開始回答",
+          "memoryMac": "{{model}} 需要 {{needed}} GB 記憶體，這台 Mac 只有 {{have}} GB",
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 記憶體，這台電腦只有 {{have}} GB",
+          "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 記憶體。如果這台電腦有這麼多記憶體，可以稍後在設定中開啟"
+        },
+        "button": {
+          "download": "下載模型",
+          "downloading": "正在下載",
+          "proceed": "繼續",
+          "noSpace": "可用空間不足"
+        },
+        "retry": "重試",
+        "retryRow": "重試{{row}}",
+        "downloaded": "已下載",
+        "foot": {
+          "default": "這些設定之後都可以在設定中變更。",
+          "finishesInBackground": "其餘項目會在你繼續後接著下載，準備好後自動開啟。",
+          "failedStaysOff": "未能下載的項目將保持關閉。之後可以在設定中新增。",
+          "needsMac": "需要 {{needed}} GB，這台 Mac 有 {{free}} GB 可用空間。",
+          "needsComputer": "需要 {{needed}} GB，這台電腦有 {{free}} GB 可用空間。",
+          "noSpaceMac": "語音輸入需要 {{needed}} GB 可用空間，這台 Mac 只有 {{free}} GB。請釋放一些空間後繼續。",
+          "noSpaceComputer": "語音輸入需要 {{needed}} GB 可用空間，這台電腦只有 {{free}} GB。請釋放一些空間後繼續。"
+        }
       }
     },
     "steps": {
@@ -3921,7 +3958,8 @@
       "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",
       "sharedNotes": "突顯我的共享筆記"
-    }
+    },
+    "localModelMissing": "在設定中為「聊天」選擇一個模型，即可在此裝置上聊天。"
   },
   "support": {
     "documentation": "文件",

@@ -1,0 +1,634 @@
+{
+  "version": 1,
+  "basis": "Design §8 as tightened 2026-10-26 (Titan 7f688d9e3; Part A report, 'Tightening pass'), Macs keyed by chip (Titan f794efae2; Part A report, 'Macs by chip'). M = measured on Josh's M5 Pro, P = predicted. graphicsPackBytes are the llama.cpp b9763 Vulkan release asset sizes.",
+  "models": {
+    "dictation": {
+      "english": "parakeet-unified-en-0.6b",
+      "european": "orukeet-v0.1.0",
+      "hindi": "nemotron-3.5-asr-streaming-0.6b",
+      "other": "small",
+      "olderMac": "small"
+    },
+    "cleanup": "qwen3.5-2b-q4_k_m",
+    "assistant": "qwen3.5-4b-q4_k_m"
+  },
+  "classification": {
+    "nvidiaMinVramMb": 6000,
+    "memoryBandGb": 16
+  },
+  "memoryNeededGb": {
+    "cleanup": {
+      "mac": 16,
+      "pc": 8
+    },
+    "assistant": {
+      "mac": 16,
+      "pc": 16
+    }
+  },
+  "graphicsPackBytes": {
+    "win32-x64": 38939043,
+    "linux-x64": 38540299
+  },
+  "olderMacDictation": {
+    "label": "slower",
+    "seconds": null,
+    "source": "no measurement; cautious"
+  },
+  "machines": {
+    "pc-under-16": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "other": {
+          "label": "slower",
+          "seconds": [3, 4]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [5, 10]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "reason": "tooSlow",
+        "firstWordsSeconds": [180, 420]
+      },
+      "source": "P: tightening pass (Titan 7f688d9e3); x86 speech and cleanup from openwhispr-bench run 39917900845, Whisper Small on the processor"
+    },
+    "pc-16-plus": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "other": {
+          "label": "slower",
+          "seconds": [3, 4]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [5, 10]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "reason": "tooSlow",
+        "firstWordsSeconds": [180, 420]
+      },
+      "source": "P: tightening pass (Titan 7f688d9e3); as pc-under-16, memory changes nothing on the processor"
+    },
+    "pc-nvidia": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2.5]
+        },
+        "other": {
+          "label": "slower",
+          "seconds": [3, 4]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0, 0.9]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [4, 12]
+      },
+      "source": "P: tightening pass (Titan 7f688d9e3); speech as pc-under-16 (no speech graphics pack, Whisper Small on the processor), text on the Vulkan graphics pack"
+    },
+    "mac-under-16": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "unavailable",
+        "reason": "memory",
+        "addedSeconds": null
+      },
+      "assistant": {
+        "label": "unavailable",
+        "reason": "memory",
+        "firstWordsSeconds": null
+      },
+      "source": "P: tightening pass (Titan 7f688d9e3); dictation plus cleanup takes 4.4 GB, over half of the memory"
+    },
+    "mac-16-plus": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [1.6, 2.7]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "reason": "tooSlow",
+        "firstWordsSeconds": [28, 48]
+      },
+      "source": "P: tightening pass (Titan 7f688d9e3); cautious row for unlisted or unread chips, cleanup from M4 1.6 s to M1 2.7 s"
+    },
+    "mac-m1": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [2.7, 2.7]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [48, 56],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m1-pro": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [1.1, 1.1]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [23, 26],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m1-max": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.6, 0.7]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [12, 15],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m2": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [1.8, 1.8]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [34, 41],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m2-pro": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [1.0, 1.0]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [18, 21],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m2-max": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.6, 0.6]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [9, 12]
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m3": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [1.8, 1.9]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [33, 40],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). 8-core graphics unpublished: reading scaled 8/10 from the 10-core row, writing kept (same memory speed)"
+    },
+    "mac-m3-pro": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [1.2, 1.2]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [19, 23],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m3-max": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.6, 0.7]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [9, 11]
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m4": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "slower",
+        "addedSeconds": [1.6, 1.6]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [28, 34],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). 8-core graphics unpublished: reading scaled 8/10 from the 10-core row, writing kept (same memory speed)"
+    },
+    "mac-m4-pro": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.8, 0.8]
+      },
+      "assistant": {
+        "label": "unavailable",
+        "firstWordsSeconds": [14, 17],
+        "reason": "tooSlow"
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m4-max": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.4, 0.5]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [7, 9]
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). "
+    },
+    "mac-m5": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [1.1, 1.1]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [11, 12]
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). #4167 M5 10-core row is partly filled; 8-core reading scaled 8/10"
+    },
+    "mac-m5-pro": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [2, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [2, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [2, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [2, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0, 0.9]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [4.8, 4.8]
+      },
+      "source": "M: measured on Josh's M5 Pro"
+    },
+    "mac-m5-max": {
+      "dictation": {
+        "english": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "european": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "hindi": {
+          "label": "fast",
+          "seconds": [1, 2]
+        },
+        "other": {
+          "label": "fast",
+          "seconds": [1, 2]
+        }
+      },
+      "cleanup": {
+        "label": "fast",
+        "addedSeconds": [0.3, 0.5]
+      },
+      "assistant": {
+        "label": "slower",
+        "firstWordsSeconds": [3, 5]
+      },
+      "source": "P: llama.cpp #4167 (llama 7B Q4_0), every published GPU-core variant of the chip, through Part A's formula; dictation from the M1 VM canary (0.5-0.7x the M5 Pro). 32-core variant unpublished: bounded by the 40-core row and the measured M5 Pro (the 32-core Max is faster than the M5 Pro on both counts)"
+    }
+  }
+}

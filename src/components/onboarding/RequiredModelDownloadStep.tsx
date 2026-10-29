@@ -7,6 +7,7 @@ import { useModelDownload } from "../../hooks/useModelDownload";
 import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { getParakeetModels, getWhisperModels } from "../../models/ModelRegistry";
 import { SETUP_CARD_CLASS } from "./ProviderSetupStep";
+import { spaceSizeUnit } from "../../utils/formatBytes";
 
 type ModelFamily = "whisper" | "parakeet";
 
@@ -124,7 +125,7 @@ export function RequiredModelDownloadStep({
                   <span className="mt-0.5 block truncate text-xs text-destructive">{failure}</span>
                 ) : (
                   <span className="mt-0.5 block truncate text-xs text-[var(--onboarding-text-secondary)]">
-                    {info?.size?.replace(/(?<=\d)(?=[A-Za-z])/, " ") ?? ""}
+                    {info?.size ? spaceSizeUnit(info.size) : ""}
                   </span>
                 )}
               </div>

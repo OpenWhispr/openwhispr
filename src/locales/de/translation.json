@@ -355,34 +355,10 @@
           "features": {
             "device": "Läuft auf Ihrem Gerät",
             "offline": "Funktioniert nach der Einrichtung offline",
-            "models": "Modelle für Diktat und Assistant wählen",
+            "setup": "Für diesen Computer eingerichtet",
             "free": "Für immer kostenlos"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Ihr Anbieter verarbeitet Ihre Daten",
-            "description": "Sie fügen Zugangsdaten für separate Diktat- und Assistant-Anbieter hinzu. Es gelten die Preise und Aufbewahrungsrichtlinien des Anbieters.",
-            "continue": "API-Anbieter einrichten",
-            "steps": {
-              "1": "Anbieter für Diktat und Assistant wählen",
-              "2": "Zugangsdaten über sichere Speicherung hinzufügen",
-              "3": "Jede Verbindung vor der Aktivierung testen"
-            }
-          },
-          "local": {
-            "title": "Die lokale Einrichtung erfordert ein paar zusätzliche Schritte",
-            "description": "Die lokale Verarbeitung behält Ihre Sprache auf diesem Gerät, erfordert aber eine einmalige Einrichtung und mindestens {{minimumSpace}} GB freien Speicher.",
-            "continue": "Lokal einrichten",
-            "steps": {
-              "1": "Transkriptions-Engine wählen",
-              "2": "Modell konfigurieren oder herunterladen, etwa {{modelSize}}",
-              "3": "Auf Installation und Aktivierung warten"
-            }
-          }
-        },
-        "useCloud": "Stattdessen Cloud verwenden",
-        "continueSetup": "Einrichtung fortsetzen",
         "showMore": "Weitere Optionen anzeigen",
         "moreOptions": {
           "title": "API-Einrichtung wählen",
@@ -437,20 +413,81 @@
         }
       },
       "local": {
-        "title": "Lokale Modelle einrichten",
-        "description": "Wählen Sie die Modelle, die auf Ihrem Gerät laufen sollen.",
-        "descriptionLineOne": "Wählen Sie die Modelle, die",
-        "descriptionLineTwo": "auf Ihrem Gerät laufen sollen.",
-        "providerLabel": "Anbieter",
-        "download": "Herunterladen",
         "downloadingShort": "Wird geladen",
-        "selected": "Ausgewählt",
-        "use": "Verwenden",
         "downloadInProgress": "Download läuft",
         "cancelDownload": "Download von {{model}} abbrechen",
         "downloads": "Modell-Downloads",
         "downloading": "Wird heruntergeladen… {{progress}}%",
         "installing": "Wird installiert"
+      },
+      "localSetup": {
+        "title": "Wir empfehlen diese Einstellungen",
+        "subtitle": "Passend zu {{computer}} und {{language}} ausgewählt. Alles läuft auf diesem Gerät.",
+        "subtitleOrganizationText": "Passend zu {{computer}} und {{language}} ausgewählt. Das Diktieren läuft auf diesem Gerät; Chat und KI-Notizen nutzen den Dienst, den Ihre Organisation gewählt hat.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Prozessor",
+          "memory": "Arbeitsspeicher",
+          "graphics": "Grafik",
+          "builtIn": "Im Chip integriert",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows-Laptop",
+          "windowsDesktop": "Windows-Desktop-PC",
+          "linuxLaptop": "Linux-Laptop",
+          "linuxDesktop": "Linux-Desktop-PC"
+        },
+        "rows": {
+          "dictation": "Diktat",
+          "cleanup": "Textbereinigung",
+          "assistant": "Assistent"
+        },
+        "badge": {
+          "fast": "Schnell, präzise",
+          "slower": "Präzise, langsamer",
+          "cloud": "Cloud empfohlen"
+        },
+        "line": {
+          "dictationSeconds": "Text erscheint etwa {{seconds}} s, nachdem Sie aufhören",
+          "dictationFewSeconds": "Text erscheint wenige Sekunden, nachdem Sie aufhören",
+          "cleanupUnderSecond": "Überarbeitet Ihren Text in unter einer Sekunde",
+          "cleanupAddsSeconds": "Verlängert jedes Diktat um etwa {{seconds}} s",
+          "assistantSeconds": "Etwa {{seconds}} s, bis die Antwort beginnt",
+          "requiredByOrganization": "Von Ihrer Organisation vorgeschrieben",
+          "off": "Aus. Sie können es später in den Einstellungen einschalten",
+          "offToFit": "Aus, damit es in den freien Speicherplatz dieses Computers passt",
+          "failed": "Download fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut"
+        },
+        "unavailable": {
+          "tooSlow": "Zu langsam",
+          "notEnoughMemory": "Nicht genug Arbeitsspeicher",
+          "memoryUnread": "Arbeitsspeicher nicht erkannt",
+          "tooSlowMinutes": "{{model}} bräuchte über {{minutes}} Minuten, bis die Antwort beginnt",
+          "tooSlowAboutMinute": "{{model}} bräuchte etwa eine Minute, bis die Antwort beginnt",
+          "tooSlowCleanupSeconds": "{{model}} bräuchte über {{seconds}} s, um jedes Diktat zu überarbeiten",
+          "tooSlowAssistantSeconds": "{{model}} bräuchte etwa {{seconds}} s, bis die Antwort beginnt",
+          "memoryMac": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Mac hat {{have}} GB",
+          "memoryComputer": "{{model}} braucht {{needed}} GB Arbeitsspeicher, dieser Computer hat {{have}} GB",
+          "memoryUnreadLine": "{{model}} braucht {{needed}} GB Arbeitsspeicher. Wenn dieser Computer so viel hat, schalten Sie es später in den Einstellungen ein"
+        },
+        "button": {
+          "download": "Modelle herunterladen",
+          "downloading": "Wird heruntergeladen",
+          "proceed": "Fortfahren",
+          "noSpace": "Nicht genug freier Speicherplatz"
+        },
+        "retry": "Erneut versuchen",
+        "retryRow": "{{row}} erneut versuchen",
+        "downloaded": "Heruntergeladen",
+        "foot": {
+          "default": "Sie können all das später in den Einstellungen ändern.",
+          "finishesInBackground": "Der Rest wird nach dem Fortfahren weiter heruntergeladen und eingeschaltet, sobald er bereit ist.",
+          "failedStaysOff": "Was nicht heruntergeladen wurde, bleibt aus. Sie können es später in den Einstellungen hinzufügen.",
+          "needsMac": "Dafür werden {{needed}} GB benötigt, und auf diesem Mac sind {{free}} GB frei.",
+          "needsComputer": "Dafür werden {{needed}} GB benötigt, und auf diesem Computer sind {{free}} GB frei.",
+          "noSpaceMac": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Mac hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren.",
+          "noSpaceComputer": "Das Diktat braucht {{needed}} GB freien Speicherplatz, und dieser Computer hat {{free}} GB. Geben Sie Speicherplatz frei, um fortzufahren."
+        }
       }
     },
     "steps": {
@@ -3158,7 +3195,8 @@
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
-    }
+    },
+    "localModelMissing": "Wähle in den Einstellungen ein Modell für Chat, um auf diesem Gerät zu chatten."
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",

@@ -12,7 +12,15 @@ import AssistantHotkeyPreview from "./onboarding/AssistantHotkeyPreview";
 import DemoStep from "./onboarding/DemoStep";
 import CalendarConnectionsStep from "./onboarding/CalendarConnectionsStep";
 import SetupChoiceStep from "./onboarding/SetupChoiceStep";
-import { ByokProviderStep, LocalModelSetupStep } from "./onboarding/ProviderSetupStep";
+import { ByokProviderStep } from "./onboarding/ProviderSetupStep";
+import {
+  LocalSetupStep,
+  LocalSetupStepPlaceholder,
+  LocalSetupSubtitlePlaceholder,
+} from "./onboarding/LocalSetupStep";
+import { planLocalSetup, proceedWithLocalSetup } from "./onboarding/localSetupFlow";
+import { localSetupComputerName, localSetupLanguageLabel } from "./onboarding/localSetupLabels";
+import { useLocalSetupSpace } from "./onboarding/useLocalSetupSpace";
 import { RequiredModelDownloadStep } from "./onboarding/RequiredModelDownloadStep";
 import { AlertDialog } from "./ui/dialog";
 import { useAuth } from "../hooks/useAuth";
@@ -26,9 +34,17 @@ import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
+import { useComputerProfile } from "../hooks/useComputerProfile";
+import { usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
 import { useSettingsStore } from "../stores/settingsStore";
+import {
+  enabledDownloads,
+  localSetupRequiredBytes,
+  type LocalSetupPlan,
+} from "../config/localSetup";
+import type { LocalSetupHandOff } from "./onboarding/useLocalSetupDownloads";
 import { getDefaultHotkey, parseHotkeyList, serializeHotkeyList } from "../utils/hotkeys";
 import {
   DEFAULT_ASSISTANT_ONBOARDING_HOTKEY,
@@ -50,6 +66,7 @@ import {
   getNotesFooterAction,
   getOnboardingProgress,
   getOnboardingRoute,
+  getOnboardingWindowMode,
   isSetupDecisionStep,
   reconcileStepWithRoute,
   resetOnboardingProgress,
@@ -58,7 +75,6 @@ import {
   shouldSkipOnboardingSetupChoice,
   type OnboardingAuthDraft,
   type OnboardingByokDraft,
-  type OnboardingLocalModelDraft,
   type OnboardingResumeState,
   type OnboardingSetupMode,
   type OnboardingStepId,
@@ -69,7 +85,7 @@ import {
   requestMicrophoneForGuide,
   type GuidePermission,
 } from "./onboarding/permissionGuideController";
-import { clearPendingLocalModels, hasPendingLocalModels } from "./onboarding/pendingLocalModels";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import { resolveAssistantDemoScenario } from "./onboarding/assistantDemoScenario";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
@@ -96,8 +112,10 @@ function DemoHotkeyDescription({ text, hotkey }: { text: string; hotkey: string 
 }
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const platform = getPlatform();
+  // Read as onboarding opens, so it has long landed by the local setup step.
+  const computerProfile = useComputerProfile();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
@@ -312,6 +330,29 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const requiredModelsLatchRef = useRef(session.currentStepId === "required-models");
   const requiredModelsPending = requiredModelsLatchRef.current || requiredModels.missing.length > 0;
 
+  // The local setup's picks; null until the computer read and the policy have
+  // resolved (see planLocalSetup), and the step shows its empty frame meanwhile.
+  const policy = usePolicySnapshot();
+  const computedLocalSetupPlan = useMemo(
+    () =>
+      planLocalSetup({
+        profile: computerProfile,
+        policy,
+        guest: session.authPath === "guest",
+        spokenLanguages: settings.spokenLanguages,
+        requiredModelIds: requiredModels.required,
+      }),
+    [computerProfile, policy, requiredModels.required, session.authPath, settings.spokenLanguages]
+  );
+  // A policy refresh that is loading or failed must not take a built plan away:
+  // the step would unmount and cancel its downloads. The last plan stands until a
+  // resolved policy builds the next one.
+  const [latchedLocalSetupPlan, setLatchedLocalSetupPlan] = useState<LocalSetupPlan | null>(null);
+  if (computedLocalSetupPlan && computedLocalSetupPlan !== latchedLocalSetupPlan) {
+    setLatchedLocalSetupPlan(computedLocalSetupPlan);
+  }
+  const localSetupPlan = computedLocalSetupPlan ?? latchedLocalSetupPlan;
+
   const route = useMemo(
     () =>
       getOnboardingRoute({
@@ -330,7 +371,23 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ]
   );
   const currentStepId = reconcileStepWithRoute(session.currentStepId, route);
+
+  // The space the Local card quotes: every row on, with the room each download
+  // reserves to unpack. Undefined until both reads land; the card has a default.
+  // Read once as onboarding opens, so the card's figure is ready when it shows; it
+  // is read again on focus only around the choice, not on every onboarding step.
+  const { space: localSetupSpace } = useLocalSetupSpace(
+    currentStepId === "setup-choice" || currentStepId === "local-setup"
+  );
+  const localSpaceGb = useMemo(() => {
+    if (!localSetupPlan || !localSetupSpace) return undefined;
+    const items = enabledDownloads(localSetupPlan, { cleanup: true, assistant: true }).flatMap(
+      (row) => row.items
+    );
+    return Math.ceil(localSetupRequiredBytes(items, localSetupSpace.factors) / 1e9);
+  }, [localSetupPlan, localSetupSpace]);
   const compact = COMPACT_STEPS.has(currentStepId);
+  const windowMode = getOnboardingWindowMode(currentStepId);
   const setupDecisionPending =
     workspaceResolutionPending && isSetupDecisionStep(currentStepId, route);
   const notesFooterAction = getNotesFooterAction({ setupDecisionPending, hasConnectedCalendar });
@@ -441,19 +498,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     },
     [currentStepId, setSession]
   );
-  const updateCurrentLocalModelDraft = useCallback(
-    (state: OnboardingLocalModelDraft) => {
-      if (currentStepId !== "local-dictation" && currentStepId !== "local-assistant") return;
-      setSession((current) => ({
-        ...current,
-        resume: {
-          ...current.resume,
-          localModels: { ...current.resume.localModels, [currentStepId]: state },
-        },
-      }));
-    },
-    [currentStepId, setSession]
-  );
 
   useEffect(() => {
     if (currentStepId === "required-models") requiredModelsLatchRef.current = true;
@@ -499,8 +543,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, []);
 
   useEffect(() => {
-    void window.electronAPI?.setOnboardingWindowMode?.(compact ? "compact" : "expanded");
-  }, [compact]);
+    void window.electronAPI?.setOnboardingWindowMode?.(windowMode);
+  }, [windowMode]);
 
   useEffect(() => {
     if (platform === "darwin" && shouldInitializeMacAccessibilityFeatures(currentStepId)) {
@@ -619,7 +663,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   ]);
 
   const finalizeOnboarding = useCallback(
-    async (mode: OnboardingCompletionMode) => {
+    // beforeComplete runs once nothing else can stop the finish, so its writes never
+    // outlive a failed one.
+    async (mode: OnboardingCompletionMode, beforeComplete?: () => void) => {
       if (isFinishing) return;
       setIsFinishing(true);
       setFatalError(null);
@@ -642,21 +688,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         await window.electronAPI?.markBundleMigrated?.();
         await window.electronAPI?.setOnboardingWindowMode?.("restore");
 
-        // hasPendingLocalModels() covers leaving a still-running download, by
-        // Proceed or Skip: the model was remembered when the download started,
-        // and BackgroundModelDownloadTray only applies it (and then clears this
-        // flag) while the flag is set.
-        //
-        // Only preserve a pending download when the completed route still uses
-        // local models. A user who walks Back and finishes on Cloud/BYOK must not
-        // be switched back to a stale local selection when it completes later.
-        const routeKeepsLocalModels = mode === "local";
-        if (routeKeepsLocalModels && hasPendingLocalModels()) {
-          localStorage.setItem("localSetupPending", "true");
-        } else {
-          localStorage.removeItem("localSetupPending");
-          clearPendingLocalModels();
-        }
+        // An older build's pending pick never reaches the tray; the local route
+        // remembers its own rows still downloading in beforeComplete.
+        discardPendingLocalSetup();
+        beforeComplete?.();
 
         const skippedAuth = session.authPath === "guest";
         localStorage.setItem("authenticationSkipped", String(skippedAuth));
@@ -695,9 +730,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   }, [finalizeOnboarding, isFinishing, session.currentStepId, skipSetupChoiceForEnterprise]);
 
   const applyReasoningSelectionToAllScopes = useCallback(
-    (mode: "byok" | "local") => {
-      // getState(), not the render-time snapshot: the provider steps write
-      // chatAgentProvider/chatAgentModel via switchReasoningProvider and call
+    (mode: "byok") => {
+      // getState(), not the render-time snapshot: the BYOK step writes
+      // chatAgentProvider/chatAgentModel via switchReasoningProvider and calls
       // onProceed() in the same tick, so `settingsStore` here still holds the
       // values from before the pick. Reading it stale configured the other three
       // scopes to the defaults (groq / openai/gpt-oss-120b) with no key.
@@ -722,6 +757,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       });
     },
     [settingsStore]
+  );
+
+  // The local setup step owns its forward action: its Proceed finishes onboarding,
+  // writing the settings for the switches the user left on as it does.
+  const proceedLocalSetup = useCallback(
+    async (handOff: () => LocalSetupHandOff) => {
+      if (!localSetupPlan) return;
+      await proceedWithLocalSetup(localSetupPlan, handOff, (beforeComplete) =>
+        finalizeOnboarding("local", beforeComplete)
+      );
+    },
+    [finalizeOnboarding, localSetupPlan]
   );
 
   const handleSetupSelection = useCallback(
@@ -816,15 +863,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       }
     } else if (currentStepId === "byok-assistant") {
       applyReasoningSelectionToAllScopes("byok");
-    } else if (currentStepId === "local-dictation") {
-      settingsStore.setCloudTranscriptionForAllScopes({ useLocalWhisper: true });
-      // Same policy-shortened-route case as BYOK: no local LLM was downloaded,
-      // so cleanup must not silently fall back to a cloud default.
-      if (!route.includes("local-assistant")) {
-        settingsStore.updateCleanupSettings({ useCleanupModel: false });
-      }
-    } else if (currentStepId === "local-assistant") {
-      applyReasoningSelectionToAllScopes("local");
     }
 
     const next = getNextOnboardingStep(currentStepId, route);
@@ -861,17 +899,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     skipSetupChoiceForEnterprise,
   ]);
 
-  const skipLocalSetup = useCallback(async () => {
-    if (currentStepId === "local-dictation") {
-      await continueFromCurrentStep();
-      return;
-    }
-    // The local assistant is optional. If the user skips it, prevent
-    // dictation from falling back to an unconfigured cleanup provider.
-    settingsStore.updateCleanupSettings({ useCleanupModel: false });
-    await finalizeOnboarding("local");
-  }, [continueFromCurrentStep, currentStepId, finalizeOnboarding, settingsStore]);
-
   const canContinue = (() => {
     switch (currentStepId) {
       case "required-models":
@@ -894,8 +921,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return notesFooterAction === "continue";
       case "byok-dictation":
       case "byok-assistant":
-      case "local-dictation":
-      case "local-assistant":
         return stageReady;
       default:
         return true;
@@ -1217,6 +1242,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <SetupChoiceStep
               isSignedIn={isSignedIn}
               agentAllowed={agentAllowed}
+              localSpaceGb={localSpaceGb}
               onSelect={(mode, options) => void handleSetupSelection(mode, options)}
               onRequestAuthentication={() => {
                 setSetupMode("cloud");
@@ -1255,30 +1281,41 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         );
 
-      case "local-dictation":
-      case "local-assistant":
+      case "local-setup":
         return (
           <div className="h-full w-full pt-2">
             <OnboardingStepHeader
-              title={t("onboarding.rehaul.local.title")}
-              // Without this the h1 is capped at max-w-xs (320px), which wraps
-              // "Set up local models" onto a second line at 40px.
+              title={t("onboarding.rehaul.localSetup.title")}
               wideTitle
-              description={t("onboarding.rehaul.local.description")}
-              descriptionLines={[
-                t("onboarding.rehaul.local.descriptionLineOne"),
-                t("onboarding.rehaul.local.descriptionLineTwo"),
-              ]}
+              description={
+                localSetupPlan ? (
+                  t(
+                    localSetupPlan.organizationRunsText
+                      ? "onboarding.rehaul.localSetup.subtitleOrganizationText"
+                      : "onboarding.rehaul.localSetup.subtitle",
+                    {
+                      computer: localSetupComputerName(localSetupPlan.profile, t),
+                      language: localSetupLanguageLabel(localSetupPlan.languageTags, i18n.language),
+                    }
+                  )
+                ) : (
+                  <LocalSetupSubtitlePlaceholder />
+                )
+              }
             />
-            <LocalModelSetupStep
-              key={currentStepId}
-              stepId={currentStepId}
-              onReadinessChange={setStageReady}
-              onProceed={() => void continueFromCurrentStep()}
-              onSkip={() => void skipLocalSetup()}
-              resumeState={session.resume.localModels[currentStepId]}
-              onResumeStateChange={updateCurrentLocalModelDraft}
-            />
+            {/* The computer and policy reads finish long before anyone gets
+                here; until they do, the card's frame holds its place. A policy
+                that couldn't be read says so (it is read again on focus). */}
+            {localSetupPlan ? (
+              <LocalSetupStep
+                plan={localSetupPlan}
+                onProceed={(handOff) => void proceedLocalSetup(handOff)}
+              />
+            ) : (
+              <LocalSetupStepPlaceholder
+                message={policy.status === "error" ? t("common.policyUnresolved") : undefined}
+              />
+            )}
           </div>
         );
     }
@@ -1293,8 +1330,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const inlineProviderStep =
     currentStepId === "byok-dictation" ||
     currentStepId === "byok-assistant" ||
-    currentStepId === "local-dictation" ||
-    currentStepId === "local-assistant";
+    currentStepId === "local-setup";
   // Choice/provider pages own their forward action. Hotkey/demo pages withhold
   // Continue until complete; Notes does the same until a calendar is connected.
   const showsContinue =

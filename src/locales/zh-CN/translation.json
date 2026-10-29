@@ -355,34 +355,10 @@
           "features": {
             "device": "在你的设备上运行",
             "offline": "设置完成后可离线使用",
-            "models": "为听写和助手选择模型",
+            "setup": "为这台电脑量身设置",
             "free": "永久免费使用"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "你的数据由服务商处理",
-            "description": "你需要分别为听写和 Assistant 服务商添加凭据。将适用服务商的定价和数据保留政策。",
-            "continue": "设置 API 服务商",
-            "steps": {
-              "1": "为听写和 Assistant 选择服务商",
-              "2": "使用安全存储添加凭据",
-              "3": "启用前测试每个连接"
-            }
-          },
-          "local": {
-            "title": "本地设置需要多几个步骤",
-            "description": "本地处理会把你的语音保留在此设备上，但需要一次性设置和至少 {{minimumSpace}} GB 可用空间。",
-            "continue": "本地设置",
-            "steps": {
-              "1": "选择转录引擎",
-              "2": "配置或下载模型，约 {{modelSize}}",
-              "3": "等待安装和启用"
-            }
-          }
-        },
-        "useCloud": "改用云端",
-        "continueSetup": "继续设置",
         "showMore": "显示更多选项",
         "moreOptions": {
           "title": "选择你的 API 设置方式",
@@ -437,20 +413,81 @@
         }
       },
       "local": {
-        "title": "设置本地模型",
-        "description": "选择你想在设备上运行的模型。",
-        "descriptionLineOne": "选择你想在设备上",
-        "descriptionLineTwo": "运行的模型。",
-        "providerLabel": "服务商",
-        "download": "下载",
         "downloadingShort": "下载中",
-        "selected": "已选择",
-        "use": "使用",
         "downloadInProgress": "下载进行中",
         "cancelDownload": "取消下载 {{model}}",
         "downloads": "模型下载",
         "downloading": "正在下载… {{progress}}%",
         "installing": "安装中"
+      },
+      "localSetup": {
+        "title": "我们推荐以下设置",
+        "subtitle": "根据你的 {{computer}} 和 {{language}} 挑选。一切都在这台设备上运行。",
+        "subtitleOrganizationText": "根据你的 {{computer}} 和 {{language}} 挑选。听写在这台设备上运行；聊天和 AI 笔记使用你的组织选择的服务。",
+        "computer": {
+          "chip": "芯片",
+          "processor": "处理器",
+          "memory": "内存",
+          "graphics": "图形",
+          "builtIn": "芯片内置",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows 笔记本电脑",
+          "windowsDesktop": "Windows 台式电脑",
+          "linuxLaptop": "Linux 笔记本电脑",
+          "linuxDesktop": "Linux 台式电脑"
+        },
+        "rows": {
+          "dictation": "听写",
+          "cleanup": "文本整理",
+          "assistant": "助手"
+        },
+        "badge": {
+          "fast": "快速、准确",
+          "slower": "准确、较慢",
+          "cloud": "推荐使用云端"
+        },
+        "line": {
+          "dictationSeconds": "停止说话后约 {{seconds}} 秒出现文字",
+          "dictationFewSeconds": "停止说话后几秒钟出现文字",
+          "cleanupUnderSecond": "不到一秒即可整理你的文字",
+          "cleanupAddsSeconds": "每次听写增加约 {{seconds}} 秒",
+          "assistantSeconds": "约 {{seconds}} 秒后开始回答",
+          "requiredByOrganization": "你的组织要求使用",
+          "off": "已关闭。之后可以在设置中开启",
+          "offToFit": "已关闭，以适应这台电脑的可用空间",
+          "failed": "无法下载。请检查网络连接后重试"
+        },
+        "unavailable": {
+          "tooSlow": "太慢",
+          "notEnoughMemory": "内存不足",
+          "memoryUnread": "无法检测内存",
+          "tooSlowMinutes": "{{model}} 需要超过 {{minutes}} 分钟才能开始回答",
+          "tooSlowAboutMinute": "{{model}} 需要约一分钟才能开始回答",
+          "tooSlowCleanupSeconds": "{{model}} 整理每次听写需要超过 {{seconds}} 秒",
+          "tooSlowAssistantSeconds": "{{model}} 需要约 {{seconds}} 秒才能开始回答",
+          "memoryMac": "{{model}} 需要 {{needed}} GB 内存，这台 Mac 只有 {{have}} GB",
+          "memoryComputer": "{{model}} 需要 {{needed}} GB 内存，这台电脑只有 {{have}} GB",
+          "memoryUnreadLine": "{{model}} 需要 {{needed}} GB 内存。如果这台电脑有这么多内存，可以稍后在设置中开启"
+        },
+        "button": {
+          "download": "下载模型",
+          "downloading": "正在下载",
+          "proceed": "继续",
+          "noSpace": "可用空间不足"
+        },
+        "retry": "重试",
+        "retryRow": "重试{{row}}",
+        "downloaded": "已下载",
+        "foot": {
+          "default": "这些设置之后都可以在设置中更改。",
+          "finishesInBackground": "其余内容会在你继续后接着下载，准备好后自动开启。",
+          "failedStaysOff": "未能下载的项目将保持关闭。之后可以在设置中添加。",
+          "needsMac": "需要 {{needed}} GB，这台 Mac 有 {{free}} GB 可用空间。",
+          "needsComputer": "需要 {{needed}} GB，这台电脑有 {{free}} GB 可用空间。",
+          "noSpaceMac": "听写需要 {{needed}} GB 可用空间，这台 Mac 只有 {{free}} GB。请释放一些空间后继续。",
+          "noSpaceComputer": "听写需要 {{needed}} GB 可用空间，这台电脑只有 {{free}} GB。请释放一些空间后继续。"
+        }
       }
     },
     "steps": {
@@ -3921,7 +3958,8 @@
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
       "sharedNotes": "突出显示我的共享笔记"
-    }
+    },
+    "localModelMissing": "在设置中为“聊天”选择一个模型，即可在此设备上聊天。"
   },
   "support": {
     "documentation": "文档",
