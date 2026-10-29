@@ -346,7 +346,7 @@ test("openrouter routes to its own base and keeps vendor-prefixed model ids", as
     cloudTranscriptionProvider: "openrouter",
     cloudTranscriptionModel: "whisper-large-v3-turbo",
   });
-  assert.equal(stale.model, "openai/gpt-transcribe");
+  assert.equal(stale.model, "mistralai/voxtral-mini-transcribe-3-0");
 });
 
 test("a Custom endpoint pointed at OpenRouter stays on the custom key slot", async () => {

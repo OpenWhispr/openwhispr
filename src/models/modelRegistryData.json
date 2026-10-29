@@ -414,10 +414,16 @@
       "baseUrl": "https://openrouter.ai/api/v1",
       "models": [
         {
-          "id": "openai/gpt-transcribe",
-          "name": "GPT Transcribe",
-          "description": "OpenAI's current transcription model",
-          "descriptionKey": "models.descriptions.transcription.openrouter_openai_gpt_transcribe"
+          "id": "mistralai/voxtral-mini-transcribe-3-0",
+          "name": "Voxtral Mini Transcribe 3",
+          "description": "Mistral's fast, accurate multilingual transcription",
+          "descriptionKey": "models.descriptions.transcription.openrouter_mistralai_voxtral_mini_transcribe_3_0"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-transcribe",
+          "name": "Nemotron 3.5 Transcribe",
+          "description": "NVIDIA's low-cost transcription in 40 languages",
+          "descriptionKey": "models.descriptions.transcription.openrouter_nvidia_nemotron_3_5_transcribe"
         },
         {
           "id": "deepgram/nova-3",
@@ -427,16 +433,10 @@
           "uploadOnly": true
         },
         {
-          "id": "google/chirp-3",
-          "name": "Chirp 3",
-          "description": "Google's speech-to-text in 100+ languages",
-          "descriptionKey": "models.descriptions.transcription.openrouter_google_chirp_3"
-        },
-        {
-          "id": "mistralai/voxtral-mini-transcribe",
-          "name": "Voxtral Mini Transcribe",
-          "description": "Low-cost multilingual transcription",
-          "descriptionKey": "models.descriptions.transcription.openrouter_mistralai_voxtral_mini_transcribe"
+          "id": "assemblyai/universal-3-6-pro",
+          "name": "Universal-3.6 Pro",
+          "description": "AssemblyAI's most accurate transcription",
+          "descriptionKey": "models.descriptions.transcription.openrouter_assemblyai_universal_3_6_pro"
         }
       ]
     },

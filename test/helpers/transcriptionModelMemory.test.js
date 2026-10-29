@@ -110,7 +110,7 @@ test("per-provider transcription model memory", async (t) => {
 
   await t.test("OpenRouter remembers ids outside the shipped shortlist", () => {
     state().switchCloudTranscriptionProvider("dictation", "openrouter");
-    assert.equal(state().cloudTranscriptionModel, "openai/gpt-transcribe");
+    assert.equal(state().cloudTranscriptionModel, "mistralai/voxtral-mini-transcribe-3-0");
 
     // The registry lists a handful of OpenRouter models; the catalog holds far
     // more. A vendor-prefixed id the user reached must survive a tab round-trip
@@ -124,7 +124,7 @@ test("per-provider transcription model memory", async (t) => {
     state().setCloudTranscriptionModel("whisper-large-v3-turbo");
     state().switchCloudTranscriptionProvider("dictation", "groq");
     state().switchCloudTranscriptionProvider("dictation", "openrouter");
-    assert.equal(state().cloudTranscriptionModel, "openai/gpt-transcribe");
+    assert.equal(state().cloudTranscriptionModel, "mistralai/voxtral-mini-transcribe-3-0");
   });
 
   await t.test("setCloudTranscriptionForAllScopes seeds memory in every scope", () => {

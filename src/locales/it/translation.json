@@ -2686,10 +2686,10 @@
         "assemblyai_universal_3_6_pro": "Massima precisione in tempo reale, 32 lingue",
         "mistral_voxtral_mini_transcribe_3_0": "Trascrizione veloce in oltre 50 lingue (anteprima)",
         "mistral_voxtral_small_transcribe_3_0": "Il Voxtral più preciso, oltre 50 lingue (anteprima)",
-        "openrouter_openai_gpt_transcribe": "Modello di trascrizione attuale di OpenAI",
-        "openrouter_deepgram_nova_3": "Trascrizione multilingue veloce di Deepgram",
-        "openrouter_google_chirp_3": "Riconoscimento vocale Google in oltre 100 lingue",
-        "openrouter_mistralai_voxtral_mini_transcribe": "Trascrizione multilingue economica"
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Trascrizione multilingue veloce e precisa di Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Trascrizione economica di NVIDIA in 40 lingue",
+        "openrouter_assemblyai_universal_3_6_pro": "La trascrizione più precisa di AssemblyAI",
+        "openrouter_deepgram_nova_3": "Trascrizione multilingue veloce di Deepgram"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
