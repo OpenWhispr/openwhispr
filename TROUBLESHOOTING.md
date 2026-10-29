@@ -160,7 +160,7 @@ When you report the flicker, add `--log-level=debug` on its own line in the same
 2. Make sure the PipeWire user service is running for the current session
 3. Sign out and back in after installing or updating PipeWire packages
 4. Restart OpenWhispr and start meeting transcription again
-5. No screen-share chooser is expected for Linux system audio; OpenWhispr captures the default sink monitor directly through PipeWire
+5. No screen-share chooser is expected for Linux system audio; OpenWhispr captures the monitor of every output device directly through PipeWire and mixes them, so a meeting app playing to headphones that are not the default output is still recorded
 
 ### Meeting Transcription Issues
 
