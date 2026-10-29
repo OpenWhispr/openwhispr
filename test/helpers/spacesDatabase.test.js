@@ -753,6 +753,31 @@ test("upsertFolderFromCloud converges on a same-space name collision", (t) => {
   assert.equal(forked.sync_status, "pending");
 });
 
+test("upsertFolderFromCloud un-nests a folder the pull moves to another space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Growth" }).space;
+  const parent = db.createFolder("Client A", team.id).folder;
+  const child = db.createFolder("Q1", team.id, parent.id).folder;
+  db.markFolderSynced(child.id, "cloud-q1");
+
+  const moved = db.upsertFolderFromCloud(
+    {
+      client_folder_id: child.client_folder_id,
+      id: "cloud-q1",
+      name: "Q1",
+      sort_order: 1,
+      created_at: "2026-07-01T00:00:00.000Z",
+      updated_at: "2026-07-02T00:00:00.000Z",
+    },
+    privateId
+  );
+  assert.equal(moved.space_id, privateId);
+  assert.equal(moved.parent_folder_id, null);
+  assert.deepEqual(db.deleteFolder(parent.id).folderIds, [parent.id]);
+});
+
 test("pending vector purges persist across relaunches until cleared", (t) => {
   const db = createDb(t);
   if (!db) return;

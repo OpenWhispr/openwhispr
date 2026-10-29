@@ -8566,6 +8566,7 @@ class DatabaseManager {
           name = excluded.name,
           sort_order = excluded.sort_order,
           space_id = excluded.space_id,
+          parent_folder_id = CASE WHEN space_id = excluded.space_id THEN parent_folder_id END,
           account_id = excluded.account_id,
           sync_status = 'synced',
           left_team = 0,
