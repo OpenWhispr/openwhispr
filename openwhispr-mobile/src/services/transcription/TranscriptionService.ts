@@ -910,6 +910,7 @@ export class TranscriptionService {
     audioUri: string,
     language?: string,
     requestContext?: TranscriptionRequest['requestContext'],
+    signal?: AbortSignal,
   ): Promise<TranscriptionResponse> {
     if (!LocalTranscriptionService.isAvailable()) {
       throw new Error(
@@ -936,6 +937,7 @@ export class TranscriptionService {
     const { getPickedLocalModel } =
       require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
     const response = await LocalTranscriptionService.transcribe(audioUri, {
+      signal,
       language,
       prompt: prompt || undefined,
       model: getPickedLocalModel(requestContext === 'file' ? 'upload' : 'dictation'),
@@ -1117,7 +1119,12 @@ export class TranscriptionService {
         // Private mode must never silently leave the device. If the on-device
         // model is unavailable we surface the error so the caller can ask the
         // user for explicit consent before any cloud fallback.
-        return await this.transcribeLocally(audioUri, language, request.requestContext);
+        return await this.transcribeLocally(
+          audioUri,
+          language,
+          request.requestContext,
+          request.signal,
+        );
 
       case 'cloud':
         try {

@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
 import { AudioTools } from '../../../../modules/audio-tools/src';
 import { TranscriptionService } from '../TranscriptionService';
+import { LocalTranscriptionService } from '../LocalTranscriptionService';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -20,7 +21,10 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemSessionType: { FOREGROUND: 0 },
 }));
 jest.mock('../LocalWhisperService', () => ({ LocalWhisperService: {} }));
-jest.mock('../LocalTranscriptionService', () => ({ LocalTranscriptionService: {} }));
+jest.mock('../LocalTranscriptionService', () => ({
+  LocalTranscriptionService: { isAvailable: () => true, transcribe: jest.fn() },
+}));
+jest.mock('@/lib/inferenceRouting', () => ({ getPickedLocalModel: () => 'parakeet-v3' }));
 jest.mock('@/lib/dictationHints', () => ({
   buildDictationHintTiers: () => [[], [], []],
   buildLlmDictionary: () => ({ personal: [], shared: [] }),
@@ -250,4 +254,31 @@ it('cleans newly split chunks without uploading if cancellation occurs during sp
   expect(await pending).toMatchObject({ error: { name: 'AbortError' } });
   expect(upload).not.toHaveBeenCalled();
   expect(AudioTools.cleanup).toHaveBeenCalledWith(['file:///newly-split.wav']);
+});
+
+it('cancels local speech through the service boundary without waiting for a transcript', async () => {
+  const started = deferred<void>();
+  const controller = new AbortController();
+  jest.mocked(LocalTranscriptionService.transcribe).mockImplementationOnce((_uri, options) => {
+    started.resolve();
+    return new Promise((_, reject) => {
+      options?.signal?.addEventListener('abort', () =>
+        reject(Object.assign(new Error('stopped'), { name: 'AbortError' })),
+      );
+    });
+  });
+  const pending = TranscriptionService.transcribe({
+    ...request(controller.signal),
+    provider: 'local',
+  }).then(
+    (value) => ({ value }),
+    (error: Error) => ({ error }),
+  );
+  await started.promise;
+  expect(jest.mocked(LocalTranscriptionService.transcribe).mock.calls[0][1]?.signal).toBe(
+    controller.signal,
+  );
+  controller.abort();
+  expect(await pending).toMatchObject({ error: { name: 'AbortError' } });
+  expect(upload).not.toHaveBeenCalled();
 });
