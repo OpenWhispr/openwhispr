@@ -1053,6 +1053,30 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   )
 
   private let rootStack = UIStackView()
+  private let minimalGlobeButton = UIButton(type: .system)
+  private var minimalKeyboardEnabled = false
+
+  private var minimalGlobeVisible: Bool {
+    minimalKeyboardEnabled && needsInputModeSwitchKey
+  }
+
+  private var typingLayoutHeight: CGFloat {
+    guard minimalKeyboardEnabled else { return metrics.keyboardHeight }
+    return metrics.stripTop + metrics.stripHeight + metrics.bottomPadding
+      + (minimalGlobeVisible ? 36 : 0)
+      + (isCompactToneMenuShown ? Self.compactToneMenuHeight : 0)
+  }
+
+  private func refreshMinimalKeyboardPreference() {
+    minimalKeyboardEnabled = KeyboardHandoffProvider.shared.isMinimalKeyboardEnabled()
+    keyboardRowsStack.isHidden = minimalKeyboardEnabled
+    minimalGlobeButton.isHidden = !minimalGlobeVisible
+    if !minimalKeyboardEnabled { closeCompactToneMenu() }
+    applyRootPadding()
+    applyKeyboardHeight()
+    refreshToneButton()
+    configureRecordingLayout()
+  }
   // The toolbar: tone, the centred dictation pill, agent. The strip guide is the
   // pill-high strip at the top of the band, where the buttons centre.
   private let topBar = UIView()
@@ -1075,6 +1099,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private let keyWidthGuide = UILayoutGuide()
   private var keyWidthGuideConstraint: NSLayoutConstraint?
 
+  private let compactToneMenu = UIStackView()
+  private var isCompactToneMenuShown = false
+  private let recordingPill = PillBackgroundView()
+  private var regularRecordingConstraints: [NSLayoutConstraint] = []
+  private var compactRecordingConstraints: [NSLayoutConstraint] = []
   private let recordingCanvas = UIView()
   // Shown whenever hasFullAccess is false, in place of the keys AND the
   // dictation strip — the amber pill and this panel are never on screen
@@ -1265,13 +1294,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     )
   }
 
+  override func loadView() {
+    // Let the host size the entire keyboard from our height constraint, rather
+    // than retaining its default typing-keyboard frame around the compact bar.
+    let inputView = UIInputView(frame: .zero, inputViewStyle: .keyboard)
+    inputView.allowsSelfSizing = true
+    view = inputView
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     KeyboardLog.ui.info("Keyboard loaded. hasFullAccess=\(self.hasFullAccess, privacy: .public)")
     KeyboardLog.echo("Keyboard loaded. hasFullAccess=\(self.hasFullAccess)")
     metrics = KeyboardMetrics.current(for: layoutInputs(width: layoutWidth))
     setupLayout()
-    applyKeyboardHeight()
+    refreshMinimalKeyboardPreference()
     refreshRecordButton()
     buildKeyboardIfNeeded()
   }
@@ -1285,13 +1322,25 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func applyKeyboardHeight() {
     // The keys keep their height at the bottom; the card above them takes the extra.
     let showsCardHeight = isAgentReviewShown || isAgentActionInFlight
-    let keyboardHeight = metrics.keyboardHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
+    // Minimal recordings keep the toolbar height; permissions and generated-text
+    // review still need their original canvas to remain readable and tappable.
+    // The permissions panel is created lazily. Before setup its UIView has
+    // interaction enabled by default, but it is not on screen and needs no space.
+    let showsFullAccessPanel = didSetupFullAccessPanel && fullAccessPanel.isUserInteractionEnabled
+    let needsCanvas = showsCardHeight
+      || (recordingCanvas.isUserInteractionEnabled && !minimalKeyboardEnabled)
+      || showsFullAccessPanel
+    let baseHeight = needsCanvas ? metrics.keyboardHeight : typingLayoutHeight
+    let keyboardHeight = baseHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
+    rootHeightConstraint?.constant = typingLayoutHeight
 
     if let keyboardHeightConstraint {
       keyboardHeightConstraint.constant = keyboardHeight
     } else {
       let constraint = view.heightAnchor.constraint(equalToConstant: keyboardHeight)
-      constraint.priority = UILayoutPriority(999)
+      // This is the host's sizing contract, not a content-layout preference.
+      // A yielding constraint can leave the system's full-height frame intact.
+      constraint.priority = .required
       constraint.isActive = true
       keyboardHeightConstraint = constraint
     }
@@ -1310,6 +1359,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    refreshMinimalKeyboardPreference()
     noteFieldReport()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
@@ -1358,6 +1408,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
     logRecordMarker("viewWillDisappear")
+    closeCompactToneMenu()
     stopDeleteRepeating()
     issueResetTimer?.invalidate()
     waitForTranscriptTimer?.invalidate()
@@ -1620,7 +1671,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     applyRootPadding()
 
     setupTopBar()
+    setupCompactToneMenu()
     setupKeyboardArea()
+    // Face ID phones supply a system globe below the extension. Home-button
+    // devices need our own switcher even when all typing rows are hidden.
+    minimalGlobeButton.setImage(UIImage(systemName: "globe"), for: .normal)
+    minimalGlobeButton.tintColor = Palette.keyText
+    minimalGlobeButton.accessibilityLabel = "Next keyboard"
+    minimalGlobeButton.addTarget(
+      self, action: #selector(handleNextKeyboardTapped), for: .touchUpInside
+    )
+    minimalGlobeButton.addTarget(
+      self, action: #selector(handleInputModeListButton(_:forEvent:)), for: .allTouchEvents
+    )
+    let minimalGlobeHeight = minimalGlobeButton.heightAnchor.constraint(equalToConstant: 36)
+    minimalGlobeHeight.priority = UILayoutPriority(999)
+    minimalGlobeHeight.isActive = true
+    minimalGlobeButton.isHidden = true
+    rootStack.addArrangedSubview(minimalGlobeButton)
     setupRecordingCanvas()
     setupAgentReviewCanvas()
   }
@@ -1655,6 +1723,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     recordingWaveformStack.spacing = Metrics.recordingWaveformBarSpacing
     recordingWaveformStack.alignment = .center
     recordingWaveformStack.translatesAutoresizingMaskIntoConstraints = false
+    recordingPill.translatesAutoresizingMaskIntoConstraints = false
+    recordingPill.layer.cornerRadius = Metrics.dictationButtonSize / 2
+    recordingPill.isHidden = true
+    recordingCanvas.addSubview(recordingPill)
     recordingCanvas.addSubview(recordingWaveformStack)
 
     for _ in 0..<Metrics.recordingWaveformBarCount {
@@ -1692,13 +1764,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       recordingCanvas.topAnchor.constraint(equalTo: view.topAnchor),
       recordingCanvas.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-      recordingCancelButton.leadingAnchor.constraint(equalTo: recordingCanvas.leadingAnchor, constant: 16),
-      recordingCancelButton.topAnchor.constraint(equalTo: recordingCanvas.topAnchor, constant: 12),
       recordingCancelButton.widthAnchor.constraint(equalToConstant: Metrics.recordingActionButtonSize),
       recordingCancelButton.heightAnchor.constraint(equalToConstant: Metrics.recordingActionButtonSize),
 
-      recordingConfirmButton.trailingAnchor.constraint(equalTo: recordingCanvas.trailingAnchor, constant: -16),
-      recordingConfirmButton.topAnchor.constraint(equalTo: recordingCanvas.topAnchor, constant: 12),
       recordingConfirmButton.widthAnchor.constraint(equalToConstant: Metrics.recordingActionButtonSize),
       recordingConfirmButton.heightAnchor.constraint(equalToConstant: Metrics.recordingActionButtonSize),
 
@@ -1707,11 +1775,42 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       recordingHeaderLabel.trailingAnchor.constraint(equalTo: recordingConfirmButton.leadingAnchor, constant: -8),
 
       recordingWaveformStack.centerXAnchor.constraint(equalTo: recordingCanvas.centerXAnchor),
-      recordingWaveformStack.centerYAnchor.constraint(equalTo: recordingCanvas.centerYAnchor, constant: -6),
+      recordingPill.leadingAnchor.constraint(equalTo: recordButton.leadingAnchor),
+      recordingPill.trailingAnchor.constraint(equalTo: recordButton.trailingAnchor),
+      recordingPill.topAnchor.constraint(equalTo: recordButton.topAnchor),
+      recordingPill.bottomAnchor.constraint(equalTo: recordButton.bottomAnchor),
 
       recordingCaptionLabel.centerXAnchor.constraint(equalTo: recordingCanvas.centerXAnchor),
       recordingCaptionLabel.topAnchor.constraint(equalTo: recordingWaveformStack.bottomAnchor, constant: 14),
     ])
+    regularRecordingConstraints = [
+      recordingCancelButton.leadingAnchor.constraint(equalTo: recordingCanvas.leadingAnchor, constant: 16),
+      recordingConfirmButton.trailingAnchor.constraint(equalTo: recordingCanvas.trailingAnchor, constant: -16),
+      recordingCancelButton.topAnchor.constraint(equalTo: recordingCanvas.topAnchor, constant: 12),
+      recordingConfirmButton.topAnchor.constraint(equalTo: recordingCanvas.topAnchor, constant: 12),
+      recordingWaveformStack.centerYAnchor.constraint(equalTo: recordingCanvas.centerYAnchor, constant: -6),
+    ]
+    compactRecordingConstraints = [
+      recordingCancelButton.centerXAnchor.constraint(equalTo: toneButton.centerXAnchor),
+      recordingConfirmButton.centerXAnchor.constraint(equalTo: agentButton.centerXAnchor),
+      recordingCancelButton.centerYAnchor.constraint(equalTo: toneButton.centerYAnchor),
+      recordingConfirmButton.centerYAnchor.constraint(equalTo: agentButton.centerYAnchor),
+      recordingWaveformStack.centerYAnchor.constraint(equalTo: recordButton.centerYAnchor),
+    ]
+    NSLayoutConstraint.activate(regularRecordingConstraints)
+  }
+
+  private func configureRecordingLayout() {
+    NSLayoutConstraint.deactivate(regularRecordingConstraints + compactRecordingConstraints)
+    NSLayoutConstraint.activate(minimalKeyboardEnabled ? compactRecordingConstraints : regularRecordingConstraints)
+    recordingWaveformStack.transform = minimalKeyboardEnabled
+      ? CGAffineTransform(scaleX: 0.35, y: 0.22) : .identity
+    recordingPill.isHidden = !minimalKeyboardEnabled
+    // Match the idle pill material and the full-size recording's waveform color.
+    recordingPill.setStyle(.adaptive)
+    setRecordingWaveformColor(isAgentRecordingActive ? Palette.cleanupAccent : Palette.accent)
+    recordingCaptionLabel.isHidden = minimalKeyboardEnabled
+    if minimalKeyboardEnabled { recordingHeaderLabel.isHidden = true }
   }
 
   /// The agent review overlay: an alpha-swapped card (like recordingCanvas) at
@@ -2139,6 +2238,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     setupFullAccessPanelIfNeeded()
     guard !fullAccessPanel.isUserInteractionEnabled else { return }
     fullAccessPanel.isUserInteractionEnabled = true
+    applyKeyboardHeight()
     view.bringSubviewToFront(fullAccessPanel)
     let apply = {
       self.fullAccessPanel.alpha = 1
@@ -2155,6 +2255,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func hideFullAccessPanel(animated: Bool) {
     guard didSetupFullAccessPanel, fullAccessPanel.isUserInteractionEnabled else { return }
     fullAccessPanel.isUserInteractionEnabled = false
+    applyKeyboardHeight()
     let apply = {
       self.fullAccessPanel.alpha = 0
       self.rootStack.alpha = 1
@@ -2179,8 +2280,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func showRecordingCanvas() {
+    closeCompactToneMenu()
     setCanvasActionButtonsEnabled(true)
     recordingCanvas.isUserInteractionEnabled = true
+    applyKeyboardHeight()
 
     if isAgentRecordingActive {
       // Deep-link/recovery starts never pass through the tap handlers, so pick
@@ -2192,13 +2295,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       recordingHeaderLabel.text = agentRecordingHeaderText
         ?? "Tell \(KeyboardHandoffProvider.shared.agentName()) What to Write"
       recordingHeaderLabel.isHidden = false
-      setRecordingWaveformColor(Palette.cleanupAccent)
     } else {
       recordingCaptionLabel.text = "Listening"
       recordingHeaderLabel.isHidden = true
-      setRecordingWaveformColor(Palette.accent)
     }
 
+    configureRecordingLayout()
     UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseOut, animations: {
       self.recordingCanvas.alpha = 1
       self.rootStack.alpha = 0
@@ -2213,6 +2315,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func hideRecordingCanvas() {
     recordingCanvas.isUserInteractionEnabled = false
+    applyKeyboardHeight()
     resetRecordingWaveformBars()
 
     UIView.animate(withDuration: 0.18, delay: 0, options: .curveEaseOut, animations: {
@@ -2299,6 +2402,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       accessibilityLabel: "Dictation tone"
     )
     toneButton.showsMenuAsPrimaryAction = true
+    toneButton.addTarget(self, action: #selector(handleCompactToneTapped), for: .touchUpInside)
     refreshToneButton()
 
     // Agent entry button, mirroring the tone button on the trailing edge. A press
@@ -2431,6 +2535,39 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     ("excited", "Excited"),
   ]
 
+  private static let compactToneMenuRowHeight: CGFloat = 44
+  private static var compactToneMenuHeight: CGFloat {
+    // One header row plus one row per tone.
+    CGFloat(toneMenuItems.count + 1) * compactToneMenuRowHeight
+  }
+
+  private func setupCompactToneMenu() {
+    compactToneMenu.axis = .vertical
+    compactToneMenu.distribution = .fillEqually
+    compactToneMenu.isHidden = true
+    rootStack.addArrangedSubview(compactToneMenu)
+  }
+
+  private func closeCompactToneMenu() {
+    isCompactToneMenuShown = false
+    compactToneMenu.isHidden = true
+    applyKeyboardHeight()
+  }
+
+  @objc private func handleCompactToneTapped() {
+    guard minimalKeyboardEnabled else { return }
+    isCompactToneMenuShown.toggle()
+    compactToneMenu.isHidden = !isCompactToneMenuShown
+    refreshToneButton()
+    applyKeyboardHeight()
+  }
+
+  private func selectCompactTone(_ tone: String) {
+    KeyboardHandoffProvider.shared.setTone(tone)
+    closeCompactToneMenu()
+    refreshToneButton()
+  }
+
   private func refreshToneButton() {
     // isToneApplicable() fails open on a dead App Group — `guard let defaults`
     // then `!= "0"` reads a live-but-empty suite as applicable — so the tone
@@ -2470,7 +2607,29 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // shorter keyboards the last tone ("Excited") can fall into the scroll
     // region instead of showing inline.
     let menuTitle = applicable ? "Dictation Tone" : "Tones are off in Local Mode"
-    toneButton.menu = UIMenu(title: menuTitle, children: actions)
+    toneButton.showsMenuAsPrimaryAction = !minimalKeyboardEnabled
+    toneButton.menu = minimalKeyboardEnabled ? nil : UIMenu(title: menuTitle, children: actions)
+    for child in compactToneMenu.arrangedSubviews {
+      compactToneMenu.removeArrangedSubview(child)
+      child.removeFromSuperview()
+    }
+    if minimalKeyboardEnabled {
+      let title = UILabel()
+      title.text = menuTitle
+      title.font = .systemFont(ofSize: 12, weight: .medium)
+      title.textColor = .secondaryLabel
+      title.textAlignment = .center
+      compactToneMenu.addArrangedSubview(title)
+      for item in Self.toneMenuItems {
+        let button = UIButton(type: .system)
+        button.setTitle((item.value == current ? "✓ " : "") + item.title, for: .normal)
+        button.isEnabled = applicable || item.value == "default"
+        button.addAction(UIAction { [weak self] _ in
+          self?.selectCompactTone(item.value)
+        }, for: .touchUpInside)
+        compactToneMenu.addArrangedSubview(button)
+      }
+    }
     toneButton.isUserInteractionEnabled = true
     toneButton.alpha = applicable ? 1.0 : 0.4
   }
@@ -2705,7 +2864,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rootStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
       top: 0, leading: metrics.sideMargin, bottom: metrics.bottomPadding, trailing: metrics.sideMargin
     )
-    rootStack.spacing = metrics.stripGapBelow
+    rootStack.spacing = minimalKeyboardEnabled ? 0 : metrics.stripGapBelow
     // The rows take the padding at the keyboard's sides and bottom, and the half of the
     // gap below the toolbar that is nearer to them. The side margin is a half point, which
     // layout rounds to pixels; one more point reaches the screen edge whatever the scale.
@@ -2728,12 +2887,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     let widthChanged = abs(width - lastMetricsWidth) > 1
     lastMetricsWidth = width
 
+    minimalGlobeButton.isHidden = !minimalGlobeVisible
     let nextMetrics = KeyboardMetrics.current(for: inputs)
     let metricsChanged = nextMetrics != metrics
     if metricsChanged {
       metrics = nextMetrics
       applyRootPadding()
-      rootHeightConstraint?.constant = metrics.keyboardHeight
+      rootHeightConstraint?.constant = typingLayoutHeight
       [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach {
         $0.spacing = metrics.rowGap
       }
@@ -4781,6 +4941,7 @@ private struct KeyboardHandoffProvider {
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
   private let dictationToneKey = "keyboard_dictation_tone"
   private let toneApplicableKey = "keyboard_tone_applicable"
+  private let minimalKeyboardEnabledKey = "keyboard_minimal_enabled"
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
   private let agentEnabledKey = "keyboard_agent_enabled"
@@ -4896,6 +5057,10 @@ private struct KeyboardHandoffProvider {
           let defaults = UserDefaults(suiteName: appGroupId) else { return }
     defaults.set(tone, forKey: dictationToneKey)
     defaults.synchronize()
+  }
+
+  func isMinimalKeyboardEnabled() -> Bool {
+    UserDefaults(suiteName: appGroupId)?.string(forKey: minimalKeyboardEnabledKey) == "1"
   }
 
   func isToneApplicable() -> Bool {

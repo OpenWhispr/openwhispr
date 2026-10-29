@@ -19,6 +19,7 @@ export default function PreferencesScreen() {
   const keyboardTone = config?.keyboardTone ?? DEFAULT_KEYBOARD_TONE;
   const agentName = config ? getDictationAgentName(config) : 'OpenWhispr';
   const handleToggleAutoLearn = useConfigToggle('autoLearnCorrections');
+  const handleToggleMinimalKeyboard = useConfigToggle('minimalKeyboardEnabled');
   const [dictationMode, setDictationMode] = useState(() => LiveActivity.isDictationModeEnabled());
 
   return (
@@ -64,6 +65,22 @@ export default function PreferencesScreen() {
           description="Required for keyboard dictation. Tap for setup steps."
           onPress={() => router.push('/keyboard-full-access')}
         />
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            iconStyle="line"
+            icon="keyboard"
+            mdIcon="Keyboard"
+            title="Minimal Keyboard"
+            description="Show only tone, dictation, and the voice assistant. Hide typing keys to save screen space."
+            rightElement={
+              <SettingsSwitch
+                value={config?.minimalKeyboardEnabled ?? false}
+                onValueChange={handleToggleMinimalKeyboard}
+              />
+            }
+            showChevron={false}
+          />
+        ) : null}
         <SettingsRow
           iconStyle="line"
           icon="keyboard"
