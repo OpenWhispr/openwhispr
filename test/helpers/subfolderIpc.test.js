@@ -104,6 +104,7 @@ test.before(() => {
     "_mirrorFolderInUse",
     "_mirrorDeleteFolderIfUnshared",
     "_asyncMirrorWrite",
+    "_asyncMirrorDelete",
   ]) {
     target[method] = Ctor.prototype[method];
   }
@@ -298,12 +299,16 @@ test("deleting a folder keeps the directory a folder named in another case still
   const teamFolder = (await handlers.get("db-create-folder")(null, "casey", team.lastInsertRowid))
     .folder;
   const teamNote = db.saveNote("Roadmap", "Body", "personal", null, null, teamFolder.id).note;
+  const deletedNote = db.saveNote("Plan", "Body", "personal", null, null, personal.id).note;
   markdownMirror.writeNote(teamNote, "casey");
+  markdownMirror.writeNote(deletedNote, "Casey");
   await settle();
 
   await handlers.get("db-delete-folder")(null, personal.id);
   await settle();
+  await settle();
   assert.ok(markdownMirror.getNotePath(teamNote.id), "the team folder's note file survives");
+  assert.equal(markdownMirror.getNotePath(deletedNote.id), null, "the deleted note's file goes");
 });
 
 test("a subfolder whose directory can't move out of a deleted parent is rewritten at the top level", async (t) => {

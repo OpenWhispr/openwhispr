@@ -2668,6 +2668,10 @@ class IPCHandlers {
         for (const note of result.relocatedNotes ?? []) {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
         }
+        // A directory another folder still uses stays, so remove the files by note.
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncMirrorDelete(noteId);
+        }
         setImmediate(() => {
           for (const folderId of result.folderIds) {
             broadcastToWindows("folder-deleted", { id: folderId });
@@ -3187,6 +3191,10 @@ class IPCHandlers {
         // files leave with the folder directory, so rewrite the live ones.
         for (const note of result.relocatedNotes ?? []) {
           if (!note.deleted_at) this._asyncMirrorWrite(note);
+        }
+        // A directory another folder still uses stays, so remove the files by note.
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
           broadcastToWindows("folder-deleted", { id });

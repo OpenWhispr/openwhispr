@@ -8202,7 +8202,7 @@ class DatabaseManager {
             `SELECT f.* FROM folders f JOIN spaces s ON s.id = f.space_id
              WHERE f.sync_status = 'pending' AND f.deleted_at IS NULL
                AND ${accountScope.sql} AND (s.kind = ?${leftTeam})
-             ORDER BY f.parent_folder_id IS NOT NULL, f.space_id, f.name`
+             ORDER BY f.space_id, f.name`
           )
           .all(...accountScope.params, spaceKind);
       }
@@ -8211,7 +8211,7 @@ class DatabaseManager {
           `SELECT f.* FROM folders f
            WHERE f.sync_status = 'pending' AND f.deleted_at IS NULL
              AND ${accountScope.sql}
-           ORDER BY f.parent_folder_id IS NOT NULL, f.space_id, f.name`
+           ORDER BY f.space_id, f.name`
         )
         .all(...accountScope.params);
     } catch (error) {
