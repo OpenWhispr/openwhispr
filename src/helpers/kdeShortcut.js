@@ -279,8 +279,10 @@ class KDEShortcutManager {
       // Pre-registration conflict check via low-level D-Bus call
       try {
         const dbusModule = getDBus();
-        // The invoke callback receives the unwrapped first return value (the
-        // aas list of owner actionIds), not a message object with a body.
+        // Use the single-key compatibility method: the newer QKeySequence /
+        // MatchType call uses structs on Qt 6, not the old flat aii signature.
+        // The callback returns KGlobalShortcutInfo tuples, whose third field
+        // is the component name (the first field is the action name).
         const owners = await new Promise((resolve, reject) => {
           this.bus.invoke(
             {
@@ -288,9 +290,9 @@ class KDEShortcutManager {
               destination: "org.kde.kglobalaccel",
               path: "/kglobalaccel",
               interface: "org.kde.KGlobalAccel",
-              member: "globalShortcutsByKey",
-              signature: "aii",
-              body: [[qtKey], 0],
+              member: "getGlobalShortcutsByKey",
+              signature: "i",
+              body: [qtKey],
             },
             (err, result) => {
               if (err) return reject(err);
@@ -300,19 +302,20 @@ class KDEShortcutManager {
         });
         if (Array.isArray(owners) && owners.length > 0) {
           const otherOwners = owners.filter(
-            (aid) => Array.isArray(aid) && aid[0] !== COMPONENT_NAME
+            (info) => Array.isArray(info) && info[2] !== COMPONENT_NAME
           );
           if (otherOwners.length > 0) {
             debugLogger.log("[KDEShortcut] Shortcut conflict — key owned by another component", {
               slot: slotName,
               hotkey: electronHotkey,
-              owners: otherOwners.map((a) => a[0]),
+              owners: otherOwners.map((info) => info[2]),
             });
             return "conflict";
           }
         }
       } catch (checkErr) {
-        // globalShortcutsByKey may not exist on older KDE — proceed without check
+        // Some builds omit the deprecated compatibility method; keep the
+        // existing best-effort policy and post-registration conflict check.
         debugLogger.log(
           "[KDEShortcut] Could not check for conflicts, proceeding:",
           checkErr.message
