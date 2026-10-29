@@ -228,8 +228,6 @@ export default function OpenAICompatiblePanel({
               ? payload.models
               : [];
 
-          // Coerce fields defensively: non-conformant endpoints may return
-          // numeric ids or object descriptions, which would crash the render.
           return (rawModels as Array<Record<string, unknown>>)
             .filter(
               (item) =>
@@ -239,6 +237,8 @@ export default function OpenAICompatiblePanel({
                 offersOpenRouterModel(item, modelNeeds)
             )
             .map((item) => {
+              // Coerce fields defensively: non-conformant endpoints may return
+              // numeric ids or object descriptions, which would crash the render.
               const rawValue = item?.id ?? item?.name;
               if (rawValue === undefined || rawValue === null || rawValue === "") return null;
               const value = String(rawValue);

@@ -27,7 +27,10 @@ test("batch and free variants and the non-answering routers are never offered", 
 
 test("a scope's needs leave out models that lack them", async () => {
   const { offersOpenRouterModel } = await load();
-  const textOnly = model("mistralai/mistral-small-24b-instruct-2501", { tools: false, image: false });
+  const textOnly = model("mistralai/mistral-small-24b-instruct-2501", {
+    tools: false,
+    image: false,
+  });
   const noTools = model("google/gemini-3.1-flash-image", { tools: false });
   const noImage = model("z-ai/glm-5.3", { image: false });
   const both = model("anthropic/claude-haiku-5.5");

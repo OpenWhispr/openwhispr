@@ -2688,8 +2688,8 @@
         "mistral_voxtral_small_transcribe_3_0": "最準確的 Voxtral，支援 50 多種語言（預覽版）",
         "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral 的快速、精準多語言轉錄",
         "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA 的低成本轉錄，支援 40 種語言",
-        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI 最精準的轉錄",
-        "openrouter_deepgram_nova_3": "Deepgram 的快速多語言轉錄"
+        "openrouter_deepgram_nova_3": "Deepgram 的快速多語言轉錄",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI 最精準的轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

@@ -2704,8 +2704,8 @@
         "mistral_voxtral_small_transcribe_3_0": "Самый точный Voxtral, 50+ языков (предварительная версия)",
         "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Быстрая и точная многоязычная транскрипция от Mistral",
         "openrouter_nvidia_nemotron_3_5_transcribe": "Недорогая транскрипция от NVIDIA на 40 языках",
-        "openrouter_assemblyai_universal_3_6_pro": "Самая точная транскрипция от AssemblyAI",
-        "openrouter_deepgram_nova_3": "Быстрая многоязычная транскрипция Deepgram"
+        "openrouter_deepgram_nova_3": "Быстрая многоязычная транскрипция Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "Самая точная транскрипция от AssemblyAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",

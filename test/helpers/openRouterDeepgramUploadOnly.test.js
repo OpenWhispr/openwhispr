@@ -17,7 +17,9 @@ test("the registry offers Deepgram via OpenRouter to Upload only", async () => {
 
   assert.ok(ids(getTranscriptionProviders()).includes(DEEPGRAM_VIA_OPENROUTER));
   assert.ok(!ids(getDictationTranscriptionProviders()).includes(DEEPGRAM_VIA_OPENROUTER));
-  assert.ok(ids(getDictationTranscriptionProviders()).includes("mistralai/voxtral-mini-transcribe-3-0"));
+  assert.ok(
+    ids(getDictationTranscriptionProviders()).includes("mistralai/voxtral-mini-transcribe-3-0")
+  );
   assert.equal(isUploadOnlyTranscriptionModel("openrouter", DEEPGRAM_VIA_OPENROUTER), true);
   // Direct Deepgram already sends the dictionary as keyterm; it is untouched.
   assert.equal(isUploadOnlyTranscriptionModel("deepgram", "nova-3"), false);

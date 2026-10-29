@@ -2688,8 +2688,8 @@
         "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）",
         "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral の高速・高精度な多言語文字起こし",
         "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA の低コストな文字起こし（40 言語）",
-        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI の最も高精度な文字起こし",
-        "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし"
+        "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI の最も高精度な文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
