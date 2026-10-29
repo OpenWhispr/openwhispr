@@ -976,8 +976,8 @@ export class SyncService {
     const ctx = await this.buildSpaceContext();
     const scope = this.resolvePushScope("folder", folder, ctx);
     if (!scope) return;
-    const { localToCloud } = await this.buildLocalToCloudFolderMap();
-    const parentFolderId = this.cloudParentFolderId(folder, localToCloud);
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
+    const parentFolderId = this.cloudParentFolderId(folder, localToCloud, blockedFolderIds);
     // The parent hasn't reached the cloud yet; a full pass pushes it first.
     if (parentFolderId === undefined) return;
 
@@ -1023,12 +1023,16 @@ export class SyncService {
   }
 
   // A parent travels as its cloud id: null for a top-level folder, undefined
-  // while the parent has no cloud id yet (the subfolder's push waits for it).
+  // while the parent has no cloud id yet or has unpushed changes (the
+  // subfolder's push waits for it, since the server refuses a subfolder whose
+  // parent's space move hasn't landed).
   private cloudParentFolderId(
     folder: FolderItem,
-    localToCloud: Map<number, string>
+    localToCloud: Map<number, string>,
+    blockedFolderIds: Set<number>
   ): string | null | undefined {
     if (folder.parent_folder_id == null) return null;
+    if (blockedFolderIds.has(folder.parent_folder_id)) return undefined;
     return localToCloud.get(folder.parent_folder_id);
   }
 
@@ -1722,14 +1726,16 @@ export class SyncService {
   }
 
   private async pushPendingFolders(teamOnly = false): Promise<void> {
-    // A subfolder waits for its parent's cloud id, so a parent created in this
-    // pass pushes first and the subfolders that waited follow in a second round.
+    // A subfolder waits for its parent to reach the cloud, so a parent created
+    // or updated in this pass pushes first and the subfolders that waited
+    // follow in a second round; a parent whose push failed holds them back.
     const waiting = await this.pushPendingFolderRound(teamOnly);
     if (waiting.size > 0) await this.pushPendingFolderRound(teamOnly, waiting);
   }
 
-  // Returns the subfolders still waiting for their parent's cloud id. `only`
-  // limits the round to those ids, so rows that already failed aren't retried.
+  // Returns the subfolders still waiting for their parent to reach the cloud.
+  // `only` limits the round to those ids, so rows that already failed aren't
+  // retried.
   private async pushPendingFolderRound(
     teamOnly: boolean,
     only?: Set<number>
@@ -1741,7 +1747,7 @@ export class SyncService {
     if (pending.length === 0) return waiting;
 
     const ctx = await this.buildSpaceContext();
-    const { localToCloud } = await this.buildLocalToCloudFolderMap();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const pushable: Array<{
       folder: FolderItem;
       scope: PushScopeFields;
@@ -1750,7 +1756,7 @@ export class SyncService {
     for (const folder of pending) {
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
-      const parentFolderId = this.cloudParentFolderId(folder, localToCloud);
+      const parentFolderId = this.cloudParentFolderId(folder, localToCloud, blockedFolderIds);
       if (parentFolderId === undefined) {
         waiting.add(folder.id);
         continue;

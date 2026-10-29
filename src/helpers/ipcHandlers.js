@@ -1132,15 +1132,17 @@ class IPCHandlers {
   }
 
   // Folder names are only unique per space — a live folder with the same path
-  // in another space shares the mirror directory.
-  _mirrorFolderInUse(mirrorFolder) {
+  // in another space shares the mirror directory. Names compare without case,
+  // as macOS and Windows directories do.
+  _mirrorFolderInUse(mirrorFolder, exceptFolderId = null) {
     const [parentName, name] = Array.isArray(mirrorFolder) ? mirrorFolder : [null, mirrorFolder];
     return !!this.databaseManager.db
       .prepare(
         `SELECT 1 FROM folders f LEFT JOIN folders p ON p.id = f.parent_folder_id
-         WHERE f.name = ? AND p.name IS ? AND f.deleted_at IS NULL`
+         WHERE f.name = ? COLLATE NOCASE AND p.name IS ? COLLATE NOCASE
+           AND f.id IS NOT ? AND f.deleted_at IS NULL`
       )
-      .get(name, parentName);
+      .get(name, parentName, exceptFolderId);
   }
 
   _mirrorDeleteFolderIfUnshared(mirrorFolder) {
@@ -1150,20 +1152,22 @@ class IPCHandlers {
   }
 
   // Renames or moves a folder's mirror directory after a change to its path.
-  // A directory another folder still uses stays put; only this folder's notes
-  // (its subfolders' included) are rewritten at the new path.
+  // A directory another folder still uses stays put, and one that couldn't
+  // move may be deleted with its old parent next; either way this folder's
+  // notes (its subfolders' included) are rewritten at the new path.
   _mirrorMoveFolder(previousMirrorFolder, folderId) {
     if (!this._noteFilesEnabled || !previousMirrorFolder) return;
     const mirrorFolder = this._getMirrorFolder(folderId);
     if (JSON.stringify(mirrorFolder) === JSON.stringify(previousMirrorFolder)) return;
-    if (this._mirrorFolderInUse(previousMirrorFolder)) {
+    const markdownMirror = require("./markdownMirror");
+    if (
+      this._mirrorFolderInUse(previousMirrorFolder, folderId) ||
+      !markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder)
+    ) {
       for (const noteId of this.databaseManager.getNoteIdsInFolder(folderId)) {
         this._asyncMirrorWrite(this.databaseManager.getNote(noteId));
       }
-      return;
     }
-    const markdownMirror = require("./markdownMirror");
-    markdownMirror.renameFolder(previousMirrorFolder, mirrorFolder);
   }
 
   _asyncMirrorWrite(note) {

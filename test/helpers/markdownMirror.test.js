@@ -113,6 +113,22 @@ test("writes reject a symlinked folder that resolves outside the mirror", (t) =>
   assert.equal(markdownMirror.getFolderPath("linked"), null);
 });
 
+test("subfolder writes and moves reject a symlinked parent that resolves outside the mirror", (t) => {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
+  fs.symlinkSync(outsidePath, path.join(basePath, "linked"), "dir");
+
+  markdownMirror.init(basePath);
+  markdownMirror.writeNote({ id: 18, title: "Escaped", content: "Body" }, ["linked", "Q2"]);
+  markdownMirror.writeNote({ id: 19, title: "Kept", content: "Body" }, "Q1");
+  assert.equal(markdownMirror.renameFolder("Q1", ["linked", "Q1"]), false);
+
+  assert.deepEqual(fs.readdirSync(outsidePath), []);
+  assert.equal(markdownMirror.getNotePath(19), path.join(basePath, "Q1", "19-kept.md"));
+});
+
 test("writes reject a symlinked note file without changing its target", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));

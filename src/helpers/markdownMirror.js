@@ -82,6 +82,11 @@ class MarkdownMirror {
   }
 
   _resolveFolderPath(folderName, { create = false } = {}) {
+    // A subfolder's parent is checked first, so a parent directory that is a
+    // link out of the mirror is never created in or written through.
+    if (Array.isArray(folderName) && !this._resolveFolderPath(folderName[0], { create })) {
+      return null;
+    }
     const candidatePath = this._folderCandidatePath(folderName);
     if (!candidatePath) return null;
 
@@ -249,29 +254,32 @@ class MarkdownMirror {
     }
   }
 
+  // Returns true once the directory has moved.
   renameFolder(oldName, newName) {
-    if (!this._baseRealPath) return;
+    if (!this._baseRealPath) return false;
     try {
       const oldPath = this._resolveFolderPath(oldName);
-      if (!oldPath) return;
+      if (!oldPath) return false;
       const newPath = this._folderCandidatePath(newName);
-      if (!newPath || oldPath === newPath) return;
+      if (!newPath || oldPath === newPath) return false;
+      if (Array.isArray(newName)) this._resolveFolderPath(newName[0], { create: true });
       const existingPath = fs.existsSync(newPath) ? this._resolveExistingFolderPath(newPath) : null;
       // A same-named folder in another space shares the directory, so move in
       // beside it; a case-only rename finds the folder itself there.
       if (existingPath && fs.statSync(existingPath).ino !== fs.statSync(oldPath).ino) {
         fs.cpSync(oldPath, existingPath, { recursive: true });
         fs.rmSync(oldPath, { recursive: true });
-        return;
+        return true;
       }
-      fs.mkdirSync(path.dirname(newPath), { recursive: true });
       fs.renameSync(oldPath, newPath);
+      return true;
     } catch (err) {
       debugLogger.error(
         "Failed to rename folder",
         { oldName, newName, error: err.message },
         "note-files"
       );
+      return false;
     }
   }
 

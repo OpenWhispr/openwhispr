@@ -92,7 +92,6 @@ test.before(() => {
   const target = {
     _noteFilesEnabled: true,
     notifyVectorChanges: () => {},
-    _asyncMirrorWrite: () => {},
     get databaseManager() {
       return current.db;
     },
@@ -104,6 +103,7 @@ test.before(() => {
     "_mirrorMoveFolder",
     "_mirrorFolderInUse",
     "_mirrorDeleteFolderIfUnshared",
+    "_asyncMirrorWrite",
   ]) {
     target[method] = Ctor.prototype[method];
   }
@@ -265,10 +265,67 @@ test("nesting a folder leaves the directory another space's same-named folder sh
   const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
   const archive = (await handlers.get("db-create-folder")(null, "Archive")).folder;
   await handlers.get("db-create-folder")(null, "Archive", team.lastInsertRowid);
+  const note = db.saveNote("Plan", "Body", "personal", null, null, archive.id).note;
+  markdownMirror.writeNote(note, "Archive");
   await settle();
   fs.writeFileSync(path.join(basePath, "Archive", "77-roadmap.md"), "---\nid: 77\n---\n");
 
   await handlers.get("db-set-folder-parent")(null, archive.id, parent.id);
   await settle();
+  await settle();
   assert.ok(fs.existsSync(path.join(basePath, "Archive", "77-roadmap.md")));
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Client A", "Archive", `${note.id}-plan.md`),
+    "the nested folder's own notes are rewritten at its new path"
+  );
+});
+
+test("deleting a folder keeps the directory a folder named in another case still uses", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+    )
+    .run("team-case-only", "Growth");
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team.lastInsertRowid, "test-account");
+  const personal = (await handlers.get("db-create-folder")(null, "Casey")).folder;
+  const teamFolder = (await handlers.get("db-create-folder")(null, "casey", team.lastInsertRowid))
+    .folder;
+  const teamNote = db.saveNote("Roadmap", "Body", "personal", null, null, teamFolder.id).note;
+  markdownMirror.writeNote(teamNote, "casey");
+  await settle();
+
+  await handlers.get("db-delete-folder")(null, personal.id);
+  await settle();
+  assert.ok(markdownMirror.getNotePath(teamNote.id), "the team folder's note file survives");
+});
+
+test("a subfolder whose directory can't move out of a deleted parent is rewritten at the top level", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const parent = (await handlers.get("db-create-folder")(null, "Client A")).folder;
+  const child = (await handlers.get("db-create-folder")(null, "Q1", null, parent.id)).folder;
+  const note = db.saveNote("Plan", "Body", "personal", null, null, child.id).note;
+  markdownMirror.writeNote(note, ["Client A", "Q1"]);
+  await settle();
+  t.mock.method(fs, "renameSync", () => {
+    throw Object.assign(new Error("operation not permitted"), { code: "EPERM" });
+  });
+
+  assert.ok((await handlers.get("db-hard-delete-folder")(null, parent.id)).success);
+  await settle();
+  await settle();
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Q1", `${note.id}-plan.md`)
+  );
+  assert.ok(!fs.existsSync(path.join(basePath, "Client A")));
 });

@@ -644,3 +644,72 @@ test("a pass with backup off leaves the nesting of personal folders alone", asyn
   assert.ok(cloud.logFor("/api/folders/list").length > 0, "the team-only pass pulled folders");
   assert.equal(folderByName(db, "Q1").parent_folder_id, null);
 });
+
+test("a subfolder waits while its parent's PATCH fails and keeps its nesting", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1", null, parent.id).folder;
+  await (await newSyncService(t)).syncAll(true);
+  const parentCloudId = folderByName(db, "Client A").cloud_id;
+  const quarterCloudId = folderByName(db, "Q1").cloud_id;
+
+  db.renameFolder(parent.id, "Client B");
+  db.renameFolder(quarter.id, "Q2");
+  setFolderRow(db, parent.id, { updated_at: "2027-01-01 00:00:00" });
+  setFolderRow(db, quarter.id, { updated_at: "2027-01-01 00:00:00" });
+  cloud.failNext((call) => call.path === "/api/folders/update" && call.body?.id === parentCloudId, {
+    status: 500,
+    error: "boom",
+  });
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.deepEqual(
+    cloud.logFor("/api/folders/update").map((call) => call.body.id),
+    [parentCloudId],
+    "the subfolder is not sent under a parent whose push failed"
+  );
+  const waiting = folderByName(db, "Q2");
+  assert.equal(waiting.sync_status, "pending");
+  assert.equal(waiting.parent_folder_id, parent.id);
+
+  await (await newSyncService(t)).syncAll(true);
+  assert.deepEqual(
+    cloud.logFor("/api/folders/update").map((call) => call.body.id),
+    [parentCloudId, parentCloudId, quarterCloudId]
+  );
+  assert.equal(folderByName(db, "Q2").sync_status, "synced");
+  assert.equal(cloud.folder(quarterCloudId).name, "Q2");
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id, parentCloudId);
+});
+
+test("a subfolder PATCH the cloud refuses to nest goes top-level and pushes that next pass", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  const quarter = db.createFolder("Q1", null, parent.id).folder;
+  await (await newSyncService(t)).syncAll(true);
+  const quarterCloudId = folderByName(db, "Q1").cloud_id;
+
+  db.renameFolder(quarter.id, "Q2");
+  setFolderRow(db, quarter.id, { updated_at: "2027-01-01 00:00:00" });
+  cloud.failNext("PATCH /api/folders/update", {
+    status: 400,
+    code: "invalid_parent_folder",
+    error: "Invalid parent",
+  });
+  await (await newSyncService(t)).syncAll(true);
+
+  const unnested = folderByName(db, "Q2");
+  assert.equal(unnested.parent_folder_id, null);
+  assert.equal(unnested.sync_status, "pending");
+
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloud.logFor("/api/folders/update").at(-1).body.parent_folder_id, null);
+  assert.equal(folderByName(db, "Q2").sync_status, "synced");
+  assert.equal(cloud.folder(quarterCloudId).parent_folder_id, null);
+});
