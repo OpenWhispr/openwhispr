@@ -84,6 +84,7 @@ import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
 import { markIntroSeen, NOTES_STRUCTURE_INTRO, shouldShowIntro } from "../../lib/versionedIntro";
+import type { InvitationNotesEntry } from "../../hooks/useInvitationNotesEntry";
 import {
   applyNoteDraftMutation,
   collectPendingNoteWrites,
@@ -138,7 +139,7 @@ interface PersonalNotesViewProps {
     event: any;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  invitationEntry?: { workspaceId: string; teamIds: string[]; spaceIds: string[] } | null;
+  invitationEntry?: InvitationNotesEntry | null;
   onInvitationEntryHandled?: () => void;
 }
 
@@ -340,9 +341,15 @@ export default function PersonalNotesView({
 
   // Arriving via an accepted invitation reopens the structure intro even when
   // this device has already seen it, and even before notes onboarding is done
-  // (the dialog also renders in the onboarding branch below).
+  // (the dialog also renders in the onboarding branch below). Once per
+  // invitation: the entry outlives the dialog while its space syncs, and a
+  // layout change in that time must not bring the dialog back.
+  const structureIntroShownForRef = useRef<InvitationNotesEntry | null>(null);
   useEffect(() => {
-    if (invitationEntry && !isSidePanelLayout) setShowStructureIntro(true);
+    if (!invitationEntry || isSidePanelLayout) return;
+    if (structureIntroShownForRef.current === invitationEntry) return;
+    structureIntroShownForRef.current = invitationEntry;
+    setShowStructureIntro(true);
   }, [invitationEntry, isSidePanelLayout]);
 
   // The acceptance modal starts a sync before navigating here. Once the first
