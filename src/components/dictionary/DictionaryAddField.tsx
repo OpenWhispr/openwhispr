@@ -23,7 +23,8 @@ interface DictionaryAddFieldProps {
   target: AddTarget;
   targets: AddTargetOption[];
   onTargetChange: (target: AddTarget) => void;
-  // Resolves true once the words were added, which clears the field.
+  // Resolves false when the words weren't added, which puts them back in the
+  // field. The field clears as soon as they're submitted.
   onAdd: (text: string) => Promise<boolean>;
   // Whether one typed word is already in the target list.
   isInTarget: (word: string) => boolean;
@@ -87,9 +88,19 @@ export function DictionaryAddField({
     }
   };
 
+  // A shared add waits on the API, so the field clears at once and the next
+  // word can be typed while it runs. A refused add puts its text back, unless
+  // something new was typed meanwhile; its toast still names the failure.
   const submit = async (): Promise<void> => {
     if (!canAdd) return;
-    await runBusy(() => onAdd(text));
+    const submitted = text;
+    setText("");
+    let added = false;
+    try {
+      added = await onAdd(submitted);
+    } finally {
+      if (!added) setText((current) => (current === "" ? submitted : current));
+    }
   };
 
   const unhide = async (): Promise<void> => {

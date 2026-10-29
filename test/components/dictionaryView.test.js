@@ -594,6 +594,38 @@ test("Enter adds to Personal through the settings store and to a shared list thr
   );
 });
 
+test("a shared add clears the field before the API answers; a failed one puts its text back", async (t) => {
+  const { container } = await renderView(t);
+  const pending = [];
+  globalThis.__results.addSharedWords = () =>
+    new Promise((resolve) => {
+      pending.push(resolve);
+    });
+  const failed = (words) => ({
+    added: [],
+    alreadyPresent: [],
+    rejected: [],
+    failed: { words, reason: "network" },
+  });
+
+  await openList(container, `space:${ENGINEERING}`);
+  await type(addInput(container), "Grafana");
+  await pressEnter(addInput(container));
+  assert.equal(addInput(container).value, "", "cleared while the request runs");
+
+  // The next word can be typed and sent while the first is still in flight.
+  await type(addInput(container), "Loki");
+  await pressEnter(addInput(container));
+  assert.equal(pending.length, 2);
+
+  await React.act(async () => pending[0](failed(["Grafana"])));
+  assert.equal(addInput(container).value, "Grafana", "an empty field gets the failed text back");
+
+  await type(addInput(container), "Tempo");
+  await React.act(async () => pending[1](failed(["Loki"])));
+  assert.equal(addInput(container).value, "Tempo", "text typed meanwhile is never overwritten");
+});
+
 test("a word already in the target is refused inline", async (t) => {
   const { container, calls } = await renderView(t);
   await openList(container, `space:${ENGINEERING}`);
