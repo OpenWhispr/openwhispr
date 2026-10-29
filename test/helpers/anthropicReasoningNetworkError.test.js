@@ -156,3 +156,56 @@ test("an already-classified failure (missing key) passes through unchanged", asy
   assert.equal(result.code, "API_KEY_MISSING");
   assert.equal(result.messageKey, "providerErrors.keyMissing");
 });
+
+for (const model of ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5"]) {
+  test(`${model}: short cleanup has room for an answer`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Cleaned dictation." }],
+          stop_reason: "end_turn",
+        }),
+        { status: 200 }
+      );
+    };
+
+    const result = await anthropicHandler({}, "a".repeat(73), model, null, {
+      requireCompleteOutput: true,
+      supportsTemperature: model === "claude-haiku-4-5",
+      temperature: 0,
+    });
+
+    assert.equal(requestBody.max_tokens, 4096);
+    assert.equal(requestBody.temperature, model === "claude-haiku-4-5" ? 0 : undefined);
+    assert.equal(requestBody.thinking, undefined);
+    assert.equal(requestBody.output_config, undefined);
+    assert.deepEqual(result, { success: true, text: "Cleaned dictation." });
+  });
+}
+
+for (const maxTokens of [128, 8192]) {
+  test(`an explicit ${maxTokens}-token cap is preserved`, async () => {
+    let requestBody;
+    fetchBehavior = async (_url, init) => {
+      requestBody = JSON.parse(init.body);
+      return new Response(
+        JSON.stringify({
+          content: [{ type: "text", text: "Incomplete" }],
+          stop_reason: "max_tokens",
+        }),
+        { status: 200 }
+      );
+    };
+
+    const result = await anthropicHandler({}, "short dictation", "claude-sonnet-5-5", null, {
+      maxTokens,
+      requireCompleteOutput: true,
+    });
+
+    assert.equal(requestBody.max_tokens, maxTokens);
+    assert.equal(result.success, false);
+    assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupTruncated");
+  });
+}
