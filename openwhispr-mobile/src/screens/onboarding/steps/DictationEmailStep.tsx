@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import {
   Image,
   Keyboard,
-  PlatformColor,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
   type ImageSourcePropType,
 } from 'react-native';
+import { iosColor } from '@/config/colors';
 import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { AppFont } from '@/lib/fonts';
@@ -226,7 +226,7 @@ function AppIcon({
 const styles = StyleSheet.create({
   emailInput: {
     minHeight: 140,
-    color: PlatformColor('label') as unknown as string,
+    color: iosColor('label'),
     fontFamily: AppFont.regular,
     fontSize: 16,
     fontWeight: '400',
