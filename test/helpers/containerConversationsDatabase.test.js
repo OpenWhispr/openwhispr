@@ -1177,3 +1177,26 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
     0
   );
 });
+
+test("a cloud pull keeps the note a chat came from", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Q3 planning sync", "body").note;
+  const chat = db.createAgentConversation("Onboarding decisions", note.id);
+  db.markConversationSynced(chat.id, "cloud-conv-note");
+
+  // The cloud's conversations carry no note_id.
+  db.upsertConversationFromCloud(
+    {
+      id: "cloud-conv-note",
+      client_conversation_id: chat.client_conversation_id,
+      title: "Onboarding decisions (renamed)",
+      updated_at: "2099-01-01T00:00:00.000Z",
+    },
+    [{ role: "user", content: "What did we decide?" }]
+  );
+  const pulled = db.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(chat.id);
+  assert.equal(pulled.title, "Onboarding decisions (renamed)");
+  assert.equal(pulled.note_id, note.id);
+  assert.equal(db.getConversationsForNote(note.id).length, 1);
+});

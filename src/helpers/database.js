@@ -8805,7 +8805,8 @@ class DatabaseManager {
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             cloud_id = excluded.cloud_id,
             title = excluded.title,
-            note_id = excluded.note_id,
+            -- The cloud has no note column, so its copy never says which note a chat came from.
+            note_id = COALESCE(excluded.note_id, agent_conversations.note_id),
             sync_status = 'synced',
             updated_at = excluded.updated_at
         `);
