@@ -3917,6 +3917,13 @@
     "searchTitle": "搜尋對話",
     "searchDescription": "搜尋所有對話",
     "inputPlaceholder": "隨便問點什麼...",
+    "sourceNote": {
+      "from": "來自",
+      "open": "開啟筆記",
+      "deleted": "此筆記已刪除",
+      "deletedShort": "已刪除",
+      "askAbout": "詢問關於{{title}}的問題..."
+    },
     "starters": {
       "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",

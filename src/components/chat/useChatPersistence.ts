@@ -12,6 +12,8 @@ export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   conversationId: number | null;
+  /** The note the open conversation was started from. */
+  noteId: number | null;
   createConversation: (
     title: string,
     noteId?: number | null,
@@ -36,6 +38,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     options.conversationId ?? null
   );
   const conversationIdRef = useRef(conversationId);
+  const [noteId, setNoteId] = useState<number | null>(null);
   const sessionVersionRef = useRef(0);
   const getSessionVersion = useCallback(() => sessionVersionRef.current, []);
 
@@ -68,6 +71,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const id = conv.id;
       conversationIdRef.current = id;
       setConversationId(id);
+      setNoteId(noteId ?? null);
       options.onConversationCreated?.(id, title);
       return id;
     },
@@ -76,6 +80,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const loadConversation = useCallback(async (id: number) => {
     const version = ++sessionVersionRef.current;
+    // Cleared up front, so the last conversation's note never grounds a send made while this loads.
+    setNoteId(null);
     const conv = await window.electronAPI?.getAgentConversation?.(id);
     if (version !== sessionVersionRef.current) return false;
     if (!conv) {
@@ -89,6 +95,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     }
     conversationIdRef.current = id;
     setConversationId(id);
+    setNoteId(conv.note_id ?? null);
     const loaded: Message[] = conv.messages.map((m) => {
       const parsed = m.metadata ? tryParseMetadata(m.metadata) : undefined;
       const toolCalls = parsed?.toolCalls as ToolCallInfo[] | undefined;
@@ -133,12 +140,14 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     setMessages([]);
     conversationIdRef.current = null;
     setConversationId(null);
+    setNoteId(null);
   }, []);
 
   return {
     messages,
     setMessages,
     conversationId,
+    noteId,
     getSessionVersion,
     createConversation,
     loadConversation,

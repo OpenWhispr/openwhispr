@@ -3917,6 +3917,13 @@
     "searchTitle": "搜索对话",
     "searchDescription": "搜索所有对话",
     "inputPlaceholder": "随便问点什么...",
+    "sourceNote": {
+      "from": "来自",
+      "open": "打开笔记",
+      "deleted": "此笔记已删除",
+      "deletedShort": "已删除",
+      "askAbout": "询问关于{{title}}的问题..."
+    },
     "starters": {
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",

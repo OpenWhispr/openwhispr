@@ -5300,6 +5300,13 @@
     "searchTitle": "البحث في المحادثات",
     "searchDescription": "البحث في جميع محادثاتك",
     "inputPlaceholder": "اسأل عن أي شيء...",
+    "sourceNote": {
+      "from": "من",
+      "open": "فتح الملاحظة",
+      "deleted": "تم حذف هذه الملاحظة",
+      "deletedShort": "محذوفة",
+      "askAbout": "اسأل عن {{title}}..."
+    },
     "starters": {
       "todos": "اعرض مهامي الأخيرة",
       "meeting": "حضّرني لاجتماعي القادم",

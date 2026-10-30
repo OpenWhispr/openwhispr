@@ -11,6 +11,8 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { NewChatEmptyState } from "./NewChatEmptyState";
 import { CreatorOpening } from "./CreatorOpening";
 import { SkillChip } from "./SkillChip";
+import { SourceNoteBar } from "./SourceNoteBar";
+import { useSourceNote, type SourceNote } from "./useSourceNote";
 import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
@@ -35,12 +37,15 @@ interface ChatViewProps {
   onSkillRequestHandled?: () => void;
   /** Open skill on a saved skill card. */
   onOpenSkill?: (name: string) => void;
+  /** Open note on a chat started from a note. */
+  onOpenNote?: (note: SourceNote) => void;
 }
 
 export default function ChatView({
   skillRequest = null,
   onSkillRequestHandled,
   onOpenSkill,
+  onOpenNote,
 }: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -61,9 +66,13 @@ export default function ChatView({
     },
   });
 
+  // A chat started from a note stays about that note here too, as in the note's own chat.
+  const { sourceNote, openNote } = useSourceNote(persistence.noteId ?? null);
+
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
+    openNote,
     allowConnectors: true,
     skillsEnabled: true,
     onStreamComplete: (_id, content, toolCalls) => {
@@ -241,6 +250,14 @@ export default function ChatView({
     [activeConversationId, handleNewChat, showConfirmDialog, t]
   );
 
+  const openSourceNote = useCallback(
+    (note: SourceNote) => {
+      if (onOpenNote) onOpenNote(note);
+      else void window.electronAPI?.agentOpenNote?.(note.id);
+    },
+    [onOpenNote]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
@@ -287,6 +304,7 @@ export default function ChatView({
             />
           </div>
           <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
+            {sourceNote && <SourceNoteBar note={sourceNote} onOpen={openSourceNote} />}
             <ChatMessages
               messages={persistence.messages}
               leading={attachedSkill?.ref.builtin ? <CreatorOpening /> : undefined}
@@ -327,7 +345,11 @@ export default function ChatView({
                 placeholder={
                   attachedSkill && !attachedSkill.ref.builtin
                     ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
-                    : t("chat.inputPlaceholder")
+                    : openNote && sourceNote
+                      ? t("chat.sourceNote.askAbout", {
+                          title: sourceNote.title || t("notes.list.untitledNote"),
+                        })
+                      : t("chat.inputPlaceholder")
                 }
                 variant="assistant"
                 expandOnFocus

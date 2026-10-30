@@ -3917,6 +3917,13 @@
     "searchTitle": "会話を検索",
     "searchDescription": "すべての会話を検索",
     "inputPlaceholder": "何でも聞いてください...",
+    "sourceNote": {
+      "from": "元のノート",
+      "open": "ノートを開く",
+      "deleted": "このノートは削除されました",
+      "deletedShort": "削除済み",
+      "askAbout": "{{title}}について質問..."
+    },
     "starters": {
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",

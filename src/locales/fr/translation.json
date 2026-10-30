@@ -3154,6 +3154,13 @@
     "searchTitle": "Rechercher des conversations",
     "searchDescription": "Rechercher dans toutes vos conversations",
     "inputPlaceholder": "Posez une question...",
+    "sourceNote": {
+      "from": "Depuis",
+      "open": "Ouvrir la note",
+      "deleted": "Cette note a été supprimée",
+      "deletedShort": "Supprimée",
+      "askAbout": "Posez une question sur {{title}}..."
+    },
     "starters": {
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",

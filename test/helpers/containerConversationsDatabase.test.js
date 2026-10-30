@@ -1178,6 +1178,32 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
   );
 });
 
+test("the chat list and chat search say which note a chat came from", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Q3 planning sync", "body").note;
+  const fromNote = db.createAgentConversation("Onboarding decisions · Q3 planning sync", note.id);
+  const plain = db.createAgentConversation("Summarize my week");
+  db.addAgentMessage(fromNote.id, "user", "What did we decide?");
+
+  const rows = (list) => Object.fromEntries(list.map((row) => [row.id, row]));
+  for (const list of [
+    db.getAgentConversationsWithPreview(),
+    db.searchAgentConversations("decid"),
+  ]) {
+    const byId = rows(list);
+    assert.equal(byId[fromNote.id].note_id, note.id);
+    assert.equal(byId[fromNote.id].note_title, "Q3 planning sync");
+    assert.equal(byId[fromNote.id].note_deleted_at, null);
+  }
+  assert.equal(rows(db.getAgentConversationsWithPreview())[plain.id].note_id, null);
+
+  db.deleteNote(note.id);
+  const afterDelete = rows(db.getAgentConversationsWithPreview())[fromNote.id];
+  assert.equal(afterDelete.note_title, "Q3 planning sync", "a soft-deleted note keeps its title");
+  assert.ok(afterDelete.note_deleted_at);
+});
+
 test("a cloud pull keeps the note a chat came from", (t) => {
   const db = createDb(t);
   if (!db) return;
