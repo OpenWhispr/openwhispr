@@ -131,6 +131,32 @@ test("Sent keeps the message, with ✓ Sent, Copy and the link", async (t) => {
   assert.equal(card.button("connectors.approval.cancel"), undefined);
 });
 
+test("a Slack reply sent outside its thread visibly reports the outcome and removes the thread promise", async (t) => {
+  const threadNote = "connectors.approval.slack.notes.replyInThread";
+  const card = await mountCard(t, {
+    ...SLACK,
+    preview: {
+      ...SLACK.preview,
+      notes: [
+        { key: threadNote, values: { started: "1727200000000" } },
+        { key: "connectors.approval.sentEarlier" },
+      ],
+    },
+  });
+  // Happy DOM has no layout; exclude screen-reader-only text from its visual text readout.
+  const style = card.host.ownerDocument.createElement("style");
+  style.textContent = ".sr-only { display: none; }";
+  card.host.ownerDocument.head.append(style);
+  assert.match(card.host.innerText, /connectors\.approval\.slack\.notes\.replyInThread/);
+
+  await card.set({ state: "sent", outsideThread: true });
+
+  assert.match(card.host.innerText, /connectors\.approval\.slack\.sentOutsideThread/);
+  assert.doesNotMatch(card.host.innerText, /connectors\.approval\.slack\.notes\.replyInThread/);
+  assert.match(card.host.innerText, /connectors\.approval\.sentEarlier/);
+  assert.ok(card.button("common.copy"));
+});
+
 test("a failed send keeps the draft editable, with Retry and Cancel; settled, only Copy", async (t) => {
   const card = await mountCard(t, {
     ...SLACK,

@@ -341,18 +341,23 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             </p>
           </>
         )}
-        {preview.notes?.map((note) => (
-          <p
-            key={note.key}
-            className="pb-1 text-xs text-muted-foreground agent:text-[13px]"
-            dir="auto"
-          >
-            {/* Some note copy (issue.notes.droppedLabels) interpolates the
+        {preview.notes
+          ?.filter(
+            (note) =>
+              !entry.outsideThread || note.key !== "connectors.approval.slack.notes.replyInThread"
+          )
+          .map((note) => (
+            <p
+              key={note.key}
+              className="pb-1 text-xs text-muted-foreground agent:text-[13px]"
+              dir="auto"
+            >
+              {/* Some note copy (issue.notes.droppedLabels) interpolates the
                 card's destination, which connectors don't themselves send in
                 note values — the note's own values win on conflict. */}
-            {t(note.key, { destination, ...note.values })}
-          </p>
-        ))}
+              {t(note.key, { destination, ...note.values })}
+            </p>
+          ))}
         {/* One live region for every outcome, rendered from the start so a
             screen reader announces each change. */}
         <div role="status" aria-live="polite" className="text-xs agent:text-[13px]">
@@ -367,7 +372,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           {entry.state === "committing" && (
             <p className="sr-only">{t("connectors.approval.sending")}</p>
           )}
-          {entry.state === "sent" && <p className="sr-only">{sentText}</p>}
+          {entry.state === "sent" && (
+            <p className={entry.outsideThread ? "pb-1 text-foreground" : "sr-only"}>{sentText}</p>
+          )}
           {/* Translated copy only: entry.message is the connector's English,
               written for the model. */}
           {entry.state === "failed" && (

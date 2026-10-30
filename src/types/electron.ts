@@ -1533,8 +1533,6 @@ declare global {
           allowClipboardFallback?: boolean;
           /** Paste exactly this text: no smart spacing, no AutoLearn. */
           raw?: boolean;
-          /** Paste only into the app the assistant panel's voice command was spoken over. */
-          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -1548,8 +1546,6 @@ declare global {
             code: "ACCESSIBILITY_PERMISSION_REQUIRED";
             clipboardCopied: true;
           }
-        /** assistantTarget: no app to paste into, so nothing was pasted or copied. */
-        | { success: false; pasted: false; reason: "no-target" }
       >;
       captureSelectedText?: () => Promise<
         | {

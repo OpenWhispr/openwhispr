@@ -1034,15 +1034,6 @@ class WindowManager {
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
     if (nextState === this._dictationLifecycleState) return true;
 
-    // Each recording may become a voice command the panel answers; the panel takes the app it
-    // was started over as its paste target only then (assistantPasteTarget.js). Follow-ups
-    // spoken while the panel is open count too, so a capture is never an older recording's.
-    if (
-      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
-      nextState !== DICTATION_LIFECYCLE.IDLE
-    ) {
-      this.assistantPasteTarget?.noteRecordingStart();
-    }
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
