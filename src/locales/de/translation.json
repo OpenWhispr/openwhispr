@@ -4717,7 +4717,9 @@
       },
       "sentLabel": "Gesendet",
       "identityChanged": "Wird jetzt als {{account}} gesendet. Drücke Senden, um es zu senden.",
-      "connectToSend": "{{name}} verbinden, um das zu senden"
+      "connectToSend": "{{name}} verbinden, um das zu senden",
+      "edit": "Bearbeiten",
+      "doneEditing": "Bearbeitung fertig"
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {

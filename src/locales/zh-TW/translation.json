@@ -4545,7 +4545,9 @@
       },
       "sentLabel": "已傳送",
       "identityChanged": "現在將以 {{account}} 身分傳送。按「傳送」即可傳送。",
-      "connectToSend": "連接 {{name}} 以傳送此內容"
+      "connectToSend": "連接 {{name}} 以傳送此內容",
+      "edit": "編輯",
+      "doneEditing": "編輯完成"
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {

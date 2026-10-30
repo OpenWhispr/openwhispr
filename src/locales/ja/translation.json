@@ -4545,7 +4545,9 @@
       },
       "sentLabel": "送信済み",
       "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
-      "connectToSend": "送信するには {{name}} を接続してください"
+      "connectToSend": "送信するには {{name}} を接続してください",
+      "edit": "編集",
+      "doneEditing": "編集完了"
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {

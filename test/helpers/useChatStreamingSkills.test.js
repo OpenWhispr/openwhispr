@@ -636,7 +636,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
         callId: call.id,
         toolName: call.name,
         displayText: result.displayText,
-        ...(result.failed ? { failed: true } : {}),
+        ...(result.isError ? { isError: true } : {}),
       };
     }
     yield { type: "done", finishReason: "stop" };
@@ -645,9 +645,9 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
   await captured.sendToAI("prep me", [userMessage("u1", "prep me")]);
 
   assert.deepEqual(
-    results.map((result) => [result.displayText, result.failed]),
+    results.map((result) => [result.displayText, result.isError]),
     [
-      ["Meeting prep", undefined],
+      ["Meeting prep", false],
       ['No skill named "meeting-perp"', true],
     ]
   );
@@ -656,7 +656,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
     steps.map((step) => [step.status, step.result, step.failed]),
     [
       ["completed", "Meeting prep", undefined],
-      ["completed", 'No skill named "meeting-perp"', true],
+      ["error", 'No skill named "meeting-perp"', true],
     ]
   );
 });

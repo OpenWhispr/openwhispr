@@ -4545,7 +4545,9 @@
       },
       "sentLabel": "已发送",
       "identityChanged": "现在将以 {{account}} 身份发送。按“发送”即可发送。",
-      "connectToSend": "连接 {{name}} 以发送此内容"
+      "connectToSend": "连接 {{name}} 以发送此内容",
+      "edit": "编辑",
+      "doneEditing": "编辑完成"
     },
     "policyOff": "您的组织已关闭连接器。",
     "email": {
