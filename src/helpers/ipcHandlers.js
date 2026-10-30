@@ -6366,22 +6366,13 @@ class IPCHandlers {
     ipcMain.handle("llama-server-start", async (event, modelId) => {
       try {
         const modelManager = require("./modelManagerBridge").default;
-        modelManager.ensureInitialized();
-        const modelInfo = modelManager.findModelById(modelId);
-        if (!modelInfo) {
-          return { success: false, error: `Model "${modelId}" not found` };
-        }
-
-        const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
-
-        await modelManager.serverManager.start(
-          modelPath,
-          await modelManager.serverStartOptions(modelInfo)
-        );
-        modelManager.currentServerModelId = modelId;
+        // Resolves the model's runtime: a GenieX (NPU) model comes back on the
+        // GenieX server's port, everything else on the llama.cpp server — the
+        // streaming chat client only needs an OpenAI-compatible port.
+        const { port } = await modelManager.ensureServerForModel(modelId);
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-        return { success: true, port: modelManager.serverManager.port };
+        return { success: true, port };
       } catch (error) {
         return { success: false, error: error.message };
       }

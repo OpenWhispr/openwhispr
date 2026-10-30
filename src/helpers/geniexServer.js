@@ -177,6 +177,11 @@ class GeniexServerManager {
       child = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
+        // v0.7.0's serve has no --think flag; the env default turns thinking
+        // off for requests that omit enable_think (per-request wins where the
+        // runtime supports it), so streamed chat does not burn the reply
+        // budget inside reasoning_content.
+        env: { ...process.env, GENIEX_THINK: "false" },
       });
     } catch (error) {
       throw new Error(`Failed to launch GenieX: ${error.message}`);

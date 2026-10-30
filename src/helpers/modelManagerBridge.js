@@ -943,6 +943,57 @@ class ModelManager {
     this.geniexServerManager?.cancelInference();
   }
 
+  /**
+   * Start (or reuse) the right server for a model and hand back its port —
+   * the seam every direct-streaming client goes through. Chat streams talk to
+   * the port rather than runInference, so this is where a GenieX (NPU) model
+   * must resolve to the GenieX server instead of silently starting the CPU
+   * llama-server with the same GGUF.
+   */
+  async ensureServerForModel(modelId) {
+    this.ensureInitialized();
+
+    const modelInfo = this.findModelById(modelId);
+    if (!modelInfo) {
+      throw new ModelNotFoundError(modelId);
+    }
+
+    const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+    if (!(await this.checkModelValid(modelPath))) {
+      throw new ModelError(`Model ${modelId} is not downloaded or is corrupted`, "MODEL_NOT_DOWNLOADED", {
+        modelId,
+      });
+    }
+
+    const serverManager = await this._serverFor(modelInfo.model);
+    if (!serverManager.isAvailable()) {
+      throw new ModelError(
+        modelInfo.model.runtime === "geniex"
+          ? "GenieX CLI not found. Install Qualcomm GenieX to run language models on the NPU."
+          : "llama-server binary not found. Please ensure the app is installed correctly.",
+        "LLAMASERVER_NOT_FOUND"
+      );
+    }
+
+    // Switching runtimes must not leave the previous server resident (see
+    // runInference for the same rule).
+    if (serverManager !== this.serverManager && this.serverManager.ready) {
+      await this.serverManager.stop();
+    }
+    if (serverManager === this.serverManager && this.geniexServerManager?.ready) {
+      await this.geniexServerManager.stop();
+    }
+
+    await serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+    this.currentServerModelId = modelId;
+    debugLogger.info("Streaming server ready", {
+      modelId,
+      runtime: modelInfo.model.runtime || "llama",
+      port: serverManager.port,
+    });
+    return { port: serverManager.port, runtime: modelInfo.model.runtime || "llama" };
+  }
+
   async prewarmServer(modelId) {
     if (!modelId) return false;
     this.ensureInitialized();

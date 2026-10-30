@@ -17,6 +17,8 @@ export interface ModelDefinition {
   hfRepo: string;
   recommended?: boolean;
   supportsThinking?: boolean;
+  /** "geniex" routes the model to the Snapdragon NPU server instead of llama.cpp. */
+  runtime?: "geniex";
   /** Superseded: kept so existing selections keep working; see isListedModel. */
   legacy?: boolean;
   // Optional MTP speculative-decoding drafter downloaded alongside the main GGUF.
