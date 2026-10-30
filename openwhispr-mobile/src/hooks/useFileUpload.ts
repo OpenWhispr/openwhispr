@@ -86,14 +86,9 @@ async function assertProviderAcceptsFile(
   }
 }
 
-// The native module rejects unreadable/unsupported audio with these codes;
-// surface a clear instruction instead of the raw AVFoundation error.
 const toFriendlyUploadError = (error: unknown): Error => {
-  const code = (error as { code?: string })?.code;
-  if (code === 'AUDIO_TRANSCODE_ERROR' || code === 'AUDIO_CHUNK_ERROR') {
-    return new Error("Couldn't read this audio file. Please try a WAV, MP3, or M4A file.");
-  }
-  return error instanceof Error ? error : new Error(String(error));
+  const message = toFriendlyTranscriptionErrorMessage(error);
+  return error instanceof Error && message === error.message ? error : new Error(message);
 };
 
 export function useFileUpload(options: UseFileUploadOptions = {}) {

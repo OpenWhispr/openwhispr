@@ -1,3 +1,4 @@
+import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService';
 import type { Transcript } from '@/types';
 import { AppState } from 'react-native';
@@ -92,7 +93,7 @@ export default function AndroidHome() {
       await useTranscriptStore.getState().retryTranscript(id, controller.signal);
     } catch (error) {
       if (!controller.signal.aborted && (error as Error)?.name !== 'AbortError') {
-        Alert.alert(t('errorTitle'), (error as Error).message);
+        Alert.alert(t('errorTitle'), toFriendlyTranscriptionErrorMessage(error));
       }
     } finally {
       if (!controller.signal.aborted) await applyHistoryRetention().catch(() => undefined);

@@ -3,6 +3,7 @@ jest.mock('@/services/storage/StorageService', () => ({
   StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
 }));
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
@@ -223,4 +224,20 @@ it('shows older history only after explicitly opening the signed-out archive', a
   view.rerender(<AndroidHome />);
   expect(screen.queryByText('Unassigned text')).toBeNull();
   expect(screen.queryByText('olderDeviceHistory')).toBeNull();
+});
+
+it('shows connection recovery guidance when a saved upload retry cannot resolve the server', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  mockRetryTranscript.mockRejectedValueOnce(
+    new Error('Unable to resolve host "preview.example.test": No address associated with hostname'),
+  );
+  render(<AndroidHome />);
+  await act(async () => fireEvent.press(screen.getByText('retry')));
+  expect(alert).toHaveBeenCalledWith(
+    'errorTitle',
+    'No internet connection. Check your connection and try again.',
+  );
+  expect(screen.queryByText('processing')).toBeNull();
+  expect(screen.getByText('retry')).toBeTruthy();
+  alert.mockRestore();
 });

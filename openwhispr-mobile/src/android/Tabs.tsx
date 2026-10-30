@@ -5,9 +5,19 @@ import { palette } from './ui';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
+import { useState } from 'react';
 export default function AndroidTabs() {
-  const { t } = useTranslation();
-  const { fontScale } = useWindowDimensions();
+  const { t, i18n } = useTranslation();
+  const { width, fontScale } = useWindowDimensions();
+  const layoutKey = `${width}:${fontScale}:${i18n.resolvedLanguage ?? i18n.language}`;
+  const [labels, setLabels] = useState<{ key: string; heights: Record<string, number> }>({
+    key: layoutKey,
+    heights: {},
+  });
+  const labelHeight = Math.max(
+    30 * fontScale,
+    ...Object.values(labels.key === layoutKey ? labels.heights : {}),
+  );
   const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
   const detail =
@@ -20,16 +30,32 @@ export default function AndroidTabs() {
         headerShown: false,
         tabBarActiveTintColor: palette.blue,
         tabBarInactiveTintColor: palette.muted,
+        tabBarLabelPosition: 'below-icon',
         tabBarStyle: {
           backgroundColor: palette.background,
           borderTopColor: palette.line,
           display: detail ? 'none' : 'flex',
-          height: Math.max(64, 40 + 30 * fontScale) + insets.bottom,
+          height: Math.max(64, 40 + labelHeight) + insets.bottom,
         },
         tabBarLabel: ({ color, children }) => (
           <Text
-            style={{ fontSize: 12, lineHeight: 15, color, textAlign: 'center' }}
-            numberOfLines={2}
+            key={`${layoutKey}:${children}`}
+            style={{
+              fontSize: 12,
+              lineHeight: 15,
+              color,
+              textAlign: 'center',
+              width: '100%',
+              flexShrink: 0,
+            }}
+            onLayout={({ nativeEvent }) => {
+              const height = Math.ceil(nativeEvent.layout.height);
+              setLabels((previous) => {
+                const heights = previous.key === layoutKey ? previous.heights : {};
+                if (heights[children] === height) return previous;
+                return { key: layoutKey, heights: { ...heights, [children]: height } };
+              });
+            }}
           >
             {children}
           </Text>

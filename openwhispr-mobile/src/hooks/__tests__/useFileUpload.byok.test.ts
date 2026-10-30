@@ -282,3 +282,48 @@ it('discards a picker result from the previous account before uploading', async 
   expect(mockAddFailedTranscript).not.toHaveBeenCalled();
   expect(mockDeleteAsync).toHaveBeenCalledWith('file://app-cache/old.wav', { idempotent: true });
 });
+
+it('retains a failed Android Cloud upload and gives the alert the same connection guidance as history', async () => {
+  mockSnapshotTranscriptionJob.mockReturnValue({ provider: 'cloud' });
+  pick({ name: 'voice.wav', size: MB });
+  mockTranscribeAndCleanup.mockRejectedValueOnce(
+    new Error('Unable to resolve host "preview.example.test": No address associated with hostname'),
+  );
+  const { error, onError } = await upload();
+  expect(error?.message).toBe('No internet connection. Check your connection and try again.');
+  expect(onError).toHaveBeenCalledWith(error);
+  expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+    expect.objectContaining({
+      audioUrl: 'file://docs/transcript-audio/upload-1.m4a',
+      provider: 'cloud',
+      errorMessage: 'No internet connection. Check your connection and try again.',
+    }),
+  );
+  expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+});
+
+it('preserves a destination error so Notes can localize the failed import', async () => {
+  pick({ name: 'voice.m4a', size: MB });
+  const destinationError = Object.assign(
+    new Error('This folder is no longer available. Return to Notes and choose a destination.'),
+    { translationKey: 'importFolderUnavailable' },
+  );
+  const onError = jest.fn();
+  const { result } = renderHook(() =>
+    useFileUpload({
+      saveToHistory: false,
+      onError,
+      onComplete: () => {
+        throw destinationError;
+      },
+    }),
+  );
+  let thrown: unknown;
+  await act(async () => {
+    await result.current.pickAndTranscribeFile().catch((error: unknown) => {
+      thrown = error;
+    });
+  });
+  expect(thrown).toBe(destinationError);
+  expect(onError).toHaveBeenCalledWith(destinationError);
+});
