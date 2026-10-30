@@ -280,10 +280,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Folder functions
   getFolders: (spaceId) => ipcRenderer.invoke("db-get-folders", spaceId),
-  createFolder: (name, spaceId) => ipcRenderer.invoke("db-create-folder", name, spaceId),
+  createFolder: (name, spaceId, parentFolderId) =>
+    ipcRenderer.invoke("db-create-folder", name, spaceId, parentFolderId),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
   moveFolderToSpace: (id, spaceId) => ipcRenderer.invoke("db-move-folder-to-space", id, spaceId),
+  setFolderParent: (id, parentFolderId) =>
+    ipcRenderer.invoke("db-set-folder-parent", id, parentFolderId),
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
 
   // Space functions
@@ -322,7 +325,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   granolaImportPickAndPreview: () => ipcRenderer.invoke("granola-import-pick-and-preview"),
   granolaImportRun: () => ipcRenderer.invoke("granola-import-run"),
   showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
-  showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
+  showFolderInExplorer: (folderId) => ipcRenderer.invoke("show-folder-in-explorer", folderId),
 
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
@@ -1287,6 +1290,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId) =>
     ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, snapshot, expectedCloudId),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
+  applyCloudFolderParents: (links) => ipcRenderer.invoke("db-apply-cloud-folder-parents", links),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-folder-after-denied-delete", id),

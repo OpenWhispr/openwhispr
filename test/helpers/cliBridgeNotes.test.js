@@ -111,3 +111,20 @@ test("PATCH /v1/notes/:id clears a provided blank text field so the clear syncs"
     { code: "VALIDATION" }
   );
 });
+
+test("POST /v1/folders/create nests under parent_folder_id and refuses a missing parent", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const parent = call(ctx.bridge, "POST", "/v1/folders/create", { name: "Client A" }).data;
+  const child = call(ctx.bridge, "POST", "/v1/folders/create", {
+    name: "Q1",
+    parent_folder_id: parent.id,
+  }).data;
+  assert.equal(child.parent_folder_id, parent.id);
+
+  assert.throws(
+    () => call(ctx.bridge, "POST", "/v1/folders/create", { name: "Q2", parent_folder_id: 999 }),
+    { code: "VALIDATION", message: "Parent folder not found" }
+  );
+});
