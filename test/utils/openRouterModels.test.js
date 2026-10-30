@@ -4,10 +4,9 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/utils/openRouterModels.ts");
 
 // Shaped like OpenRouter's /models entries.
-const model = (id, { tools = true, image = true } = {}) => ({
+const model = (id, { tools = true } = {}) => ({
   id,
   supported_parameters: tools ? ["temperature", "tools"] : ["temperature"],
-  architecture: { input_modalities: image ? ["text", "image"] : ["text"] },
 });
 
 test("batch and free variants and the non-answering routers are never offered", async () => {
@@ -27,26 +26,23 @@ test("batch and free variants and the non-answering routers are never offered", 
 
 test("a scope's needs leave out models that lack them", async () => {
   const { offersOpenRouterModel } = await load();
-  const textOnly = model("mistralai/mistral-small-24b-instruct-2501", {
-    tools: false,
-    image: false,
-  });
+  const textOnly = model("mistralai/mistral-small-24b-instruct-2501", { tools: false });
   const noTools = model("google/gemini-3.1-flash-image", { tools: false });
-  const noImage = model("z-ai/glm-5.3", { image: false });
+  const toolsOnly = model("z-ai/glm-5.3");
   const both = model("anthropic/claude-haiku-5.5");
 
   // Cleanup, translation and notes only need text.
-  for (const entry of [textOnly, noTools, noImage, both]) {
+  for (const entry of [textOnly, noTools, toolsOnly, both]) {
     assert.equal(offersOpenRouterModel(entry, []), true, entry.id);
   }
   // Chat and the voice assistant send tools.
   assert.deepEqual(
-    [textOnly, noTools, noImage, both].filter((entry) => offersOpenRouterModel(entry, ["tools"])),
-    [noImage, both]
+    [textOnly, noTools, toolsOnly, both].filter((entry) => offersOpenRouterModel(entry, ["tools"])),
+    [toolsOnly, both]
   );
-  // The vision override sends tools and a screenshot.
+  // The vision override sends tools and a screenshot, and offers only the tested list.
   assert.deepEqual(
-    [textOnly, noTools, noImage, both].filter((entry) =>
+    [textOnly, noTools, toolsOnly, both].filter((entry) =>
       offersOpenRouterModel(entry, ["tools", "image"])
     ),
     [both]

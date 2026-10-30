@@ -21,7 +21,7 @@ import { isWindowSwitchBlur, useFocusHold } from "../hooks/useFocusHold";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
 import { useCredentialDraft } from "../hooks/useCredentialDraft";
 import { useTypingPause } from "../hooks/useTypingPause";
-import { offersOpenRouterModel } from "../utils/openRouterModels";
+import { OPENROUTER_VISION_MODELS, offersOpenRouterModel } from "../utils/openRouterModels";
 import type { ModelCapability } from "../config/inferenceScopes";
 
 interface ModelOption {
@@ -81,6 +81,8 @@ export default function OpenAICompatiblePanel({
   const latestBaseRef = useRef<string>(normalizeBaseUrl(baseUrl));
   const keyDraft = useCredentialDraft();
   const apiKey = keyDraft.value("apiKey", savedApiKey);
+  // OpenRouter's vision list is offered in its tested order.
+  const listsVisionModels = provider === "openrouter" && !!modelNeeds?.includes("image");
   // The list reads the key, the model and the address setter through refs, so neither a key
   // change, a pick nor a parent's new setter on each render reloads it.
   const apiKeyRef = useRef(apiKey);
@@ -228,7 +230,7 @@ export default function OpenAICompatiblePanel({
               ? payload.models
               : [];
 
-          return (rawModels as Array<Record<string, unknown>>)
+          const options = (rawModels as Array<Record<string, unknown>>)
             .filter(
               (item) =>
                 provider !== "openrouter" ||
@@ -252,6 +254,14 @@ export default function OpenAICompatiblePanel({
               return { value, label: value, description, ownedBy } as ModelOption;
             })
             .filter(Boolean) as ModelOption[];
+          // A saved pick that is off the vision list ranks -1, so it leads.
+          return listsVisionModels
+            ? options.sort(
+                (a, b) =>
+                  OPENROUTER_VISION_MODELS.indexOf(a.value) -
+                  OPENROUTER_VISION_MODELS.indexOf(b.value)
+              )
+            : options;
         };
 
         // When the entered base yields no models, fall back through sibling
@@ -311,7 +321,7 @@ export default function OpenAICompatiblePanel({
         }
       }
     },
-    [baseUrl, lockedBaseUrl, provider, modelNeeds, t]
+    [baseUrl, lockedBaseUrl, provider, modelNeeds, listsVisionModels, t]
   );
 
   useEffect(() => {
@@ -505,6 +515,7 @@ export default function OpenAICompatiblePanel({
             models={displayedModels}
             selectedModel={model}
             onModelSelect={setModel}
+            ordered={listsVisionModels}
           />
         ) : (
           <ModelCardList

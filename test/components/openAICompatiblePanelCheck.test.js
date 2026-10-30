@@ -283,9 +283,9 @@ const openRouterCatalog = respond(200, {
     { id: MISTRAL, supported_parameters: [] },
   ],
 });
-const openRouterList = async (t, modelNeeds, model = "") => {
+const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouterCatalog) => {
   const panel = await mount(t, {
-    fetch: openRouterCatalog,
+    fetch,
     overrides: {
       provider: "openrouter",
       baseUrl: "https://openrouter.ai/api/v1",
@@ -297,9 +297,10 @@ const openRouterList = async (t, modelNeeds, model = "") => {
     },
   });
   await panel.wait(0);
-  const list = panel.find((node) => Array.isArray(node.props?.models))[0];
-  return list.props.models.map((option) => option.value);
+  return panel.find((node) => Array.isArray(node.props?.models))[0].props;
 };
+const openRouterList = async (...args) =>
+  (await openRouterListProps(...args)).models.map((option) => option.value);
 
 test("OpenRouter lists only models the scope's requests can use", async (t) => {
   await t.test("text features skip batch variants", async (t) => {
@@ -310,5 +311,26 @@ test("OpenRouter lists only models the scope's requests can use", async (t) => {
   });
   await t.test("a saved pick stays listed even when the scope can't use it", async (t) => {
     assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [HAIKU, MISTRAL]);
+  });
+  const { OPENROUTER_VISION_MODELS } = await import("../../src/utils/openRouterModels.ts");
+  const MINIMAX = "minimax/minimax-m3.1-flash";
+  const reversedCatalog = respond(200, {
+    data: [...OPENROUTER_VISION_MODELS, MINIMAX]
+      .reverse()
+      .map((id) => ({ id, supported_parameters: ["tools"] })),
+  });
+  await t.test("the vision model gets the tested list, in its order", async (t) => {
+    const list = await openRouterListProps(t, ["tools", "image"], "", reversedCatalog);
+    assert.deepEqual(
+      list.models.map((option) => option.value),
+      OPENROUTER_VISION_MODELS
+    );
+    assert.equal(list.ordered, true, "the searchable list keeps that order");
+  });
+  await t.test("a saved vision pick off the list leads it", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools", "image"], MINIMAX, reversedCatalog), [
+      MINIMAX,
+      ...OPENROUTER_VISION_MODELS,
+    ]);
   });
 });

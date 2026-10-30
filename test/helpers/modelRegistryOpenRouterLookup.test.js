@@ -27,3 +27,14 @@ test("an exact registry id wins before the prefix is stripped", async () => {
 
   assert.deepEqual(getCloudModel("openai/gpt-oss-120b", "openrouter"), groqGptOss);
 });
+
+// The vision list promises a screenshot reaches each model as the assistant's main
+// model too, which the gate only allows for a registry entry with vision.
+test("every OpenRouter vision model resolves to a registry model with vision", async () => {
+  const { getCloudModel } = await load();
+  const { OPENROUTER_VISION_MODELS } = await import("../../src/utils/openRouterModels.ts");
+
+  for (const id of OPENROUTER_VISION_MODELS) {
+    assert.equal(getCloudModel(id, "openrouter")?.supportsVision, true, id);
+  }
+});
