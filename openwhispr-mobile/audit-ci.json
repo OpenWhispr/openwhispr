@@ -5,6 +5,13 @@
   "extra-args": ["--package-lock-only", "--ignore-scripts"],
   "allowlist": [
     {
+      "GHSA-qr28-fpjm-wq7f": {
+        "active": true,
+        "expiry": "2026-11-13T00:00:00Z",
+        "notes": "decode-uri-component 0.2.2 carries the single-pass UTF-8 decoder from upstream 0.5.1 (58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6), backported with patch-package while preserving the CommonJS/plus-sign API required by Expo Router's query-string 7. Upgrading directly to 0.5.1 would change its module/API contract. CI and postinstall run test:security against every locked decoder, including malformed-input timeout regressions. npm audit cannot detect this patch. Remove the patch and exception when the Expo dependency chain accepts a fixed decoder; review by 2026-11-13."
+      }
+    },
+    {
       "GHSA-86w9-cpqp-85rv": {
         "active": true,
         "expiry": "2026-11-01T00:00:00Z",
