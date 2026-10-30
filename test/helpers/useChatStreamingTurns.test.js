@@ -582,6 +582,83 @@ test("regenerating replaces the reply in place and keeps the sends it made", asy
   );
 });
 
+for (const cloud of [false, true]) {
+  test(`regeneration preserves a sent receipt when ${cloud ? "Cloud" : "AI SDK"} reuses its call ID`, async (t) => {
+    const harness = await renderChatStreaming(
+      t,
+      { allowConnectors: true, allowInteractions: true },
+      {
+        settings: cloud ? { chatAgentMode: "openwhispr" } : BYOK,
+        statuses: SLACK_READY,
+        electronAPI: {
+          connectorPrepare: async () => ({
+            status: "ready",
+            actionId: "a1",
+            preview: {
+              verbKey: "slackPost",
+              destinationLabel: "#eng",
+              accountLabel: "chad",
+              body: "hi",
+            },
+          }),
+          connectorCommit: async () => ({ state: "sent", url: "https://slack.test/1" }),
+          connectorCancel: async () => ({ cancelled: true }),
+        },
+      }
+    );
+    const approvals = await harness.vite.ssrLoadModule("/stores/connectorApprovalStore.ts");
+    const request = { id: "u1", role: "user", content: "Post hi to #eng", isStreaming: false };
+    harness.seed([request]);
+    let regenerating = false;
+    harness.setStream((tools, config) =>
+      (async function* () {
+        yield {
+          type: "tool_calls",
+          calls: [{ id: "s1", name: "slack_send_message", arguments: "{}" }],
+        };
+        const args = { destination: "#eng", text: "hi" };
+        const running = cloud
+          ? config.executeToolCall("slack_send_message", JSON.stringify(args), "s1")
+          : tools.slack_send_message.execute(args, toolOptions("s1"));
+        await new Promise((resolve) => setImmediate(resolve));
+        const entry = Object.values(approvals.useConnectorApprovalStore.getState().entries).find(
+          (entry) => entry.state === "pending"
+        );
+        if (regenerating) approvals.cancelApproval(entry.key);
+        else await approvals.approveAction(entry.key);
+        const output = await running;
+        yield {
+          type: "tool_result",
+          callId: "s1",
+          toolName: "slack_send_message",
+          displayText: "Settled",
+          metadata: cloud ? output.metadata : output,
+        };
+        yield { type: "content", text: regenerating ? "Nothing new sent." : "Sent." };
+        yield { type: "done", finishReason: "stop" };
+      })()
+    );
+    await harness.captured.sendToAI(request.content, [request], { conversationId: 7 });
+    const reply = harness.assistant();
+    const receipt = structuredClone(reply.toolCalls[0]);
+    regenerating = true;
+    await harness.captured.sendToAI(request.content, [request], {
+      conversationId: 7,
+      replaceMessage: reply,
+    });
+
+    const calls = harness.completed.at(-1)[2];
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0], receipt, "the earlier send keeps its outcome, link and action key");
+    assert.notEqual(calls[1].id, receipt.id);
+    assert.equal(calls[1].metadata.status, "cancelled_by_user");
+    const entries = Object.values(approvals.useConnectorApprovalStore.getState().entries);
+    assert.equal(entries.length, 2);
+    assert.equal(entries.find((entry) => entry.toolCallId === receipt.id).state, "sent");
+    assert.equal(entries.find((entry) => entry.toolCallId === calls[1].id).state, "cancelled");
+  });
+}
+
 test("the same send twice in one step gets one card", async (t) => {
   const prepares = [];
   const harness = await renderChatStreaming(

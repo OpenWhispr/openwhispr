@@ -997,6 +997,9 @@ export function useChatStreaming({
         let turn: AssistantTurn = { startedAt: Date.now(), status: "running" };
         let toolCalls: ToolCallInfo[] = replaced?.toolCalls?.filter((call) => call.actionKey) ?? [];
         const carriedCallCount = toolCalls.length;
+        // Providers can reuse an earlier request's IDs; its receipts keep their own.
+        const carriedCallIds = new Map(toolCalls.map((call) => [call.id, crypto.randomUUID()]));
+        const currentToolCallId = (id: string): string => carriedCallIds.get(id) ?? id;
         let reasoning = "";
         let rawContent = "";
         let fullContent = "";
@@ -1261,8 +1264,11 @@ export function useChatStreaming({
                   const result = await executeTool(
                     tool,
                     args,
-                    toolScope.createContext({ messageId: assistantId, toolCallId }),
-                    (result) => recordExecutedResult(toolCallId, result)
+                    toolScope.createContext({
+                      messageId: assistantId,
+                      toolCallId: currentToolCallId(toolCallId),
+                    }),
+                    (result) => recordExecutedResult(currentToolCallId(toolCallId), result)
                   );
                   const data = result.success
                     ? typeof result.data === "string"
@@ -1299,12 +1305,12 @@ export function useChatStreaming({
               (toolCallId, abortSignal) =>
                 toolScope.createContext({
                   messageId: assistantId,
-                  toolCallId,
+                  toolCallId: currentToolCallId(toolCallId),
                   signal: abortSignal,
                 }),
               (id, text, result) => {
-                toolDisplayTexts.set(id, text);
-                recordExecutedResult(id, result);
+                toolDisplayTexts.set(currentToolCallId(id), text);
+                recordExecutedResult(currentToolCallId(id), result);
               }
             );
             stream = ReasoningService.processTextStreamingAI(
@@ -1375,30 +1381,33 @@ export function useChatStreaming({
                 toolCalls = [
                   ...toolCalls,
                   {
-                    id: call.id,
+                    id: currentToolCallId(call.id),
                     name: call.name,
                     arguments: call.arguments,
                     status: "executing",
                     startedAt: Date.now(),
                     textOffset: fullContent.length,
-                    ...annotations.get(call.id),
+                    ...annotations.get(currentToolCallId(call.id)),
                   },
                 ];
               }
-              if (chunk.calls.some((call) => annotations.get(call.id)?.interaction)) {
+              if (
+                chunk.calls.some((call) => annotations.get(currentToolCallId(call.id))?.interaction)
+              ) {
                 updateWaiting();
               } else {
                 flushContentNow();
               }
             } else if (chunk.type === "tool_result") {
+              const toolCallId = currentToolCallId(chunk.callId);
               toolCalls = toolCalls.map((tc) =>
-                tc.id === chunk.callId
+                tc.id === toolCallId
                   ? {
                       ...tc,
                       status: chunk.isError ? ("error" as const) : ("completed" as const),
                       finishedAt: Date.now(),
                       ...(chunk.isError ? { failed: true } : {}),
-                      result: toolDisplayTexts.get(chunk.callId) ?? chunk.displayText,
+                      result: toolDisplayTexts.get(toolCallId) ?? chunk.displayText,
                       ...(chunk.metadata && !isQueryResultData(chunk.metadata)
                         ? {
                             metadata:
