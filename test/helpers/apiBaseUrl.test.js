@@ -146,3 +146,34 @@ test("ensureV1Suffix checks the path, not characters after the query", async () 
     "https://gateway.example.com/v1?api-key=secret"
   );
 });
+
+// Regression for #2381: a base that already ends in a version segment other
+// than /v1 (Z.ai's coding base) is a complete API mount — appending /v1 sent
+// requests to /api/coding/paas/v4/v1/chat/completions.
+test("ensureV1Suffix leaves versioned bases other than /v1 untouched", async () => {
+  const { ensureV1Suffix } = await load();
+
+  assert.equal(
+    ensureV1Suffix("https://api.z.ai/api/coding/paas/v4"),
+    "https://api.z.ai/api/coding/paas/v4"
+  );
+  assert.equal(ensureV1Suffix("https://api.example.com/v2"), "https://api.example.com/v2");
+  assert.equal(ensureV1Suffix("https://api.example.com/v1beta"), "https://api.example.com/v1beta");
+  assert.equal(ensureV1Suffix("https://local.host:8080/api/v0"), "https://local.host:8080/api/v0");
+});
+
+test("ensureV1Suffix still appends /v1 to unversioned bases", async () => {
+  const { ensureV1Suffix } = await load();
+
+  assert.equal(ensureV1Suffix("https://api.example.com"), "https://api.example.com/v1");
+  assert.equal(ensureV1Suffix("http://127.0.0.1:1234"), "http://127.0.0.1:1234/v1");
+  // An unversioned named mount is not a version segment: keep the fallback.
+  assert.equal(
+    ensureV1Suffix("https://gateway.example.com/stable"),
+    "https://gateway.example.com/stable/v1"
+  );
+  assert.equal(
+    ensureV1Suffix("https://api.example.com/openai/v4?api-key=secret"),
+    "https://api.example.com/openai/v4?api-key=secret"
+  );
+});
