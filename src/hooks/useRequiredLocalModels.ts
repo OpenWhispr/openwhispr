@@ -30,13 +30,15 @@ export function useRequiredLocalModels(): RequiredLocalModelsState {
   const [installed, setInstalled] = useState<string[] | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [whisper, parakeet] = await Promise.all([
+    const [whisper, parakeet, qualcomm] = await Promise.all([
       window.electronAPI?.listWhisperModels?.().catch(() => undefined),
       window.electronAPI?.listParakeetModels?.().catch(() => undefined),
+      window.electronAPI?.listQualcommModels?.().catch(() => undefined),
     ]);
     setInstalled([
       ...(whisper?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
       ...(parakeet?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
+      ...(qualcomm?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
     ]);
   }, []);
 

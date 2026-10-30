@@ -292,6 +292,7 @@ const DatabaseManager = require("./src/helpers/database");
 const ClipboardManager = require("./src/helpers/clipboard");
 const WhisperManager = require("./src/helpers/whisper");
 const ParakeetManager = require("./src/helpers/parakeet");
+const { QualcommWhisperManager } = require("./src/helpers/qualcommWhisper");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const dockManager = require("./src/helpers/dockManager");
@@ -346,6 +347,7 @@ let clipboardManager = null;
 let connectorManager = null;
 let whisperManager = null;
 let parakeetManager = null;
+let qualcommManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
@@ -635,6 +637,7 @@ function initializeCoreManagers() {
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
   }
   parakeetManager = new ParakeetManager();
+  qualcommManager = new QualcommWhisperManager();
   diarizationManager = new DiarizationManager();
   calendarReminderScheduler = new CalendarReminderScheduler(databaseManager);
   googleCalendarManager = new GoogleCalendarManager(
@@ -705,6 +708,7 @@ function initializeCoreManagers() {
     clipboardManager,
     whisperManager,
     parakeetManager,
+    qualcommManager,
     diarizationManager,
     windowManager,
     updateManager,
@@ -733,6 +737,7 @@ function initializeCoreManagers() {
 function registerSidecars() {
   if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
   if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+  if (qualcommManager) sidecarRegistry.register("qualcomm", () => qualcommManager.stop());
   if (diarizationManager) {
     sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
   }
@@ -1472,6 +1477,14 @@ async function startApp() {
   };
   parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
+  });
+
+  const qualcommSettings = {
+    localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
+    qualcommModel: process.env.QUALCOMM_MODEL,
+  };
+  qualcommManager.initializeAtStartup(qualcommSettings).catch((err) => {
+    debugLogger.debug("Qualcomm startup init error (non-fatal)", { error: err.message });
   });
 
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.

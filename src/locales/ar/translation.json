@@ -394,6 +394,16 @@
         "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
         "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
         "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
+      },
+      "qualcomm": {
+        "whisper_tiny": "Fastest Snapdragon NPU transcription",
+        "whisper_base": "Balanced Snapdragon NPU transcription",
+        "whisper_small": "Higher accuracy Snapdragon NPU transcription",
+        "whisper_small_quantized": "Quantized Small for a smaller NPU download",
+        "whisper_medium": "High accuracy Snapdragon NPU transcription",
+        "whisper_medium_quantized": "Quantized Medium for a smaller NPU download",
+        "whisper_large_v3_turbo": "Best Snapdragon NPU accuracy, still fast",
+        "whisper_large_v3_turbo_quantized": "Quantized Large v3 Turbo for a smaller NPU download"
       }
     },
     "errors": {
@@ -4869,6 +4879,17 @@
     "tinfoil": {
       "transportNote": "يستخدم Tinfoil نموذج Voxtral Mini 4B للتفريغ المباشر (البث)، ونموذج Voxtral Small 24B للمعالجة الدفعية.",
       "docsLink": "قراءة الوثائق"
+    },
+    "qualcomm": {
+      "unavailable": "Requires Windows on Snapdragon (ARM64)",
+      "runtime": {
+        "title": "Qualcomm NPU runtime",
+        "description": "Installs the QNN runtime (onnxruntime-qnn, numpy, transformers) into an app-managed Python environment.",
+        "install": "Install runtime",
+        "installing": "Installing…",
+        "preparing": "Preparing…",
+        "failed": "Runtime installation failed."
+      }
     }
   },
   "cleanupPrompt": "التنظيف",

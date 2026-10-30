@@ -74,6 +74,8 @@ export function MeetingTranscriptionPanel() {
     setMeetingParakeetModel,
     meetingCohereModel,
     setMeetingCohereModel,
+    meetingQualcommModel,
+    setMeetingQualcommModel,
     meetingCloudTranscriptionProvider,
     setMeetingCloudTranscriptionProvider,
     meetingCloudTranscriptionModel,
@@ -170,6 +172,8 @@ export function MeetingTranscriptionPanel() {
         setMeetingParakeetModel(modelId);
       } else if (provider === "cohere") {
         setMeetingCohereModel(modelId);
+      } else if (provider === "qualcomm") {
+        setMeetingQualcommModel(modelId);
       } else {
         setMeetingWhisperModel(modelId);
       }
@@ -178,6 +182,7 @@ export function MeetingTranscriptionPanel() {
       meetingLocalTranscriptionProvider,
       setMeetingParakeetModel,
       setMeetingCohereModel,
+      setMeetingQualcommModel,
       setMeetingWhisperModel,
     ]
   );
@@ -195,7 +200,9 @@ export function MeetingTranscriptionPanel() {
           ? meetingParakeetModel
           : meetingLocalTranscriptionProvider === "cohere"
             ? meetingCohereModel
-            : meetingWhisperModel
+            : meetingLocalTranscriptionProvider === "qualcomm"
+              ? meetingQualcommModel
+              : meetingWhisperModel
       }
       onLocalModelSelect={handleLocalTranscriptionModelSelect}
       selectedLocalProvider={meetingLocalTranscriptionProvider}

@@ -253,6 +253,7 @@ export function requiredLocalModelIds(state: PolicyDecisionSnapshot): string[] {
   const known = new Set<string>([
     ...Object.keys(modelRegistryData.whisperModels),
     ...Object.keys(modelRegistryData.parakeetModels),
+    ...Object.keys(modelRegistryData.qualcommModels),
   ]);
   const usable: string[] = [];
   for (const id of required) {

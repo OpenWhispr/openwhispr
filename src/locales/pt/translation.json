@@ -902,6 +902,17 @@
     "tinfoil": {
       "transportNote": "O Tinfoil transmite com o Voxtral Mini 4B e processa em lote com o Voxtral Small 24B.",
       "docsLink": "Ver a documentação"
+    },
+    "qualcomm": {
+      "unavailable": "Requires Windows on Snapdragon (ARM64)",
+      "runtime": {
+        "title": "Qualcomm NPU runtime",
+        "description": "Installs the QNN runtime (onnxruntime-qnn, numpy, transformers) into an app-managed Python environment.",
+        "install": "Install runtime",
+        "installing": "Installing…",
+        "preparing": "Preparing…",
+        "failed": "Runtime installation failed."
+      }
     }
   },
   "hooks": {
@@ -2778,6 +2789,16 @@
       "diarization": {
         "segmentation": "Detecção de limites de fala para identificação de falantes",
         "embedding_en": "Impressão vocal para identificação de falantes"
+      },
+      "qualcomm": {
+        "whisper_tiny": "Fastest Snapdragon NPU transcription",
+        "whisper_base": "Balanced Snapdragon NPU transcription",
+        "whisper_small": "Higher accuracy Snapdragon NPU transcription",
+        "whisper_small_quantized": "Quantized Small for a smaller NPU download",
+        "whisper_medium": "High accuracy Snapdragon NPU transcription",
+        "whisper_medium_quantized": "Quantized Medium for a smaller NPU download",
+        "whisper_large_v3_turbo": "Best Snapdragon NPU accuracy, still fast",
+        "whisper_large_v3_turbo_quantized": "Quantized Large v3 Turbo for a smaller NPU download"
       }
     },
     "errors": {

@@ -132,9 +132,29 @@ export interface ParakeetModelInfo {
 
 export type ParakeetModelsMap = Record<string, ParakeetModelInfo>;
 
+export interface QualcommModelInfo {
+  name: string;
+  description: string;
+  descriptionKey?: string;
+  size: string;
+  sizeMb: number;
+  language: string;
+  /** Hugging Face repo holding release_assets.json (e.g. qualcomm/Whisper-Tiny). */
+  hfRepo: string;
+  /** openai/whisper-* model size the tokenizer/config files come from. */
+  hfModelSize: string;
+  organization?: { id: string; name: string };
+  license?: string;
+  modelCardUrl?: string;
+  recommended?: boolean;
+}
+
+export type QualcommModelsMap = Record<string, QualcommModelInfo>;
+
 interface ModelRegistryData {
   parakeetModels: ParakeetModelsMap;
   whisperModels: WhisperModelsMap;
+  qualcommModels: QualcommModelsMap;
   transcriptionProviders: TranscriptionProviderData[];
   cloudProviders: CloudProviderData[];
   enterpriseProviders: EnterpriseProviderData[];
@@ -572,6 +592,21 @@ export function isCohereTranscribeModel(modelId: string): boolean {
 export function isSherpaLocalProvider(provider: string): boolean {
   return provider === "nvidia" || provider === "cohere";
 }
+
+// Qualcomm models ride their own QNN/NPU sidecar engine, not sherpa-onnx.
+export function isQualcommLocalProvider(provider: string): boolean {
+  return provider === "qualcomm";
+}
+
+export function getQualcommModels(): QualcommModelsMap {
+  return modelData.qualcommModels;
+}
+
+export function getQualcommModelInfo(modelId: string): QualcommModelInfo | undefined {
+  return modelData.qualcommModels[modelId];
+}
+
+export const QUALCOMM_MODEL_INFO = modelData.qualcommModels;
 
 export const PARAKEET_MODEL_INFO = modelData.parakeetModels;
 

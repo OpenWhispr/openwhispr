@@ -923,6 +923,17 @@
     "tinfoil": {
       "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
       "docsLink": "查看文件"
+    },
+    "qualcomm": {
+      "unavailable": "Requires Windows on Snapdragon (ARM64)",
+      "runtime": {
+        "title": "Qualcomm NPU runtime",
+        "description": "Installs the QNN runtime (onnxruntime-qnn, numpy, transformers) into an app-managed Python environment.",
+        "install": "Install runtime",
+        "installing": "Installing…",
+        "preparing": "Preparing…",
+        "failed": "Runtime installation failed."
+      }
     }
   },
   "hooks": {
@@ -2799,6 +2810,16 @@
       "diarization": {
         "segmentation": "用於說話者分離的語音邊界偵測",
         "embedding_en": "用於說話者辨識的聲紋提取"
+      },
+      "qualcomm": {
+        "whisper_tiny": "Fastest Snapdragon NPU transcription",
+        "whisper_base": "Balanced Snapdragon NPU transcription",
+        "whisper_small": "Higher accuracy Snapdragon NPU transcription",
+        "whisper_small_quantized": "Quantized Small for a smaller NPU download",
+        "whisper_medium": "High accuracy Snapdragon NPU transcription",
+        "whisper_medium_quantized": "Quantized Medium for a smaller NPU download",
+        "whisper_large_v3_turbo": "Best Snapdragon NPU accuracy, still fast",
+        "whisper_large_v3_turbo_quantized": "Quantized Large v3 Turbo for a smaller NPU download"
       }
     },
     "errors": {
