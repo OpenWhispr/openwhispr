@@ -492,3 +492,31 @@ it('clears a grant withdrawn while the purchase links it, before recording', asy
   await rc.recordRevenueCatPurchase('pro.monthly');
   expect(server['billing-a']).toBe('');
 });
+
+it('records the purchase and logs in even when attribution fails', async () => {
+  mockConsent = 'revoked';
+  sdk.getAppUserID.mockRejectedValue(new Error('bridge unavailable'));
+  await expect(rc.identifyRevenueCatUser('billing-a')).resolves.toBe(true);
+  await expect(rc.recordRevenueCatPurchase('pro.monthly')).resolves.toBe(true);
+  expect(sdk.logIn).toHaveBeenCalledWith('billing-a');
+  expect(sdk.recordPurchase).toHaveBeenCalledWith('pro.monthly');
+});
+
+it('keeps the record of linked accounts when it cannot be read', async () => {
+  startSession(await linkedDevice());
+  const storage = require('@react-native-async-storage/async-storage').default;
+  jest.spyOn(storage, 'getItem').mockRejectedValue(new Error('storage unavailable'));
+  await rc.identifyRevenueCatUser('billing-b');
+  await rc.recordRevenueCatPurchase('pro.monthly');
+  expect(JSON.parse(device.storage['revenuecat.appsflyerLinkedUsers'])).toContain('billing-a');
+});
+
+it('records a link before writing it, so an interrupted link is still cleared', async () => {
+  sdk.setAttributes.mockImplementation(async (attributes) => {
+    const value = attributes.$appsflyerId;
+    if (value === 'af-device') throw new Error('bridge unavailable');
+    if (value !== null && value !== undefined) storeLocally(value);
+  });
+  await rc.identifyRevenueCatUser('billing-a');
+  expect(JSON.parse(device.storage['revenuecat.appsflyerLinkedUsers'])).toContain('billing-a');
+});

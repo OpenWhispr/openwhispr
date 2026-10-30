@@ -63,8 +63,11 @@ export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
   if (enabled === null) return 'pending';
   switch (trackingAuthorizationStatus) {
     case 'authorized':
-    case 'notSupported':
       return 'granted';
+    case 'notSupported':
+      // ATT exists on every iOS version the app supports, so there this means
+      // the tracking module didn't load: no answer to link with.
+      return Platform.OS === 'ios' ? 'undecided' : 'granted';
     case 'denied':
       return 'revoked';
     case 'notDetermined':
@@ -76,7 +79,7 @@ export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
 
 export function subscribeAppsFlyerAttribution(listener: () => void): () => void {
   attributionListeners.add(listener);
-  return () => {
+  return (): void => {
     attributionListeners.delete(listener);
   };
 }
@@ -88,7 +91,7 @@ function publishAttributionState(sdkBecameReady = false): void {
   const consentChanged = consent !== 'pending' && consent !== lastPublishedConsent;
   if (consentChanged) lastPublishedConsent = consent;
   if (!consentChanged && !sdkBecameReady) return;
-  attributionListeners.forEach((listener) => {
+  attributionListeners.forEach((listener): void => {
     try {
       listener();
     } catch (error) {
@@ -110,7 +113,9 @@ export async function getAppsFlyerRevenueId(): Promise<string | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const id = await Promise.race([
-      stateChange.then(() => (collectionAllowed() ? getAppsFlyer().getAppsFlyerUID() : null)),
+      stateChange.then((): Promise<string | null> | null =>
+        collectionAllowed() ? getAppsFlyer().getAppsFlyerUID() : null,
+      ),
       new Promise<null>((resolve) => {
         timeout = setTimeout(() => resolve(null), REVENUE_ID_LOOKUP_TIMEOUT_MS);
       }),

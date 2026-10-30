@@ -65,6 +65,14 @@ Accepted consequences of the account-level link:
   clears are no-ops while its local copy stays empty, so a link a consenting
   device sets afterwards stays in place. RevenueCat forgets the local copy when
   the device switches accounts, so the opt-out clears once more after a switch.
+- Signing out of, or switching away from, an account this device linked clears
+  the account's link even while another consenting device stays signed in to
+  it. That device's renewals reach AppsFlyer without a link until it next opens
+  the app or makes a purchase, which links it again. Keeping the departed
+  device's identifier would attribute them to an install that left the account.
+- If the device's record of linked accounts can't be read, sign-out and account
+  switches leave the link alone until a later read succeeds. A link is recorded
+  before it is written, so an interrupted link errs toward one extra clear.
 
 ## Device identifiers
 

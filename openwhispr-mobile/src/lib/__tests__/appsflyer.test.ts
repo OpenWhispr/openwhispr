@@ -997,6 +997,33 @@ describe('RevenueCat attribution identity', () => {
     mockGetAppsFlyerUID.mockRejectedValueOnce(new Error('native unavailable'));
     await expect(af.getAppsFlyerRevenueId()).resolves.toBeNull();
   });
+
+  it('discards an inactive-return re-check that a full refresh overtook', async () => {
+    const af = await loadStartedAppsFlyer();
+    const staleRead = deferred<TrackingAuthorizationStatus>();
+    mockGetTrackingAuthorizationStatus.mockReturnValueOnce(staleRead.promise);
+    const recheck = af.recheckAppsFlyerTrackingAuthorization();
+    // Tracking was turned off in iOS Settings; the full refresh reads it first.
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('denied');
+    await af.refreshAppsFlyerTrackingAuthorization();
+    staleRead.resolve('authorized');
+    await recheck;
+    expect(af.getAppsFlyerAttributionConsent()).toBe('revoked');
+  });
+
+  it('reads an unloaded tracking module on iOS as no answer', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const af = await loadStartedAppsFlyer();
+    expect(af.getAppsFlyerAttributionConsent()).toBe('undecided');
+    const { Platform } = require('react-native') as typeof import('react-native');
+    const originalOS = Platform.OS;
+    Platform.OS = 'android';
+    try {
+      expect(af.getAppsFlyerAttributionConsent()).toBe('granted');
+    } finally {
+      Platform.OS = originalOS;
+    }
+  });
 });
 
 it('keeps the af_subscribe client event on Android', async () => {

@@ -158,8 +158,9 @@ function RootLayout() {
   // Returning to a still-in-memory app (background→foreground) should land on
   // Home, not wherever it was suspended (e.g. the Account screen). Cold launches
   // go through app/index.tsx; warm resume never re-resolves "/", so it needs this
-  // explicit reset. Tracking an actual 'background' first ignores transient
-  // 'inactive' flickers (control center, notifications). `resolveResumeAction`
+  // explicit reset. Tracking an actual 'background' first keeps transient
+  // 'inactive' flickers (control center, notifications) from resetting it; those
+  // returns only re-read ATT. `resolveResumeAction`
   // owns the guard list — flows that drive their own navigation (keyboard
   // handoff, calendar auth, Stripe link-out) opt out of the reset there.
   useEffect(() => {
