@@ -14,6 +14,8 @@ test("openrouter vendor-prefixed ids resolve to the upstream registry model", as
   assert.equal(getCloudModel("google/gemini-3.5-flash-lite", "openrouter")?.supportsVision, true);
   assert.equal(getCloudModel("google/gemini-3.5-flash-lite"), undefined);
   assert.equal(getCloudModel("google/gemini-3.5-flash-lite", "custom"), undefined);
+  // OpenRouter writes Claude versions with dots; the registry with dashes.
+  assert.equal(getCloudModel("anthropic/claude-haiku-5.5", "openrouter")?.id, "claude-haiku-5-5");
 });
 
 test("an exact registry id wins before the prefix is stripped", async () => {

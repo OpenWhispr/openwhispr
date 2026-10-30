@@ -511,9 +511,13 @@ export function getCloudModel(
     if (model) return model;
   }
   // OpenRouter ids carry a vendor prefix (google/gemini-3.5-flash-lite) that the
-  // registry stores without, so retry on the upstream id.
+  // registry stores without, so retry on the upstream id. Its Claude versions
+  // also use dots (claude-haiku-5.5) where Anthropic's own ids use dashes.
   if (providerId === "openrouter" && modelId.includes("/")) {
-    return getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    const upstream = modelId.slice(modelId.lastIndexOf("/") + 1);
+    return getCloudModel(
+      modelId.startsWith("anthropic/") ? upstream.replaceAll(".", "-") : upstream
+    );
   }
   return undefined;
 }
