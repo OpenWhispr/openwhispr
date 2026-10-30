@@ -1,7 +1,6 @@
 const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
-const { isMarkdownTargetSignature } = require("./markdownTargets");
 const { parseWindowHandle } = require("./windowsPasteTarget");
 
 const SESSION_TTL_MS = 5 * 60 * 1000;

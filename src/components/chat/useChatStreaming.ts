@@ -18,7 +18,7 @@ import {
   isWebSearchBlockedByOrg,
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
-import { readSkillCardRecord } from "./skillCardRecord";
+import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
 import { useAuth } from "../../hooks/useAuth";
 import { getUsageState } from "../../lib/usageStore";
 import { readIsSubscribed } from "../../lib/subscriptionFlag";
@@ -1008,6 +1008,10 @@ export function useChatStreaming({
         };
 
         const recordExecutedResult = (id: string, result: ToolResult): void => {
+          if (cancelled()) {
+            const call = toolCalls.find((call) => call.id === id);
+            if (call && !SKILL_CARD_TOOLS.has(call.name)) return;
+          }
           const metadata =
             result.success && result.data && typeof result.data === "object"
               ? (result.data as ToolCallInfo["metadata"])
@@ -1124,7 +1128,6 @@ export function useChatStreaming({
                     displayText: result.displayText,
                     metadata,
                     isError: !result.success,
-                    ...(result.success ? {} : { failed: true }),
                   };
                 }
               : undefined;
