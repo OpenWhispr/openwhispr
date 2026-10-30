@@ -288,7 +288,11 @@
         "openrouter_mistralai_voxtral_mini_transcribe_3_0": "تفريغ سريع ودقيق متعدد اللغات من Mistral",
         "openrouter_nvidia_nemotron_3_5_transcribe": "تفريغ منخفض التكلفة من NVIDIA بـ 40 لغة",
         "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
-        "openrouter_assemblyai_universal_3_6_pro": "أدق تفريغ من AssemblyAI"
+        "openrouter_assemblyai_universal_3_6_pro": "أدق تفريغ من AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "تفريغ دقيق من ElevenLabs بأكثر من 90 لغة",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "نموذج التفريغ الأكبر متعدد اللغات من Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "تفريغ منخفض التكلفة من NVIDIA للغات الأوروبية",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "أقل تفريغ متعدد اللغات تكلفةً من NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",

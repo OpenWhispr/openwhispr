@@ -2689,7 +2689,11 @@
         "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Trascrizione multilingue veloce e precisa di Mistral",
         "openrouter_nvidia_nemotron_3_5_transcribe": "Trascrizione economica di NVIDIA in 40 lingue",
         "openrouter_deepgram_nova_3": "Trascrizione multilingue veloce di Deepgram",
-        "openrouter_assemblyai_universal_3_6_pro": "La trascrizione più precisa di AssemblyAI"
+        "openrouter_assemblyai_universal_3_6_pro": "La trascrizione più precisa di AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Trascrizione precisa di ElevenLabs in oltre 90 lingue",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Il modello di trascrizione multilingue più grande di Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Trascrizione economica di NVIDIA per le lingue europee",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "La trascrizione multilingue più economica di NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",

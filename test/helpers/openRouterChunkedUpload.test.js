@@ -238,6 +238,16 @@ test("silence is not lost audio, and an all-silent upload says so", async () => 
     }),
     { code: "NO_SPEECH_DETECTED" }
   );
+
+  // ElevenLabs Scribe's answer for a silent piece.
+  await assert.rejects(
+    transcribeOpenRouterChunks({
+      inputPath: "in",
+      split: fakeSplit(2).split,
+      transcribeChunk: async () => ({ text: "[pause]" }),
+    }),
+    { code: "NO_SPEECH_DETECTED" }
+  );
 });
 
 test("losing more than half the audio fails the upload", async () => {
