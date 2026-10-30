@@ -224,6 +224,7 @@ function getProtocolAppArgs() {
 // Register custom protocol for OAuth callbacks.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
+  if (process.platform === "darwin" && app.isDefaultProtocolClient(protocol)) return true;
   const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
   const appArgs = getProtocolAppArgs();
 
