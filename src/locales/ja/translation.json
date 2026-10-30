@@ -1161,6 +1161,7 @@
   "auth": {
     "cloudNotConfigured": "クラウド未設定",
     "sessionExpired": "セッションの有効期限が切れました",
+    "unconfirmedSession": "サインインを確認できなかったため、何も変更されていません。OpenWhispr がサーバーに接続できるようになってから再試行してください。",
     "common": {
       "back": "戻る",
       "continue": "続ける",
@@ -1644,6 +1645,10 @@
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",
       "offline": "オフライン",
+      "offlineAccount": {
+        "title": "前回サインイン時の情報を表示中",
+        "description": "OpenWhispr がサーバーに接続できるようになるまで、同期とアカウントの変更は一時停止されます。"
+      },
       "pastDue": {
         "description": "現在は無料プランをご利用中です。お支払い方法を更新して Pro に戻しましょう。",
         "title": "お支払いを処理できませんでした"

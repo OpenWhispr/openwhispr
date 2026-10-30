@@ -244,6 +244,34 @@ test("a retry after an error holds the scopes carried in memory even with no per
   assert.equal(getManagedScopeResolution("transcription", "auto").kind, "manual");
 });
 
+test("another identity's config never stands in when its first fetch fails", async (t) => {
+  const { useEnterpriseIdentityStore } = await boot(t, {
+    electronAPI: {
+      getManagedEnterpriseConfig: (accountId, workspaceId, authGeneration) =>
+        Promise.resolve(
+          accountId === "account-a"
+            ? {
+                success: true,
+                status: "network",
+                accountId,
+                workspaceId,
+                authGeneration,
+                config: bedrockRequired,
+              }
+            : { success: false, status: "error", accountId, workspaceId, authGeneration }
+        ),
+    },
+  });
+
+  await useEnterpriseIdentityStore.getState().refresh("account-a", "workspace-a", 1);
+  assert.equal(useEnterpriseIdentityStore.getState().status, "ready");
+
+  // Account B has nothing cached anywhere, so nothing is enforced for it.
+  await useEnterpriseIdentityStore.getState().refresh("account-b", "workspace-b", 2);
+  assert.equal(useEnterpriseIdentityStore.getState().status, "error");
+  assert.deepEqual(useEnterpriseIdentityStore.getState().enforcedScopes, []);
+});
+
 test("the transcription opt-out is independent of the LLM setup mode", async (t) => {
   installBrowserGlobals(t, { initialStorage: { enterpriseSetupMode: "manual" } });
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-stt-setup-mode-" });

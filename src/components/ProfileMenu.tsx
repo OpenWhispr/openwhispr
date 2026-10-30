@@ -31,7 +31,7 @@ export default function ProfileMenu({
   onSignOut,
 }: ProfileMenuProps): React.ReactElement {
   const { t } = useTranslation();
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, user, isOfflineAccount } = useAuth();
   const usage = useUsage();
   const { planLabel } = useAccountPlan(usage);
 
@@ -69,9 +69,9 @@ export default function ProfileMenu({
               <p dir="auto" className="min-w-0 truncate text-[13px] font-medium text-foreground">
                 {name}
               </p>
-              {planLabel && (
+              {(isOfflineAccount || planLabel) && (
                 <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
-                  {planLabel}
+                  {isOfflineAccount ? t("settingsPage.account.offline") : planLabel}
                 </Badge>
               )}
             </div>

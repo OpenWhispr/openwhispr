@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "你的声音，由你掌控。",
     "welcomeTitle": "欢迎使用 OpenWhispr",
-    "sessionExpired": "会话已过期，请重新登录。"
+    "sessionExpired": "会话已过期，请重新登录。",
+    "unconfirmedSession": "无法确认你的登录状态，因此未做任何更改。请在 OpenWhispr 能连接到服务器后重试。"
   },
   "cleanupPrompt": "文本整理",
   "developerSection": {
@@ -1644,6 +1645,10 @@
       "notSignedIn": "未登录",
       "notSignedInDescription": "创建账户以解锁高级功能。",
       "offline": "离线",
+      "offlineAccount": {
+        "title": "显示上次登录时的信息",
+        "description": "在 OpenWhispr 能连接到服务器之前，同步和账户更改将暂停。"
+      },
       "pastDue": {
         "description": "你目前使用的是免费版。更新支付方式即可恢复 Pro 版。",
         "title": "我们无法处理你的付款"

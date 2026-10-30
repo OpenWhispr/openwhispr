@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "Le pouvoir de votre voix. À vos conditions.",
     "welcomeTitle": "Bienvenue sur OpenWhispr",
-    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
+    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription.",
+    "unconfirmedSession": "Nous n'avons pas pu confirmer votre connexion, donc rien n'a été modifié. Réessayez dès qu'OpenWhispr pourra joindre ses serveurs."
   },
   "calendar": {
     "title": "Google Agenda",
@@ -1939,6 +1940,10 @@
       "notSignedIn": "Non connecté",
       "notSignedInDescription": "Créez un compte pour débloquer les fonctionnalités premium.",
       "offline": "Hors ligne",
+      "offlineAccount": {
+        "title": "Affichage de votre dernière connexion",
+        "description": "La synchronisation et les modifications du compte sont en pause jusqu'à ce qu'OpenWhispr puisse joindre ses serveurs."
+      },
       "pastDue": {
         "description": "Vous êtes temporairement sur le plan gratuit. Mettez à jour votre moyen de paiement pour revenir à Pro.",
         "title": "Nous n'avons pas pu traiter votre paiement"

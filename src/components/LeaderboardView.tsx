@@ -24,7 +24,7 @@ export default function LeaderboardView({
   syncAllowedByPolicy,
 }: LeaderboardViewProps) {
   const { t } = useTranslation();
-  const { isLoaded: authSettled, isSignedIn, user } = useAuth();
+  const { isLoaded: authSettled, isSignedIn, user, isOfflineAccount, refetch } = useAuth();
   const authGeneration = getValidatedAuthGeneration();
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState<boolean | null>(null);
   const [ssoStarting, setSsoStarting] = useState(false);
@@ -104,6 +104,7 @@ export default function LeaderboardView({
         accountId={user?.id ?? null}
         authGeneration={authGeneration}
         authSettled={authSettled}
+        accountOffline={isOfflineAccount}
         isSignedIn={isSignedIn}
         participating={isSignedIn && participationEnabled}
         cloudAccessAllowed={syncAllowedByPolicy}
@@ -115,6 +116,7 @@ export default function LeaderboardView({
         onJoin={joinLeaderboard}
         onLeave={leaveParticipation}
         onRefreshParticipation={refreshParticipation}
+        onSessionRefresh={() => void refetch()}
         onSignIn={onSignIn}
         onSsoSignIn={() => void startSsoSignIn()}
         ssoActionDisabled={ssoStarting || oauthProtocolRegistered !== true}

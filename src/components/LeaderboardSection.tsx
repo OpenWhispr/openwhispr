@@ -88,6 +88,8 @@ interface LeaderboardSectionProps {
   authGeneration: number | null;
   /** The session has settled, so a missing credential will not arrive on its own. */
   authSettled: boolean;
+  /** Presented from this device while the server can't confirm it: signing in won't help. */
+  accountOffline: boolean;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
@@ -102,6 +104,7 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onJoin: () => Promise<boolean>;
   onRefreshParticipation: () => void;
+  onSessionRefresh: () => void;
   onSignIn: () => void;
   onSsoSignIn: () => void;
   ssoActionDisabled: boolean;
@@ -154,6 +157,7 @@ export default function LeaderboardSection({
   accountId,
   authGeneration,
   authSettled,
+  accountOffline,
   isSignedIn,
   participating,
   cloudAccessAllowed,
@@ -165,6 +169,7 @@ export default function LeaderboardSection({
   onJoin,
   onLeave,
   onRefreshParticipation,
+  onSessionRefresh,
   onSignIn,
   onSsoSignIn,
   ssoActionDisabled,
@@ -262,7 +267,7 @@ export default function LeaderboardSection({
         // presenting a session whose refetch failed, so this would otherwise
         // be a spinner with no message and no way out.
         setAccessLoading(!authSettled);
-        setAccessError(authSettled ? "auth" : null);
+        setAccessError(authSettled ? (accountOffline ? "generic" : "auth") : null);
         return;
       }
       setAccessLoading(true);
@@ -285,7 +290,7 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId, authGeneration, authSettled]
+    [accountId, accountOffline, authGeneration, authSettled]
   );
 
   useEffect(() => {
@@ -656,7 +661,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return <LeaderboardSkeleton />;
-  if (accessError && !access) {
+  if (accessError && (!access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
@@ -666,7 +671,13 @@ export default function LeaderboardSection({
             ? t("insights.leaderboard.signInDescription")
             : t("insights.leaderboard.accessError")
         }
-        onRetry={accessError === "auth" ? onSignIn : () => void loadAccess()}
+        onRetry={
+          accessError === "auth"
+            ? onSignIn
+            : accountOffline
+              ? onSessionRefresh
+              : () => void loadAccess()
+        }
       />
     );
   }
@@ -1016,7 +1027,9 @@ export default function LeaderboardSection({
               ? onSsoSignIn
               : visibleFailure === "auth"
                 ? onSignIn
-                : () => void load()
+                : accountOffline
+                  ? onSessionRefresh
+                  : () => void load()
           }
         />
       ) : !visibleLeaderboard ? (

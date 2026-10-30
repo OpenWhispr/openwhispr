@@ -1236,7 +1236,8 @@
     },
     "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a OpenWhispr",
-    "sessionExpired": "Sesión expirada"
+    "sessionExpired": "Sesión expirada",
+    "unconfirmedSession": "No pudimos confirmar tu inicio de sesión, así que no se cambió nada. Inténtalo de nuevo cuando OpenWhispr pueda conectarse a sus servidores."
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {
@@ -1696,6 +1697,10 @@
       "notSignedIn": "Sin sesión iniciada",
       "notSignedInDescription": "Crea una cuenta para desbloquear funciones premium.",
       "offline": "Sin conexión",
+      "offlineAccount": {
+        "title": "Se muestra tu último inicio de sesión",
+        "description": "La sincronización y los cambios de cuenta están en pausa hasta que OpenWhispr pueda conectarse a sus servidores."
+      },
       "pastDue": {
         "description": "Estás en el plan gratuito por ahora. Actualiza tu método de pago para volver a Pro.",
         "title": "No pudimos procesar tu pago"
