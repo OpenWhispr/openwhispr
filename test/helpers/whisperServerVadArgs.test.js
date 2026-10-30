@@ -31,6 +31,8 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
     "auto",
     "--max-len",
     "4096",
+    "--max-context",
+    "0",
     "--vad",
     "--vad-model",
     "/tmp/ggml-silero-v5.1.2.bin",
@@ -80,6 +82,7 @@ test("buildWhisperServerArgs suppresses the segment wrap without disabling times
   // tokens, so whisper.cpp advanced `seek` a full 30s window regardless of where the
   // decode stopped and silently dropped everything in between (#2150).
   assert.equal(args.includes("--no-timestamps"), false);
+  assert.equal(args[args.indexOf("--max-context") + 1], "0");
 });
 
 test("buildWhisperServerArgs includes thread count when provided", () => {
