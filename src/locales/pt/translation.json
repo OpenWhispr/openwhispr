@@ -193,6 +193,7 @@
     "policyUnresolved": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes.",
     "managedConfigLoading": "Verificando a configuração gerenciada da sua organização. Tente novamente em instantes.",
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
+    "managedConfigAmbiguous": "A configuração gerenciada da sua organização está inconsistente. Entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
     "resizePanel": "Redimensionar painel"
   },
@@ -862,6 +863,9 @@
       "modelRetired": "A Tinfoil descontinuou {{from}}. Alterado para {{to}}.",
       "refreshingModels": "A atualizar modelos…"
     },
+    "openai": {
+      "modelRetired": "A OpenAI descontinuou {{from}}. Alterado para {{to}}."
+    },
     "corti": {
       "euOnly": "Os modelos da Corti estão disponíveis apenas na região da UE."
     }
@@ -948,6 +952,9 @@
         "managedTranscriptionUnavailable": "A transcrição gerenciada não está disponível no momento. Tente novamente em instantes.",
         "managedRouteInvalid": "A transcrição gerenciada não pôde ser iniciada devido a uma incompatibilidade de configuração. Tente novamente ou entre em contato com o administrador.",
         "managedAuthRejected": "As credenciais de transcrição gerenciada da sua organização foram rejeitadas. Entre em contato com o administrador.",
+        "managedRequestRejected": "O serviço de transcrição da sua organização recusou este áudio (HTTP {{status}}). Tente novamente ou entre em contato com o administrador.",
+        "managedResponseMalformed": "O serviço de transcrição da sua organização enviou uma resposta que o OpenWhispr não conseguiu ler. Tente novamente ou entre em contato com o administrador.",
+        "managedChunkTooLarge": "Não foi possível dividir este áudio em partes pequenas o suficiente para o serviço de transcrição da sua organização. Entre em contato com o administrador.",
         "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
         "providerKeyMissing": "Nenhuma chave de API definida para seu provedor de transcrição. Adicione-a em Configurações → Fala para texto.",
         "cleanupTruncated": "O modelo de IA ficou sem espaço antes de terminar a limpeza do seu ditado.",
@@ -1638,6 +1645,8 @@
       },
       "rollingWeeklyLimit": "Limite semanal contínuo",
       "signOut": {
+        "endMeetingDescription": "Sair da conta encerra a gravação da reunião em andamento. O que foi capturado até agora permanece na nota.",
+        "endMeetingTitle": "Encerrar a gravação da reunião?",
         "failedDescription": "Algo deu errado ao sair. Tente novamente.",
         "failedTitle": "Não foi possível sair",
         "signOut": "Sair",
@@ -2390,6 +2399,7 @@
         "description": "Verifique sua conexão e tente novamente.",
         "retry": "Tentar novamente"
       },
+      "staleList": "Não foi possível acessar o OpenWhispr. Mostrando seus espaços de trabalho da última vez que você se conectou.",
       "tab": {
         "general": "Geral",
         "members": "Membros",
@@ -2609,6 +2619,8 @@
   "models": {
     "learnMore": "Saiba mais",
     "noneAvailable": "Nenhum modelo disponível",
+    "legacy": "Legado",
+    "legacyHint": "Não é mais oferecido. Depois de trocar para outro modelo, ele não aparecerá novamente.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "ASR local mais preciso (5,42% WER médio, 14 idiomas). Sem detecção automática de idioma"
@@ -2618,7 +2630,8 @@
         "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)",
         "nemotron_speech_streaming_en_0_6b": "ASR em inglês por streaming da NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "ASR multilíngue por streaming da NVIDIA Nemotron com detecção automática de idioma (15 idiomas)",
-        "orukeet": "Parakeet ajustado para reconhecimento de fala multilíngue"
+        "orukeet": "Parakeet ajustado para reconhecimento de fala multilíngue",
+        "parakeet_tdt_110m_en": "ASR leve em inglês com pontuação para computadores mais simples"
       },
       "whisper": {
         "tiny": "Mais rápido, qualidade inferior",
@@ -2626,7 +2639,9 @@
         "small": "Melhor qualidade, mais lento",
         "medium": "Alta qualidade",
         "large": "Melhor qualidade, o mais lento",
-        "turbo": "Rápido com boa qualidade"
+        "turbo": "Rápido com boa qualidade",
+        "large_q5": "Large com um terço do download",
+        "turbo_q5": "Turbo com um terço do download"
       },
       "transcription": {
         "openai_gpt_transcribe": "Transcrição mais recente e precisa",
@@ -2644,7 +2659,10 @@
         "deepgram_nova_3": "O modelo em tempo real mais preciso da Deepgram",
         "assemblyai_universal_streaming_english": "Transcrições em tempo real imutáveis, em inglês",
         "assemblyai_universal_streaming_multilingual": "Transcrições em tempo real imutáveis, multilíngues",
-        "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas"
+        "assemblyai_universal_3_5_pro": "Máxima precisão em tempo real, 18 idiomas",
+        "assemblyai_universal_3_6_pro": "Máxima precisão em tempo real, 32 idiomas",
+        "mistral_voxtral_mini_transcribe_3_0": "Transcrição rápida em mais de 50 idiomas (prévia)",
+        "mistral_voxtral_small_transcribe_3_0": "O Voxtral mais preciso, mais de 50 idiomas (prévia)"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",
@@ -2652,7 +2670,6 @@
         "openai_gpt_5_nano": "Ultrarápido, baixa latência",
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 menor",
-        "openai_gpt_4_1_nano": "GPT-4.1 com menor latência",
         "anthropic_claude_fable_5_1": "O modelo mais capaz da Anthropic, classe Mythos",
         "anthropic_claude_fable_5": "Modelo principal anterior da classe Mythos",
         "anthropic_claude_opus_5_5": "Modelo Opus mais recente para raciocínio complexo, contexto de 1M",
@@ -2662,7 +2679,7 @@
         "anthropic_claude_sonnet_4_6": "Desempenho equilibrado",
         "anthropic_claude_sonnet_4_5": "Geração anterior do Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
-        "gemini_gemini_3_5_flash": "Modelo Gemini mais recente, rápido e de alta capacidade",
+        "gemini_gemini_3_5_flash": "Modelo Gemini rápido e de alta capacidade",
         "gemini_gemini_3_5_flash_lite": "O modelo 3.5 mais rápido e econômico",
         "gemini_gemini_3_1_pro_preview": "Modelo principal de nova geração para raciocínio complexo",
         "gemini_gemini_3_1_flash_lite": "Desempenho de ponta a baixo custo",
@@ -2690,18 +2707,29 @@
         "corti_corti_s1_instant": "Modelo de saúde rápido, sem rastro de raciocínio",
         "corti_corti_s1": "Modelo clínico mais capaz com raciocínio",
         "corti_corti_s1_mini_instant": "Modelo de saúde compacto, o mais rápido e econômico",
-        "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço"
+        "corti_corti_s1_mini": "Modelo clínico compacto com raciocínio pela metade do preço",
+        "openai_gpt_6_1_sol": "Capacidade próxima do Astra para chat e tarefas agênticas a menor custo",
+        "openai_gpt_6_luna": "O GPT-6 mais rápido e econômico",
+        "gemini_gemini_3_6_flash": "Modelo Gemini rápido e de alta capacidade",
+        "gemini_gemini_3_8_flash": "O modelo Flash mais capaz",
+        "gemini_gemini_4_argon": "O modelo de raciocínio de ponta do Google",
+        "tinfoil_kimi_k3": "Modelo principal privado da Moonshot com raciocínio nativo e visão, contexto de 256K",
+        "tinfoil_deepseek_v4_1_flash": "Modelo DeepSeek privado e rápido com raciocínio opcional, contexto de 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "O modelo Claude mais capaz. Ideal para as tarefas de assistente mais difíceis.",
-        "bedrock_claude_haiku_4_5": "Rápido e barato. Ótimo para limpar texto.",
-        "bedrock_claude_sonnet_5": "Equilibrado. Padrão recomendado para tarefas de assistente.",
+        "bedrock_claude_haiku_4_5": "Haiku anterior. Rápido e barato para limpar texto.",
+        "bedrock_claude_sonnet_5": "Sonnet anterior. Rápido e capaz para tarefas de assistente.",
         "bedrock_claude_opus_4_8": "Máxima inteligência. Para tarefas complexas de assistente.",
         "bedrock_gpt_oss_120b": "Modelo aberto da OpenAI. Ótimo raciocínio a baixo custo.",
         "bedrock_deepseek_v3_2": "Modelo de fronteira de pesos abertos. Ótimo custo-benefício para tarefas de assistente.",
         "bedrock_qwen3_next_80b": "Modelo aberto esparso. Rápido e multilíngue.",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "Equilibrado. Padrão recomendado para tarefas de assistente.",
+        "bedrock_claude_haiku_5_5": "O modelo Claude mais rápido. Ótimo para limpar texto.",
+        "bedrock_claude_opus_5_5": "Inteligência máxima. Ideal para tarefas de assistente complexas.",
+        "vertex_gemini_3_8_flash": "O modelo Flash mais capaz via Vertex",
+        "vertex_gemini_3_5_flash_lite": "O modelo mais rápido e econômico via Vertex",
+        "vertex_gemini_4_argon": "O modelo de raciocínio de ponta do Google via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido poderoso",
@@ -2738,7 +2766,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE da Liquid AI, alta qualidade com apenas 1,5B parâmetros ativos",
         "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para limpeza de maior qualidade",
         "liquidai_lfm2_5_350m_q8_0": "Modelo ultraleve para limpeza rápida de ditado",
-        "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto"
+        "liquidai_lfm2_5_230m_q8_0": "Modelo minúsculo, limpeza instantânea em hardware modesto",
+        "qwen_qwen3_5_0_8b_q4_k_m": "Qwen3.5 minúsculo para a limpeza mais rápida",
+        "qwen_qwen3_8_27b_q4_k_m": "O modelo Qwen mais capaz para computadores de 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "Modelo de mistura de especialistas rápido, 3B de parâmetros ativos",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Modelo de 14B da Mistral com uso de ferramentas, contexto de 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "Modelo rápido sem etapa de raciocínio para limpeza e ferramentas",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "Pequeno e rápido para limpeza de ditado",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Build QAT oficial do Google, ideal para computadores de 16 GB"
       },
       "diarization": {
         "segmentation": "Detecção de limites de fala para identificação de falantes",
@@ -2867,7 +2902,6 @@
       "personal": "Pessoal",
       "privateTooltip": "Somente você pode ver seu espaço pessoal",
       "newSpace": "Novo espaço de equipe",
-      "newSpaceInWorkspace": "Novo espaço de equipe em {{workspace}}",
       "createTitle": "Criar espaço de equipe",
       "createDescription": "Uma área compartilhada dentro de um workspace para as pessoas e grupos que você adicionar.",
       "nameAndIconLabel": "Nome e ícone",
@@ -3202,7 +3236,8 @@
       "urlFileTooLarge": "O arquivo é grande demais para baixar. O tamanho máximo é 500 MB.",
       "urlYoutubeBlocked": "O YouTube está bloqueando temporariamente downloads da sua rede. Tente novamente em instantes.",
       "customEndpointInvalid": "O endpoint de transcrição personalizado não está configurado ou é inválido. Atualize-o nas Configurações.",
-      "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas."
+      "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
+      "disabledByOrg": "O envio de áudio foi desativado pela sua organização."
     },
     "meeting": {
       "title": "Notas de reunião",
@@ -3229,7 +3264,11 @@
       "systemAudioQuiet": {
         "title": "O áudio da reunião ficou silencioso",
         "description": "Ninguém foi ouvido nos últimos minutos. Se a chamada ainda estiver acontecendo, verifique seu dispositivo de saída de som."
-      }
+      },
+      "recordingDisabledByOrg": "A gravação de reuniões foi desativada pela sua organização.",
+      "stoppedAccountChanged": "A gravação parou porque você saiu da conta ou trocou de conta.",
+      "stoppedPolicyUnresolved": "A gravação parou porque não foi possível verificar as configurações da sua organização.",
+      "stoppedWorkspaceChanged": "A gravação parou porque você trocou de espaço de trabalho."
     },
     "meetingPill": {
       "returnToNote": "Voltar à gravação",
@@ -3414,6 +3453,7 @@
     },
     "speaker": {
       "you": "Você",
+      "noteTaker": "Quem anotou",
       "them": "Outro",
       "unknown": "Participante desconhecido",
       "label": "Participante {{n}}",
@@ -3510,19 +3550,16 @@
   },
   "dictionary": {
     "addWord": "Adicionar palavra",
-    "removeWord": "Remover {{word}}",
     "clearAll": "Limpar tudo",
     "clearTitle": "Limpar o dicionário?",
     "clearDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
-    "addPlaceholder": "Adicione palavras separadas por vírgulas — OpenWhispr, Supabase, John Snow, ARR",
     "add": "Adicionar",
     "importWords": "Importar palavras",
     "importPlaceholder": "Cole palavras separadas por vírgulas ou novas linhas...",
     "separateWithCommas": "Uma palavra por linha, ou separadas por vírgulas",
     "wordsReady_one": "{{count}} palavra pronta",
+    "wordsReady_many": "{{count}} de palavras prontas",
     "wordsReady_other": "{{count}} palavras prontas",
-    "import": "Importar",
-    "yourDictionary": "Seu dicionário",
     "promptLimitNotice": "Seu dicionário tem {{chars}} caracteres. Os modelos Groq e Whisper leem apenas as últimas centenas de caracteres, portanto uma lista mais curta funciona melhor ali. Os demais modelos recebem a lista completa.",
     "exportDictionary": "Exportar dicionário",
     "exportFailed": "Falha ao exportar",
@@ -3557,7 +3594,172 @@
     "emptyTitle": "Adicione palavras ao seu dicionário",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
     "addFirstWord": "Adicione sua primeira palavra",
-    "agentDefault": "Adicionado por padrão"
+    "agentDefault": "Adicionado por padrão",
+    "shared": {
+      "allWords": "Todas as palavras",
+      "personal": "Pessoais",
+      "group": "Compartilhadas",
+      "allShared": "Todas",
+      "everyoneAt": "Todos em {{workspace}}",
+      "hidden": "Ocultas",
+      "add": {
+        "placeholder": "Adicione palavras separadas por vírgulas",
+        "to": "em {{list}}",
+        "chooseList": "Escolher a lista onde adicionar",
+        "hiddenForYou": "Oculta para você em {{list}}",
+        "notAdded_one": "{{count}} palavra não foi adicionada: {{words}}",
+        "notAdded_many": "{{count}} de palavras não foram adicionadas: {{words}}",
+        "notAdded_other": "{{count}} palavras não foram adicionadas: {{words}}"
+      },
+      "alreadyIn": "Já está em {{list}}",
+      "importTo": "Importar para {{list}}",
+      "actions": {
+        "share": "Compartilhar",
+        "edit": "Editar",
+        "delete": "Excluir",
+        "hide": "Ocultar para mim",
+        "deleteForEveryone": "Excluir para todos",
+        "unhide": "Mostrar",
+        "shareWord": "Compartilhar {{word}}",
+        "deleteWord": "Excluir {{word}}",
+        "hideWord": "Ocultar {{word}} para mim",
+        "deleteForEveryoneWord": "Excluir {{word}} para todos",
+        "unhideWord": "Mostrar {{word}}"
+      },
+      "attribution": {
+        "you": "Você",
+        "former": "Ex-membro"
+      },
+      "toolbar": {
+        "search": "Pesquisar",
+        "searchPlaceholder": "Pesquisar nesta lista",
+        "closeSearch": "Fechar pesquisa",
+        "sort": "Ordenar",
+        "sync": "Sincronizar agora",
+        "syncedAgo": "Sincronizado há {{time}}",
+        "syncedJustNow": "Sincronizado agora",
+        "notSynced": "Ainda não sincronizado"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "Mais recentes primeiro",
+        "oldest": "Mais antigas primeiro"
+      },
+      "memberCount_one": "{{count}} membro",
+      "memberCount_many": "{{count}} de membros",
+      "memberCount_other": "{{count}} membros",
+      "emptyList": "Ainda não há palavras em {{list}}",
+      "allHiddenList": "Todas as palavras de {{list}} estão ocultas para você",
+      "noMatches": "Nenhuma palavra corresponde a “{{query}}”",
+      "deletedForEveryone": "“{{word}}” excluída para todos",
+      "undo": "Desfazer",
+      "errors": {
+        "generic": "Não foi possível atualizar {{list}}. Tente novamente.",
+        "listFull": "{{list}} está cheia",
+        "planRequired": "Os dicionários compartilhados exigem o Business, então {{list}} não foi alterada",
+        "ssoRequired": "Entre com o SSO da sua empresa para alterar {{list}}",
+        "notMember": "Você não tem mais acesso a {{list}}",
+        "invalid": "{{list}} só aceita termos curtos: até 64 caracteres e 6 palavras, sem vírgulas, pontuação de frase ou símbolos como < > { } [ ] ` |",
+        "recentlyDeleted": "Essa palavra acabou de ser excluída de {{list}}. Adicione-a novamente."
+      },
+      "deleteOneTitle": "Excluir “{{word}}”?",
+      "deleteDescription": "Isso vale para todos em {{list}}.",
+      "deleteManyTitle_one": "Excluir {{count}} palavra?",
+      "deleteManyTitle_many": "Excluir {{count}} de palavras?",
+      "deleteManyTitle_other": "Excluir {{count}} palavras?",
+      "deletedManyForEveryone_one": "{{count}} palavra excluída para todos",
+      "deletedManyForEveryone_many": "{{count}} de palavras excluídas para todos",
+      "deletedManyForEveryone_other": "{{count}} palavras excluídas para todos",
+      "deletedPersonalMany_one": "{{count}} palavra excluída",
+      "deletedPersonalMany_many": "{{count}} de palavras excluídas",
+      "deletedPersonalMany_other": "{{count}} palavras excluídas",
+      "selection": {
+        "count_one": "{{count}} selecionada",
+        "count_many": "{{count}} selecionadas",
+        "count_other": "{{count}} selecionadas",
+        "selectAll": "Selecionar todas ({{total}})",
+        "shareWith": "Compartilhar com…",
+        "clear": "Limpar seleção",
+        "selectWord": "Selecionar {{word}}",
+        "label": "Palavras selecionadas"
+      },
+      "share": {
+        "titleOne": "Compartilhar \"{{word}}\" com",
+        "titleMany_one": "Compartilhar {{count}} palavra com",
+        "titleMany_many": "Compartilhar {{count}} de palavras com",
+        "titleMany_other": "Compartilhar {{count}} palavras com",
+        "alreadyShared": "Já compartilhada",
+        "movesOutOne": "Remove-a de Pessoais",
+        "movesOutMany": "Remove-as de Pessoais",
+        "partial_one": "{{moved}} de {{total}} palavras compartilhadas. {{count}} não foi compartilhada.",
+        "partial_many": "{{moved}} de {{total}} palavras compartilhadas. {{count}} não foram compartilhadas.",
+        "partial_other": "{{moved}} de {{total}} palavras compartilhadas. {{count}} não foram compartilhadas.",
+        "reasons": {
+          "personalChanged": "Uma palavra mudou em outro dispositivo. Tente novamente.",
+          "network": "Verifique sua conexão e tente novamente.",
+          "aListFull": "Uma lista está cheia"
+        }
+      },
+      "locked": {
+        "noWorkspace": "Os dicionários compartilhados estão incluídos no Business. Compartilhe com todos o jargão, os nomes de produtos e as siglas da sua equipe.",
+        "upgradeAdmin": "Os dicionários compartilhados estão incluídos no Business. Faça o upgrade de {{workspace}} para que todos tenham as mesmas palavras.",
+        "upgradeMember": "Os dicionários compartilhados estão incluídos no Business. Peça a um administrador para fazer o upgrade de {{workspace}}.",
+        "paused_one": "A {{count}} palavra compartilhada de {{workspace}} está pausada. Faça o upgrade para o Business para usá-la novamente no ditado.",
+        "paused_many": "As {{count}} de palavras compartilhadas de {{workspace}} estão pausadas. Faça o upgrade para o Business para usá-las novamente no ditado.",
+        "paused_other": "As {{count}} palavras compartilhadas de {{workspace}} estão pausadas. Faça o upgrade para o Business para usá-las novamente no ditado.",
+        "workspaceTitle": "Todos no seu espaço de trabalho",
+        "workspaceDescription": "Palavras para a empresa toda",
+        "spaceTitle": "Uma lista por espaço",
+        "spaceDescription": "Palavras de que só uma equipe precisa",
+        "wordCount_one": "{{count}} palavra",
+        "wordCount_many": "{{count}} de palavras",
+        "wordCount_other": "{{count}} palavras",
+        "lockLabel": "Incluído no Business",
+        "ssoRequired": "{{workspace}} exige o SSO da empresa. Saia e entre novamente com SSO para usar as palavras compartilhadas.",
+        "noAccess": "Você não tem mais acesso às palavras compartilhadas de {{workspace}}. Fale com um administrador se achar que é um erro.",
+        "pausedMember_one": "A {{count}} palavra compartilhada de {{workspace}} está pausada. Peça a um administrador ou ao proprietário para fazer o upgrade para o Business para usá-la novamente no ditado.",
+        "pausedMember_many": "As {{count}} de palavras compartilhadas de {{workspace}} estão pausadas. Peça a um administrador ou ao proprietário para fazer o upgrade para o Business para usá-las novamente no ditado.",
+        "pausedMember_other": "As {{count}} palavras compartilhadas de {{workspace}} estão pausadas. Peça a um administrador ou ao proprietário para fazer o upgrade para o Business para usá-las novamente no ditado."
+      },
+      "empty": {
+        "body": "Adicione os termos que esta equipe usa ou compartilhe alguns da sua lista pessoal. Todos em {{list}} ({{count}}) vão recebê-los.",
+        "import": "Importar uma lista",
+        "shareFromPersonal": "Compartilhar de Pessoais"
+      },
+      "arrival": {
+        "title_one": "{{count}} palavra da equipe adicionada",
+        "title_many": "{{count}} de palavras da equipe adicionadas",
+        "title_other": "{{count}} palavras da equipe adicionadas",
+        "description": "As palavras compartilhadas de {{workspace}} agora valem para o seu ditado e para as notas das suas reuniões.",
+        "descriptionNoWorkspace": "As palavras compartilhadas da sua equipe agora valem para o seu ditado e para as notas das suas reuniões.",
+        "viewWords": "Ver palavras"
+      },
+      "lockedEntry": "Bloqueada",
+      "notTermLike": "Listas compartilhadas só aceitam termos curtos: até 64 caracteres e 6 palavras, sem vírgulas, pontuação de frase, símbolos como < > { } [ ] ` | ou caracteres ocultos",
+      "notUsed": "Não usada no ditado",
+      "notUsedTooltip": "O ditado ignora palavras compartilhadas com mais de 64 caracteres ou 6 palavras, ou com vírgulas, pontuação de frase, símbolos como < > { } [ ] ` | ou caracteres ocultos",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "{{count}} palavra ficou de fora: {{words}}",
+      "skipped_many": "{{count}} de palavras ficaram de fora: {{words}}",
+      "skipped_other": "{{count}} palavras ficaram de fora: {{words}}",
+      "partial": {
+        "add_one": "{{applied}} de {{total}} palavras adicionadas a {{list}}. {{count}} não foi adicionada.",
+        "add_many": "{{applied}} de {{total}} palavras adicionadas a {{list}}. {{count}} não foram adicionadas.",
+        "add_other": "{{applied}} de {{total}} palavras adicionadas a {{list}}. {{count}} não foram adicionadas.",
+        "hide_one": "{{applied}} de {{total}} palavras ocultadas para você. {{count}} não foi ocultada.",
+        "hide_many": "{{applied}} de {{total}} palavras ocultadas para você. {{count}} não foram ocultadas.",
+        "hide_other": "{{applied}} de {{total}} palavras ocultadas para você. {{count}} não foram ocultadas.",
+        "unhide_one": "{{applied}} de {{total}} palavras reexibidas. {{count}} continua oculta.",
+        "unhide_many": "{{applied}} de {{total}} palavras reexibidas. {{count}} continuam ocultas.",
+        "unhide_other": "{{applied}} de {{total}} palavras reexibidas. {{count}} continuam ocultas.",
+        "delete_one": "{{applied}} de {{total}} palavras excluídas para todos. {{count}} não foi excluída.",
+        "delete_many": "{{applied}} de {{total}} palavras excluídas para todos. {{count}} não foram excluídas.",
+        "delete_other": "{{applied}} de {{total}} palavras excluídas para todos. {{count}} não foram excluídas."
+      },
+      "hiddenWord": "“{{word}}” oculta para você",
+      "stillIn": "“{{word}}” ainda está em {{list}}"
+    }
   },
   "insights": {
     "title": "Estatísticas",
@@ -3692,7 +3894,6 @@
     "upload": "Enviar",
     "dictionary": "Dicionário",
     "referral": "Ganhe um mês grátis",
-    "inviteTeam": "Convide sua equipe",
     "settings": "Configurações",
     "support": "Suporte",
     "limitReached": "Limite semanal da nuvem atingido",
@@ -3706,7 +3907,7 @@
     "learnMore": "Saiba mais",
     "integrations": "Integrações",
     "defaultUser": "Usuário",
-    "notSignedIn": "Não conectado",
+    "accountMenu": "Conta: {{name}}",
     "chat": "Chat",
     "collapse": "Recolher barra lateral",
     "expand": "Expandir barra lateral"
@@ -3773,6 +3974,12 @@
     "active": "Aceleração GPU ativa",
     "ready": "Aceleração GPU pronta",
     "activating": "Ativando GPU...",
+    "activeBackend": "Aceleração {{backend}} ativa",
+    "readyBackend": "Aceleração {{backend}} pronta",
+    "activatingBackend": "Ativando {{backend}}...",
+    "enableBackend": "Ativar {{backend}}",
+    "cudaDescription": "Aceleração CUDA para GPUs NVIDIA compatíveis. Requer um driver NVIDIA atual e compatível.",
+    "vulkanDescription": "Aceleração Vulkan para GPUs AMD, Intel e NVIDIA compatíveis.",
     "activationFailed": "Aceleração GPU indisponível",
     "activationFailedDescription": "OpenWhispr mudou para a transcrição por CPU.",
     "reasoningActivationFailedDescription": "OpenWhispr mudou para o processamento por CPU.",
@@ -3919,6 +4126,9 @@
       "get_noteStatus": "Lendo nota...",
       "create_noteStatus": "Criando nota...",
       "update_noteStatus": "Atualizando nota...",
+      "load_skillStatus": "Carregando habilidade…",
+      "propose_skillStatus": "Preparando a habilidade…",
+      "update_skillStatus": "Preparando a alteração…",
       "copiedToClipboard": "Copiado para a área de transferência",
       "openNote": "Abrir nota",
       "unknownTool": "Ferramenta desconhecida: {{name}}",
@@ -3926,6 +4136,9 @@
       "search_openwhispr_helpName": "Buscar ajuda do OpenWhispr",
       "read_openwhispr_helpName": "Ler ajuda do OpenWhispr",
       "get_openwhispr_contextName": "Ler configurações do OpenWhispr",
+      "load_skillName": "Carregar habilidade",
+      "propose_skillName": "Propor habilidade",
+      "update_skillName": "Atualizar habilidade",
       "search_openwhispr_helpStatus": "Pesquisando na ajuda do OpenWhispr...",
       "read_openwhispr_helpStatus": "Lendo a ajuda do OpenWhispr...",
       "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr...",
@@ -4122,6 +4335,7 @@
       },
       "sections": {
         "connectors": "Conectores",
+        "skills": "Habilidades",
         "calendars": "Calendários",
         "api": "Chaves de API",
         "mcp": "Servidor MCP",
@@ -4587,6 +4801,227 @@
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
     "locked": "Incluído nos planos pagos"
   },
+  "skills": {
+    "pane": {
+      "description": "Ensine seus fluxos de trabalho ao assistente uma vez. Ele os usa sempre que fizerem sentido.",
+      "search": "Pesquisar habilidades",
+      "manage": "Gerenciar habilidades",
+      "add": "Adicionar",
+      "addMenu": {
+        "createWithAssistant": "Criar com o assistente",
+        "create": "Criar habilidade",
+        "upload": "Enviar habilidade"
+      },
+      "installed": "Instaladas",
+      "recommended": "Recomendadas",
+      "seeOne": "Ver {{first}}",
+      "seeTwo": "Ver {{first}} e {{second}}",
+      "seeMore_one": "Ver {{first}}, {{second}} e mais {{count}}",
+      "seeMore_other": "Ver {{first}}, {{second}} e mais {{count}}",
+      "noMatches": "Nenhuma habilidade instalada corresponde a \"{{query}}\".",
+      "stateOn": "ativada",
+      "stateOff": "desativada",
+      "stateNeedsFix": "precisa de correção",
+      "off": "Desativada",
+      "needsFix": "Precisa de correção",
+      "cardLabel": "{{name}}, {{state}}. Abrir detalhes",
+      "addRecommended": "Adicionar {{name}}",
+      "empty": {
+        "title": "Nenhuma habilidade ainda",
+        "description": "Crie uma com o assistente ou envie uma que você já tenha.",
+        "descriptionNoAssistant": "Envie uma que você já tenha ou crie a sua."
+      }
+    },
+    "breadcrumb": {
+      "label": "Trilha de navegação",
+      "root": "Habilidades"
+    },
+    "detail": {
+      "skillLabel": "Habilidade",
+      "toggle": "Ativar ou desativar {{name}}",
+      "more": "Mais opções para {{name}}",
+      "files": "Arquivos",
+      "copyFile": "Copiar {{path}}",
+      "neverRun": "O OpenWhispr nunca executa scripts",
+      "uninstall": "Desinstalar",
+      "uninstallConfirm": "Desinstalar {{name}}? Ela será removida deste computador.",
+      "problem": "Esta habilidade não pode ser usada até ser corrigida: {{reason}}",
+      "tryNow": "Experimentar agora"
+    },
+    "menu": {
+      "copyMarkdown": "Copiar Markdown",
+      "uninstall": "Desinstalar"
+    },
+    "toasts": {
+      "added": "Habilidade adicionada: {{name}}",
+      "created": "Habilidade criada: {{name}}",
+      "uploaded_one": "{{count}} habilidade enviada",
+      "uploaded_other": "{{count}} habilidades enviadas",
+      "uninstalled": "Habilidade desinstalada: {{name}}",
+      "removedFromComputer": "Removida deste computador.",
+      "copiedMarkdown": "Markdown copiado",
+      "copyFailed": "Não foi possível copiar",
+      "revealFailed": "Não foi possível encontrar a pasta da habilidade",
+      "writeFailed": "Não foi possível salvar a habilidade",
+      "writeFailedNoSpace": "Seu disco está cheio.",
+      "writeFailedPermission": "O OpenWhispr não consegue gravar na pasta de habilidades.",
+      "loadFailed": "Não foi possível ler suas habilidades"
+    },
+    "manage": {
+      "title": "Gerenciar habilidades",
+      "description": "Ative ou desative habilidades, ou remova as que você não usa. Cada uma fica salva neste computador.",
+      "noMatches": "Nenhuma habilidade corresponde a \"{{query}}\".",
+      "none": "Nenhuma habilidade ainda."
+    },
+    "upload": {
+      "title": "Enviar uma habilidade",
+      "description": "Adicione habilidades que você criou em outro lugar, como no Claude ou no Codex.",
+      "crumb": "Enviar habilidade",
+      "drop": "Arraste arquivos de habilidade para cá ou procure",
+      "dropActive": "Solte para adicionar",
+      "several": "Você pode adicionar várias de uma vez.",
+      "ruleMd": "Arquivos .md precisam de um nome e uma descrição no topo",
+      "ruleZip": "Arquivos .zip e .skill precisam ter um SKILL.md dentro",
+      "fileCount_one": "{{count}} arquivo",
+      "fileCount_other": "{{count}} arquivos",
+      "ready": "Pronta",
+      "duplicate": "Você já tem esta habilidade",
+      "replace": "Substituir",
+      "willReplace": "Vai substituir sua habilidade atual",
+      "willReplaceCopy": "Será usado no lugar do outro arquivo",
+      "alsoInUpload": "Outro arquivo deste envio tem a mesma habilidade",
+      "skipped": "Ignorada",
+      "undo": "Desfazer",
+      "chooseFile": "Escolha um arquivo para continuar.",
+      "submit": "Enviar",
+      "submitCount_one": "Enviar {{count}} habilidade",
+      "submitCount_other": "Enviar {{count}} habilidades"
+    },
+    "create": {
+      "title": "Criar uma habilidade",
+      "description": "Escreva-a você mesmo. O assistente a usa sempre que um pedido corresponder à descrição.",
+      "crumb": "Criar habilidade",
+      "name": "Nome",
+      "namePlaceholder": "Relatório de status semanal",
+      "nameMissing": "Adicione um nome.",
+      "descriptionLabel": "Descrição",
+      "descriptionPlaceholder": "O que ela faz e quando usá-la. Por exemplo: Escreve minha atualização semanal com base nas notas desta semana. Use quando eu pedir uma atualização semanal.",
+      "descriptionHint": "O assistente lê isto para decidir quando usar a habilidade.",
+      "descriptionMissing": "Adicione uma descrição para que o assistente saiba quando usá-la.",
+      "instructions": "Instruções",
+      "instructionsPlaceholder": "## Quando usar\nQuando eu pedir minha atualização semanal.\n\n## Etapas\n1. Leia as notas desta semana.\n2. Agrupe-as em conquistas, bloqueios e próxima semana.\n\n## Formato de saída\nTrês listas curtas.",
+      "instructionsMissing": "Adicione as instruções.",
+      "addFile": "Adicionar arquivo",
+      "filesTooLarge": "Os arquivos de uma habilidade podem somar no máximo 25 MB.",
+      "removeFile": "Remover {{path}}",
+      "submit": "Criar",
+      "unsaved": "Você tem alterações não salvas",
+      "keepEditing": "Continuar editando",
+      "discard": "Descartar",
+      "draftWithAssistant": "Rascunhar com o assistente"
+    },
+    "problems": {
+      "missingName": "Precisa de um nome no topo",
+      "missingDescription": "Precisa de uma descrição no topo",
+      "frontmatterMissing": "Precisa de um nome e uma descrição no topo",
+      "frontmatterInvalid": "Não é possível ler os detalhes do topo",
+      "frontmatterNotMapping": "Os detalhes do topo não estão no formato esperado",
+      "nameFormat": "O nome só pode ter letras minúsculas, números e hífens simples",
+      "nameTooLong": "O nome tem mais de 64 caracteres",
+      "descriptionTooLong": "A descrição tem mais de {{max}} caracteres",
+      "descriptionAngleBrackets": "A descrição não pode conter < ou >",
+      "noSkillFile": "Não há nenhum SKILL.md dentro",
+      "multipleSkillFiles": "Há mais de um SKILL.md dentro",
+      "skillFileTooDeep": "O SKILL.md precisa estar no topo ou dentro de uma única pasta",
+      "unsafePath": "Contém um nome de arquivo ou caminho não permitido",
+      "symlink": "Contém um link para outro arquivo, o que não é permitido",
+      "tooLarge": "Tem mais de 25 MB",
+      "tooManyFiles": "Tem mais de 500 arquivos",
+      "unsupportedFile": "Só é possível adicionar arquivos .md, .zip e .skill",
+      "unreadableArchive": "Não é possível abrir este arquivo",
+      "nameMismatch": "O nome dentro do SKILL.md não corresponde à pasta",
+      "unreadable": "Não é possível ler os arquivos da habilidade",
+      "skillFileNotUtf8": "O SKILL.md precisa ser salvo como texto UTF-8",
+      "placeholder": "Substitua primeiro o marcador [TODO: …]",
+      "nameTaken": "Você já tem uma habilidade chamada {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "A pasta é renomeada para corresponder ao nome da habilidade",
+      "reservedWord": "Nomes com \"claude\" ou \"anthropic\" não podem ser enviados ao Claude",
+      "longBody": "As instruções têm mais de 500 linhas, o que pode deixar o assistente mais lento",
+      "longDescription": "A descrição tem mais de 300 caracteres; as mais curtas são escolhidas com mais confiabilidade",
+      "unknownKeys": "Há detalhes extras no topo que o OpenWhispr mantém, mas não usa"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "Ações para o Linear",
+        "description": "Extrai as ações de uma reunião e prepara rascunhos de issues do Linear para eu aprovar. Use depois de uma reunião quando eu pedir as ações."
+      },
+      "meeting-summary-to-slack": {
+        "title": "Resumo da reunião para o Slack",
+        "description": "Escreve um resumo curto da reunião e prepara um rascunho para um canal do Slack. Use quando eu pedir para compartilhar um resumo da reunião."
+      },
+      "one-on-one-prep": {
+        "title": "Preparação para 1:1",
+        "description": "Reúne o que mudou desde a minha última reunião individual com alguém. Use quando eu pedir para me preparar para um 1:1."
+      },
+      "meeting-decisions": {
+        "title": "Decisões das reuniões",
+        "description": "Encontra as decisões nas notas das minhas reuniões, com a data e a reunião de cada uma. Use quando eu perguntar o que decidimos."
+      }
+    },
+    "chat": {
+      "chipRemove": "Remover {{name}} deste chat",
+      "placeholderWith": "Pergunte o que quiser — este chat usa {{name}}",
+      "usingSkill": "Usando habilidade · {{name}}",
+      "usingSkillFailed": "Não foi possível usar a habilidade · {{name}}",
+      "creatorName": "Criador de habilidades",
+      "creatorOpening": "O que você faz repetidamente? Conte como foi da última vez ou escolha uma nota para começar.",
+      "draftPrompt": "Me ajude a terminar esta habilidade.\nNome: {{name}}\nDescrição: {{description}}",
+      "draftInstructions": "Instruções até agora:\n{{instructions}}",
+      "draftFiles": "Arquivos que adicionei: {{files}}",
+      "noneYet": "(nada ainda)"
+    },
+    "approval": {
+      "createHeader": "Criar habilidade",
+      "newSkill": "Nova habilidade",
+      "replacesExisting": "Você já tem esta habilidade. Salvar vai atualizá-la.",
+      "replacesExistingTurnsOn": "Você já tem esta habilidade. Salvar vai atualizá-la e ativá-la.",
+      "nameLabel": "Nome da habilidade",
+      "descriptionLabel": "Quando é usada",
+      "seeFull": "Ver a habilidade completa",
+      "save": "Salvar habilidade",
+      "saving": "Salvando…",
+      "saved": "Salva",
+      "openSkill": "Abrir habilidade",
+      "skippedCreate": "Ignorada. Nada foi salvo.",
+      "updated": "Atualizada",
+      "undo": "Desfazer",
+      "undone": "Desfeito. A habilidade voltou a ser como era.",
+      "undoStale": "Não foi possível desfazer. A habilidade mudou desde então.",
+      "outdated": "Não salvo. A habilidade mudou depois que este cartão foi criado.",
+      "unchangedLines_one": "⋯ {{count}} linha sem alterações",
+      "unchangedLines_other": "⋯ {{count}} linhas sem alterações",
+      "undoFailed": "Não foi possível desfazer. Tente novamente.",
+      "failed": "Não foi possível salvar a habilidade.",
+      "notSaved": "Nada foi salvo.",
+      "updateHeader": "Atualizar habilidade",
+      "removes": "Remove:",
+      "learnedFrom": "Aprendida de: {{title}} · {{date}}",
+      "today": "Hoje",
+      "seeChanges": "Ver as alterações exatas",
+      "added": "Adicionado:",
+      "removed": "Removido:",
+      "update": "Atualizar habilidade",
+      "skippedUpdate": "Ignorada. A habilidade não foi alterada."
+    },
+    "code": {
+      "paste": "Colar no app",
+      "pasteNote": "Cola sem pressionar Enter, para você escolher quando executar.",
+      "pasted": "Colado",
+      "pasteFailed": "Não foi possível colar. O texto está na sua área de transferência."
+    }
+  },
   "calendar": {
     "title": "Google Agenda",
     "status": "Status",
@@ -4825,7 +5260,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "Espaços de trabalho",
-      "create": "Criar espaço de trabalho…"
+      "create": "Criar espaço de trabalho…",
+      "add": "Adicionar espaço de trabalho",
+      "invitePeople": "Convidar pessoas"
     },
     "create": {
       "title": "Criar espaço de trabalho",
@@ -4929,6 +5366,7 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever",
+    "joinOnly": "Entrar na reunião",
     "folders": {
       "choose": "Escolher pasta da reunião",
       "search": "Pesquisar pastas",
@@ -4961,7 +5399,9 @@
         "CREATE_FAILED": "Não foi possível concluir. Tente novamente.",
         "LINKED_NOTE_CHANGED": "Confira o destino e entre novamente.",
         "NOTE_UNAVAILABLE": "Esta nota não está disponível. Tente novamente sem criar outra.",
-        "START_FAILED": "Não foi possível concluir. Tente novamente."
+        "START_FAILED": "Não foi possível concluir. Tente novamente.",
+        "POLICY_MEETING_RECORDING_DISABLED": "A gravação de reuniões foi desativada pela sua organização.",
+        "POLICY_UNRESOLVABLE": "As configurações da sua organização ainda não foram carregadas. Tente novamente em instantes."
       }
     }
   },
@@ -5142,5 +5582,51 @@
     "permissionDenied": "Negada",
     "permissionRestricted": "Restrita",
     "permissionNotDetermined": "Não solicitada"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "Configuração de áudio empresarial",
+      "description": "Configure as credenciais neste dispositivo e teste a ligação de áudio da organização.",
+      "provider": "Fornecedor de áudio",
+      "gateway": "Gateway de áudio",
+      "provisioned": "Credencial configurada",
+      "credentialMissing": "Credencial necessária",
+      "proxyCredentialFormat": "Para um proxy, introduza JSON com username e password. Para áudio, introduza a chave API.",
+      "probeConsent": "Autorizo testes curtos de áudio que podem gerar custos do fornecedor.",
+      "testBatch": "Testar transcrição de ficheiro",
+      "testRealtime": "Testar ligação de reunião",
+      "testPassed": "Teste concluído e comunicado ao administrador.",
+      "testFailed": "Falha no teste de ligação.",
+      "setupFailed": "Falha na configuração. Verifique a sessão, as permissões e a rede.",
+      "saved": "Credencial guardada neste dispositivo.",
+      "operationUnavailable": "A organização não configurou esta operação de áudio.",
+      "certificateUnavailable": "O conjunto de certificados da organização está indisponível.",
+      "partialUpload": "Falharam {{count}} segmentos de áudio; a transcrição está incompleta.",
+      "importBootstrap": "Importar configuração da organização",
+      "importedBootstrap": "Credenciais de configuração importadas.",
+      "bootstrapNotFound": "Ficheiro de configuração não encontrado.",
+      "checks": {
+        "authRejected": "O provedor de áudio recusou as credenciais deste dispositivo. Verifique a chave provisionada ou a configuração de identidade.",
+        "tlsFailed": "Não foi possível verificar a conexão segura. Verifique os certificados da sua organização.",
+        "proxyFailed": "A conexão pelo proxy da sua organização falhou. Verifique as configurações e as credenciais do proxy.",
+        "timeout": "O provedor de áudio não respondeu a tempo. Verifique sua rede ou VPN.",
+        "credentialMissing": "Uma credencial necessária para esta conexão não está provisionada neste dispositivo.",
+        "configChanged": "Sua organização alterou esta configuração de áudio. Abra a configuração novamente e tente outra vez.",
+        "protocolFailed": "O provedor de áudio respondeu em um formato que o OpenWhispr não suporta. Verifique a implantação e o protocolo.",
+        "networkFailed": "Não foi possível acessar o provedor de áudio. Verifique sua rede, VPN e DNS.",
+        "secureStorageUnavailable": "Este dispositivo não tem armazenamento seguro de credenciais. No Linux, instale e desbloqueie um chaveiro (como GNOME Keyring ou KWallet) e tente novamente."
+      },
+      "errors": {
+        "ssoRequired": "Sua organização exige o SSO da empresa. Entre com SSO e tente novamente.",
+        "enterpriseRequired": "O áudio corporativo requer um plano Enterprise ativo para este espaço de trabalho.",
+        "signInRequired": "Sua sessão expirou. Entre novamente e tente outra vez.",
+        "accessDenied": "Sua conta não pode configurar o áudio deste espaço de trabalho. Verifique se você é membro e está no espaço certo.",
+        "rateLimited": "Muitas solicitações de teste. Aguarde alguns minutos e tente novamente."
+      },
+      "bootstrapNotProtected": "O arquivo de inicialização deve pertencer a você e só você deve poder lê-lo. Peça à TI para enviá-lo novamente.",
+      "bootstrapUnreadable": "O OpenWhispr não consegue ler o arquivo de inicialização. Peça à TI para torná-lo legível pela sua conta.",
+      "bootstrapMismatch": "O arquivo de inicialização não corresponde à sua conta, a este espaço de trabalho ou às credenciais configuradas.",
+      "testLinkOtherWorkspace": "Este link de teste é de outro espaço de trabalho. Mude para esse espaço de trabalho e abra o link novamente."
+    }
   }
 }

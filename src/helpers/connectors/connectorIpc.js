@@ -294,6 +294,7 @@ function registerConnectorIpc({
 }
 
 module.exports = {
+  POLICY_TIMEOUT_MS,
   registerConnectorIpc,
   createConnectorPolicyResolver,
   createConnectorAuthLookup,

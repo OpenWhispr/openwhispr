@@ -25,7 +25,8 @@ jest.mock('../LocalTranscriptionService', () => ({
   },
 }));
 jest.mock('@/lib/dictationHints', () => ({
-  buildDictationHints: () => [],
+  buildDictationHintTiers: () => [[], [], []],
+  buildLlmDictionary: () => ({ personal: [], shared: [] }),
   isDictationContext: () => true,
 }));
 jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));

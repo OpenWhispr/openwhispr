@@ -158,6 +158,8 @@ async function setupAssistantPanel(
     onResponseContent: noop,
     onConversationReset: noop,
     onSelectionContextChange: noop,
+    skillChoice: { picked: null, pickOff: false },
+    onSkillChoiceChange: noop,
   };
   return { AssistantPanel, props };
 }
@@ -342,6 +344,8 @@ test("starting a new conversation clears the displayed response and parent conte
         assistant.handleConversationReset();
       },
       onSelectionContextChange: (context) => lifecycleEvents.push(`selection:${context}`),
+      skillChoice: assistant.skillChoice,
+      onSkillChoiceChange: assistant.setSkillChoice,
     });
   }
 
@@ -419,6 +423,20 @@ test("the Assistant localizes the active registered tool name", async (t) => {
 
   assert.match(markup, />Buscar notas</);
   assert.doesNotMatch(markup, />Search notes</);
+});
+
+test("the Assistant names the skill tools in the user's language", async (t) => {
+  const names = {
+    load_skill: "Cargar habilidad",
+    propose_skill: "Proponer habilidad",
+    update_skill: "Actualizar habilidad",
+  };
+  for (const [activeToolName, name] of Object.entries(names)) {
+    const markup = await renderAssistantPanel(t, [], { activeToolName, locale: "es" });
+
+    assert.match(markup, new RegExp(`>${name}<`), activeToolName);
+    assert.doesNotMatch(markup, />Herramienta</, activeToolName);
+  }
 });
 
 test("the Assistant uses its localized fallback for an unknown active tool", async (t) => {
@@ -987,6 +1005,8 @@ test("only a plain-text caret delivery asks the model for plain prose", async (t
       onResponseContent: noop,
       onConversationReset: noop,
       onSelectionContextChange: noop,
+      skillChoice: { picked: null, pickOff: false },
+      onSkillChoiceChange: noop,
     });
 
   root = createRoot(container);

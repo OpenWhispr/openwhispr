@@ -3,6 +3,7 @@ import type { AssistantTurn, AssistantTurnStatus, Message, ToolCallInfo } from "
 import type { TurnDetails } from "./useChatStreaming";
 import type { ContainerScope } from "../../types/chat";
 import type { AgentConversationWithMessages, AgentMessageRow } from "../../types/electron";
+import { withoutSkillCardDrafts } from "./skillCardRecord";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -181,7 +182,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const metadata =
         toolCalls?.length || details.turn
           ? {
-              ...(toolCalls?.length ? { toolCalls } : {}),
+              ...(toolCalls?.length ? { toolCalls: withoutSkillCardDrafts(toolCalls) } : {}),
               ...(details.turn ? { turn: details.turn } : {}),
             }
           : undefined;

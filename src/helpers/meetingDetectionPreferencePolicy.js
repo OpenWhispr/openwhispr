@@ -8,8 +8,10 @@ function deriveDetectorPreferences({
   notificationsEnabled,
   notifyMeetingDetection,
   meetingProcessDetection,
+  meetingRecordingEnabled = true,
 }) {
-  const audioDetection = notificationsEnabled === true && notifyMeetingDetection === true;
+  const audioDetection =
+    meetingRecordingEnabled && notificationsEnabled === true && notifyMeetingDetection === true;
   return {
     audioDetection,
     processDetection: audioDetection && meetingProcessDetection === true,

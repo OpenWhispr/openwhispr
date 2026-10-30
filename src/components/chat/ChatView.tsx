@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
@@ -11,12 +11,24 @@ import ConversationList from "./ConversationList";
 import { ConfirmDialog } from "../ui/dialog";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { NewChatEmptyState } from "./NewChatEmptyState";
+import { CreatorOpening } from "./CreatorOpening";
+import { SkillChip } from "./SkillChip";
+import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
 import { useToast } from "../ui/useToast";
 import { GitFork } from "../icons";
 import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
+import {
+  NO_CHAT_SKILLS,
+  forgetChatSkills,
+  readChatSkills,
+  writeChatSkills,
+  type AttachedSkill,
+  type ChatSkills,
+} from "./chatSkillMemory";
+import type { SkillChatRequest } from "../../types/skills";
 
 const CommandSearch = lazy(() => import("../CommandSearch"));
 
@@ -30,15 +42,28 @@ interface ChatViewProps {
   active?: boolean;
   /** Bumped to start a new chat from outside (the New chat menu). */
   newChatRequest?: number;
+  /** A new id opens a new chat with that skill attached. */
+  skillRequest?: SkillChatRequest | null;
+  onSkillRequestHandled?: () => void;
+  /** Open skill on a saved skill card. */
+  onOpenSkill?: (name: string) => void;
 }
-
-export default function ChatView({ active = true, newChatRequest = 0 }: ChatViewProps) {
+export default function ChatView({
+  active = true,
+  newChatRequest = 0,
+  skillRequest = null,
+  onSkillRequestHandled,
+  onOpenSkill,
+}: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [isNewChat, setIsNewChat] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
+  // A conversation's skills come back with it when the user returns to it.
+  const [chatSkills, setChatSkills] = useState<ChatSkills>(NO_CHAT_SKILLS);
+  const { attached: attachedSkill, pickOff: skillPickOff, removed: removedSkills } = chatSkills;
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const { toast } = useToast();
 
@@ -56,6 +81,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
     allowInteractions: true,
     onStreamComplete: persistence.saveAssistantMessage,
     onTurnCheckpoint: persistence.saveAssistantMessage,
+    skillsEnabled: true,
   });
   // useChatStreaming returns a fresh object every render; cancelStream is
   // stable, so the callbacks below depend on it rather than on `streaming`.
@@ -67,9 +93,11 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
       cancelStream();
       setActiveConversationId(id);
       setIsNewChat(false);
+      setChatSkills(readChatSkills(id));
       if ((await persistence.loadConversation(id)) === null) {
         setActiveConversationId(null);
         setIsNewChat(true);
+        setChatSkills(NO_CHAT_SKILLS);
       }
     },
     [activeConversationId, cancelStream, persistence]
@@ -79,6 +107,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
     cancelStream();
     setActiveConversationId(null);
     setIsNewChat(true);
+    setChatSkills(NO_CHAT_SKILLS);
     persistence.handleNewChat();
   }, [cancelStream, persistence]);
 
@@ -165,6 +194,86 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
     void handleTextSubmit(t("agentMode.turn.continueMessage"));
   }, [handleTextSubmit, t]);
 
+  // Every send carries the chat's skill, and lets the app pick one until the user said no.
+  const sendWithSkill = useCallback(
+    (text: string, skill: AttachedSkill | null) =>
+      handleTextSubmit(text, {
+        attachedSkill: skill?.ref,
+        allowSkillPick: !skillPickOff,
+        removedSkills,
+        onSkillPicked: ({ name, displayName }) =>
+          setChatSkills((skills) => ({
+            ...skills,
+            attached: { ref: { name }, displayName, picked: true },
+          })),
+      }),
+    [handleTextSubmit, skillPickOff, removedSkills]
+  );
+
+  const removeSkill = useCallback(() => {
+    setChatSkills(({ attached, pickOff, removed }) => ({
+      attached: null,
+      pickOff: pickOff || Boolean(attached?.picked),
+      removed: attached && !attached.ref.builtin ? [...removed, attached.ref.name] : removed,
+    }));
+    // The × is gone with the chip, so the cursor goes back to the composer.
+    focusComposer();
+  }, [focusComposer]);
+
+  useEffect(() => {
+    if (activeConversationId !== null) writeChatSkills(activeConversationId, chatSkills);
+  }, [activeConversationId, chatSkills]);
+
+  // Try now, Create with assistant and Draft with assistant each open a new chat. The request
+  // stays set until the parent clears it, so each id is handled once.
+  const handledRequestId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!skillRequest || handledRequestId.current === skillRequest.id) return;
+    const request = skillRequest;
+    // Handled once this commit is done: React's development build mounts twice, and the first
+    // mount's chat session ends with it, which would drop a draft sent from it.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      handledRequestId.current = request.id;
+      startNewChat();
+      const skill: AttachedSkill =
+        request.kind === "try"
+          ? { ref: { name: request.name }, displayName: request.displayName }
+          : {
+              ref: { name: "skill-creator", builtin: true },
+              displayName: t("skills.chat.creatorName"),
+            };
+      setChatSkills((skills) => ({ ...skills, attached: skill }));
+      if (request.kind === "create" && request.draft) {
+        const { title, description, instructions, fileNames } = request.draft;
+        const draftText = [
+          t("skills.chat.draftPrompt", {
+            name: title || t("skills.chat.noneYet"),
+            description: description || t("skills.chat.noneYet"),
+          }),
+          ...(instructions ? [t("skills.chat.draftInstructions", { instructions })] : []),
+          ...(fileNames.length > 0
+            ? [t("skills.chat.draftFiles", { files: fileNames.join(", ") })]
+            : []),
+        ].join("\n");
+        void sendWithSkill(draftText, skill);
+      }
+      onSkillRequestHandled?.();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [skillRequest, startNewChat, sendWithSkill, onSkillRequestHandled, t]);
+
+  // Open skill leaves the chat, which ends a running turn; a turn that so far holds only the
+  // card's tool call isn't saved then, so the link waits for the turn to finish.
+  const turnRunning = submissionInFlight || streaming.agentState !== "idle";
+  const skillChatActions = useMemo(
+    () => ({ openSkill: turnRunning ? undefined : onOpenSkill }),
+    [turnRunning, onOpenSkill]
+  );
+
   const handleArchive = useCallback(
     async (id: number) => {
       await window.electronAPI?.archiveAgentConversation?.(id);
@@ -183,6 +292,7 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
         description: t("chat.deleteConfirm"),
         onConfirm: async () => {
           await window.electronAPI?.deleteAgentConversation?.(id);
+          forgetChatSkills(id);
           if (activeConversationId === id) {
             handleNewChat();
           }
@@ -241,79 +351,95 @@ export default function ChatView({ active = true, newChatRequest = 0 }: ChatView
           />
         </Suspense>
       )}
-      <div className="flex h-full min-h-0">
-        <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
-          <ConversationList
-            activeConversationId={activeConversationId}
-            onSelectConversation={handleSelectConversation}
-            onNewChat={startNewChat}
-            onOpenSearch={() => setShowSearch(true)}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-            refreshKey={refreshKey}
-          />
-        </div>
-        <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
-          {forkOrigin?.parentTitle && (
-            <div className="px-3 pt-2">
-              <button
-                type="button"
-                onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
-                className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
-              >
-                <GitFork size={11} className="shrink-0" />
-                <span dir="auto" className="truncate">
-                  {t("chat.forkedFrom", { title: forkOrigin.parentTitle })}
-                </span>
-              </button>
-            </div>
-          )}
-          <ChatMessages
-            messages={persistence.messages}
-            onForkMessage={handleForkMessage}
-            onContinue={handleContinue}
-            emptyState={
-              <NewChatEmptyState
-                onPrompt={(prompt) => {
-                  // The starter card unmounts once the message lands; move focus to the
-                  // composer first so it isn't dropped.
-                  focusComposer();
-                  void handleTextSubmit(prompt);
-                }}
-                showSuggestions={isNewChat}
-                disabled={submissionInFlight || streaming.agentState !== "idle"}
-              />
-            }
-            contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
-          />
-          <div
-            ref={composerRef}
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1"
-          >
-            <ChatInput
-              className="pointer-events-auto mx-auto w-full max-w-2xl"
-              // New chat and switching cancel the stream at once, but the
-              // cancelled send can hold the submission lock until an
-              // in-flight tool returns; a message sent before then would
-              // be dropped, so the input stays busy until it lets go.
-              agentState={
-                submissionInFlight && streaming.agentState === "idle"
-                  ? "thinking"
-                  : streaming.agentState
-              }
-              partialTranscript=""
-              onTextSubmit={handleTextSubmit}
-              onCancel={streaming.cancelStream}
-              voiceDraft
-              focusOnIdle={false}
-              placeholder={t("chat.inputPlaceholder")}
-              variant="assistant"
-              expandOnFocus
-              active={active}
+      <SkillChatActionsContext.Provider value={skillChatActions}>
+        <div className="flex h-full min-h-0">
+          <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
+            <ConversationList
+              activeConversationId={activeConversationId}
+              onSelectConversation={handleSelectConversation}
+              onNewChat={startNewChat}
+              onOpenSearch={() => setShowSearch(true)}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+              refreshKey={refreshKey}
             />
           </div>
+          <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
+            {forkOrigin?.parentTitle && (
+              <div className="px-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
+                  className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                >
+                  <GitFork size={11} className="shrink-0" />
+                  <span dir="auto" className="truncate">
+                    {t("chat.forkedFrom", { title: forkOrigin.parentTitle })}
+                  </span>
+                </button>
+              </div>
+            )}
+            <ChatMessages
+              onForkMessage={handleForkMessage}
+              onContinue={handleContinue}
+              messages={persistence.messages}
+              leading={attachedSkill?.ref.builtin ? <CreatorOpening /> : undefined}
+              emptyState={
+                <NewChatEmptyState
+                  onPrompt={(prompt) => {
+                    // The starter card unmounts once the message lands; move focus to the
+                    // composer first so it isn't dropped.
+                    focusComposer();
+                    void sendWithSkill(prompt, attachedSkill);
+                  }}
+                  showSuggestions={isNewChat}
+                  disabled={submissionInFlight || streaming.agentState !== "idle"}
+                />
+              }
+              contentClassName={`${PAGE_CONTENT_WIDTH_CLASS} pb-[var(--chat-composer-inset,5rem)]`}
+            />
+            <div
+              ref={composerRef}
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-5 pt-1"
+            >
+              <ChatInput
+                className="pointer-events-auto mx-auto w-full max-w-2xl"
+                // New chat and switching cancel the stream at once, but the
+                // cancelled send can hold the submission lock until an
+                // in-flight tool returns; a message sent before then would
+                // be dropped, so the input stays busy until it lets go.
+                agentState={
+                  submissionInFlight && streaming.agentState === "idle"
+                    ? "thinking"
+                    : streaming.agentState
+                }
+                partialTranscript=""
+                onTextSubmit={(text) => void sendWithSkill(text, attachedSkill)}
+                onCancel={streaming.cancelStream}
+                voiceDraft
+                focusOnIdle={false}
+                placeholder={
+                  attachedSkill && !attachedSkill.ref.builtin
+                    ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
+                    : t("chat.inputPlaceholder")
+                }
+                variant="assistant"
+                expandOnFocus
+                active={active}
+                leadingRow={
+                  attachedSkill && (
+                    <SkillChip
+                      key={attachedSkill.ref.name}
+                      name={attachedSkill.displayName}
+                      onRemove={removeSkill}
+                    />
+                  )
+                }
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      </SkillChatActionsContext.Provider>
     </>
   );
 }

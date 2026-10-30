@@ -1,5 +1,6 @@
 const { clipboard, systemPreferences } = require("electron");
 const { spawn, spawnSync } = require("child_process");
+const { randomUUID } = require("crypto");
 const { killProcess } = require("../utils/process");
 const path = require("path");
 const fs = require("fs");
@@ -28,7 +29,23 @@ const PASTE_DELAYS = {
 // surfaces as an unpasted transcript instead of an indefinite wait.
 const MODIFIER_RELEASE_WAIT_MS = 1500;
 
+// How long the macOS fast-paste binary keeps the transcript as a pasteboard
+// promise, waiting for the target to read it (`--await-read` in
+// resources/macos-fast-paste.swift), on top of the time its own work may take.
+const PASTE_READ_BUDGET_MS = 3000;
+const FAST_PASTE_TIMEOUT_MS = 3000;
+
+// Tags the fast-paste binary's transcript item; keep in sync with
+// pasteSessionType in resources/macos-fast-paste.swift.
+const PASTE_SESSION_TYPE = "com.openwhispr.paste-session";
+const PASTE_POSTED = /^PASTE_POSTED( typed)?$/m;
+const PASTE_READ_VERDICT = /^PASTE_(?:READ \d+|NOT_READ|REPLACED|TYPED)$/m;
+
 const RESTORE_DELAYS = {
+  // macOS restores just after the target reads the transcript, but never sooner
+  // than `darwin` after ⌘V, so an early reader (a clipboard manager ignoring the
+  // transient marker) can't trigger a restore before the target pastes.
+  darwin_after_read: 50,
   darwin: 450,
   win32_nircmd: 500,
   win32_pwsh: 500,
@@ -76,6 +93,15 @@ const LINUX_TERMINAL_CLASSES = [
 // no entry above because it has no Linux window class. Matching it on Linux too
 // is harmless — no such window class exists there.
 const TERMINAL_SIGNATURES = [...LINUX_TERMINAL_CLASSES, "iterm"];
+
+// Omarchy gives terminal-launched apps their own IDs instead of the emulator's
+// class. Keep these prefixes in sync with resources/linux-fast-paste.c.
+const OMARCHY_TERMINAL_PREFIXES = ["org.omarchy.", "tui."];
+
+function isOmarchyTerminalSignature(signature) {
+  const normalized = String(signature || "").toLowerCase();
+  return OMARCHY_TERMINAL_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
 
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
@@ -270,6 +296,7 @@ class ClipboardManager {
   // match inside unrelated names ("com.system76.CosmicEdit"), so it must be a whole word.
   isTerminalSignature(signature) {
     if (!signature) return false;
+    if (isOmarchyTerminalSignature(signature)) return true;
     const normalized = String(signature).toLowerCase();
     const words = normalized.split(/[^a-z0-9]+/);
     return TERMINAL_SIGNATURES.some((term) =>
@@ -879,11 +906,18 @@ class ClipboardManager {
     this.safeLog("🔄 Clipboard restored");
   }
 
-  async _restoreClipboardAfterDelay(original, { delayMs, expectedText, restore } = {}) {
+  async _restoreClipboardAfterDelay(
+    original,
+    { delayMs, expectedText, expectedSession, restore } = {}
+  ) {
     if (!original) return;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
 
-    if (typeof expectedText === "string") {
+    const holdsSession =
+      typeof expectedSession === "string" && this._holdsPasteSession(expectedSession);
+    // An app that rewrote the transcript (a format stripper) drops the session tag,
+    // so the text check still applies.
+    if (!holdsSession && typeof expectedText === "string") {
       let currentText = null;
       try {
         currentText = clipboard.readText();
@@ -908,6 +942,16 @@ class ClipboardManager {
     }
 
     this._restoreClipboard(original);
+  }
+
+  // Reading the tag never requests the transcript itself, which would count as the
+  // target's read, and it still holds when the binary died before handing it over.
+  _holdsPasteSession(session) {
+    try {
+      return clipboard.readBuffer(PASTE_SESSION_TYPE).toString("utf8") === session;
+    } catch {
+      return false;
+    }
   }
 
   safeLog(...args) {
@@ -996,6 +1040,12 @@ class ClipboardManager {
         this.safeLog("💾 Saved original clipboard:", originalClipboard.type);
       }
 
+      // A restored macOS paste hands the transcript to the fast-paste binary, which
+      // puts it on the pasteboard as a transient, this-Mac-only promise; a plain write
+      // here would let clipboard managers and Universal Clipboard pick it up.
+      const fastPasteHoldsTranscript =
+        platform === "darwin" && shouldRestore && !!this.resolveFastPasteBinary();
+
       // Apps paste the clipboard; terminals given Shift+Insert (niri always sends it)
       // paste the primary selection.
       const waylandWrites = { clipboard: false, primary: false };
@@ -1006,7 +1056,7 @@ class ClipboardManager {
           clipboard.writeText(text);
         }
         waylandWrites.primary = this._writePrimarySelection(text);
-      } else {
+      } else if (!fastPasteHoldsTranscript) {
         clipboard.writeText(text);
       }
       this.safeLog("📋 Text copied to clipboard:", text.substring(0, 50) + "...");
@@ -1021,6 +1071,7 @@ class ClipboardManager {
         );
 
         if (!hasPermissions) {
+          if (fastPasteHoldsTranscript) clipboard.writeText(text);
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
           if (allowClipboardFallback) {
             this.safeLog("✅ Clipboard fallback used (manual paste required)");
@@ -1040,7 +1091,9 @@ class ClipboardManager {
             ...options,
             expectedClipboardText: text,
           });
+          method = pasteResult?.method || method;
         } catch (firstError) {
+          if (firstError?.pasteMayHavePosted) throw firstError;
           this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
           clipboard.writeText(text);
           await new Promise((r) => setTimeout(r, 200));
@@ -1048,6 +1101,7 @@ class ClipboardManager {
             ...options,
             expectedClipboardText: text,
           });
+          method = pasteResult?.method || method;
         }
       } else if (platform === "win32") {
         const winFastPaste = this.resolveWindowsFastPasteBinary();
@@ -1105,18 +1159,67 @@ class ClipboardManager {
     const fastPasteBinary = this.resolveFastPasteBinary();
     const useFastPaste = !!fastPasteBinary;
     const pasteDelay = options.fromStreaming ? (useFastPaste ? 15 : 50) : PASTE_DELAYS.darwin;
+    const text = options.expectedClipboardText;
+    // Only a restore needs to know when the target read the transcript.
+    const session =
+      useFastPaste && originalClipboard != null && typeof text === "string" ? randomUUID() : null;
 
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         const pasteProcess = useFastPaste
-          ? spawn(fastPasteBinary)
+          ? spawn(
+              fastPasteBinary,
+              session ? ["--await-read", String(PASTE_READ_BUDGET_MS), "--session", session] : []
+            )
           : spawn("osascript", [
               "-e",
               'tell application "System Events" to key code 9 using command down',
             ]);
 
+        let output = "";
         let errorOutput = "";
         let hasTimedOut = false;
+        // Set once the binary reports the transcript going out (⌘V posted, or typing
+        // begun). From then on it is never retried or handed to osascript, either of
+        // which would paste it twice.
+        let settleRead = null;
+        // Before that, a failed binary leaves the transcript for the fallback or the user.
+        const keepTranscript = () => {
+          if (session) clipboard.writeText(text);
+        };
+
+        if (session) {
+          // An older binary exits without reading the transcript.
+          pasteProcess.stdin.on("error", () => {});
+          pasteProcess.stdin.end(text);
+        }
+
+        pasteProcess.stdout.on("data", (data) => {
+          output += data.toString();
+          const posted = !settleRead && PASTE_POSTED.exec(output);
+          if (!posted) return;
+          const method = posted[1] ? "typed" : "cgevent";
+          const read = new Promise((resolveRead) => {
+            settleRead = resolveRead;
+          });
+          resolve({
+            method,
+            restoreComplete: read.then((verdict) => {
+              debugLogger.debug(
+                "Fast paste finished",
+                { method, verdict: verdict ?? "none" },
+                "clipboard"
+              );
+              return session
+                ? this._restoreAfterPasteRead(
+                    originalClipboard,
+                    { session, expectedText: text },
+                    verdict
+                  )
+                : undefined;
+            }),
+          });
+        });
 
         pasteProcess.stderr.on("data", (data) => {
           errorOutput += data.toString();
@@ -1126,6 +1229,11 @@ class ClipboardManager {
           if (hasTimedOut) return;
           clearTimeout(timeoutId);
           pasteProcess.removeAllListeners();
+
+          if (settleRead) {
+            settleRead(code === 0 ? (output.match(PASTE_READ_VERDICT)?.[0] ?? null) : null);
+            return;
+          }
 
           if (code === 0) {
             this.safeLog(`Text pasted successfully via ${useFastPaste ? "CGEvent" : "osascript"}`);
@@ -1140,6 +1248,7 @@ class ClipboardManager {
               resolve({ restoreComplete: Promise.resolve() });
             }
           } else if (useFastPaste && code === 3) {
+            keepTranscript();
             this.safeLog("CGEvent paste could not resolve the active keyboard layout", {
               stderr: errorOutput.trim(),
             });
@@ -1155,6 +1264,7 @@ class ClipboardManager {
                 : `CGEvent paste failed (code ${code}), falling back to osascript`,
               { stderr: errorOutput.trim() }
             );
+            keepTranscript();
             this.fastPasteChecked = true;
             this.fastPastePath = null;
             this.pasteMacOSWithOsascript(originalClipboard, options).then(resolve).catch(reject);
@@ -1171,7 +1281,12 @@ class ClipboardManager {
           clearTimeout(timeoutId);
           pasteProcess.removeAllListeners();
 
+          if (settleRead) {
+            settleRead(null);
+            return;
+          }
           if (useFastPaste) {
+            keepTranscript();
             this.safeLog("CGEvent paste error, falling back to osascript");
             this.fastPasteChecked = true;
             this.fastPastePath = null;
@@ -1182,15 +1297,44 @@ class ClipboardManager {
           }
         });
 
-        const timeoutId = setTimeout(() => {
-          hasTimedOut = true;
-          killProcess(pasteProcess, "SIGKILL");
-          pasteProcess.removeAllListeners();
-          const errorMsg =
-            "Paste operation timed out. Text is copied to clipboard - please paste manually with Cmd+V.";
-          reject(new Error(errorMsg));
-        }, 3000);
+        const timeoutId = setTimeout(
+          () => {
+            hasTimedOut = true;
+            killProcess(pasteProcess, "SIGKILL");
+            pasteProcess.removeAllListeners();
+            if (settleRead) {
+              settleRead(null);
+              return;
+            }
+            keepTranscript();
+            const errorMsg =
+              "Paste operation timed out. Text is copied to clipboard - please paste manually with Cmd+V.";
+            // PASTE_POSTED may be waiting unread in the pipe, so retrying could paste twice.
+            reject(Object.assign(new Error(errorMsg), { pasteMayHavePosted: useFastPaste }));
+          },
+          session ? PASTE_READ_BUDGET_MS + FAST_PASTE_TIMEOUT_MS : FAST_PASTE_TIMEOUT_MS
+        );
       }, pasteDelay);
+    });
+  }
+
+  // `PASTE_READ <ms>`: shortly after the read, but no sooner than the plain delay after
+  // ⌘V. Nothing read in the budget, or replaced: at once. No verdict: the plain delay.
+  // Typed (a Chromium browser): the pasteboard never left the user's clipboard.
+  _restoreAfterPasteRead(originalClipboard, { session, expectedText }, verdict) {
+    if (verdict === "PASTE_TYPED") return Promise.resolve();
+    const readMs = /^PASTE_READ (\d+)$/.exec(verdict ?? "")?.[1];
+    let delayMs = RESTORE_DELAYS.darwin;
+    if (readMs != null) {
+      delayMs = Math.max(RESTORE_DELAYS.darwin_after_read, RESTORE_DELAYS.darwin - Number(readMs));
+    } else if (verdict) {
+      delayMs = 0;
+    }
+    debugLogger.debug("Clipboard restore scheduled", { restoreDelayMs: delayMs }, "clipboard");
+    return this._restoreClipboardAfterDelay(originalClipboard, {
+      delayMs,
+      expectedSession: session,
+      expectedText,
     });
   }
 
@@ -1718,6 +1862,8 @@ class ClipboardManager {
     // COSMIC names the focused app but not its process, so Electron apps look like any
     // other window there: only a known terminal leaves Shift+Insert.
     const useShiftInsert =
+      // Match Omarchy's universal terminal paste, including Codex and Claude.
+      windowSignals.some(isOmarchyTerminalSignature) ||
       detectedIsKonsole ||
       detectedIsElectron ||
       (isWayland && (windowSignals.length === 0 || (isCosmic && !isTerminalTarget)));

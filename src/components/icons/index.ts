@@ -5,8 +5,10 @@ import * as Nucleo from "./nucleo";
 export type { IconComponent, IconProps } from "./createIcon";
 export {
   Bold,
+  ChevronsUpDown,
   Circle,
   CopyRounded,
+  EyeOff,
   FolderRounded,
   GitFork,
   Heading,
@@ -16,6 +18,7 @@ export {
   ListEnd,
   ListOrdered,
   Quote,
+  SkillStack,
   Square,
   SquareSlash,
   SquareSparkle,

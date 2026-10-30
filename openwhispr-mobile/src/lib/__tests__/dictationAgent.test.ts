@@ -1,4 +1,4 @@
-import { getDictationAgentName, isNoteChatEnabled } from '@/lib/dictationAgent';
+import { getDictationAgentName, isChatEnabled, isNoteChatEnabled } from '@/lib/dictationAgent';
 import type { UserConfig } from '@/types';
 
 const baseConfig: UserConfig = { defaultMode: 'cloud' };
@@ -30,5 +30,10 @@ describe('note chat', () => {
   it('ignores the voice assistant switch', () => {
     expect(isNoteChatEnabled({ ...baseConfig, dictationAgentEnabled: false })).toBe(true);
     expect(isNoteChatEnabled({ ...baseConfig, noteChatEnabled: false })).toBe(false);
+  });
+
+  it('counts as on until a config has loaded', () => {
+    expect(isChatEnabled(null)).toBe(true);
+    expect(isChatEnabled({ ...baseConfig, noteChatEnabled: false })).toBe(false);
   });
 });

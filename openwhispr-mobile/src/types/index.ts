@@ -110,6 +110,10 @@ export interface ReasoningRequest {
   language?: string;
   locale?: string;
   customDictionary?: string[];
+  // Teammates' words (at most 200, 2,000 characters), kept apart from the
+  // personal customDictionary: the API and the prompts built here quote them as
+  // data. Omitted when empty, so a personal-only request is what it always was.
+  sharedDictionary?: string[];
   // Keyboard dictation tone. Sent only for keyboard cleanup with a non-default
   // tone; the API appends a matching instruction in cleanup mode.
   tone?: KeyboardTone;
@@ -186,6 +190,10 @@ export interface StructuredMeetingNotes {
   followUps: string[];
 }
 
+// What the audio is for. /api/transcribe applies org policy to it instead of
+// inferring it from requestContext, where 'recording' would fit a meeting too.
+export type AudioPurpose = 'dictation' | 'meeting' | 'upload';
+
 export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
@@ -196,6 +204,7 @@ export interface TranscriptionRequest extends CleanupInferenceSnapshot {
   jobId?: string;
   clientTranscriptionId?: string;
   requestContext?: 'keyboard' | 'recording' | 'file';
+  purpose?: AudioPurpose;
   // Per-job snapshot of the keyboard tone taken at record-start. Threaded to
   // cleanup; never re-read live. Only set for keyboard dictation.
   keyboardTone?: KeyboardTone;

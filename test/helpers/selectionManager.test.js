@@ -860,6 +860,51 @@ test("getWinTarget returns the hex HWND a win32 probe captured (#859)", async ()
   assert.equal((await manager.getWinTarget())?.id, "00001A2B");
 });
 
+// The paste helper pastes into whatever is in front when its restore fails, so a paste
+// that may only land in one window asks first whether that window came forward.
+test("restoreWinTarget is true only when the captured window is in front afterwards", async () => {
+  const spawnCalls = [];
+  let front = "00001A2B";
+  let exitCode = 0;
+  const SpawningSelectionManager = loadSelectionManager({
+    spawn: (command, args) => {
+      spawnCalls.push(args);
+      const probe = new EventEmitter();
+      probe.stdout = new EventEmitter();
+      probe.stderr = new EventEmitter();
+      process.nextTick(() => {
+        probe.stdout.emit("data", `TARGET ${front}\nIS_TERMINAL false\n`);
+        probe.emit("close", exitCode);
+      });
+      return probe;
+    },
+  });
+  let binary = "/tmp/windows-fast-paste.exe";
+  const manager = new SpawningSelectionManager({
+    clipboardManager: { resolveWindowsFastPasteBinary: () => binary },
+    textEditMonitor: {},
+    platform: "win32",
+  });
+  const terminal = { kind: "win-hwnd", id: "0x1a2b" };
+
+  assert.equal(await manager.restoreWinTarget(terminal), true, "same handle, other spelling");
+  assert.deepEqual(spawnCalls[0], ["--restore-window", "0x1a2b", "--detect-only"]);
+
+  front = "00009999";
+  assert.equal(await manager.restoreWinTarget(terminal), false, "another window came forward");
+
+  front = "00001A2B";
+  exitCode = 2;
+  assert.equal(await manager.restoreWinTarget(terminal), false, "the helper failed");
+
+  exitCode = 0;
+  assert.equal(await manager.restoreWinTarget({ kind: "win-hwnd", id: "junk" }), false);
+  assert.equal(await manager.restoreWinTarget({ kind: "x11-window", id: "7" }), false);
+
+  binary = null;
+  assert.equal(await manager.restoreWinTarget(terminal), false, "no helper, no paste");
+});
+
 test("the app context of a win32 target carries its exe, class and window title", async () => {
   const SpawningSelectionManager = loadSelectionManager({
     spawn: () => {

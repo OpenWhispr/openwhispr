@@ -1,5 +1,7 @@
 import type { UsageInfo } from '@/data/remote/usageApi';
+import { getAffiliateClientConfig } from '@/lib/affiliateLink';
 import {
+  CREATOR_CODE_PAYWALL_PLACEMENT,
   SUPERWALL_APP_ENTITLEMENT_ID,
   SUPERWALL_PLACEMENTS,
   SUPERWALL_WORDS_REMAINING_SENTINEL,
@@ -7,7 +9,10 @@ import {
   buildSuperwallSubscriptionStatus,
   buildUsageGateParams,
   isTransactionalSuperwallPlacement,
+  resolveSuperwallPlacementName,
 } from '@/lib/superwall';
+
+jest.mock('@/lib/affiliateLink', () => ({ getAffiliateClientConfig: jest.fn(() => null) }));
 
 const baseUsage: UsageInfo = {
   billingUserId: '00000000-0000-4000-8000-000000000001',
@@ -94,5 +99,34 @@ describe('superwall billing bridge mapping', () => {
       plan: 'free',
       isSubscribed: false,
     });
+  });
+});
+
+describe('creator-code paywall placement', () => {
+  afterEach(() => jest.mocked(getAffiliateClientConfig).mockReturnValue(null));
+
+  it('keeps every placement unchanged in a build without creator codes', () => {
+    for (const placement of Object.values(SUPERWALL_PLACEMENTS)) {
+      expect(resolveSuperwallPlacementName(placement, false)).toBe(placement);
+      expect(resolveSuperwallPlacementName(placement, true)).toBe(placement);
+    }
+  });
+
+  it('sends onboarding and creator offers to the creator-code paywall when creator codes are on', () => {
+    jest
+      .mocked(getAffiliateClientConfig)
+      .mockReturnValue({ domain: 'sandbox.dub.link', publishableKey: 'dub_pk_test' });
+    expect(resolveSuperwallPlacementName(SUPERWALL_PLACEMENTS.onboardingPaywall, false)).toBe(
+      CREATOR_CODE_PAYWALL_PLACEMENT,
+    );
+    expect(resolveSuperwallPlacementName(SUPERWALL_PLACEMENTS.accountBillingOpen, true)).toBe(
+      CREATOR_CODE_PAYWALL_PLACEMENT,
+    );
+    expect(resolveSuperwallPlacementName(SUPERWALL_PLACEMENTS.accountBillingOpen, false)).toBe(
+      SUPERWALL_PLACEMENTS.accountBillingOpen,
+    );
+    expect(resolveSuperwallPlacementName(SUPERWALL_PLACEMENTS.cloudUsageLimitReached, false)).toBe(
+      SUPERWALL_PLACEMENTS.cloudUsageLimitReached,
+    );
   });
 });

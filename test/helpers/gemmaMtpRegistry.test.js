@@ -5,7 +5,7 @@ const modelData = require("../../src/models/modelRegistryData.json");
 
 const DRAFT_FIELDS = ["draftHfRepo", "draftFileName", "draftSizeBytes"];
 
-// Exact expected values for the four Gemma 4 QAT entries (HF tree API).
+// Exact expected values for the five Gemma 4 QAT entries (HF tree API).
 const EXPECTED = {
   "gemma-4-31b-it-qat-q4_0": {
     size: "17.9GB",
@@ -20,6 +20,13 @@ const EXPECTED = {
     draftHfRepo: "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
     draftFileName: "mtp-gemma-4-26B-A4B-it.gguf",
     draftSizeBytes: 251939328,
+  },
+  "gemma-4-12b-it-qat-q4_0": {
+    size: "7.2GB",
+    sizeBytes: 6975879296,
+    draftHfRepo: "unsloth/gemma-4-12B-it-qat-GGUF",
+    draftFileName: "mtp-gemma-4-12B-it.gguf",
+    draftSizeBytes: 253708800,
   },
   "gemma-4-e4b-it-qat-q4_0": {
     size: "5.2GB",
@@ -43,7 +50,7 @@ function allLocalModels() {
   );
 }
 
-test("the four Gemma 4 QAT entries carry the exact drafter field triplets", () => {
+test("the five Gemma 4 QAT entries carry the exact drafter field triplets", () => {
   const byId = new Map(allLocalModels().map(({ model }) => [model.id, model]));
 
   for (const [id, expected] of Object.entries(EXPECTED)) {
@@ -57,7 +64,7 @@ test("the four Gemma 4 QAT entries carry the exact drafter field triplets", () =
   }
 });
 
-test("no entry outside the four QAT ids gained any drafter field", () => {
+test("no entry outside the five QAT ids gained any drafter field", () => {
   for (const { model } of allLocalModels()) {
     if (EXPECTED[model.id]) continue;
     for (const field of DRAFT_FIELDS) {

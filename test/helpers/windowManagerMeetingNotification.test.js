@@ -416,6 +416,43 @@ test("window manager starts fail-closed and suppresses normal-app popup surfaces
   assert.deepEqual(createdWindows, []);
 });
 
+test("a detection suppressed while onboarding is active is released", async () => {
+  const manager = new WindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId, options) =>
+      closedDetections.push([detectionId, options]),
+  };
+
+  // The gate is also closed at startup and while the control panel reloads;
+  // a detection held active then would block every later prompt for it.
+  assert.equal(
+    await manager.showMeetingNotification({ detectionId: "audio:sustained-audio" }),
+    false
+  );
+  assert.deepEqual(closedDetections, [["audio:sustained-audio", { flushQueued: false }]]);
+});
+
+test("a card the onboarding gate hides mid-load does not replay the queue into the gate", async () => {
+  const manager = createNormalWindowManager();
+  const closedDetections = [];
+  manager.meetingDetectionEngine = {
+    handleDetectionNotificationClosed: (detectionId, options) =>
+      closedDetections.push([detectionId, options]),
+  };
+
+  const showPromise = manager.showMeetingNotification({
+    detectionId: "audio:sustained-audio",
+    source: "audio",
+  });
+  // An onboarding demo closes the gate without hiding the card that is loading.
+  assert.equal(manager.beginOnboardingDemo("dictation"), true);
+  createdWindows[0].loadDeferred.resolve();
+
+  assert.equal(await showPromise, false);
+  assert.deepEqual(closedDetections, [["audio:sustained-audio", { flushQueued: false }]]);
+});
+
 test("window creation uses the notification dimensions and position", async () => {
   const manager = createNormalWindowManager();
   const notification = { detectionId: "calendar:next", source: "calendar" };

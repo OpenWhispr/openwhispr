@@ -811,6 +811,7 @@ export function useKeyboardHandoff() {
               // would bring the spoken instruction back as a dictation.
               ...(provider === 'byok' ? {} : { jobId }),
               requestContext: 'keyboard',
+              purpose: 'dictation',
               keyboardTone,
             });
             writeTranscriptionMetrics(transcription);
@@ -954,6 +955,7 @@ export function useKeyboardHandoff() {
               mimeType,
               jobId,
               requestContext: 'keyboard',
+              purpose: 'dictation',
               keyboardTone,
             },
             {

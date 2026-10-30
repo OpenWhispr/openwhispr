@@ -31,6 +31,8 @@ export const DESCRIPTION_KEYS: Record<string, string> = {
   "gemma4-31b": "models.descriptions.cloud.tinfoil_gemma4_31b",
   "gpt-oss-120b": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",
+  "kimi-k3": "models.descriptions.cloud.tinfoil_kimi_k3",
+  "deepseek-v4-1-flash": "models.descriptions.cloud.tinfoil_deepseek_v4_1_flash",
 };
 
 function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {

@@ -9,7 +9,7 @@
  * like thinkingSuppressionDialects.
  */
 export interface ModelFamilyConstraints {
-  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3";
+  family: "gpt-oss" | "qwen" | "magistral" | "glm-5.3" | "gemini-no-minimal";
   reasoningEffort?: {
     /** Value that best approximates "thinking off" for reasoning_effort. */
     suppressValue: string;
@@ -61,6 +61,14 @@ const FAMILIES: Array<ModelFamilyConstraints & { match: RegExp }> = [
     // spent the whole 4,096-token notes budget thinking (#2008); at high it fit,
     // so max isn't offered either.
     reasoningEffort: { suppressValue: "low", defaultValue: "high", options: ["low", "high"] },
+  },
+  {
+    family: "gemini-no-minimal",
+    match: /gemini-(3\.8-flash|4-argon|3\.1-pro)/,
+    // These Gemini models take low|medium|high only and reject "minimal", so low
+    // is the floor (ai.google.dev/gemini-api/docs/generate-content/thinking for
+    // 3.8 Flash and 4 Argon; 3.1 Pro already uses low in the native provider).
+    reasoningEffort: { suppressValue: "low" },
   },
   {
     family: "magistral",

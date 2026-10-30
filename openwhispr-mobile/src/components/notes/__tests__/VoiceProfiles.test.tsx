@@ -4,8 +4,12 @@ import { VoiceProfileList } from '../VoiceProfileList';
 
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
+const mockSwipeDeletes: ((restore: () => void) => void)[] = [];
 jest.mock('@/components/ui/SwipeableCard', () => ({
-  SwipeableCard: ({ children }: any) => children,
+  SwipeableCard: ({ children, onDelete }: any) => {
+    mockSwipeDeletes.push(onDelete);
+    return children;
+  },
 }));
 jest.mock('../SectionHeader', () => ({ SectionHeader: () => null }));
 
@@ -33,6 +37,17 @@ const baseListProps = {
 describe('VoiceProfileList', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSwipeDeletes.length = 0;
+  });
+
+  it('hands a swiped row back to the screen so a cancelled delete can restore it', () => {
+    const onDelete = jest.fn();
+    render(<VoiceProfileList profiles={[profile()]} {...baseListProps} onDelete={onDelete} />);
+    const restore = jest.fn();
+
+    mockSwipeDeletes[mockSwipeDeletes.length - 1](restore);
+
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), restore);
   });
 
   it('renders your badge and opens the profile on row press', () => {

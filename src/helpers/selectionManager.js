@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
 const { isMarkdownTargetSignature } = require("./markdownTargets");
+const { parseWindowHandle } = require("./windowsPasteTarget");
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const MAX_SELECTION_EDIT_CODE_POINTS = 6000;
@@ -185,6 +186,22 @@ class SelectionManager {
       await this._captureTargetPromise;
     }
     return this.lastTarget?.kind === "win-hwnd" ? this.lastTarget : null;
+  }
+
+  // Brings a captured Windows window forward and says whether it is in front now. The paste
+  // helper falls back to whatever is in front when its restore fails, so a paste that may
+  // only land in this window asks first. A helper without --restore-window reports the window
+  // in front unchanged, which reads as not restored.
+  async restoreWinTarget(target) {
+    if (target?.kind !== "win-hwnd") return false;
+    const binary = this.clipboardManager.resolveWindowsFastPasteBinary();
+    if (!binary) return false;
+    const result = await runSpawn(binary, ["--restore-window", target.id, "--detect-only"], {
+      timeout: 700,
+    });
+    const front = result.success ? result.stdout.match(/TARGET\s+(\S+)/)?.[1] : null;
+    const wanted = parseWindowHandle(target.id);
+    return wanted !== null && front != null && parseWindowHandle(front) === wanted;
   }
 
   // The dictation target as the Tone & Style classifier reads it: the app's

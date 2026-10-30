@@ -214,6 +214,7 @@
     "policyUnresolved": "貴組織的設定尚未載入完成。請稍後再試。",
     "managedConfigLoading": "正在檢查您組織的託管設定。請稍候再試。",
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
+    "managedConfigAmbiguous": "您組織的託管設定不一致。請聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
     "resizePanel": "調整面板大小"
   },
@@ -883,6 +884,9 @@
       "modelRetired": "Tinfoil 已停用 {{from}}，已切換至 {{to}}。",
       "refreshingModels": "正在重新整理模型…"
     },
+    "openai": {
+      "modelRetired": "OpenAI 已停用 {{from}}，已切換至 {{to}}。"
+    },
     "corti": {
       "euOnly": "Corti 模型僅在歐盟地區可用。"
     }
@@ -969,6 +973,9 @@
         "managedTranscriptionUnavailable": "託管轉錄目前無法使用。請稍候再試。",
         "managedRouteInvalid": "由於設定不符，託管轉錄無法啟動。請重試或聯絡管理員。",
         "managedAuthRejected": "您組織的託管轉錄憑證遭拒。請聯絡管理員。",
+        "managedRequestRejected": "您組織的轉錄服務拒絕了此音訊（HTTP {{status}}）。請重試或聯絡管理員。",
+        "managedResponseMalformed": "您組織的轉錄服務傳回了 OpenWhispr 無法讀取的回應。請重試或聯絡管理員。",
+        "managedChunkTooLarge": "無法將此音訊分割得夠小以供您組織的轉錄服務使用。請聯絡管理員。",
         "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
         "providerKeyMissing": "尚未為您的轉錄服務商設定 API 金鑰。請在「設定 → 語音轉文字」中新增。",
         "cleanupTruncated": "AI 模型的輸出長度達到上限，未能完成聽寫清理。",
@@ -1659,6 +1666,8 @@
       },
       "rollingWeeklyLimit": "滾動式每週額度",
       "signOut": {
+        "endMeetingDescription": "登出會結束正在進行的會議錄製。已錄製的內容會保留在筆記中。",
+        "endMeetingTitle": "結束會議錄製？",
         "failedDescription": "登出時發生錯誤。請再試一次。",
         "failedTitle": "無法登出",
         "signOut": "登出",
@@ -2411,6 +2420,7 @@
         "description": "請檢查網路連線後再試一次。",
         "retry": "重試"
       },
+      "staleList": "無法連線至 OpenWhispr。顯示的是你上次連線時的工作區。",
       "tab": {
         "general": "一般",
         "members": "成員",
@@ -2630,6 +2640,8 @@
   "models": {
     "learnMore": "瞭解更多",
     "noneAvailable": "沒有可用的模型",
+    "legacy": "舊版",
+    "legacyHint": "已不再提供。切換到其他模型後將不再顯示。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最準確的本地語音辨識(平均 WER 5.42%,支援 14 種語言)。不支援自動語言偵測"
@@ -2639,7 +2651,8 @@
         "parakeet_unified_en_0_6b": "僅英語 ASR，最先進的準確度（平均 WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron 英語串流語音辨識",
         "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron 多語言串流語音辨識，自動語言偵測（15 種語言）",
-        "orukeet": "針對多語言語音辨識微調的 Parakeet"
+        "orukeet": "針對多語言語音辨識微調的 Parakeet",
+        "parakeet_tdt_110m_en": "適用於低階裝置的輕量英語 ASR，含標點"
       },
       "whisper": {
         "tiny": "最快速，品質較低",
@@ -2647,7 +2660,9 @@
         "small": "品質更佳，速度較慢",
         "medium": "高品質",
         "large": "最佳品質，速度最慢",
-        "turbo": "速度快且品質佳"
+        "turbo": "速度快且品質佳",
+        "large_q5": "下載大小僅為三分之一的 Large",
+        "turbo_q5": "下載大小僅為三分之一的 Turbo"
       },
       "transcription": {
         "openai_gpt_transcribe": "最新、最準確的轉錄",
@@ -2665,7 +2680,10 @@
         "deepgram_nova_3": "Deepgram 最精準的即時模型",
         "assemblyai_universal_streaming_english": "不會變動的即時轉錄（英文）",
         "assemblyai_universal_streaming_multilingual": "不會變動的即時轉錄（多語言）",
-        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言"
+        "assemblyai_universal_3_5_pro": "最高精度即時轉錄，支援 18 種語言",
+        "assemblyai_universal_3_6_pro": "最高精度即時轉錄，支援 32 種語言",
+        "mistral_voxtral_mini_transcribe_3_0": "支援 50 多種語言的快速轉錄（預覽版）",
+        "mistral_voxtral_small_transcribe_3_0": "最準確的 Voxtral，支援 50 多種語言（預覽版）"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -2673,7 +2691,6 @@
         "openai_gpt_5_nano": "超快速，低延遲",
         "openai_gpt_4_1": "穩健基礎，1M 上下文",
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
-        "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic 最強大的模型，Mythos 級",
         "anthropic_claude_fable_5": "上一代 Mythos 級旗艦模型",
         "anthropic_claude_opus_5_5": "最新 Opus 模型，適合複雜推理，1M 上下文",
@@ -2683,7 +2700,7 @@
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "gemini_gemini_3_5_flash": "最新、快速且高性能的 Gemini 模型",
+        "gemini_gemini_3_5_flash": "快速且高性能的 Gemini 模型",
         "gemini_gemini_3_5_flash_lite": "最快、最經濟的 3.5 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_1_flash_lite": "前沿級性能，成本更低",
@@ -2711,18 +2728,29 @@
         "corti_corti_s1_instant": "快速醫療模型，無推理過程",
         "corti_corti_s1": "功能最強的臨床模型，帶推理",
         "corti_corti_s1_mini_instant": "精簡型醫療模型，最快且成本最低",
-        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
+        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理",
+        "openai_gpt_6_1_sol": "以更低成本提供接近 Astra 的能力，適用於聊天與代理任務",
+        "openai_gpt_6_luna": "速度最快、成本最低的 GPT-6",
+        "gemini_gemini_3_6_flash": "快速且高性能的 Gemini 模型",
+        "gemini_gemini_3_8_flash": "最強 Flash 模型",
+        "gemini_gemini_4_argon": "Google 前沿推理模型",
+        "tinfoil_kimi_k3": "私密的 Moonshot 旗艦模型，原生推理與視覺能力，256K 上下文",
+        "tinfoil_deepseek_v4_1_flash": "私密的快速 DeepSeek 模型，可選推理，1M 上下文"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的助理任務。",
-        "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
-        "bedrock_claude_sonnet_5": "均衡效能。建議作為助理任務的預設模型。",
+        "bedrock_claude_haiku_4_5": "上一代 Haiku。快速且低成本，適合文字清理。",
+        "bedrock_claude_sonnet_5": "上一代 Sonnet。快速強大，適合助理任務。",
         "bedrock_claude_opus_4_8": "最高智能。適用於複雜的助理任務。",
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
         "bedrock_deepseek_v3_2": "開放權重前沿模型。助理任務的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
-        "vertex_gemini_2_5_flash": "透過 Vertex 提供的快速多模態模型",
-        "vertex_gemini_2_5_pro": "透過 Vertex 提供的進階推理模型"
+        "bedrock_claude_sonnet_5_5": "均衡效能。建議作為助理任務的預設模型。",
+        "bedrock_claude_haiku_5_5": "速度最快的 Claude 模型。適合文字清理。",
+        "bedrock_claude_opus_5_5": "最高智慧。最適合複雜的助理任務。",
+        "vertex_gemini_3_8_flash": "透過 Vertex 提供的最強 Flash 模型",
+        "vertex_gemini_3_5_flash_lite": "透過 Vertex 提供的速度最快、成本最低的模型",
+        "vertex_gemini_4_argon": "透過 Vertex 提供的 Google 前沿推理模型"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強大的混合模型",
@@ -2759,7 +2787,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI 的 MoE 模型，僅 1.5B 啟用參數即可實現高品質",
         "liquidai_lfm2_2_6b_q4_k_m": "更高品質清理的均衡 LFM2 模型",
         "liquidai_lfm2_5_350m_q8_0": "超輕量模型，快速清理聽寫文字",
-        "liquidai_lfm2_5_230m_q8_0": "微型模型，低階硬體也能即時清理"
+        "liquidai_lfm2_5_230m_q8_0": "微型模型，低階硬體也能即時清理",
+        "qwen_qwen3_5_0_8b_q4_k_m": "超小型 Qwen3.5，清理速度最快",
+        "qwen_qwen3_8_27b_q4_k_m": "適用於 32 GB 裝置的最強 Qwen 模型",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "快速的混合專家模型，3B 啟用參數",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "Mistral 的 14B 模型，支援工具呼叫，256K 上下文",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "無思考過程的快速模型，適用於清理與工具呼叫",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "小巧快速，適合聽寫文字清理",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 官方 QAT 建置，最適合 16 GB 裝置"
       },
       "diarization": {
         "segmentation": "用於說話者分離的語音邊界偵測",
@@ -2867,7 +2902,6 @@
       "personal": "個人",
       "privateTooltip": "只有你可以看到你的個人空間",
       "newSpace": "新增團隊空間",
-      "newSpaceInWorkspace": "在 {{workspace}} 中新增團隊空間",
       "createTitle": "建立團隊空間",
       "createDescription": "工作區內的共享區域，供你加入的人員和群組存取。",
       "nameAndIconLabel": "名稱與圖示",
@@ -3202,7 +3236,8 @@
       "urlFileTooLarge": "檔案過大，無法下載。大小上限為 500 MB。",
       "urlYoutubeBlocked": "YouTube 暫時封鎖了來自您網路的下載。請稍後再試。",
       "customEndpointInvalid": "自訂轉錄端點未設定或無效。請在設定中更新。",
-      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。"
+      "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
+      "disabledByOrg": "您的組織已停用音訊上傳。"
     },
     "meeting": {
       "title": "會議筆記",
@@ -3229,7 +3264,11 @@
       "systemAudioQuiet": {
         "title": "會議音訊已靜默",
         "description": "已有幾分鐘未偵測到任何人聲。如果通話仍在進行，請檢查您的聲音輸出裝置。"
-      }
+      },
+      "recordingDisabledByOrg": "您的組織已停用會議錄音。",
+      "stoppedAccountChanged": "由於您已登出或切換了帳號，錄音已停止。",
+      "stoppedPolicyUnresolved": "由於無法檢查您的組織設定，錄音已停止。",
+      "stoppedWorkspaceChanged": "由於您切換了工作區，錄音已停止。"
     },
     "meetingPill": {
       "returnToNote": "返回到錄音",
@@ -3414,6 +3453,7 @@
     },
     "speaker": {
       "you": "你",
+      "noteTaker": "記錄者",
       "them": "對方",
       "unknown": "未知發言者",
       "label": "發言者 {{n}}",
@@ -3510,18 +3550,14 @@
   },
   "dictionary": {
     "addWord": "新增詞語",
-    "removeWord": "移除 {{word}}",
     "clearAll": "全部清除",
     "clearTitle": "清空字典？",
     "clearDescription": "這將移除自訂字典中的所有詞彙。此操作無法復原。",
-    "addPlaceholder": "用逗號分隔新增多個詞——OpenWhispr、Supabase、ARR",
     "add": "新增",
     "importWords": "匯入詞語",
     "importPlaceholder": "貼上以逗號或換行分隔的詞語...",
     "separateWithCommas": "每行一個詞，或以逗號分隔",
     "wordsReady_other": "{{count}} 個詞語就緒",
-    "import": "匯入",
-    "yourDictionary": "你的詞典",
     "promptLimitNotice": "字典目前共 {{chars}} 個字元。Groq 與 Whisper 模型只會讀取其中最後幾百個字元，因此清單越短效果越好；其他模型會收到完整清單。",
     "exportDictionary": "匯出詞典",
     "exportFailed": "匯出失敗",
@@ -3557,7 +3593,155 @@
     "emptyTitle": "將詞語加入字典",
     "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
     "addFirstWord": "新增第一個詞",
-    "agentDefault": "預設加入"
+    "agentDefault": "預設加入",
+    "shared": {
+      "allWords": "全部詞彙",
+      "personal": "個人",
+      "group": "共享",
+      "allShared": "全部",
+      "everyoneAt": "{{workspace}} 全員",
+      "hidden": "已隱藏",
+      "add": {
+        "placeholder": "用逗號分隔新增多個詞",
+        "to": "新增到 {{list}}",
+        "chooseList": "選擇要新增到的清單",
+        "hiddenForYou": "在 {{list}} 中已對你隱藏",
+        "notAdded_one": "{{count}} 個詞語未新增：{{words}}",
+        "notAdded_other": "{{count}} 個詞語未新增：{{words}}"
+      },
+      "alreadyIn": "已在 {{list}} 中",
+      "importTo": "匯入到 {{list}}",
+      "actions": {
+        "share": "共用",
+        "edit": "編輯",
+        "delete": "刪除",
+        "hide": "對我隱藏",
+        "deleteForEveryone": "為所有人刪除",
+        "unhide": "取消隱藏",
+        "shareWord": "共用 {{word}}",
+        "deleteWord": "刪除 {{word}}",
+        "hideWord": "對我隱藏 {{word}}",
+        "deleteForEveryoneWord": "為所有人刪除 {{word}}",
+        "unhideWord": "取消隱藏 {{word}}"
+      },
+      "attribution": {
+        "you": "你",
+        "former": "前成員"
+      },
+      "toolbar": {
+        "search": "搜尋",
+        "searchPlaceholder": "搜尋此清單",
+        "closeSearch": "關閉搜尋",
+        "sort": "排序",
+        "sync": "立即同步",
+        "syncedAgo": "{{time}}前已同步",
+        "syncedJustNow": "剛剛已同步",
+        "notSynced": "尚未同步"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "最新優先",
+        "oldest": "最早優先"
+      },
+      "memberCount_one": "{{count}} 位成員",
+      "memberCount_other": "{{count}} 位成員",
+      "emptyList": "{{list}} 中還沒有詞語",
+      "allHiddenList": "{{list}} 中的所有詞語都已對你隱藏",
+      "noMatches": "沒有與「{{query}}」相符的詞語",
+      "deletedForEveryone": "已為所有人刪除「{{word}}」",
+      "undo": "復原",
+      "errors": {
+        "generic": "無法更新 {{list}}，請再試一次。",
+        "listFull": "{{list}} 已滿",
+        "planRequired": "共享字典需要 Business 方案，{{list}} 未變更",
+        "ssoRequired": "請使用公司 SSO 登入後再變更 {{list}}",
+        "notMember": "你已無法存取 {{list}}",
+        "invalid": "{{list}} 只接受簡短詞語：不超過 64 個字元和 6 個詞，且不含逗號、句末標點或 < > { } [ ] ` | 等符號",
+        "recentlyDeleted": "這個詞語剛從 {{list}} 中刪除，請重新新增。"
+      },
+      "deleteOneTitle": "要刪除「{{word}}」嗎？",
+      "deleteDescription": "這會影響 {{list}} 中的所有人。",
+      "deleteManyTitle_one": "要刪除 {{count}} 個詞語嗎？",
+      "deleteManyTitle_other": "要刪除 {{count}} 個詞語嗎？",
+      "deletedManyForEveryone_one": "已為所有人刪除 {{count}} 個詞語",
+      "deletedManyForEveryone_other": "已為所有人刪除 {{count}} 個詞語",
+      "deletedPersonalMany_one": "已刪除 {{count}} 個詞語",
+      "deletedPersonalMany_other": "已刪除 {{count}} 個詞語",
+      "selection": {
+        "count_one": "已選取 {{count}} 項",
+        "count_other": "已選取 {{count}} 項",
+        "selectAll": "全選 {{total}} 項",
+        "shareWith": "共用給…",
+        "clear": "清除選取",
+        "selectWord": "選取 {{word}}",
+        "label": "已選取的詞語"
+      },
+      "share": {
+        "titleOne": "將「{{word}}」共用給",
+        "titleMany_one": "將 {{count}} 個詞語共用給",
+        "titleMany_other": "將 {{count}} 個詞語共用給",
+        "alreadyShared": "已共用",
+        "movesOutOne": "將其移出個人",
+        "movesOutMany": "將其移出個人",
+        "partial_one": "已共用 {{moved}}/{{total}} 個詞語，{{count}} 個未共用。",
+        "partial_other": "已共用 {{moved}}/{{total}} 個詞語，{{count}} 個未共用。",
+        "reasons": {
+          "personalChanged": "某個詞語已在其他裝置上變更，請再試一次。",
+          "network": "請檢查網路連線後再試一次。",
+          "aListFull": "有一個清單已滿"
+        }
+      },
+      "locked": {
+        "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
+        "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
+        "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
+        "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
+        "paused_other": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
+        "workspaceTitle": "工作區中的所有人",
+        "workspaceDescription": "適用於整個公司的詞語",
+        "spaceTitle": "每個空間一個清單",
+        "spaceDescription": "只有一個團隊需要的詞語",
+        "wordCount_one": "{{count}} 個詞語",
+        "wordCount_other": "{{count}} 個詞語",
+        "lockLabel": "包含在 Business 方案中",
+        "ssoRequired": "{{workspace}} 要求使用公司 SSO。請登出後使用 SSO 重新登入，以使用其共享詞語。",
+        "noAccess": "你已無法存取 {{workspace}} 的共享詞語。如有疑問，請聯絡管理員。",
+        "pausedMember_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。請管理員或擁有者升級到 Business，即可在聽寫中再次使用。",
+        "pausedMember_other": "{{workspace}} 的 {{count}} 個共享詞語已暫停。請管理員或擁有者升級到 Business，即可在聽寫中再次使用。"
+      },
+      "empty": {
+        "body": "新增這個團隊使用的術語，或從你的個人清單中共享一些。{{list}} 中的所有人（{{count}}）都會收到。",
+        "import": "匯入清單",
+        "shareFromPersonal": "從個人共享"
+      },
+      "arrival": {
+        "title_one": "已新增 {{count}} 個團隊詞彙",
+        "title_other": "已新增 {{count}} 個團隊詞彙",
+        "description": "{{workspace}} 的共用詞彙現已套用於你的聽寫和會議筆記。",
+        "descriptionNoWorkspace": "你團隊的共用詞彙現已套用於你的聽寫和會議筆記。",
+        "viewWords": "檢視詞彙"
+      },
+      "lockedEntry": "已鎖定",
+      "notTermLike": "共享清單只接受簡短詞語：不超過 64 個字元和 6 個詞，且不含逗號、句末標點、< > { } [ ] ` | 等符號或不可見字元",
+      "notUsed": "聽寫中不使用",
+      "notUsedTooltip": "超過 64 個字元或 6 個詞，或包含逗號、句末標點、< > { } [ ] ` | 等符號或不可見字元的共享詞語不會用於聽寫",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "已略過 {{count}} 個詞語：{{words}}",
+      "skipped_other": "已略過 {{count}} 個詞語：{{words}}",
+      "partial": {
+        "add_one": "已將 {{applied}}/{{total}} 個詞語新增到 {{list}}，{{count}} 個未新增。",
+        "add_other": "已將 {{applied}}/{{total}} 個詞語新增到 {{list}}，{{count}} 個未新增。",
+        "hide_one": "已為你隱藏 {{applied}}/{{total}} 個詞語，{{count}} 個未隱藏。",
+        "hide_other": "已為你隱藏 {{applied}}/{{total}} 個詞語，{{count}} 個未隱藏。",
+        "unhide_one": "已取消隱藏 {{applied}}/{{total}} 個詞語，{{count}} 個仍為隱藏狀態。",
+        "unhide_other": "已取消隱藏 {{applied}}/{{total}} 個詞語，{{count}} 個仍為隱藏狀態。",
+        "delete_one": "已為所有人刪除 {{applied}}/{{total}} 個詞語，{{count}} 個未刪除。",
+        "delete_other": "已為所有人刪除 {{applied}}/{{total}} 個詞語，{{count}} 個未刪除。"
+      },
+      "hiddenWord": "已對你隱藏「{{word}}」",
+      "stillIn": "「{{word}}」仍在 {{list}} 中"
+    }
   },
   "insights": {
     "title": "統計",
@@ -3692,7 +3876,6 @@
     "upload": "上傳",
     "dictionary": "字典",
     "referral": "獲得一個月免費",
-    "inviteTeam": "邀請你的團隊",
     "settings": "設定",
     "support": "支援",
     "limitReached": "已達本週雲端上限",
@@ -3706,7 +3889,7 @@
     "learnMore": "瞭解更多",
     "integrations": "整合",
     "defaultUser": "使用者",
-    "notSignedIn": "尚未登入",
+    "accountMenu": "帳戶：{{name}}",
     "chat": "聊天",
     "collapse": "收合側邊欄",
     "expand": "展開側邊欄"
@@ -3773,6 +3956,12 @@
     "active": "GPU 加速已啟用",
     "ready": "GPU 加速已就緒",
     "activating": "正在啟動 GPU...",
+    "activeBackend": "{{backend}} 加速已啟用",
+    "readyBackend": "{{backend}} 加速已就緒",
+    "activatingBackend": "正在啟用 {{backend}}...",
+    "enableBackend": "啟用 {{backend}}",
+    "cudaDescription": "適用於支援的 NVIDIA GPU 的 CUDA 加速。需要目前相容的 NVIDIA 驅動程式。",
+    "vulkanDescription": "適用於相容的 AMD、Intel 和 NVIDIA GPU 的 Vulkan 加速。",
     "activationFailed": "GPU 加速無法使用",
     "activationFailedDescription": "OpenWhispr 已切換為 CPU 轉錄。",
     "reasoningActivationFailedDescription": "OpenWhispr 已切換為 CPU 處理。",
@@ -3919,6 +4108,9 @@
       "get_noteStatus": "正在讀取筆記...",
       "create_noteStatus": "正在建立筆記...",
       "update_noteStatus": "正在更新筆記...",
+      "load_skillStatus": "正在載入技能…",
+      "propose_skillStatus": "正在準備技能…",
+      "update_skillStatus": "正在準備變更…",
       "copiedToClipboard": "已複製到剪貼簿",
       "openNote": "開啟筆記",
       "unknownTool": "未知工具：{{name}}",
@@ -3926,6 +4118,9 @@
       "search_openwhispr_helpName": "搜尋 OpenWhispr 說明",
       "read_openwhispr_helpName": "閱讀 OpenWhispr 說明",
       "get_openwhispr_contextName": "讀取 OpenWhispr 設定",
+      "load_skillName": "載入技能",
+      "propose_skillName": "提議技能",
+      "update_skillName": "更新技能",
       "search_openwhispr_helpStatus": "正在搜尋 OpenWhispr 說明...",
       "read_openwhispr_helpStatus": "正在閱讀 OpenWhispr 說明...",
       "get_openwhispr_contextStatus": "正在讀取 OpenWhispr 設定...",
@@ -4122,6 +4317,7 @@
       },
       "sections": {
         "connectors": "連接器",
+        "skills": "技能",
         "calendars": "行事曆",
         "api": "API 金鑰",
         "mcp": "MCP 伺服器",
@@ -4587,6 +4783,227 @@
     "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",
     "locked": "付費方案包含此功能"
   },
+  "skills": {
+    "pane": {
+      "description": "把您的工作流程教給助理一次，之後在合適的時候它都會使用。",
+      "search": "搜尋技能",
+      "manage": "管理技能",
+      "add": "新增",
+      "addMenu": {
+        "createWithAssistant": "用助理建立",
+        "create": "建立技能",
+        "upload": "上傳技能"
+      },
+      "installed": "已安裝",
+      "recommended": "推薦",
+      "seeOne": "查看 {{first}}",
+      "seeTwo": "查看 {{first}} 和 {{second}}",
+      "seeMore_one": "查看 {{first}}、{{second}} 及另外 {{count}} 個",
+      "seeMore_other": "查看 {{first}}、{{second}} 及另外 {{count}} 個",
+      "noMatches": "沒有符合「{{query}}」的已安裝技能。",
+      "stateOn": "已開啟",
+      "stateOff": "已關閉",
+      "stateNeedsFix": "需要修正",
+      "off": "關閉",
+      "needsFix": "需要修正",
+      "cardLabel": "{{name}}，{{state}}。開啟詳細資料",
+      "addRecommended": "新增 {{name}}",
+      "empty": {
+        "title": "尚無技能",
+        "description": "和助理一起建立一個，或上傳您已有的技能。",
+        "descriptionNoAssistant": "上傳您已有的技能，或自行建立一個。"
+      }
+    },
+    "breadcrumb": {
+      "label": "導覽路徑",
+      "root": "技能"
+    },
+    "detail": {
+      "skillLabel": "技能",
+      "toggle": "開啟或關閉 {{name}}",
+      "more": "{{name}} 的更多動作",
+      "files": "檔案",
+      "copyFile": "複製 {{path}}",
+      "neverRun": "OpenWhispr 從不執行指令碼",
+      "uninstall": "解除安裝",
+      "uninstallConfirm": "要解除安裝 {{name}} 嗎？它會從這台電腦中移除。",
+      "problem": "此技能修正後才能使用：{{reason}}",
+      "tryNow": "立即試用"
+    },
+    "menu": {
+      "copyMarkdown": "複製 Markdown",
+      "uninstall": "解除安裝"
+    },
+    "toasts": {
+      "added": "已新增 {{name}}",
+      "created": "已建立 {{name}}",
+      "uploaded_one": "已上傳 {{count}} 個技能",
+      "uploaded_other": "已上傳 {{count}} 個技能",
+      "uninstalled": "已解除安裝 {{name}}",
+      "removedFromComputer": "已從這台電腦中移除。",
+      "copiedMarkdown": "已複製 Markdown",
+      "copyFailed": "無法複製",
+      "revealFailed": "無法找到此技能的資料夾",
+      "writeFailed": "無法儲存技能",
+      "writeFailedNoSpace": "您的磁碟已滿。",
+      "writeFailedPermission": "OpenWhispr 無法寫入其技能資料夾。",
+      "loadFailed": "無法讀取您的技能"
+    },
+    "manage": {
+      "title": "管理技能",
+      "description": "開啟或關閉技能，或移除不用的技能。每個技能都儲存在這台電腦上。",
+      "noMatches": "沒有符合「{{query}}」的技能。",
+      "none": "尚無技能。"
+    },
+    "upload": {
+      "title": "上傳技能",
+      "description": "新增您在其他地方建立的技能，例如在 Claude 或 Codex 中。",
+      "crumb": "上傳技能",
+      "drop": "將技能檔案拖曳到這裡，或瀏覽",
+      "dropActive": "放開即可新增",
+      "several": "可以一次新增多個。",
+      "ruleMd": ".md 檔案開頭需要名稱和描述",
+      "ruleZip": ".zip 和 .skill 檔案中需要包含 SKILL.md",
+      "fileCount_one": "{{count}} 個檔案",
+      "fileCount_other": "{{count}} 個檔案",
+      "ready": "就緒",
+      "duplicate": "您已有此技能",
+      "replace": "取代",
+      "willReplace": "將取代您目前的技能",
+      "willReplaceCopy": "將代替另一個檔案使用",
+      "alsoInUpload": "此次上傳的另一個檔案包含相同的技能",
+      "skipped": "已略過",
+      "undo": "復原",
+      "chooseFile": "選擇一個檔案以繼續。",
+      "submit": "上傳",
+      "submitCount_one": "上傳 {{count}} 個技能",
+      "submitCount_other": "上傳 {{count}} 個技能"
+    },
+    "create": {
+      "title": "建立技能",
+      "description": "自己撰寫。只要要求符合描述，助理就會使用它。",
+      "crumb": "建立技能",
+      "name": "名稱",
+      "namePlaceholder": "每週狀態報告",
+      "nameMissing": "請新增名稱。",
+      "descriptionLabel": "描述",
+      "descriptionPlaceholder": "它的作用以及何時使用。例如：根據本週的筆記撰寫我的每週更新。當我要每週更新時使用。",
+      "descriptionHint": "助理會讀取這段內容來決定何時使用此技能。",
+      "descriptionMissing": "請新增描述，讓助理知道何時使用它。",
+      "instructions": "指示",
+      "instructionsPlaceholder": "## 何時使用\n當我要每週更新時。\n\n## 步驟\n1. 閱讀本週的筆記。\n2. 將它們分為成果、阻礙和下週計畫。\n\n## 輸出格式\n三個簡短的清單。",
+      "instructionsMissing": "請新增指示。",
+      "addFile": "新增檔案",
+      "filesTooLarge": "一個技能的檔案總共不能超過 25 MB。",
+      "removeFile": "移除 {{path}}",
+      "submit": "建立",
+      "unsaved": "您有未儲存的變更",
+      "keepEditing": "繼續編輯",
+      "discard": "捨棄",
+      "draftWithAssistant": "用助理起草"
+    },
+    "problems": {
+      "missingName": "開頭需要名稱",
+      "missingDescription": "開頭需要描述",
+      "frontmatterMissing": "開頭需要名稱和描述",
+      "frontmatterInvalid": "無法讀取開頭的資訊",
+      "frontmatterNotMapping": "開頭的資訊格式不符合預期",
+      "nameFormat": "名稱只能使用小寫字母、數字和單一連字號",
+      "nameTooLong": "名稱超過 64 個字元",
+      "descriptionTooLong": "描述超過 {{max}} 個字元",
+      "descriptionAngleBrackets": "描述不能包含 < 或 >",
+      "noSkillFile": "其中沒有 SKILL.md",
+      "multipleSkillFiles": "其中有多個 SKILL.md",
+      "skillFileTooDeep": "SKILL.md 必須位於最上層，或在一個資料夾內",
+      "unsafePath": "包含不允許的檔案名稱或路徑",
+      "symlink": "包含指向其他檔案的連結，這是不允許的",
+      "tooLarge": "大於 25 MB",
+      "tooManyFiles": "檔案超過 500 個",
+      "unsupportedFile": "只能新增 .md、.zip 和 .skill 檔案",
+      "unreadableArchive": "無法開啟此檔案",
+      "nameMismatch": "SKILL.md 中的名稱與其資料夾不一致",
+      "unreadable": "無法讀取此技能的檔案",
+      "skillFileNotUtf8": "SKILL.md 必須儲存為 UTF-8 文字",
+      "placeholder": "請先取代 [TODO: …] 預留位置",
+      "nameTaken": "您已有名為「{{name}}」的技能"
+    },
+    "warnings": {
+      "folderRenamed": "資料夾會重新命名為與技能名稱一致",
+      "reservedWord": "包含「claude」或「anthropic」的名稱無法上傳到 Claude",
+      "longBody": "指示超過 500 行，可能會拖慢助理",
+      "longDescription": "描述超過 300 個字元；較短的描述更容易被準確選中",
+      "unknownKeys": "開頭有額外的資訊，OpenWhispr 會保留但不會使用"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "行動項目同步到 Linear",
+        "description": "從會議中擷取行動項目，並草擬 Linear 議題供我核准。會議結束後我要行動項目時使用。"
+      },
+      "meeting-summary-to-slack": {
+        "title": "會議摘要發到 Slack",
+        "description": "撰寫簡短的會議摘要，並草擬要發到 Slack 頻道的訊息。當我要分享會議摘要時使用。"
+      },
+      "one-on-one-prep": {
+        "title": "1 對 1 準備",
+        "description": "彙整自我上次與某人一對一會議以來的變化。當我要準備 1 對 1 時使用。"
+      },
+      "meeting-decisions": {
+        "title": "會議決策",
+        "description": "在我的會議筆記中尋找決策，並註明每項決策的日期和會議。當我問我們決定了什麼時使用。"
+      }
+    },
+    "chat": {
+      "chipRemove": "從此對話中移除 {{name}}",
+      "placeholderWith": "隨便問點什麼——此對話使用 {{name}}",
+      "usingSkill": "正在使用技能 · {{name}}",
+      "usingSkillFailed": "無法使用技能 · {{name}}",
+      "creatorName": "技能建立工具",
+      "creatorOpening": "您經常反覆做什麼事？跟我說說上一次的情況，或選一則筆記作為起點。",
+      "draftPrompt": "幫我完成這個技能。\n名稱：{{name}}\n描述：{{description}}",
+      "draftInstructions": "目前的說明：\n{{instructions}}",
+      "draftFiles": "我新增的檔案：{{files}}",
+      "noneYet": "（尚無）"
+    },
+    "approval": {
+      "createHeader": "建立技能",
+      "newSkill": "新技能",
+      "replacesExisting": "您已經有這個技能，儲存後會更新它。",
+      "replacesExistingTurnsOn": "您已經有這個技能，儲存後會更新並開啟它。",
+      "nameLabel": "技能名稱",
+      "descriptionLabel": "何時使用",
+      "seeFull": "查看完整技能",
+      "save": "儲存技能",
+      "saving": "正在儲存…",
+      "saved": "已儲存",
+      "openSkill": "開啟技能",
+      "skippedCreate": "已略過，未儲存任何內容。",
+      "updated": "已更新",
+      "undo": "復原",
+      "undone": "已復原，技能已恢復原狀。",
+      "undoStale": "無法復原，此後技能已被變更。",
+      "outdated": "未儲存。此卡片建立後技能已被變更。",
+      "unchangedLines_one": "⋯ {{count}} 行未變更",
+      "unchangedLines_other": "⋯ {{count}} 行未變更",
+      "undoFailed": "無法復原，請再試一次。",
+      "failed": "無法儲存技能。",
+      "notSaved": "未儲存任何內容。",
+      "updateHeader": "更新技能",
+      "removes": "將移除：",
+      "learnedFrom": "學習自：{{title}} · {{date}}",
+      "today": "今天",
+      "seeChanges": "查看確切變更",
+      "added": "新增：",
+      "removed": "移除：",
+      "update": "更新技能",
+      "skippedUpdate": "已略過，技能未變更。"
+    },
+    "code": {
+      "paste": "貼到應用程式",
+      "pasteNote": "貼上時不會按 Enter 鍵，由您決定何時執行。",
+      "pasted": "已貼上",
+      "pasteFailed": "無法貼上，文字已在您的剪貼簿中。"
+    }
+  },
   "calendar": {
     "title": "Google 日曆",
     "status": "狀態",
@@ -4825,7 +5242,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "工作區",
-      "create": "建立工作區…"
+      "create": "建立工作區…",
+      "add": "新增工作區",
+      "invitePeople": "邀請成員"
     },
     "create": {
       "title": "建立工作區",
@@ -4929,6 +5348,7 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄",
+    "joinOnly": "加入會議",
     "folders": {
       "choose": "選擇會議資料夾",
       "search": "搜尋資料夾",
@@ -4961,7 +5381,9 @@
         "CREATE_FAILED": "無法完成，請重試。",
         "LINKED_NOTE_CHANGED": "請檢查儲存位置，然後重新加入。",
         "NOTE_UNAVAILABLE": "此筆記無法使用。請重試，不要建立替代筆記。",
-        "START_FAILED": "無法完成，請重試。"
+        "START_FAILED": "無法完成，請重試。",
+        "POLICY_MEETING_RECORDING_DISABLED": "您的組織已停用會議錄音。",
+        "POLICY_UNRESOLVABLE": "貴組織的設定尚未載入完成。請稍後再試。"
       }
     }
   },
@@ -5142,5 +5564,51 @@
     "permissionDenied": "已拒絕",
     "permissionRestricted": "受限",
     "permissionNotDetermined": "尚未請求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業音訊設定",
+      "description": "在此裝置設定憑證並測試組織的音訊連線。",
+      "provider": "音訊供應商",
+      "gateway": "音訊閘道",
+      "provisioned": "憑證已設定",
+      "credentialMissing": "需要憑證",
+      "proxyCredentialFormat": "代理伺服器請輸入包含 username 和 password 的 JSON；音訊請輸入 API 金鑰。",
+      "probeConsent": "我允許傳送簡短的音訊測試要求，這可能產生供應商費用。",
+      "testBatch": "測試檔案轉錄",
+      "testRealtime": "測試會議連線",
+      "testPassed": "連線測試通過，已向管理員回報。",
+      "testFailed": "連線測試失敗。",
+      "setupFailed": "設定失敗。請檢查登入狀態、工作區權限與網路設定。",
+      "saved": "憑證已儲存在此裝置。",
+      "operationUnavailable": "組織尚未設定此音訊操作。",
+      "certificateUnavailable": "組織的憑證組合無法使用。",
+      "partialUpload": "{{count}} 個音訊片段失敗，轉錄不完整。",
+      "importBootstrap": "匯入組織設定",
+      "importedBootstrap": "已匯入設定憑證。",
+      "bootstrapNotFound": "找不到設定檔。",
+      "checks": {
+        "authRejected": "音訊服務商拒絕了此裝置的憑證。請檢查已佈建的金鑰或身分設定。",
+        "tlsFailed": "無法驗證安全連線。請檢查您組織的憑證。",
+        "proxyFailed": "透過您組織的 Proxy 連線失敗。請檢查 Proxy 設定與憑證。",
+        "timeout": "音訊服務商未及時回應。請檢查您的網路或 VPN。",
+        "credentialMissing": "此裝置尚未佈建此連線所需的憑證。",
+        "configChanged": "您的組織已變更此音訊設定。請重新開啟設定後再試一次。",
+        "protocolFailed": "音訊服務商回傳了 OpenWhispr 不支援的格式。請檢查部署與通訊協定。",
+        "networkFailed": "無法連線至音訊服務商。請檢查您的網路、VPN 與 DNS。",
+        "secureStorageUnavailable": "此裝置沒有安全的憑證儲存區。在 Linux 上，請安裝並解鎖金鑰圈（例如 GNOME Keyring 或 KWallet）後再試一次。"
+      },
+      "errors": {
+        "ssoRequired": "您的組織要求使用公司 SSO。請透過 SSO 登入後再試一次。",
+        "enterpriseRequired": "企業音訊需要此工作區具備有效的 Enterprise 方案。",
+        "signInRequired": "您的工作階段已過期。請重新登入後再試一次。",
+        "accessDenied": "您的帳號無法為此工作區設定音訊。請確認您是成員，且已進入正確的工作區。",
+        "rateLimited": "測試要求過多。請稍候幾分鐘再試一次。"
+      },
+      "bootstrapNotProtected": "引導檔案必須歸您所有，且只有您能讀取。請 IT 部門重新派送。",
+      "bootstrapUnreadable": "OpenWhispr 無法讀取引導檔案。請 IT 部門讓您的帳號可以讀取。",
+      "bootstrapMismatch": "引導檔案與您的帳號、此工作區或其設定的憑證不符。",
+      "testLinkOtherWorkspace": "此測試連結對應的是其他工作區。請切換到該工作區，然後重新開啟連結。"
+    }
   }
 }

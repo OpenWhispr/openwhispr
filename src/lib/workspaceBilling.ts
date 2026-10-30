@@ -1,16 +1,43 @@
 import type { Workspace } from "../types/electron";
-import { canManageWorkspace } from "./spacePermissions.ts";
+import { workspaceCan } from "./capabilities.ts";
 
 const PAID_PLANS = new Set(["pro", "business", "enterprise"]);
+const SHARED_DICTIONARY_PLANS = new Set(["business", "enterprise"]);
 const ENTITLED_STATUSES = new Set(["active", "trialing"]);
 
-type WorkspaceBillingState = Pick<Workspace, "plan" | "status" | "role" | "stripe_subscription_id">;
+type WorkspaceBillingState = Pick<
+  Workspace,
+  "plan" | "status" | "role" | "capabilities" | "stripe_subscription_id" | "has_subscription"
+>;
+
+/**
+ * The API's checkout gate: a Stripe subscription, or a paid plan provisioned
+ * without one. Not "a Stripe subscription exists" — use the raw
+ * `stripe_subscription_id` for Stripe-only actions. APIs that predate
+ * `has_subscription` only send the raw id.
+ */
+export function hasSubscription(
+  workspace: Pick<Workspace, "has_subscription" | "stripe_subscription_id">
+): boolean {
+  return workspace.has_subscription ?? Boolean(workspace.stripe_subscription_id);
+}
 
 /** Mirrors the API's `hasActiveWorkspaceSubscription`: a paid plan that is currently entitled. */
 export function hasActiveWorkspaceSubscription(
   workspace: Pick<WorkspaceBillingState, "plan" | "status">
 ): boolean {
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
+}
+
+/** The shared team dictionary is a Business feature: Business or Enterprise, currently entitled. */
+export function hasSharedDictionaryPlan(
+  workspace: Pick<Workspace, "plan" | "status"> | null | undefined
+): boolean {
+  return Boolean(
+    workspace &&
+    SHARED_DICTIONARY_PLANS.has(workspace.plan) &&
+    ENTITLED_STATUSES.has(workspace.status)
+  );
 }
 
 /**
@@ -20,20 +47,20 @@ export function hasActiveWorkspaceSubscription(
  */
 export function canSelfServeEnterprise(workspace: WorkspaceBillingState): boolean {
   return (
-    workspace.role === "owner" &&
-    !workspace.stripe_subscription_id &&
+    workspaceCan(workspace, "manage_billing") &&
+    !hasSubscription(workspace) &&
     !hasActiveWorkspaceSubscription(workspace)
   );
 }
 
 /** Mirrors the admin console's own gate: entitled Enterprise plan + owner/admin role. */
 export function isEnterpriseConsoleAvailable(
-  workspace: Pick<WorkspaceBillingState, "plan" | "status" | "role">
+  workspace: Pick<WorkspaceBillingState, "plan" | "status" | "role" | "capabilities">
 ): boolean {
   return (
     workspace.plan === "enterprise" &&
     ENTITLED_STATUSES.has(workspace.status) &&
-    canManageWorkspace(workspace.role)
+    workspaceCan(workspace, "manage_settings")
   );
 }
 
@@ -41,10 +68,11 @@ export function isEnterpriseConsoleAvailable(
  * An owned workspace with a live, entitled Stripe subscription on a lower plan
  * can upgrade in place (subscription price swap, no new checkout). Manually
  * provisioned plans have no subscription to update, so they stay sales-led.
+ * Reads the raw id, not `has_subscription`, which also covers manual plans.
  */
 export function canUpgradeWorkspaceToEnterprise(workspace: WorkspaceBillingState): boolean {
   return (
-    workspace.role === "owner" &&
+    workspaceCan(workspace, "manage_billing") &&
     Boolean(workspace.stripe_subscription_id) &&
     hasActiveWorkspaceSubscription(workspace) &&
     workspace.plan !== "enterprise"
@@ -69,7 +97,14 @@ export function enterpriseTileCta(
   workspaces: Array<
     Pick<
       Workspace,
-      "id" | "role" | "billing_manager" | "plan" | "status" | "stripe_subscription_id"
+      | "id"
+      | "role"
+      | "capabilities"
+      | "billing_manager"
+      | "plan"
+      | "status"
+      | "stripe_subscription_id"
+      | "has_subscription"
     >
   >,
   activeWorkspaceId: string | null
@@ -82,7 +117,7 @@ export function enterpriseTileCta(
     return { action: "openDialog" };
   }
   if (workspaces.length === 0) return { action: "createWorkspace" };
-  if (workspaces.some((workspace) => workspace.role === "owner")) {
+  if (workspaces.some((workspace) => workspaceCan(workspace, "manage_billing"))) {
     return { action: "contactSales", ownerName: null };
   }
   const target =
