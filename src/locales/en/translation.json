@@ -926,6 +926,7 @@
     },
     "qualcomm": {
       "unavailable": "Requires Windows on Snapdragon (ARM64)",
+      "requiresCpu": "Requires a Snapdragon (Qualcomm) processor",
       "runtime": {
         "title": "Qualcomm NPU runtime",
         "description": "Installs the QNN runtime (onnxruntime-qnn, numpy, transformers) into an app-managed Python environment.",

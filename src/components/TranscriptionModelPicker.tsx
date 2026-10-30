@@ -643,7 +643,10 @@ export default function TranscriptionModelPicker({
           return {
             ...provider,
             disabled: true,
-            disabledLabel: t("transcription.qualcomm.unavailable"),
+            disabledLabel:
+              qualcommCapability.reason === "cpu"
+                ? t("transcription.qualcomm.requiresCpu")
+                : t("transcription.qualcomm.unavailable"),
           };
         }
         return provider;

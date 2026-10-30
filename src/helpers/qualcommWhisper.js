@@ -24,8 +24,8 @@ const {
   isQualcommLocalProvider,
 } = require("./qualcommModelInfo");
 const {
-  getQualcommCapability,
-  assertQualcommSupported,
+  getQualcommNpuCapability,
+  assertQualcommNpuSupported,
 } = require("./qualcommCapability");
 const { QualcommRuntimeManager } = require("./qualcommRuntime");
 
@@ -144,7 +144,7 @@ class QualcommWhisperManager {
       await cleanupStaleDownloads(this.getModelsDir());
 
       const { localTranscriptionProvider, qualcommModel } = settings;
-      const capability = getQualcommCapability();
+      const capability = await getQualcommNpuCapability();
 
       if (
         capability.supported &&
@@ -183,7 +183,7 @@ class QualcommWhisperManager {
   }
 
   async checkInstallation() {
-    const capability = getQualcommCapability();
+    const capability = await getQualcommNpuCapability();
     const scriptPath = this.getSidecarScriptPath();
     const scriptAvailable = fs.existsSync(scriptPath);
 
@@ -206,7 +206,7 @@ class QualcommWhisperManager {
   }
 
   async installRuntime(onProgress = null) {
-    assertQualcommSupported();
+    await assertQualcommNpuSupported();
     return this.runtimeManager.ensureRuntime({ onProgress });
   }
 
@@ -448,7 +448,7 @@ class QualcommWhisperManager {
 
   async transcribeLocalQualcomm(audioBlob, options = {}) {
     const model = options.model || "whisper-tiny";
-    assertQualcommSupported();
+    await assertQualcommNpuSupported();
 
     if (!this.runtimeManager.isRuntimeReady()) {
       throw Object.assign(
@@ -546,7 +546,7 @@ class QualcommWhisperManager {
 
   async downloadQualcommModel(modelName, progressCallback = null) {
     this.validateModelName(modelName);
-    assertQualcommSupported();
+    await assertQualcommNpuSupported();
     const modelConfig = getQualcommModelConfig(modelName);
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();

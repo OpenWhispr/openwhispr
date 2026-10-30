@@ -1216,6 +1216,9 @@ export interface ParakeetCheckResult {
   code?: string;
   message?: string;
   minimumMacOSVersion?: string;
+  /** Qualcomm only: why the gate failed — "platform" (OS/arch) or "cpu" (not a Snapdragon). */
+  reason?: string | null;
+  cpuName?: string | null;
 }
 
 export interface ParakeetModelResult {
@@ -2262,6 +2265,9 @@ declare global {
         supported: boolean;
         code?: string;
         message?: string;
+        /** Why the gate failed: "platform" (OS/arch) or "cpu" (not a Snapdragon). */
+        reason?: string | null;
+        cpuName?: string | null;
         scriptPath?: string;
         runtime?: QualcommRuntimeStatus;
       }>;
