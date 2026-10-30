@@ -5,6 +5,10 @@ import type { ModelCapability } from "../config/inferenceScopes";
 // `bodybuilder` writes OpenRouter API requests instead of answers.
 const HIDDEN_ROUTERS = new Set(["openrouter/free", "openrouter/fusion", "openrouter/bodybuilder"]);
 
+// Named rather than taken from list position, since the catalog is OpenRouter's. It
+// supports tools and image input, so it suits every scope.
+export const OPENROUTER_DEFAULT_MODEL = "anthropic/claude-haiku-5.5";
+
 interface OpenRouterCatalogModel {
   id?: unknown;
   supported_parameters?: unknown;
