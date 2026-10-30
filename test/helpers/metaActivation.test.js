@@ -16,6 +16,8 @@ function rig(t) {
   let offline = false;
   let blocked = false;
   let permitted = true;
+  let conflict = false;
+  let loseAnswer = false;
   const calls = [];
   const warnings = [];
   let seq = 0;
@@ -46,7 +48,7 @@ function rig(t) {
         data: { status: "collecting", serverTime, device: { ...device, last_seq: seq } },
       };
     }
-    if (rejects(body)) {
+    if (conflict || rejects(body)) {
       calls.at(-1).status = 409;
       return { success: false, status: 409, error: "Activation stream could not be reconciled" };
     }
@@ -56,6 +58,8 @@ function rig(t) {
         total += e.words;
       }
     if (!body.gap) device.complete_through = body.completeThrough;
+    // Committed, but the answer never arrives (the 10 s abort).
+    if (loseAnswer) throw new Error("timeout");
     return {
       success: true,
       data: { status: total >= 200 ? "pending" : "collecting", acceptedThrough: seq },
@@ -84,6 +88,9 @@ function rig(t) {
     offline: (v) => (offline = v),
     blocked: (v) => (blocked = v),
     permitted: (v) => (permitted = v),
+    conflict: (v) => (conflict = v),
+    loseAnswer: (v) => (loseAnswer = v),
+    device: () => device,
     scope: (v) => (scope = v),
   };
 }
@@ -423,7 +430,7 @@ test("a clock drifting ahead re-syncs hourly instead of outrunning the server wi
   assert.equal(r.manager.current().total_words, 5);
   assert.equal(r.db.prepare("SELECT count(*) n FROM captures").get().n, 0);
 });
-test("a stale anchor still stamps captures so dictation never becomes a gap", async (t) => {
+test("a clock past its hourly re-sync still stamps dictation and sends it once refreshed", async (t) => {
   const r = rig(t);
   await r.manager.flush();
   r.drift(2 * 60 * 60_000, 50_000);
@@ -462,7 +469,7 @@ test("a rejected batch re-syncs once instead of resending the same watermark", a
   r.drift(10 * 60_000, 40_000);
   await r.manager.flush();
   assert.equal(batches(r).at(-1).status, 409);
-  assert.deepEqual(r.warnings, ["Activation batch rejected; re-syncing clock"]);
+  assert.deepEqual(r.warnings, ["Activation batch rejected; clock re-synced"]);
   await capture(r, 7);
   assert.equal(batches(r).at(-1).status, undefined);
   assert.equal(r.manager.current().gap, 0);
@@ -485,4 +492,106 @@ test("a re-sync that moves the clock back never stamps at or before the acknowle
   assert.ok(Date.parse(event.occurredAt) > watermark);
   assert.equal(batches(r).at(-1).status, undefined);
   assert.equal(r.manager.current().total_words, 4);
+});
+test("a 409 a fresh clock does not fix re-syncs once, not on every pass", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.conflict(true);
+  await capture(r, 2);
+  assert.equal(batches(r).at(-1).status, 409);
+  const before = r.calls.length;
+  for (let i = 0; i < 4; i++) await r.manager.flush();
+  assert.deepEqual(
+    r.calls.slice(before).map((c) => c.path),
+    [
+      "/api/activation/device",
+      "/api/activation/batch",
+      "/api/activation/batch",
+      "/api/activation/batch",
+      "/api/activation/batch",
+    ]
+  );
+  r.conflict(false);
+  await r.manager.flush();
+  assert.equal(batches(r).at(-1).status, undefined);
+  assert.equal(r.manager.current().total_words, 2);
+  assert.deepEqual(r.warnings, ["Activation batch rejected; clock re-synced"]);
+});
+test("waking an unenrolled device posts nothing", async (t) => {
+  const r = rig(t);
+  r.permitted(false);
+  await r.manager.flush();
+  await r.manager.resync();
+  assert.equal(r.calls.length, 1);
+});
+test("a lost acknowledgement followed by a backward re-sync never lands behind the server", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(10 * 60_000, 25_000);
+  r.loseAnswer(true);
+  const id = r.manager.begin();
+  r.tick();
+  r.manager.stopCapture(id);
+  // Transcription takes a few seconds, so the watermark passes the stop time.
+  r.tick(3000);
+  r.manager.finish(id, 2);
+  await r.manager.flush();
+  r.loseAnswer(false);
+  const sent = batches(r).length;
+  await r.manager.resync();
+  await capture(r, 3);
+  assert.deepEqual(
+    batches(r)
+      .slice(sent)
+      .map((c) => c.status),
+    [undefined, undefined]
+  );
+  assert.equal(r.manager.current().total_words, 5);
+  assert.equal(r.manager.current().complete_through, r.device().complete_through);
+});
+test("closing after an hour sends only the closing batch", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.tick(61 * 60_000);
+  const before = r.calls.length;
+  await r.manager.close();
+  assert.deepEqual(
+    r.calls.slice(before).map((c) => c.path),
+    ["/api/activation/batch"]
+  );
+  assert.equal(r.calls.at(-1).body.close, true);
+  assert.equal(r.manager.current().state, "closed");
+});
+test("an unsent capture stamped behind the server's watermark is restamped past it", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(10 * 60_000, 25_000);
+  r.loseAnswer(true);
+  await capture(r, 2);
+  r.loseAnswer(false);
+  // An older build restarted on true time and stamped behind the server's
+  // watermark, which it never learned.
+  const watermark = Date.parse(r.device().complete_through);
+  const stream = r.manager.current();
+  r.db
+    .prepare(
+      "INSERT INTO captures(id,stream_id,generation,started_at,occurred_at,seq,words) VALUES('behind',?,1,?,?,?,3)"
+    )
+    .run(
+      stream.id,
+      new Date(r.wall() - 1).toISOString(),
+      new Date(r.wall()).toISOString(),
+      stream.last_seq + 1
+    );
+  r.db
+    .prepare("UPDATE streams SET last_seq=last_seq+1,total_words=total_words+3 WHERE id=?")
+    .run(stream.id);
+  assert.ok(r.wall() < watermark);
+  await r.create().flush();
+  const event = batches(r)
+    .at(-1)
+    .body.events.find((e) => e.eventId === "behind");
+  assert.ok(Date.parse(event.occurredAt) > watermark);
+  assert.equal(batches(r).at(-1).status, undefined);
+  assert.equal(r.manager.current().total_words, 5);
 });

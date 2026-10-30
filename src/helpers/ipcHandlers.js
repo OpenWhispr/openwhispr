@@ -6835,8 +6835,8 @@ class IPCHandlers {
         logger: debugLogger,
       });
       this.metaActivation.start();
-      // Take server time again on wake, so a machine that slept through the
-      // hourly re-sync refreshes before stamping new dictation.
+      // A machine that slept through the hourly re-sync takes server time
+      // again on wake, before its next batch.
       powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
