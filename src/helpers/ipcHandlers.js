@@ -11,6 +11,7 @@ const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
@@ -45,6 +46,7 @@ const {
   asProviderError,
   redactProviderBody,
 } = require("./providerHttpErrors");
+const { isSettingsTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -1657,6 +1659,31 @@ class IPCHandlers {
       this.windowManager.permissionGuide.startDrag(event, target)
     );
 
+    // The agent window's own channels; each checks that it is the sender.
+    ipcMain.on("agent-window-ready", (event) => this.windowManager.agentWindow?.markReady(event));
+    ipcMain.handle(
+      "agent-window-set-layout",
+      (event, request) => this.windowManager.agentWindow?.setLayout(event, request) ?? false
+    );
+    ipcMain.handle("agent-window-hide", (event) =>
+      Boolean(this.windowManager.agentWindow?.hide(event))
+    );
+    ipcMain.handle(
+      "agent-window-voice-state",
+      (event, state) => this.windowManager.agentWindow?.setVoiceState(event, state) ?? false
+    );
+    // The dictation window's ways into the assistant: its pill menu's Ask
+    // assistant, and a conversational wake-word command it transcribed.
+    ipcMain.handle("open-agent-window", (event) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      this.windowManager.openAgentWindow();
+      return true;
+    });
+    ipcMain.handle("agent-window-submit-command", (event, command) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      return this.windowManager.agentWindow?.deliverCommand(command) ?? false;
+    });
+
     // WindowManager owns every teardown path for a demo (id-matched end,
     // onboarding-set-active(false), control panel closed); without this hook a
     // renderer crash mid-demo would leave the session set and broadcast every
@@ -1810,7 +1837,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      if (!isProviderSettingsTarget(section)) return { success: false };
+      if (!isSettingsTarget(section) && !isProviderSettingsTarget(section)) {
+        return { success: false };
+      }
       await this.windowManager.openSettings(section);
       return { success: true };
     });
@@ -2152,7 +2181,7 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate; raw key presses are merely requests and can
     // be declined while a transcript is still being finalized.
-    ipcMain.on("dictation-lifecycle-state-changed", (event, state, inputKind) => {
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (
         !dictationWindow ||
@@ -2161,32 +2190,7 @@ class IPCHandlers {
       ) {
         return;
       }
-      this.windowManager.setDictationLifecycleState(state, inputKind);
-    });
-
-    ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      if (typeof text !== "string" || !text.trim()) return;
-      this.windowManager.showAgentDictationFinalTranscript(text);
-    });
-
-    ipcMain.on("dictation-audio-level-changed", (event, level) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      this.windowManager.setDictationAudioLevel(level);
+      this.windowManager.setDictationLifecycleState(state);
     });
 
     // Dictionary handlers
@@ -2921,6 +2925,21 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("db-update-agent-message", async (event, id, content, metadata) => {
+      return this.databaseManager.updateAgentMessage(id, content, metadata);
+    });
+
+    ipcMain.handle(
+      "db-fork-agent-conversation",
+      async (event, conversationId, throughMessageId, forkContext) => {
+        return this.databaseManager.forkAgentConversation(
+          conversationId,
+          throughMessageId,
+          forkContext
+        );
+      }
+    );
+
     ipcMain.handle("db-get-agent-messages", async (event, conversationId) => {
       return this.databaseManager.getAgentMessages(conversationId);
     });
@@ -3490,13 +3509,11 @@ class IPCHandlers {
       });
     });
 
-    ipcMain.handle("capture-selected-text", async (event, options = {}) => {
+    ipcMain.handle("capture-selected-text", async () => {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
-      return this.selectionManager.captureSelectedText({
-        probeEditable: options.probeEditable === true,
-      });
+      return this.selectionManager.captureSelectedText();
     });
 
     ipcMain.handle("replace-selected-text", async (event, sessionId, text, options = {}) => {
@@ -3504,17 +3521,6 @@ class IPCHandlers {
         return { success: false, code: "selection_manager_unavailable" };
       }
       return this.selectionManager.replaceSelectedText(sessionId, text, {
-        restoreClipboard: options.restoreClipboard !== false,
-        allowClipboardFallback: options.allowClipboardFallback === true,
-        webContents: event.sender,
-      });
-    });
-
-    ipcMain.handle("paste-at-captured-target", async (event, sessionId, text, options = {}) => {
-      if (!this.selectionManager) {
-        return { success: false, code: "selection_manager_unavailable" };
-      }
-      return this.selectionManager.pasteAtCapturedTarget(sessionId, text, {
         restoreClipboard: options.restoreClipboard !== false,
         allowClipboardFallback: options.allowClipboardFallback === true,
         webContents: event.sender,
@@ -3563,8 +3569,8 @@ class IPCHandlers {
           mainWindow.showInactive();
         } else {
           mainWindow.blur();
-          // On Linux blur() leaves X focus on the pill, where the assistant panel
-          // took it, so the paste would land in the panel.
+          // On Linux blur() leaves X focus on the pill, so the paste would land
+          // in the pill.
           if (process.platform === "linux") this.windowManager.returnLinuxKeyboardFocus();
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
@@ -4964,16 +4970,40 @@ class IPCHandlers {
       return this.windowManager.getHyprlandConfigStatus();
     });
 
+    // Esc goes to the window that is recording (dictation or the agent
+    // window), and only that window may take it back. A renderer that
+    // reloads, crashes or closes can't, so it gives Esc back by going.
+    const releaseCancelHotkey = () => {
+      this._cancelHotkeyOwner = null;
+      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+    };
+    const watchedCancelOwners = new WeakSet();
+    const watchCancelOwner = (owner) => {
+      if (watchedCancelOwners.has(owner)) return;
+      watchedCancelOwners.add(owner);
+      const releaseIfOwner = () => {
+        if (this._cancelHotkeyOwner === owner) releaseCancelHotkey();
+      };
+      // A committed main-frame navigation only: one will-navigate blocks keeps the renderer.
+      owner.on("did-navigate", releaseIfOwner);
+      owner.on("render-process-gone", releaseIfOwner);
+      owner.once("destroyed", releaseIfOwner);
+    };
+
     ipcMain.handle("register-cancel-hotkey", async (event, key) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const mainWindow = this.windowManager.mainWindow;
+      const owner = event.sender;
+      this._cancelHotkeyOwner = owner;
+      watchCancelOwner(owner);
       return hotkeyManager.registerSlot("cancel", key, () => {
-        mainWindow?.webContents?.send("cancel-hotkey-pressed");
+        if (!owner.isDestroyed()) owner.send("cancel-hotkey-pressed");
       });
     });
 
-    ipcMain.handle("unregister-cancel-hotkey", async () => {
-      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+    ipcMain.handle("unregister-cancel-hotkey", async (event) => {
+      const owner = this._cancelHotkeyOwner;
+      if (owner && !owner.isDestroyed() && owner !== event.sender) return { success: false };
+      releaseCancelHotkey();
       return { success: true };
     });
 
@@ -6407,92 +6437,6 @@ class IPCHandlers {
     // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
       this.windowManager?.setScreenContextProtection(enabled);
-      return { success: true };
-    });
-
-    // Panel open: window becomes focusable so follow-up keyboard input works.
-    // Only the dictation renderer may flip main-window focusability.
-    ipcMain.handle("set-assistant-panel-open", (event, open) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelOpen(open);
-      return { success: true };
-    });
-
-    // The panel takes the app its voice command was spoken over as Paste into app's target
-    // ("adopt"), or drops any target when it opens without one ("forget"). True when there is
-    // a target that isn't OpenWhispr.
-    ipcMain.handle("assistant-paste-target", async (event, action) => {
-      const target = this.windowManager?.assistantPasteTarget;
-      if (!target || event.sender !== this.windowManager?.mainWindow?.webContents) return false;
-      if (action === "adopt") return target.adopt();
-      target.clear();
-      return false;
-    });
-
-    // Busy state is enforced in the main process so a hotkey cannot trigger
-    // native capture side effects before the renderer has a chance to reject it.
-    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelBusy(busy);
-      return { success: true };
-    });
-
-    const isAgentDictationPill = (event) => {
-      const pillWindow = this.windowManager?.agentDictationPillWindow;
-      return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
-    };
-
-    // The pill disables its own controls when an assistant or translation
-    // capture owns the lifecycle, but that state travels by IPC — a click can
-    // race it. Re-check here so a stale pill can never toggle or cancel a
-    // recording it does not own.
-    const isAgentDictationPillInteractive = () =>
-      this.windowManager.getAgentDictationPillState().interactive;
-
-    ipcMain.handle("toggle-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendToggleDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("cancel-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendCancelActiveDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-dictation-pill-state", (event) => {
-      return isAgentDictationPill(event)
-        ? this.windowManager.getAgentDictationPillState()
-        : { lifecycle: "idle", interactive: false, horizontalDirection: "left" };
-    });
-
-    ipcMain.handle("resize-agent-dictation-pill-to-content", (event, surfaceHeight = null) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
-    });
-
-    ipcMain.handle("set-agent-dictation-pill-interactivity", (event, interactive) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
       return { success: true };
     });
 

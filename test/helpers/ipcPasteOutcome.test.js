@@ -142,8 +142,8 @@ test("paste-text on Linux hands back the keyboard the assistant panel took befor
           isFocused: () => true,
           blur: () => order.push("blur"),
         },
-        // blur() leaves X focus on the Linux pill, so the paste would land in
-        // the panel instead of the user's app.
+        // blur() leaves X focus on the Linux pill, so the paste would land
+        // there instead of the user's app.
         returnLinuxKeyboardFocus: () => order.push("return"),
       };
       target.clipboardManager = {
@@ -491,25 +491,4 @@ test("Paste into app on Linux pastes only once focus is back on the command's ap
   });
 
   assert.equal(pasted, 1);
-});
-
-test("only the dictation window can adopt or forget the panel's paste target", async () => {
-  const handler = handlers.get("assistant-paste-target");
-  const calls = [];
-  const webContents = {};
-  target.windowManager = {
-    mainWindow: { webContents },
-    assistantPasteTarget: {
-      adopt: async () => {
-        calls.push("adopt");
-        return true;
-      },
-      clear: () => calls.push("clear"),
-    },
-  };
-
-  assert.equal(await handler({ sender: {} }, "adopt"), false);
-  assert.equal(await handler({ sender: webContents }, "adopt"), true);
-  assert.equal(await handler({ sender: webContents }, "forget"), false);
-  assert.deepEqual(calls, ["adopt", "clear"]);
 });

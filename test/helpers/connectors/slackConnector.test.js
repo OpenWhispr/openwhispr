@@ -113,6 +113,31 @@ test("a DM is opened only after Send, never while preparing", async () => {
   assert.equal(posts(slack)[0].params.channel, "D0GABE");
 });
 
+test("two people with the same name are told apart by their usernames", async () => {
+  const alex = (id, name) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Alex Chen", display_name: "alex" },
+  });
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [ok({ ok: true, members: [alex("U0A1", "alex.chen"), alex("U0A2", "achen")] })],
+  });
+  const prepared = await connector.prepare(
+    "send_message",
+    { destination: "Alex Chen", text: "hi" },
+    BOUND
+  );
+  assert.deepEqual(prepared.choices, [
+    { label: "Alex Chen (@alex.chen)", destination: "@alex.chen" },
+    { label: "Alex Chen (@achen)", destination: "@achen" },
+  ]);
+  // The model reads the same usernames where no picker shows.
+  assert.deepEqual(prepared.candidates, ["Alex Chen (@alex.chen)", "Alex Chen (@achen)"]);
+});
+
 test("an ambiguous name asks which one and prepares nothing", async () => {
   const { connector, slack } = await setupSlack({
     ...channelsOnly,
@@ -127,6 +152,15 @@ test("an ambiguous name asks which one and prepares nothing", async () => {
 
   assert.equal(prepared.status, "needs_clarification");
   assert.deepEqual(prepared.candidates, ["Gabe Smith (@gabe)", "Gabriel Stone (@gstone)"]);
+  // What the user picks from: each one finds exactly that person again.
+  assert.deepEqual(prepared.choices, [
+    { label: "Gabe Smith (@gabe)", destination: "@gabe" },
+    { label: "Gabriel Stone (@gstone)", destination: "@gstone" },
+  ]);
+  for (const { destination } of prepared.choices) {
+    const picked = await connector.prepare("send_message", { destination, text: "hi" }, BOUND);
+    assert.equal(picked.status, "ready", destination);
+  }
   assert.equal(
     slack
       .methods()
@@ -618,4 +652,64 @@ test("an edited Slack card posts its edited text through the manager, and nothin
   assert.equal(posts(slack).length, 1);
   assert.equal(posts(slack)[0].params.channel, "C0ENG");
   assert.equal(postedText(posts(slack)[0].params), "Ship it today");
+});
+
+test("a picked @username finds that person even when it is someone else's display name", async () => {
+  const person = (id, name, realName, displayName) => ({
+    id,
+    name,
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: realName, display_name: displayName },
+  });
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    "users.list": [
+      ok({
+        ok: true,
+        members: [
+          person("U1", "john", "John Park", ""),
+          person("U2", "jsmith", "John Smith", "john"),
+        ],
+      }),
+    ],
+  });
+  const asked = await connector.prepare("send_message", { destination: "John", text: "hi" }, BOUND);
+  assert.equal(asked.status, "needs_clarification");
+  const park = asked.choices.find((choice) => choice.label.startsWith("John Park"));
+  assert.equal(park.destination, "@john");
+  const picked = await connector.prepare(
+    "send_message",
+    { destination: park.destination, text: "hi" },
+    BOUND
+  );
+  assert.equal(picked.status, "ready");
+  assert.match(picked.preview.destinationLabel, /John Park/);
+});
+
+test("a list cut off at the page cap still finds an exact @username", async () => {
+  const sam = {
+    id: "U0SAM",
+    name: "sam",
+    deleted: false,
+    is_bot: false,
+    profile: { real_name: "Sam Lee", display_name: "sam" },
+  };
+  const { connector } = await setupSlack({
+    ...channelsOnly,
+    // More pages than the cap: the list is cut off.
+    "users.list": [ok({ ok: true, members: [sam], response_metadata: { next_cursor: "more" } })],
+  });
+  const picked = await connector.prepare(
+    "send_message",
+    { destination: "@sam", text: "hi" },
+    BOUND
+  );
+  assert.equal(picked.status, "ready");
+  const named = await connector.prepare(
+    "send_message",
+    { destination: "Sam Lee", text: "hi" },
+    BOUND
+  );
+  assert.equal(named.status, "needs_clarification", "a name alone still isn't enough");
 });

@@ -1851,7 +1851,7 @@
       },
       "examplesTitle": "例",
       "helper": "声に出して言いやすい短い名前を選びましょう",
-      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、選択中のテキストは結果で安全に置き換えられます。自動貼り付けが有効で編集可能なテキスト欄にフォーカスがある場合、回答はカーソル位置に貼り付けられ、それ以外の場合はフローティングのアシスタントパネルに表示されます。",
+      "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、選択中のテキストは結果で安全に置き換えられます。それ以外のリクエストはアシスタントウィンドウで開きます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
@@ -2015,7 +2015,7 @@
       },
       "voiceAgentHotkey": {
         "title": "音声アシスタントホットキー",
-        "description": "コマンドを話すと、アシスタントがノート・カレンダー・ウェブツールを使います。回答はフォーカス中の編集可能なカーソル位置に貼り付けられるか、選択テキストを置き換えるか、フローティングパネルに表示されます。"
+        "description": "リクエストを話すと、アシスタントがノート・カレンダー・ウェブツールを使って専用のウィンドウで答えます。先に選択したテキストはコンテキストとして一緒に送られます。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -3921,7 +3921,11 @@
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
-    }
+    },
+    "fork": "分岐",
+    "forked": "分岐したチャット",
+    "forkedFrom": "「{{title}}」から分岐",
+    "forkFailed": "このチャットを分岐できませんでした"
   },
   "support": {
     "documentation": "ドキュメント",
@@ -4004,7 +4008,6 @@
       "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
-      "clickToSpeak": "クリックして話す",
       "waitingForMicrophone": "マイクを待っています…"
     },
     "buttons": {
@@ -4016,7 +4019,6 @@
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示",
       "askAssistant": "アシスタントに質問",
-      "busyRecording": "先に録音を終了してください",
       "startMeetingRecording": "ミーティングの録音を開始"
     }
   },
@@ -4119,30 +4121,150 @@
       "update_skillName": "スキルを更新",
       "search_openwhispr_helpStatus": "OpenWhisprのヘルプを検索中...",
       "read_openwhispr_helpStatus": "OpenWhisprのヘルプを読み込み中...",
-      "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中..."
+      "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中...",
+      "ask_userName": "質問",
+      "ask_userStatus": "質問しています...",
+      "request_connectionName": "接続",
+      "request_connectionStatus": "接続を依頼しています...",
+      "request_accessName": "アクセス",
+      "request_accessStatus": "アクセスを依頼しています...",
+      "request_api_keyName": "API キー",
+      "request_api_keyStatus": "API キーを依頼しています...",
+      "open_settingsName": "設定",
+      "open_settingsStatus": "設定を案内しています..."
+    },
+    "turn": {
+      "reasoning": "推論",
+      "stopped": "停止しました",
+      "stepLimit": "ステップ数の上限に達したため一時停止しました。",
+      "continue": "続ける",
+      "continueMessage": "続けて",
+      "failed": "この返信は失敗しました。"
+    },
+    "interactions": {
+      "notNow": "今はしない",
+      "cancel": "キャンセル",
+      "questions": {
+        "recommended": "{{label}}（おすすめ）",
+        "submit": "送信",
+        "placeholder": "回答を入力…",
+        "previous": "前の質問",
+        "next": "次の質問",
+        "position": "{{current}}/{{total}}",
+        "continue": "続ける",
+        "typedAnswer": "あなたの回答: {{answer}}"
+      },
+      "connection": {
+        "title": "{{name}} を接続",
+        "connect": "{{name}} を接続",
+        "connecting": "ブラウザで接続を完了してください…",
+        "failed": "接続できませんでした。もう一度お試しください。",
+        "permissionDenied": "カレンダーへのアクセスが拒否されました。システム設定で許可してから、もう一度お試しください。",
+        "calendarTitle": "カレンダーを接続",
+        "yes": "はい",
+        "reasons": {
+          "gmail": "Gmail からメールを送信できます。",
+          "slack": "代わりに Slack へメッセージを投稿できます。",
+          "linear": "Linear の課題を検索・作成できます。",
+          "github": "GitHub の Issue を検索・作成できます。",
+          "calendar": "空き時間を確認して、候補の時間を提案できます。"
+        }
+      },
+      "access": {
+        "screen": "画面へのアクセスを許可しますか？",
+        "allow": "許可",
+        "capturing": "取得中…"
+      },
+      "apiKey": {
+        "title": "{{provider}} の API キーを追加",
+        "placeholder": "ここに貼り付けるか入力",
+        "save": "保存",
+        "label": "{{provider}} の API キー",
+        "saved": "{{provider}} のキーを保存しました"
+      },
+      "settings": {
+        "done": "完了しました",
+        "technicalDetails": "技術的な詳細",
+        "checking": "確認中…"
+      },
+      "status": {
+        "answered": "回答済み",
+        "connected": "{{name}} を接続しました",
+        "granted": "画面を共有しました",
+        "declined": "許可しませんでした",
+        "saved": "API キーを保存しました",
+        "done": "設定から戻りました",
+        "cancelled": "閉じました",
+        "notAnswered": "未回答",
+        "invalid": "質問を表示できませんでした"
+      },
+      "followUp": {
+        "connected": "{{name}} を接続しました。",
+        "granted": "画面へのアクセスを許可しました。",
+        "saved": "{{provider}} の API キーを保存しました。",
+        "done": "設定を完了しました。"
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "編集するテキストを選択",
-      "selectedContext": "選択したテキストを追加",
-      "removeSelectedContext": "選択したテキストを削除",
-      "newConversation": "新しい会話",
-      "copyToClipboard": "クリップボードにコピー",
-      "suggestions": {
-        "summarizeNotes": "最近のノートを要約して",
-        "calendar": "カレンダーの予定を教えて",
-        "draft": "文章の下書きを手伝って"
-      }
+  "agentWindow": {
+    "title": "アシスタント",
+    "actions": {
+      "expand": "展開",
+      "collapse": "最小化",
+      "speak": "話す",
+      "type": "入力",
+      "stop": "停止",
+      "close": "閉じる",
+      "regenerate": "再生成",
+      "readAloud": "読み上げ",
+      "stopReading": "読み上げを停止"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "呼び出し中",
-        "calling": "実行中",
-        "using": "使用中"
-      },
-      "toolFallback": "ツール"
-    }
+    "notices": {
+      "nothingHeard": "聞き取れませんでした",
+      "transcriptionFailed": "文字起こしできませんでした",
+      "micUnavailable": "マイクを開けませんでした",
+      "regenerateFailed": "回答を再生成できませんでした",
+      "dictationActive": "音声入力がマイクを使用中です"
+    },
+    "composer": {
+      "placeholder": "質問を話すか入力してください…",
+      "followUpPlaceholder": "続けて質問…",
+      "answerPlaceholder": "ここに回答…",
+      "cardPlaceholder": "上のカードで回答…"
+    },
+    "empty": {
+      "title": "何をお手伝いしましょうか？",
+      "description": "下にリクエストを入力してください。"
+    },
+    "selectedContext": {
+      "title": "選択したコンテキスト",
+      "remove": "選択したコンテキストを削除",
+      "fromAnswer": "回答から:「{{text}}」",
+      "fromOtherApp": "別のアプリから:「{{text}}」"
+    },
+    "selectionHint": "テキストを選択して質問または分岐",
+    "selectionToolbar": "選択したテキスト",
+    "followUp": "続けて質問",
+    "forkFromHere": "ここから分岐",
+    "chats": {
+      "title": "チャット",
+      "switch": "チャットを切り替え",
+      "new": "新しいチャット",
+      "empty": "チャットはまだありません",
+      "untitled": "無題のチャット",
+      "fork": "分岐"
+    },
+    "progress": {
+      "callingTools_one": "{{count}}個のツールを呼び出し中…",
+      "callingTools_other": "{{count}}個のツールを呼び出し中…",
+      "checkingAnswers": "回答を確認中…",
+      "reasoning": "推論中…",
+      "reasonedFor": "{{duration}}推論",
+      "workedFor": "{{duration}}作業",
+      "steps_one": "{{count}}ステップ",
+      "steps_other": "{{count}}ステップ"
+    },
+    "waitingForAnswer": "回答を待っています"
   },
   "integrations": {
     "title": "連携",
@@ -4265,7 +4387,6 @@
     "approval": {
       "headers": {
         "default": "{{destination}} に送信",
-        "slackPost": "{{destination}}に投稿",
         "email": "{{destination}} 宛てのメール",
         "issue": "{{destination}} に Issue を作成",
         "comment": "{{destination}} にコメント"
@@ -4273,8 +4394,6 @@
       "identity": "{{account}} として",
       "identityWithWorkspace": "{{workspace}} の {{account}} として",
       "send": "送信",
-      "edit": "編集",
-      "doneEditing": "編集完了",
       "cancel": "キャンセル",
       "titleLabel": "タイトル",
       "bodyLabel": "メッセージ",
@@ -4360,7 +4479,6 @@
         }
       },
       "email": {
-        "from": "差出人: {{account}}",
         "toLabel": "宛先",
         "ccLabel": "Cc",
         "subjectLabel": "件名",
@@ -4373,7 +4491,8 @@
         "tooManyRecipients": "1通のメールの宛先は、宛先とCcを合わせて最大{{max}}件です。",
         "subjectTooLong": "件名は{{max}}文字以内にしてください。",
         "bodyTooLong": "メッセージが長すぎて Gmail で送信できません。短くしてから送信してください。",
-        "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。"
+        "unknown": "送信されたか確認できませんでした。送信済みフォルダを確認してください。",
+        "fromLabel": "差出人"
       },
       "github": {
         "notes": {
@@ -4417,7 +4536,18 @@
         "notes": {
           "targetTitle": "「{{title}}」へ"
         }
-      }
+      },
+      "sentEarlier": "このチャットで以前に送信済みです。",
+      "slack": {
+        "channelLabel": "チャンネル",
+        "asLabel": "送信者",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "送信済み",
+      "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
+      "connectToSend": "送信するには {{name}} を接続してください",
+      "edit": "編集",
+      "doneEditing": "編集完了"
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {
@@ -4466,7 +4596,8 @@
         "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
         "failedTitle": "Slackは接続されませんでした",
         "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
-      }
+      },
+      "pickDestination": "どの「{{destination}}」ですか？"
     },
     "github": {
       "title": "GitHub",
@@ -4706,7 +4837,8 @@
       },
       "gmailDraftLimit": "1回のリクエストで準備できるメールは{{max}}件までです。",
       "queryResults": "見つかった結果: {{total}}",
-      "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。"
+      "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。",
+      "alreadySent": "このリクエストで既に実行済みです"
     },
     "beta": "ベータ",
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",

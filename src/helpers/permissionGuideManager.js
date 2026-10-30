@@ -2,6 +2,7 @@ const { app, BrowserWindow, nativeImage, screen } = require("electron");
 const path = require("path");
 const DevServerManager = require("./devServerManager");
 const debugLogger = require("./debugLogger");
+const { isFromWindow } = require("./ipcSender");
 const { computeGuideBounds } = require("./permissionGuidePlacement");
 const {
   isSettingsWindowStateAvailable,
@@ -24,15 +25,6 @@ function validState(state) {
     state.sessionId.length <= 128 &&
     PERMISSIONS.has(state.permission) &&
     ["granted", "needsRelaunch", "busy", "error"].every((key) => typeof state[key] === "boolean")
-  );
-}
-
-function fromWindow(event, window) {
-  return (
-    window &&
-    !window.isDestroyed() &&
-    event.sender === window.webContents &&
-    event.senderFrame === window.webContents.mainFrame
   );
 }
 
@@ -71,11 +63,11 @@ class PermissionGuideManager {
   }
 
   stateFor(event) {
-    return fromWindow(event, this.window) ? this.snapshot() : null;
+    return isFromWindow(event, this.window) ? this.snapshot() : null;
   }
 
   handleAction(event, action) {
-    if (!fromWindow(event, this.window) || !this.matches(action) || !ACTIONS.has(action.action))
+    if (!isFromWindow(event, this.window) || !this.matches(action) || !ACTIONS.has(action.action))
       return;
     // Closing is done here, not echoed back through the owner: the owner may
     // no longer be listening, and the guide must never outlive its controls.
@@ -84,7 +76,7 @@ class PermissionGuideManager {
   }
 
   startDrag(event, target) {
-    if (!fromWindow(event, this.window) || !this.matches(target) || !this.snapshot().canDrag)
+    if (!isFromWindow(event, this.window) || !this.matches(target) || !this.snapshot().canDrag)
       return;
     try {
       event.sender.startDrag({ file: this.bundlePath, icon: this.icon });
@@ -97,7 +89,7 @@ class PermissionGuideManager {
     return (
       process.platform === "darwin" &&
       this.windowManager._onboardingActive &&
-      fromWindow(event, this.windowManager.controlPanelWindow)
+      isFromWindow(event, this.windowManager.controlPanelWindow)
     );
   }
 

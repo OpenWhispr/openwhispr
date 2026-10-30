@@ -5,8 +5,11 @@ import type {
   ApprovalOutcome,
   ConnectorCommitResult,
   ConnectorEdits,
+  ConnectorPrepareResult,
   ConnectorPreview,
 } from "../types/connectors";
+import type { ConnectionTarget } from "../types/agentInteractions";
+import { isConnectorReady, useConnectorStatusStore } from "./connectorStatusStore";
 
 export const APPROVAL_TTL_MS = 10 * 60 * 1000;
 
@@ -41,8 +44,17 @@ export interface ApprovalEntry {
   destinationLabel?: string;
   /** What a sent action created, as the connector named it ("ENG-124"). */
   resultLabel?: string;
-  /** Shown on a pending card after a Send that could not run. */
-  notice?: "policy_retry";
+  /** Failed, and the tool still waits: Retry sends the draft again. */
+  awaitingRetry?: true;
+  /** Send needs the service connected first: the card asks, then connects. */
+  reconnect?: "prompt" | "connecting";
+  /** Why the last connect from the card failed (an error code). */
+  connectError?: string;
+  /**
+   * Shown on a pending card after a Send that could not run: the policy check
+   * didn't finish, or after a reconnect it would go out as someone else.
+   */
+  notice?: "policy_retry" | "identity_changed";
 }
 
 interface ApprovalStoreState {
@@ -60,12 +72,24 @@ export function approvalKey(messageId: string, toolCallId: string): string {
   return `${messageId}::${toolCallId}`;
 }
 
+type FailedOutcome = Extract<ApprovalOutcome, { state: "failed" }>;
+
+/** Prepares the same action again, on the login that is current now. */
+export type Reprepare = () => Promise<ConnectorPrepareResult | undefined>;
+
 interface PendingResolution {
   resolve: (outcome: ApprovalOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
   detach: () => void;
   signal: AbortSignal;
   expiresAt: number;
+  reprepare: Reprepare;
+  /** The failure a card waiting for Retry shows; Cancel reports it. */
+  failure?: FailedOutcome;
+  /** Counts the card's connects, so only the latest one's result counts. */
+  connectAttempt: number;
+  /** Where the first prepare sent it, which the tool reports unless Send changed it. */
+  preparedDestination: string;
 }
 
 // Promise resolvers stay outside zustand state: they are not renderable.
@@ -141,24 +165,57 @@ function settle(
   resolutions.delete(key);
   clearTimeout(pending.timer);
   pending.detach();
-  patchEntry(key, { state, notice: undefined, ...patch });
+  patchEntry(key, {
+    state,
+    notice: undefined,
+    awaitingRetry: undefined,
+    reconnect: undefined,
+    connectError: undefined,
+    ...patch,
+  });
   pending.resolve(outcome);
 }
 
-// Conversation end and expiry only withdraw a card that is still pending: a
-// committing send may already have reached the provider.
-function withdraw(key: string, reason: "conversation_ended" | "expired"): void {
-  const entry = entryFor(key);
-  if (!entry || entry.state !== "pending") return;
-  void window.electronAPI?.connectorCancel?.(entry.actionId, reason);
-  settle(key, { state: "not_sent", reason }, "not_sent");
+// A connect the card started for Send.
+function stopConnect(entry: ApprovalEntry): void {
+  if (entry.reconnect === "connecting") {
+    void window.electronAPI?.connectorCancelConnect?.(entry.connectorId);
+  }
 }
 
-// A Send whose policy check couldn't finish sent nothing, so the card goes
-// back to pending. An abort or expiry that fired meanwhile — when only a
-// pending card can be withdrawn — is applied now.
-function returnToPending(key: string): void {
-  patchEntry(key, { state: "pending", notice: "policy_retry" });
+// A card that failed and hasn't been prepared again since (waiting for Retry,
+// or asking to connect after one) still reports that failure.
+function failureToReport(
+  entry: ApprovalEntry,
+  pending: PendingResolution
+): FailedOutcome | undefined {
+  return entry.awaitingRetry || entry.state === "pending" ? pending.failure : undefined;
+}
+
+// Conversation end and expiry only withdraw a card that waits on the user: a
+// committing send may already have reached the provider. A card that failed
+// reports that failure, so the model hears what really happened.
+function withdraw(key: string, reason: "conversation_ended" | "expired"): void {
+  const entry = entryFor(key);
+  const pending = resolutions.get(key);
+  if (!entry || !pending) return;
+  // Only a connect the card started for Send runs, and only while it waits.
+  stopConnect(entry);
+  const failure = failureToReport(entry, pending);
+  if (failure) {
+    settle(key, { ...failure, ...userEditsOf(entry) }, "failed");
+    return;
+  }
+  if (entry.state !== "pending") return;
+  void window.electronAPI?.connectorCancel?.(entry.actionId, reason);
+  settle(key, { state: "not_sent", reason, ...userEditsOf(entry) }, "not_sent");
+}
+
+// The card waits on the user again after a Send that didn't go out. An abort
+// or expiry that fired meanwhile, while only a waiting card can be withdrawn,
+// is applied now.
+function waitForUserAgain(key: string, patch: Partial<ApprovalEntry>): void {
+  patchEntry(key, patch);
   const pending = resolutions.get(key);
   if (!pending) return;
   if (pending.signal.aborted) withdraw(key, "conversation_ended");
@@ -167,7 +224,8 @@ function returnToPending(key: string): void {
 
 export function requestApproval(
   context: ToolExecutionContext,
-  request: { actionId: string; connectorId: string; preview: ConnectorPreview }
+  request: { actionId: string; connectorId: string; preview: ConnectorPreview },
+  reprepare: Reprepare
 ): Promise<ApprovalOutcome> {
   const { messageId, toolCallId, signal } = context;
   const key = approvalKey(messageId, toolCallId);
@@ -192,6 +250,9 @@ export function requestApproval(
       detach: () => signal.removeEventListener("abort", onAbort),
       signal,
       expiresAt: Date.now() + APPROVAL_TTL_MS,
+      reprepare,
+      connectAttempt: 0,
+      preparedDestination: request.preview.destinationLabel,
     });
     const draft: ApprovalDraft = {
       ...(request.preview.title !== undefined ? { title: request.preview.title } : {}),
@@ -206,7 +267,6 @@ export function requestApproval(
         [key]: { key, messageId, toolCallId, ...request, draft, state: "pending" },
       },
     }));
-    context.onApprovalRequested();
   });
 }
 
@@ -215,7 +275,7 @@ export function updateApprovalDraft(
   patch: { title?: string; body?: string; fields?: Partial<DraftFields> }
 ): void {
   const entry = entryFor(key);
-  if (!entry || entry.state !== "pending") return;
+  if (!entry || (entry.state !== "pending" && !entry.awaitingRetry)) return;
   const { fields } = entry.draft;
   patchEntry(key, {
     draft: {
@@ -233,24 +293,251 @@ export function updateApprovalDraft(
 
 export function cancelApproval(key: string): void {
   const entry = entryFor(key);
-  if (!entry || entry.state !== "pending") return;
+  const pending = resolutions.get(key);
+  if (!entry || !pending) return;
+  // After a failed send the model hears that failure, with the user's edits.
+  stopConnect(entry);
+  const failure = failureToReport(entry, pending);
+  if (failure) {
+    settle(key, { ...failure, ...userEditsOf(entry) }, "cancelled");
+    return;
+  }
+  if (entry.state !== "pending") return;
   void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
-  settle(key, { state: "cancelled" }, "cancelled");
+  settle(key, { state: "cancelled", ...userEditsOf(entry) }, "cancelled");
+}
+
+// Reported whatever the outcome, so after a failure the model proposes the
+// email the user settled on rather than its own draft.
+function userEditsOf(entry: ApprovalEntry): ApprovalEdits {
+  const { fields, body } = entry.draft;
+  if (fields)
+    return fieldsDiffer(fields, entry.preview.fields ?? {}) ? { final: copyFields(fields) } : {};
+  return body !== entry.preview.body ? { finalText: body } : {};
+}
+
+// Main answers these when the login the action was prepared on is gone
+// (disconnected, reconnected, or flagged for a reconnect): nothing was sent.
+function lostConnection(result: ConnectorCommitResult): boolean {
+  return (
+    (result.state === "not_sent" &&
+      (result.reason === "not_found" || result.reason === "connection_changed")) ||
+    (result.state === "failed" && result.errorCode === "reconnect_needed")
+  );
+}
+
+// The connection the store last heard of; unknown counts as ready, and main decides.
+function connectorReady(connectorId: string): boolean {
+  return !useConnectorStatusStore.getState().loaded || isConnectorReady(connectorId);
 }
 
 // Send commits the draft (what the card shows), never an edit-mode snapshot:
 // leaving edit mode must not discard the user's changes.
 export async function approveAction(key: string): Promise<void> {
   const entry = entryFor(key);
-  if (!entry || entry.state !== "pending") return;
+  if (!entry || entry.state !== "pending" || entry.reconnect) return;
+  // Nothing can go out while the service isn't connected: connect first.
+  if (!connectorReady(entry.connectorId)) {
+    patchEntry(key, { reconnect: "prompt", connectError: undefined, notice: undefined });
+    return;
+  }
+  await commitDraft(key, { mayRebind: true });
+}
+
+/**
+ * Sends the draft once more after a failure. Main already finished the failed
+ * action, so it is prepared again on the current login; the tool has waited
+ * all along, so this is still the same send. With the service no longer
+ * connected, the card asks to connect first.
+ */
+export async function retryApproval(key: string): Promise<void> {
+  const entry = entryFor(key);
+  if (!entry?.awaitingRetry) return;
+  if (!connectorReady(entry.connectorId)) {
+    patchEntry(key, {
+      state: "pending",
+      awaitingRetry: undefined,
+      reconnect: "prompt",
+      connectError: undefined,
+    });
+    return;
+  }
+  await rebind(key);
+}
+
+/** The card's ✓ Yes: connect the service, then send what the card holds. */
+export async function connectToSend(key: string): Promise<void> {
+  const entry = entryFor(key);
+  const pending = resolutions.get(key);
+  if (entry?.state !== "pending" || entry.reconnect !== "prompt" || !pending) return;
+  const attempt = ++pending.connectAttempt;
+  patchEntry(key, { reconnect: "connecting", connectError: undefined });
+  // Connected meanwhile (another card's Yes, or Settings): no second sign-in.
+  if (useConnectorStatusStore.getState().loaded && isConnectorReady(entry.connectorId)) {
+    await rebind(key);
+    return;
+  }
+  // Loaded when used: the interaction store imports this one.
+  const { connectTarget } = await import("./agentInteractionStore");
+  const outcome = await connectTarget(entry.connectorId as Exclude<ConnectionTarget, "calendar">);
+  // Withdrawn, or the user gave up (X) or started another connect, meanwhile.
+  if (
+    resolutions.get(key) !== pending ||
+    pending.connectAttempt !== attempt ||
+    entryFor(key)?.reconnect !== "connecting"
+  ) {
+    return;
+  }
+  if (outcome.status !== "connected") {
+    patchEntry(key, {
+      reconnect: "prompt",
+      connectError:
+        outcome.status === "failed"
+          ? outcome.errorCode
+          : outcome.status === "unavailable"
+            ? outcome.reason
+            : undefined,
+    });
+    return;
+  }
+  await rebind(key);
+}
+
+/** The card's X on its connect prompt: back to the draft, nothing sent. */
+export function dismissReconnect(key: string): void {
+  const entry = entryFor(key);
+  const pending = resolutions.get(key);
+  if (entry?.state !== "pending" || !entry.reconnect) return;
+  stopConnect(entry);
+  if (pending) pending.connectAttempt += 1;
+  patchEntry(key, { reconnect: undefined, connectError: undefined });
+}
+
+// The renderer only has the labels the user sees, so who a send goes out as
+// and where it goes are compared by those, not by ids.
+const sameIdentity = (a: ConnectorPreview, b: ConnectorPreview): boolean =>
+  a.accountLabel === b.accountLabel &&
+  a.workspaceLabel === b.workspaceLabel &&
+  a.destinationLabel === b.destinationLabel;
+
+// What failing to prepare again reads like on the card, for Retry.
+function prepareFailure(prepared: ConnectorPrepareResult | undefined): FailedOutcome {
+  if (prepared?.status === "failed") {
+    return { state: "failed", errorCode: prepared.errorCode, message: prepared.message };
+  }
+  const errorCode = prepared?.status === "unavailable" ? prepared.reason : "prepare_failed";
+  return { state: "failed", errorCode, message: "The action couldn't be prepared again." };
+}
+
+function failAwaitingRetry(key: string, failure: FailedOutcome): void {
+  const pending = resolutions.get(key);
+  if (pending) pending.failure = failure;
+  waitForUserAgain(key, {
+    state: "failed",
+    awaitingRetry: true,
+    errorCode: failure.errorCode,
+    message: failure.message,
+  });
+}
+
+/**
+ * Prepares the action again on the current login and sends the draft, once.
+ * Nothing can go out twice: the old action is gone (finished, invalidated or
+ * refused by its binding), the new one is bound to the new login, and the tool
+ * has held its send claim the whole time. A send that would now go to another
+ * account, workspace or destination waits for the user's Send instead.
+ */
+async function rebind(key: string): Promise<void> {
+  const entry = entryFor(key);
+  const pending = resolutions.get(key);
+  if (!entry || !pending) return;
+  const retrying = entry.awaitingRetry;
+  // The turn ended or the card expired while the Send ran: nothing new is
+  // prepared, and the card is withdrawn as it would have been while it waited.
+  if (pending.signal.aborted || Date.now() >= pending.expiresAt) {
+    waitForUserAgain(
+      key,
+      retrying
+        ? { state: "failed", awaitingRetry: true }
+        : { state: "pending", reconnect: undefined }
+    );
+    return;
+  }
+  patchEntry(key, {
+    state: "committing",
+    awaitingRetry: undefined,
+    reconnect: undefined,
+    notice: undefined,
+  });
+  // The old action, if main still holds it. No receipt reason fits one
+  // replaced by a new action; it reads as cancelled, and the new one sends.
+  void window.electronAPI?.connectorCancel?.(entry.actionId, "cancelled_by_user");
+  const prepared = await pending.reprepare().catch(() => undefined);
+  // The turn ended or the card expired meanwhile: the new action goes, and the
+  // card is withdrawn as it would have been while it waited.
+  if (
+    resolutions.get(key) !== pending ||
+    pending.signal.aborted ||
+    Date.now() >= pending.expiresAt
+  ) {
+    if (prepared?.status === "ready") {
+      void window.electronAPI?.connectorCancel?.(prepared.actionId, "conversation_ended");
+    }
+    waitForUserAgain(
+      key,
+      retrying ? { state: "failed", awaitingRetry: true } : { state: "pending" }
+    );
+    return;
+  }
+  if (prepared?.status === "needs_clarification") {
+    // The draft can't go where it was going (a channel archived, an app
+    // uninstalled): the model hears the question and asks the user.
+    settle(
+      key,
+      {
+        state: "not_sent",
+        reason: "needs_clarification",
+        clarification: prepared,
+        ...userEditsOf(entry),
+      },
+      "not_sent"
+    );
+    return;
+  }
+  if (prepared?.status !== "ready") {
+    const needsConnect =
+      (prepared?.status === "failed" && prepared.errorCode === "reconnect_needed") ||
+      (prepared?.status === "unavailable" && prepared.reason === "not_connected");
+    if (needsConnect) waitForUserAgain(key, { state: "pending", reconnect: "prompt" });
+    else failAwaitingRetry(key, prepareFailure(prepared));
+    return;
+  }
+  const unchanged = sameIdentity(entry.preview, prepared.preview);
+  // Prepared again: an earlier failure is no longer what the card stands for.
+  pending.failure = undefined;
+  patchEntry(key, { actionId: prepared.actionId, preview: prepared.preview });
+  if (!unchanged) {
+    waitForUserAgain(key, { state: "pending", notice: "identity_changed" });
+    return;
+  }
+  await commitDraft(key, { mayRebind: false });
+}
+
+// Commits what the card holds and settles the card on the outcome. A send that
+// lost its login prepares again on its own once per Send, when the service is
+// connected; otherwise the card asks to connect.
+async function commitDraft(key: string, { mayRebind }: { mayRebind: boolean }): Promise<void> {
+  const entry = entryFor(key);
+  if (!entry) return;
   const { title, body, fields } = entry.draft;
   // A fields card commits its fields; main keeps only those the action declares.
   const edits: ConnectorEdits = fields
     ? copyFields(fields)
     : { ...(title !== undefined ? { title } : {}), body };
   // The expiry timer and abort listener stay armed while sending. They only
-  // withdraw a pending card, and a Send that comes back retryable returns
-  // the card to pending; settle() disarms them for every final outcome.
+  // withdraw a card waiting on the user, and a Send that comes back without
+  // sending returns the card to that; settle() disarms them for every final
+  // outcome.
   patchEntry(key, { state: "committing", notice: undefined });
 
   let raw: unknown;
@@ -265,24 +552,28 @@ export async function approveAction(key: string): Promise<void> {
   const result: ConnectorCommitResult = isConnectorCommitResult(raw) ? raw : { state: "unknown" };
 
   if (result.state === "not_sent" && result.retryable === true) {
-    returnToPending(key);
+    waitForUserAgain(key, { state: "pending", notice: "policy_retry" });
+    return;
+  }
+  if (lostConnection(result)) {
+    const reconnectNeeded = result.state === "failed";
+    if (mayRebind && !reconnectNeeded && connectorReady(entry.connectorId)) await rebind(key);
+    else waitForUserAgain(key, { state: "pending", reconnect: "prompt" });
     return;
   }
 
-  // Reported whatever the outcome, so after a failure the model proposes the
-  // email the user settled on rather than its own draft.
-  const userEdits: ApprovalEdits =
-    fields && fieldsDiffer(fields, entry.preview.fields ?? {})
-      ? { final: copyFields(fields) }
-      : !fields && entry.draft.body !== entry.preview.body
-        ? { finalText: entry.draft.body }
-        : {};
-  const destination =
+  const userEdits = userEditsOf(entry);
+  // Where it went, when that isn't where the first prepare said: as main
+  // reports it, or as the card showed it after a reconnect prepared it again.
+  const reported =
     (result.state === "sent" || result.state === "unknown") &&
     typeof result.destinationLabel === "string" &&
     result.destinationLabel !== ""
-      ? { destinationLabel: result.destinationLabel }
-      : {};
+      ? result.destinationLabel
+      : entry.preview.destinationLabel !== resolutions.get(key)?.preparedDestination
+        ? entry.preview.destinationLabel
+        : undefined;
+  const destination = reported ? { destinationLabel: reported } : {};
   // resultLabel names what the send created ("ENG-124"); only a sent commit
   // ever carries one.
   const created =
@@ -305,12 +596,12 @@ export async function approveAction(key: string): Promise<void> {
       );
       break;
     case "failed":
-      settle(
-        key,
-        { state: "failed", errorCode: result.errorCode, message: result.message, ...userEdits },
-        "failed",
-        { message: result.message, errorCode: result.errorCode }
-      );
+      // The provider confirmed nothing went out: the draft stays, with Retry.
+      failAwaitingRetry(key, {
+        state: "failed",
+        errorCode: result.errorCode,
+        message: result.message,
+      });
       break;
     case "unknown":
       settle(

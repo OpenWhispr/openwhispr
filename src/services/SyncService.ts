@@ -369,6 +369,29 @@ function conversationCreateSnapshot(
   };
 }
 
+// A conversation is pushed once, so not while a reply is still running or
+// waiting on the user: another device would get a half turn and could answer
+// its question again. A turn that old was cut off (the app quit) and goes as is.
+const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
+
+function hasTurnInProgress(conversation: { messages: ReadonlyArray<{ metadata?: unknown }> }) {
+  return conversation.messages.some((message) => {
+    let metadata = message.metadata;
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        return false;
+      }
+    }
+    const turn = (metadata as { turn?: { status?: string; startedAt?: number } } | null)?.turn;
+    return (
+      (turn?.status === "waiting" || turn?.status === "running") &&
+      Date.now() - (turn.startedAt ?? 0) < TURN_IN_PROGRESS_MAX_AGE_MS
+    );
+  });
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -1212,7 +1235,7 @@ export class SyncService {
 
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
-    } else {
+    } else if (!hasTurnInProgress(full)) {
       const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
         client_conversation_id: full.client_conversation_id ?? String(full.id),
@@ -2503,7 +2526,7 @@ export class SyncService {
     for (const conv of fresh) {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
-        if (!full) continue;
+        if (!full || hasTurnInProgress(full)) continue;
         const snapshot = conversationCreateSnapshot(full);
         const cloudConv = await ConversationsService.create({
           client_conversation_id: full.client_conversation_id ?? String(full.id),

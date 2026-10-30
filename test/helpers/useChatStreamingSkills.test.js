@@ -636,7 +636,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
         callId: call.id,
         toolName: call.name,
         displayText: result.displayText,
-        ...(result.failed ? { failed: true } : {}),
+        ...(result.isError ? { isError: true } : {}),
       };
     }
     yield { type: "done", finishReason: "stop" };
@@ -645,9 +645,9 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
   await captured.sendToAI("prep me", [userMessage("u1", "prep me")]);
 
   assert.deepEqual(
-    results.map((result) => [result.displayText, result.failed]),
+    results.map((result) => [result.displayText, result.isError]),
     [
-      ["Meeting prep", undefined],
+      ["Meeting prep", false],
       ['No skill named "meeting-perp"', true],
     ]
   );
@@ -656,7 +656,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
     steps.map((step) => [step.status, step.result, step.failed]),
     [
       ["completed", "Meeting prep", undefined],
-      ["completed", 'No skill named "meeting-perp"', true],
+      ["error", 'No skill named "meeting-perp"', true],
     ]
   );
 });
@@ -855,7 +855,13 @@ for (const [ending, mode] of [
       skillsCheckProposal: async (input) => library.checkProposal(input),
       skillsSaveProposal: async (input) => ({ ok: true, ...library.saveProposal(input) }),
       addAgentMessage: async (id, role, content, metadata) => {
-        stored.push({ id, role, content, metadata });
+        const row = { id, role, content, metadata };
+        stored.push(row);
+        return { id: stored.length };
+      },
+      updateAgentMessage: async (rowId, content, metadata) => {
+        Object.assign(stored[rowId - 1], { content, metadata });
+        return true;
       },
       createAgentConversation: async () => ({ id: 17 }),
       getAgentConversation: async (id) => ({
@@ -874,8 +880,8 @@ for (const [ending, mode] of [
       t,
       {
         skillsEnabled: true,
-        onStreamComplete: (_id, content, toolCalls) => {
-          void chat.getPersistence().saveAssistantMessage(content, toolCalls);
+        onStreamComplete: (...args) => {
+          void chat.getPersistence().saveAssistantMessage(...args);
         },
       },
       {
@@ -998,7 +1004,13 @@ for (const [ending, mode, writeFails, partialText] of [
         return result;
       },
       addAgentMessage: async (id, role, content, metadata) => {
-        stored.push({ id, role, content, metadata });
+        const row = { id, role, content, metadata };
+        stored.push(row);
+        return { id: stored.length };
+      },
+      updateAgentMessage: async (rowId, content, metadata) => {
+        Object.assign(stored[rowId - 1], { content, metadata });
+        return true;
       },
       getAgentConversation: async (id) => ({
         id,

@@ -23,7 +23,6 @@ export default class FakeAudioManager {
     this.callbacks = callbacks;
   }
   setVoiceAgentRequested() {}
-  setAssistantSelectionContext() {}
   setTranslationRequested() {}
   startRecording() {
     globalThis.__forceStopStarts += 1;

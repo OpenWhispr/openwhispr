@@ -58,6 +58,7 @@ import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
 import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
+import type { ChatImageAttachment } from "../components/chat/types";
 
 export type ToolMetadata = Record<string, unknown> | Array<Record<string, unknown>>;
 
@@ -65,8 +66,8 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
-  /** The tool ran but didn't do what was asked; displayText says why. */
-  failed?: boolean;
+  /** The tool failed (a thrown error or a failed result), not merely reported a status. */
+  isError?: boolean;
 }
 
 const BYOK_STREAM_PROVIDERS = [
@@ -89,8 +90,13 @@ function toByokStreamProvider(provider: string): ByokStreamProvider {
   return provider as ByokStreamProvider;
 }
 
+/**
+ * A run that ends with finishReason "tool-calls" stopped at the step cap while
+ * the model still wanted to call tools.
+ */
 export type AgentStreamChunk =
   | { type: "content"; text: string }
+  | { type: "reasoning"; text: string }
   | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
   | {
       type: "tool_result";
@@ -98,9 +104,37 @@ export type AgentStreamChunk =
       toolName: string;
       displayText: string;
       metadata?: ToolMetadata;
-      failed?: boolean;
+      isError?: boolean;
     }
   | { type: "done"; finishReason?: string };
+
+// Some providers stream a failure as a plain object ({ message, code }), not an Error.
+function streamErrorMessage(cause: unknown): string {
+  const message = (cause as { message?: unknown } | null | undefined)?.message;
+  return typeof message === "string" && message ? message : String(cause ?? "Stream failed");
+}
+
+// Screenshots the user allowed during the turn, shown to every later step.
+function withStepImages(
+  messages: import("ai").ModelMessage[],
+  images: readonly ChatImageAttachment[] | undefined
+): import("ai").ModelMessage[] {
+  if (!images?.length) return messages;
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "The screenshot the user allowed:" },
+        ...images.map((image) => ({
+          type: "image" as const,
+          image: image.image,
+          mediaType: image.mediaType,
+        })),
+      ],
+    },
+  ];
+}
 
 function resolveLlmDispatchMode(
   provider: string,
@@ -837,7 +871,11 @@ class ReasoningService extends BaseReasoningService {
     messages: Array<{ role: string; content: string | Array<Record<string, unknown>> }>,
     model: string,
     provider: string,
-    config: ReasoningConfig & { systemPrompt: string },
+    config: ReasoningConfig & {
+      systemPrompt: string;
+      /** Images tools attach mid-turn; read before every step. */
+      stepImages?: readonly ChatImageAttachment[];
+    },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     ({ model, provider, config } = this.resolveManagedScope(
@@ -1001,7 +1039,9 @@ class ReasoningService extends BaseReasoningService {
       })) as import("ai").ModelMessage[],
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
-      prepareStep: ({ messages }) => ({ messages: compactTranscriptHistory(messages) }),
+      prepareStep: ({ messages }) => ({
+        messages: withStepImages(compactTranscriptHistory(messages), config.stepImages),
+      }),
       abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
@@ -1019,6 +1059,8 @@ class ReasoningService extends BaseReasoningService {
         if (chunk.type === "text-delta") {
           const text = filterThinkTags ? filterThinkTags(chunk.text) : chunk.text;
           if (text) yield { type: "content", text };
+        } else if (chunk.type === "reasoning-delta") {
+          if (chunk.text) yield { type: "reasoning", text: chunk.text };
         } else if (chunk.type === "text-end" || chunk.type === "finish-step") {
           const trailing = finishFilteredText();
           if (trailing) yield { type: "content", text: trailing };
@@ -1054,7 +1096,7 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
             ...(metadata ? { metadata } : {}),
-            ...(isToolFailure ? { failed: true } : {}),
+            ...(isToolFailure ? { isError: true } : {}),
           };
         } else if (chunk.type === "tool-error") {
           // A call the SDK rejected (unknown tool, invalid input) never ran; without
@@ -1065,7 +1107,7 @@ class ReasoningService extends BaseReasoningService {
             callId: chunk.toolCallId,
             toolName: chunk.toolName,
             displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
-            failed: true,
+            isError: true,
           };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
@@ -1078,7 +1120,7 @@ class ReasoningService extends BaseReasoningService {
           finishFilteredText();
           if (!abortController.signal.aborted) {
             const cause = (chunk as { error?: unknown }).error;
-            throw cause instanceof Error ? cause : new Error(String(cause ?? "Stream failed"));
+            throw cause instanceof Error ? cause : new Error(streamErrorMessage(cause));
           }
         } else if (chunk.type === "finish") {
           const trailing = finishFilteredText();
@@ -1309,9 +1351,11 @@ class ReasoningService extends BaseReasoningService {
       });
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+      let stepText = "";
 
       for await (const ev of ipcStream.stream) {
         if (ev.type === "content") {
+          stepText += ev.text as string;
           yield { type: "content", text: ev.text as string };
         } else if (ev.type === "tool_call") {
           const call = {
@@ -1332,6 +1376,11 @@ class ReasoningService extends BaseReasoningService {
       }
 
       latestStepStart = currentMessages.length;
+      // What the model said before calling its tools is part of its turn: the
+      // next step must see it, or the model repeats or contradicts itself.
+      if (stepText.trim()) {
+        currentMessages = [...currentMessages, { role: "assistant", content: stepText }];
+      }
       for (const call of pendingToolCalls) {
         if (operationWasCancelled()) return;
         let toolResult: ToolExecutionResult;
@@ -1339,7 +1388,7 @@ class ReasoningService extends BaseReasoningService {
           toolResult = await config.executeToolCall(call.name, call.arguments, call.id);
         } catch (error) {
           const errMsg = `Error: ${(error as Error).message}`;
-          toolResult = { data: errMsg, displayText: errMsg, failed: true };
+          toolResult = { data: errMsg, displayText: errMsg, isError: true };
         }
         if (operationWasCancelled()) return;
         yield {
@@ -1348,7 +1397,7 @@ class ReasoningService extends BaseReasoningService {
           toolName: call.name,
           displayText: toolResult.displayText,
           ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
-          ...(toolResult.failed ? { failed: true } : {}),
+          ...(toolResult.isError ? { isError: true } : {}),
         };
 
         currentMessages = [
@@ -1380,7 +1429,8 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (operationWasCancelled()) return;
-    yield { type: "done", finishReason: "stop" };
+    // Every step ended in tool calls: the cap stopped a run that wasn't done.
+    yield { type: "done", finishReason: "tool-calls" };
   }
 
   async isAvailable(): Promise<boolean> {

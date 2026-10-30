@@ -244,13 +244,10 @@ test("on the AI SDK path a tool step shows the tool's own text, not a bare Done"
       })()
   );
 
-  let holds = 0;
-  await captured.sendToAI("Who is Gab?", [], { onHoldDelivery: () => (holds += 1) });
+  await captured.sendToAI("Who is Gab?", []);
 
   const assistant = getMessages().find((message) => message.role === "assistant");
   assert.equal(assistant.toolCalls[0].result, "Contacts found: 2");
-  // The AI SDK tools carry the turn's scope, so a tool's hold reaches the caller.
-  assert.equal(holds, 1);
 });
 
 test("a search's items reach the model but are never kept with the conversation", async (t) => {
@@ -298,33 +295,6 @@ test("a search's items reach the model but are never kept with the conversation"
   const [search, note] = getMessages().find((message) => message.role === "assistant").toolCalls;
   assert.equal(search.metadata, undefined, "the saved and synced message holds no items");
   assert.deepEqual(note.metadata, { id: 7, title: "Standup" }, "a note card still gets its data");
-});
-
-test("on the cloud path a tool's hold reaches the caller through the turn's scope", async (t) => {
-  const { captured, reasoningService } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
-    electronAPI: { connectorFindContacts: async () => ({ contacts: [] }) },
-  });
-  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
-    (async function* () {
-      yield {
-        type: "tool_calls",
-        calls: [{ id: "srv-1", name: "find_contact", arguments: '{"name":"Zed"}' }],
-      };
-      const result = await config.executeToolCall("find_contact", '{"name":"Zed"}', "srv-1");
-      yield {
-        type: "tool_result",
-        callId: "srv-1",
-        toolName: "find_contact",
-        displayText: result.displayText,
-      };
-      yield { type: "done", finishReason: "stop" };
-    })()
-  );
-
-  let holds = 0;
-  await captured.sendToAI("Who is Zed?", [], { onHoldDelivery: () => (holds += 1) });
-
-  assert.equal(holds, 1);
 });
 
 test("Esc settles a send whose tool never finishes, and a late result is dropped", async (t) => {
@@ -1004,11 +974,8 @@ test("a reply that imitates the tool notes is shown, saved and delivered without
   assert.equal(delivered, "Done.");
 });
 
-test("a reply that is only a tool note settles as an empty response, announced once", async (t) => {
-  let announced = 0;
-  const { captured, reasoningService, getMessages } = await renderChatStreaming(t, {
-    onResponseContent: () => announced++,
-  });
+test("a reply that is only a tool note settles as an empty response", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(t);
   reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
     (async function* () {
       yield { type: "content", text: "[Tools used: web_" };
@@ -1023,7 +990,6 @@ test("a reply that is only a tool note settles as an empty response, announced o
     getMessages().find((m) => m.role === "assistant").content,
     "The model returned no response."
   );
-  assert.equal(announced, 1);
 });
 
 test("the onboarding demo isn't told to send the user off to enable anything", async (t) => {
@@ -1114,7 +1080,6 @@ for (const [surface, hookOptions] of [
         [previous, { id: "question", role: "user", content: prompt }],
         {
           onComplete: (result) => delivered.push(result.content),
-          onHoldDelivery: () => assert.fail("ordinary replies must keep normal delivery"),
         }
       );
       assert.equal(sentMessages.at(-1).at(-1).content, prompt);
@@ -1288,24 +1253,69 @@ test("with no account name the prompt asks for no signature rather than a placeh
   assert.match(prompts[0], /You don't know the user's name/);
 });
 
-test("Tone & Style gives every send the user's writing style, and a pasted answer its app", async (t) => {
+test("Tone & Style gives every send the user's writing style", async (t) => {
   const tones = { personal: "very_casual", work: "casual", email: "formal", other: "excited" };
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: { toneStyleEnabled: true, toneStyles: tones },
   });
   await captured.sendToAI("Email Josh that I'm in", []);
-  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
 
-  const [typed, pasted] = sentMessages.map((messages) => messages[0].content);
-  assert.match(typed, /WRITING STYLE: When you write something the user will send/);
-  assert.match(pasted, /typed at the user's cursor in a work chat app/);
-  assert.match(pasted, /work message style: casual and friendly/);
+  assert.match(
+    sentMessages[0][0].content,
+    /WRITING STYLE: When you write something the user will send/
+  );
 });
 
 test("without Tone & Style no send carries a writing style", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: { toneStyleEnabled: false },
   });
-  await captured.sendToAI("Tell them it's shipped", [], { destinationAppCategory: "work" });
+  await captured.sendToAI("Tell them it's shipped", []);
   assert.doesNotMatch(sentMessages[0][0].content, /WRITING STYLE/);
+});
+
+test("open_settings carries the model scope of the chat that asked", async (t) => {
+  for (const inferenceScope of ["dictationAgent", undefined]) {
+    const { captured, reasoningService, vite } = await renderChatStreaming(
+      t,
+      { allowInteractions: true, ...(inferenceScope ? { inferenceScope } : {}) },
+      {
+        // Both scopes on the user's own OpenAI key, so the tools run on the AI SDK path.
+        settings: {
+          ...BYOK_SETTINGS,
+          useDictationAgent: true,
+          dictationAgentMode: "providers",
+          dictationAgentProvider: "openai",
+          dictationAgentModel: "gpt-5-mini",
+        },
+      }
+    );
+    const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+    let payload = null;
+    reasoningService.processTextStreamingAI.mock.mockImplementation(
+      (_messages, _model, _provider, _config, tools) =>
+        (async function* () {
+          yield {
+            type: "tool_calls",
+            calls: [{ id: "call-1", name: "open_settings", arguments: "{}" }],
+          };
+          const running = tools.open_settings.execute(
+            { target: "llms", message: "Add your key" },
+            { toolCallId: "call-1", messages: [] }
+          );
+          let entry;
+          while (
+            !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+          ) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
+          payload = entry.payload;
+          interactions.cancelInteraction(entry.key);
+          await running;
+          yield { type: "done", finishReason: "stop" };
+        })()
+    );
+    await captured.sendToAI("My model keeps failing", []);
+    assert.equal(payload?.scope, inferenceScope ?? "chatIntelligence");
+  }
 });

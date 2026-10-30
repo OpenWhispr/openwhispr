@@ -39,22 +39,22 @@ const field = (root, labelKey) =>
     (element) => element.getAttribute?.("aria-label") === `connectors.approval.email.${labelKey}`
   );
 
-test("outside edit mode the fields are shown, Cc only when it has addresses", async (t) => {
+const VIEW = { editing: false, showCc: true, accountLabel: "you@example.test", onChange() {} };
+
+test("outside edit mode the fields are shown, Cc only when it has addresses, and who it's from", async (t) => {
   installBrowserGlobals(t);
   const { EmailApprovalFields } = await loadFields(t);
   const render = (fields) =>
-    renderToStaticMarkup(
-      React.createElement(EmailApprovalFields, {
-        fields,
-        editing: false,
-        onChange() {},
-      })
-    );
+    renderToStaticMarkup(React.createElement(EmailApprovalFields, { ...VIEW, fields }));
 
   const markup = render(FIELDS);
   assert.match(markup, /josh@acme\.test, dana@acme\.test/);
   assert.match(markup, /Q3 numbers/);
-  assert.match(markup, /Line one\nLine two/);
+  assert.match(
+    markup,
+    /connectors\.approval\.email\.fromLabel<\/span><span[^>]*>you@example\.test</
+  );
+  assert.doesNotMatch(markup, /Line one/, "the card shows the body itself");
   assert.doesNotMatch(markup, /connectors\.approval\.email\.ccLabel/);
   assert.doesNotMatch(markup, /<input|<textarea/);
   assert.match(render({ ...FIELDS, cc: ["sam@acme.test"] }), /sam@acme\.test/);
@@ -65,9 +65,8 @@ test("outside edit mode a non-ASCII domain also shows its punycode form", async 
   const { EmailApprovalFields } = await loadFields(t);
   const markup = renderToStaticMarkup(
     React.createElement(EmailApprovalFields, {
+      ...VIEW,
       fields: { ...FIELDS, to: ["a@müller.de"], cc: ["b@müller.de"] },
-      editing: false,
-      onChange() {},
     })
   );
   // recipientLabel's punycode annotation, same form the approval card's
@@ -82,7 +81,7 @@ test("in edit mode To and Cc show the raw address, not its punycode form", async
   assert.equal(field(container, "toLabel").value, "a@müller.de");
 });
 
-async function mountEditor(t, initial = FIELDS) {
+async function mountEditor(t, initial = FIELDS, { showCc = true } = {}) {
   let root = null;
   // Registered before installBrowserGlobals's cleanup, which removes window.
   t.after(async () => {
@@ -97,6 +96,8 @@ async function mountEditor(t, initial = FIELDS) {
     return React.createElement(EmailApprovalFields, {
       fields,
       editing: true,
+      showCc,
+      accountLabel: "you@example.test",
       onChange: (patch) => {
         patches.push(patch);
         setFields((current) => ({ ...current, ...patch }));
@@ -125,7 +126,7 @@ test("typing in To reports the parsed list and keeps the comma the user just typ
   assert.equal(field(container, "ccLabel").value, "sam@acme.test, Sam <s@x.test>");
 });
 
-test("a line break typed or pasted into Subject becomes a space; Body keeps its lines", async (t) => {
+test("a line break typed or pasted into Subject becomes a space", async (t) => {
   const { container, patches } = await mountEditor(t);
 
   await React.act(async () =>
@@ -133,7 +134,10 @@ test("a line break typed or pasted into Subject becomes a space; Body keeps its 
   );
   assert.deepEqual(patches.at(-1), { subject: "Q3 Bcc: evil@attacker.test" });
   assert.equal(field(container, "subjectLabel").value, "Q3 Bcc: evil@attacker.test");
+});
 
-  await React.act(async () => type(field(container, "bodyLabel"), "Hi\n\nThanks"));
-  assert.deepEqual(patches.at(-1), { body: "Hi\n\nThanks" });
+test("Cc stays out of the way unless the email has one", async (t) => {
+  const { container } = await mountEditor(t, FIELDS, { showCc: false });
+  assert.ok(field(container, "toLabel"));
+  assert.equal(field(container, "ccLabel"), null);
 });

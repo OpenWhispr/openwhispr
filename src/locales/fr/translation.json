@@ -2146,7 +2146,7 @@
       },
       "examplesTitle": "Exemples",
       "helper": "Choisissez un nom court et naturel à prononcer",
-      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Si le collage automatique est activé, la réponse est collée au curseur d'un champ modifiable actif ; sinon, elle s'ouvre dans le panneau flottant de l'assistant.",
+      "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, le texte surligné est remplacé en toute sécurité par le résultat. Les autres demandes s'ouvrent dans la fenêtre de l'assistant.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
@@ -2310,7 +2310,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'assistant vocal",
-        "description": "Dites une commande et l'assistant utilise vos notes, votre calendrier et les outils web. La réponse est collée à un curseur modifiable actif, remplace le texte sélectionné ou s'ouvre dans le panneau flottant."
+        "description": "Dites une demande et l'assistant répond dans sa propre fenêtre, en utilisant vos notes, votre calendrier et les outils web. Le texte que vous surlignez avant l'accompagne comme contexte."
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -3158,7 +3158,11 @@
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
-    }
+    },
+    "fork": "Dupliquer",
+    "forked": "Discussion dupliquée",
+    "forkedFrom": "Dupliquée depuis « {{title}} »",
+    "forkFailed": "Impossible de dupliquer cette discussion"
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",
@@ -4194,7 +4198,6 @@
       "hotkeyToSpeak": "{{hotkey}} pour parler",
       "recording": "Enregistrement...",
       "processing": "Traitement...",
-      "clickToSpeak": "Cliquez pour parler",
       "waitingForMicrophone": "En attente du microphone…"
     },
     "buttons": {
@@ -4206,7 +4209,6 @@
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant",
       "askAssistant": "Demander à l'assistant",
-      "busyRecording": "Terminez d'abord l'enregistrement en cours",
       "startMeetingRecording": "Démarrer l’enregistrement de la réunion"
     }
   },
@@ -4309,30 +4311,150 @@
       "update_skillName": "Mettre à jour une compétence",
       "search_openwhispr_helpStatus": "Recherche dans l’aide OpenWhispr...",
       "read_openwhispr_helpStatus": "Lecture de l’aide OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr...",
+      "ask_userName": "Question",
+      "ask_userStatus": "Question en cours...",
+      "request_connectionName": "Connexion",
+      "request_connectionStatus": "Demande de connexion...",
+      "request_accessName": "Accès",
+      "request_accessStatus": "Demande d'accès...",
+      "request_api_keyName": "Clé API",
+      "request_api_keyStatus": "Demande d'une clé API...",
+      "open_settingsName": "Réglages",
+      "open_settingsStatus": "Redirection vers les réglages..."
+    },
+    "turn": {
+      "reasoning": "Raisonnement",
+      "stopped": "Arrêté",
+      "stepLimit": "En pause après le nombre maximal d'étapes.",
+      "continue": "Continuer",
+      "continueMessage": "Continue",
+      "failed": "Cette réponse a échoué."
+    },
+    "interactions": {
+      "notNow": "Pas maintenant",
+      "cancel": "Annuler",
+      "questions": {
+        "recommended": "{{label}} (Recommandé)",
+        "submit": "Envoyer",
+        "placeholder": "Saisissez votre réponse…",
+        "previous": "Question précédente",
+        "next": "Question suivante",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuer",
+        "typedAnswer": "Votre réponse : {{answer}}"
+      },
+      "connection": {
+        "title": "Connecter {{name}}",
+        "connect": "Connecter {{name}}",
+        "connecting": "Terminez la connexion dans votre navigateur…",
+        "failed": "Connexion impossible. Réessayez.",
+        "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez.",
+        "calendarTitle": "Connecter un calendrier",
+        "yes": "Oui",
+        "reasons": {
+          "gmail": "Je peux envoyer l'e-mail depuis votre Gmail.",
+          "slack": "Je peux publier le message sur Slack pour vous.",
+          "linear": "Je peux trouver et créer des tickets Linear pour vous.",
+          "github": "Je peux trouver et créer des issues GitHub pour vous.",
+          "calendar": "Je peux vérifier vos disponibilités et proposer des créneaux."
+        }
+      },
+      "access": {
+        "screen": "Autoriser l'accès à votre écran ?",
+        "allow": "Autoriser",
+        "capturing": "Capture…"
+      },
+      "apiKey": {
+        "title": "Ajoutez votre clé API {{provider}}",
+        "placeholder": "Collez ou saisissez ici",
+        "save": "Enregistrer",
+        "label": "Clé API {{provider}}",
+        "saved": "Clé {{provider}} enregistrée"
+      },
+      "settings": {
+        "done": "C'est fait",
+        "technicalDetails": "Détails techniques",
+        "checking": "Vérification…"
+      },
+      "status": {
+        "answered": "Répondu",
+        "connected": "{{name}} connecté",
+        "granted": "Écran partagé",
+        "declined": "Refusé",
+        "saved": "Clé API enregistrée",
+        "done": "Retour des réglages",
+        "cancelled": "Ignoré",
+        "notAnswered": "Sans réponse",
+        "invalid": "Impossible d'afficher cette question"
+      },
+      "followUp": {
+        "connected": "J'ai connecté {{name}}.",
+        "granted": "J'ai autorisé l'accès à mon écran.",
+        "saved": "J'ai enregistré ma clé API {{provider}}.",
+        "done": "J'ai terminé dans les réglages."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Sélectionnez du texte à modifier avec",
-      "selectedContext": "Texte sélectionné ajouté",
-      "removeSelectedContext": "Supprimer le texte sélectionné",
-      "newConversation": "Nouvelle conversation",
-      "copyToClipboard": "Copier dans le presse-papiers",
-      "suggestions": {
-        "summarizeNotes": "Résumer mes notes récentes",
-        "calendar": "Qu’y a-t-il dans mon calendrier ?",
-        "draft": "Aidez-moi à rédiger quelque chose"
-      }
+  "agentWindow": {
+    "title": "Assistant",
+    "actions": {
+      "expand": "Agrandir",
+      "collapse": "Réduire",
+      "speak": "Parler",
+      "type": "Écrire",
+      "stop": "Arrêter",
+      "close": "Fermer",
+      "regenerate": "Régénérer",
+      "readAloud": "Lire à voix haute",
+      "stopReading": "Arrêter la lecture"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocation",
-        "calling": "Appel",
-        "using": "Utilisation"
-      },
-      "toolFallback": "Outil"
-    }
+    "notices": {
+      "nothingHeard": "Je n'ai rien entendu",
+      "transcriptionFailed": "Transcription impossible",
+      "micUnavailable": "Micro inaccessible",
+      "regenerateFailed": "Impossible de régénérer la réponse",
+      "dictationActive": "La dictée utilise le micro"
+    },
+    "composer": {
+      "placeholder": "Dictez ou tapez votre question…",
+      "followUpPlaceholder": "Poser une question complémentaire…",
+      "answerPlaceholder": "Répondez ici…",
+      "cardPlaceholder": "Répondez sur la carte ci-dessus…"
+    },
+    "empty": {
+      "title": "Comment puis-je vous aider ?",
+      "description": "Tapez votre demande ci-dessous."
+    },
+    "selectedContext": {
+      "title": "Contexte sélectionné",
+      "remove": "Retirer le contexte sélectionné",
+      "fromAnswer": "Tiré de la réponse : « {{text}} »",
+      "fromOtherApp": "Tiré d'une autre app : « {{text}} »"
+    },
+    "selectionHint": "Sélectionnez du texte pour relancer ou dupliquer",
+    "selectionToolbar": "Texte sélectionné",
+    "followUp": "Relancer",
+    "forkFromHere": "Dupliquer à partir d'ici",
+    "chats": {
+      "title": "Conversations",
+      "switch": "Changer de conversation",
+      "new": "Nouvelle conversation",
+      "empty": "Aucune conversation pour l'instant",
+      "untitled": "Conversation sans titre",
+      "fork": "Dupliquée"
+    },
+    "progress": {
+      "callingTools_one": "Appel de {{count}} outil…",
+      "callingTools_other": "Appel de {{count}} outils…",
+      "checkingAnswers": "Vérification des réponses…",
+      "reasoning": "Réflexion…",
+      "reasonedFor": "Réflexion : {{duration}}",
+      "workedFor": "Travail : {{duration}}",
+      "steps_one": "{{count}} étape",
+      "steps_other": "{{count}} étapes"
+    },
+    "waitingForAnswer": "En attente de réponse"
   },
   "integrations": {
     "title": "Intégrations",
@@ -4455,7 +4577,6 @@
     "approval": {
       "headers": {
         "default": "Envoyer à {{destination}}",
-        "slackPost": "Publier dans {{destination}}",
         "email": "E-mail à {{destination}}",
         "issue": "Créer un ticket dans {{destination}}",
         "comment": "Commenter {{destination}}"
@@ -4463,8 +4584,6 @@
       "identity": "En tant que {{account}}",
       "identityWithWorkspace": "En tant que {{account}} dans {{workspace}}",
       "send": "Envoyer",
-      "edit": "Modifier",
-      "doneEditing": "Modification terminée",
       "cancel": "Annuler",
       "titleLabel": "Titre",
       "bodyLabel": "Message",
@@ -4550,7 +4669,6 @@
         }
       },
       "email": {
-        "from": "De {{account}}",
         "toLabel": "À",
         "ccLabel": "Cc",
         "subjectLabel": "Objet",
@@ -4563,7 +4681,8 @@
         "tooManyRecipients": "Un e-mail peut être envoyé à {{max}} adresses au maximum, À et Cc compris.",
         "subjectTooLong": "L'objet doit compter au plus {{max}} caractères.",
         "bodyTooLong": "Le message est trop long pour Gmail. Raccourcissez-le pour l'envoyer.",
-        "unknown": "Impossible de confirmer l'envoi. Vérifiez votre dossier Messages envoyés."
+        "unknown": "Impossible de confirmer l'envoi. Vérifiez votre dossier Messages envoyés.",
+        "fromLabel": "De"
       },
       "github": {
         "notes": {
@@ -4607,7 +4726,18 @@
         "notes": {
           "targetTitle": "Sur « {{title}} »"
         }
-      }
+      },
+      "sentEarlier": "Vous avez déjà envoyé ceci plus tôt dans cette discussion.",
+      "slack": {
+        "channelLabel": "Canal",
+        "asLabel": "En tant que",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Envoyé",
+      "identityChanged": "Sera envoyé en tant que {{account}}. Appuyez sur Envoyer pour l’envoyer.",
+      "connectToSend": "Connectez {{name}} pour envoyer ceci",
+      "edit": "Modifier",
+      "doneEditing": "Modification terminée"
     },
     "policyOff": "Votre organisation a désactivé les connecteurs.",
     "email": {
@@ -4656,7 +4786,8 @@
         "connectedBody": "Vous pouvez fermer cet onglet et retourner à OpenWhispr.",
         "failedTitle": "Slack n'a pas été connecté",
         "failedBody": "Retournez à OpenWhispr pour réessayer."
-      }
+      },
+      "pickDestination": "Quel « {{destination}} » voulez-vous dire ?"
     },
     "github": {
       "title": "GitHub",
@@ -4896,7 +5027,8 @@
       },
       "gmailDraftLimit": "Seuls {{max}} e-mails peuvent être préparés par demande.",
       "queryResults": "Résultats trouvés : {{total}}",
-      "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande."
+      "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande.",
+      "alreadySent": "Déjà fait pour cette demande"
     },
     "beta": "Bêta",
     "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",

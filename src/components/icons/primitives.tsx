@@ -212,6 +212,82 @@ const SquareSparkleMark = glyph(
   </>
 );
 
+// The chat's Fork action (Lucide's git-fork shape).
+const GitForkMark = glyph(
+  <>
+    <circle cx="12" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+    <path d="M12 12v3" />
+  </>
+);
+
+// The agent window's controls (Lucide's shapes): expand and collapse the
+// modal, read an answer aloud, and the "select text" hint.
+const MaximizeMark = glyph(
+  <>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+  </>
+);
+
+const MinimizeMark = glyph(
+  <>
+    <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+    <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+    <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+    <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+  </>
+);
+
+const VolumeMark = glyph(
+  <>
+    <path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z" />
+    <path d="M16 9a5 5 0 0 1 0 6" />
+    <path d="M19.4 18.4a9 9 0 0 0 0-12.8" />
+  </>
+);
+
+// The question card's submit arrow (Lucide's arrow-up).
+const ArrowUpMark = glyph(
+  <>
+    <path d="m5 12 7-7 7 7" />
+    <path d="M12 19V5" />
+  </>
+);
+
+// The agent's progress row: Thinking… and Checking answers…, drawn from the
+// design's own icons (Lucide's lightbulb and message-circle-question).
+const LightbulbMark = glyph(
+  <>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+  </>
+);
+
+const MessageCircleQuestionMark = glyph(
+  <>
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <path d="M12 17h.01" />
+  </>
+);
+
+const TextSelectMark = glyph(
+  <>
+    <path d="M21 6H3" />
+    <path d="M10 12H3" />
+    <path d="M10 18H3" />
+    <path d="M15 12v8" />
+    <path d="M13 12h4" />
+    <path d="M13 20h4" />
+  </>
+);
+
 // The skill icon: a tile on two layers. Each layer is its own group, drawn bottom first,
 // so skills/SkillIcon.tsx can drop them in one after another.
 const SkillStackMark = glyph(
@@ -238,14 +314,23 @@ const ChevronsUpDownMark = glyph(
 
 export const ChevronsUpDown = createIcon("chevrons-up-down", ChevronsUpDownMark);
 export const Circle = createIcon("circle", CircleMark);
+export const ArrowUp = createIcon("arrow-up", ArrowUpMark);
 export const Square = createIcon("square", SquareMark);
 export const SquareSlash = createIcon("square-slash", SquareSlashMark);
 export const Bold = createIcon("bold", BoldMark);
 export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
 export const EyeOff = createIcon("eye-off", EyeOffMark);
 export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
+export const GitFork = createIcon("git-fork", GitForkMark);
 export const Heading = createIcon("heading", HeadingMark);
+export const Maximize = createIcon("maximize", MaximizeMark);
+export const MessageCircleQuestion = createIcon(
+  "message-circle-question",
+  MessageCircleQuestionMark
+);
+export const Minimize = createIcon("minimize", MinimizeMark);
 export const Italic = createIcon("italic", ItalicMark);
+export const Lightbulb = createIcon("lightbulb", LightbulbMark);
 export const List = createIcon("list", ListMark);
 export const ListChecks = createIcon("list-checks", ListChecksMark);
 export const ListEnd = createIcon("list-end", ListEndMark);
@@ -255,3 +340,5 @@ export const SkillStack = createIcon("skill-stack", SkillStackMark);
 export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
 export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);
+export const TextSelect = createIcon("text-select", TextSelectMark);
+export const Volume = createIcon("volume", VolumeMark);

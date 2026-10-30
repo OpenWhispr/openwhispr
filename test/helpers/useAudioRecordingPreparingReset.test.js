@@ -28,7 +28,6 @@ export default class FakeAudioManager {
   setVoiceAgentRequested(value) {
     this.voiceAgentRequested = value;
   }
-  setAssistantSelectionContext() {}
   setTranslationRequested(value) {
     this.translationRequested = value;
   }
@@ -47,7 +46,9 @@ export default class FakeAudioManager {
 }
 `;
 
-test("a failed dictation start reports the lifecycle back to idle instead of sticking on preparing", async (t) => {
+// Mounts useAudioRecording over the fake AudioManager and returns its API, the
+// lifecycle reports made after mount, and the agent-recording listener.
+async function mountRecording(t) {
   // t.after hooks run in registration order, so this unmount must be
   // registered before installBrowserGlobals/installHookDom's own cleanup —
   // otherwise window/document are already torn down when unmount runs.
@@ -57,13 +58,14 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
   });
 
   const reported = [];
+  const listeners = {};
   const noopDispose = () => () => {};
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         // The mount effect registers all seven of these unconditionally (or
         // via optional chaining); onToggleDictation in particular is called
-        // without "?.", so it must exist even though this test drives
+        // without "?.", so it must exist even though these tests drive
         // startRecording() directly rather than through any of these events.
         onToggleDictation: noopDispose,
         onToggleVoiceAgent: noopDispose,
@@ -72,15 +74,18 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged: (state, inputKind) =>
-          reported.push(`${state}:${inputKind}`),
+        onAgentRecordingChanged: (callback) => {
+          listeners.agentRecording = callback;
+          return () => {};
+        },
+        dictationLifecycleStateChanged: (state) => reported.push(state),
       },
     },
   });
   const container = installHookDom(t);
   // The start path awaits two animation frames before opening the mic;
   // resolve them synchronously instead of riding out the 250ms/frame
-  // fallback timeout twice in this test.
+  // fallback timeout twice in these tests.
   globalThis.requestAnimationFrame = (callback) => {
     callback();
     return 1;
@@ -105,15 +110,40 @@ test("a failed dictation start reports the lifecycle back to idle instead of sti
     root.render(React.createElement(Harness));
   });
 
-  // The mount effect reports its own "idle" reset; isolate the assertion to
+  // The mount effect reports its own "idle" reset; isolate the assertions to
   // what performStartRecording itself reports.
   reported.length = 0;
+  return { api: () => api, reported, listeners };
+}
+
+test("a failed dictation start reports the lifecycle back to idle instead of sticking on preparing", async (t) => {
+  const { api, reported } = await mountRecording(t);
 
   let started;
   await React.act(async () => {
-    started = await api.startRecording();
+    started = await api().startRecording();
   });
 
   assert.equal(started, false);
-  assert.deepEqual(reported, ["preparing:dictation", "idle:dictation"]);
+  assert.deepEqual(reported, ["preparing", "idle"]);
+});
+
+// A pill click or the pill menu starts dictation without main's hotkey guard;
+// while the agent window records, both would hold the microphone.
+test("no dictation starts while the agent window records", async (t) => {
+  const { api, reported, listeners } = await mountRecording(t);
+
+  listeners.agentRecording(true);
+  let started;
+  await React.act(async () => {
+    started = await api().startRecording();
+  });
+  assert.equal(started, false);
+  assert.deepEqual(reported, [], "nothing prepares");
+
+  listeners.agentRecording(false);
+  await React.act(async () => {
+    await api().startRecording();
+  });
+  assert.deepEqual(reported, ["preparing", "idle"]);
 });

@@ -1,0 +1,176 @@
+/* The agent window (?agent=true): a transparent window the size of what it
+   shows, plus an 8px margin for the shadow (agentWindowPlacement.js). */
+@layer base {
+  body:has(.agent-window),
+  body:has(.agent-window) #root {
+    background: transparent;
+    overflow: hidden;
+  }
+}
+
+.agent-window {
+  position: fixed;
+  inset: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  /* How strongly the modal's glow shows: a pale wash over light surfaces. */
+  --agent-glow-full: 0.4;
+  --agent-glow-faint: 0.16;
+}
+
+/* The assistant floats over any desktop, so in dark mode its surfaces are a
+   step deeper than the app's charcoal and neutral, with the brand blue (the
+   glass gradient's midpoint, as in light mode). Light mode keeps the app's
+   palette. The second selector reaches menus that portal out of the window's
+   tree (the chat switcher); the agent window is its own page. */
+.dark .agent-window,
+.dark:has(.agent-window) {
+  --agent-glow-full: 1;
+  --agent-glow-faint: 0.4;
+  --color-primary: #4577e9;
+  --color-ring: #4577e9;
+  --color-surface-0: oklch(0.17 0 0);
+  --color-surface-1: oklch(0.218 0 0);
+  --color-surface-2: oklch(0.269 0 0);
+  --color-surface-3: oklch(0.29 0 0);
+  --color-surface-raised: oklch(0.31 0 0);
+  --color-border: oklch(0.31 0 0);
+  --color-popover: var(--color-surface-1);
+  --color-muted: var(--color-surface-2);
+  /* Within the window's 8px margin: a larger shadow is cut off at its edge. */
+  --shadow-modal: 0 2px 8px -2px oklch(0 0 0 / 0.4);
+}
+
+/* Transparent while the native window resizes (a stale frame then shows
+   nothing), faded back in once it has the new size (useAgentSurface). */
+.agent-window-content {
+  opacity: 0;
+  transition: none;
+}
+
+.agent-window-content[data-shown="true"] {
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}
+
+/* The blue that rises from the bottom of the modal: full on an empty chat,
+   faint while the assistant listens or works, gone at rest or while a card
+   waits on the user (AgentModal's glow). A dot grid shows through the full one. */
+.agent-modal-glow {
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+  /* A band from the bottom, brightest at the two bottom corners, where it
+     rises higher, and dipping under the pill. */
+  background:
+    radial-gradient(
+      30% 100% at 6% 100%,
+      color-mix(in oklab, var(--color-primary) 24%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      30% 100% at 94% 100%,
+      color-mix(in oklab, var(--color-primary) 24%, transparent),
+      transparent
+    ),
+    linear-gradient(
+      to top,
+      color-mix(in oklab, var(--color-primary) 42%, transparent),
+      color-mix(in oklab, var(--color-primary) 36%, transparent) 30%,
+      color-mix(in oklab, var(--color-primary) 12%, transparent) 50%,
+      transparent 68%
+    );
+}
+
+.agent-modal-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+  background: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--color-primary) 45%, transparent) 0.75px,
+      transparent 1.25px
+    )
+    center bottom / 31px 21px;
+  mask-image: linear-gradient(to top, black, transparent 45%);
+}
+
+.agent-modal-glow[data-glow="soft"] {
+  opacity: var(--agent-glow-faint);
+}
+
+.agent-modal-glow[data-glow="strong"] {
+  opacity: var(--agent-glow-full);
+}
+
+.agent-modal-glow[data-glow="strong"]::after {
+  opacity: 1;
+}
+
+/* A connect card carries a faint wash of the brand blue behind its actions. */
+.agent-window [data-interaction-card][data-kind="connection"] {
+  background-image: radial-gradient(
+    55% 140% at 72% 100%,
+    color-mix(in oklab, var(--color-primary) 9%, transparent),
+    transparent
+  );
+}
+
+/* A step that is running: the label in the foreground color, with the brand
+   blue sweeping across it (steady under reduced motion). */
+.agent-shimmer-text {
+  background: linear-gradient(
+      90deg,
+      var(--color-foreground) 30%,
+      var(--color-primary) 50%,
+      var(--color-foreground) 70%
+    )
+    0 0 / 250% 100%;
+  animation: agent-shimmer 2.4s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes agent-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+/* Expand while a card waits on the user (useAnswerNudge): a blue pulse, or a
+   steady blue for reduced motion. */
+.agent-expand-cue {
+  color: var(--color-primary);
+  animation: agent-expand-cue 1.2s ease-in-out infinite;
+}
+
+@keyframes agent-expand-cue {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-expand-cue {
+    animation: none;
+    background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+  }
+
+  .agent-shimmer-text {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: var(--color-foreground);
+  }
+}

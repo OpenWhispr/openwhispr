@@ -78,11 +78,6 @@ export function appendDictionarySuffix(
   return suffixed;
 }
 
-// Append after every other suffix: trailing instructions are the ones models weight most.
-export function appendPlainTextResponseSuffix(prompt: string): string {
-  return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
-}
-
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);

@@ -1903,7 +1903,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Las demás solicitudes se abren en la ventana del asistente.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
@@ -2067,7 +2067,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atajo del asistente de voz",
-        "description": "Di un comando y el asistente usa tus notas, calendario y herramientas web. La respuesta se pega en un cursor editable con foco, reemplaza el texto seleccionado o se abre en el panel flotante."
+        "description": "Di una solicitud y el asistente responde en su propia ventana, usando tus notas, calendario y herramientas web. El texto que resaltes antes se envía con ella como contexto."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -3991,7 +3991,11 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Chat bifurcado",
+    "forkedFrom": "Bifurcado de «{{title}}»",
+    "forkFailed": "No se pudo bifurcar este chat"
   },
   "support": {
     "documentation": "Documentación",
@@ -4074,7 +4078,6 @@
       "hotkeyToSpeak": "{{hotkey}} para hablar",
       "recording": "Grabando...",
       "processing": "Procesando...",
-      "clickToSpeak": "Haz clic para hablar",
       "waitingForMicrophone": "Esperando el micrófono…"
     },
     "buttons": {
@@ -4086,7 +4089,6 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
       "askAssistant": "Preguntar al asistente",
-      "busyRecording": "Primero termina la grabación actual",
       "startMeetingRecording": "Iniciar grabación de reunión"
     }
   },
@@ -4189,30 +4191,150 @@
       "update_skillName": "Actualizar habilidad",
       "search_openwhispr_helpStatus": "Buscando en la ayuda de OpenWhispr...",
       "read_openwhispr_helpStatus": "Leyendo la ayuda de OpenWhispr...",
-      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr..."
+      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr...",
+      "ask_userName": "Pregunta",
+      "ask_userStatus": "Preguntándote...",
+      "request_connectionName": "Conexión",
+      "request_connectionStatus": "Pidiendo conectar...",
+      "request_accessName": "Acceso",
+      "request_accessStatus": "Pidiendo acceso...",
+      "request_api_keyName": "Clave de API",
+      "request_api_keyStatus": "Pidiendo una clave de API...",
+      "open_settingsName": "Ajustes",
+      "open_settingsStatus": "Indicándote Ajustes..."
+    },
+    "turn": {
+      "reasoning": "Razonamiento",
+      "stopped": "Detenido",
+      "stepLimit": "En pausa tras alcanzar el número máximo de pasos.",
+      "continue": "Continuar",
+      "continueMessage": "Continúa",
+      "failed": "Esta respuesta falló."
+    },
+    "interactions": {
+      "notNow": "Ahora no",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "{{label}} (Recomendado)",
+        "submit": "Enviar",
+        "placeholder": "Escribe tu respuesta…",
+        "previous": "Pregunta anterior",
+        "next": "Pregunta siguiente",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuar",
+        "typedAnswer": "Tu respuesta: {{answer}}"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Termina de conectar en tu navegador…",
+        "failed": "No se pudo conectar. Inténtalo de nuevo.",
+        "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo.",
+        "calendarTitle": "Conectar un calendario",
+        "yes": "Sí",
+        "reasons": {
+          "gmail": "Puedo enviar el correo desde tu Gmail.",
+          "slack": "Puedo publicar el mensaje en Slack por ti.",
+          "linear": "Puedo buscar y crear incidencias de Linear por ti.",
+          "github": "Puedo buscar y crear issues de GitHub por ti.",
+          "calendar": "Puedo consultar tu disponibilidad y sugerir horarios."
+        }
+      },
+      "access": {
+        "screen": "¿Permitir el acceso a tu pantalla?",
+        "allow": "Permitir",
+        "capturing": "Capturando…"
+      },
+      "apiKey": {
+        "title": "Añade tu clave de API de {{provider}}",
+        "placeholder": "Pega o escribe aquí",
+        "save": "Guardar",
+        "label": "Clave de API de {{provider}}",
+        "saved": "Clave de {{provider}} guardada"
+      },
+      "settings": {
+        "done": "Listo",
+        "technicalDetails": "Detalles técnicos",
+        "checking": "Comprobando…"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Pantalla compartida",
+        "declined": "No permitido",
+        "saved": "Clave de API guardada",
+        "done": "De vuelta de Ajustes",
+        "cancelled": "Descartado",
+        "notAnswered": "Sin respuesta",
+        "invalid": "No se pudo mostrar la pregunta"
+      },
+      "followUp": {
+        "connected": "He conectado {{name}}.",
+        "granted": "He permitido el acceso a mi pantalla.",
+        "saved": "He guardado mi clave de API de {{provider}}.",
+        "done": "He terminado en Ajustes."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Selecciona texto para editarlo con",
-      "selectedContext": "Texto seleccionado añadido",
-      "removeSelectedContext": "Quitar texto seleccionado",
-      "newConversation": "Nueva conversación",
-      "copyToClipboard": "Copiar al portapapeles",
-      "suggestions": {
-        "summarizeNotes": "Resume mis notas recientes",
-        "calendar": "¿Qué hay en mi calendario?",
-        "draft": "Ayúdame a redactar algo"
-      }
+  "agentWindow": {
+    "title": "Asistente",
+    "actions": {
+      "expand": "Ampliar",
+      "collapse": "Minimizar",
+      "speak": "Hablar",
+      "type": "Escribir",
+      "stop": "Detener",
+      "close": "Cerrar",
+      "regenerate": "Regenerar",
+      "readAloud": "Leer en voz alta",
+      "stopReading": "Dejar de leer"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocando",
-        "calling": "Llamando",
-        "using": "Usando"
-      },
-      "toolFallback": "Herramienta"
-    }
+    "notices": {
+      "nothingHeard": "No te he entendido",
+      "transcriptionFailed": "No se pudo transcribir",
+      "micUnavailable": "No se pudo abrir el micrófono",
+      "regenerateFailed": "No se pudo regenerar la respuesta",
+      "dictationActive": "El dictado está usando el micrófono"
+    },
+    "composer": {
+      "placeholder": "Dicta o escribe tu pregunta…",
+      "followUpPlaceholder": "Haz una pregunta de seguimiento…",
+      "answerPlaceholder": "Responde aquí…",
+      "cardPlaceholder": "Responde en la tarjeta de arriba…"
+    },
+    "empty": {
+      "title": "¿En qué puedo ayudarte?",
+      "description": "Escribe tu petición abajo."
+    },
+    "selectedContext": {
+      "title": "Contexto seleccionado",
+      "remove": "Quitar el contexto seleccionado",
+      "fromAnswer": "De la respuesta: «{{text}}»",
+      "fromOtherApp": "De otra app: «{{text}}»"
+    },
+    "selectionHint": "Selecciona texto para preguntar o bifurcar",
+    "selectionToolbar": "Texto seleccionado",
+    "followUp": "Preguntar",
+    "forkFromHere": "Bifurcar desde aquí",
+    "chats": {
+      "title": "Chats",
+      "switch": "Cambiar de chat",
+      "new": "Nuevo chat",
+      "empty": "Aún no hay chats",
+      "untitled": "Chat sin título",
+      "fork": "Bifurcado"
+    },
+    "progress": {
+      "callingTools_one": "Llamando a {{count}} herramienta…",
+      "callingTools_other": "Llamando a {{count}} herramientas…",
+      "checkingAnswers": "Revisando las respuestas…",
+      "reasoning": "Razonando…",
+      "reasonedFor": "Razonó durante {{duration}}",
+      "workedFor": "Trabajó durante {{duration}}",
+      "steps_one": "{{count}} paso",
+      "steps_other": "{{count}} pasos"
+    },
+    "waitingForAnswer": "Esperando respuesta"
   },
   "integrations": {
     "title": "Integraciones",
@@ -4335,7 +4457,6 @@
     "approval": {
       "headers": {
         "default": "Enviar a {{destination}}",
-        "slackPost": "Publicar en {{destination}}",
         "email": "Correo para {{destination}}",
         "issue": "Crear incidencia en {{destination}}",
         "comment": "Comentar en {{destination}}"
@@ -4343,8 +4464,6 @@
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} en {{workspace}}",
       "send": "Enviar",
-      "edit": "Editar",
-      "doneEditing": "Edición terminada",
       "cancel": "Cancelar",
       "titleLabel": "Título",
       "bodyLabel": "Mensaje",
@@ -4430,7 +4549,6 @@
         }
       },
       "email": {
-        "from": "De {{account}}",
         "toLabel": "Para",
         "ccLabel": "CC",
         "subjectLabel": "Asunto",
@@ -4443,7 +4561,8 @@
         "tooManyRecipients": "Un correo puede ir a {{max}} direcciones como máximo, entre Para y CC.",
         "subjectTooLong": "El asunto debe tener {{max}} caracteres como máximo.",
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
-        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados."
+        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados.",
+        "fromLabel": "De"
       },
       "github": {
         "notes": {
@@ -4487,7 +4606,18 @@
         "notes": {
           "targetTitle": "En «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Ya enviaste esto antes en este chat.",
+      "slack": {
+        "channelLabel": "Canal",
+        "asLabel": "Como",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Enviado",
+      "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",
+      "connectToSend": "Conecta {{name}} para enviar esto",
+      "edit": "Editar",
+      "doneEditing": "Edición terminada"
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {
@@ -4536,7 +4666,8 @@
         "connectedBody": "Puedes cerrar esta pestaña y volver a OpenWhispr.",
         "failedTitle": "Slack no se conectó",
         "failedBody": "Vuelve a OpenWhispr para intentarlo de nuevo."
-      }
+      },
+      "pickDestination": "¿Qué «{{destination}}» quieres decir?"
     },
     "github": {
       "title": "GitHub",
@@ -4776,7 +4907,8 @@
       },
       "gmailDraftLimit": "Solo se pueden preparar {{max}} correos por solicitud.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud."
+      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud.",
+      "alreadySent": "Ya se hizo para esta solicitud"
     },
     "beta": "Beta",
     "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",

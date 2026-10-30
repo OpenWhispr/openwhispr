@@ -41,7 +41,9 @@ test("every approval outcome tells the model what happened and whether to retry"
   );
   const unknown = approvalOutcomeResult({ state: "unknown" }, "#eng").data;
   assert.equal(unknown.status, "unknown");
-  assert.match(unknown.guidance, /may or may not have been sent/);
+  assert.match(unknown.guidance, /may or may not have gone through/);
+  // The model once answered an unconfirmed post with "I've posted the message".
+  assert.match(unknown.guidance, /Never say or imply you sent, posted or created it/);
   assert.match(unknown.guidance, /#eng/);
 });
 
@@ -81,9 +83,11 @@ test("runApprovalAction passes clarifications straight back to the model", async
       messageId: "m1",
       toolCallId: "call-1",
       signal: controller.signal,
-      onApprovalRequested() {},
-      onHoldDelivery() {},
       claimTurnSlot: () => true,
+      claimAction: () => true,
+      releaseAction() {},
+      sentEarlier: () => false,
+      recordCompletedAction() {},
       releaseTurnSlot() {},
     },
     "slack",
@@ -126,9 +130,11 @@ test("runApprovalAction waits for the card and returns the send", async (t) => {
       messageId: "m1",
       toolCallId: "call-2",
       signal: controller.signal,
-      onApprovalRequested() {},
-      onHoldDelivery() {},
       claimTurnSlot: () => true,
+      claimAction: () => true,
+      releaseAction() {},
+      sentEarlier: () => false,
+      recordCompletedAction() {},
       releaseTurnSlot() {},
     },
     "slack",
@@ -227,7 +233,7 @@ test("a sent email reports what the user sent, and an unknown one the connector'
       destination: "dana@acme.test",
       checkUrl: "c",
       guidance:
-        "It may or may not have been sent. Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.",
+        'It may or may not have gone through. Say you tried and couldn\'t confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". Do not retry this action unless the user asks you to. Tell the user to check their Gmail Sent folder.',
     }
   );
 });
@@ -320,16 +326,19 @@ test("runApprovalAction words a Gmail failure for Gmail and passes its unknown g
     },
   });
   const { runApprovalAction } = await loadRun();
-  const { approvalKey, approveAction, useConnectorApprovalStore } = await loadStore();
+  const { approvalKey, approveAction, cancelApproval, useConnectorApprovalStore } =
+    await loadStore();
   await (await loadI18n()).changeLanguage("en");
   useConnectorApprovalStore.setState({ entries: {} });
   const ctx = (toolCallId) => ({
     messageId: "m7",
     toolCallId,
     signal: new AbortController().signal,
-    onApprovalRequested() {},
-    onHoldDelivery() {},
     claimTurnSlot: () => true,
+    claimAction: () => true,
+    releaseAction() {},
+    sentEarlier: () => false,
+    recordCompletedAction() {},
     releaseTurnSlot() {},
   });
   const options = { unknownGuidance: "Tell the user to check their Gmail Sent folder." };
@@ -354,7 +363,10 @@ test("runApprovalAction words a Gmail failure for Gmail and passes its unknown g
     committed = result;
     const pending = runApprovalAction(ctx(toolCallId), "gmail", "send", {}, options);
     await new Promise((resolve) => setImmediate(resolve));
-    await approveAction(approvalKey("m7", toolCallId));
+    const key = approvalKey("m7", toolCallId);
+    await approveAction(key);
+    // A failed send waits for Retry; the user gives up instead.
+    if (useConnectorApprovalStore.getState().entries[key].awaitingRetry) cancelApproval(key);
     return pending;
   };
 
@@ -424,9 +436,11 @@ test("a created item's label reaches the card and the model; a malformed one doe
         messageId: "m7",
         toolCallId,
         signal: new AbortController().signal,
-        onApprovalRequested() {},
-        onHoldDelivery() {},
         claimTurnSlot: () => true,
+        claimAction: () => true,
+        releaseAction() {},
+        sentEarlier: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "linear",
@@ -486,4 +500,131 @@ test("an issue or comment's tool step says what was created, or where to check",
     approvalOutcomeResult({ state: "sent" }, "#eng", { verbKey: "slackPost" }).displayText,
     "Sent to #eng."
   );
+});
+
+test("a send that had to be prepared again is still one send for the request", async (t) => {
+  const prepared = [];
+  const commits = [
+    { state: "not_sent", reason: "not_found" },
+    { state: "sent", url: "u" },
+  ];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async () => {
+          prepared.push(prepared.length);
+          return {
+            status: "ready",
+            actionId: `a${prepared.length}`,
+            preview: {
+              verbKey: "slackPost",
+              destinationLabel: "#eng",
+              accountLabel: "chad",
+              body: "hi",
+            },
+          };
+        },
+        connectorCommit: async () => commits.shift(),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { runApprovalAction } = await loadRun();
+  const { approvalKey, approveAction, useConnectorApprovalStore } = await loadStore();
+  useConnectorApprovalStore.setState({ entries: {} });
+  const ledger = { claimed: 0, released: 0, recorded: 0 };
+  const context = {
+    messageId: "m8",
+    toolCallId: "call-1",
+    signal: new AbortController().signal,
+    claimTurnSlot: () => true,
+    releaseTurnSlot() {},
+    claimAction: () => (ledger.claimed += 1) === 1,
+    releaseAction: () => (ledger.released += 1),
+    sentEarlier: () => false,
+    recordCompletedAction: () => (ledger.recorded += 1),
+  };
+
+  const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
+  await new Promise((resolve) => setImmediate(resolve));
+  await approveAction(approvalKey("m8", "call-1"));
+  const result = await running;
+
+  assert.equal(result.data.status, "sent");
+  assert.deepEqual(prepared, [0, 1], "prepared again after main lost the first action");
+  assert.deepEqual(ledger, { claimed: 1, released: 0, recorded: 1 });
+});
+
+test("a send prepared again that needs the user to say where asks the model that", async (t) => {
+  const question = {
+    status: "needs_clarification",
+    message: "#eng is archived.",
+    candidates: ["#eng-2"],
+  };
+  const prepares = [
+    {
+      status: "ready",
+      actionId: "a1",
+      preview: { verbKey: "slackPost", destinationLabel: "#eng", accountLabel: "chad", body: "hi" },
+    },
+    question,
+  ];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorPrepare: async () => prepares.shift(),
+        connectorCommit: async () => ({ state: "not_sent", reason: "not_found" }),
+        connectorCancel: async () => ({ cancelled: true }),
+      },
+    },
+  });
+  const { runApprovalAction } = await loadRun();
+  const { approvalKey, approveAction, cancelApproval, useConnectorApprovalStore } =
+    await loadStore();
+  useConnectorApprovalStore.setState({ entries: {} });
+  const ledger = { released: 0, recorded: 0 };
+  const context = {
+    messageId: "m9",
+    toolCallId: "call-1",
+    signal: new AbortController().signal,
+    claimTurnSlot: () => true,
+    releaseTurnSlot() {},
+    claimAction: () => true,
+    releaseAction: () => (ledger.released += 1),
+    sentEarlier: () => false,
+    recordCompletedAction: () => (ledger.recorded += 1),
+  };
+
+  const running = runApprovalAction(context, "slack", "send_message", { text: "hi" });
+  await new Promise((resolve) => setImmediate(resolve));
+  const key = approvalKey("m9", "call-1");
+  await approveAction(key);
+  const { state } = useConnectorApprovalStore.getState().entries[key];
+  // Settled with the question, not left waiting for a Retry (which would hold the test).
+  if (state !== "not_sent") cancelApproval(key);
+  assert.equal(state, "not_sent");
+  const result = await running;
+
+  assert.deepEqual(result.data, {
+    status: "needs_clarification",
+    message: "#eng is archived.",
+    candidates: ["#eng-2"],
+  });
+  assert.deepEqual(ledger, { released: 1, recorded: 0 }, "nothing went out");
+});
+
+test("a cancelled or withdrawn card still tells the model what the user wrote", async () => {
+  const { approvalOutcomeResult } = await loadOutcome();
+  const cancelled = approvalOutcomeResult(
+    { state: "cancelled", finalText: "Launch moved to Friday" },
+    "#launch"
+  );
+  assert.equal(cancelled.data.status, "cancelled_by_user");
+  assert.equal(cancelled.data.finalText, "Launch moved to Friday");
+  const withdrawn = approvalOutcomeResult(
+    { state: "not_sent", reason: "conversation_ended", final: { subject: "Notes" } },
+    "dana@acme.test"
+  );
+  assert.equal(withdrawn.data.status, "not_sent");
+  assert.deepEqual(withdrawn.data.final, { subject: "Notes" });
 });
