@@ -302,35 +302,29 @@ const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouter
 const openRouterList = async (...args) =>
   (await openRouterListProps(...args)).models.map((option) => option.value);
 
-test("OpenRouter lists only models the scope's requests can use", async (t) => {
-  await t.test("text features skip batch variants", async (t) => {
-    assert.deepEqual(await openRouterList(t), [HAIKU, MISTRAL]);
+test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
+  await t.test("text features skip batch variants and untested models", async (t) => {
+    assert.deepEqual(await openRouterList(t), [HAIKU]);
   });
-  await t.test("chat also needs tools", async (t) => {
-    assert.deepEqual(await openRouterList(t, ["tools"]), [HAIKU]);
+  await t.test("a saved pick stays listed, first, even when the scope can't use it", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [MISTRAL, HAIKU]);
   });
-  await t.test("a saved pick stays listed even when the scope can't use it", async (t) => {
-    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [HAIKU, MISTRAL]);
-  });
-  const { OPENROUTER_VISION_MODELS } = await import("../../src/utils/openRouterModels.ts");
-  const MINIMAX = "minimax/minimax-m3.1-flash";
-  const reversedCatalog = respond(200, {
-    data: [...OPENROUTER_VISION_MODELS, MINIMAX]
-      .reverse()
-      .map((id) => ({ id, supported_parameters: ["tools"] })),
-  });
-  await t.test("the vision model gets the tested list, in its order", async (t) => {
-    const list = await openRouterListProps(t, ["tools", "image"], "", reversedCatalog);
-    assert.deepEqual(
-      list.models.map((option) => option.value),
-      OPENROUTER_VISION_MODELS
-    );
-    assert.equal(list.ordered, true, "the searchable list keeps that order");
-  });
-  await t.test("a saved vision pick off the list leads it", async (t) => {
-    assert.deepEqual(await openRouterList(t, ["tools", "image"], MINIMAX, reversedCatalog), [
-      MINIMAX,
-      ...OPENROUTER_VISION_MODELS,
-    ]);
-  });
+  const { OPENROUTER_TEXT_MODELS, OPENROUTER_VISION_MODELS } =
+    await import("../../src/utils/openRouterModels.ts");
+  for (const [scope, needs, tested] of [
+    ["chat", ["tools"], OPENROUTER_TEXT_MODELS],
+    ["the vision model", ["tools", "image"], OPENROUTER_VISION_MODELS],
+  ]) {
+    await t.test(`${scope} gets its tested list, in its order`, async (t) => {
+      const reversedCatalog = respond(200, {
+        data: [...tested].reverse().map((id) => ({ id, supported_parameters: ["tools"] })),
+      });
+      const list = await openRouterListProps(t, needs, "", reversedCatalog);
+      assert.deepEqual(
+        list.models.map((option) => option.value),
+        tested
+      );
+      assert.equal(list.ordered, true, "the searchable list keeps that order");
+    });
+  }
 });

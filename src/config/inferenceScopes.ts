@@ -32,8 +32,8 @@ export interface InferenceScopeDefinition {
   /**
    * What this scope's requests ask of a model beyond text: chat sends tools to
    * every cloud model, and the vision override also sends a screenshot. Only
-   * OpenRouter's catalog says which models support them, so its list is the one
-   * narrowed by this.
+   * OpenRouter's list reads it: an image need picks the tested vision list, and a
+   * tools need also drops models whose catalog entry has lost tool support.
    */
   modelNeeds?: readonly ModelCapability[];
 }
