@@ -22,7 +22,7 @@
     "clean": "npm run format && npm run lint && npm run typecheck",
     "pretest": "npm rebuild better-sqlite3",
     "test": "jest",
-    "test:security": "node --test scripts/__tests__/node-forge.test.js scripts/__tests__/zod.test.js",
+    "test:security": "node --test scripts/__tests__/node-forge.test.js scripts/__tests__/zod.test.js scripts/__tests__/query-string.test.js",
     "test:watch": "jest --watch",
     "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
@@ -130,6 +130,9 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
+    "query-string@7.1.3": {
+      "decode-uri-component": "0.5.1"
+    },
     "@expo/cli@55.0.37": {
       "zod": "$zod"
     },
