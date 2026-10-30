@@ -12,52 +12,75 @@ function rig(t) {
   });
   let scope = { accountId: "a", authGeneration: 1 };
   let clock = 0;
+  let wall = Date.parse("2026-10-14T10:00:00.000Z");
   let offline = false;
   let blocked = false;
   let permitted = true;
   const calls = [];
+  const warnings = [];
   let seq = 0;
   let total = 0;
-  const serverTime = "2026-10-14T10:00:00.000Z";
+  let device = null;
+  // Mirrors recordActivationBatch's watermark and contribution checks.
+  const rejects = (body) =>
+    !body.gap &&
+    (Date.parse(body.completeThrough) > wall + 30_000 ||
+      Date.parse(body.completeThrough) < Date.parse(device.complete_through) ||
+      body.events.some(
+        (e) =>
+          e.seq > seq &&
+          (Date.parse(e.occurredAt) <= Date.parse(device.complete_through) ||
+            Date.parse(e.occurredAt) > Date.parse(body.completeThrough))
+      ));
   const request = async ({ path, body }) => {
     calls.push({ path, body: structuredClone(body) });
     if (offline) throw new Error("offline");
     if (blocked) return { success: false, status: 403, code: "POLICY_CLOUD_BACKUP_BLOCKED" };
+    const serverTime = new Date(wall).toISOString();
     if (path.endsWith("/device") && !permitted)
       return { success: true, data: { status: "awaiting_permission", serverTime, device: null } };
-    if (path.endsWith("/device"))
+    if (path.endsWith("/device")) {
+      device ??= { registered_at: serverTime, complete_through: serverTime, closed: false };
       return {
         success: true,
-        data: {
-          status: "collecting",
-          serverTime,
-          device: {
-            registered_at: serverTime,
-            complete_through: serverTime,
-            last_seq: seq,
-            closed: false,
-          },
-        },
+        data: { status: "collecting", serverTime, device: { ...device, last_seq: seq } },
       };
+    }
+    if (rejects(body)) {
+      calls.at(-1).status = 409;
+      return { success: false, status: 409, error: "Activation stream could not be reconciled" };
+    }
     for (const e of body.events)
       if (e.seq > seq) {
         seq = e.seq;
         total += e.words;
       }
+    if (!body.gap) device.complete_through = body.completeThrough;
     return {
       success: true,
       data: { status: total >= 200 ? "pending" : "collecting", acceptedThrough: seq },
     };
   };
+  const logger = { warn: (message) => warnings.push(message), debug: () => {} };
   const create = () =>
-    new MetaActivation({ db, getScope: () => scope, request, monotonicNow: () => clock });
+    new MetaActivation({ db, getScope: () => scope, request, monotonicNow: () => clock, logger });
   const manager = create();
   return {
     db,
     manager,
     create,
     calls,
-    tick: (n = 1000) => (clock += n),
+    warnings,
+    tick: (n = 1000) => {
+      clock += n;
+      wall += n;
+    },
+    // The monotonic clock runs `ahead` ms faster than server time over `n` ms.
+    drift: (n, ahead) => {
+      clock += n + ahead;
+      wall += n;
+    },
+    wall: () => wall,
     offline: (v) => (offline = v),
     blocked: (v) => (blocked = v),
     permitted: (v) => (permitted = v),
@@ -379,4 +402,87 @@ test("excluded assistant capture still honors immediate startup cancellation", a
     states.some((state) => state.isRecording),
     false
   );
+});
+
+const batches = (r) => r.calls.filter((c) => c.path.endsWith("/batch"));
+const registrations = (r) => r.calls.filter((c) => c.path.endsWith("/device")).length;
+
+test("a clock drifting ahead re-syncs hourly instead of outrunning the server window", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  // 40 s ahead after an hour: one batch from this clock is past the 30 s window.
+  r.drift(60 * 60_000, 40_000);
+  assert.ok(r.manager.clock(r.manager.getScope()) > r.wall() + 30_000);
+  await capture(r, 5);
+  assert.equal(registrations(r), 2);
+  const batch = batches(r).at(-1);
+  assert.equal(batch.status, undefined);
+  assert.ok(Date.parse(batch.body.events[0].occurredAt) <= r.wall());
+  assert.ok(Date.parse(batch.body.completeThrough) <= r.wall() + 30_000);
+  assert.equal(batch.body.gap, false);
+  assert.equal(r.manager.current().total_words, 5);
+  assert.equal(r.db.prepare("SELECT count(*) n FROM captures").get().n, 0);
+});
+test("a stale anchor still stamps captures so dictation never becomes a gap", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(2 * 60 * 60_000, 50_000);
+  r.offline(true);
+  await capture(r, 3);
+  assert.equal(r.manager.current().gap, 0);
+  r.offline(false);
+  await r.manager.flush();
+  assert.equal(batches(r).at(-1).status, undefined);
+  assert.equal(batches(r).at(-1).body.events[0].words, 3);
+  assert.equal(r.manager.current().gap, 0);
+});
+test("waking from sleep re-syncs the clock before the next batch", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(10 * 60_000, 40_000);
+  await r.manager.resync();
+  assert.deepEqual(
+    r.calls.slice(-2).map((c) => c.path),
+    ["/api/activation/device", "/api/activation/batch"]
+  );
+  assert.equal(batches(r).at(-1).status, undefined);
+});
+test("a rejected batch re-syncs once instead of resending the same watermark", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  r.drift(10 * 60_000, 40_000);
+  await r.manager.flush();
+  assert.equal(batches(r).at(-1).status, 409);
+  await r.manager.flush();
+  assert.deepEqual(
+    r.calls.slice(-2).map((c) => c.path),
+    ["/api/activation/device", "/api/activation/batch"]
+  );
+  assert.equal(batches(r).at(-1).status, undefined);
+  r.drift(10 * 60_000, 40_000);
+  await r.manager.flush();
+  assert.equal(batches(r).at(-1).status, 409);
+  assert.deepEqual(r.warnings, ["Activation batch rejected; re-syncing clock"]);
+  await capture(r, 7);
+  assert.equal(batches(r).at(-1).status, undefined);
+  assert.equal(r.manager.current().gap, 0);
+});
+test("a re-sync that moves the clock back never stamps at or before the acknowledged watermark", async (t) => {
+  const r = rig(t);
+  await r.manager.flush();
+  // Accepted while 25 s ahead, so the server's watermark is ahead of server time.
+  r.drift(10 * 60_000, 25_000);
+  await r.manager.flush();
+  const watermark = Date.parse(r.manager.current().complete_through);
+  assert.ok(watermark > r.wall());
+  await r.manager.resync();
+  assert.ok(r.manager.clock(r.manager.getScope()) < watermark);
+  const id = r.manager.begin();
+  r.manager.stopCapture(id);
+  r.manager.finish(id, 4);
+  await r.manager.flush();
+  const event = batches(r).at(-1).body.events[0];
+  assert.ok(Date.parse(event.occurredAt) > watermark);
+  assert.equal(batches(r).at(-1).status, undefined);
+  assert.equal(r.manager.current().total_words, 4);
 });

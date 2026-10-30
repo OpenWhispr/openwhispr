@@ -1,6 +1,15 @@
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const {
+  ipcMain,
+  app,
+  shell,
+  BrowserWindow,
+  systemPreferences,
+  net,
+  session,
+  powerMonitor,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -6823,8 +6832,12 @@ class IPCHandlers {
           proxyFetch: (url, init) =>
             proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
         }),
+        logger: debugLogger,
       });
       this.metaActivation.start();
+      // Take server time again on wake, so a machine that slept through the
+      // hourly re-sync refreshes before stamping new dictation.
+      powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");
