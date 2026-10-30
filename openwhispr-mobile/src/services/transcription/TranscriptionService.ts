@@ -28,7 +28,7 @@ import {
   sharedDictionaryPromptChars,
 } from '../../lib/transcriptionPromptCap';
 import { BackgroundUploader } from '../../../modules/background-uploader/src';
-import { AudioTools } from '../../../modules/audio-tools/src';
+import { CloudAudioTools as AudioTools } from './cloudAudio';
 import { AppGroupStorage, APP_GROUP_KEYS } from '../../../modules/app-group-storage/src';
 import { CLEANUP_TIMEOUT_MS } from '../../lib/cleanupTranscript';
 import { withRetry } from '../../lib/retry';
@@ -585,24 +585,30 @@ export class TranscriptionService {
           ? KEYBOARD_INLINE_SAFE_EXTENSIONS
           : INLINE_SAFE_EXTENSIONS,
       );
-      if (plan === 'ogg') {
-        const { chunks } = await AudioTools.splitOggOpus(audioUri, CLOUD_INLINE_LIMIT);
+      if (plan === 'ogg' && Platform.OS !== 'android') {
+        const { chunks, durationMs } = await AudioTools.splitOggOpus(audioUri, CLOUD_INLINE_LIMIT);
         return this.transcribeChunked(
           chunks,
           'audio/ogg',
           parameters,
           sessionCookie,
           options.signal,
+          durationMs,
         );
       }
-      if (plan === 'wav') {
-        const { chunks } = await AudioTools.splitToChunks(audioUri, CLOUD_CHUNK_SECONDS);
+      if (plan === 'wav' || (plan === 'ogg' && Platform.OS === 'android')) {
+        const { chunks, durationMs } = await AudioTools.splitToChunks(
+          audioUri,
+          CLOUD_CHUNK_SECONDS,
+          options.signal,
+        );
         return this.transcribeChunked(
           chunks,
           'audio/wav',
           parameters,
           sessionCookie,
           options.signal,
+          durationMs,
         );
       }
     }
@@ -812,7 +818,8 @@ export class TranscriptionService {
     chunkMimeType: string,
     parameters: Record<string, string>,
     sessionCookie: string,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    durationMs: number,
   ): Promise<TranscriptionResponse> {
     try {
       const texts: string[] = new Array(chunkUris.length);
@@ -861,7 +868,7 @@ export class TranscriptionService {
       const workerCount = Math.min(CLOUD_CHUNK_CONCURRENCY, chunkUris.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
-      return { text: stitchChunkTexts(texts), duration: 0, provider: 'cloud' };
+      return { text: stitchChunkTexts(texts), duration: durationMs / 1000, provider: 'cloud' };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }

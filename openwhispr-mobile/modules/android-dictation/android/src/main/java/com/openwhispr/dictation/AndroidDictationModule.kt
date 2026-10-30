@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class AndroidDictationModule : Module() {
   private var recorder: WavRecorder? = null
   private val sampleDecodes = ConcurrentHashMap<String, AtomicBoolean>()
+  private val cloudAudioJobs = ConcurrentHashMap<String, AtomicBoolean>()
   private val providerRuntime = lazy { ProviderTransport(context) }
   private val speechRuntime = lazy { ParakeetEngine(context) }
   private val moonshineRuntime = lazy { MoonshineEngine(context) }
@@ -75,6 +76,8 @@ class AndroidDictationModule : Module() {
     OnDestroy {
       sampleDecodes.values.forEach { it.set(true) }
       sampleDecodes.clear()
+      cloudAudioJobs.values.forEach { it.set(true) }
+      cloudAudioJobs.clear()
       appContext.reactContext?.let {
         it.stopService(Intent(it, DictationService::class.java))
         it.stopService(Intent(it, MeetingCaptureService::class.java))
@@ -189,6 +192,49 @@ class AndroidDictationModule : Module() {
       try { active.stop(cancel) } finally { active.close(); recorder = null }
     }
     AsyncFunction("decodeAudio") { uri: String -> AudioDecoder.decode(context, localFile(uri)) }
+    Function("prepareCloudAudio") {
+      val id = UUID.randomUUID().toString()
+      cloudAudioJobs[id] = AtomicBoolean(false)
+      id
+    }
+    Function("cancelCloudAudio") { id: String -> cloudAudioJobs[id]?.set(true) }
+    AsyncFunction("splitCloudAudio") { uri: String, seconds: Int, id: String ->
+      val cancelled = requireNotNull(cloudAudioJobs[id]) { "Transcription cancelled." }
+      val directory = File(context.cacheDir, "cloud-audio-${UUID.randomUUID()}")
+      var decoded: File? = null
+      try {
+        check(!cancelled.get()) { "Transcription cancelled." }
+        require(seconds in 1..120) { "Invalid Cloud audio chunk duration." }
+        check(directory.mkdir()) { "Cannot create temporary Cloud audio storage." }
+        val result = AudioDecoder.decode(context, localFile(uri), maxDecodedFrames = AudioDecoder.MAX_WAV_FRAMES) { cancelled.get() }
+        val wav = localFile(result.getValue("uri") as String)
+        decoded = wav
+        val chunks = CloudAudioChunks.split(wav, directory, seconds) { cancelled.get() }
+        mapOf("chunks" to chunks.map { "file://${it.path}" }, "durationMs" to result.getValue("durationMs"))
+      } catch (error: Exception) {
+        directory.deleteRecursively()
+        throw error
+      } finally {
+        decoded?.delete()
+        cloudAudioJobs.remove(id)
+      }
+    }.runOnQueue(appContext.backgroundCoroutineScope)
+    AsyncFunction("cleanupCloudAudio") { uris: List<String> ->
+      val cache = context.cacheDir.canonicalFile
+      // Never accept an arbitrary managed recording or another cache file.
+      val chunks = uris.map { uri ->
+        val file = localFile(uri)
+        val parent = requireNotNull(file.parentFile)
+        require(parent.parentFile == cache &&
+          parent.name.matches(Regex("cloud-audio-[0-9a-f-]{36}")) &&
+          file.name.matches(Regex("chunk-[0-9]+\\.wav"))) { "Not temporary Cloud audio." }
+        file
+      }
+      chunks.forEach { file ->
+        check(!file.exists() || file.delete()) { "Cannot remove temporary Cloud audio." }
+        file.parentFile?.delete() // Only succeeds once all sibling chunks are gone.
+      }
+    }
     Function("prepareSampleDecode") {
       val id = UUID.randomUUID().toString()
       sampleDecodes[id] = AtomicBoolean(false)

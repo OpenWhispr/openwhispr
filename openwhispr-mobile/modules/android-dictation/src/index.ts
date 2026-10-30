@@ -53,6 +53,17 @@ interface NativeDictation {
   startLocalMeeting(noteId: number, captureId: string, audioNamespace: string): Promise<void>;
   stopLocalMeeting(noteId: number, captureId: string): Promise<void>;
   decodeAudio(uri: string): Promise<Recording>;
+  prepareCloudAudio(): string;
+  cancelCloudAudio(id: string): void;
+  splitCloudAudio(
+    uri: string,
+    seconds: number,
+    id: string,
+  ): Promise<{
+    chunks: string[];
+    durationMs: number;
+  }>;
+  cleanupCloudAudio(uris: string[]): Promise<void>;
   prepareSampleDecode(): string;
   cancelSampleDecode(id: string): void;
   decodeSampleAudio(uri: string, id: string): Promise<Recording>;

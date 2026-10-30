@@ -10,7 +10,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 object AudioDecoder {
-  fun decode(context: Context, input: File, maxDurationMs: Long? = null, cancelled: () -> Boolean = { false }): Map<String, Any> {
+  const val MAX_WAV_FRAMES = (Int.MAX_VALUE - 44L) / 2
+  fun decode(context: Context, input: File, maxDurationMs: Long? = null, maxDecodedFrames: Long = 16000L * 3600 - 1, cancelled: () -> Boolean = { false }): Map<String, Any> {
     val output = File(context.cacheDir, "decoded-${System.nanoTime()}.wav")
     val extractor = MediaExtractor()
     var decoder: MediaCodec? = null
@@ -69,11 +70,16 @@ object AudioDecoder {
                 bytes.putShort((sum / channels).toShort()); outputFrames++
               }
             }
+            // Cloud can decode beyond the local engine's one-hour limit, but
+            // canonical WAV byte counts must still fit without integer overflow.
+            check(outputFrames <= minOf(maxDecodedFrames, MAX_WAV_FRAMES)) {
+              if (maxDecodedFrames < MAX_WAV_FRAMES) "Audio uploads must be shorter than one hour."
+              else "Decoded audio is too large."
+            }
             wav.write(bytes.array(), 0, bytes.position())
             if (maxDurationMs != null) require(outputFrames * 1000 / 16000 <= maxDurationMs) { "SAMPLE_TOO_LONG" }
             outputEnded = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
             codec.releaseOutputBuffer(slot, false)
-            check(outputFrames < 16000L * 3600) { "Audio uploads must be shorter than one hour." }
           }
         }
         val dataSize = (outputFrames * 2).toInt()

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { BackgroundUploader } from '../../../../modules/background-uploader/src';
-import { AudioTools } from '../../../../modules/audio-tools/src';
+import { CloudAudioTools as AudioTools } from '../cloudAudio';
 import { TranscriptionService } from '../TranscriptionService';
 import { LocalTranscriptionService } from '../LocalTranscriptionService';
 
@@ -34,8 +34,8 @@ jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: jest.fn(), upload: jest.fn() },
 }));
-jest.mock('../../../../modules/audio-tools/src', () => ({
-  AudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
+jest.mock('../cloudAudio', () => ({
+  CloudAudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: {},
