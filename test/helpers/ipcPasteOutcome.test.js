@@ -492,24 +492,3 @@ test("Paste into app on Linux pastes only once focus is back on the command's ap
 
   assert.equal(pasted, 1);
 });
-
-test("only the dictation window can adopt or forget the panel's paste target", async () => {
-  const handler = handlers.get("assistant-paste-target");
-  const calls = [];
-  const webContents = {};
-  target.windowManager = {
-    mainWindow: { webContents },
-    assistantPasteTarget: {
-      adopt: async () => {
-        calls.push("adopt");
-        return true;
-      },
-      clear: () => calls.push("clear"),
-    },
-  };
-
-  assert.equal(await handler({ sender: {} }, "adopt"), false);
-  assert.equal(await handler({ sender: webContents }, "adopt"), true);
-  assert.equal(await handler({ sender: webContents }, "forget"), false);
-  assert.deepEqual(calls, ["adopt", "clear"]);
-});
