@@ -51,7 +51,6 @@ import {
   calendarProviders,
   resolveUnavailableCapabilities,
 } from "../../config/agentCapabilities";
-import type { ToneAppCategory } from "../../config/toneStyle";
 import { refreshSkills, useSkillsStore } from "../../stores/skillsStore";
 import { estimateNoteTokens } from "../../helpers/noteChunking";
 import {
@@ -317,12 +316,6 @@ export interface SendToAIOptions {
   requestText?: string;
   /** This turn isn't offered update_note, so it can't change a note (a note's chat action). */
   keepNotesUnchanged?: boolean;
-  /** Keeps the answer from announcing itself (the onboarding demo streams it elsewhere). */
-  suppressResponseContent?: boolean;
-  /** Asks the model for plain prose because the answer will be pasted into a plain-text app. */
-  plainTextResponse?: boolean;
-  /** Tone & Style: the kind of app a caret-destined answer will be typed into. */
-  destinationAppCategory?: ToneAppCategory;
   /** A skill the user attached to this chat; its text joins the model-only copy of this turn. */
   attachedSkill?: SkillRef;
   /** False once the user removed an app-picked skill from this chat. */
@@ -910,9 +903,7 @@ export function useChatStreaming({
             openNote: openNoteContext || undefined,
             openNoteTranscriptPreview: currentNote.transcriptPreview,
             userName: userNameRef.current,
-            writingStyle: settings.toneStyleEnabled
-              ? { tones: settings.toneStyles, destination: options?.destinationAppCategory }
-              : undefined,
+            writingStyle: settings.toneStyleEnabled ? { tones: settings.toneStyles } : undefined,
             skillCatalog: registry?.get("load_skill")
               ? buildSkillCatalog(offeredSkills, SKILL_CATALOG_MAX_TOKENS[contextTier])
               : undefined,
