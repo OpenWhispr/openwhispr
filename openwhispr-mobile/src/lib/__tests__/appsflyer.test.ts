@@ -892,6 +892,80 @@ describe('RevenueCat attribution identity', () => {
     expect(mockGetAppsFlyerUID).not.toHaveBeenCalled();
   });
 
+  it('re-reads ATT after an inactive return without stopping the SDK', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notDetermined');
+    const af = await loadInitializedAppsFlyer();
+    expect(af.getAppsFlyerAttributionConsent()).toBe('undecided');
+    const listener = jest.fn();
+    af.subscribeAppsFlyerAttribution(listener);
+    // A paywall asked for tracking and the user allowed it.
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('authorized');
+    const recheck = af.recheckAppsFlyerTrackingAuthorization();
+    expect(af.getAppsFlyerAttributionConsent()).toBe('undecided');
+    await recheck;
+    expect(af.getAppsFlyerAttributionConsent()).toBe('granted');
+    expect(listener).toHaveBeenCalled();
+    await expect(af.getAppsFlyerRevenueId()).resolves.toBe('af-device');
+  });
+
+  it('leaves an unchanged status alone on an inactive return', async () => {
+    const af = await loadStartedAppsFlyer();
+    mockStop.mockClear();
+    await af.recheckAppsFlyerTrackingAuthorization();
+    expect(mockStop).not.toHaveBeenCalled();
+    expect(af.getAppsFlyerAttributionConsent()).toBe('granted');
+  });
+
+  it('recovers a status a failed refresh left unread', async () => {
+    const af = await loadStartedAppsFlyer();
+    mockGetTrackingAuthorizationStatus.mockRejectedValueOnce(new Error('unavailable'));
+    await expect(af.refreshAppsFlyerTrackingAuthorization()).rejects.toThrow('unavailable');
+    expect(af.getAppsFlyerAttributionConsent()).toBe('pending');
+    await af.recheckAppsFlyerTrackingAuthorization();
+    expect(af.getAppsFlyerAttributionConsent()).toBe('granted');
+  });
+
+  it('announces the SDK again when a session start fails', async () => {
+    const af = await loadInitializedAppsFlyer();
+    const listener = jest.fn();
+    af.subscribeAppsFlyerAttribution(listener);
+    mockStart.mockRejectedValueOnce(new Error('start failed'));
+    mockSessionReadyListener?.();
+    await flushPromises();
+    expect(listener).toHaveBeenCalled();
+  });
+
+  it('drops an ID read that finishes after consent is withdrawn', async () => {
+    const af = await loadStartedAppsFlyer();
+    const pending = deferred<string>();
+    mockGetAppsFlyerUID.mockReturnValueOnce(pending.promise);
+    const result = af.getAppsFlyerRevenueId();
+    await flushPromises();
+    expect(mockGetAppsFlyerUID).toHaveBeenCalled();
+    af.setAppsFlyerTrackingAuthorizationStatus('denied');
+    pending.resolve('af-device');
+    await expect(result).resolves.toBeNull();
+  });
+
+  it('reads the ID only after a pending stop or resume settles', async () => {
+    const af = await loadStartedAppsFlyer();
+    const resume = deferred<void>();
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    mockStop.mockReturnValueOnce(resume.promise);
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+      isLoading: false,
+    });
+    const result = af.getAppsFlyerRevenueId();
+    await flushPromises();
+    expect(mockGetAppsFlyerUID).not.toHaveBeenCalled();
+    resume.resolve();
+    await expect(result).resolves.toBe('af-device');
+  });
+
   it('applies an opt-out even if a listener throws', async () => {
     const af = await loadStartedAppsFlyer();
     af.subscribeAppsFlyerAttribution(() => {

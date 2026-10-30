@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases, {
   LOG_LEVEL,
   PURCHASES_ARE_COMPLETED_BY_TYPE,
@@ -19,11 +20,18 @@ let identifiedUserId: string | null = null;
 let requestedUserId: string | null = null;
 // The identifier this session attached to identifiedUserId, if any.
 let linkedRevenueId: string | null = null;
+// Billing users whose link this device set and has not cleared, kept across
+// launches so that leaving an account clears only a link this device made.
+let linkedUsers: Set<string> | null = null;
 
 // Written with setAttributes, never setAppsflyerID: that setter also collects
 // IDFA/IDFV/IP on every call, including a clear, and PurchasesHybridCommon
 // 19.0.0 ignores the configure flag that should turn this off.
 const APPSFLYER_ID_ATTRIBUTE = '$appsflyerId';
+// The React Native bridge drops null-valued keys, so null would clear nothing;
+// RevenueCat deletes an attribute set to an empty string.
+const CLEARED_ATTRIBUTE = '';
+const LINKED_USERS_KEY = 'revenuecat.appsflyerLinkedUsers';
 let identityQueue: Promise<unknown> = Promise.resolve();
 
 const IDENTITY_CALL_TIMEOUT_MS = 10_000;
@@ -67,46 +75,64 @@ function canLinkRevenueAttribution(): boolean {
   );
 }
 
-// A device that never had consent cannot have linked the account, so leaving
-// the account must not clear a link another device set.
-function mayHaveLinkedRevenueAttribution(): boolean {
-  return linkedRevenueId !== null || getAppsFlyerAttributionConsent() === 'granted';
+async function loadLinkedUsers(): Promise<Set<string>> {
+  if (linkedUsers) return linkedUsers;
+  try {
+    const stored: unknown = JSON.parse((await AsyncStorage.getItem(LINKED_USERS_KEY)) ?? '[]');
+    linkedUsers = new Set(
+      Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [],
+    );
+  } catch (error) {
+    reportRevenueCatError('linked-users', error);
+    linkedUsers = new Set();
+  }
+  return linkedUsers;
 }
 
-// An explicit opt-out on this device, or a signed-in user who has since left
-// (sign-out or an account switch still queued, or a sign-out the SDK failed to
-// complete) and whom this device may have linked.
-function revenueAttributionWithdrawn(): boolean {
-  if (getAppsFlyerAttributionConsent() === 'revoked') return true;
-  const departed = identifiedUserId !== null && identifiedUserId !== requestedUserId;
-  return departed && mayHaveLinkedRevenueAttribution();
+async function setLinkedFromThisDevice(userId: string, linked: boolean): Promise<void> {
+  const users = await loadLinkedUsers();
+  if (users.has(userId) === linked) return;
+  if (linked) users.add(userId);
+  else users.delete(userId);
+  try {
+    await AsyncStorage.setItem(LINKED_USERS_KEY, JSON.stringify([...users]));
+  } catch (error) {
+    reportRevenueCatError('linked-users', error);
+  }
 }
 
-async function linkRevenueAttribution(id: string): Promise<void> {
+async function linkRevenueAttribution(userId: string, id: string): Promise<void> {
   try {
     // The ID belongs to the account, not the device, and RevenueCat skips a
     // value equal to its local copy. Clearing first makes it a pending change,
     // so it reaches the server even after another device replaced or cleared it.
-    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: null });
+    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: CLEARED_ATTRIBUTE });
     await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: id });
     linkedRevenueId = id;
   } catch (error) {
     reportRevenueCatError('sync-attribution', error);
+    return;
   }
+  await setLinkedFromThisDevice(userId, true);
 }
 
-// Setters only change local attributes. logIn, logOut and every receipt post
-// push them, so only a withdrawal of a linked ID asks for an immediate push.
-// That push can be rate limited without rejecting, so it is not delivery proof.
-async function unlinkRevenueAttribution({ push }: { push: boolean }): Promise<void> {
-  const wasLinked = linkedRevenueId !== null;
+// Clears the link of `userId`, the current SDK user. Setters only change local
+// attributes, and logIn, logOut and receipt posts push them, so only withdrawing
+// a link this device set asks for an immediate push. That push can be rate
+// limited without rejecting, so it is not delivery proof.
+async function unlinkRevenueAttribution(
+  userId: string,
+  { push }: { push: boolean },
+): Promise<void> {
+  const wasLinked = (await loadLinkedUsers()).has(userId);
   try {
-    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: null });
+    await Purchases.setAttributes({ [APPSFLYER_ID_ATTRIBUTE]: CLEARED_ATTRIBUTE });
     linkedRevenueId = null;
   } catch (error) {
     reportRevenueCatError('sync-attribution', error);
     return;
   }
+  await setLinkedFromThisDevice(userId, false);
   if (!push || !wasLinked) return;
   try {
     await Purchases.syncAttributesAndOfferingsIfNeeded();
@@ -128,30 +154,33 @@ async function unlinkRevenueAttribution({ push }: { push: boolean }): Promise<vo
 // account's link since this session set it.
 async function syncRevenueAttribution({ beforePost = false } = {}): Promise<void> {
   if (Platform.OS !== 'ios') return;
-  if (revenueAttributionWithdrawn()) {
-    await unlinkRevenueAttribution({ push: !beforePost });
+  // Leaving an account clears its link before logIn or logOut (when this device
+  // set it), and canLinkRevenueAttribution never relinks a departed account.
+  if (getAppsFlyerAttributionConsent() === 'revoked') {
+    const sdkUserId = identifiedUserId ?? (await Purchases.getAppUserID());
+    await unlinkRevenueAttribution(sdkUserId, { push: !beforePost });
     return;
   }
   if (!canLinkRevenueAttribution() || (linkedRevenueId && !beforePost)) return;
   // A null ID is "not readable yet"; the SDK becoming ready notifies again.
   const id = await getAppsFlyerRevenueId();
-  if (!id || !canLinkRevenueAttribution()) return;
-  await linkRevenueAttribution(id);
+  const userId = identifiedUserId;
+  if (!id || !userId || !canLinkRevenueAttribution()) return;
+  await linkRevenueAttribution(userId, id);
   // Consent can be withdrawn while the setters cross the bridge. Clear it
   // before a queued purchase or restore posts, not only in a later callback.
-  if (revenueAttributionWithdrawn()) await unlinkRevenueAttribution({ push: !beforePost });
+  if (getAppsFlyerAttributionConsent() === 'revoked') {
+    await unlinkRevenueAttribution(userId, { push: !beforePost });
+  }
 }
 
 async function logInWithAttribution(userId: string): Promise<void> {
-  // An anonymous SDK user is never linked, so only a signed-in one needs clearing.
-  if (
-    Platform.OS === 'ios' &&
-    mayHaveLinkedRevenueAttribution() &&
-    (await Purchases.getAppUserID()) !== userId &&
-    !(await Purchases.isAnonymous())
-  ) {
-    // logIn pushes the departing user's attributes before switching.
-    await unlinkRevenueAttribution({ push: false });
+  if (Platform.OS === 'ios') {
+    const departingUserId = await Purchases.getAppUserID();
+    if (departingUserId !== userId && (await loadLinkedUsers()).has(departingUserId)) {
+      // logIn pushes the departing user's attributes before switching.
+      await unlinkRevenueAttribution(departingUserId, { push: false });
+    }
   }
   await Purchases.logIn(userId);
   if (identifiedUserId !== userId) linkedRevenueId = null;
@@ -162,9 +191,12 @@ async function logInWithAttribution(userId: string): Promise<void> {
 async function logOutWithAttribution(): Promise<void> {
   // The SDK rejects logging out an anonymous user; there is no one to sign out.
   if (!(await Purchases.isAnonymous())) {
-    // logOut pushes the departing user's attributes before switching.
-    if (Platform.OS === 'ios' && mayHaveLinkedRevenueAttribution()) {
-      await unlinkRevenueAttribution({ push: false });
+    if (Platform.OS === 'ios') {
+      const departingUserId = await Purchases.getAppUserID();
+      // logOut pushes the departing user's attributes before switching.
+      if ((await loadLinkedUsers()).has(departingUserId)) {
+        await unlinkRevenueAttribution(departingUserId, { push: false });
+      }
     }
     await Purchases.logOut();
   }
@@ -257,6 +289,8 @@ export async function reconcileRevenueCatPurchases(
       await logInWithAttribution(billingUserId);
       if (!isCurrent()) return false;
       await syncRevenueAttribution({ beforePost: true });
+      // Linking can take a moment; the account must not change before posting.
+      if (!isCurrent()) return false;
       await Purchases.syncPurchasesForResult();
       return isCurrent();
     }, PURCHASE_SYNC_TIMEOUT_MS);

@@ -31,7 +31,11 @@ import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSes
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
 import { initSentry, Sentry } from '@/lib/sentry';
-import { initAppsFlyer, refreshAppsFlyerTrackingAuthorization } from '@/lib/appsflyer';
+import {
+  initAppsFlyer,
+  recheckAppsFlyerTrackingAuthorization,
+  refreshAppsFlyerTrackingAuthorization,
+} from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
@@ -165,15 +169,20 @@ function RootLayout() {
         backgrounded = true;
         return;
       }
+      const reportAttError = (error: unknown): void => {
+        Sentry.captureException(error);
+      };
+      if (state === 'active' && !backgrounded) {
+        // An inactive return (the StoreKit sheet, Face ID, or a paywall's own
+        // tracking prompt) re-reads ATT without the stop and pending window of a
+        // full refresh, so a purchase completing right now keeps its link.
+        recheckAppsFlyerTrackingAuthorization().catch(reportAttError);
+      }
       if (state === 'active' && backgrounded) {
         backgrounded = false;
         // ATT can change in iOS Settings while the app is backgrounded. Reapply
         // that system decision before allowing any further attribution events.
-        // An inactive flicker (the StoreKit sheet, Face ID) cannot change it, and
-        // the onboarding prompt reports its own result.
-        refreshAppsFlyerTrackingAuthorization().catch((error: unknown): void => {
-          Sentry.captureException(error);
-        });
+        refreshAppsFlyerTrackingAuthorization().catch(reportAttError);
         const { resetToHome, refreshUsage } = resolveResumeAction(homeRouteRef.current.onHome);
         if (refreshUsage) {
           const usageStore = useUsageStore.getState();

@@ -21,64 +21,80 @@ logins, restores and purchase records.
 ## Consent
 
 - **Granted** (Usage Analytics on, ATT authorized): the device links its
-  identifier, and links it again before every purchase and restore, since
-  another device may have changed the account's link in the meantime.
+  identifier, and links it again before every purchase it records and every
+  restore, since another device may have changed the account's link.
 - **Revoked** (Usage Analytics off, ATT denied): an explicit opt-out on this
   device clears the account's link.
 - **Undecided** (the ATT prompt not answered on this device, or a build without
   AppsFlyer) and **pending** (a decision not read yet: preference not hydrated,
-  or the ATT re-check after the app returns from the background): the device
-  never touches the account's link.
+  or a full ATT re-check in progress): the device never touches the account's
+  link.
 
-The ATT re-check runs only after the app returns from the background, since ATT
-can only change in iOS Settings; an inactive flicker such as the StoreKit sheet
-closing does not trigger it, and the onboarding prompt reports its own result.
+ATT is read in full, which briefly stops AppsFlyer and reads as pending, at
+launch, on AppsFlyer's session-ready signal and when the app returns from the
+background, since iOS Settings can change it. A return from an inactive state
+(the StoreKit sheet, Face ID, or a paywall's own tracking prompt) re-reads it
+without stopping anything and applies only a change, so a grant on a paywall
+takes effect at once. The onboarding prompt reports its own result.
 
-An account change or sign-out clears the departing account's link when this
-device may have set it: it linked the account in this session, or its consent is
-granted. A device that never had consent leaves another device's link alone. A
-pending or failed sign-out cannot relink the departed account.
+The device keeps a record, across launches, of the billing accounts whose link
+it set. Signing out or switching accounts clears the departing account's link
+only when this device set it, and a withdrawal of such a link is pushed to
+RevenueCat at once, even in a later session. A device that never linked the
+account leaves another device's link alone, and a pending or failed sign-out
+cannot relink the departed account.
 
 Accepted consequences of the account-level link:
 
 - A purchase or restore on a device without consent is forwarded with the
   account's current link, which another, consenting device set. That device's
   own identifiers are never read or sent.
+- Purchases RevenueCat posts by itself (an offer code redeemed in the App Store,
+  Ask to Buy, or its observer-mode detection when the app becomes active) carry
+  whatever the account's link is at that moment; the app does not link again
+  first.
 - The most recent consenting device to open the app or make a purchase supplies
   the link. An explicit opt-out on any device clears it until a consenting device
-  next opens the app; it then writes its identifier again, once per app session
-  and before each purchase, by clearing and setting it locally, since RevenueCat
-  skips a value equal to its local copy. A RevenueCat sync that lands between
-  those two local writes can briefly send the cleared value; the identifier stays
-  pending and goes out with the next sync.
+  next opens the app; that device then writes its identifier again, once per app
+  session and before each purchase or restore, by clearing and setting it
+  locally, since RevenueCat skips a value equal to its local copy. A RevenueCat
+  sync that lands between those two local writes can send the cleared value; if
+  the receipt post that follows reaches the server first, the account may hold
+  no link until that device's next launch or purchase.
 - After one device's explicit opt-out has cleared the link, that device's later
-  clears are no-ops (its local copy is already empty), so the link a consenting
-  device sets afterwards stays in place.
+  clears are no-ops while its local copy stays empty, so a link a consenting
+  device sets afterwards stays in place. RevenueCat forgets the local copy when
+  the device switches accounts, so the opt-out clears once more after a switch.
 
 ## Device identifiers
 
-The app never sends `$idfa`, `$idfv`, `$ip` or `$deviceVersion`: RevenueCat
-cannot delete them once set, and AppsFlyer already holds the install's device
-identifiers. It writes `$appsflyerId` with `setAttributes`, never with
-`setAppsflyerID`, which collects all four on every call, including a clear.
-RevenueCat's `automaticDeviceIdentifierCollectionEnabled` option would turn that
-off, but PurchasesHybridCommon 19.0.0 (pinned by react-native-purchases 10.10.0)
-accepts it without applying it. Revisit this only on an SDK upgrade that
-verifiably honours the option. The SDK still sends its own `$attConsentStatus`
-(the ATT status, not an identifier) with every sync and receipt post.
+The app never sends `$idfa`, `$idfv`, `$ip` or `$deviceVersion` as subscriber
+attributes: RevenueCat cannot delete them once set, and AppsFlyer already holds
+the install's device identifiers. It writes `$appsflyerId` with `setAttributes`,
+never with `setAppsflyerID`, which collects all four on every call, including a
+clear. RevenueCat's `automaticDeviceIdentifierCollectionEnabled` option would
+turn that off, but PurchasesHybridCommon 19.0.0 (pinned by react-native-purchases
+10.10.0) accepts it without applying it. Revisit this only on an SDK upgrade
+that verifiably honours the option. A clear writes an empty string: the React
+Native bridge drops keys whose value is `null`, so a `null` would clear nothing.
+
+Independently of this change, the RevenueCat SDK sends the IDFV in a request
+header on every call, and sends its own `$attConsentStatus` (the ATT status, not
+an identifier) whenever that status changes.
 
 ## Synchronization
 
 Attribute setters are local. RevenueCat pushes pending attributes before
 `logIn` and `logOut` switch users (including the login to the same user on every
-launch), with a receipt post (a recorded purchase, or a restore that finds
-transactions), and in its own lifecycle syncs when the app becomes active or
-resigns active. The app asks for an immediate push
-(`syncAttributesAndOfferingsIfNeeded`) only when it withdraws an identifier it
-linked in this session. That call is limited to 5 per 60 seconds (a throttled
-call skips the push without failing), and it also fetches offerings, which fails
-in a project without offerings after the attributes are sent; that failure is not
-reported. It is not proof of delivery.
+launch), with a receipt post (a recorded purchase, a restore that finds
+transactions, or a purchase it detects itself), and in its own lifecycle syncs
+when the app enters the foreground or resigns active (which a StoreKit sheet or
+system alert also causes). The app asks for an immediate push
+(`syncAttributesAndOfferingsIfNeeded`) only when it withdraws a link this device
+set. That call is limited to 5 per 60 seconds (a throttled call skips the push
+without failing), and it also fetches offerings, which fails in a project
+without offerings after the attributes are sent; that failure is not reported.
+It is not proof of delivery.
 
 A device that is offline or has not reopened after an OS ATT change cannot
 instantly notify RevenueCat. Verify actual server deletion and subsequent
@@ -165,18 +181,19 @@ Record build/commit, environment, deidentified event and transaction IDs, event
 name, USD amount, RevenueCat delivery status and AppsFlyer receipt. Keep customer
 identifiers and credentials out of committed evidence.
 
-| Scenario                                                                     | Required observation                                                                                                                                                               |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| New signed-in user; analytics and ATT allowed                                | Correct billing user has the device's `$appsflyerId` before the purchase is recorded. Exactly one revenue event arrives with the expected USD amount.                              |
-| Trial start and conversion                                                   | Trial is not a paid purchase. Conversion sends the actual paid value once.                                                                                                         |
-| Renewal with app closed                                                      | One server revenue event is delivered, without a second client purchase.                                                                                                           |
-| Analytics disabled, ATT denied or not determined (single device)             | This device's AppsFlyer ID is never read or attached, no device identifier (`$idfv`, `$idfa`, `$ip`) is sent, and no revenue event is forwarded.                                   |
-| Same account on two devices, one without consent                             | The device without consent never sends its own ID and, if undecided, never clears the account's link; an explicit opt-out clears it until the consenting device reopens.           |
-| App foregrounded repeatedly after linking, and a purchase sheet closing      | `$appsflyerId` stays set on the server between foregrounds.                                                                                                                        |
-| Consent withdrawn after a successful purchase                                | Server `$appsflyerId` is removed; a subsequent sandbox renewal produces no AppsFlyer delivery. Check reopening after an offline change and rapid changes that hit SDK rate limits. |
-| Sign-out, failed sign-out, or A-to-B switch while login/ID lookup is pending | No late ID write relinks A or attaches A's lookup to B; old account's attribute is cleared on the server.                                                                          |
-| Restore or app restart                                                       | Access and reconciliation still work; no additional client purchase/revenue event is generated.                                                                                    |
-| Sync/network failure                                                         | Billing remains observable/reconcilable; report attribute-delivery failure separately from purchase success, and confirm recovery on reconnect/reopen.                             |
+| Scenario                                                                     | Required observation                                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New signed-in user; analytics and ATT allowed                                | Correct billing user has the device's `$appsflyerId` (a plain AppsFlyer ID string) before the purchase is recorded. Exactly one revenue event arrives with the expected USD amount. |
+| Trial start and conversion                                                   | Trial is not a paid purchase. Conversion sends the actual paid value once.                                                                                                          |
+| Renewal with app closed                                                      | One server revenue event is delivered, without a second client purchase.                                                                                                            |
+| Analytics disabled, ATT denied or not determined (single device)             | This device's AppsFlyer ID is never read or attached, no device identifier (`$idfv`, `$idfa`, `$ip`) is sent as a subscriber attribute, and no revenue event is forwarded.          |
+| Same account on two devices, one without consent                             | The device without consent never sends its own ID and, if undecided, never clears the account's link; an explicit opt-out clears it until the consenting device reopens.            |
+| App foregrounded repeatedly after linking, and a purchase sheet closing      | `$appsflyerId` stays set on the server between foregrounds.                                                                                                                         |
+| ATT allowed from a paywall's tracking prompt, then a purchase on it          | The purchase carries this device's `$appsflyerId` without leaving the app first.                                                                                                    |
+| Consent withdrawn after a successful purchase                                | Server `$appsflyerId` is removed; a subsequent sandbox renewal produces no AppsFlyer delivery. Check reopening after an offline change and rapid changes that hit SDK rate limits.  |
+| Sign-out, failed sign-out, or A-to-B switch while login/ID lookup is pending | No late ID write relinks A or attaches A's lookup to B; old account's attribute is cleared on the server.                                                                           |
+| Restore or app restart                                                       | Access and reconciliation still work; no additional client purchase/revenue event is generated.                                                                                     |
+| Sync/network failure                                                         | Billing remains observable/reconcilable; report attribute-delivery failure separately from purchase success, and confirm recovery on reconnect/reopen.                              |
 
 The native SDK queue retains its existing deadline behavior: a hung native call
 releases its caller at the deadline but holds the identity lock until it settles.

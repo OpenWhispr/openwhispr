@@ -35,6 +35,10 @@ jest.mock('@/lib/appsflyer', () => ({
   getAppsFlyerAttributionConsent: () => 'revoked',
   subscribeAppsFlyerAttribution: jest.fn(),
 }));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: { getItem: jest.fn().mockResolvedValue(null), setItem: jest.fn() },
+}));
 jest.mock('@/lib/sentry', () => ({
   Sentry: { captureException: jest.fn() },
 }));

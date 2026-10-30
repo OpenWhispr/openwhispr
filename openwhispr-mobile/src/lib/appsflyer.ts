@@ -51,8 +51,9 @@ let revenueId: string | null = null;
 // 'revoked' is an explicit opt-out on this device (Usage Analytics off, ATT
 // denied). 'undecided' is a device that has not answered the ATT prompt, or a
 // build without AppsFlyer: it can neither link nor opt out. 'pending' is an
-// answer not read yet (preference not hydrated, or the ATT re-check after the
-// app returns from the background).
+// answer not read yet (preference not hydrated, or the full ATT re-check that
+// runs at launch, on AppsFlyer's session-ready signal and after the app returns
+// from the background).
 export type AppsFlyerAttributionConsent = 'granted' | 'revoked' | 'undecided' | 'pending';
 
 export function getAppsFlyerAttributionConsent(): AppsFlyerAttributionConsent {
@@ -176,7 +177,12 @@ function startSessionIfAllowed(): void {
       return true;
     })
     .catch((error: unknown): boolean => {
-      if (sdkReady === startOperation) didStartCurrentSession = false;
+      if (sdkReady === startOperation) {
+        didStartCurrentSession = false;
+        // The identifier is readable without a session, so a reader that gave
+        // up while start() was pending can try again.
+        publishAttributionState(true);
+      }
       warn('start failed')(error);
       return false;
     });
@@ -318,6 +324,20 @@ export async function refreshAppsFlyerTrackingAuthorization(): Promise<void> {
     if (revision !== trackingRefreshRevision) return;
     throw error;
   }
+}
+
+// A light re-read for a return from an inactive state, such as a permission
+// prompt shown over the app (a paywall can ask for tracking). Unlike the full
+// refresh it keeps the current status while reading, so nothing stops or reads
+// as pending, and applies only a change. It also recovers a status left unread
+// by a failed refresh.
+export async function recheckAppsFlyerTrackingAuthorization(): Promise<void> {
+  if (trackingAuthorizationStatus === 'notSupported') return;
+  const revision = trackingRefreshRevision;
+  const status = await getTrackingAuthorizationStatus();
+  if (revision !== trackingRefreshRevision || status === trackingAuthorizationStatus) return;
+  trackingRefreshRevision += 1;
+  applyTrackingAuthorizationStatus(status);
 }
 
 export function initAppsFlyer(): void {
