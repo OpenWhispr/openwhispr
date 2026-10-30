@@ -53,12 +53,15 @@ interface SearchableModelListProps {
   models: ModelCardOption[];
   selectedModel: string;
   onModelSelect: (modelId: string) => void;
+  // Keep the given order as one list: no vendor groups, no pinned selection.
+  ordered?: boolean;
 }
 
 export default function SearchableModelList({
   models,
   selectedModel,
   onModelSelect,
+  ordered = false,
 }: SearchableModelListProps) {
   const { t } = useTranslation();
   const listboxId = useId();
@@ -73,6 +76,19 @@ export default function SearchableModelList({
   );
 
   const { rows, matchCount } = useMemo(() => {
+    if (ordered) {
+      const matches = models.filter(
+        (model) => !normalizedQuery || matchesQuery(model, normalizedQuery)
+      );
+      return {
+        rows: matches.map((model): Row => ({
+          type: "model",
+          key: `m:${model.value}`,
+          data: toDisplayOption(model, false),
+        })),
+        matchCount: matches.length,
+      };
+    }
     const groups = new Map<string, ModelCardOption[]>();
     const seen = new Set<string>();
     for (const model of models) {
@@ -122,7 +138,7 @@ export default function SearchableModelList({
       }
     }
     return { rows: result, matchCount: matched };
-  }, [models, selectedModel, selectedOption, normalizedQuery, t]);
+  }, [models, ordered, selectedModel, selectedOption, normalizedQuery, t]);
 
   const virtualizer = useVirtualizer({
     count: rows.length,

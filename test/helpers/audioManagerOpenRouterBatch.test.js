@@ -187,3 +187,44 @@ test("an OpenRouter dictation failure names OpenRouter, not OpenAI", async (t) =
   assert.equal(error.code, "PROVIDER_AUTH_FAILED");
   assert.deepEqual(error.messageParams, { provider: "OpenRouter" });
 });
+
+// ElevenLabs Scribe answers silence with "[pause]", which would otherwise be pasted.
+test("Scribe v2's [pause] for silence is treated as nothing said", async (t) => {
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-openrouter-scribe-pause-test-",
+    settingsKey: "__openRouterScribePauseSettings",
+    settings: {
+      useLocalWhisper: false,
+      transcriptionMode: "providers",
+      remoteTranscriptionUrl: "",
+      cloudTranscriptionMode: "byok",
+      cloudTranscriptionProvider: "openrouter",
+      cloudTranscriptionModel: "elevenlabs/scribe-v2",
+      openrouterApiKey: "sk-or-openrouter",
+      allowLocalFallback: false,
+      preferredLanguage: "en",
+      customDictionary: [],
+    },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ text: "[pause]" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const manager = createManager({
+    processTranscription: async (text) => text,
+    isReasoningAvailable: async () => false,
+  });
+  await assert.rejects(
+    manager.processWithOpenAIAPI(new Blob([new Uint8Array(1600)], { type: "audio/webm" }), {
+      durationSeconds: 1,
+    }),
+    /No text transcribed/
+  );
+});

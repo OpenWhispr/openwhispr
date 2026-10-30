@@ -272,3 +272,59 @@ test("a key OpenRouter refuses is never saved", async (t) => {
   await panel.unmount();
   assert.deepEqual(saved, []);
 });
+
+// Shaped like OpenRouter's /models entries.
+const HAIKU = "anthropic/claude-haiku-5.5";
+const MISTRAL = "mistralai/mistral-small-24b-instruct-2501";
+const openRouterCatalog = respond(200, {
+  data: [
+    { id: HAIKU, supported_parameters: ["tools"] },
+    { id: `${HAIKU}:batch`, supported_parameters: ["tools"] },
+    { id: MISTRAL, supported_parameters: [] },
+  ],
+});
+const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouterCatalog) => {
+  const panel = await mount(t, {
+    fetch,
+    overrides: {
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      lockedBaseUrl: true,
+      apiKeyRequired: true,
+      apiKey: "sk-or-saved",
+      model,
+      modelNeeds,
+    },
+  });
+  await panel.wait(0);
+  return panel.find((node) => Array.isArray(node.props?.models))[0].props;
+};
+const openRouterList = async (...args) =>
+  (await openRouterListProps(...args)).models.map((option) => option.value);
+
+test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
+  await t.test("text features skip batch variants and untested models", async (t) => {
+    assert.deepEqual(await openRouterList(t), [HAIKU]);
+  });
+  await t.test("a saved pick stays listed, first, even when the scope can't use it", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [MISTRAL, HAIKU]);
+  });
+  const { OPENROUTER_TEXT_MODELS, OPENROUTER_VISION_MODELS } =
+    await import("../../src/utils/openRouterModels.ts");
+  for (const [scope, needs, tested] of [
+    ["chat", ["tools"], OPENROUTER_TEXT_MODELS],
+    ["the vision model", ["tools", "image"], OPENROUTER_VISION_MODELS],
+  ]) {
+    await t.test(`${scope} gets its tested list, in its order`, async (t) => {
+      const reversedCatalog = respond(200, {
+        data: [...tested].reverse().map((id) => ({ id, supported_parameters: ["tools"] })),
+      });
+      const list = await openRouterListProps(t, needs, "", reversedCatalog);
+      assert.deepEqual(
+        list.models.map((option) => option.value),
+        tested
+      );
+      assert.equal(list.ordered, true, "the searchable list keeps that order");
+    });
+  }
+});

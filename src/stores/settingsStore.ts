@@ -42,6 +42,7 @@ import {
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import modelRegistryData from "../models/modelRegistryData.json";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
+import { OPENROUTER_DEFAULT_MODEL } from "../utils/openRouterModels";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand and a type, so neither reopens the ModelRegistry
 // cycle.
@@ -196,6 +197,7 @@ export function reasoningModelBelongsToProvider(providerId: string, modelId: str
 }
 
 function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion: string): string {
+  if (providerId === "openrouter") return OPENROUTER_DEFAULT_MODEL;
   const providers =
     mode === "local"
       ? modelRegistryData.localProviders

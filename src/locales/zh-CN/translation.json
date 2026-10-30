@@ -2686,10 +2686,14 @@
         "assemblyai_universal_3_6_pro": "最高精度实时转录，支持 32 种语言",
         "mistral_voxtral_mini_transcribe_3_0": "支持 50 多种语言的快速转录（预览版）",
         "mistral_voxtral_small_transcribe_3_0": "最准确的 Voxtral，支持 50 多种语言（预览版）",
-        "openrouter_openai_gpt_transcribe": "OpenAI 当前的转录模型",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral 的快速、精准多语言转录",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA 的低成本转录，支持 40 种语言",
         "openrouter_deepgram_nova_3": "Deepgram 的快速多语言转录",
-        "openrouter_google_chirp_3": "支持 100 多种语言的 Google 语音转文字",
-        "openrouter_mistralai_voxtral_mini_transcribe": "低成本多语言转录"
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI 最精准的转录",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs 的精准转录，支持 90 多种语言",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral 的大型多语言转录模型",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA 的低成本转录，支持欧洲语言",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA 成本最低的多语言转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
