@@ -37,6 +37,7 @@ function createDatabaseManager() {
       cloud_id TEXT,
       sync_status TEXT NOT NULL DEFAULT 'synced',
       space_id INTEGER,
+      parent_folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL,
       account_id TEXT,
       deleted_at TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,

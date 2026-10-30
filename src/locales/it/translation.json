@@ -3032,7 +3032,7 @@
         "title": "Spazio del team",
         "description": "Un'area condivisa all'interno di un workspace. Aggiungi persone o gruppi per dare loro accesso."
       },
-      "contents": "Ogni spazio può contenere cartelle e note.",
+      "contents": "Ogni spazio può contenere cartelle e note, e ogni cartella può avere sottocartelle.",
       "done": "Ho capito",
       "reopen": "Scopri come sono organizzati gli spazi"
     },
@@ -3045,12 +3045,16 @@
       "title": "Cartelle",
       "soon": "Presto",
       "folderName": "Nome cartella",
+      "topLevel": "Livello principale",
       "couldNotCreate": "Impossibile creare la cartella",
       "couldNotRename": "Impossibile rinominare la cartella",
       "couldNotDelete": "Impossibile eliminare la cartella",
       "deleteTitle": "Eliminare la cartella?",
       "deleteDescription": "Questa azione eliminerà definitivamente \"{{name}}\" e le sue {{count}} nota/e. Questa operazione non può essere annullata.",
       "deleteDescriptionEmpty": "Questa azione eliminerà definitivamente \"{{name}}\". Questa operazione non può essere annullata.",
+      "deleteDescriptionSubfolders": "Questa azione eliminerà definitivamente \"{{name}}\" insieme a {{subfolders}} e {{notes}}. Questa operazione non può essere annullata.",
+      "subfolderCount_one": "{{count}} sottocartella",
+      "subfolderCount_other": "{{count}} sottocartelle",
       "deleteConfirm": "Elimina cartella e note"
     },
     "list": {
@@ -3281,6 +3285,7 @@
       "searchFolders": "Cerca cartelle...",
       "noResults": "Nessuna cartella trovata",
       "newFolder": "Nuova cartella",
+      "newSubfolder": "Nuova sottocartella",
       "showInFileManager": "Mostra in {{manager}}"
     },
     "actions": {
@@ -3508,6 +3513,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membri"
       },
+      "subfolders": "Sottocartelle",
       "banner": {
         "title": {
           "team": "Il tuo spazio di team",

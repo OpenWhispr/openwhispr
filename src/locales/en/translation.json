@@ -3384,7 +3384,7 @@
         "title": "Team space",
         "description": "A shared area inside a workspace. Add people or groups to give them access."
       },
-      "contents": "Each space can contain folders and notes.",
+      "contents": "Each space can contain folders and notes, and each folder can have subfolders.",
       "done": "Got it",
       "reopen": "Learn how spaces are organized"
     },
@@ -3397,12 +3397,16 @@
       "title": "Folders",
       "soon": "Soon",
       "folderName": "Folder name",
+      "topLevel": "Top level",
       "couldNotCreate": "Couldn't create folder",
       "couldNotRename": "Couldn't rename folder",
       "couldNotDelete": "Couldn't delete folder",
       "deleteTitle": "Delete folder?",
       "deleteDescription": "This will permanently delete \"{{name}}\" and its {{count}} note(s). This cannot be undone.",
       "deleteDescriptionEmpty": "This will permanently delete \"{{name}}\". This cannot be undone.",
+      "deleteDescriptionSubfolders": "This will permanently delete \"{{name}}\", including {{subfolders}} and {{notes}}. This cannot be undone.",
+      "subfolderCount_one": "{{count}} subfolder",
+      "subfolderCount_other": "{{count}} subfolders",
       "deleteConfirm": "Delete folder and notes"
     },
     "list": {
@@ -3649,6 +3653,7 @@
       "searchFolders": "Search folders...",
       "noResults": "No folders found",
       "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
       "showInFileManager": "Show in {{manager}}"
     },
     "actions": {
@@ -3860,6 +3865,7 @@
         "members_one": "{{count}} member",
         "members_other": "{{count}} members"
       },
+      "subfolders": "Subfolders",
       "banner": {
         "title": {
           "team": "Your team space",

@@ -56,7 +56,10 @@ test("dynamic prose and identity values keep their own direction", () => {
       "src/components/notes/UploadAudioView.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,
     ],
-    ["src/components/notes/UploadAudioView.tsx", /<span\s+dir="auto"[^>]*>\s*\{f\.name\}/],
+    [
+      "src/components/notes/UploadAudioView.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{folderPathLabel\(f, folders, t\)\}/,
+    ],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -231,7 +234,7 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folderName\}/],
     [
       "src/components/notes/NoteEditor.tsx",
-      /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
+      /<span\s+dir="auto"[^>]*>\s*\{folderPathLabel\(folder, folders, t\)\}/,
     ],
     ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/],
     ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/],

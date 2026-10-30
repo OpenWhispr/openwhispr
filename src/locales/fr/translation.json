@@ -3384,7 +3384,7 @@
         "title": "Espace d'équipe",
         "description": "Un espace partagé au sein d'un workspace. Ajoutez des personnes ou des groupes pour leur donner accès."
       },
-      "contents": "Chaque espace peut contenir des dossiers et des notes.",
+      "contents": "Chaque espace peut contenir des dossiers et des notes, et chaque dossier peut avoir des sous-dossiers.",
       "done": "Compris",
       "reopen": "Comprendre l'organisation des espaces"
     },
@@ -3397,12 +3397,16 @@
       "title": "Dossiers",
       "soon": "Bientôt",
       "folderName": "Nom du dossier",
+      "topLevel": "Niveau supérieur",
       "couldNotCreate": "Impossible de créer le dossier",
       "couldNotRename": "Impossible de renommer le dossier",
       "couldNotDelete": "Impossible de supprimer le dossier",
       "deleteTitle": "Supprimer le dossier ?",
       "deleteDescription": "Cette action supprimera définitivement \"{{name}}\" et ses {{count}} note(s). Cette action est irréversible.",
       "deleteDescriptionEmpty": "Cette action supprimera définitivement \"{{name}}\". Cette action est irréversible.",
+      "deleteDescriptionSubfolders": "Cette action supprimera définitivement \"{{name}}\", y compris {{subfolders}} et {{notes}}. Cette action est irréversible.",
+      "subfolderCount_one": "{{count}} sous-dossier",
+      "subfolderCount_other": "{{count}} sous-dossiers",
       "deleteConfirm": "Supprimer le dossier et les notes"
     },
     "list": {
@@ -3649,6 +3653,7 @@
       "searchFolders": "Rechercher des dossiers...",
       "noResults": "Aucun dossier trouvé",
       "newFolder": "Nouveau dossier",
+      "newSubfolder": "Nouveau sous-dossier",
       "showInFileManager": "Afficher dans {{manager}}"
     },
     "actions": {
@@ -3860,6 +3865,7 @@
         "members_one": "{{count}} membre",
         "members_other": "{{count}} membres"
       },
+      "subfolders": "Sous-dossiers",
       "banner": {
         "title": {
           "team": "Votre espace d'équipe",

@@ -3084,7 +3084,7 @@
         "title": "Espacio de equipo",
         "description": "Un área compartida dentro de un workspace. Añade personas o grupos para darles acceso."
       },
-      "contents": "Cada espacio puede contener carpetas y notas.",
+      "contents": "Cada espacio puede contener carpetas y notas, y cada carpeta puede tener subcarpetas.",
       "done": "Entendido",
       "reopen": "Cómo se organizan los espacios"
     },
@@ -3097,12 +3097,16 @@
       "title": "Carpetas",
       "soon": "Próximamente",
       "folderName": "Nombre de la carpeta",
+      "topLevel": "Nivel superior",
       "couldNotCreate": "No se pudo crear la carpeta",
       "couldNotRename": "No se pudo renombrar la carpeta",
       "couldNotDelete": "No se pudo eliminar la carpeta",
       "deleteTitle": "¿Eliminar carpeta?",
       "deleteDescription": "Esto eliminará permanentemente \"{{name}}\" y sus {{count}} nota(s). Esta acción no se puede deshacer.",
       "deleteDescriptionEmpty": "Esto eliminará permanentemente \"{{name}}\". Esta acción no se puede deshacer.",
+      "deleteDescriptionSubfolders": "Esto eliminará permanentemente \"{{name}}\" junto con {{subfolders}} y {{notes}}. Esta acción no se puede deshacer.",
+      "subfolderCount_one": "{{count}} subcarpeta",
+      "subfolderCount_other": "{{count}} subcarpetas",
       "deleteConfirm": "Eliminar carpeta y notas"
     },
     "list": {
@@ -3333,6 +3337,7 @@
       "searchFolders": "Buscar carpetas...",
       "noResults": "No se encontraron carpetas",
       "newFolder": "Nueva carpeta",
+      "newSubfolder": "Nueva subcarpeta",
       "showInFileManager": "Mostrar en {{manager}}"
     },
     "actions": {
@@ -3560,6 +3565,7 @@
         "members_one": "{{count}} miembro",
         "members_other": "{{count}} miembros"
       },
+      "subfolders": "Subcarpetas",
       "banner": {
         "title": {
           "team": "Tu espacio de equipo",

@@ -79,7 +79,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useAuth } from "../../hooks/useAuth";
 import { usePolicySnapshot, useTranscriptionContextAllowed } from "../../hooks/usePolicy";
 import NotesOnboarding from "./NotesOnboarding";
-import { defaultFolderDisplayName, notesEmptyTitleKey } from "./shared";
+import { folderPathLabel, notesEmptyTitleKey, orderFoldersAsTree } from "./shared";
 import { isRegenerableNoteTitle } from "../../helpers/regenerableNoteTitle";
 import { isMeetingAutoEndEligible } from "../../helpers/meetingRecordingSession";
 import { handleMeetingRecordingRequest } from "../../helpers/meetingRecordingRequest";
@@ -395,13 +395,16 @@ export default function PersonalNotesView({
   const activeFolderName = useMemo(() => {
     if (!activeNote?.folder_id) return null;
     const folder = folders.find((f) => f.id === activeNote.folder_id);
-    return folder ? defaultFolderDisplayName(folder, t) : null;
+    return folder ? folderPathLabel(folder, folders, t) : null;
   }, [activeNote?.folder_id, folders, t]);
 
   // The editor's move-to-folder chip only offers folders in the note's own
   // space; cross-space moves change the audience and need an explicit confirm.
   const editorFolders = useMemo(
-    () => (activeNote ? folders.filter((f) => f.space_id === activeNote.space_id) : folders),
+    () =>
+      orderFoldersAsTree(
+        activeNote ? folders.filter((f) => f.space_id === activeNote.space_id) : folders
+      ),
     [activeNote, folders]
   );
 

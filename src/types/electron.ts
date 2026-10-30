@@ -651,6 +651,7 @@ export interface FolderItem {
   is_default: number;
   sort_order: number;
   space_id: number;
+  parent_folder_id: number | null;
   created_at: string;
   updated_at: string;
   client_folder_id: string;
@@ -669,6 +670,7 @@ export type FolderPushSnapshot = Pick<
   | "is_default"
   | "sort_order"
   | "space_id"
+  | "parent_folder_id"
   | "created_at"
   | "updated_at"
   | "sync_status"
@@ -1901,7 +1903,8 @@ declare global {
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
         name: string,
-        spaceId?: number | null
+        spaceId?: number | null,
+        parentFolderId?: number | null
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -1912,6 +1915,10 @@ declare global {
         id: number,
         spaceId: number
       ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      setFolderParent: (
+        id: number,
+        parentFolderId: number | null
+      ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;
@@ -2001,7 +2008,7 @@ declare global {
         errors?: Array<{ clientNoteId: string; error: string }>;
       }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
-      showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
+      showFolderInExplorer?: (folderId: number) => Promise<{ success: boolean }>;
 
       // Action operations
       getActions: () => Promise<ActionItem[]>;
@@ -3872,6 +3879,9 @@ declare global {
         expectedCloudId: string
       ) => Promise<FolderAckResult>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
+      applyCloudFolderParents?: (
+        links: Array<{ cloudId: string; parentCloudId: string | null }>
+      ) => Promise<void>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
         success: boolean;
@@ -3890,7 +3900,6 @@ declare global {
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
-        folderName?: string;
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;

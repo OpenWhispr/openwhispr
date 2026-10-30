@@ -3384,7 +3384,7 @@
         "title": "Team-Bereich",
         "description": "Ein gemeinsamer Bereich in einem Workspace. Füge Personen oder Gruppen hinzu, um ihnen Zugriff zu geben."
       },
-      "contents": "Jeder Bereich kann Ordner und Notizen enthalten.",
+      "contents": "Jeder Bereich kann Ordner und Notizen enthalten, und jeder Ordner kann Unterordner haben.",
       "done": "Verstanden",
       "reopen": "Organisation der Bereiche erklären"
     },
@@ -3397,12 +3397,16 @@
       "title": "Ordner",
       "soon": "Demnächst",
       "folderName": "Ordnername",
+      "topLevel": "Oberste Ebene",
       "couldNotCreate": "Ordner konnte nicht erstellt werden",
       "couldNotRename": "Ordner konnte nicht umbenannt werden",
       "couldNotDelete": "Ordner konnte nicht gelöscht werden",
       "deleteTitle": "Ordner löschen?",
       "deleteDescription": "Dadurch werden \"{{name}}\" und {{count}} enthaltene Notiz(en) dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
       "deleteDescriptionEmpty": "Dadurch wird \"{{name}}\" dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "deleteDescriptionSubfolders": "Dadurch wird \"{{name}}\" dauerhaft gelöscht, einschließlich {{subfolders}} und {{notes}}. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "subfolderCount_one": "{{count}} Unterordner",
+      "subfolderCount_other": "{{count}} Unterordner",
       "deleteConfirm": "Ordner und Notizen löschen"
     },
     "list": {
@@ -3649,6 +3653,7 @@
       "searchFolders": "Ordner suchen...",
       "noResults": "Keine Ordner gefunden",
       "newFolder": "Neuer Ordner",
+      "newSubfolder": "Neuer Unterordner",
       "showInFileManager": "Im {{manager}} anzeigen"
     },
     "actions": {
@@ -3860,6 +3865,7 @@
         "members_one": "{{count}} Mitglied",
         "members_other": "{{count}} Mitglieder"
       },
+      "subfolders": "Unterordner",
       "banner": {
         "title": {
           "team": "Dein Team-Space",

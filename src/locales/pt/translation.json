@@ -3032,7 +3032,7 @@
         "title": "Espaço de equipe",
         "description": "Uma área compartilhada dentro de um workspace. Adicione pessoas ou grupos para dar acesso a elas."
       },
-      "contents": "Cada espaço pode conter pastas e notas.",
+      "contents": "Cada espaço pode conter pastas e notas, e cada pasta pode ter subpastas.",
       "done": "Entendi",
       "reopen": "Entenda como os espaços são organizados"
     },
@@ -3045,12 +3045,16 @@
       "title": "Pastas",
       "soon": "Em breve",
       "folderName": "Nome da pasta",
+      "topLevel": "Nível superior",
       "couldNotCreate": "Não foi possível criar a pasta",
       "couldNotRename": "Não foi possível renomear a pasta",
       "couldNotDelete": "Não foi possível excluir a pasta",
       "deleteTitle": "Excluir pasta?",
       "deleteDescription": "Isso excluirá permanentemente \"{{name}}\" e suas {{count}} nota(s). Esta ação não pode ser desfeita.",
       "deleteDescriptionEmpty": "Isso excluirá permanentemente \"{{name}}\". Esta ação não pode ser desfeita.",
+      "deleteDescriptionSubfolders": "Isso excluirá permanentemente \"{{name}}\", incluindo {{subfolders}} e {{notes}}. Esta ação não pode ser desfeita.",
+      "subfolderCount_one": "{{count}} subpasta",
+      "subfolderCount_other": "{{count}} subpastas",
       "deleteConfirm": "Excluir pasta e notas"
     },
     "list": {
@@ -3281,6 +3285,7 @@
       "searchFolders": "Pesquisar pastas...",
       "noResults": "Nenhuma pasta encontrada",
       "newFolder": "Nova pasta",
+      "newSubfolder": "Nova subpasta",
       "showInFileManager": "Mostrar no {{manager}}"
     },
     "actions": {
@@ -3508,6 +3513,7 @@
         "members_one": "{{count}} membro",
         "members_other": "{{count}} membros"
       },
+      "subfolders": "Subpastas",
       "banner": {
         "title": {
           "team": "Seu espaço de equipe",

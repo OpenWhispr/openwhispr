@@ -2960,7 +2960,7 @@
         "title": "チームスペース",
         "description": "ワークスペース内の共有エリア。人やグループを追加してアクセスを付与します。"
       },
-      "contents": "各スペースにはフォルダーとノートを作成できます。",
+      "contents": "各スペースにはフォルダーとノートを作成でき、各フォルダーにはサブフォルダーを作成できます。",
       "done": "了解",
       "reopen": "スペースの構成を確認"
     },
@@ -3056,6 +3056,7 @@
       "searchFolders": "フォルダを検索...",
       "noResults": "フォルダが見つかりません",
       "newFolder": "新しいフォルダ",
+      "newSubfolder": "新しいサブフォルダ",
       "showInFileManager": "{{manager}}で表示"
     },
     "actions": {
@@ -3206,12 +3207,16 @@
       "title": "フォルダ",
       "soon": "近日公開",
       "folderName": "フォルダ名",
+      "topLevel": "最上位",
       "couldNotCreate": "フォルダを作成できませんでした",
       "couldNotRename": "フォルダの名前を変更できませんでした",
       "couldNotDelete": "フォルダを削除できませんでした",
       "deleteTitle": "フォルダを削除しますか？",
       "deleteDescription": "「{{name}}」と {{count}} 件のノートを完全に削除します。この操作は取り消せません。",
       "deleteDescriptionEmpty": "「{{name}}」を完全に削除します。この操作は取り消せません。",
+      "deleteDescriptionSubfolders": "「{{name}}」と、その中の {{subfolders}} と {{notes}} を完全に削除します。この操作は取り消せません。",
+      "subfolderCount_one": "{{count}} 件のサブフォルダ",
+      "subfolderCount_other": "{{count}} 件のサブフォルダ",
       "deleteConfirm": "フォルダとノートを削除"
     },
     "list": {
@@ -3436,6 +3441,7 @@
         "members_one": "{{count}} 人のメンバー",
         "members_other": "{{count}} 人のメンバー"
       },
+      "subfolders": "サブフォルダ",
       "banner": {
         "title": {
           "team": "チームスペース",

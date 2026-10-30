@@ -12,6 +12,7 @@ import {
   useSpaceRootCounts,
   folderContainerKey,
   ensureContainerLoaded,
+  navigateToContainer,
 } from "../../../stores/noteStore";
 import { useContainerChat } from "../../../hooks/useContainerChat";
 import { cn } from "../../lib/utils";
@@ -21,7 +22,7 @@ import { ContainerIcon } from "./ContainerIcon";
 import { OverviewExplainerBanner } from "./OverviewExplainerBanner";
 import { OverviewAskSection } from "./OverviewAskSection";
 import { OverviewNoteList } from "./OverviewNoteList";
-import { defaultFolderDisplayName } from "../shared";
+import { defaultFolderDisplayName, folderPathLabel, folderTree } from "../shared";
 import type { NoteItem, SpaceItem, FolderItem } from "../../../types/electron";
 
 const SPACE_NOTES_LIMIT = 50;
@@ -93,7 +94,10 @@ export function ContainerOverview({
     };
   }, [folder, notesByContainer]);
 
-  const notes = folder ? containerNotes : (spaceNotes ?? []);
+  const notes = useMemo(
+    () => (folder ? containerNotes : (spaceNotes ?? [])),
+    [folder, containerNotes, spaceNotes]
+  );
   const folderKey = folder ? folderContainerKey(folder.id) : null;
   const folderNotesLoaded = folderKey !== null && notesByContainer[folderKey] !== undefined;
   const isLoaded = folder ? folderNotesLoaded : spaceNotes !== null;
@@ -101,7 +105,36 @@ export function ContainerOverview({
     ? folderNotesError && !folderNotesLoaded
     : spaceNotesError && spaceNotes === null;
 
-  const chat = useContainerChat({ space, folder, notes });
+  const subfolders = useMemo(
+    () =>
+      folder
+        ? (folderTree(folders).find((node) => node.folder.id === folder.id)?.subfolders ?? [])
+        : [],
+    [folder, folders]
+  );
+
+  // Folder chat covers the subfolders too, so its context lists their notes.
+  useEffect(() => {
+    for (const subfolder of subfolders) {
+      void ensureContainerLoaded(folderContainerKey(subfolder.id)).catch(() => {});
+    }
+  }, [subfolders]);
+  const chatNotes = useMemo(
+    () => [
+      ...notes,
+      ...subfolders.flatMap(
+        (subfolder) => notesByContainer[folderContainerKey(subfolder.id)] ?? []
+      ),
+    ],
+    [notes, subfolders, notesByContainer]
+  );
+
+  const chat = useContainerChat({
+    space,
+    folder,
+    folderLabel: folder ? folderPathLabel(folder, folders, t) : null,
+    notes: chatNotes,
+  });
 
   const workspace = space.workspace_id
     ? workspaces.find((w) => w.id === space.workspace_id)
@@ -220,6 +253,28 @@ export function ContainerOverview({
           <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
         )}
         {notes.length > 0 && askSection}
+        {subfolders.length > 0 && (
+          <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
+            <div className="pt-4 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider select-none">
+              {t("notes.overview.subfolders")}
+            </div>
+            {subfolders.map((subfolder) => (
+              <button
+                key={subfolder.id}
+                onClick={() => navigateToContainer(subfolder.space_id, subfolder.id)}
+                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+              >
+                <ContainerIcon space={space} folder={subfolder} />
+                <span dir="auto" className="text-[13px] text-foreground/85 truncate flex-1">
+                  {defaultFolderDisplayName(subfolder, t)}
+                </span>
+                <span className="text-[11px] text-foreground/45 dark:text-foreground/45 shrink-0 tabular-nums">
+                  {t("notes.spaces.noteCount", { count: folderCounts[subfolder.id] ?? 0 })}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
           <OverviewNoteList
             notes={notes}

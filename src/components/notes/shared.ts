@@ -35,14 +35,56 @@ export function folderMatchesQuery(
   );
 }
 
+// A subfolder whose parent isn't a loaded top-level folder of its space (a
+// transient sync state) shows as top level, so no folder is ever hidden.
+function loadedParent(folder: FolderItem, folders: FolderItem[]): FolderItem | undefined {
+  if (folder.parent_folder_id == null) return undefined;
+  return folders.find(
+    (f) =>
+      f.id === folder.parent_folder_id &&
+      f.space_id === folder.space_id &&
+      f.parent_folder_id == null
+  );
+}
+
+// Each top-level folder with its subfolders, both in main's sort order.
+export function folderTree(
+  folders: FolderItem[]
+): Array<{ folder: FolderItem; subfolders: FolderItem[] }> {
+  const nodes = new Map<number, { folder: FolderItem; subfolders: FolderItem[] }>();
+  const nested: Array<[FolderItem, FolderItem]> = [];
+  for (const folder of folders) {
+    const parent = loadedParent(folder, folders);
+    if (parent) nested.push([parent, folder]);
+    else nodes.set(folder.id, { folder, subfolders: [] });
+  }
+  for (const [parent, folder] of nested) nodes.get(parent.id)!.subfolders.push(folder);
+  return [...nodes.values()];
+}
+
+export function orderFoldersAsTree(folders: FolderItem[]): FolderItem[] {
+  return folderTree(folders).flatMap(({ folder, subfolders }) => [folder, ...subfolders]);
+}
+
+export function folderPathLabel(
+  folder: FolderItem,
+  folders: FolderItem[],
+  t: (key: string) => string
+): string {
+  const parent = loadedParent(folder, folders);
+  const name = defaultFolderDisplayName(folder, t);
+  return parent ? `${defaultFolderDisplayName(parent, t)} / ${name}` : name;
+}
+
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);
 }
 
 // URL downloads route to "Videos" by name: a pre-existing user-created folder with
-// that name is used as-is (the migration never promotes or replaces it).
+// that name is used as-is (the migration never promotes or replaces it), but only
+// at the top level, so a "Videos" subfolder of Meetings never takes uploads.
 export function findVideosFolder(folders: FolderItem[]): FolderItem | undefined {
-  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME);
+  return folders.find((f) => f.name === VIDEOS_FOLDER_NAME && f.parent_folder_id == null);
 }
 
 // URL-download error codes → notes.upload.* i18n keys.
