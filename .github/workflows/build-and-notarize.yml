@@ -68,10 +68,11 @@ jobs:
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
         run: npm rebuild better-sqlite3
-      - name: Run tests (shard ${{ matrix.shard }}/4)
-        # npm test's command; node reads --test-shard only before the file glob.
-        run: node --import tsx --test --test-shard=${{ matrix.shard }}/4 "test/**/*.test.js"
+      - name: Run tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+        run: npm test
         env:
+          # npm test -- --test-shard would land after the file glob, where node ignores it
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/${{ strategy.job-total }}
           # keeps require("electron") from throwing when postinstall was skipped
           ELECTRON_OVERRIDE_DIST_PATH: /tmp
           # a skipped DB test here means the rebuild step above is gone: fail instead
