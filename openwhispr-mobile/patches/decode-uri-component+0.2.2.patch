@@ -2,11 +2,14 @@ diff --git a/node_modules/decode-uri-component/index.js b/node_modules/decode-ur
 index 24e7db0..b1c2d96 100644
 --- a/node_modules/decode-uri-component/index.js
 +++ b/node_modules/decode-uri-component/index.js
-@@ -1,93 +1,152 @@
+@@ -1,93 +1,155 @@
 -'use strict';
 -var token = '%[a-f0-9]{2}';
 -var singleMatcher = new RegExp('(' + token + ')|([^%]+?)', 'gi');
 -var multiMatcher = new RegExp('(' + token + ')+', 'gi');
++// Backport of decode-uri-component 0.5.1 (MIT, Sam Verschueren).
++// https://github.com/SamVerschueren/decode-uri-component/commit/58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6
++// Only the CommonJS export and 0.2.x plus-to-space behavior are retained below.
 +// Matches one or more consecutive percent-encoded bytes (e.g. `%C3%A5`).
 +const token = '%[a-f0-9]{2}';
 +const multiMatcher = new RegExp(`(${token})+`, 'gi');
