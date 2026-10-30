@@ -796,9 +796,12 @@ class ReasoningService extends BaseReasoningService {
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+          // Tolerate both "data: {...}" and "data:{...}" — OpenAI-style
+          // servers differ (GenieX v0.10+ emits the compact form), and a
+          // space-dependent match silently drops every chunk as no response.
+          if (!trimmed || !trimmed.startsWith("data:")) continue;
 
-          const data = trimmed.slice(6);
+          const data = trimmed.slice(5).trim();
           if (data === "[DONE]") {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;

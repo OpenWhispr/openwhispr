@@ -3801,9 +3801,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         // Extract data from "data: " prefix
         let data = "";
-        if (trimmedLine.startsWith("data: ")) {
-          data = trimmedLine.slice(6);
-        } else if (trimmedLine.startsWith("data:")) {
+        // Tolerate "data: {...}" and "data:{...}" — servers differ in spacing.
+        if (trimmedLine.startsWith("data:")) {
           data = trimmedLine.slice(5).trim();
         } else {
           // Not a data line, could be leftover - keep in buffer
