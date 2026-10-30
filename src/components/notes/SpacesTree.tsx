@@ -1531,14 +1531,13 @@ export default function SpacesTree({
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
-    // Moving back out of a team leaves subfolders behind and doesn't re-nest
-    // a subfolder, so a nested folder's move stays one-way, as confirmed.
-    const isNested =
-      folder.parent_folder_id != null || folders.some((f) => f.parent_folder_id === folder.id);
     const result = await moveFolderSafely(() => moveFolderToSpace(folder.id, space.id));
     if (!result.success) return;
     revealContainer(space.id, null);
-    if (isNested) return;
+    // A subfolder moved on its own becomes top-level there, and moving it back
+    // doesn't re-nest it, so its move stays one-way, as confirmed. A parent's
+    // subfolders move with it both ways.
+    if (folder.parent_folder_id != null) return;
     showUndoToast(folder.name, spaceDisplayName(space, t), () => {
       // Undo is a folder move like any other: after a role change it must
       // not bypass the destructive-folder-action rules in the new space.
