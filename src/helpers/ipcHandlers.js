@@ -6197,7 +6197,13 @@ class IPCHandlers {
         }
         const modelPath = require("path").join(modelManager.modelsDir, modelInfo.model.fileName);
         const { ceiling } = await modelManager.contextCeiling(modelInfo, modelPath);
-        return { success: true, maxContextTokens: ceiling, modelName: modelInfo.model.name };
+        // A GenieX (NPU) model runs with a fixed --nctx window; the RAM-based
+        // ceiling says nothing about what the NPU will actually grant.
+        const maxContextTokens =
+          modelInfo.model.runtime === "geniex"
+            ? Math.min(ceiling, modelInfo.model.contextLength || ceiling)
+            : ceiling;
+        return { success: true, maxContextTokens, modelName: modelInfo.model.name };
       } catch (error) {
         return { success: false, error: error.message };
       }
@@ -6312,6 +6318,17 @@ class IPCHandlers {
         return await LocalReasoningService.isAvailable();
       } catch (error) {
         return false;
+      }
+    });
+
+    // Qualcomm GenieX (NPU language models): platform gate, Qualcomm CPU
+    // detection, and whether the CLI is on PATH. The renderer uses it to
+    // badge and gate the Qualcomm tab.
+    ipcMain.handle("check-geniex-status", async () => {
+      try {
+        return await require("./geniexServer").getGeniexStatus();
+      } catch (error) {
+        return { supported: false, installed: false, error: error.message };
       }
     });
 

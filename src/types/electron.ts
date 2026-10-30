@@ -2355,6 +2355,20 @@ declare global {
         details?: Record<string, unknown>;
       }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
+      /** Snapdragon gate plus whether the GenieX CLI is installed; badges the Qualcomm (NPU) LLM tab. */
+      checkGeniexStatus: () => Promise<{
+        supported: boolean;
+        platformSupported?: boolean;
+        cpuQualcomm?: boolean;
+        cpuName?: string | null;
+        code?: string;
+        message?: string;
+        installed: boolean;
+        binaryPath?: string | null;
+        installerUrl?: string;
+        docsUrl?: string;
+        error?: string;
+      }>;
       /** The largest context this machine can give a bundled model; drives chunked note generation. */
       getLocalContextBudget: (modelId: string) => Promise<{
         success: boolean;

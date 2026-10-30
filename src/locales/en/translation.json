@@ -889,6 +889,14 @@
     },
     "corti": {
       "euOnly": "Corti's models are only available in the EU region."
+    },
+    "geniex": {
+      "title": "Runs on the Snapdragon NPU",
+      "description": "These models need Qualcomm's GenieX runtime to run on the Hexagon NPU. Install the CLI, then restart OpenWhispr — the installer is an ARM64 .exe from Qualcomm.",
+      "install": "Get GenieX",
+      "docs": "Install guide",
+      "ready": "Snapdragon NPU active (GenieX)",
+      "unavailable": "Qualcomm NPU language models require Windows on Snapdragon with a native ARM64 build."
     }
   },
   "transcription": {
@@ -2863,6 +2871,12 @@
         "vertex_gemini_4_argon": "Google's frontier reasoning model via Vertex"
       },
       "local": {
+        "qualcomm_qwen3_5_2b_q4_0": "Runs on the Snapdragon NPU via Qualcomm GenieX",
+        "qualcomm_qwen3_5_0_8b_q4_0": "Fastest Snapdragon NPU cleanup",
+        "qualcomm_qwen3_4b_instruct_2507_q4_0": "Highest-quality non-thinking Qwen on the Snapdragon NPU",
+        "qualcomm_qwen3_4b_q4_0": "Qwen3 with thinking mode on the Snapdragon NPU",
+        "qualcomm_qwen3_1_7b_q4_0": "Compact Qwen3 on the Snapdragon NPU",
+        "qualcomm_qwen3_0_6b_q4_0": "Tiny Qwen3, instant NPU cleanup",
         "qwen_qwen3_5_9b_q4_k_m": "Powerful hybrid model",
         "qwen_qwen3_5_4b_q4_k_m": "Balanced Qwen3.5 for general use",
         "qwen_qwen3_5_2b_q4_k_m": "Small Qwen3.5 for quick tasks",

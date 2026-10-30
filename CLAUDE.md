@@ -305,6 +305,16 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Provider id `"qualcomm"`; models in the registry's `qualcommModels` section (`whisper-tiny` … `whisper-large-v3-turbo-quantized`); no streaming runtime — the offline buffered-chunk preview path serves it
   - Pre-warm on startup when `LOCAL_TRANSCRIPTION_PROVIDER=qualcomm` (`QUALCOMM_MODEL` env); sidecar restarts when the selected model changes
 
+### Qualcomm NPU Integration (Language models via GenieX)
+
+The transcription stack above runs Whisper on the NPU; the language-model (cleanup/reasoning) side has its own NPU path:
+
+- **geniexServer.js**: `GeniexServerManager` drives Qualcomm's **GenieX CLI** (`geniex serve`), an OpenAI-compatible server on `127.0.0.1:18181` whose llama.cpp runtime runs `Q4_0` GGUFs on the Hexagon NPU (K-quant GGUFs like the CPU/Vulkan registry's `Q4_K_M` fall back to GPU/CPU — Q4_0 is what lands on the NPU)
+  - Registry models flagged `runtime: "geniex"` (the `qualcomm` entry in `localProviders`, Qwen3/Qwen3.5 Q4_0 files from `unsloth/*-GGUF` and `ggml-org/*-GGUF`) download through the ordinary model download flow, then inference swaps `LlamaServerManager` for `GeniexServerManager` via `modelManagerBridge._serverFor(model)` — both managers share the same interface, so `runInference` is unchanged
+  - `geniex pull <openwhispr/…> --local-path <dir>` registers the downloaded GGUF into the GenieX cache — the file is staged into its own directory first (hardlinked when on the same volume, v0.7.0 rejects a bare file) and `pull` copies it into the cache, so `deleteModel` runs `geniex remove` alongside its own unlink; then `geniex serve --compute npu --nctx <ctx>` starts the server, readiness polls `GET /v1/models` and adopts the served id (local pulls register verbatim, HF pulls carry `:PRECISION` suffixes)
+  - Thinking suppression uses GenieX's `enable_think: false` request field (serve has no `--think` flag in v0.7.0, and llama.cpp's `chat_template_kwargs` dialect is not shared across runtimes); no `/tokenize` endpoint, so the prompt preflight degrades to the estimate
+  - Same Snapdragon gate as transcription (`qualcommCapability.js`: win32 + native arm64) **plus real CPU detection** (`qualcommCpu.js`: WMI `Win32_Processor` name matched against `snapdragon|qualcomm`, cached, `OPENWHISPR_CPU`-style override `OPENWHISPR_QUALCOMM_CPU`) — the tab is disabled with an explanation on ARM64 machines that are not Qualcomm's, and earns the provider tab's recommended pill when a Snapdragon is present; the LLM picker explains itself via `check-geniex-status` IPC (`ReasoningModelSelector`'s `GeniexStatusBadge`) — installer link when the CLI is missing, ready line when on PATH (`OPENWHISPR_GENIEX_PATH` overrides)
+
 ### Local Semantic Search (Qdrant + MiniLM)
 
 Offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Its resources are lazy (#2143): Qdrant and the embedding model start on the first semantic search (or the first vector write while the index is active), the embedding model downloads on that first activation if missing, and everything is released after 5 minutes idle. While asleep, keyword FTS5 serves searches and note changes are journaled in SQLite.
@@ -490,7 +500,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost (retired for new API keys; kept for existing ones)
     - Gemma 4 (`gemma-4-31b-it`, `gemma-4-26b-a4b-it`) - Google's open Gemma 4 models served through the Gemini API
-  - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
+  - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS), plus Qualcomm Qwen Q4_0 GGUFs served on the Snapdragon NPU through GenieX (see the Qualcomm NPU Integration section)
 
 ### 8. Model Registry Architecture
 
