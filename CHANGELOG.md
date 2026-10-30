@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dictation
+
+- **Simplified Chinese keeps 么.** Converting to Simplified turned 什么 and 这么 into 什幺 and 这幺, because the converter read 么 as Taiwan's form of 幺. (#2985, thanks @spin0za for the report)
+
 ## [1.11.0] - 2026-10-29
 
 Business and Enterprise teams now share a dictionary, the assistant can follow skills you keep for recurring work, and the workspace you're in moves to the bottom of the sidebar with your account in the top bar. Whisper checks that GPU acceleration really started and falls back to Vulkan, and organizations can turn off meeting recording and audio upload separately. This release also fixes a launch crash on devices used by two accounts, the macOS paste that could insert your previous clipboard, and dictionary words lost on a new device.

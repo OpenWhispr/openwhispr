@@ -111,6 +111,13 @@ test("applyChineseScript is idempotent for the same target", async () => {
   }
 });
 
+test("applyChineseScript keeps 么 in simplified text", async () => {
+  const { applyChineseScript } = await load();
+  // opencc-js 1.4.1 read 么 as Taiwan's form of 幺, so 什么 came out as 什幺 (#2985).
+  assert.equal(await applyChineseScript("为什么这么快", "simplified"), "为什么这么快");
+  assert.equal(await applyChineseScript("為什麼這麼快", "simplified"), "为什么这么快");
+});
+
 test("applyChineseScript is a no-op for Japanese and Korean when target is null", async () => {
   const { applyChineseScript, resolveChineseScriptTarget } = await load();
   for (const text of ["会議の資料を確認してください", "한국어 漢字 텍스트"]) {
