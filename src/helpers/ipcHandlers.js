@@ -1132,17 +1132,28 @@ class IPCHandlers {
   }
 
   // Folder names are only unique per space — a live folder with the same path
-  // in another space shares the mirror directory. Names compare without case,
-  // as macOS and Windows directories do.
+  // in another space shares the mirror directory. Names compare as the
+  // platform's directories do: exactly on Linux, without case on macOS and
+  // Windows, and without Unicode normalization on macOS too.
   _mirrorFolderInUse(mirrorFolder, exceptFolderId = null) {
     const [parentName, name] = Array.isArray(mirrorFolder) ? mirrorFolder : [null, mirrorFolder];
-    return !!this.databaseManager.db
+    const pathKey = (value) => {
+      if (value == null || process.platform === "linux") return value;
+      const folded = value.toLowerCase();
+      return process.platform === "darwin" ? folded.normalize("NFC") : folded;
+    };
+    return this.databaseManager.db
       .prepare(
-        `SELECT 1 FROM folders f LEFT JOIN folders p ON p.id = f.parent_folder_id
-         WHERE f.name = ? COLLATE NOCASE AND p.name IS ? COLLATE NOCASE
-           AND f.id IS NOT ? AND f.deleted_at IS NULL`
+        `SELECT f.name, p.name AS parent_name FROM folders f
+         LEFT JOIN folders p ON p.id = f.parent_folder_id
+         WHERE f.id IS NOT ? AND f.deleted_at IS NULL`
       )
-      .get(name, parentName, exceptFolderId);
+      .all(exceptFolderId)
+      .some(
+        (folder) =>
+          pathKey(folder.name) === pathKey(name) &&
+          pathKey(folder.parent_name) === pathKey(parentName)
+      );
   }
 
   _mirrorDeleteFolderIfUnshared(mirrorFolder) {
@@ -2700,6 +2711,11 @@ class IPCHandlers {
       if (result?.success) {
         // Qdrant payloads carry space_id — the triggers journaled the moved notes.
         this.notifyVectorChanges();
+        // Teammates' notes stayed in the team, outside the folder.
+        for (const note of result.relocatedNotes ?? []) {
+          this._asyncMirrorWrite(note);
+          setImmediate(() => broadcastToWindows("note-updated", note));
+        }
         if (result.folder) {
           setImmediate(() => {
             broadcastToWindows("folder-synced", result.folder);

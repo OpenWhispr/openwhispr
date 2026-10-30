@@ -615,6 +615,26 @@ test("a subfolder the cloud refuses to nest goes top-level without stranding its
   assert.equal(cloud.folder(synced.cloud_id).parent_folder_id, null);
 });
 
+test("a folder name taken mid-batch doesn't keep the folders after it from the cloud", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  await (await newSyncService(t)).syncAll(true);
+  db.createFolder("Acme");
+  db.createFolder("Beta");
+  const taken = { status: 409, code: "folder_name_taken", error: "Folder name already taken" };
+  cloud.failNext("POST /api/folders/batch-create", taken);
+  cloud.failNext(
+    (call) => call.path === "/api/folders/create" && call.body?.name === "Acme",
+    taken
+  );
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(folderByName(db, "Acme").sync_status, "pending");
+  assert.equal(folderByName(db, "Beta").sync_status, "synced");
+});
+
 test("a pass with backup off leaves the nesting of personal folders alone", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
@@ -683,6 +703,32 @@ test("a subfolder waits while its parent's PATCH fails and keeps its nesting", a
   assert.equal(folderByName(db, "Q2").sync_status, "synced");
   assert.equal(cloud.folder(quarterCloudId).name, "Q2");
   assert.equal(cloud.folder(quarterCloudId).parent_folder_id, parentCloudId);
+});
+
+test("a note in a new subfolder waits with it for the parent's PATCH", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+
+  const parent = db.createFolder("Client A").folder;
+  await (await newSyncService(t)).syncAll(true);
+  db.renameFolder(parent.id, "Client B");
+  setFolderRow(db, parent.id, { updated_at: "2027-01-01 00:00:00" });
+  const quarter = db.createFolder("Q1", null, parent.id).folder;
+  const plan = db.saveNote("Plan", "body", "personal", null, null, quarter.id).note;
+  const cloudPlan = () => cloud.notes().find((n) => n.client_note_id === plan.client_note_id);
+  cloud.failNext("PATCH /api/folders/update", {
+    status: 409,
+    code: "folder_name_taken",
+    error: "Folder name already taken",
+  });
+  await (await newSyncService(t)).syncAll(true);
+
+  assert.equal(cloudPlan(), undefined, "the note doesn't upload without its folder");
+  assert.equal(db.getNote(plan.id).sync_status, "pending");
+
+  await (await newSyncService(t)).syncAll(true);
+  assert.equal(cloudPlan().folder_id, folderByName(db, "Q1").cloud_id);
 });
 
 test("a subfolder PATCH the cloud refuses to nest goes top-level and pushes that next pass", async (t) => {
@@ -835,8 +881,8 @@ test("a folder leaving a team pushes its retraction under a private parent that 
 });
 
 // A synced team folder "Roadmap" and its synced subfolder "Q1", each holding a
-// synced note, moved to the private space together.
-function carryTeamSubfolderOut(db, cloud) {
+// synced note; Q1 also holds a teammate's.
+function seedTeamSubfolder(db, cloud) {
   db.setActiveAccountId("test-account");
   const team = db.db
     .prepare(
@@ -863,14 +909,23 @@ function carryTeamSubfolderOut(db, cloud) {
   };
   const roadmap = seed("Roadmap");
   const quarter = seed("Q1", roadmap);
-  assert.ok(db.moveFolderToSpace(roadmap.folder.id, db.getPrivateSpaceId()).success);
-  // The move comes after the seeded cloud notes, or the cloud rejects it as stale.
-  db.db.prepare("UPDATE notes SET updated_at = '2027-01-01 00:00:00'").run();
+  const retro = db.saveNote("Retro", "body", "personal", null, null, quarter.folder.id, team).note;
+  const cloudRetro = cloud.seedNote({ client_note_id: retro.client_note_id, title: "Retro" });
+  db.markNoteSynced(retro.id, cloudRetro.id, null, "teammate");
   browserLocalStorage.setItem("teamSpacesCapability", "true");
-  return { roadmap, quarter };
+  return { roadmap, quarter, cloudRetro };
 }
 
-function assertCarriedRetraction(db, cloud, { roadmap, quarter }) {
+// The seeded folders, moved to the private space together.
+function carryTeamSubfolderOut(db, cloud) {
+  const seeded = seedTeamSubfolder(db, cloud);
+  assert.ok(db.moveFolderToSpace(seeded.roadmap.folder.id, db.getPrivateSpaceId()).success);
+  // The move comes after the seeded cloud notes, or the cloud rejects it as stale.
+  db.db.prepare("UPDATE notes SET updated_at = '2027-01-01 00:00:00'").run();
+  return seeded;
+}
+
+function assertCarriedRetraction(db, cloud, { roadmap, quarter, cloudRetro }) {
   assert.deepEqual(
     cloud
       .logFor("/api/folders/update")
@@ -888,6 +943,8 @@ function assertCarriedRetraction(db, cloud, { roadmap, quarter }) {
     [
       [quarter.cloudNote.id, null, quarter.cloudFolder.id],
       [roadmap.cloudNote.id, null, roadmap.cloudFolder.id],
+      // A teammate's note stays in the team and leaves the folder.
+      [cloudRetro.id, "cloud-growth", null],
     ].sort()
   );
   const q1 = folderByName(db, "Q1");
@@ -935,4 +992,20 @@ test("without backup, a carried subfolder retracts with its parent and nests onc
   const { roadmap, quarter } = carried;
   assert.equal(cloud.folder(quarter.cloudFolder.id).parent_folder_id, roadmap.cloudFolder.id);
   assert.equal(folderByName(db, "Q1").sync_status, "synced");
+});
+
+test("without backup, a pulled move out of a team keeps the carried subfolder nested", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  const { roadmap } = seedTeamSubfolder(db, cloud);
+  // Another device moved both to Private: the newer cloud rows carry no space.
+  db.db.prepare("UPDATE folders SET updated_at = '2020-01-01 00:00:00'").run();
+
+  browserLocalStorage.removeItem("cloudBackupEnabled");
+  await (await newSyncService(t)).syncFolders(true);
+
+  const q1 = folderByName(db, "Q1");
+  assert.equal(q1.space_id, db.getPrivateSpaceId());
+  assert.equal(q1.parent_folder_id, roadmap.folder.id);
 });

@@ -1853,11 +1853,13 @@ export class SyncService {
         if (
           isSpaceAccessError(err) ||
           isPermissionDenialError(err) ||
-          isInvalidParentFolderError(err)
+          isInvalidParentFolderError(err) ||
+          isFolderNameTakenError(err)
         ) {
           // A typed rejection can't be attributed to a row from the batch
-          // response; create individually so one rejected folder settles
-          // terminally without stranding (or relocating) the rest.
+          // response, and the server stops at the first one; create
+          // individually so one rejected folder settles on its own without
+          // stranding (or relocating) the rest.
           for (const { folder, scope, parentFolderId } of fresh) {
             await this.pushFreshFolder(folder, scope, parentFolderId, ctx);
           }
@@ -1972,6 +1974,14 @@ export class SyncService {
                   cloudFolder as unknown as Record<string, unknown>,
                   ctx.privateSpace.id
                 );
+                // The space change cleared the parent; a carried subfolder
+                // nests again under its parent once both are private.
+                if (cloudFolder.parent_folder_id !== undefined) {
+                  parentLinks.push({
+                    cloudId: cloudFolder.id,
+                    parentCloudId: cloudFolder.parent_folder_id,
+                  });
+                }
               }
             }
             continue;
@@ -3654,19 +3664,25 @@ export class SyncService {
     // pushing a child note's folder_id + scope now could be rejected as out
     // of scope. Those notes defer and stay pending. Note pushes pass the
     // private space: a private folder that owes no retraction is already
-    // private in the cloud, so it never holds its notes back.
+    // private in the cloud, so it never holds its notes back. A new subfolder
+    // waiting for its parent holds its notes back too, or they'd upload with
+    // no folder; a private one only when backup will push it.
     blockedFolderIds: Set<number>;
   }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+    const localToCloud = new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!]));
+    const unpushed = new Set(
+      folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
+    );
     return {
-      localToCloud: new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!])),
+      localToCloud,
       blockedFolderIds: new Set(
         folders
-          .filter(
-            (f) =>
-              f.cloud_id &&
-              f.sync_status === "pending" &&
-              (f.left_team || f.space_id !== privateSpaceId)
+          .filter((f) =>
+            f.cloud_id
+              ? unpushed.has(f.id) && (f.left_team || f.space_id !== privateSpaceId)
+              : (this.canSync() || f.space_id !== privateSpaceId) &&
+                this.cloudParentFolderId(f, localToCloud, unpushed) === undefined
           )
           .map((f) => f.id)
       ),

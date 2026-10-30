@@ -4834,7 +4834,24 @@ class DatabaseManager {
       const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       const nextAccountId = this._accountIdForSpace(spaceId);
       const inFolders = `IN (${placeholders(folderIds)})`;
-      const notes = this.db.transaction(() => {
+      const { notes, relocatedNotes } = this.db.transaction(() => {
+        // The server files a note only in its owner's personal folders, so a
+        // teammate's note stays in the team, at its top level. A note whose
+        // owner is still unknown moves.
+        const relocatedIds = leftTeam
+          ? this.db
+              .prepare(
+                `SELECT id FROM notes WHERE folder_id ${inFolders} AND deleted_at IS NULL AND owner_user_id <> ?`
+              )
+              .all(...folderIds, this.activeAccountId)
+              .map((row) => row.id)
+          : [];
+        const inRelocated = `IN (${placeholders(relocatedIds)})`;
+        this.db
+          .prepare(
+            `UPDATE notes SET folder_id = NULL, sync_status = 'pending', updated_at = datetime('now') WHERE id ${inRelocated}`
+          )
+          .run(...relocatedIds);
         this.db
           .prepare(
             `UPDATE folders SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'),
@@ -4851,12 +4868,17 @@ class DatabaseManager {
         this.db
           .prepare(`UPDATE agent_conversations SET space_id = ? WHERE folder_id ${inFolders}`)
           .run(spaceId, ...folderIds);
-        return this.db
-          .prepare(`SELECT * FROM notes WHERE folder_id ${inFolders} AND deleted_at IS NULL`)
-          .all(...folderIds);
+        return {
+          notes: this.db
+            .prepare(`SELECT * FROM notes WHERE folder_id ${inFolders} AND deleted_at IS NULL`)
+            .all(...folderIds),
+          relocatedNotes: this.db
+            .prepare(`SELECT * FROM notes WHERE id ${inRelocated}`)
+            .all(...relocatedIds),
+        };
       })();
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-      return { success: true, folder: updated, notes };
+      return { success: true, folder: updated, notes, relocatedNotes };
     } catch (error) {
       debugLogger.error("Error moving folder to space", { error: error.message }, "spaces");
       throw error;

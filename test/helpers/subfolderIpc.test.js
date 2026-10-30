@@ -356,34 +356,44 @@ test("nesting a folder leaves the directory another space's same-named folder sh
   );
 });
 
-test("deleting a folder keeps the directory a folder named in another case still uses", async (t) => {
-  const ctx = setup(t);
-  if (!ctx) return;
-  const { db } = ctx;
+// Each platform's directories decide whether two spaces' folders share one.
+for (const [platform, personalName, teamName, how, shared] of [
+  ["linux", "Casey", "casey", "another case", false],
+  ["darwin", "Été", "été", "another case", true],
+  ["darwin", "Caf\u00e9", "Cafe\u0301", "another Unicode form", true],
+  ["win32", "Été", "été", "another case", true],
+  ["win32", "Caf\u00e9", "Cafe\u0301", "another Unicode form", false],
+]) {
+  test(`on ${platform}, a folder named in ${how} ${shared ? "shares" : "doesn't share"} a deleted folder's directory`, async (t) => {
+    const ctx = setup(t);
+    if (!ctx) return;
+    const { db } = ctx;
+    const realPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: platform });
+    t.after(() => Object.defineProperty(process, "platform", realPlatform));
+    const deleteFolder = t.mock.method(markdownMirror, "deleteFolder");
 
-  const team = db.db
-    .prepare(
-      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
-    )
-    .run("team-case-only", "Growth");
-  db.db
-    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
-    .run(team.lastInsertRowid, "test-account");
-  const personal = (await handlers.get("db-create-folder")(null, "Casey")).folder;
-  const teamFolder = (await handlers.get("db-create-folder")(null, "casey", team.lastInsertRowid))
-    .folder;
-  const teamNote = db.saveNote("Roadmap", "Body", "personal", null, null, teamFolder.id).note;
-  const deletedNote = db.saveNote("Plan", "Body", "personal", null, null, personal.id).note;
-  markdownMirror.writeNote(teamNote, "casey");
-  markdownMirror.writeNote(deletedNote, "Casey");
-  await settle();
+    const team = db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+      )
+      .run("team-same-directory", "Growth");
+    db.db
+      .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+      .run(team.lastInsertRowid, "test-account");
+    const personal = (await handlers.get("db-create-folder")(null, personalName)).folder;
+    await handlers.get("db-create-folder")(null, teamName, team.lastInsertRowid);
+    const deletedNote = db.saveNote("Plan", "Body", "personal", null, null, personal.id).note;
+    markdownMirror.writeNote(deletedNote, personalName);
+    await settle();
 
-  await handlers.get("db-delete-folder")(null, personal.id);
-  await settle();
-  await settle();
-  assert.ok(markdownMirror.getNotePath(teamNote.id), "the team folder's note file survives");
-  assert.equal(markdownMirror.getNotePath(deletedNote.id), null, "the deleted note's file goes");
-});
+    await handlers.get("db-delete-folder")(null, personal.id);
+    await settle();
+    await settle();
+    assert.equal(deleteFolder.mock.callCount(), shared ? 0 : 1);
+    assert.equal(markdownMirror.getNotePath(deletedNote.id), null, "the deleted note's file goes");
+  });
+}
 
 test("a subfolder whose directory can't move out of a deleted parent is rewritten at the top level", async (t) => {
   const ctx = setup(t);
