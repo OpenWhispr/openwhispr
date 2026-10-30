@@ -617,6 +617,24 @@ test("retry: an empty answer from a BYOK engine is no speech, not a missing engi
   }
 });
 
+test("retry: Scribe's [pause] for silence is no speech, not a transcript", async (t) => {
+  const originalFetchResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = originalFetchResponse;
+  });
+  fetchResponse = () => ({ ok: true, status: 200, json: async () => ({ text: "[pause]" }) });
+  textUpdates.length = 0;
+  const result = await invoke({
+    cloudTranscriptionProvider: "openrouter",
+    cloudTranscriptionModel: "elevenlabs/scribe-v2",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "NO_SPEECH_DETECTED");
+  assert.equal(textUpdates.length, 0);
+});
+
 test("retry: a chunked cloud retry that lost a chunk saves the rest and returns the warning", async (t) => {
   const result = await withCloudResponse(
     t,

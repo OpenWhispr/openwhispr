@@ -7811,7 +7811,8 @@ class IPCHandlers {
         if (!result) {
           return { success: false, error: "No transcription engine available" };
         }
-        if (!result.text) {
+        // ElevenLabs Scribe answers silence with "[pause]" instead of nothing.
+        if (!result.text || result.text.trim() === "[pause]") {
           throw Object.assign(new Error("No speech detected in audio"), {
             code: "NO_SPEECH_DETECTED",
           });
