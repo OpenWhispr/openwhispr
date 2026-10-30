@@ -12217,6 +12217,7 @@ class IPCHandlers {
         if (byok) dropStaleReadyWarmConnection(this.assemblyAiStreaming);
 
         if (this.assemblyAiStreaming.hasWarmConnection()) {
+          this.assemblyAiStreaming.resetWarmIdleTimer?.(options.idleTimeoutMs);
           debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
