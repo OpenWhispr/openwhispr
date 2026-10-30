@@ -3991,7 +3991,11 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Chat bifurcado",
+    "forkedFrom": "Bifurcado de «{{title}}»",
+    "forkFailed": "No se pudo bifurcar este chat"
   },
   "support": {
     "documentation": "Documentación",
@@ -4189,7 +4193,72 @@
       "update_skillName": "Actualizar habilidad",
       "search_openwhispr_helpStatus": "Buscando en la ayuda de OpenWhispr...",
       "read_openwhispr_helpStatus": "Leyendo la ayuda de OpenWhispr...",
-      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr..."
+      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr...",
+      "ask_userName": "Pregunta",
+      "ask_userStatus": "Preguntándote...",
+      "request_connectionName": "Conexión",
+      "request_connectionStatus": "Pidiendo conectar...",
+      "request_accessName": "Acceso",
+      "request_accessStatus": "Pidiendo acceso...",
+      "request_api_keyName": "Clave de API",
+      "request_api_keyStatus": "Pidiendo una clave de API...",
+      "open_settingsName": "Ajustes",
+      "open_settingsStatus": "Indicándote Ajustes..."
+    },
+    "turn": {
+      "reasoning": "Razonamiento",
+      "stopped": "Detenido",
+      "stepLimit": "En pausa tras alcanzar el número máximo de pasos.",
+      "continue": "Continuar",
+      "continueMessage": "Continúa",
+      "failed": "Esta respuesta falló."
+    },
+    "interactions": {
+      "notNow": "Ahora no",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "Recomendado",
+        "submit": "Enviar",
+        "placeholder": "Escribe tu respuesta…"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Termina de conectar en tu navegador…",
+        "failed": "No se pudo conectar. Inténtalo de nuevo.",
+        "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo.",
+        "calendarTitle": "Conectar un calendario"
+      },
+      "access": {
+        "screen": "¿Permitir el acceso a tu pantalla?",
+        "allow": "Permitir"
+      },
+      "apiKey": {
+        "title": "Añade tu clave de API de {{provider}}",
+        "placeholder": "Clave de API",
+        "save": "Guardar"
+      },
+      "settings": {
+        "done": "Listo",
+        "technicalDetails": "Detalles técnicos"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Pantalla compartida",
+        "declined": "No permitido",
+        "saved": "Clave de API guardada",
+        "done": "De vuelta de Ajustes",
+        "cancelled": "Descartado",
+        "notAnswered": "Sin respuesta",
+        "invalid": "No se pudo mostrar la pregunta"
+      },
+      "followUp": {
+        "connected": "He conectado {{name}}.",
+        "granted": "He permitido el acceso a mi pantalla.",
+        "saved": "He guardado mi clave de API de {{provider}}.",
+        "done": "He terminado en Ajustes."
+      }
     }
   },
   "assistant": {
@@ -4487,7 +4556,8 @@
         "notes": {
           "targetTitle": "En «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Ya enviaste esto antes en este chat."
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {
@@ -4776,7 +4846,8 @@
       },
       "gmailDraftLimit": "Solo se pueden preparar {{max}} correos por solicitud.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud."
+      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud.",
+      "alreadySent": "Ya se hizo para esta solicitud"
     },
     "beta": "Beta",
     "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",

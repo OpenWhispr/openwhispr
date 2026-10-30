@@ -3921,7 +3921,11 @@
       "todos": "列出我最近的待辦事項",
       "meeting": "幫我準備下一場會議",
       "sharedNotes": "突顯我的共享筆記"
-    }
+    },
+    "fork": "分支",
+    "forked": "分支的對話",
+    "forkedFrom": "分支自「{{title}}」",
+    "forkFailed": "無法分支此對話"
   },
   "support": {
     "documentation": "文件",
@@ -4119,7 +4123,72 @@
       "update_skillName": "更新技能",
       "search_openwhispr_helpStatus": "正在搜尋 OpenWhispr 說明...",
       "read_openwhispr_helpStatus": "正在閱讀 OpenWhispr 說明...",
-      "get_openwhispr_contextStatus": "正在讀取 OpenWhispr 設定..."
+      "get_openwhispr_contextStatus": "正在讀取 OpenWhispr 設定...",
+      "ask_userName": "提問",
+      "ask_userStatus": "正在詢問你...",
+      "request_connectionName": "連結",
+      "request_connectionStatus": "正在請求連結...",
+      "request_accessName": "存取",
+      "request_accessStatus": "正在請求存取...",
+      "request_api_keyName": "API 金鑰",
+      "request_api_keyStatus": "正在請求 API 金鑰...",
+      "open_settingsName": "設定",
+      "open_settingsStatus": "正在引導你前往設定..."
+    },
+    "turn": {
+      "reasoning": "推理過程",
+      "stopped": "已停止",
+      "stepLimit": "已達到最大步驟數，已暫停。",
+      "continue": "繼續",
+      "continueMessage": "繼續",
+      "failed": "此回覆失敗。"
+    },
+    "interactions": {
+      "notNow": "暫不",
+      "cancel": "取消",
+      "questions": {
+        "recommended": "推薦",
+        "submit": "提交",
+        "placeholder": "輸入你的回答…"
+      },
+      "connection": {
+        "title": "連結 {{name}}",
+        "connect": "連結 {{name}}",
+        "connecting": "請在瀏覽器中完成連結…",
+        "failed": "無法連結，請再試一次。",
+        "permissionDenied": "行事曆存取遭拒。請在系統設定中允許後再試一次。",
+        "calendarTitle": "連結日曆"
+      },
+      "access": {
+        "screen": "允許存取你的螢幕嗎？",
+        "allow": "允許"
+      },
+      "apiKey": {
+        "title": "新增你的 {{provider}} API 金鑰",
+        "placeholder": "API 金鑰",
+        "save": "儲存"
+      },
+      "settings": {
+        "done": "我已完成",
+        "technicalDetails": "技術詳細資訊"
+      },
+      "status": {
+        "answered": "已回答",
+        "connected": "已連結 {{name}}",
+        "granted": "已分享螢幕",
+        "declined": "未允許",
+        "saved": "API 金鑰已儲存",
+        "done": "已從設定返回",
+        "cancelled": "已略過",
+        "notAnswered": "未回答",
+        "invalid": "無法顯示該問題"
+      },
+      "followUp": {
+        "connected": "我已連結 {{name}}。",
+        "granted": "我已允許存取我的螢幕。",
+        "saved": "我已儲存我的 {{provider}} API 金鑰。",
+        "done": "我已在設定中完成。"
+      }
     }
   },
   "assistant": {
@@ -4417,7 +4486,8 @@
         "notes": {
           "targetTitle": "關於「{{title}}」"
         }
-      }
+      },
+      "sentEarlier": "你已在此對話中傳送過此內容。"
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {
@@ -4706,7 +4776,8 @@
       },
       "gmailDraftLimit": "每次請求最多只能準備 {{max}} 封郵件。",
       "queryResults": "找到的結果：{{total}}",
-      "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。"
+      "cardLimit": "每次請求最多只能準備 {{max}} 張卡片。",
+      "alreadySent": "已在此請求中完成"
     },
     "beta": "測試版",
     "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",

@@ -3939,7 +3939,11 @@
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
       "sharedNotes": "Evidenzia le mie note condivise"
-    }
+    },
+    "fork": "Dirama",
+    "forked": "Chat diramata",
+    "forkedFrom": "Diramata da «{{title}}»",
+    "forkFailed": "Impossibile diramare questa chat"
   },
   "support": {
     "documentation": "Documentazione",
@@ -4137,7 +4141,72 @@
       "update_skillName": "Aggiorna skill",
       "search_openwhispr_helpStatus": "Ricerca nella guida di OpenWhispr...",
       "read_openwhispr_helpStatus": "Lettura della guida di OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lettura delle impostazioni di OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lettura delle impostazioni di OpenWhispr...",
+      "ask_userName": "Domanda",
+      "ask_userStatus": "Ti sto chiedendo...",
+      "request_connectionName": "Connessione",
+      "request_connectionStatus": "Richiesta di connessione...",
+      "request_accessName": "Accesso",
+      "request_accessStatus": "Richiesta di accesso...",
+      "request_api_keyName": "Chiave API",
+      "request_api_keyStatus": "Richiesta di una chiave API...",
+      "open_settingsName": "Impostazioni",
+      "open_settingsStatus": "Ti indirizzo alle impostazioni..."
+    },
+    "turn": {
+      "reasoning": "Ragionamento",
+      "stopped": "Interrotto",
+      "stepLimit": "In pausa dopo il numero massimo di passaggi.",
+      "continue": "Continua",
+      "continueMessage": "Continua",
+      "failed": "Questa risposta non è riuscita."
+    },
+    "interactions": {
+      "notNow": "Non ora",
+      "cancel": "Annulla",
+      "questions": {
+        "recommended": "Consigliato",
+        "submit": "Invia",
+        "placeholder": "Scrivi la tua risposta…"
+      },
+      "connection": {
+        "title": "Connetti {{name}}",
+        "connect": "Connetti {{name}}",
+        "connecting": "Completa la connessione nel browser…",
+        "failed": "Impossibile connettersi. Riprova.",
+        "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova.",
+        "calendarTitle": "Connetti un calendario"
+      },
+      "access": {
+        "screen": "Consentire l'accesso allo schermo?",
+        "allow": "Consenti"
+      },
+      "apiKey": {
+        "title": "Aggiungi la tua chiave API di {{provider}}",
+        "placeholder": "Chiave API",
+        "save": "Salva"
+      },
+      "settings": {
+        "done": "Fatto",
+        "technicalDetails": "Dettagli tecnici"
+      },
+      "status": {
+        "answered": "Risposto",
+        "connected": "{{name}} connesso",
+        "granted": "Schermo condiviso",
+        "declined": "Non consentito",
+        "saved": "Chiave API salvata",
+        "done": "Di ritorno dalle impostazioni",
+        "cancelled": "Ignorato",
+        "notAnswered": "Senza risposta",
+        "invalid": "Impossibile mostrare la domanda"
+      },
+      "followUp": {
+        "connected": "Ho connesso {{name}}.",
+        "granted": "Ho consentito l'accesso al mio schermo.",
+        "saved": "Ho salvato la mia chiave API di {{provider}}.",
+        "done": "Ho finito nelle impostazioni."
+      }
     }
   },
   "assistant": {
@@ -4435,7 +4504,8 @@
         "notes": {
           "targetTitle": "Su «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Hai già inviato questo in precedenza in questa chat."
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
     "email": {
@@ -4724,7 +4794,8 @@
       },
       "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
       "queryResults": "Risultati trovati: {{total}}",
-      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta."
+      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta.",
+      "alreadySent": "Già fatto per questa richiesta"
     },
     "beta": "Beta",
     "upsell": "I connettori sono inclusi nei piani a pagamento. Effettua l'upgrade per far lavorare l'assistente nei tuoi strumenti.",

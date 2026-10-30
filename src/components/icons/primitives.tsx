@@ -212,6 +212,17 @@ const SquareSparkleMark = glyph(
   </>
 );
 
+// The chat's Fork action (Lucide's git-fork shape).
+const GitForkMark = glyph(
+  <>
+    <circle cx="12" cy="18" r="3" />
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="18" cy="6" r="3" />
+    <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+    <path d="M12 12v3" />
+  </>
+);
+
 // The skill icon: a tile on two layers. Each layer is its own group, drawn bottom first,
 // so skills/SkillIcon.tsx can drop them in one after another.
 const SkillStackMark = glyph(
@@ -244,6 +255,7 @@ export const Bold = createIcon("bold", BoldMark);
 export const CopyRounded = createIcon("copy-rounded", CopyRoundedMark);
 export const EyeOff = createIcon("eye-off", EyeOffMark);
 export const FolderRounded = createIcon("folder-rounded", FolderRoundedMark);
+export const GitFork = createIcon("git-fork", GitForkMark);
 export const Heading = createIcon("heading", HeadingMark);
 export const Italic = createIcon("italic", ItalicMark);
 export const List = createIcon("list", ListMark);

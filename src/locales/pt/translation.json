@@ -3939,7 +3939,11 @@
       "todos": "Liste minhas tarefas recentes",
       "meeting": "Prepare-me para minha próxima reunião",
       "sharedNotes": "Destaque minhas notas compartilhadas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Conversa bifurcada",
+    "forkedFrom": "Bifurcada de \"{{title}}\"",
+    "forkFailed": "Não foi possível bifurcar esta conversa"
   },
   "support": {
     "documentation": "Documentação",
@@ -4137,7 +4141,72 @@
       "update_skillName": "Atualizar habilidade",
       "search_openwhispr_helpStatus": "Pesquisando na ajuda do OpenWhispr...",
       "read_openwhispr_helpStatus": "Lendo a ajuda do OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr...",
+      "ask_userName": "Pergunta",
+      "ask_userStatus": "Perguntando a você...",
+      "request_connectionName": "Conexão",
+      "request_connectionStatus": "Pedindo para conectar...",
+      "request_accessName": "Acesso",
+      "request_accessStatus": "Pedindo acesso...",
+      "request_api_keyName": "Chave de API",
+      "request_api_keyStatus": "Pedindo uma chave de API...",
+      "open_settingsName": "Configurações",
+      "open_settingsStatus": "Indicando as configurações..."
+    },
+    "turn": {
+      "reasoning": "Raciocínio",
+      "stopped": "Interrompido",
+      "stepLimit": "Pausado após o número máximo de etapas.",
+      "continue": "Continuar",
+      "continueMessage": "Continue",
+      "failed": "Esta resposta falhou."
+    },
+    "interactions": {
+      "notNow": "Agora não",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "Recomendado",
+        "submit": "Enviar",
+        "placeholder": "Digite sua resposta…"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Conclua a conexão no navegador…",
+        "failed": "Não foi possível conectar. Tente novamente.",
+        "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
+        "calendarTitle": "Conectar um calendário"
+      },
+      "access": {
+        "screen": "Permitir acesso à sua tela?",
+        "allow": "Permitir"
+      },
+      "apiKey": {
+        "title": "Adicione sua chave de API do {{provider}}",
+        "placeholder": "Chave de API",
+        "save": "Salvar"
+      },
+      "settings": {
+        "done": "Concluído",
+        "technicalDetails": "Detalhes técnicos"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Tela compartilhada",
+        "declined": "Não permitido",
+        "saved": "Chave de API salva",
+        "done": "De volta das configurações",
+        "cancelled": "Dispensado",
+        "notAnswered": "Sem resposta",
+        "invalid": "Não foi possível mostrar a pergunta"
+      },
+      "followUp": {
+        "connected": "Conectei o {{name}}.",
+        "granted": "Permiti o acesso à minha tela.",
+        "saved": "Salvei minha chave de API do {{provider}}.",
+        "done": "Terminei nas configurações."
+      }
     }
   },
   "assistant": {
@@ -4435,7 +4504,8 @@
         "notes": {
           "targetTitle": "Em \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "Você já enviou isto antes nesta conversa."
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
@@ -4724,7 +4794,8 @@
       },
       "gmailDraftLimit": "Só é possível preparar {{max}} e-mails por solicitação.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação."
+      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação.",
+      "alreadySent": "Já feito para este pedido"
     },
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",

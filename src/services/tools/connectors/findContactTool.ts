@@ -35,7 +35,7 @@ export const findContactTool: ToolDefinition = {
     const contacts = response?.contacts ?? [];
     const guidance =
       contacts.length === 0
-        ? "No match. Ask the user for the email address."
+        ? "No match in the user's calendars or contacts. Look for the person in the user's notes with search_notes before you ask the user for the email address."
         : response?.hasMore
           ? `More than ${contacts.length} people match and only the closest are listed. Unless one is clearly meant, ask the user for the last name or email address.`
           : contacts.length > 1

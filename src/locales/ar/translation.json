@@ -952,7 +952,8 @@
         "notes": {
           "targetTitle": "على \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "سبق أن أرسلت هذا في وقت سابق من هذه المحادثة."
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1241,7 +1242,8 @@
       },
       "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
       "queryResults": "النتائج التي عُثر عليها: {{total}}",
-      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب.",
+      "alreadySent": "تم تنفيذه بالفعل لهذا الطلب"
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
@@ -2270,7 +2272,72 @@
       "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
-      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."
+      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr...",
+      "ask_userName": "سؤال",
+      "ask_userStatus": "جارٍ سؤالك...",
+      "request_connectionName": "ربط",
+      "request_connectionStatus": "جارٍ طلب الربط...",
+      "request_accessName": "وصول",
+      "request_accessStatus": "جارٍ طلب الوصول...",
+      "request_api_keyName": "مفتاح API",
+      "request_api_keyStatus": "جارٍ طلب مفتاح API...",
+      "open_settingsName": "الإعدادات",
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+    },
+    "turn": {
+      "reasoning": "الاستدلال",
+      "stopped": "تم الإيقاف",
+      "stepLimit": "توقف مؤقتًا بعد بلوغ الحد الأقصى للخطوات.",
+      "continue": "متابعة",
+      "continueMessage": "تابِع",
+      "failed": "تعذّر إكمال هذا الرد."
+    },
+    "interactions": {
+      "notNow": "ليس الآن",
+      "cancel": "إلغاء",
+      "questions": {
+        "recommended": "موصى به",
+        "submit": "إرسال",
+        "placeholder": "اكتب إجابتك…"
+      },
+      "connection": {
+        "title": "ربط {{name}}",
+        "connect": "ربط {{name}}",
+        "connecting": "أكمل الربط في متصفحك…",
+        "failed": "تعذّر الربط. حاول مرة أخرى.",
+        "permissionDenied": "تم رفض الوصول إلى التقويم. اسمح به في إعدادات النظام ثم حاول مرة أخرى.",
+        "calendarTitle": "ربط تقويم"
+      },
+      "access": {
+        "screen": "هل تسمح بالوصول إلى شاشتك؟",
+        "allow": "سماح"
+      },
+      "apiKey": {
+        "title": "أضف مفتاح API الخاص بـ {{provider}}",
+        "placeholder": "مفتاح API",
+        "save": "حفظ"
+      },
+      "settings": {
+        "done": "انتهيت",
+        "technicalDetails": "التفاصيل التقنية"
+      },
+      "status": {
+        "answered": "تمت الإجابة",
+        "connected": "تم ربط {{name}}",
+        "granted": "تمت مشاركة الشاشة",
+        "declined": "غير مسموح",
+        "saved": "تم حفظ مفتاح API",
+        "done": "تمت العودة من الإعدادات",
+        "cancelled": "تم التجاهل",
+        "notAnswered": "لم تتم الإجابة",
+        "invalid": "تعذّر عرض هذا السؤال"
+      },
+      "followUp": {
+        "connected": "لقد ربطت {{name}}.",
+        "granted": "سمحت بالوصول إلى شاشتي.",
+        "saved": "حفظت مفتاح API الخاص بـ {{provider}}.",
+        "done": "انتهيت من الإعدادات."
+      }
     }
   },
   "noteEditor": {
@@ -5304,7 +5371,11 @@
       "todos": "اعرض مهامي الأخيرة",
       "meeting": "حضّرني لاجتماعي القادم",
       "sharedNotes": "أبرِز ملاحظاتي المشتركة"
-    }
+    },
+    "fork": "تفريع",
+    "forked": "محادثة متفرعة",
+    "forkedFrom": "متفرعة من \"{{title}}\"",
+    "forkFailed": "تعذّر تفريع هذه المحادثة"
   },
   "support": {
     "documentation": "الوثائق",

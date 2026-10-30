@@ -3999,7 +3999,11 @@
       "todos": "Перечисли мои последние задачи",
       "meeting": "Подготовь меня к следующей встрече",
       "sharedNotes": "Выдели мои общие заметки"
-    }
+    },
+    "fork": "Ответвить",
+    "forked": "Ответвлённый чат",
+    "forkedFrom": "Ответвлено от «{{title}}»",
+    "forkFailed": "Не удалось ответвить чат"
   },
   "support": {
     "documentation": "Документация",
@@ -4197,7 +4201,72 @@
       "update_skillName": "Обновить навык",
       "search_openwhispr_helpStatus": "Поиск в справке OpenWhispr...",
       "read_openwhispr_helpStatus": "Чтение справки OpenWhispr...",
-      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr..."
+      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr...",
+      "ask_userName": "Вопрос",
+      "ask_userStatus": "Задаю вопрос...",
+      "request_connectionName": "Подключение",
+      "request_connectionStatus": "Запрашиваю подключение...",
+      "request_accessName": "Доступ",
+      "request_accessStatus": "Запрашиваю доступ...",
+      "request_api_keyName": "Ключ API",
+      "request_api_keyStatus": "Запрашиваю ключ API...",
+      "open_settingsName": "Настройки",
+      "open_settingsStatus": "Направляю в настройки..."
+    },
+    "turn": {
+      "reasoning": "Рассуждение",
+      "stopped": "Остановлено",
+      "stepLimit": "Приостановлено: достигнут предел шагов.",
+      "continue": "Продолжить",
+      "continueMessage": "Продолжай",
+      "failed": "Не удалось получить этот ответ."
+    },
+    "interactions": {
+      "notNow": "Не сейчас",
+      "cancel": "Отмена",
+      "questions": {
+        "recommended": "Рекомендуется",
+        "submit": "Отправить",
+        "placeholder": "Введите ответ…"
+      },
+      "connection": {
+        "title": "Подключить {{name}}",
+        "connect": "Подключить {{name}}",
+        "connecting": "Завершите подключение в браузере…",
+        "failed": "Не удалось подключиться. Попробуйте ещё раз.",
+        "permissionDenied": "Доступ к календарю запрещён. Разрешите его в Системных настройках и попробуйте снова.",
+        "calendarTitle": "Подключить календарь"
+      },
+      "access": {
+        "screen": "Разрешить доступ к экрану?",
+        "allow": "Разрешить"
+      },
+      "apiKey": {
+        "title": "Добавьте ключ API {{provider}}",
+        "placeholder": "Ключ API",
+        "save": "Сохранить"
+      },
+      "settings": {
+        "done": "Готово",
+        "technicalDetails": "Технические подробности"
+      },
+      "status": {
+        "answered": "Ответ получен",
+        "connected": "{{name}} подключён",
+        "granted": "Экран предоставлен",
+        "declined": "Не разрешено",
+        "saved": "Ключ API сохранён",
+        "done": "Возврат из настроек",
+        "cancelled": "Отклонено",
+        "notAnswered": "Без ответа",
+        "invalid": "Не удалось показать вопрос"
+      },
+      "followUp": {
+        "connected": "Я подключил {{name}}.",
+        "granted": "Я разрешил доступ к экрану.",
+        "saved": "Я сохранил ключ API {{provider}}.",
+        "done": "Я закончил в настройках."
+      }
     }
   },
   "assistant": {
@@ -4495,7 +4564,8 @@
         "notes": {
           "targetTitle": "К «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Вы уже отправляли это ранее в этом чате."
     },
     "policyOff": "Ваша организация отключила коннекторы.",
     "email": {
@@ -4784,7 +4854,8 @@
       },
       "gmailDraftLimit": "Лимит писем на один запрос: {{max}}.",
       "queryResults": "Найдено результатов: {{total}}",
-      "cardLimit": "Лимит карточек на один запрос: {{max}}."
+      "cardLimit": "Лимит карточек на один запрос: {{max}}.",
+      "alreadySent": "Уже сделано для этого запроса"
     },
     "beta": "Бета",
     "upsell": "Коннекторы входят в платные тарифы. Перейдите на платный тариф, чтобы ассистент работал в ваших инструментах.",

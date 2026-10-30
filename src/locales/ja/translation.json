@@ -3921,7 +3921,11 @@
       "todos": "最近のTo Doを一覧にして",
       "meeting": "次の会議に備えさせて",
       "sharedNotes": "共有ノートのハイライトを見せて"
-    }
+    },
+    "fork": "分岐",
+    "forked": "分岐したチャット",
+    "forkedFrom": "「{{title}}」から分岐",
+    "forkFailed": "このチャットを分岐できませんでした"
   },
   "support": {
     "documentation": "ドキュメント",
@@ -4119,7 +4123,72 @@
       "update_skillName": "スキルを更新",
       "search_openwhispr_helpStatus": "OpenWhisprのヘルプを検索中...",
       "read_openwhispr_helpStatus": "OpenWhisprのヘルプを読み込み中...",
-      "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中..."
+      "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中...",
+      "ask_userName": "質問",
+      "ask_userStatus": "質問しています...",
+      "request_connectionName": "接続",
+      "request_connectionStatus": "接続を依頼しています...",
+      "request_accessName": "アクセス",
+      "request_accessStatus": "アクセスを依頼しています...",
+      "request_api_keyName": "API キー",
+      "request_api_keyStatus": "API キーを依頼しています...",
+      "open_settingsName": "設定",
+      "open_settingsStatus": "設定を案内しています..."
+    },
+    "turn": {
+      "reasoning": "推論",
+      "stopped": "停止しました",
+      "stepLimit": "ステップ数の上限に達したため一時停止しました。",
+      "continue": "続ける",
+      "continueMessage": "続けて",
+      "failed": "この返信は失敗しました。"
+    },
+    "interactions": {
+      "notNow": "今はしない",
+      "cancel": "キャンセル",
+      "questions": {
+        "recommended": "おすすめ",
+        "submit": "送信",
+        "placeholder": "回答を入力…"
+      },
+      "connection": {
+        "title": "{{name}} を接続",
+        "connect": "{{name}} を接続",
+        "connecting": "ブラウザで接続を完了してください…",
+        "failed": "接続できませんでした。もう一度お試しください。",
+        "permissionDenied": "カレンダーへのアクセスが拒否されました。システム設定で許可してから、もう一度お試しください。",
+        "calendarTitle": "カレンダーを接続"
+      },
+      "access": {
+        "screen": "画面へのアクセスを許可しますか？",
+        "allow": "許可"
+      },
+      "apiKey": {
+        "title": "{{provider}} の API キーを追加",
+        "placeholder": "API キー",
+        "save": "保存"
+      },
+      "settings": {
+        "done": "完了しました",
+        "technicalDetails": "技術的な詳細"
+      },
+      "status": {
+        "answered": "回答済み",
+        "connected": "{{name}} を接続しました",
+        "granted": "画面を共有しました",
+        "declined": "許可しませんでした",
+        "saved": "API キーを保存しました",
+        "done": "設定から戻りました",
+        "cancelled": "閉じました",
+        "notAnswered": "未回答",
+        "invalid": "質問を表示できませんでした"
+      },
+      "followUp": {
+        "connected": "{{name}} を接続しました。",
+        "granted": "画面へのアクセスを許可しました。",
+        "saved": "{{provider}} の API キーを保存しました。",
+        "done": "設定を完了しました。"
+      }
     }
   },
   "assistant": {
@@ -4417,7 +4486,8 @@
         "notes": {
           "targetTitle": "「{{title}}」へ"
         }
-      }
+      },
+      "sentEarlier": "このチャットで以前に送信済みです。"
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {
@@ -4706,7 +4776,8 @@
       },
       "gmailDraftLimit": "1回のリクエストで準備できるメールは{{max}}件までです。",
       "queryResults": "見つかった結果: {{total}}",
-      "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。"
+      "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。",
+      "alreadySent": "このリクエストで既に実行済みです"
     },
     "beta": "ベータ",
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",

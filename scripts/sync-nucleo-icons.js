@@ -94,6 +94,7 @@ export {
   CopyRounded,
   EyeOff,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
   List,

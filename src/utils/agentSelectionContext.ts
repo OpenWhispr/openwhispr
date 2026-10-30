@@ -18,9 +18,9 @@ export function normalizeAgentSelectionContext(
 }
 
 /**
- * Builds the model-only form of the current user turn. The visible and
- * persisted user message remains untouched; this additional context exists
- * only for the request that consumes it.
+ * Builds the model's form of a user turn. The message itself stays as typed;
+ * its selected text is saved beside it and quoted again whenever the message
+ * is in the model's history.
  */
 export function buildAgentRequestText(
   userText: string,

@@ -3921,7 +3921,11 @@
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
       "sharedNotes": "突出显示我的共享笔记"
-    }
+    },
+    "fork": "分叉",
+    "forked": "分叉的对话",
+    "forkedFrom": "分叉自“{{title}}”",
+    "forkFailed": "无法分叉此对话"
   },
   "support": {
     "documentation": "文档",
@@ -4119,7 +4123,72 @@
       "update_skillName": "更新技能",
       "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
       "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
-      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
+      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置...",
+      "ask_userName": "提问",
+      "ask_userStatus": "正在询问你...",
+      "request_connectionName": "连接",
+      "request_connectionStatus": "正在请求连接...",
+      "request_accessName": "访问",
+      "request_accessStatus": "正在请求访问...",
+      "request_api_keyName": "API 密钥",
+      "request_api_keyStatus": "正在请求 API 密钥...",
+      "open_settingsName": "设置",
+      "open_settingsStatus": "正在引导你前往设置..."
+    },
+    "turn": {
+      "reasoning": "推理过程",
+      "stopped": "已停止",
+      "stepLimit": "已达到最大步骤数，已暂停。",
+      "continue": "继续",
+      "continueMessage": "继续",
+      "failed": "此回复失败。"
+    },
+    "interactions": {
+      "notNow": "暂不",
+      "cancel": "取消",
+      "questions": {
+        "recommended": "推荐",
+        "submit": "提交",
+        "placeholder": "输入你的回答…"
+      },
+      "connection": {
+        "title": "连接 {{name}}",
+        "connect": "连接 {{name}}",
+        "connecting": "请在浏览器中完成连接…",
+        "failed": "无法连接，请重试。",
+        "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。",
+        "calendarTitle": "连接日历"
+      },
+      "access": {
+        "screen": "允许访问你的屏幕吗？",
+        "allow": "允许"
+      },
+      "apiKey": {
+        "title": "添加你的 {{provider}} API 密钥",
+        "placeholder": "API 密钥",
+        "save": "保存"
+      },
+      "settings": {
+        "done": "我已完成",
+        "technicalDetails": "技术详情"
+      },
+      "status": {
+        "answered": "已回答",
+        "connected": "已连接 {{name}}",
+        "granted": "已共享屏幕",
+        "declined": "未允许",
+        "saved": "API 密钥已保存",
+        "done": "已从设置返回",
+        "cancelled": "已忽略",
+        "notAnswered": "未回答",
+        "invalid": "无法显示该问题"
+      },
+      "followUp": {
+        "connected": "我已连接 {{name}}。",
+        "granted": "我已允许访问我的屏幕。",
+        "saved": "我已保存我的 {{provider}} API 密钥。",
+        "done": "我已在设置中完成。"
+      }
     }
   },
   "assistant": {
@@ -4417,7 +4486,8 @@
         "notes": {
           "targetTitle": "关于“{{title}}”"
         }
-      }
+      },
+      "sentEarlier": "你已在此对话中发送过此内容。"
     },
     "policyOff": "您的组织已关闭连接器。",
     "email": {
@@ -4706,7 +4776,8 @@
       },
       "gmailDraftLimit": "每次请求最多只能准备 {{max}} 封邮件。",
       "queryResults": "找到的结果：{{total}}",
-      "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。"
+      "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。",
+      "alreadySent": "已在此请求中完成"
     },
     "beta": "测试版",
     "upsell": "连接器包含在付费方案中。升级后，助手即可在您的工具中执行操作。",

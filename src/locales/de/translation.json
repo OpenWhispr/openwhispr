@@ -3158,7 +3158,11 @@
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
-    }
+    },
+    "fork": "Abzweigen",
+    "forked": "Abgezweigter Chat",
+    "forkedFrom": "Abgezweigt von „{{title}}“",
+    "forkFailed": "Chat konnte nicht abgezweigt werden"
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -4291,7 +4295,72 @@
       "update_skillName": "Skill aktualisieren",
       "search_openwhispr_helpStatus": "OpenWhispr-Hilfe wird durchsucht...",
       "read_openwhispr_helpStatus": "OpenWhispr-Hilfe wird gelesen...",
-      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen..."
+      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen...",
+      "ask_userName": "Frage",
+      "ask_userStatus": "Frage dich...",
+      "request_connectionName": "Verbindung",
+      "request_connectionStatus": "Bitte um Verbindung...",
+      "request_accessName": "Zugriff",
+      "request_accessStatus": "Bitte um Zugriff...",
+      "request_api_keyName": "API-Schlüssel",
+      "request_api_keyStatus": "Bitte um einen API-Schlüssel...",
+      "open_settingsName": "Einstellungen",
+      "open_settingsStatus": "Verweise auf die Einstellungen..."
+    },
+    "turn": {
+      "reasoning": "Gedankengang",
+      "stopped": "Angehalten",
+      "stepLimit": "Nach der maximalen Anzahl von Schritten pausiert.",
+      "continue": "Fortfahren",
+      "continueMessage": "Mach weiter",
+      "failed": "Diese Antwort ist fehlgeschlagen."
+    },
+    "interactions": {
+      "notNow": "Nicht jetzt",
+      "cancel": "Abbrechen",
+      "questions": {
+        "recommended": "Empfohlen",
+        "submit": "Absenden",
+        "placeholder": "Antwort eingeben…"
+      },
+      "connection": {
+        "title": "{{name}} verbinden",
+        "connect": "{{name}} verbinden",
+        "connecting": "Schließe die Verbindung im Browser ab…",
+        "failed": "Verbindung fehlgeschlagen. Versuche es erneut.",
+        "permissionDenied": "Der Kalenderzugriff wurde verweigert. Erlaube ihn in den Systemeinstellungen und versuche es erneut.",
+        "calendarTitle": "Kalender verbinden"
+      },
+      "access": {
+        "screen": "Zugriff auf deinen Bildschirm erlauben?",
+        "allow": "Erlauben"
+      },
+      "apiKey": {
+        "title": "Deinen {{provider}}-API-Schlüssel hinzufügen",
+        "placeholder": "API-Schlüssel",
+        "save": "Speichern"
+      },
+      "settings": {
+        "done": "Fertig",
+        "technicalDetails": "Technische Details"
+      },
+      "status": {
+        "answered": "Beantwortet",
+        "connected": "{{name}} verbunden",
+        "granted": "Bildschirm geteilt",
+        "declined": "Nicht erlaubt",
+        "saved": "API-Schlüssel gespeichert",
+        "done": "Zurück aus den Einstellungen",
+        "cancelled": "Verworfen",
+        "notAnswered": "Nicht beantwortet",
+        "invalid": "Die Frage konnte nicht angezeigt werden"
+      },
+      "followUp": {
+        "connected": "Ich habe {{name}} verbunden.",
+        "granted": "Ich habe den Zugriff auf meinen Bildschirm erlaubt.",
+        "saved": "Ich habe meinen {{provider}}-API-Schlüssel gespeichert.",
+        "done": "Ich bin in den Einstellungen fertig."
+      }
     }
   },
   "assistant": {
@@ -4589,7 +4658,8 @@
         "notes": {
           "targetTitle": "Zu „{{title}}“"
         }
-      }
+      },
+      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet."
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {
@@ -4878,7 +4948,8 @@
       },
       "gmailDraftLimit": "Pro Anfrage können nur {{max}} E-Mails vorbereitet werden.",
       "queryResults": "Gefundene Ergebnisse: {{total}}",
-      "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden."
+      "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden.",
+      "alreadySent": "Für diese Anfrage bereits erledigt"
     },
     "beta": "Beta",
     "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",

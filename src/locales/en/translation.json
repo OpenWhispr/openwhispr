@@ -3158,7 +3158,11 @@
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
-    }
+    },
+    "fork": "Fork",
+    "forked": "Forked chat",
+    "forkedFrom": "Forked from \"{{title}}\"",
+    "forkFailed": "Couldn't fork this chat"
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -4291,7 +4295,72 @@
       "update_skillName": "Update skill",
       "search_openwhispr_helpStatus": "Searching OpenWhispr help...",
       "read_openwhispr_helpStatus": "Reading OpenWhispr help...",
-      "get_openwhispr_contextStatus": "Reading OpenWhispr settings..."
+      "get_openwhispr_contextStatus": "Reading OpenWhispr settings...",
+      "ask_userName": "Question",
+      "ask_userStatus": "Asking you...",
+      "request_connectionName": "Connection",
+      "request_connectionStatus": "Asking to connect...",
+      "request_accessName": "Access",
+      "request_accessStatus": "Asking for access...",
+      "request_api_keyName": "API key",
+      "request_api_keyStatus": "Asking for an API key...",
+      "open_settingsName": "Settings",
+      "open_settingsStatus": "Pointing you to Settings..."
+    },
+    "turn": {
+      "reasoning": "Reasoning",
+      "stopped": "Stopped",
+      "stepLimit": "Paused after the maximum number of steps.",
+      "continue": "Continue",
+      "continueMessage": "Continue",
+      "failed": "This reply failed."
+    },
+    "interactions": {
+      "notNow": "Not now",
+      "cancel": "Cancel",
+      "questions": {
+        "recommended": "Recommended",
+        "submit": "Submit",
+        "placeholder": "Type your answer…"
+      },
+      "connection": {
+        "title": "Connect {{name}}",
+        "connect": "Connect {{name}}",
+        "connecting": "Finish connecting in your browser…",
+        "failed": "Couldn't connect. Try again.",
+        "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
+        "calendarTitle": "Connect a calendar"
+      },
+      "access": {
+        "screen": "Allow access to your screen?",
+        "allow": "Allow"
+      },
+      "apiKey": {
+        "title": "Add your {{provider}} API key",
+        "placeholder": "API key",
+        "save": "Save"
+      },
+      "settings": {
+        "done": "I'm done",
+        "technicalDetails": "Technical details"
+      },
+      "status": {
+        "answered": "Answered",
+        "connected": "Connected {{name}}",
+        "granted": "Screen shared",
+        "declined": "Not allowed",
+        "saved": "API key saved",
+        "done": "Back from Settings",
+        "cancelled": "Dismissed",
+        "notAnswered": "Not answered",
+        "invalid": "Couldn't show that question"
+      },
+      "followUp": {
+        "connected": "I connected {{name}}.",
+        "granted": "I allowed access to my screen.",
+        "saved": "I saved my {{provider}} API key.",
+        "done": "I'm done in Settings."
+      }
     }
   },
   "assistant": {
@@ -4589,7 +4658,8 @@
         "notes": {
           "targetTitle": "On \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "You already sent this earlier in this chat."
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -4878,7 +4948,8 @@
       },
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
-      "cardLimit": "Only {{max}} cards can be prepared per request."
+      "cardLimit": "Only {{max}} cards can be prepared per request.",
+      "alreadySent": "Already done for this request"
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",

@@ -110,8 +110,34 @@ const TOOL_GROUPS: Record<string, string> = {
   load_skill: "The user's skills",
   propose_skill: "The user's skills",
   update_skill: "The user's skills",
+  ask_user: "Asking the user",
+  request_connection: "Asking the user",
+  request_access: "Asking the user",
+  request_api_key: "Asking the user",
+  open_settings: "Asking the user",
 };
 
+// The interaction tools are there to finish a task, never to add steps to it.
+// What to look up with which tool before asking, for the tools this turn has.
+// Smaller models skip the lookups unless the tools are named.
+const LOOKUPS: ReadonlyArray<[tool: string, lookup: string]> = [
+  ["find_contact", "people and their email addresses with find_contact, then search_notes"],
+  ["search_notes", "names, addresses, channels, plans and facts with search_notes"],
+  ["github_search_issues", "pull requests and issues with github_search_issues"],
+  ["linear_search_issues", "Linear issues with linear_search_issues"],
+  ["get_calendar_events", "meetings with get_calendar_events"],
+];
+
+function askOnlyWhenNecessaryRule(tools: readonly PromptTool[]): string {
+  const lookups = LOOKUPS.filter(([name]) => tools.some((tool) => tool.name === name)).map(
+    ([, lookup]) => lookup
+  );
+  return (
+    "Ask the user something only when you really can't decide it yourself. A simple request gets a direct answer with no questions. " +
+    (lookups.length > 0 ? `Before asking, look it up: ${lookups.join("; ")}. ` : "") +
+    "Take reasonable defaults for the rest, and ask only about what is still missing, everything in one ask_user call. Carry a request with several parts through to the end in this turn: never finish by saying you will do something, do it. While a question or card waits for the user, the task is paused; when they answer, carry on with the original request and do only what is still outstanding."
+  );
+}
 // A skill is the user's own guidance, but its text may come from anywhere (an upload), so
 // it guides how to do a task and never stands in for the user's approval of an action.
 const SKILL_RULE =
@@ -225,6 +251,9 @@ export function getAgentSystemPrompt(
     }
     if (tools.some((tool) => tool.connectorId)) {
       prompt += "\n\n" + CONNECTOR_TOOL_RULES;
+    }
+    if (tools.some((tool) => tool.name === "ask_user")) {
+      prompt += "\n\n" + askOnlyWhenNecessaryRule(tools);
     }
     if (tools.some((tool) => tool.name === "get_calendar_availability")) {
       prompt += "\n\n" + getLocalCalendarContext();

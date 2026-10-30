@@ -156,6 +156,32 @@ test("turn slots are shared by a scope's calls and start over with each turn", a
   );
 });
 
+test("a send is claimed once per request, and an earlier request's send is only flagged", async () => {
+  const { createToolExecutionScope } = await loadScope();
+  const recorded = [];
+  const scope = createToolExecutionScope({
+    completedActions: ["slack.send_message:earlier"],
+    onActionCompleted: (request) => recorded.push(request),
+  });
+  const first = scope.createContext({ messageId: "m1", toolCallId: "call-a" });
+  const second = scope.createContext({ messageId: "m1", toolCallId: "call-b" });
+
+  // The user may want an earlier request's send again: the card says so.
+  assert.equal(first.sentEarlier("slack.send_message:earlier"), true);
+  assert.equal(first.claimAction("slack.send_message:earlier"), true);
+  assert.equal(first.sentEarlier("slack.send_message:x"), false);
+  assert.equal(first.claimAction("slack.send_message:x"), true);
+  assert.equal(second.claimAction("slack.send_message:x"), false, "the same call running now");
+  first.releaseAction("slack.send_message:x");
+  assert.equal(second.claimAction("slack.send_message:x"), true, "the first one never sent");
+
+  // A send that lands after the turn ended is still recorded on its call.
+  scope.abort();
+  second.recordCompletedAction("slack.send_message:x");
+  assert.deepEqual(recorded, [{ toolCallId: "call-b", actionKey: "slack.send_message:x" }]);
+  assert.equal(first.claimAction("slack.send_message:x"), false);
+});
+
 test("executeTool settles an aborted call at once and never runs one after the abort", async () => {
   const { executeTool } = await loadRegistry();
   const { createToolExecutionScope } = await loadScope();

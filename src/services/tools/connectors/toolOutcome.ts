@@ -37,6 +37,20 @@ export function unavailableResult(
   };
 }
 
+// A resumed or regenerated turn can't be told apart from the user asking
+// again, so the same send stays refused for the rest of the conversation.
+export function alreadySentResult(): ToolResult {
+  return {
+    success: true,
+    data: {
+      status: "already_sent",
+      guidance:
+        "This exact action was already done (or may have been) earlier in this request, so it was not done again. Tell the user it was already done.",
+    },
+    displayText: i18n.t("connectors.toolStatus.alreadySent"),
+  };
+}
+
 export function notSentResult(
   reason: string,
   guidance: string = NO_RETRY,

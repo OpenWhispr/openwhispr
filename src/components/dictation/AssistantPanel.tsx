@@ -50,10 +50,13 @@ import {
 } from "../../helpers/assistantResponseDelivery";
 import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
 import { ApprovalCard } from "../chat/ApprovalCard";
+import { InteractionCard } from "../chat/InteractionCard";
+import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
+import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 import { SkillApprovalCard, SkillCardSummary } from "../chat/SkillApprovalCard";
 import { readSkillCardRecord } from "../chat/skillCardRecord";
 import { SkillChip } from "../chat/SkillChip";
-import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 
 export interface AssistantCommand {
@@ -143,15 +146,14 @@ export function AssistantPanel({
   const { messages, setMessages } = persistence;
 
   const streaming = useChatStreaming({
-    messages,
     setMessages,
     // Spoken commands answer on the Voice Assistant scope, not the Chat one.
     inferenceScope: "dictationAgent",
     allowConnectors: true,
+    allowInteractions: true,
+    onStreamComplete: persistence.saveAssistantMessage,
+    onTurnCheckpoint: persistence.saveAssistantMessage,
     skillsEnabled: true,
-    onStreamComplete: (_assistantId, content, toolCalls) => {
-      void persistence.saveAssistantMessage(content, toolCalls);
-    },
     onResponseContent,
   });
 
@@ -183,6 +185,7 @@ export function AssistantPanel({
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  useInterruptedInteractions(persistence, sendMessage);
   const latestAssistantMessage = [...messages]
     .reverse()
     .find((message) => message.role === "assistant");
@@ -334,10 +337,17 @@ export function AssistantPanel({
         return record ? [{ key, record }] : [];
       })
     : [];
-  const approvalAwaitingUser =
+  const interactionEntries = useAgentInteractionStore((state) => state.entries);
+  const panelInteractions = latestAssistantMessage
+    ? (latestAssistantMessage.toolCalls ?? [])
+        .map((toolCall) => interactionEntries[approvalKey(latestAssistantMessage.id, toolCall.id)])
+        .filter((entry): entry is NonNullable<typeof entry> => !!entry && entry.state !== "settled")
+    : [];
+  const cardAwaitingUser =
     panelApprovals.some((entry) => entry.state === "pending" || entry.state === "committing") ||
+    panelInteractions.length > 0 ||
     panelSkillApprovals.some((entry) => entry.state === "pending" || entry.state === "saving");
-  const isToolExecuting = Boolean(streaming.activeToolName) && !approvalAwaitingUser;
+  const isToolExecuting = Boolean(streaming.activeToolName) && !cardAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,
     activeToolName: streaming.activeToolName,
@@ -634,6 +644,9 @@ export function AssistantPanel({
             ) : null}
             {panelApprovals.map((entry) => (
               <ApprovalCard key={entry.key} entry={entry} />
+            ))}
+            {panelInteractions.map((entry) => (
+              <InteractionCard key={entry.key} entry={entry} />
             ))}
             {panelSkillApprovals.map((entry) => (
               <SkillApprovalCard key={entry.key} entry={entry} />

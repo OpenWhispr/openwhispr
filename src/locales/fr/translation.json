@@ -3158,7 +3158,11 @@
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
-    }
+    },
+    "fork": "Dupliquer",
+    "forked": "Discussion dupliquée",
+    "forkedFrom": "Dupliquée depuis « {{title}} »",
+    "forkFailed": "Impossible de dupliquer cette discussion"
   },
   "referral": {
     "title": "Parrainez et gagnez des récompenses",
@@ -4309,7 +4313,72 @@
       "update_skillName": "Mettre à jour une compétence",
       "search_openwhispr_helpStatus": "Recherche dans l’aide OpenWhispr...",
       "read_openwhispr_helpStatus": "Lecture de l’aide OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lecture des paramètres OpenWhispr...",
+      "ask_userName": "Question",
+      "ask_userStatus": "Question en cours...",
+      "request_connectionName": "Connexion",
+      "request_connectionStatus": "Demande de connexion...",
+      "request_accessName": "Accès",
+      "request_accessStatus": "Demande d'accès...",
+      "request_api_keyName": "Clé API",
+      "request_api_keyStatus": "Demande d'une clé API...",
+      "open_settingsName": "Réglages",
+      "open_settingsStatus": "Redirection vers les réglages..."
+    },
+    "turn": {
+      "reasoning": "Raisonnement",
+      "stopped": "Arrêté",
+      "stepLimit": "En pause après le nombre maximal d'étapes.",
+      "continue": "Continuer",
+      "continueMessage": "Continue",
+      "failed": "Cette réponse a échoué."
+    },
+    "interactions": {
+      "notNow": "Pas maintenant",
+      "cancel": "Annuler",
+      "questions": {
+        "recommended": "Recommandé",
+        "submit": "Envoyer",
+        "placeholder": "Saisissez votre réponse…"
+      },
+      "connection": {
+        "title": "Connecter {{name}}",
+        "connect": "Connecter {{name}}",
+        "connecting": "Terminez la connexion dans votre navigateur…",
+        "failed": "Connexion impossible. Réessayez.",
+        "permissionDenied": "L'accès au calendrier a été refusé. Autorisez-le dans les Réglages Système, puis réessayez.",
+        "calendarTitle": "Connecter un calendrier"
+      },
+      "access": {
+        "screen": "Autoriser l'accès à votre écran ?",
+        "allow": "Autoriser"
+      },
+      "apiKey": {
+        "title": "Ajoutez votre clé API {{provider}}",
+        "placeholder": "Clé API",
+        "save": "Enregistrer"
+      },
+      "settings": {
+        "done": "C'est fait",
+        "technicalDetails": "Détails techniques"
+      },
+      "status": {
+        "answered": "Répondu",
+        "connected": "{{name}} connecté",
+        "granted": "Écran partagé",
+        "declined": "Refusé",
+        "saved": "Clé API enregistrée",
+        "done": "Retour des réglages",
+        "cancelled": "Ignoré",
+        "notAnswered": "Sans réponse",
+        "invalid": "Impossible d'afficher cette question"
+      },
+      "followUp": {
+        "connected": "J'ai connecté {{name}}.",
+        "granted": "J'ai autorisé l'accès à mon écran.",
+        "saved": "J'ai enregistré ma clé API {{provider}}.",
+        "done": "J'ai terminé dans les réglages."
+      }
     }
   },
   "assistant": {
@@ -4607,7 +4676,8 @@
         "notes": {
           "targetTitle": "Sur « {{title}} »"
         }
-      }
+      },
+      "sentEarlier": "Vous avez déjà envoyé ceci plus tôt dans cette discussion."
     },
     "policyOff": "Votre organisation a désactivé les connecteurs.",
     "email": {
@@ -4896,7 +4966,8 @@
       },
       "gmailDraftLimit": "Seuls {{max}} e-mails peuvent être préparés par demande.",
       "queryResults": "Résultats trouvés : {{total}}",
-      "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande."
+      "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande.",
+      "alreadySent": "Déjà fait pour cette demande"
     },
     "beta": "Bêta",
     "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",

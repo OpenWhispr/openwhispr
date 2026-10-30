@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 interface PersistedMessageContext {
   conversationId: number;
@@ -63,15 +64,17 @@ export function useChatMessageSender({
           const convId = conversationId ?? (await createConversation(text));
           if (!isCurrent()) return;
           const previousMessages = persistence.messages;
+          const selectedContext = normalizeAgentSelectionContext(options?.selectedContext)?.text;
           const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: text,
             isStreaming: false,
+            ...(selectedContext ? { selectedContext } : {}),
           };
 
           persistence.setMessages((messages) => [...messages, userMessage]);
-          await persistence.saveUserMessage(text);
+          await persistence.saveUserMessage(text, { messageId: userMessage.id, selectedContext });
           if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
@@ -82,9 +85,8 @@ export function useChatMessageSender({
           submitted = true;
           await streaming.sendToAI(text, [...previousMessages, userMessage], {
             ...options,
-            // A late result still belongs to this conversation after navigation or New chat.
-            persistAssistantMessage: (content, toolCalls) =>
-              persistence.saveAssistantMessage(content, toolCalls, convId),
+            conversationId: convId,
+            persistAssistantMessage: persistence.saveAssistantMessage,
           });
         } catch (error) {
           if (isCurrent()) throw error;
