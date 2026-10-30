@@ -1,3 +1,4 @@
+import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { Action } from '@/data';
 
 export type GenerateNotesInputKind = 'plain-note' | 'meeting-transcript';
@@ -7,6 +8,8 @@ export interface BuildActionSystemPromptInput {
   inputKind: GenerateNotesInputKind;
   isDefaultGenerateNotesAction: boolean;
   customDictionary?: string[];
+  // Teammates' words, quoted as data after the personal list.
+  sharedDictionary?: string[];
 }
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes - possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
@@ -76,5 +79,10 @@ export const buildActionSystemPrompt = (input: BuildActionSystemPromptInput): st
       ? MEETING_SYSTEM_PROMPT
       : BASE_SYSTEM_PROMPT;
 
-  return appendCustomDictionarySuffix(`${basePrompt}${input.actionPrompt}`, input.customDictionary);
+  const prompt = appendCustomDictionarySuffix(
+    `${basePrompt}${input.actionPrompt}`,
+    input.customDictionary,
+  );
+  const shared = normalizedDictionaryWords(input.sharedDictionary);
+  return shared.length > 0 ? `${prompt}\n\n${sharedDictionaryHint(shared)}` : prompt;
 };

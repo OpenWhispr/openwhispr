@@ -187,3 +187,30 @@ test("withoutRemovedSegments returns the input when nothing was removed", () => 
   assert.deepEqual(withoutRemovedSegments(segments, undefined), segments);
   assert.deepEqual(withoutRemovedSegments(segments, []), segments);
 });
+
+test("diarization preserves the recorder while still numbering in-person voices", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  const existing = [
+    { id: "bob", source: "mic", text: "hello", timestamp: 1, recorderName: "Bob Viewer" },
+  ];
+  const merged = mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments: [{ source: "mic", text: "hello", timestamp: 1, speaker: "you" }],
+  }).segments;
+  assert.equal(merged[0].recorderName, "Bob Viewer");
+  assert.equal(
+    buildLlmTranscript(merged, {}, "Alice", (key) => key),
+    "Bob Viewer: hello"
+  );
+  const numbered = mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments: [{ source: "mic", text: "hello", timestamp: 1, speaker: "speaker_0" }],
+  }).segments;
+  assert.equal(
+    buildLlmTranscript(numbered, {}, "Alice", (_key, opts) => `Speaker ${opts.n}`),
+    "Speaker 1: hello"
+  );
+});

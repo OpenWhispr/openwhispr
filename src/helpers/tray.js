@@ -283,9 +283,10 @@ class TrayManager {
         click: () => this.windowManager?.openAgentWindow(),
       },
       {
-        // Starts in the main process, like the meeting hotkey: the recording it
-        // opens is policy-gated where it actually begins, in the control panel.
+        // Starts in the main process, like the meeting hotkey, which refuses
+        // it under policy; the pill's menu hides it then, the tray disables it.
         label: i18nMain.t("app.commandMenu.startMeetingRecording"),
+        enabled: !this.windowManager?.getMeetingRecordingRefusal?.(),
         click: () => this.windowManager?.startManualMeeting(),
       },
       { type: "separator" },

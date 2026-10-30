@@ -16,6 +16,7 @@ export interface ToolExecutionScope {
 }
 
 interface ToolExecutionHandlers {
+  onApprovalRequested?: () => void;
   /** A call now waits on the user's answer, or no longer does. */
   onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
   onImageAttached?: (image: ChatImageAttachment) => void;
@@ -63,6 +64,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       // Either the turn ending or the SDK abandoning this one call releases
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
+      onApprovalRequested: notify(handlers.onApprovalRequested),
       claimTurnSlot,
       releaseTurnSlot,
       onInteraction: (record) => interaction({ toolCallId, record }),

@@ -1,0 +1,12 @@
+{
+  "name": "creator-link-input",
+  "version": "1.0.0",
+  "description": "Native creator-link field with explicit system paste completion",
+  "main": "src/index.tsx",
+  "private": true,
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

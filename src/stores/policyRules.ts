@@ -419,7 +419,35 @@ export function isTranscriptionContextAllowed(
   settings: SettingsState,
   context: TranscriptionPolicyContext
 ): boolean {
-  return isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context));
+  return (
+    isAudioFeatureAllowed(state, context) &&
+    isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
+  );
+}
+
+export function isAudioFeatureAllowed(
+  state: PolicyDecisionSnapshot,
+  context: TranscriptionPolicyContext
+): boolean {
+  return managedPolicyDecision(state, (policy) =>
+    context === "meeting"
+      ? policy.features.meetingRecordingEnabled !== false
+      : context === "upload"
+        ? policy.features.audioUploadEnabled !== false
+        : true
+  );
+}
+
+export type MeetingRecordingRefusal = "unresolved" | "disabled" | "restricted";
+
+/**
+ * Why policy refuses a meeting recording: no policy resolved yet, the org's
+ * meeting recording switch, or another restriction (e.g. a minimum app version).
+ */
+export function meetingRecordingRefusal(state: PolicyDecisionSnapshot): MeetingRecordingRefusal {
+  const policy = managedPolicy(state);
+  if (!policy) return "unresolved";
+  return policy.features.meetingRecordingEnabled === false ? "disabled" : "restricted";
 }
 
 /** Whether a note share visibility is allowed under the org's external-sharing mode. */

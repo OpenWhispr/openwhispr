@@ -4,6 +4,7 @@ import { Button } from "./button";
 import { cn } from "../lib/utils";
 import type { ColorScheme } from "../../utils/modelPickerStyles";
 import { createExternalLinkHandler, withUtm } from "../../utils/externalLinks";
+import { isListedModel } from "../../models/legacyModels";
 
 export interface ModelCardOption {
   value: string;
@@ -20,6 +21,8 @@ export interface ModelCardOption {
   isDownloading?: boolean;
   isCancelling?: boolean;
   recommended?: boolean;
+  // Shown grayed out and can't be picked; a downloaded one can still be deleted.
+  legacy?: boolean;
 }
 
 const COLOR_CONFIG: Record<
@@ -42,6 +45,9 @@ const COLOR_CONFIG: Record<
       "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
   },
 };
+
+// The default card without its hover lift: a legacy card can't be picked.
+const LEGACY_CARD_CLASS = "border-border bg-surface-1 dark:border-white/10 dark:bg-white/3";
 
 interface ModelCardProps {
   model: ModelCardOption;
@@ -73,16 +79,12 @@ export function ModelCard({
   const isDownloaded = model.isDownloaded;
   const isDownloading = model.isDownloading;
   const modelIsCancelling = model.isCancelling ?? false;
+  const isLegacy = Boolean(model.legacy);
+  const isSelectable = !isLegacy && (!isLocalMode || (isDownloaded && !isSelected));
   const specHref = model.specUrl ? withUtm(model.specUrl, "model_spec") : undefined;
 
   const handleCardClick = () => {
-    if (isLocalMode) {
-      if (isDownloaded && !isSelected) {
-        onSelect(model.value);
-      }
-    } else {
-      onSelect(model.value);
-    }
+    if (isSelectable) onSelect(model.value);
   };
 
   const getStatusDotClass = () => {
@@ -105,9 +107,11 @@ export function ModelCard({
   return (
     <div
       onClick={handleCardClick}
+      title={isLegacy ? t("models.legacyHint") : undefined}
+      aria-disabled={isLegacy || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
-        isSelected ? styles.selected : styles.default
-      } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
+        isSelected ? styles.selected : isLegacy ? LEGACY_CARD_CLASS : styles.default
+      } ${isSelectable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5">
         <div
@@ -134,7 +138,8 @@ export function ModelCard({
         <span
           dir="ltr"
           className={cn(
-            "text-sm font-semibold text-foreground truncate tracking-tight",
+            "text-sm font-semibold truncate tracking-tight",
+            isLegacy ? "text-muted-foreground" : "text-foreground",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
           )}
         >
@@ -165,6 +170,11 @@ export function ModelCard({
         {model.recommended && (
           <span className="text-xs font-medium text-primary px-1.5 py-0.5 bg-primary/10 rounded-sm shrink-0">
             {t("common.recommended")}
+          </span>
+        )}
+        {isLegacy && (
+          <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
+            {t("models.legacy")}
           </span>
         )}
 
@@ -203,7 +213,7 @@ export function ModelCard({
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
-              ) : (
+              ) : isLegacy ? null : (
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -250,14 +260,17 @@ export default function ModelCardList({
   onCancelDownload,
 }: ModelCardListProps) {
   const { t } = useTranslation();
+  const listedModels = models.filter((model) =>
+    isListedModel(model, model.value === selectedModel, model.isDownloaded)
+  );
 
-  if (models.length === 0) {
+  if (listedModels.length === 0) {
     return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
   }
 
   return (
     <div className={`space-y-0.5 ${className}`}>
-      {models.map((model) => (
+      {listedModels.map((model) => (
         <ModelCard
           key={model.value}
           model={model}

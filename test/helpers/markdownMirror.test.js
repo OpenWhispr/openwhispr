@@ -133,7 +133,7 @@ test("writes reject a symlinked note file without changing its target", (t) => {
 test("Windows-reserved and trailing-character folder names use distinct portable keys", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
-  const folderNames = ["CON", "NUL.txt", "folder.", "folder "];
+  const folderNames = ["CON", "NUL.txt", "CONIN$", "folder.", "folder "];
 
   markdownMirror.init(basePath);
   folderNames.forEach((folderName, index) => {
@@ -151,7 +151,10 @@ test("Windows-reserved and trailing-character folder names use distinct portable
   });
   assert.equal(new Set(diskNames).size, folderNames.length);
   for (const diskName of diskNames) {
-    assert.doesNotMatch(diskName, /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i);
+    assert.doesNotMatch(
+      diskName,
+      /^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])(?:\..*)?$/i
+    );
     assert.doesNotMatch(diskName, /[ .]$/);
   }
 });

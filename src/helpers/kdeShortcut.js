@@ -117,6 +117,8 @@ class KDEShortcutManager {
     this.componentProxy = null;
     this.callbacks = new Map();
     this.registeredSlots = new Set();
+    // Set by HotkeyManager to debug-log each press and release: (slotName, action).
+    this.onHotkeyEvent = null;
   }
 
   static isKDE() {
@@ -196,13 +198,13 @@ class KDEShortcutManager {
       });
 
       iface.on("globalShortcutPressed", (componentUnique, shortcutUnique, timestamp) => {
-        debugLogger.log("[KDEShortcut] Shortcut pressed", { componentUnique, shortcutUnique });
         // KGlobalAccel signal sends the actionUnique value as shortcutUnique.
         // Direct callback lookup by slotName should match. Fallback maps
         // actionFriendly names for compatibility.
-        const callback =
-          this.callbacks.get(shortcutUnique) || this._findCallbackByFriendlyName(shortcutUnique);
+        const slotName = this._resolveSlotName(shortcutUnique);
+        const callback = slotName ? this.callbacks.get(slotName) : null;
         if (callback) {
+          this.onHotkeyEvent?.(slotName, "down");
           callback(undefined, "down");
         } else {
           debugLogger.log("[KDEShortcut] No callback found for", {
@@ -212,10 +214,8 @@ class KDEShortcutManager {
         }
       });
       iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
-        debugLogger.log("[KDEShortcut] Shortcut released", { componentUnique, shortcutUnique });
-        const slotName = this.callbacks.has(shortcutUnique)
-          ? shortcutUnique
-          : this._findSlotByFriendlyName(shortcutUnique);
+        const slotName = this._resolveSlotName(shortcutUnique);
+        if (slotName) this.onHotkeyEvent?.(slotName, "up");
         if (slotName !== "dictation") return;
         this.callbacks.get(slotName)?.(undefined, "up");
       });
@@ -229,9 +229,10 @@ class KDEShortcutManager {
     }
   }
 
-  _findCallbackByFriendlyName(name) {
-    const slotName = this._findSlotByFriendlyName(name);
-    return slotName ? this.callbacks.get(slotName) : null;
+  _resolveSlotName(shortcutUnique) {
+    return this.callbacks.has(shortcutUnique)
+      ? shortcutUnique
+      : this._findSlotByFriendlyName(shortcutUnique);
   }
 
   _findSlotByFriendlyName(name) {

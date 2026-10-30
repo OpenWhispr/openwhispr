@@ -309,3 +309,20 @@ test("the pending card is the first open question or answer card on screen", asy
   // A card of another chat's message never counts.
   assert.equal(findPendingCard([], interaction, approval), null);
 });
+
+test("a skill proposal waits above the assistant pill and stops waiting after its Save", async () => {
+  const { findPendingCard } = await load();
+  const messages = [
+    {
+      id: "m1",
+      toolCalls: [{ id: "c1", name: "propose_skill", arguments: "{}", status: "executing" }],
+    },
+  ];
+  const skillApprovals = { "m1::c1": { state: "pending" } };
+  assert.equal(findPendingCard(messages, {}, {}, { skillApprovals }).id, "m1::c1:skill");
+  assert.equal(
+    findPendingCard(messages, {}, {}, { skillApprovals: { "m1::c1": { state: "saved" } } }),
+    null
+  );
+  assert.equal(findPendingCard([], {}, {}, { skillApprovals }), null);
+});

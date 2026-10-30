@@ -127,6 +127,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onToggleTranslation: registerListener("toggle-translation", (callback) => () => callback()),
+  onMeetingStartRefused: registerListener(
+    "meeting-start-refused",
+    (callback) => (_event, code) => callback(code)
+  ),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
   onPrepareDictation: registerListener("prepare-dictation", (callback) => () => callback()),
@@ -206,6 +210,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("snippets-updated", listener);
     return () => ipcRenderer.removeListener("snippets-updated", listener);
   },
+  skillsList: () => ipcRenderer.invoke("skills-list"),
+  skillsGet: (name) => ipcRenderer.invoke("skills-get", name),
+  skillsReadFile: (name, path) => ipcRenderer.invoke("skills-read-file", name, path),
+  skillsSetEnabled: (name, enabled) => ipcRenderer.invoke("skills-set-enabled", name, enabled),
+  skillsUninstall: (name) => ipcRenderer.invoke("skills-uninstall", name),
+  skillsReveal: (name) => ipcRenderer.invoke("skills-reveal", name),
+  skillsPreviewUpload: (items) => ipcRenderer.invoke("skills-preview-upload", items),
+  skillsCommitUpload: (request) => ipcRenderer.invoke("skills-commit-upload", request),
+  skillsDiscardUploads: (tokens) => ipcRenderer.invoke("skills-discard-uploads", tokens),
+  skillsCreate: (input) => ipcRenderer.invoke("skills-create", input),
+  skillsAddRecommended: (id, copy) => ipcRenderer.invoke("skills-add-recommended", id, copy),
+  skillsReadForModel: (ref) => ipcRenderer.invoke("skills-read-for-model", ref),
+  skillsCheckProposal: (request) => ipcRenderer.invoke("skills-check-proposal", request),
+  skillsSaveProposal: (proposal) => ipcRenderer.invoke("skills-save-proposal", proposal),
+  skillsApplyUpdate: (update) => ipcRenderer.invoke("skills-apply-update", update),
+  skillsMarkUsed: (name) => ipcRenderer.invoke("skills-mark-used", name),
+  skillsUndo: (name, versionId) => ipcRenderer.invoke("skills-undo", name, versionId),
+  onSkillsChanged: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("skills-changed", listener);
+    return () => ipcRenderer.removeListener("skills-changed", listener);
+  },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);
@@ -215,7 +241,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId, transcript) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -224,11 +250,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
       sourceFile,
       audioDuration,
       folderId,
-      spaceId
+      spaceId,
+      transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
-  getNotes: (noteType, limit, folderId, spaceId) =>
-    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId),
+  getNotes: (noteType, limit, folderId, spaceId, spaceIds) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId, spaceId, spaceIds),
   getSpaceNotes: (spaceId, limit) => ipcRenderer.invoke("db-get-space-notes", spaceId, limit),
   updateNote: (id, updates, options) => ipcRenderer.invoke("db-update-note", id, updates, options),
   getNoteUndos: () => ipcRenderer.invoke("db-get-note-undos"),
@@ -239,8 +266,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
   exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
-  searchNotes: (query, limit, spaceId, folderId) =>
-    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId),
+  searchNotes: (query, limit, spaceId, folderId, spaceIds) =>
+    ipcRenderer.invoke("db-search-notes", query, limit, spaceId, folderId, spaceIds),
   semanticSearchNotes: (query, limit, spaceId, folderId) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit, spaceId, folderId),
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
@@ -717,8 +744,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "managed-enterprise-config-changed",
     (callback) => (_event, snapshot) => callback(snapshot)
   ),
-  clearManagedEnterpriseIdentity: () => ipcRenderer.invoke("clear-managed-enterprise-identity"),
+  clearManagedEnterpriseIdentity: (options) =>
+    ipcRenderer.invoke("clear-managed-enterprise-identity", options),
   managedTranscribe: (data) => ipcRenderer.invoke("managed-transcribe", data),
+  getPendingEnterpriseAudioTest: (consume = false) =>
+    ipcRenderer.invoke("get-pending-enterprise-audio-test", consume),
+  claimEnterpriseAudioTest: () => ipcRenderer.invoke("claim-enterprise-audio-test"),
+  onEnterpriseAudioTestRequested: registerListener(
+    "enterprise-audio-test-requested",
+    (callback) => () => callback()
+  ),
+  enterpriseAudioImportBootstrap: (data) =>
+    ipcRenderer.invoke("enterprise-audio-import-bootstrap", data),
+  enterpriseAudioStatus: (data) => ipcRenderer.invoke("enterprise-audio-status", data),
+  enterpriseAudioSaveCredential: (data) =>
+    ipcRenderer.invoke("enterprise-audio-save-credential", data),
+  enterpriseAudioTest: (data) => ipcRenderer.invoke("enterprise-audio-test", data),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -922,8 +963,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
-  meetingTranscriptionSend: (buffer, source) =>
-    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionSend: (buffer, source, capturedAt) =>
+    ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
   meetingTranscriptionStop: (expectedSessionId) =>
@@ -1277,11 +1318,52 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
   upsertDictionaryFromCloud: (cloudEntry) =>
     ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
-  markDictionarySynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-dictionary-synced", id, cloudId),
+  markDictionarySynced: (
+    id,
+    cloudId,
+    serverUpdatedAt,
+    expectedWord,
+    expectedSource,
+    serverSource,
+    pushed
+  ) =>
+    ipcRenderer.invoke(
+      "db-mark-dictionary-synced",
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedWord,
+      expectedSource,
+      serverSource,
+      pushed
+    ),
   hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
   clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
   broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
+  getDictionaryEntriesByWords: (words) =>
+    ipcRenderer.invoke("db-get-dictionary-entries-by-words", words),
+  markDictionaryWordsShared: (words, sharedAt, options) =>
+    ipcRenderer.invoke("db-mark-dictionary-words-shared", words, sharedAt, options),
+  getMovedDictionaryWords: () => ipcRenderer.invoke("db-get-moved-dictionary-words"),
+  retireMovedDictionaryWords: (words, options) =>
+    ipcRenderer.invoke("db-retire-moved-dictionary-words", words, options),
+  reviveRetiredDictionaryWords: (words) =>
+    ipcRenderer.invoke("db-revive-retired-dictionary-words", words),
+
+  getSharedDictionary: (workspaceId) => ipcRenderer.invoke("db-shared-dictionary-get", workspaceId),
+  applySharedDictionaryPull: (workspaceId, change) =>
+    ipcRenderer.invoke("db-shared-dictionary-apply-pull", workspaceId, change),
+  replaceSharedDictionary: (workspaceId, full) =>
+    ipcRenderer.invoke("db-shared-dictionary-replace", workspaceId, full),
+  applySharedDictionaryHides: (workspaceId, change) =>
+    ipcRenderer.invoke("db-shared-dictionary-apply-hides", workspaceId, change),
+  replaceSharedDictionaryHides: (workspaceId, hidden) =>
+    ipcRenderer.invoke("db-shared-dictionary-replace-hides", workspaceId, hidden),
+  clearSharedDictionary: (workspaceId) =>
+    ipcRenderer.invoke("db-shared-dictionary-clear", workspaceId),
+  pruneSharedDictionary: (keepWorkspaceIds) =>
+    ipcRenderer.invoke("db-shared-dictionary-prune", keepWorkspaceIds),
+  setSharedDictionaryHints: (hints) => ipcRenderer.invoke("dictionary-set-shared-hints", hints),
 
   getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),

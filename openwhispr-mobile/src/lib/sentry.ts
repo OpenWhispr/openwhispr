@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/react-native';
 import { useConfigStore } from '@/store/useConfigStore';
+import { isUsageAnalyticsAllowed } from '@/lib/usageAnalytics';
 
 let didInit = false;
 let watchingConsent = false;
@@ -9,8 +10,7 @@ let closing: Promise<void> | null = null;
 // fails closed until then. Once loaded, the saved preference (default on) is
 // authoritative — including while a later save is in flight.
 function analyticsEnabled(): boolean {
-  const { config } = useConfigStore.getState();
-  return config !== null && (config.usageAnalyticsEnabled ?? true);
+  return isUsageAnalyticsAllowed(useConfigStore.getState().config);
 }
 
 function syncConsent(): void {

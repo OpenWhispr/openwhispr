@@ -75,6 +75,10 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
+    this.getMeetingRecordingRefusal = () => null;
+    // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
+    this.resolveMeetingRecordingRefusal = async () => null;
     // Set by main.js: an app started to the tray creates no control panel.
     this.startedMinimized = false;
     this.notificationWindow = null;
@@ -741,6 +745,7 @@ class WindowManager {
 
     this.macCompoundPushState = {
       active: true,
+      hotkey,
       downTime,
       isRecording: false,
       requiredModifiers,
@@ -767,6 +772,9 @@ class WindowManager {
     if (!this.macCompoundPushState.requiredModifiers.has(modifier)) {
       return;
     }
+
+    // The press came through globalShortcut, which can't see the release.
+    this.hotkeyManager.logHotkeyEvent("macos-native", "up", this.macCompoundPushState.hotkey);
 
     if (this.macCompoundPushState.safetyTimeoutId) {
       clearTimeout(this.macCompoundPushState.safetyTimeoutId);
@@ -1008,6 +1016,15 @@ class WindowManager {
     const nextState = normalizeDictationLifecycle(state);
     if (nextState === this._dictationLifecycleState) return;
 
+    // Each recording may become a voice command the panel answers; the panel takes the app it
+    // was started over as its paste target only then (assistantPasteTarget.js). Follow-ups
+    // spoken while the panel is open count too, so a capture is never an older recording's.
+    if (
+      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
+      nextState !== DICTATION_LIFECYCLE.IDLE
+    ) {
+      this.assistantPasteTarget?.noteRecordingStart();
+    }
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
@@ -1052,6 +1069,13 @@ class WindowManager {
 
   sendToggleTranslation() {
     this._sendDictationToggle("toggle-translation", "translation");
+  }
+
+  // The pill explains a refused meeting start the way it explains a refused
+  // tray action: the start may have come from a hotkey with nothing else shown.
+  sendMeetingStartRefused(code) {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.webContents.send("meeting-start-refused", code);
   }
 
   // The tray's and the pill menu's Ask assistant: the agent window opens to the
@@ -1901,7 +1925,16 @@ class WindowManager {
   }
 
   async showMeetingNotification(promptData, { autoDismiss = true } = {}) {
-    if (this._onboardingActive) return false;
+    if (this._onboardingActive) {
+      // No card will settle this detection, and while it stays active the
+      // engine skips every repeat of it.
+      if (promptData?.detectionId) {
+        this.meetingDetectionEngine?.handleDetectionNotificationClosed?.(promptData.detectionId, {
+          flushQueued: false,
+        });
+      }
+      return false;
+    }
     this._cancelMeetingNavigation("STALE_NOTIFICATION");
     const previousOwner = this._meetingNotificationOwner;
     if (
@@ -2040,7 +2073,8 @@ class WindowManager {
     }
     if (this.notificationWindow !== win) return false;
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      // Queued prompts would only reach the same closed gate.
+      this.dismissMeetingNotification({ flushQueued: false });
       return false;
     }
 
@@ -2064,7 +2098,7 @@ class WindowManager {
   // "ready" must not clear the fallback that would force-show its replacement.
   showNotificationWindow(ownerWebContents) {
     if (this._onboardingActive) {
-      this.dismissMeetingNotification();
+      this.dismissMeetingNotification({ flushQueued: false });
       return;
     }
     const win = this.notificationWindow;

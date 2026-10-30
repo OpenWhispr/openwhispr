@@ -10,9 +10,10 @@ export type WhisperGpuBackend = "cuda" | "vulkan";
 // comes a pack an older release installed that this version can't use (#2424):
 // the startup notice names it, so the card offers its re-download even when GPU
 // detection no longer sees the GPU (RDP, a VM, a failed nvidia-smi). Last, a
-// first-time offer. Cards below the CUDA build's kernel floor (e.g. Maxwell)
-// crash at the first kernel launch, so they are never offered the CUDA pack and
-// get the Vulkan pack like AMD/Intel GPUs.
+// first-time offer, unless the bundled whisper-server already runs on the GPU
+// (a distro GPU build, #2168). Cards below the CUDA build's kernel floor (e.g.
+// Maxwell) crash at the first kernel launch, so they are never offered the CUDA
+// pack and get the Vulkan pack like AMD/Intel GPUs.
 export function pickWhisperGpuBackend(
   cuda: CudaWhisperStatus | null | undefined,
   vulkan: VulkanWhisperStatus | null | undefined
@@ -26,6 +27,7 @@ export function pickWhisperGpuBackend(
   if (vulkanAvailable && vulkan?.downloaded) return "vulkan";
   if (cuda?.needsUpdate && !cudaBelowFloor) return "cuda";
   if (vulkan?.needsUpdate) return "vulkan";
+  if (cuda?.bundledGpu || vulkan?.bundledGpu) return null;
   if (cudaEligible) return "cuda";
   if (vulkanAvailable) return "vulkan";
   return null;

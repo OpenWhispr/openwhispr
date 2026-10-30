@@ -189,14 +189,14 @@ function NoteChatSettings({ enabled }: { enabled: boolean }): React.JSX.Element 
   const toggleNoteChat = useConfigToggle('noteChatEnabled');
   return (
     <WorkflowSwitchCard
-      title="Enable Note Chat"
-      label="Note Chat"
+      title="Enable Chat"
+      label="Chat"
       description="Ask questions about your notes and get answers from them."
       icon="bubble.left.and.bubble.right"
       mdIcon="MessagesSquare"
       enabled={enabled}
       onToggle={toggleNoteChat}
-      offNote="Notes don’t offer Ask about this note while note chat is off."
+      offNote="The Chat tab and Ask about this note are off while chat is off."
     />
   );
 }
@@ -323,7 +323,11 @@ function WorkflowSettings({ scope }: { scope: MobileInferenceScope }): React.JSX
     providers.find((candidate) => candidate.id === selection.providerId) ?? providers[0];
   const modelId = selection.modelId ?? defaultModelId(provider);
   const providerId = provider?.id;
-  const models = provider?.models.length ? provider.models : discoveredModels;
+  const models = provider?.models.length
+    ? provider.models.filter(
+        (model) => !model.legacy || model.id === modelId || model.id === savedSelection.modelId,
+      )
+    : discoveredModels;
   const speechScope = scope === 'dictation' || scope === 'upload' ? scope : null;
   // On-Device text workflows run on Apple Intelligence, which some iPhones can never run and
   // others have to finish setting up in iOS Settings, so it's checked again on return to the app.

@@ -49,26 +49,33 @@ export function appendToneStyleSuffix(prompt: string, toneStyle?: DictationToneS
   return `${prompt}\n\n${instruction}`;
 }
 
-const WRITING_KINDS: Record<ToneAppCategory, { label: string; examples: string; style: string }> = {
+const WRITING_KINDS: Record<
+  ToneAppCategory,
+  { label: string; examples: string; style: string; destination: string }
+> = {
   personal: {
     label: "Personal messages",
     examples: "texts, WhatsApp, iMessage, Telegram, Instagram",
     style: "personal message",
+    destination: "a personal messaging app",
   },
   work: {
     label: "Work messages",
     examples: "Slack, Teams, Google Chat, LinkedIn",
     style: "work message",
+    destination: "a work chat app",
   },
   email: {
     label: "Emails",
     examples: "any email, including an email_draft body",
     style: "email",
+    destination: "an email app",
   },
   other: {
     label: "Everything else",
     examples: "posts, notes, documents, issues and comments",
     style: "general writing",
+    destination: "an app other than chat or email",
   },
 };
 
@@ -91,11 +98,25 @@ function writingKindList(tones: ToneStyles): string[] {
 }
 
 /**
- * The chat's guide to writing in the user's own tone: the model works out
- * which kind of text a request is for from the request, the recipient and the
- * tool, and picks its style.
+ * The chat's guide to writing in the user's own tone. With `destination`, the
+ * kind of app the assistant will type its answer into, that app's style is the
+ * one for the reply; text written through a tool still goes by its own kind.
+ * Otherwise the model works out which kind of text a request is for from the
+ * request, the recipient and the tool, and picks its style.
  */
-export function buildWritingStyleBlock(tones: ToneStyles): string {
+export function buildWritingStyleBlock(
+  tones: ToneStyles,
+  destination?: ToneAppCategory | null
+): string {
+  if (destination) {
+    const kind = WRITING_KINDS[destination];
+    return [
+      `WRITING STYLE: Your reply will be typed at the user's cursor in ${kind.destination}, as their own words. Write the reply as only the text that goes there (no subject line or label), in the user's ${kind.style} style: ${TONE_RULES[tones[destination]]}`,
+      "That style is for the reply only. Text you write through a tool (an email_draft body, a message you send) takes the user's style for its own kind:",
+      ...writingKindList(tones),
+      WRITING_STYLE_RULES,
+    ].join("\n");
+  }
   return [
     "WRITING STYLE: When you write something the user will send or keep as their own words (a message, email, reply, post, comment or note), write it the way they write that kind of text. Work out which kind it is from the request, the recipient and the tool you use, and use only that kind's style:",
     ...writingKindList(tones),

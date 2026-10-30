@@ -144,13 +144,30 @@ import {
   payloadSendsDictionaryBias,
   stripTrailingDictionaryEcho,
 } from "../utils/dictionaryEchoFilter.js";
-import { dictionaryPromptLimit, trimDictionaryPrompt } from "../utils/dictionaryPromptCap.js";
+import {
+  dictionaryPromptLimit,
+  formatDictionaryPrompt,
+  joinDictionaryPromptTiers,
+  PROMPT_HEAD_TERMS,
+  selectDictionaryPromptTiers,
+  sharedDictionaryPromptChars,
+  WHISPER_DECODER_PROMPT_CHARS,
+} from "../utils/dictionaryPromptCap.js";
 import {
   dictionaryKeywordOverflow,
   dictionaryKeywords,
   usesTranscriptionKeywords,
 } from "../utils/dictionaryKeywords.js";
-import { getDictionaryHintWords } from "../utils/snippets";
+import {
+  getDictionaryHintTiers,
+  getEffectiveDictionaryWords,
+  getKeytermDictionaryWords,
+  getCloudLlmDictionaryFields,
+  getKeywordDictionaryWords,
+  getLlmDictionaryWords,
+  MAX_SHARED_KEYTERMS,
+} from "../utils/snippets";
+import { normalizeAgentSelectionContext } from "../utils/agentSelectionContext";
 import { getAgentName } from "../utils/agentName";
 import { shouldDisplayDictationPreview } from "../utils/transcriptionPreview";
 import {
@@ -258,7 +275,7 @@ function dictationAgentPrompt(settings, agentName) {
   return resolvePrompt("dictationAgent", {
     agentName,
     language: settings.preferredLanguage,
-    customDictionary: getDictionaryHintWords(settings),
+    customDictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
     uiLanguage: settings.uiLanguage,
   });
 }
@@ -354,7 +371,7 @@ function resolveReasoningRoute(
         systemPrompt: resolvePrompt("translate", {
           agentName,
           targetLanguageLabel: getLanguageLabel(settings.translationTargetLanguage),
-          customDictionary: getDictionaryHintWords(settings),
+          customDictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
           uiLanguage: settings.uiLanguage,
         }),
       },
@@ -539,6 +556,8 @@ const MANAGED_TRANSCRIPTION_SPEC = {
   }),
 };
 
+// `echoPrompt` gives the dictionary in the order the payload carries it, for
+// the trailing-echo strip; without one it's the Whisper-order `prompt`.
 const PROXY_TRANSCRIPTION_PROVIDERS = {
   tinfoil: {
     displayName: "Tinfoil",
@@ -552,9 +571,11 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
   mistral: {
     displayName: "Mistral",
     ipc: () => window.electronAPI?.proxyMistralTranscription,
-    buildPayload: ({ audioBuffer, model, language, dictionaryPrompt }) => {
+    // contextBias keeps the HEAD of the list, so it reads the prompt in priority
+    // order (personal words first), not the Whisper order that ends with them.
+    buildPayload: ({ audioBuffer, model, language, priorityDictionaryPrompt }) => {
       const payload = { audioBuffer, model, language };
-      const tokens = (dictionaryPrompt || "")
+      const tokens = (priorityDictionaryPrompt || "")
         .split(",")
         .flatMap((entry) => entry.trim().split(/\s+/))
         .filter(Boolean)
@@ -562,6 +583,7 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (tokens.length > 0) payload.contextBias = tokens;
       return payload;
     },
+    echoPrompt: ({ priorityDictionaryPrompt }) => priorityDictionaryPrompt,
   },
   gemini: {
     displayName: "Gemini",
@@ -572,6 +594,7 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       language,
       keyterms: keyterms.length > 0 ? keyterms : undefined,
     }),
+    echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   xai: {
     displayName: "xAI",
@@ -581,6 +604,7 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (keyterms.length > 0) payload.keyterms = keyterms;
       return payload;
     },
+    echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   corti: {
     displayName: "Corti",
@@ -833,9 +857,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.workletBlobUrl;
   }
 
-  getCustomDictionaryPrompt() {
-    const words = getDictionaryHintWords(getSettings());
-    return words.length > 0 ? words.join(", ") : null;
+  // The dictionary words a prompt keeps, highest priority first: personal words
+  // and snippet triggers, then space and workspace words. A caller with a
+  // provider request limit passes it and its shared limits. Without one
+  // (OpenWhispr Cloud, local engines, the proxied providers) the personal list
+  // is sent whole, as it always was, and shared words only fill the Whisper
+  // decoder's window beside the script bias, at most PROMPT_HEAD_TERMS terms in
+  // all: past the window a decoder never reads them, and the Cloud API's Groq
+  // and Gemini routes keep the HEAD of an over-long prompt, which opens with
+  // shared words.
+  getCustomDictionaryPromptTiers(maxChars, sharedLimits) {
+    const settings = getSettings();
+    const tiers = getDictionaryHintTiers(settings);
+    if (maxChars !== undefined) return selectDictionaryPromptTiers(tiers, maxChars, sharedLimits);
+    const scriptBias = this.getWhisperPrompt(settings, null);
+    return selectDictionaryPromptTiers(tiers, Infinity, {
+      sharedChars: WHISPER_DECODER_PROMPT_CHARS - (scriptBias ? scriptBias.length + 1 : 0),
+      sharedWords: MAX_SHARED_KEYTERMS,
+      totalTerms: PROMPT_HEAD_TERMS,
+    });
+  }
+
+  // Personal words and snippet triggers end the prompt, where a Whisper decoder
+  // reads (see getCustomDictionaryPromptTiers).
+  getCustomDictionaryPrompt(maxChars, sharedLimits) {
+    return (
+      joinDictionaryPromptTiers(this.getCustomDictionaryPromptTiers(maxChars, sharedLimits)) || null
+    );
+  }
+
+  // The personal part of getCustomDictionaryPrompt(), which sends it whole, for
+  // echo checks.
+  getPersonalDictionaryPrompt(settings = getSettings()) {
+    return getDictionaryHintTiers(settings)[0].join(", ") || null;
   }
 
   // Script conversion targets whatever the user ends up pasting: the translation
@@ -888,10 +942,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Check the dictionary on its own as well as the full prompt: the echo filter needs
   // 70% of the prompt's words to appear, and a Chinese script bias counts as one more
   // word, which alone pushes a one- or two-term dictionary under the threshold.
-  isDictionaryEcho(text) {
-    return (
-      matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt()) ||
-      matchesDictionaryPrompt(text, this.getWhisperPrompt())
+  // Shared words dilute that share the same way, so when the prompt carried any,
+  // an echo of the user's own words is checked on its own too, as it was before
+  // shared words existed. Pass the dictionary the request carried (and its
+  // personal part) when it was built with its own budget.
+  isDictionaryEcho(text, dictionaryPrompt, personalPrompt) {
+    if (dictionaryPrompt === undefined) {
+      dictionaryPrompt = this.getCustomDictionaryPrompt();
+      personalPrompt = this.getPersonalDictionaryPrompt();
+    }
+    const settings = getSettings();
+    const prompts = [dictionaryPrompt];
+    if (personalPrompt && personalPrompt !== dictionaryPrompt) prompts.push(personalPrompt);
+    return prompts.some(
+      (prompt) =>
+        matchesDictionaryPrompt(text, prompt) ||
+        matchesDictionaryPrompt(text, this.getWhisperPrompt(settings, prompt))
     );
   }
 
@@ -2361,6 +2427,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
       const customDictionaryPrompt = this.getCustomDictionaryPrompt();
       const dictionaryPrompt = this.getWhisperPrompt();
+      // Shared words dilute the echo filter's word share, so an echo of the
+      // user's own words is checked on its own too (see isDictionaryEcho).
+      const personalDictionaryPrompt = this.getPersonalDictionaryPrompt();
+      const echoPrompts = [dictionaryPrompt, customDictionaryPrompt];
+      if (personalDictionaryPrompt && personalDictionaryPrompt !== customDictionaryPrompt) {
+        echoPrompts.push(personalDictionaryPrompt);
+      }
+      const matchesAnyEchoPrompt = (text) =>
+        echoPrompts.some((prompt) => matchesDictionaryPrompt(text, prompt));
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -2390,11 +2465,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       if (result.success && result.text) {
-        const strictDictionaryEcho = Boolean(
-          dictionaryPrompt &&
-          (matchesDictionaryPrompt(result.text, dictionaryPrompt) ||
-            matchesDictionaryPrompt(result.text, customDictionaryPrompt))
-        );
+        const strictDictionaryEcho = Boolean(dictionaryPrompt && matchesAnyEchoPrompt(result.text));
         const initialFragment = analyzeDictionaryPromptFragment(result.text, dictionaryPrompt);
         const dictionaryPromptFragment = !strictDictionaryEcho && initialFragment.isPromptFragment;
         // A non-repeated fragment can only be replaced by the sparse-recording rule
@@ -2430,9 +2501,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const hasRetryText = Boolean(retryText.trim());
           const retryFragment = analyzeDictionaryPromptFragment(retryText, dictionaryPrompt);
           const retryStrictDictionaryEcho = Boolean(
-            hasRetryText &&
-            (matchesDictionaryPrompt(retryText, dictionaryPrompt) ||
-              matchesDictionaryPrompt(retryText, customDictionaryPrompt))
+            hasRetryText && matchesAnyEchoPrompt(retryText)
           );
           // On the strict path a short, dictionary-spelled retry is the recovered
           // dictation (#1454), not a second echo — only another full-prompt echo
@@ -3002,7 +3071,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           /\{\{agentName\}\}/g,
           agentName?.trim() || "Assistant"
         ),
-        dictionary: getDictionaryHintWords(settings),
+        dictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
         toneSentence,
       });
       selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
@@ -3150,7 +3219,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             agentName,
             promptMode: "cleanup",
             purpose: "cleanup",
-            customDictionary: getDictionaryHintWords(settings),
+            ...getCloudLlmDictionaryFields(settings),
             customPrompt,
             language: this.getCleanupLanguage(settings),
             locale: settings.uiLanguage || "en",
@@ -3698,7 +3767,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               promptMode: "cleanup",
               purpose: "cleanup",
-              customDictionary: getDictionaryHintWords(settings),
+              ...getCloudLlmDictionaryFields(settings),
               customPrompt,
               ...toneStyle,
               language: this.getCleanupLanguage(settings),
@@ -3810,8 +3879,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
   }
 
+  // Personal words first, then the active workspace's shared words; no snippet
+  // triggers, which are phrases rather than terms.
   getCustomDictionaryArray() {
-    return getSettings().customDictionary;
+    return getEffectiveDictionaryWords(getSettings());
   }
 
   getCustomPrompt() {
@@ -3819,7 +3890,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getKeyterms() {
-    return this.getCustomDictionaryArray();
+    return getKeytermDictionaryWords(getSettings());
   }
 
   async processWithOpenAIAPI(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
@@ -3870,14 +3941,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         ? MANAGED_TRANSCRIPTION_SPEC
         : PROXY_TRANSCRIPTION_PROVIDERS[provider];
       if (proxySpec && (managedResolution || !isSelfHostedTranscription(apiSettings))) {
-        const providerName = managedResolution ? "azure-managed" : provider;
+        const providerName = managedResolution ? `${managedResolution.provider}-managed` : provider;
         const call = proxySpec.ipc();
         if (!call) {
           throw new Error(`${proxySpec.displayName} transcription is unavailable in this window`);
         }
         const apiCallStart = performance.now();
         const proxyDictionaryPrompt = this.getWhisperPrompt(apiSettings);
-        const proxyPayload = proxySpec.buildPayload({
+        const proxyArgs = {
           audioBuffer: await optimizedAudio.arrayBuffer(),
           model,
           language,
@@ -3885,11 +3956,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           managedResolution,
           mimeType: optimizedAudio.type || "audio/webm",
           dictionaryPrompt: proxyDictionaryPrompt,
+          priorityDictionaryPrompt: this.getWhisperPrompt(
+            apiSettings,
+            this.getCustomDictionaryPromptTiers().flat().join(", ") || null
+          ),
           keyterms: this.getKeyterms()
             .map((t) => t.trim().slice(0, 50))
             .filter(Boolean)
             .slice(0, 100),
-        });
+        };
+        const proxyPayload = proxySpec.buildPayload(proxyArgs);
         // Managed Azure is enterprise: its failures keep their own shape.
         const classifyProxyFailure = (err) =>
           managedResolution
@@ -3907,14 +3983,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw classifyProxyFailure(errorFromIpcResult(result));
         }
         const sendsDictionaryBias = payloadSendsDictionaryBias(proxyPayload);
+        // A recital follows the order the list was sent in, which for
+        // contextBias and keyterms is personal words first, not Whisper order.
+        const proxyEchoPrompt = proxySpec.echoPrompt?.(proxyArgs) ?? proxyDictionaryPrompt;
         const proxyText = this.stripTrailingDictionaryEcho(
           result?.text,
-          sendsDictionaryBias ? proxyDictionaryPrompt : null
+          sendsDictionaryBias ? proxyEchoPrompt : null
         );
         if (!proxyText?.trim()) {
           throw new Error(`No text transcribed - ${proxySpec.displayName} response was empty`);
         }
-        if (sendsDictionaryBias && this.isDictionaryEcho(result.text)) {
+        // Keyterms carry up to MAX_SHARED_KEYTERMS shared words, not only the
+        // Whisper window's, so a whole-text echo is checked against what was sent.
+        const echoDictionary = proxyPayload.keyterms
+          ? [proxyPayload.keyterms.join(", "), this.getPersonalDictionaryPrompt(apiSettings)]
+          : [];
+        if (sendsDictionaryBias && this.isDictionaryEcho(result.text, ...echoDictionary)) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -3925,7 +4009,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
-        return { success: true, text, rawText: proxyText, source, timings };
+        return {
+          success: true,
+          text,
+          rawText: proxyText,
+          source,
+          timings,
+          // Managed audio over the upload limit is chunked; lost chunks leave a partial transcript.
+          ...(result.warning ? { warning: result.warning } : {}),
+        };
       }
 
       // Some Custom endpoints decode the upload and reject anything that isn't
@@ -3990,32 +4082,56 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const endpoint = this.getTranscriptionEndpoint(route);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
-      // dictionaryKeywords), so its prompt carries only the Chinese script bias and
-      // the terms past the keyword cap.
+      // dictionaryKeywords), highest priority first so the keyword cap only ever
+      // drops shared words, of which it gets MAX_SHARED_KEYTERMS at most. Its
+      // prompt carries only the Chinese script bias and the terms past the
+      // keyword cap.
       const usesKeywords = usesTranscriptionKeywords(model);
-      const dictionary = this.getCustomDictionaryPrompt();
+      const keywordDictionary = usesKeywords
+        ? getKeywordDictionaryWords(apiSettings).join(", ") || null
+        : null;
 
       // Prompt budgets follow each provider's real limit (see dictionaryPromptCap):
       // Groq's 896-char request cap, the Whisper decoders' window, and a far
       // larger context guard for the 4o transcribe models, which are LLMs and
-      // read the whole thing. The cut is a request bound, not a priority rule:
-      // Whisper decoders read the tail of whatever they are given.
+      // read the whole thing. The script bias shares the budget, so the
+      // dictionary gets what it leaves, cut between whole terms.
       const MAX_PROMPT_CHARS = dictionaryPromptLimit({ provider, endpoint, model });
-      const trimmedPrompt = trimDictionaryPrompt(
-        this.getWhisperPrompt(
-          apiSettings,
-          usesKeywords ? dictionaryKeywordOverflow(dictionary) : dictionary
-        ),
-        MAX_PROMPT_CHARS
+      const scriptBias = this.getWhisperPrompt(apiSettings, null);
+      const dictionaryBudget = Math.max(
+        0,
+        MAX_PROMPT_CHARS - (scriptBias ? scriptBias.length + 1 : 0)
       );
-      const dictionaryPrompt = trimmedPrompt.prompt;
+      const uncutDictionary = usesKeywords
+        ? dictionaryKeywordOverflow(keywordDictionary)
+        : this.getCustomDictionaryPrompt(Infinity);
+      // Shared words get the same limits as on every other STT path: at most
+      // MAX_SHARED_KEYTERMS, and on a Whisper decoder only what it reads.
+      const promptDictionaryTiers = usesKeywords
+        ? null
+        : this.getCustomDictionaryPromptTiers(dictionaryBudget, {
+            sharedChars:
+              sharedDictionaryPromptChars(MAX_PROMPT_CHARS) -
+              (scriptBias ? scriptBias.length + 1 : 0),
+            sharedWords: MAX_SHARED_KEYTERMS,
+          });
+      const promptDictionary = usesKeywords
+        ? formatDictionaryPrompt([uncutDictionary?.split(", ") ?? []], dictionaryBudget) || null
+        : joinDictionaryPromptTiers(promptDictionaryTiers) || null;
+      // An echo of the user's own words is checked on its own too (isDictionaryEcho).
+      const personalEchoPrompt = usesKeywords
+        ? this.getPersonalDictionaryPrompt(apiSettings)
+        : promptDictionaryTiers[0].join(", ") || null;
+      const promptTruncated = (promptDictionary?.length ?? 0) < (uncutDictionary?.length ?? 0);
+      // Echoes are classified against this exact string (see dictionaryPromptCap).
+      const dictionaryPrompt = this.getWhisperPrompt(apiSettings, promptDictionary);
       if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
-        if (trimmedPrompt.truncated) {
+        if (promptTruncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
             {
-              originalLength: trimmedPrompt.originalLength,
-              truncatedLength: dictionaryPrompt.length,
+              originalLength: uncutDictionary.length,
+              truncatedLength: promptDictionary?.length ?? 0,
               maxChars: MAX_PROMPT_CHARS,
             },
             "transcription"
@@ -4024,7 +4140,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("prompt", dictionaryPrompt);
       }
       if (usesKeywords) {
-        for (const keyword of dictionaryKeywords(dictionary)) {
+        for (const keyword of dictionaryKeywords(keywordDictionary)) {
           formData.append("keywords[]", keyword);
         }
       }
@@ -4032,9 +4148,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // plus the prompt's overflow; when the overflow was capped, count only the
       // keywords.
       const sentDictionaryPrompt = usesKeywords
-        ? trimmedPrompt.truncated
-          ? dictionaryKeywords(dictionary).join(", ")
-          : dictionary
+        ? promptTruncated
+          ? dictionaryKeywords(keywordDictionary).join(", ")
+          : keywordDictionary
         : dictionaryPrompt;
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
@@ -4187,7 +4303,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
-        if (this.isDictionaryEcho(result.text)) {
+        if (
+          this.isDictionaryEcho(
+            result.text,
+            usesKeywords ? keywordDictionary : promptDictionary,
+            personalEchoPrompt
+          )
+        ) {
           throw dictionaryEchoError();
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
@@ -4787,7 +4909,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return undefined;
     return {
       agentName: getAgentName() || "",
-      customDictionary: getDictionaryHintWords(settings),
+      ...getCloudLlmDictionaryFields(settings),
       customPrompt: this.getCustomPrompt(),
       ...(settings.toneStyleEnabled
         ? resolveDictationToneStyle(settings.toneStyles, appCategory)
@@ -6004,7 +6126,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   agentName,
                   promptMode: "cleanup",
                   purpose: "cleanup",
-                  customDictionary: getDictionaryHintWords(stSettings),
+                  ...getCloudLlmDictionaryFields(stSettings),
                   customPrompt,
                   ...toneStyle,
                   language: this.getCleanupLanguage(stSettings),

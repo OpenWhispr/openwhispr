@@ -9,6 +9,7 @@ import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules
 import { getSettings } from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
 import { answerWithText, useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
@@ -36,6 +37,7 @@ import { AgentComposer } from "./AgentComposer";
 import { AgentModal } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
 import { ToolCallCard } from "../chat/ChatMessage";
+import { SkillChip } from "../chat/SkillChip";
 import { SelectedContextBlock } from "./AgentContext";
 
 // How long a spoken request waits for the press-time selection and screenshot.
@@ -99,14 +101,16 @@ export default function AgentWindow() {
   // The card the turn waits on: above the pill when it arrives while compact.
   const interactions = useAgentInteractionStore((store) => store.entries);
   const approvals = useConnectorApprovalStore((store) => store.entries);
+  const skillApprovals = useSkillApprovalStore((store) => store.entries);
   const pendingCard = useMemo(
-    () => findPendingCard(messages, interactions, approvals),
-    [approvals, interactions, messages]
+    () => findPendingCard(messages, interactions, approvals, { skillApprovals }),
+    [approvals, interactions, messages, skillApprovals]
   );
   // What the composer answers: a restored question too, though nothing waits on it.
   const answerableCard = useMemo(
-    () => findPendingCard(messages, interactions, approvals, { includeRestored: true }),
-    [approvals, interactions, messages]
+    () =>
+      findPendingCard(messages, interactions, approvals, { includeRestored: true, skillApprovals }),
+    [approvals, interactions, messages, skillApprovals]
   );
   const cardFrameRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState(0);
@@ -720,7 +724,16 @@ export default function AgentWindow() {
           keyboardWanted &&
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
-        header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+        header={
+          <>
+            {chat.pickedSkill && (
+              <div className="pb-2">
+                <SkillChip name={chat.pickedSkill.displayName} onRemove={chat.removePickedSkill} />
+              </div>
+            )}
+            {!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+          </>
+        }
         className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
       />
     );

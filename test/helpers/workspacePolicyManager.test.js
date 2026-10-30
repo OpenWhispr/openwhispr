@@ -282,6 +282,36 @@ test("reuses a successful managed policy for five minutes, then accepts an updat
   assert.equal(context.broadcasts.length, 2);
 });
 
+test("a refresh after a server refusal skips the freshness window, not the throttle", async (t) => {
+  let currentTime = 0;
+  let requestCount = 0;
+  const updated = validPolicy("2026-08-05T00:05:00.000Z");
+  updated.data.policy.features.meetingRecordingEnabled = false;
+  const responses = [response(200, validPolicy()), response(200, updated)];
+  const context = setup(
+    async (_url, init) => {
+      // Chromium's HTTP cache would otherwise answer within max-age=300.
+      assert.equal(init.cache, "no-store");
+      requestCount += 1;
+      return responses.shift();
+    },
+    { now: () => currentTime, successfulRefreshMs: 300_000, minimumAttemptIntervalMs: 5_000 }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  await context.manager.getPolicy(request);
+  currentTime = 1_000;
+  const throttled = await context.manager.getPolicy({ ...request, refresh: true });
+  currentTime = 5_000;
+  const refreshed = await context.manager.getPolicy({ ...request, refresh: true });
+
+  assert.equal(throttled.policy.features.meetingRecordingEnabled, undefined);
+  assert.equal(refreshed.policy.features.meetingRecordingEnabled, false);
+  assert.equal(requestCount, 2);
+  assert.equal(context.broadcasts.at(-1).policy.features.meetingRecordingEnabled, false);
+});
+
 test("refreshes a managed identity to authoritative unmanaged after five minutes", async (t) => {
   let currentTime = 0;
   let requestCount = 0;

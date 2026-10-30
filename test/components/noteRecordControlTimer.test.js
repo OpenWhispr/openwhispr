@@ -8,7 +8,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // id, so leaving a recording note and coming back remounts this control. While
 // the elapsed seconds were counted interval ticks, that restarted the timer at
 // 00:00; deriving them from the session's start timestamp does not.
-async function renderRecordControl(t, { elapsedMs, isRecording = true }) {
+async function renderRecordControl(t, { elapsedMs, isRecording = true, ...props }) {
   installBrowserGlobals(t);
   // The store's stamp is resolved when the component reads it, not when this
   // harness is built: standing up the renderer server takes seconds, and a
@@ -41,6 +41,7 @@ async function renderRecordControl(t, { elapsedMs, isRecording = true }) {
       isProcessing: false,
       onStart: () => {},
       onStop: () => {},
+      ...props,
     })
   );
 }
@@ -62,4 +63,20 @@ test("an idle control renders no timer at all", async (t) => {
   const html = await renderRecordControl(t, { elapsedMs: null, isRecording: false });
 
   assert.ok(!html.includes("tabular-nums"), "the idle button is a mic, not a timer pill");
+});
+
+test("a disabled control describes why to assistive tech, not only in its tooltip", async (t) => {
+  const reason = "Meeting recording is disabled by your organization.";
+  const html = await renderRecordControl(t, {
+    elapsedMs: null,
+    isRecording: false,
+    disabled: true,
+    disabledReason: reason,
+  });
+
+  const describedBy = html.match(/aria-describedby="([^"]+)"/)?.[1];
+  assert.ok(describedBy, "the button points at its reason");
+  // Hidden, so browse mode doesn't read it a second time beside the button.
+  assert.ok(html.includes(`id="${describedBy}" hidden="">${reason}<`));
+  assert.ok(html.includes(`title="${reason}"`));
 });

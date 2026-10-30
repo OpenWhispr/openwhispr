@@ -11,6 +11,7 @@ const originalLoad = Module._load;
 // registered handler closures can be invoked directly against a fake `this`.
 const handlers = new Map();
 const fetches = [];
+let policySnapshot = { success: true, managed: false };
 let fetchResponse = () => ({
   ok: true,
   status: 200,
@@ -112,6 +113,13 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         getTinfoilChatModels: () => [],
       };
     }
+    if (request === "./workspacePolicyManager")
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async () => policySnapshot,
+        }),
+      };
     if (request === "./tokenStore") {
       return { ...originalLoad.call(this, request, parent, isMain), get: () => "test-token" };
     }
@@ -157,6 +165,8 @@ function buildFakeThis() {
   ]);
   const target = {
     sessionId: "test-session",
+    _uploadCancelRegistry:
+      require("../../src/helpers/uploadCancelRegistry").createUploadCancelRegistry(),
     audioStorageManager: {
       // 7 is a stored WebM recording, 8 one already in WAV, 9 one too large to
       // upload inline.
@@ -1014,4 +1024,251 @@ test("upload: an HTTP failure logs its status and a redacted body", async (t) =>
   assert.equal(failure.meta.status, 401);
   assert.match(failure.meta.body, /Incorrect API key provided/);
   assert.equal(failure.meta.body.includes("sk-proj-leakedKey12345"), false);
+});
+
+test("file IPCs preserve dictation when uploads are disabled, including cloud source metadata", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalLocal = fakeThis.transcribeLocalFile;
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.transcribeLocalFile = originalLocal;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({
+      success: true,
+      managed: true,
+      policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled: false } },
+    }),
+  });
+  let localCalls = 0;
+  fakeThis.transcribeLocalFile = async () => {
+    localCalls++;
+    return { success: true, text: "dictation" };
+  };
+  fsNode.writeFileSync(uploadTempFile, WAV_BUFFER);
+  // Only a recording main saved as a voice draft may claim to be dictation.
+  const { path: draftFile } = await handlers.get("save-temp-audio")({}, WAV_BUFFER);
+  t.after(() => handlers.get("delete-temp-audio")({}, draftFile));
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+  ]) {
+    const invokeFile = (filePath, purpose) => {
+      const options = {
+        purpose,
+        apiKey: "sk-test",
+        provider: "openai",
+        model: "whisper-1",
+        transcriptionMode: "providers",
+      };
+      return channel.endsWith("-byok")
+        ? handlers.get(channel)({ sender: {} }, { filePath, ...options })
+        : handlers.get(channel)({ sender: {} }, filePath, options);
+    };
+    fetches.length = 0;
+    assert.equal((await invokeFile(draftFile, "dictation")).success, true, channel);
+    if (channel.endsWith("-cloud")) {
+      assert.match(fetches[0].init.body.toString(), /name="source"\r\n\r\ndictation\r\n/);
+    }
+    const networkCalls = fetches.length;
+    for (const [filePath, purpose] of [
+      [uploadTempFile, undefined],
+      [uploadTempFile, "dictation"],
+    ]) {
+      const refused = await invokeFile(filePath, purpose);
+      assert.equal(refused.code, "POLICY_AUDIO_UPLOAD_DISABLED", channel);
+    }
+    assert.equal(fetches.length, networkCalls, channel);
+  }
+  assert.equal(localCalls, 1);
+
+  // A deleted draft's path is an upload again.
+  await handlers.get("delete-temp-audio")({}, draftFile);
+  const deleted = await handlers.get("transcribe-audio-file")({ sender: {} }, draftFile, {
+    purpose: "dictation",
+  });
+  assert.equal(deleted.code, "POLICY_AUDIO_UPLOAD_DISABLED");
+});
+
+test("cancelling during policy lookup prevents every upload handler's later side effects", async (t) => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  const { deferred } = require("./harness/deferred");
+  const originalPolicy = fakeThis._audioFeaturePolicy;
+  const originalDiarization = fakeThis.diarizationManager;
+  fakeThis.diarizationManager = { isModelDownloaded: () => true };
+  const local = t.mock.method(fakeThis, "transcribeLocalFile", async () => ({ success: true }));
+  const downloader = require("../../src/helpers/urlAudioDownloader");
+  const download = t.mock.method(downloader, "download", async () => ({ tempPath: "/tmp/audio" }));
+  const diarization = t.mock.method(fakeThis.diarizationManager, "isModelDownloaded", () => true);
+  t.after(() => {
+    fakeThis._audioFeaturePolicy = originalPolicy;
+    fakeThis.diarizationManager = originalDiarization;
+  });
+
+  for (const channel of [
+    "transcribe-audio-file",
+    "transcribe-audio-file-cloud",
+    "transcribe-audio-file-byok",
+    "diarize-audio-file",
+    "download-url-audio",
+  ]) {
+    const policy = deferred();
+    fakeThis._audioFeaturePolicy = createAudioFeaturePolicy({ getPolicy: () => policy.promise });
+    const requestId = `cancel-${channel}`;
+    const options = { requestId };
+    const args = channel.endsWith("-byok")
+      ? [{ filePath: uploadTempFile, ...options }]
+      : channel === "download-url-audio"
+        ? ["https://example.com/audio.mp3", requestId]
+        : [uploadTempFile, options];
+    fetches.length = 0;
+    const pending = handlers.get(channel)({ sender: {} }, ...args);
+    const cancellationChannel =
+      channel === "download-url-audio" ? "cancel-url-download" : "cancel-upload-transcription";
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, true, channel);
+    policy.resolve({ success: true, managed: false });
+    const result = await pending;
+    assert.equal(result.success, false, channel);
+    assert.equal(
+      result.code,
+      channel === "download-url-audio" ? "DOWNLOAD_CANCELLED" : "UPLOAD_CANCELLED",
+      channel
+    );
+    assert.equal(fetches.length, 0, channel);
+    assert.equal((await handlers.get(cancellationChannel)({}, requestId)).success, false, channel);
+  }
+  assert.equal(local.mock.callCount(), 0);
+  assert.equal(download.mock.callCount(), 0);
+  assert.equal(diarization.mock.callCount(), 0);
+});
+
+test("enterprise credential retirement preserves an actionable string code through IPC serialization", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const { ipcErrorFields } = require("../../src/helpers/ipcErrorFields");
+  const credential = deferred();
+  const activeMeeting = fakeThis._activeEnterpriseAudioMeeting;
+  fakeThis._activeEnterpriseAudioMeeting = false;
+  t.after(() => {
+    fakeThis._activeEnterpriseAudioMeeting = activeMeeting;
+    credential.resolve("rotated-key");
+  });
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => ({
+    managed: true,
+    provider: "openai-compatible",
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+    },
+  }));
+  const read = t.mock.method(fakeThis.enterpriseAudioCredentials, "read", () => credential.promise);
+  const request = t.mock.method(fakeThis.enterpriseAudioTransport, "request", async () => {
+    throw new Error("Retired audio must not be sent");
+  });
+  const profile = await fakeThis.enterpriseAudioRuntime.resolve({});
+  const pending = profile.request({});
+  await new Promise(setImmediate);
+  assert.equal(read.mock.callCount(), 1);
+  fakeThis._retireEnterpriseAudio();
+  await assert.rejects(pending, (error) => {
+    const result = ipcErrorFields(error);
+    assert.equal(result.code, "MANAGED_CONFIG_CHANGED");
+    assert.equal(result.messageKey, "common.managedConfigUnavailable");
+    assert.equal(result.error, "Enterprise audio configuration changed");
+    return true;
+  });
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("main enterprise audio resolution honors provider and mode policy before HTTP or socket creation", async (t) => {
+  t.after(() => {
+    policySnapshot = { success: true, managed: false };
+  });
+  const resolved = {
+    managed: true,
+    provider: "openai-compatible",
+    mode: "managed_default",
+    allowManualSetup: true,
+    generation: 1,
+    version: 1,
+    identity: { accountId: "account-a", workspaceId: "workspace-a" },
+    config: {
+      batch: {
+        endpoint: "https://gateway.test/transcribe",
+        defaultDeployment: "speech",
+        authentication: { type: "bearer", credentialSlot: "http" },
+      },
+      realtime: {
+        endpoint: "wss://gateway.test/realtime",
+        defaultDeployment: "speech",
+        protocol: "openai-transcription-ga",
+        authentication: { type: "bearer", credentialSlot: "socket" },
+      },
+    },
+  };
+  t.mock.method(fakeThis.enterpriseIdentityManager, "resolveProvider", async () => resolved);
+  t.mock.method(fakeThis.enterpriseAudioCredentials, "read", async () => "device-key");
+  const request = t.mock.method(
+    fakeThis.enterpriseAudioTransport,
+    "request",
+    async () => new Response('{"text":"allowed"}')
+  );
+  const socket = t.mock.method(fakeThis.enterpriseAudioTransport, "createSocket", async () => ({}));
+  for (const transcription of [
+    { allowedModes: ["local"], allowedEnterpriseProviders: [] },
+    { allowedModes: ["local", "enterprise"], allowedEnterpriseProviders: ["azure"] },
+  ]) {
+    policySnapshot = { success: true, managed: true, policy: { transcription } };
+    for (const operation of ["batch", "realtime"]) {
+      resolved.mode = "managed_default";
+      resolved.allowManualSetup = true;
+      assert.equal(await fakeThis.enterpriseAudioRuntime.resolve({}, operation), null);
+      for (const [mode, allowManualSetup] of [
+        ["managed_required", true],
+        ["managed_default", false],
+      ]) {
+        Object.assign(resolved, { mode, allowManualSetup });
+        await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, operation), {
+          code: "PROVIDER_POLICY_CONFLICT",
+          messageKey: "common.managedPolicyConflict",
+        });
+      }
+    }
+  }
+  assert.equal(request.mock.callCount(), 0);
+  assert.equal(socket.mock.callCount(), 0);
+
+  Object.assign(resolved, { mode: "managed_default", allowManualSetup: true });
+  policySnapshot = { success: true, managed: false };
+  const batch = await fakeThis.enterpriseAudioRuntime.resolve({}, "batch");
+  const realtime = await fakeThis.enterpriseAudioRuntime.resolve({}, "realtime");
+  await batch.request({});
+  await realtime.createSocket();
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = {
+    success: true,
+    managed: true,
+    policy: { transcription: { allowedModes: ["local"], allowedEnterpriseProviders: [] } },
+  };
+  await assert.rejects(batch.request({}), { code: "MANAGED_CONFIG_CHANGED" });
+  await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
+  assert.equal(request.mock.callCount(), 1);
+  assert.equal(socket.mock.callCount(), 1);
+  policySnapshot = { success: false };
+  await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
 });
