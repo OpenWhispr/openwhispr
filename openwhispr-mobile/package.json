@@ -25,6 +25,8 @@
     "test:security": "node --test scripts/__tests__/node-forge.test.js",
     "test:watch": "jest --watch",
     "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
+    "check:eas-ios-images": "node --test scripts/__tests__/check-eas-ios-images.test.js && node scripts/check-eas-ios-images.js",
+    "verify:ios-launch": "bash scripts/verify-ios-launch.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "bundle install"
   },
