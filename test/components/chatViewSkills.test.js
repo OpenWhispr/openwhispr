@@ -8,6 +8,8 @@ const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skil
 // ChatView with its real message sender. The streaming hook records each send and its
 // options; the composer renders its leading row, so the chip is real and clickable.
 const MOCKS = {
+  "/ui/useToast": `export function useToast() { return { toast() {} }; }`,
+  "/useInterruptedInteractions": `export function useInterruptedInteractions() {}`,
   "react-i18next": SKILLS_MOCKS["react-i18next"],
   "/useChatStreaming": `
     import { useCallback } from "react";
@@ -33,6 +35,7 @@ const MOCKS = {
         createConversation: async () => 1,
         saveUserMessage: async () => {},
         saveAssistantMessage() {},
+        getSessionVersion: () => 1,
         loadConversation: async () => [],
         handleNewChat() {
           globalThis.__newChats += 1;

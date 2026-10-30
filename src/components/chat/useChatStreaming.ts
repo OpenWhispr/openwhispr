@@ -674,6 +674,19 @@ export function useChatStreaming({
               connectors,
               keepNotesUnchanged,
               interactions,
+              skills: skillsEnabled
+                ? {
+                    usable: offeredSkills,
+                    activeNames: () => carriedSkillNamesRef.current,
+                    read: (ref) =>
+                      window.electronAPI?.skillsReadForModel?.(ref) ?? Promise.resolve(null),
+                    // Last use only orders the catalog; a failed stamp isn't worth surfacing.
+                    markUsed: (name) =>
+                      void window.electronAPI?.skillsMarkUsed?.(name).catch(() => {}),
+                    maxTokens: SKILL_CONTEXT_MAX_TOKENS[contextTier],
+                    creatorAttached,
+                  }
+                : undefined,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }
@@ -980,7 +993,13 @@ export function useChatStreaming({
             call.id === toolCallId ? { ...call, ...patch } : call
           );
           if (patch.interaction) updateWaiting();
-          else flushContentNow();
+          else if (turn.status === "running" || turn.status === "waiting") flushContentNow();
+          else
+            setMessages((messages) =>
+              messages.map((message) =>
+                message.id === assistantId ? { ...message, toolCalls: currentToolCalls() } : message
+              )
+            );
           // Saved at once, so a renderer that dies before the turn ends (or a
           // card that commits after Stop) can't lose a send.
           if (patch.actionKey) checkpoint();
@@ -999,7 +1018,19 @@ export function useChatStreaming({
           };
           turnHooks.annotate(id, patch);
           const call = toolCalls.find((call) => call.id === id);
-          if (call && readSkillCardRecord(call)?.status === "saved") checkpoint();
+          if (call && readSkillCardRecord(call)?.status === "saved") {
+            (options?.persistAssistantMessage ?? onTurnCheckpoint ?? onStreamComplete)?.(
+              assistantId,
+              allowInteractions ||
+                (turn.finishedAt != null &&
+                  turn.status !== "error" &&
+                  explicitCancelGenerationRef.current <= sendGeneration)
+                ? fullContent
+                : "",
+              currentToolCalls(),
+              turnDetails()
+            );
+          }
         };
 
         // A stop keeps what the reply has so far, and every call still running
@@ -1077,6 +1108,7 @@ export function useChatStreaming({
                     displayText: result.displayText,
                     metadata,
                     isError: !result.success,
+                    ...(result.success ? {} : { failed: true }),
                   };
                 }
               : undefined;
