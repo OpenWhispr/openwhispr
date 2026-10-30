@@ -3155,7 +3155,7 @@
     "searchDescription": "Rechercher dans toutes vos conversations",
     "inputPlaceholder": "Posez une question...",
     "sourceNote": {
-      "from": "Depuis",
+      "from": "Depuis la note",
       "open": "Ouvrir la note",
       "deleted": "Cette note a été supprimée",
       "deletedShort": "Supprimée",

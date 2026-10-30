@@ -13,6 +13,7 @@ import { CreatorOpening } from "./CreatorOpening";
 import { SkillChip } from "./SkillChip";
 import { SourceNoteBar } from "./SourceNoteBar";
 import { useSourceNote, type SourceNote } from "./useSourceNote";
+import { deriveConversationTitle } from "../../lib/conversationTitle";
 import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
@@ -67,7 +68,7 @@ export default function ChatView({
   });
 
   // A chat started from a note stays about that note here too, as in the note's own chat.
-  const { sourceNote, openNote } = useSourceNote(persistence.noteId ?? null);
+  const { sourceNote, openNote } = useSourceNote(persistence.noteId);
 
   const streaming = useChatStreaming({
     messages: persistence.messages,
@@ -347,7 +348,12 @@ export default function ChatView({
                     ? t("skills.chat.placeholderWith", { name: attachedSkill.displayName })
                     : openNote && sourceNote
                       ? t("chat.sourceNote.askAbout", {
-                          title: sourceNote.title || t("notes.list.untitledNote"),
+                          // The placeholder is one line and clips; its own "..." ends a shortened title.
+                          title: deriveConversationTitle(
+                            sourceNote.title,
+                            t("notes.list.untitledNote"),
+                            ""
+                          ),
                         })
                       : t("chat.inputPlaceholder")
                 }

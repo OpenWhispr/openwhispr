@@ -17,7 +17,7 @@ export function SourceNoteBar({
   const title = note.title || t("notes.list.untitledNote");
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/70 bg-surface-1/85 ps-4 pe-3 backdrop-blur-sm dark:border-white/8">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/70 bg-surface-1 ps-4 pe-3 dark:border-white/8">
       <span
         aria-hidden="true"
         className={cn(
@@ -49,7 +49,7 @@ export function SourceNoteBar({
           variant="outline"
           size="sm"
           onClick={() => onOpen(note)}
-          className="ms-auto h-[26px] rounded-md px-2 text-xs"
+          className="ms-auto h-6.5 rounded-md px-2 text-xs"
         >
           {t("chat.sourceNote.open")}
         </Button>

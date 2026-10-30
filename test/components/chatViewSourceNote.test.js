@@ -8,6 +8,7 @@ const { click, findAll, label, settle } = require("../lib/skillsHarness");
 // ChatView with a conversation already open: persistence reports the note it was
 // started from, and the note comes from a faked getNote.
 const MOCKS = {
+  "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: !!globalThis.__user, user: globalThis.__user ?? null });`,
   "/useChatStreaming": `
     import { useCallback } from "react";
     export function useChatStreaming(options) {
@@ -60,23 +61,34 @@ const NOTE = {
   deleted_at: null,
 };
 
-async function renderChatView(t, { noteId, note }) {
+async function renderChatView(t, { noteId, note, user = null }) {
   let root = null;
   const opened = [];
+  const noteListeners = new Set();
+  let currentNote = note;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__noteId;
+    delete globalThis.__user;
     delete globalThis.__chatInput;
     delete globalThis.__chatStreamingOptions;
   });
   globalThis.__noteId = noteId;
+  globalThis.__user = user;
+  const subscribe = (listener) => {
+    noteListeners.add(listener);
+    return () => noteListeners.delete(listener);
+  };
   installBrowserGlobals(t, {
     window: {
       addEventListener() {},
       removeEventListener() {},
       electronAPI: {
-        getNote: async (id) => (id === note?.id ? note : null),
+        getNote: async (id) => (id === currentNote?.id ? currentNote : null),
         getSpeakerMappings: async () => [],
+        onNoteUpdated: subscribe,
+        onNoteSynced: subscribe,
+        onNoteDeleted: subscribe,
       },
     },
   });
@@ -88,11 +100,28 @@ async function renderChatView(t, { noteId, note }) {
   const { default: ChatView } = await vite.ssrLoadModule("/components/chat/ChatView.tsx");
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
-  await React.act(async () =>
-    root.render(React.createElement(ChatView, { onOpenNote: (target) => opened.push(target) }))
-  );
-  await settle();
-  return { container, opened };
+  const render = async () => {
+    await React.act(async () =>
+      root.render(React.createElement(ChatView, { onOpenNote: (target) => opened.push(target) }))
+    );
+    await settle();
+  };
+  await render();
+  return {
+    container,
+    opened,
+    // The open conversation's note changes, as persistence reports it.
+    setNoteId: async (id) => {
+      globalThis.__noteId = id;
+      await render();
+    },
+    // The note changes elsewhere, and main broadcasts it.
+    editNote: async (changes) => {
+      currentNote = { ...currentNote, ...changes };
+      for (const listener of noteListeners) listener(currentNote);
+      await settle();
+    },
+  };
 }
 
 const openNoteButton = (container) =>
@@ -141,4 +170,86 @@ test("a chat not started from a note has no source bar", async (t) => {
   assert.doesNotMatch(container.textContent, /From|Open note/);
   assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
   assert.equal(globalThis.__chatInput.placeholder, "Ask anything...");
+});
+
+const MEETING_TRANSCRIPT = JSON.stringify([
+  { text: "I will send the deck", source: "mic", speaker: "you" },
+  { text: "Thanks, I'll review it", source: "system", speaker: "speaker_1" },
+]);
+
+test("grounding says the user took the notes when they recorded them", async (t) => {
+  await renderChatView(t, {
+    noteId: NOTE.id,
+    note: {
+      ...NOTE,
+      transcript: MEETING_TRANSCRIPT,
+      cloud_id: "cloud-5",
+      created_by_user_id: "u1",
+    },
+    user: { id: "u1", name: "Chad", email: "chad@example.com" },
+  });
+
+  const { text } = globalThis.__chatStreamingOptions.openNote(Infinity);
+  assert.match(text, /Meeting Context/);
+  assert.match(text, /Chad/);
+  assert.match(text, /I will send the deck/);
+});
+
+test("grounding says someone else took a teammate's notes", async (t) => {
+  await renderChatView(t, {
+    noteId: NOTE.id,
+    note: {
+      ...NOTE,
+      transcript: MEETING_TRANSCRIPT,
+      cloud_id: "cloud-5",
+      created_by_user_id: "u2",
+    },
+    user: { id: "u1", name: "Chad", email: "chad@example.com" },
+  });
+
+  const { text } = globalThis.__chatStreamingOptions.openNote(Infinity);
+  assert.match(text, /Someone other than the user took these notes/);
+  assert.doesNotMatch(text, /Chad/);
+});
+
+test("an edit to the note elsewhere reaches the bar and the next send", async (t) => {
+  const { container, editNote } = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+
+  await editNote({ title: "Q4 planning sync", content: "Action items: send the deck." });
+  assert.match(container.textContent, /Q4 planning sync/);
+  assert.match(globalThis.__chatStreamingOptions.openNote(Infinity).text, /send the deck/);
+  assert.equal(globalThis.__chatInput.placeholder, "Ask about Q4 planning sync...");
+
+  await editNote({ deleted_at: "2026-10-30T10:00:00.000Z" });
+  assert.match(container.textContent, /This note was deleted/);
+  assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+});
+
+test("switching conversations keeps the bar steady but never grounds in the old note", async (t) => {
+  const { container, setNoteId } = await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+
+  // The next conversation is loading: its note isn't known yet.
+  await setNoteId(undefined);
+  assert.match(container.textContent, /Q3 planning sync/, "the bar doesn't flash out");
+  assert.equal(globalThis.__chatStreamingOptions.openNote, undefined);
+
+  await setNoteId(NOTE.id);
+  assert.equal(typeof globalThis.__chatStreamingOptions.openNote, "function");
+
+  // A plain chat drops the bar.
+  await setNoteId(undefined);
+  await setNoteId(null);
+  assert.doesNotMatch(container.textContent, /Open note/);
+});
+
+test("a long note title is shortened in the composer placeholder", async (t) => {
+  await renderChatView(t, {
+    noteId: NOTE.id,
+    note: { ...NOTE, title: "Weekly product sync with the design team and the platform group" },
+  });
+
+  assert.equal(
+    globalThis.__chatInput.placeholder,
+    "Ask about Weekly product sync with the design team..."
+  );
 });

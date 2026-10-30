@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { OpenNoteContext } from "./useChatStreaming";
 import type { NoteItem } from "../../types/electron";
 import { buildOpenNoteContext } from "./openNoteContext";
-import { readableTranscript } from "../../utils/transcriptEvidence";
+import { useAuth } from "../../hooks/useAuth";
+import { noteChatTranscript } from "../../utils/transcriptEvidence";
+import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import { parseNoteParticipants } from "../../utils/noteAttendees";
+import { isNoteRecorder, resolveNoteRecorder } from "../../utils/noteRecorder";
 
 export interface SourceNote {
   id: number;
@@ -15,7 +19,7 @@ export interface SourceNote {
 interface LoadedNote {
   noteId: number;
   note: NoteItem;
-  transcript: string;
+  speakerMappings: Record<string, string>;
 }
 
 interface UseSourceNoteResult {
@@ -24,42 +28,67 @@ interface UseSourceNoteResult {
   openNote?: (maxTranscriptTokens: number) => OpenNoteContext;
 }
 
-/** The note a Chat-section conversation was started from, if it still exists. */
-export function useSourceNote(noteId: number | null): UseSourceNoteResult {
+/**
+ * The note a Chat-section conversation was started from, if it still exists.
+ * `noteId` is undefined while the conversation loads.
+ */
+export function useSourceNote(noteId: number | null | undefined): UseSourceNoteResult {
+  const { user } = useAuth();
   const [loaded, setLoaded] = useState<LoadedNote | null>(null);
+  // Bumped when the note changes elsewhere (an assistant edit, a sync pull, a delete).
+  const [revision, setRevision] = useState(0);
+
+  if (noteId === null && loaded !== null) setLoaded(null);
 
   useEffect(() => {
-    if (noteId === null) return;
+    if (noteId == null) return;
+    const refresh = (changed: { id: number } | null) => {
+      if (changed?.id === noteId) setRevision((value) => value + 1);
+    };
+    const disposers = [
+      window.electronAPI?.onNoteUpdated?.(refresh),
+      window.electronAPI?.onNoteSynced?.(refresh),
+      window.electronAPI?.onNoteDeleted?.(refresh),
+    ];
+    return () => disposers.forEach((dispose) => dispose?.());
+  }, [noteId]);
+
+  useEffect(() => {
+    if (noteId == null) return;
     let cancelled = false;
     void (async () => {
-      const note = await window.electronAPI?.getNote?.(noteId).catch(() => null);
+      const [note, mappings] = await Promise.all([
+        window.electronAPI?.getNote?.(noteId).catch(() => null),
+        // Saved names only relabel speakers; without them the transcript still reads.
+        window.electronAPI?.getSpeakerMappings?.(noteId).catch(() => []),
+      ]);
       if (cancelled) return;
-      if (!note) {
-        setLoaded(null);
-        return;
-      }
-      // Saved names only relabel speakers; without them the transcript still reads.
-      const mappings = await window.electronAPI?.getSpeakerMappings?.(noteId).catch(() => []);
-      if (cancelled) return;
-      const transcript = readableTranscript(
-        note.transcript ?? "",
-        Object.fromEntries(
-          (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
-        )
-      ).text;
-      setLoaded({ noteId, note, transcript });
+      setLoaded(
+        note
+          ? {
+              noteId,
+              note,
+              speakerMappings: Object.fromEntries(
+                (mappings ?? []).map((mapping) => [mapping.speaker_id, mapping.display_name])
+              ),
+            }
+          : null
+      );
     })();
     return () => {
       cancelled = true;
     };
-  }, [noteId]);
+  }, [noteId, revision]);
 
-  // A note fetched for the previous conversation never stands in for this one's.
-  const current = noteId !== null && loaded?.noteId === noteId ? loaded : null;
+  const userId = user?.id;
+  const userName = user?.name;
+  const userEmail = user?.email;
 
   return useMemo(() => {
-    if (!current) return { sourceNote: null };
-    const { note, transcript } = current;
+    // While the next conversation loads, its bar keeps the last note's rather
+    // than flashing; only a note loaded for this conversation grounds a send.
+    if (!loaded || noteId === null) return { sourceNote: null };
+    const { note, speakerMappings } = loaded;
     const deleted = note.deleted_at != null;
     const sourceNote: SourceNote = {
       id: note.id,
@@ -68,7 +97,22 @@ export function useSourceNote(noteId: number | null): UseSourceNoteResult {
       spaceId: note.space_id ?? null,
       deleted,
     };
-    if (deleted) return { sourceNote };
+    if (deleted || loaded.noteId !== noteId) return { sourceNote };
+
+    // As the note's own chat (NoteEditor): the transcript says who took the notes.
+    const recordedByUser = isNoteRecorder(note, userId);
+    const owner = recordedByUser
+      ? resolveNoteRecorder({
+          recordedByUser,
+          user: { name: userName, email: userEmail },
+          recorder: undefined,
+          participants: parseNoteParticipants(note.participants),
+        })
+      : null;
+    const transcript =
+      noteChatTranscript(parseTranscriptSegments(note.transcript || ""), speakerMappings, owner) ??
+      note.transcript ??
+      "";
     return {
       sourceNote,
       openNote: (maxTranscriptTokens: number) =>
@@ -84,5 +128,5 @@ export function useSourceNote(noteId: number | null): UseSourceNoteResult {
           maxTranscriptTokens
         ),
     };
-  }, [current]);
+  }, [loaded, noteId, userId, userName, userEmail]);
 }

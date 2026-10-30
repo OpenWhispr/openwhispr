@@ -75,6 +75,7 @@ import {
   setActiveNoteId,
   setActiveFolderId,
   navigateToContainer,
+  ensureNoteLoaded,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -503,6 +504,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         initializeNotes(null, 50, data.folderId);
       }
       setActiveNoteId(data.noteId);
+      void ensureNoteLoaded(data.noteId);
       setActiveView("personal-notes");
     };
     drain();
@@ -571,6 +573,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       if (folderId != null) setActiveFolderId(folderId);
       else if (spaceId != null) navigateToContainer(spaceId, null);
       setActiveNoteId(noteId);
+      void ensureNoteLoaded(noteId);
       setActiveView("personal-notes");
     },
     []

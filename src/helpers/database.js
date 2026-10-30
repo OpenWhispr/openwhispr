@@ -6895,6 +6895,8 @@ class DatabaseManager {
       const archiveFilter = includeArchived
         ? "WHERE c.archived_at IS NOT NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL"
         : "WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL";
+      // Only a note the active account can open names a chat's source.
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
@@ -6904,13 +6906,13 @@ class DatabaseManager {
             (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
-          LEFT JOIN notes n ON n.id = c.note_id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           ${archiveFilter}
           GROUP BY c.id
           ORDER BY c.updated_at DESC
           LIMIT ? OFFSET ?`
         )
-        .all(limit, offset);
+        .all(...noteScope.params, limit, offset);
     } catch (error) {
       debugLogger.error(
         "Error getting agent conversations with preview",
@@ -6925,6 +6927,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query}%`;
+      const noteScope = this._accountScopeCondition("n");
       return this.db
         .prepare(
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
@@ -6935,7 +6938,7 @@ class DatabaseManager {
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
-          LEFT JOIN notes n ON n.id = c.note_id
+          LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           WHERE c.archived_at IS NULL AND c.deleted_at IS NULL
             AND c.space_id IS NULL AND c.folder_id IS NULL
             AND (c.title LIKE ? OR ms.content LIKE ?)
@@ -6943,7 +6946,7 @@ class DatabaseManager {
           ORDER BY c.updated_at DESC
           LIMIT ?`
         )
-        .all(pattern, pattern, limit);
+        .all(...noteScope.params, pattern, pattern, limit);
     } catch (error) {
       debugLogger.error(
         "Error searching agent conversations",

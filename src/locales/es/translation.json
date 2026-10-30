@@ -3988,7 +3988,7 @@
     "searchDescription": "Buscar en todas tus conversaciones",
     "inputPlaceholder": "Pregunta algo...",
     "sourceNote": {
-      "from": "De",
+      "from": "De la nota",
       "open": "Abrir nota",
       "deleted": "Esta nota se eliminó",
       "deletedShort": "Eliminada",

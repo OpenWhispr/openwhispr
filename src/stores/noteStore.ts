@@ -519,7 +519,10 @@ export async function loadContainerNotes(
         : ((await window.electronAPI.getNotes(noteType, limit, null, id)) ?? []);
     // A newer load for this container may have resolved first.
     if (containerLoadGenerations.get(key) === gen) {
-      applyContainers({ ...useNoteStore.getState().notesByContainer, [key]: items });
+      applyContainers({
+        ...useNoteStore.getState().notesByContainer,
+        [key]: withOpenNote(key, items),
+      });
     }
     return items;
   })();
@@ -529,6 +532,34 @@ export async function loadContainerNotes(
   } finally {
     if (containerLoadsInFlight.get(key) === load) containerLoadsInFlight.delete(key);
   }
+}
+
+// The open note can sit past its container's loaded page (ensureNoteLoaded, or
+// newer notes pushing it down); a reload must not close it.
+function withOpenNote(key: string, items: NoteItem[]): NoteItem[] {
+  const { activeNoteId, notesByContainer } = useNoteStore.getState();
+  if (activeNoteId == null || items.some((note) => note.id === activeNoteId)) return items;
+  const open = notesByContainer[key]?.find((note) => note.id === activeNoteId);
+  return open ? [...items, open] : items;
+}
+
+/**
+ * Jump navigation opens a note by id, but the notes view only shows notes in
+ * the store, and containers load their newest page. A note past it is fetched
+ * and added to its container.
+ */
+export async function ensureNoteLoaded(id: number): Promise<void> {
+  if (getNoteFromStore(id)) return;
+  const note = await window.electronAPI.getNote(id);
+  if (!note || note.deleted_at) return;
+  const key = noteContainerKey(note);
+  await ensureContainerLoaded(key);
+  const state = useNoteStore.getState();
+  if (findNoteInState(state, id)) return;
+  applyContainers({
+    ...state.notesByContainer,
+    [key]: [...(state.notesByContainer[key] ?? []), note],
+  });
 }
 
 export async function ensureContainerLoaded(key: string): Promise<NoteItem[]> {

@@ -1226,3 +1226,21 @@ test("a cloud pull keeps the note a chat came from", (t) => {
   assert.equal(pulled.note_id, note.id);
   assert.equal(db.getConversationsForNote(note.id).length, 1);
 });
+
+test("a chat's source note shows only to the account that can open it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Board-only plan", "body").note;
+  const chat = db.createAgentConversation("Question", note.id);
+
+  db.setActiveAccountId("other-account");
+  assert.equal(db.getNote(note.id), null);
+  const row = db.getAgentConversationsWithPreview().find((c) => c.id === chat.id);
+  assert.equal(row.note_title, null, "another account doesn't see the note's title");
+  const found = db.searchAgentConversations("Question").find((c) => c.id === chat.id);
+  assert.equal(found.note_title, null);
+
+  db.setActiveAccountId("test-account");
+  const own = db.getAgentConversationsWithPreview().find((c) => c.id === chat.id);
+  assert.equal(own.note_title, "Board-only plan");
+});

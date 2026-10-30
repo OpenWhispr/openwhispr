@@ -12,8 +12,8 @@ export interface ChatPersistence {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   conversationId: number | null;
-  /** The note the open conversation was started from. */
-  noteId: number | null;
+  /** The note the open conversation was started from; undefined while it loads. */
+  noteId: number | null | undefined;
   createConversation: (
     title: string,
     noteId?: number | null,
@@ -38,7 +38,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     options.conversationId ?? null
   );
   const conversationIdRef = useRef(conversationId);
-  const [noteId, setNoteId] = useState<number | null>(null);
+  const [noteId, setNoteId] = useState<number | null | undefined>(null);
   const sessionVersionRef = useRef(0);
   const getSessionVersion = useCallback(() => sessionVersionRef.current, []);
 
@@ -80,8 +80,8 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const loadConversation = useCallback(async (id: number) => {
     const version = ++sessionVersionRef.current;
-    // Cleared up front, so the last conversation's note never grounds a send made while this loads.
-    setNoteId(null);
+    // Unknown up front, so the last conversation's note never grounds a send made while this loads.
+    setNoteId(undefined);
     const conv = await window.electronAPI?.getAgentConversation?.(id);
     if (version !== sessionVersionRef.current) return false;
     if (!conv) {
@@ -90,6 +90,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       // tombstoned row and the session is never persisted.
       conversationIdRef.current = null;
       setConversationId(null);
+      setNoteId(null);
       setMessages([]);
       return null;
     }
