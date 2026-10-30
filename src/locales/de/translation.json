@@ -3154,6 +3154,13 @@
     "searchTitle": "Unterhaltungen suchen",
     "searchDescription": "In allen Unterhaltungen suchen",
     "inputPlaceholder": "Frag etwas...",
+    "sourceNote": {
+      "from": "Aus",
+      "open": "Notiz öffnen",
+      "deleted": "Diese Notiz wurde gelöscht",
+      "deletedShort": "Gelöscht",
+      "askAbout": "Frag etwas zu {{title}}..."
+    },
     "starters": {
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",

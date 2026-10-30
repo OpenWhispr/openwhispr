@@ -3935,6 +3935,13 @@
     "searchTitle": "Cerca conversazioni",
     "searchDescription": "Cerca in tutte le conversazioni",
     "inputPlaceholder": "Chiedi qualcosa...",
+    "sourceNote": {
+      "from": "Da",
+      "open": "Apri nota",
+      "deleted": "Questa nota è stata eliminata",
+      "deletedShort": "Eliminata",
+      "askAbout": "Chiedi qualcosa su {{title}}..."
+    },
     "starters": {
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",

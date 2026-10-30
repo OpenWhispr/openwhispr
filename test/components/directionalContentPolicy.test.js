@@ -125,10 +125,7 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<span\s+dir="ltr"[^>]*>\s*\{row\.preview\.fileName\}/,
     ],
     ["src/components/skills/SkillDetailDialog.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.path\}/],
-    [
-      "src/components/skills/CreateSkillScreen.tsx",
-      /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/,
-    ],
+    ["src/components/skills/CreateSkillScreen.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -197,7 +194,9 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(scopeSpace\)\}/],
     ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(space\)\}/],
     ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{target\.label\}/],
-    ["src/components/chat/ConversationItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{conversation\.title\}/],
+    ["src/components/chat/ConversationItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{title\}/],
+    ["src/components/chat/ConversationItem.tsx", /<span\s+dir="auto"[^>]*>\s*\{sourceNote\.title/],
+    ["src/components/chat/SourceNoteBar.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}/],
     [
       "src/components/chat/ConversationItem.tsx",
       /<p\s+dir="auto"[^>]*>\s*\{conversation\.preview\}/,

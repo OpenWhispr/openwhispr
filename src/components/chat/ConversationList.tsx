@@ -7,6 +7,7 @@ import { groupItemsByDate } from "../../utils/dateGrouping";
 import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
+import type { ConversationPreview as ConversationRow } from "../../types/electron";
 
 type FlatItem =
   { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
@@ -82,20 +83,18 @@ export default function ConversationList({
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
       ]);
-      const toPreview = (c: {
-        id: number;
-        title: string;
-        last_message?: string;
-        created_at: string;
-        updated_at: string;
-        archived_at?: string;
-      }) => ({
+      const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
-        preview: c.last_message,
+        preview: c.last_message ?? undefined,
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        // A note that's gone entirely has no title to show; the chat reads as a plain one.
+        sourceNote:
+          c.note_id != null && c.note_title != null
+            ? { title: c.note_title, deleted: c.note_deleted_at != null }
+            : undefined,
       });
       setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
       // The Archived toggle hides once nothing is archived; leave that view with it.

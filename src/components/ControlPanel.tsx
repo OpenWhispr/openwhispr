@@ -103,6 +103,7 @@ import {
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
+import type { SourceNote } from "./chat/useSourceNote";
 
 const platform = getCachedPlatform();
 
@@ -565,6 +566,19 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     setActiveView("integrations");
   }, []);
   const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
+  const openNoteInNotes = useCallback(
+    (noteId: number, folderId: number | null, spaceId?: number | null) => {
+      if (folderId != null) setActiveFolderId(folderId);
+      else if (spaceId != null) navigateToContainer(spaceId, null);
+      setActiveNoteId(noteId);
+      setActiveView("personal-notes");
+    },
+    []
+  );
+  const openChatSourceNote = useCallback(
+    (note: SourceNote) => openNoteInNotes(note.id, note.folderId, note.spaceId),
+    [openNoteInNotes]
+  );
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
   // narrow window, so leaving it means different things in each case.
@@ -1063,12 +1077,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           open={showSearch}
           onOpenChange={setShowSearch}
           transcriptions={history}
-          onNoteSelect={(id, folderId, spaceId) => {
-            if (folderId != null) setActiveFolderId(folderId);
-            else if (spaceId != null) navigateToContainer(spaceId, null);
-            setActiveNoteId(id);
-            setActiveView("personal-notes");
-          }}
+          onNoteSelect={openNoteInNotes}
           onContainerSelect={(spaceId, folderId) => {
             navigateToContainer(spaceId, folderId);
             setActiveView("personal-notes");
@@ -1308,6 +1317,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     skillRequest={skillChatRequest}
                     onSkillRequestHandled={handleSkillChatRequestHandled}
                     onOpenSkill={openSkill}
+                    onOpenNote={openChatSourceNote}
                   />
                 </Suspense>
               )}
