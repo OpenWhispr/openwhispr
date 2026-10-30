@@ -12,8 +12,9 @@ export function buildLiveTranscriptionPreview(committedText = "", partialText = 
 }
 
 /**
- * Assistant-routed recordings stream their answer into the assistant panel;
- * the floating dictation preview must never appear for them. Single owner of
+ * Assistant-routed recordings (in the dictation window, only the onboarding
+ * demo's) answer elsewhere; the floating dictation preview must never appear
+ * for them. Single owner of
  * that rule for both the local preview window (AudioManager's `display` flag)
  * and the BYOK streaming preview below.
  */

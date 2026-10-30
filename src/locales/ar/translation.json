@@ -800,7 +800,6 @@
     "approval": {
       "headers": {
         "default": "إرسال إلى {{destination}}",
-        "slackPost": "نشر في {{destination}}",
         "email": "بريد إلكتروني إلى {{destination}}",
         "issue": "إنشاء مشكلة في {{destination}}",
         "comment": "التعليق على {{destination}}"
@@ -808,8 +807,6 @@
       "identity": "بصفتك {{account}}",
       "identityWithWorkspace": "بصفتك {{account}} في {{workspace}}",
       "send": "إرسال",
-      "edit": "تعديل",
-      "doneEditing": "تم التعديل",
       "cancel": "إلغاء",
       "titleLabel": "العنوان",
       "bodyLabel": "الرسالة",
@@ -895,7 +892,6 @@
         }
       },
       "email": {
-        "from": "من {{account}}",
         "toLabel": "إلى",
         "ccLabel": "نسخة",
         "subjectLabel": "الموضوع",
@@ -908,7 +904,8 @@
         "tooManyRecipients": "يمكن إرسال البريد الإلكتروني إلى {{max}} عنوانًا كحد أقصى، في حقلي إلى ونسخة معًا.",
         "subjectTooLong": "اجعل الموضوع {{max}} حرفًا أو أقل.",
         "bodyTooLong": "الرسالة طويلة جدًا بالنسبة إلى Gmail. اختصرها لإرسالها.",
-        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل."
+        "unknown": "تعذّر تأكيد الإرسال. تحقق من مجلد البريد المُرسل.",
+        "fromLabel": "من"
       },
       "github": {
         "notes": {
@@ -952,7 +949,18 @@
         "notes": {
           "targetTitle": "على \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "سبق أن أرسلت هذا في وقت سابق من هذه المحادثة.",
+      "slack": {
+        "channelLabel": "القناة",
+        "asLabel": "بصفتك",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "تم الإرسال",
+      "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
+      "connectToSend": "اربط {{name}} لإرسال هذا",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1001,7 +1009,8 @@
         "connectedBody": "يمكنك إغلاق هذا التبويب والعودة إلى OpenWhispr.",
         "failedTitle": "لم يتم توصيل Slack",
         "failedBody": "عد إلى OpenWhispr للمحاولة مرة أخرى."
-      }
+      },
+      "pickDestination": "أيّ «{{destination}}» تقصد؟"
     },
     "github": {
       "title": "GitHub",
@@ -1241,7 +1250,8 @@
       },
       "gmailDraftLimit": "يمكن تجهيز {{max}} رسائل بريد إلكتروني فقط لكل طلب.",
       "queryResults": "النتائج التي عُثر عليها: {{total}}",
-      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
+      "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب.",
+      "alreadySent": "تم تنفيذه بالفعل لهذا الطلب"
     },
     "beta": "تجريبي",
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
@@ -2270,8 +2280,158 @@
       "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
-      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr..."
+      "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr...",
+      "ask_userName": "سؤال",
+      "ask_userStatus": "جارٍ سؤالك...",
+      "request_connectionName": "ربط",
+      "request_connectionStatus": "جارٍ طلب الربط...",
+      "request_accessName": "وصول",
+      "request_accessStatus": "جارٍ طلب الوصول...",
+      "request_api_keyName": "مفتاح API",
+      "request_api_keyStatus": "جارٍ طلب مفتاح API...",
+      "open_settingsName": "الإعدادات",
+      "open_settingsStatus": "جارٍ توجيهك إلى الإعدادات..."
+    },
+    "turn": {
+      "reasoning": "الاستدلال",
+      "stopped": "تم الإيقاف",
+      "stepLimit": "توقف مؤقتًا بعد بلوغ الحد الأقصى للخطوات.",
+      "continue": "متابعة",
+      "continueMessage": "تابِع",
+      "failed": "تعذّر إكمال هذا الرد."
+    },
+    "interactions": {
+      "notNow": "ليس الآن",
+      "cancel": "إلغاء",
+      "questions": {
+        "recommended": "{{label}} (موصى به)",
+        "submit": "إرسال",
+        "placeholder": "اكتب إجابتك…",
+        "previous": "السؤال السابق",
+        "next": "السؤال التالي",
+        "position": "{{current}}/{{total}}",
+        "continue": "متابعة",
+        "typedAnswer": "إجابتك: {{answer}}"
+      },
+      "connection": {
+        "title": "ربط {{name}}",
+        "connect": "ربط {{name}}",
+        "connecting": "أكمل الربط في متصفحك…",
+        "failed": "تعذّر الربط. حاول مرة أخرى.",
+        "permissionDenied": "تم رفض الوصول إلى التقويم. اسمح به في إعدادات النظام ثم حاول مرة أخرى.",
+        "calendarTitle": "ربط تقويم",
+        "yes": "نعم",
+        "reasons": {
+          "gmail": "يمكنني إرسال البريد من حسابك في Gmail.",
+          "slack": "يمكنني نشر الرسالة في Slack نيابةً عنك.",
+          "linear": "يمكنني البحث عن مشكلات Linear وإنشاؤها نيابةً عنك.",
+          "github": "يمكنني البحث عن مشكلات GitHub وإنشاؤها نيابةً عنك.",
+          "calendar": "يمكنني التحقق من أوقات فراغك واقتراح مواعيد."
+        }
+      },
+      "access": {
+        "screen": "هل تسمح بالوصول إلى شاشتك؟",
+        "allow": "سماح",
+        "capturing": "جارٍ الالتقاط…"
+      },
+      "apiKey": {
+        "title": "أضف مفتاح API الخاص بـ {{provider}}",
+        "placeholder": "الصق أو اكتب هنا",
+        "save": "حفظ",
+        "label": "مفتاح API الخاص بـ {{provider}}",
+        "saved": "تم حفظ مفتاح {{provider}}"
+      },
+      "settings": {
+        "done": "انتهيت",
+        "technicalDetails": "التفاصيل التقنية",
+        "checking": "جارٍ التحقق…"
+      },
+      "status": {
+        "answered": "تمت الإجابة",
+        "connected": "تم ربط {{name}}",
+        "granted": "تمت مشاركة الشاشة",
+        "declined": "غير مسموح",
+        "saved": "تم حفظ مفتاح API",
+        "done": "تمت العودة من الإعدادات",
+        "cancelled": "تم التجاهل",
+        "notAnswered": "لم تتم الإجابة",
+        "invalid": "تعذّر عرض هذا السؤال"
+      },
+      "followUp": {
+        "connected": "لقد ربطت {{name}}.",
+        "granted": "سمحت بالوصول إلى شاشتي.",
+        "saved": "حفظت مفتاح API الخاص بـ {{provider}}.",
+        "done": "انتهيت من الإعدادات."
+      }
     }
+  },
+  "agentWindow": {
+    "title": "المساعد",
+    "actions": {
+      "expand": "توسيع",
+      "collapse": "تصغير",
+      "speak": "تحدّث",
+      "type": "اكتب",
+      "stop": "إيقاف",
+      "close": "إغلاق",
+      "regenerate": "إعادة الإنشاء",
+      "readAloud": "قراءة بصوت عالٍ",
+      "stopReading": "إيقاف القراءة"
+    },
+    "notices": {
+      "nothingHeard": "لم أسمع شيئًا",
+      "transcriptionFailed": "تعذّر التفريغ النصي",
+      "micUnavailable": "تعذّر فتح الميكروفون",
+      "regenerateFailed": "تعذّرت إعادة إنشاء الإجابة",
+      "dictationActive": "الإملاء يستخدم الميكروفون"
+    },
+    "composer": {
+      "placeholder": "أملِ سؤالك أو اكتبه…",
+      "followUpPlaceholder": "اطرح سؤال متابعة…",
+      "answerPlaceholder": "أجب هنا…",
+      "cardPlaceholder": "أجب في البطاقة أعلاه…"
+    },
+    "empty": {
+      "title": "كيف يمكنني المساعدة؟",
+      "description": "اكتب طلبك أدناه."
+    },
+    "selectedContext": {
+      "title": "السياق المحدد",
+      "remove": "إزالة السياق المحدد",
+      "fromAnswer": "من الإجابة: \"{{text}}\"",
+      "fromOtherApp": "من تطبيق آخر: \"{{text}}\""
+    },
+    "selectionHint": "حدّد نصًا للمتابعة أو التفريع",
+    "selectionToolbar": "النص المحدد",
+    "followUp": "متابعة",
+    "forkFromHere": "تفريع من هنا",
+    "chats": {
+      "title": "المحادثات",
+      "switch": "تبديل المحادثة",
+      "new": "محادثة جديدة",
+      "empty": "لا توجد محادثات بعد",
+      "untitled": "محادثة بلا عنوان",
+      "fork": "متفرعة"
+    },
+    "progress": {
+      "callingTools_zero": "استدعاء {{count}} أداة…",
+      "callingTools_one": "استدعاء أداة واحدة ({{count}})…",
+      "callingTools_two": "استدعاء أداتين ({{count}})…",
+      "callingTools_few": "استدعاء {{count}} أدوات…",
+      "callingTools_many": "استدعاء {{count}} أداة…",
+      "callingTools_other": "استدعاء {{count}} أداة…",
+      "checkingAnswers": "جارٍ التحقق من الإجابات…",
+      "reasoning": "جارٍ الاستدلال…",
+      "reasonedFor": "استدلّ لمدة {{duration}}",
+      "workedFor": "عمل لمدة {{duration}}",
+      "steps_zero": "{{count}} خطوة",
+      "steps_one": "خطوة واحدة ({{count}})",
+      "steps_two": "خطوتان ({{count}})",
+      "steps_few": "{{count}} خطوات",
+      "steps_many": "{{count}} خطوة",
+      "steps_other": "{{count}} خطوة"
+    },
+    "waitingForAnswer": "في انتظار الإجابة"
   },
   "noteEditor": {
     "saved": "تم الحفظ",
@@ -2367,7 +2527,6 @@
       "hotkeyToSpeak": "{{hotkey}} للتحدث",
       "recording": "جاري التسجيل...",
       "processing": "جاري المعالجة...",
-      "clickToSpeak": "انقر للتحدث",
       "waitingForMicrophone": "في انتظار الميكروفون…"
     },
     "buttons": {
@@ -2379,7 +2538,6 @@
       "startListening": "بدء الاستماع",
       "hideForNow": "إخفاء الآن",
       "askAssistant": "اسأل المساعد",
-      "busyRecording": "أنهِ التسجيل الحالي أولاً",
       "startMeetingRecording": "بدء تسجيل الاجتماع"
     }
   },
@@ -3994,7 +4152,7 @@
       },
       "examplesTitle": "أمثلة",
       "helper": "اختر شيئًا قصيرًا وطبيعيًا لقوله بصوت عالٍ",
-      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. عند تفعيل اللصق التلقائي، تُلصق الإجابة عند موضع المؤشر في حقل قابل للكتابة؛ وإلا فتُفتح في لوحة المساعد العائمة.",
+      "howItWorksDescription": "عندما تقول \"يا {{agentName}}\" متبوعًا بتعليمات، يُستبدل النص المحدد بالنتيجة بأمان. أما الطلبات الأخرى فتُفتح في نافذة المساعد.",
       "howItWorksTitle": "كيف يعمل",
       "instructionMode": "التعليمات",
       "placeholder": "على سبيل المثال Jarvis، Nova، Atlas...",
@@ -4158,7 +4316,7 @@
       },
       "voiceAgentHotkey": {
         "title": "مفتاح اختصار المساعد الصوتي",
-        "description": "انطق أمرًا وسيستخدم المساعد ملاحظاتك وتقويمك وأدوات الويب. ستُلصق إجابته عند موضع المؤشر في حقل قابل للكتابة، أو تستبدل النص المحدد، أو تُفتح في اللوحة العائمة."
+        "description": "انطق طلبًا وسيجيب المساعد في نافذته الخاصة مستخدمًا ملاحظاتك وتقويمك وأدوات الويب. يُرسل النص الذي تحدده مسبقًا معه كسياق."
       },
       "microphone": {
         "description": "حدد جهاز الإدخال الذي تريد استخدامه للإملاء",
@@ -5304,7 +5462,11 @@
       "todos": "اعرض مهامي الأخيرة",
       "meeting": "حضّرني لاجتماعي القادم",
       "sharedNotes": "أبرِز ملاحظاتي المشتركة"
-    }
+    },
+    "fork": "تفريع",
+    "forked": "محادثة متفرعة",
+    "forkedFrom": "متفرعة من \"{{title}}\"",
+    "forkFailed": "تعذّر تفريع هذه المحادثة"
   },
   "support": {
     "documentation": "الوثائق",
@@ -5352,28 +5514,6 @@
     "remove": "إزالة",
     "dismiss": "ليس الآن",
     "cancel": "إلغاء"
-  },
-  "assistant": {
-    "panel": {
-      "selectionHint": "حدد النص لتعديله باستخدام",
-      "selectedContext": "تمت إضافة النص المحدد",
-      "removeSelectedContext": "إزالة النص المحدد",
-      "newConversation": "محادثة جديدة",
-      "copyToClipboard": "النسخ إلى الحافظة",
-      "suggestions": {
-        "summarizeNotes": "لخّص ملاحظاتي الأخيرة",
-        "calendar": "ما هي المواعيد في التقويم الخاص بي؟",
-        "draft": "ساعدني في صياغة شيء ما"
-      }
-    },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "جاري استدعاء",
-        "calling": "جاري تنفيذ",
-        "using": "جاري استخدام"
-      },
-      "toolFallback": "أداة"
-    }
   },
   "notesView": {
     "searchPlaceholder": "البحث في الملاحظات...",

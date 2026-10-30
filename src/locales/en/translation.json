@@ -2146,7 +2146,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. Other requests open in the assistant window.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2310,7 +2310,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
+        "description": "Speak a request and the assistant answers in its own window, using your notes, calendar, and web tools. Text you highlight first goes with it as context."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -3158,7 +3158,11 @@
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
-    }
+    },
+    "fork": "Fork",
+    "forked": "Forked chat",
+    "forkedFrom": "Forked from \"{{title}}\"",
+    "forkFailed": "Couldn't fork this chat"
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -4176,7 +4180,6 @@
       "hotkeyToSpeak": "{{hotkey}} to talk",
       "recording": "Recording...",
       "processing": "Processing...",
-      "clickToSpeak": "Click to speak",
       "waitingForMicrophone": "Waiting for microphone…"
     },
     "buttons": {
@@ -4188,7 +4191,6 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
-      "busyRecording": "Finish the current dictation first",
       "startMeetingRecording": "Start meeting recording"
     }
   },
@@ -4291,30 +4293,150 @@
       "update_skillName": "Update skill",
       "search_openwhispr_helpStatus": "Searching OpenWhispr help...",
       "read_openwhispr_helpStatus": "Reading OpenWhispr help...",
-      "get_openwhispr_contextStatus": "Reading OpenWhispr settings..."
+      "get_openwhispr_contextStatus": "Reading OpenWhispr settings...",
+      "ask_userName": "Question",
+      "ask_userStatus": "Asking you...",
+      "request_connectionName": "Connection",
+      "request_connectionStatus": "Asking to connect...",
+      "request_accessName": "Access",
+      "request_accessStatus": "Asking for access...",
+      "request_api_keyName": "API key",
+      "request_api_keyStatus": "Asking for an API key...",
+      "open_settingsName": "Settings",
+      "open_settingsStatus": "Pointing you to Settings..."
+    },
+    "turn": {
+      "reasoning": "Reasoning",
+      "stopped": "Stopped",
+      "stepLimit": "Paused after the maximum number of steps.",
+      "continue": "Continue",
+      "continueMessage": "Continue",
+      "failed": "This reply failed."
+    },
+    "interactions": {
+      "notNow": "Not now",
+      "cancel": "Cancel",
+      "questions": {
+        "recommended": "{{label}} (Recommended)",
+        "submit": "Submit",
+        "placeholder": "Type your answer…",
+        "previous": "Previous question",
+        "next": "Next question",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continue",
+        "typedAnswer": "Your answer: {{answer}}"
+      },
+      "connection": {
+        "title": "Connect {{name}}",
+        "connect": "Connect {{name}}",
+        "connecting": "Finish connecting in your browser…",
+        "failed": "Couldn't connect. Try again.",
+        "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
+        "calendarTitle": "Connect a calendar",
+        "yes": "Yes",
+        "reasons": {
+          "gmail": "I can send the email from your Gmail.",
+          "slack": "I can post the message to Slack for you.",
+          "linear": "I can find and file Linear issues for you.",
+          "github": "I can find and file GitHub issues for you.",
+          "calendar": "I can check your availability and suggest times."
+        }
+      },
+      "access": {
+        "screen": "Allow access to your screen?",
+        "allow": "Allow",
+        "capturing": "Capturing…"
+      },
+      "apiKey": {
+        "title": "Add your {{provider}} API key",
+        "placeholder": "Paste or write here",
+        "save": "Save",
+        "label": "{{provider}} API key",
+        "saved": "{{provider}} key saved"
+      },
+      "settings": {
+        "done": "I'm done",
+        "technicalDetails": "Technical details",
+        "checking": "Checking…"
+      },
+      "status": {
+        "answered": "Answered",
+        "connected": "Connected {{name}}",
+        "granted": "Screen shared",
+        "declined": "Not allowed",
+        "saved": "API key saved",
+        "done": "Back from Settings",
+        "cancelled": "Dismissed",
+        "notAnswered": "Not answered",
+        "invalid": "Couldn't show that question"
+      },
+      "followUp": {
+        "connected": "I connected {{name}}.",
+        "granted": "I allowed access to my screen.",
+        "saved": "I saved my {{provider}} API key.",
+        "done": "I'm done in Settings."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Select text to edit with",
-      "selectedContext": "Selected text added",
-      "removeSelectedContext": "Remove selected text",
-      "newConversation": "New conversation",
-      "copyToClipboard": "Copy to clipboard",
-      "suggestions": {
-        "summarizeNotes": "Summarize my recent notes",
-        "calendar": "What is on my calendar?",
-        "draft": "Help me draft something"
-      }
+  "agentWindow": {
+    "title": "Assistant",
+    "actions": {
+      "expand": "Expand",
+      "collapse": "Minimize",
+      "speak": "Speak",
+      "type": "Type",
+      "stop": "Stop",
+      "close": "Close",
+      "regenerate": "Regenerate",
+      "readAloud": "Read aloud",
+      "stopReading": "Stop reading"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invoking",
-        "calling": "Calling",
-        "using": "Using"
-      },
-      "toolFallback": "Tool"
-    }
+    "notices": {
+      "nothingHeard": "Didn't catch that",
+      "transcriptionFailed": "Couldn't transcribe that",
+      "micUnavailable": "Couldn't open the mic",
+      "regenerateFailed": "Couldn't regenerate that answer",
+      "dictationActive": "Dictation is using the mic"
+    },
+    "composer": {
+      "placeholder": "Dictate or type your question…",
+      "followUpPlaceholder": "Ask a follow-up…",
+      "answerPlaceholder": "Answer here…",
+      "cardPlaceholder": "Answer on the card above…"
+    },
+    "empty": {
+      "title": "What can I help with?",
+      "description": "Type your request below."
+    },
+    "selectedContext": {
+      "title": "Selected context",
+      "remove": "Remove selected context",
+      "fromAnswer": "From the answer: “{{text}}”",
+      "fromOtherApp": "From another app: “{{text}}”"
+    },
+    "selectionHint": "Select text to follow up or fork",
+    "selectionToolbar": "Selected text",
+    "followUp": "Follow up",
+    "forkFromHere": "Fork from here",
+    "chats": {
+      "title": "Chats",
+      "switch": "Switch chat",
+      "new": "New chat",
+      "empty": "No chats yet",
+      "untitled": "Untitled chat",
+      "fork": "Fork"
+    },
+    "progress": {
+      "callingTools_one": "Calling {{count}} tool…",
+      "callingTools_other": "Calling {{count}} tools…",
+      "checkingAnswers": "Checking answers…",
+      "reasoning": "Reasoning…",
+      "reasonedFor": "Reasoned for {{duration}}",
+      "workedFor": "Worked for {{duration}}",
+      "steps_one": "{{count}} step",
+      "steps_other": "{{count}} steps"
+    },
+    "waitingForAnswer": "Waiting for answer"
   },
   "integrations": {
     "title": "Integrations",
@@ -4437,7 +4559,6 @@
     "approval": {
       "headers": {
         "default": "Send to {{destination}}",
-        "slackPost": "Post to {{destination}}",
         "email": "Email to {{destination}}",
         "issue": "Create issue in {{destination}}",
         "comment": "Comment on {{destination}}"
@@ -4445,8 +4566,6 @@
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
       "send": "Send",
-      "edit": "Edit",
-      "doneEditing": "Done editing",
       "cancel": "Cancel",
       "titleLabel": "Title",
       "bodyLabel": "Message",
@@ -4532,7 +4651,6 @@
         }
       },
       "email": {
-        "from": "From {{account}}",
         "toLabel": "To",
         "ccLabel": "Cc",
         "subjectLabel": "Subject",
@@ -4545,7 +4663,8 @@
         "tooManyRecipients": "An email can go to at most {{max}} addresses, To and Cc together.",
         "subjectTooLong": "Keep the subject to {{max}} characters or fewer.",
         "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
-        "unknown": "Couldn't confirm it was sent. Check your Sent folder."
+        "unknown": "Couldn't confirm it was sent. Check your Sent folder.",
+        "fromLabel": "From"
       },
       "github": {
         "notes": {
@@ -4589,7 +4708,18 @@
         "notes": {
           "targetTitle": "On \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "You already sent this earlier in this chat.",
+      "slack": {
+        "channelLabel": "Channel",
+        "asLabel": "As",
+        "destination": "{{workspace}} · {{destination}}"
+      },
+      "sentLabel": "Sent",
+      "identityChanged": "Now sending as {{account}}. Press Send to send it.",
+      "connectToSend": "Connect {{name}} to send this",
+      "edit": "Edit",
+      "doneEditing": "Done editing"
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -4638,7 +4768,8 @@
         "connectedBody": "You can close this tab and return to OpenWhispr.",
         "failedTitle": "Slack wasn't connected",
         "failedBody": "Return to OpenWhispr to try again."
-      }
+      },
+      "pickDestination": "Which “{{destination}}” did you mean?"
     },
     "github": {
       "title": "GitHub",
@@ -4878,7 +5009,8 @@
       },
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
-      "cardLimit": "Only {{max}} cards can be prepared per request."
+      "cardLimit": "Only {{max}} cards can be prepared per request.",
+      "alreadySent": "Already done for this request"
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",

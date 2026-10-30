@@ -1,3 +1,5 @@
+import type { ArrowKey } from "./arrowKeys";
+
 export interface EmojiEntry {
   emoji: string;
   label: string;
@@ -23,8 +25,6 @@ export interface GridPosition {
   col: number;
 }
 
-export type ArrowKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
-
 export const EMOJI_COLUMNS = 9;
 export const RECENT_EMOJI_LIMIT = EMOJI_COLUMNS;
 export const FLAGS_GROUP = 9;
@@ -48,18 +48,6 @@ export const EMOJI_GROUP_KEYS: Record<number, string> = {
 export function isRegionalFlag(emoji: string): boolean {
   const first = emoji.codePointAt(0) ?? 0;
   return (first >= 0x1f1e6 && first <= 0x1f1ff) || /[\u{E0020}-\u{E007F}]/u.test(emoji);
-}
-
-export function isArrowKey(key: string): key is ArrowKey {
-  return key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight";
-}
-
-// The grid is a flex row, so its visual order follows the document direction.
-export function logicalArrowKey(key: ArrowKey, dir: "ltr" | "rtl"): ArrowKey {
-  if (dir !== "rtl") return key;
-  if (key === "ArrowLeft") return "ArrowRight";
-  if (key === "ArrowRight") return "ArrowLeft";
-  return key;
 }
 
 export function visibleEmoji(

@@ -150,7 +150,7 @@ test("a failed tool output is marked failed, with no metadata and its error as d
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "Something failed");
-  assert.equal(toolResult.failed, true);
+  assert.equal(toolResult.isError, true);
 });
 
 test("a connector's failed result is still metadata, so its outcome reaches later turns", async (t) => {
@@ -164,7 +164,7 @@ test("a connector's failed result is still metadata, so its outcome reaches late
   );
 
   assert.deepEqual(toolResult.metadata, failed);
-  assert.equal(toolResult.failed, undefined, "the call ran; its outcome is in the metadata");
+  assert.equal(toolResult.isError, undefined, "the call ran; its outcome is in the metadata");
 });
 
 test("a successful string tool output yields no metadata", async (t) => {
@@ -180,7 +180,7 @@ test("a successful string tool output yields no metadata", async (t) => {
 
   assert.equal(toolResult.metadata, undefined);
   assert.equal(toolResult.displayText, "plain string result");
-  assert.equal(toolResult.failed, undefined);
+  assert.equal(toolResult.isError, undefined);
 });
 
 test("a call the SDK rejects still settles, with its error as displayText", async (t) => {
@@ -200,7 +200,7 @@ test("a call the SDK rejects still settles, with its error as displayText", asyn
   assert.equal(toolResult.toolName, "ghost_tool");
   assert.match(toolResult.displayText, /^Error: .*ghost_tool/);
   assert.equal(toolResult.metadata, undefined);
-  assert.equal(toolResult.failed, true);
+  assert.equal(toolResult.isError, true);
 });
 
 test("the cloud tool loop marks a call failed when its executor says so or throws", async (t) => {
@@ -234,14 +234,14 @@ test("the cloud tool loop marks a call failed when its executor says so or throw
     executeToolCall: async (_name, _args, toolCallId) => {
       if (toolCallId === "call-throws") throw new Error("boom");
       return toolCallId === "call-failed"
-        ? { data: "Something failed", displayText: "Something failed", failed: true }
+        ? { data: "Something failed", displayText: "Something failed", isError: true }
         : { data: "ok", displayText: "ok" };
     },
   });
   const results = (await collectAllChunks(stream)).filter((chunk) => chunk.type === "tool_result");
 
   assert.deepEqual(
-    results.map((chunk) => [chunk.callId, chunk.displayText, chunk.failed]),
+    results.map((chunk) => [chunk.callId, chunk.displayText, chunk.isError]),
     [
       ["call-ok", "ok", undefined],
       ["call-failed", "Something failed", true],

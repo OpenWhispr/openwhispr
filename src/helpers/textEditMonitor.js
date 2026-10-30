@@ -225,11 +225,9 @@ class TextEditMonitor extends EventEmitter {
           { timeout: timeoutMs },
           (error, stdout, stderr) => {
             const output = stdout.replace(/\n$/, "");
-            if (output === "EDITABLE_NONE:") {
-              resolve({ state: "none", editable: true });
-              return;
-            }
-            if (output === "NONE:") {
+            // The helper marks an empty but editable field EDITABLE_NONE:;
+            // nothing here needs the difference.
+            if (output === "NONE:" || output === "EDITABLE_NONE:") {
               resolve({ state: "none" });
               return;
             }
@@ -296,9 +294,6 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
 
-        // The AppleScript never reports an editable caret (only the native
-        // binary emits EDITABLE_NONE:), so this fallback can read selections
-        // but never produce a caret delivery target — panel-first by design.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });
@@ -309,61 +304,6 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
-  }
-
-  // Resolves "editable" | "not_editable" | "unknown". "unknown" is macOS-only:
-  // the dormant-Chromium signature, where accessibility cannot inspect the
-  // focused field at all. The default timeout reuses SELECTED_TEXT_TIMEOUT_MS
-  // because a dormant tree's verdict only arrives after the same retry ladder.
-  async isFocusedEditable(target, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
-    const resolved = this.resolveBinary();
-    if (!resolved) return "not_editable";
-
-    let args;
-    if (process.platform === "darwin") {
-      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
-      if (!pid) return "not_editable";
-      args = [...resolved.args, "--editable-target", String(pid)];
-    } else if (process.platform === "linux") {
-      // The probe answers only for the target process's active window, so a
-      // target whose process can't be resolved is never a caret.
-      if (!target?.pid) return "not_editable";
-      args = [...resolved.args, "--probe-editable", String(target.pid)];
-    } else {
-      args = [...resolved.args, "--probe-editable"];
-    }
-
-    // The verdict is the first output line. A stale binary that predates the
-    // probe flag falls into monitor mode instead: it blocks reading stdin,
-    // then emits its monitor output and keeps running — closing stdin and
-    // resolving on that first line keeps the stale case a fast "not editable"
-    // rather than a hang until the timeout.
-    const toVerdict = (line) =>
-      line === "EDITABLE" ? "editable" : line === "UNKNOWN" ? "unknown" : "not_editable";
-    return new Promise((resolve) => {
-      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
-      let buffered = "";
-      let settled = false;
-      const settle = (verdict) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        try {
-          child.kill();
-        } catch {}
-        resolve(verdict);
-      };
-      const timer = setTimeout(() => settle("not_editable"), timeoutMs);
-      child.stdin.on("error", () => {});
-      child.stdin.end();
-      child.stdout.on("data", (data) => {
-        buffered += data.toString();
-        const newline = buffered.indexOf("\n");
-        if (newline !== -1) settle(toVerdict(buffered.slice(0, newline).trim()));
-      });
-      child.on("error", () => settle("not_editable"));
-      child.on("close", () => settle(toVerdict(buffered.trim())));
-    });
   }
 
   /**

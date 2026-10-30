@@ -6,21 +6,23 @@ import {
   isValidEmailAddress,
   recipientLabel,
 } from "../../../helpers/connectors/emailCompose";
-import type { ApprovalEdits, ConnectorDirectResult } from "../../../types/connectors";
+import type { ConnectorDirectResult } from "../../../types/connectors";
 import type { ComposeTarget, EmailDraftTarget } from "../../../utils/emailDraftTarget";
 import { getCachedPlatform } from "../../../utils/platform";
 import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
 import { connectorErrorText } from "../../../utils/connectorErrorCopy";
+import { connectFirst } from "../interactionTools";
 import { runApprovalAction } from "./runApprovalAction";
 import {
+  alreadySentResult,
   failedResult,
   needsClarificationResult,
   notSentResult,
   unavailableResult,
   unknownResult,
-  userEdits,
 } from "./toolOutcome";
 import { findContactTool } from "./findContactTool";
+import { connectorActionKey } from "./actionKey";
 import type { ConnectorToolModule } from "./connectorToolModules";
 
 // Enough for "email Josh and Dana each a recap"; a model stuck in a loop, or
@@ -115,9 +117,9 @@ function draftOpenedGuidance(
 
 // The tool step reads "Gmail needs to be reconnected.", the same copy a
 // failed reconnect_needed step shows, not the generic "connectors unavailable".
-function gmailReconnectResult(edits: ApprovalEdits = {}): ToolResult {
+function gmailReconnectResult(): ToolResult {
   return {
-    ...unavailableResult("reconnect_needed", GMAIL_RECONNECT_GUIDANCE, edits),
+    ...unavailableResult("reconnect_needed", GMAIL_RECONNECT_GUIDANCE),
     displayText: connectorErrorText(i18n.t, "toolStatus", "gmail", "reconnect_needed"),
   };
 }
@@ -132,7 +134,8 @@ function isReconnectFailure(result: ToolResult): boolean {
   return data?.status === "failed" && data.errorCode === "reconnect_needed";
 }
 
-function createGmailSendTool(): ToolDefinition {
+// canConnect: the chat can connect Gmail itself (it offers interactions).
+function createGmailSendTool(canConnect: boolean): ToolDefinition {
   return {
     name: "email_draft",
     description:
@@ -146,17 +149,20 @@ function createGmailSendTool(): ToolDefinition {
       args: Record<string, unknown>,
       context?: ToolExecutionContext
     ): Promise<ToolResult> {
-      // Every outcome keeps the turn off the caret: a card, a question back
-      // and a receipt all belong in the panel, never in the user's document.
-      context?.onHoldDelivery();
       const recipients = recipientsOrQuestion(args);
       if (isToolResult(recipients)) return recipients;
       if (context?.signal.aborted) return notSentResult("cancelled");
 
       // Read live, not when the registry was built: a login can lapse
-      // mid-conversation. No compose window stands in for it (spec §4.3).
+      // mid-conversation. No compose window stands in for it (spec §4.3):
+      // where the chat can, the user reconnects Gmail on this call's card and
+      // the email goes on; elsewhere they are sent to Settings.
       const gmail = useConnectorStatusStore.getState().statuses.gmail;
-      if (gmail?.connected && gmail.needsReconnect) return gmailReconnectResult();
+      if (gmail?.connected && gmail.needsReconnect) {
+        if (!canConnect) return gmailReconnectResult();
+        const refused = await connectFirst(context, "gmail");
+        if (refused) return refused;
+      }
 
       if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
         return notSentResult(
@@ -181,12 +187,9 @@ function createGmailSendTool(): ToolDefinition {
       // one that never went out gives it back for a retry in the same turn.
       const status = resultStatus(result);
       if (status !== "sent" && status !== "unknown") context?.releaseTurnSlot("email_draft");
-      // The card itself shows a Send-time reconnect as failed; the model gets
-      // the same instruction either way: send the user to Settings. The
-      // user's edits ride along, so a later "send it again" uses their email.
-      return isReconnectFailure(result)
-        ? gmailReconnectResult(userEdits((result.data ?? {}) as ApprovalEdits))
-        : result;
+      // The login lapsed between the status read above and the prepare: no
+      // card appeared, and the user reconnects in Settings.
+      return isReconnectFailure(result) ? gmailReconnectResult() : result;
     },
   };
 }
@@ -205,9 +208,6 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       args: Record<string, unknown>,
       context?: ToolExecutionContext
     ): Promise<ToolResult> {
-      // Every outcome keeps the turn off the caret: an opened compose window
-      // takes focus, and a question back must not land in the user's document.
-      context?.onHoldDelivery();
       const recipients = recipientsOrQuestion(args);
       if (isToolResult(recipients)) return recipients;
       const { to, cc } = recipients;
@@ -235,7 +235,17 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       // keeps bare addresses so the model can reuse them in a retry.
       const destination = to.map(recipientLabel).join(", ");
 
+      // The same draft asked for twice in this request is opened once; one from
+      // an earlier request opens again, since opening a draft sends nothing.
+      const actionKey = connectorActionKey("email", "draft", {
+        to,
+        cc,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      if (context && !context.claimAction(actionKey)) return alreadySentResult();
       if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        context.releaseAction(actionKey);
         return notSentResult(
           "draft_limit",
           `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
@@ -244,6 +254,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       }
       if (clipboardReserved && context && !context.claimTurnSlot("clipboard", 1)) {
         context.releaseTurnSlot("email_draft");
+        context.releaseAction(actionKey);
         return notSentResult(
           "clipboard_in_use",
           "This draft is too long for a link, and its text would replace another draft's text on the clipboard. Tell the user to paste the earlier draft's text first, then ask again for this one.",
@@ -255,6 +266,7 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       const releaseSlots = (): void => {
         context?.releaseTurnSlot("email_draft");
         if (clipboardReserved) context?.releaseTurnSlot("clipboard");
+        context?.releaseAction(actionKey);
       };
 
       // Main may still be resolving policy when the user presses Esc; the
@@ -272,13 +284,10 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
         releaseSlots();
         return unavailableResult("connectors_unavailable");
       }
-      // Sticky for the turn once text may be on the clipboard, so the answer
-      // isn't copied over it.
-      const preserveClipboard = (): void => context?.onHoldDelivery({ preserveClipboard: true });
       // An unknown run may have opened a window and used the clipboard, so
       // it keeps its slots.
       if (result.state === "unknown") {
-        if (clipboardReserved) preserveClipboard();
+        context?.recordCompletedAction(actionKey);
         return unknownResult(
           to.join(", "),
           `The draft to ${destination} may or may not have opened. Ask the user to check for a draft window.`,
@@ -287,13 +296,13 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
       }
       if (result.state !== "sent") releaseSlots();
       else if (result.copyFailed) context?.releaseTurnSlot("clipboard");
+      if (result.state === "sent") context?.recordCompletedAction(actionKey);
       if (result.state === "not_sent") return notSentResult(result.reason);
       if (result.state === "unavailable") return unavailableResult(result.reason);
       if (result.state === "failed") return failedResult(result.errorCode, result.message);
 
       const bodyCopied = Boolean(result.bodyCopied);
       const subjectCopied = Boolean(result.subjectCopied);
-      if (bodyCopied || subjectCopied) preserveClipboard();
 
       return {
         success: true,
@@ -322,15 +331,35 @@ function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
 /**
  * One tool, two paths: with Gmail chosen, a card the user sends from the chat;
  * otherwise a compose window in their email app. gmailSend must never reach
- * buildComposeRequest, which only knows the compose targets.
+ * buildComposeRequest, which only knows the compose targets. With
+ * `currentTarget`, each call takes the path the target resolves to then:
+ * Gmail can be connected in the middle of a turn.
  */
-export function createEmailDraftTool(target: EmailDraftTarget): ToolDefinition {
-  return target === "gmailSend" ? createGmailSendTool() : createComposeDraftTool(target);
+function emailDraftTool(target: EmailDraftTarget, canConnectGmail: boolean): ToolDefinition {
+  return target === "gmailSend"
+    ? createGmailSendTool(canConnectGmail)
+    : createComposeDraftTool(target);
+}
+
+// currentTarget is set when the chat can connect Gmail itself.
+export function createEmailDraftTool(
+  target: EmailDraftTarget,
+  currentTarget?: () => EmailDraftTarget
+): ToolDefinition {
+  const tool = emailDraftTool(target, Boolean(currentTarget));
+  if (!currentTarget) return tool;
+  return {
+    ...tool,
+    execute: (args, context) => emailDraftTool(currentTarget(), true).execute(args, context),
+  };
 }
 
 /** Email tools need no login of their own: compose windows, or Gmail's card. */
 export const emailToolModule: ConnectorToolModule = {
   connectorId: "email",
   requiresConnection: false,
-  createTools: (env) => [findContactTool, createEmailDraftTool(env.emailDraftTarget)],
+  createTools: (env) => [
+    findContactTool,
+    createEmailDraftTool(env.emailDraftTarget, env.currentEmailDraftTarget),
+  ],
 };

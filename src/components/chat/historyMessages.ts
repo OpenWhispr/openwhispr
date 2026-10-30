@@ -1,4 +1,7 @@
 import type { Message, ToolCallInfo } from "./types";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import { buildAgentRequestText } from "../../utils/agentSelectionContext";
+import { answerText } from "../../utils/interactionAnswers";
 
 export interface HistoryMessage {
   role: string;
@@ -35,6 +38,7 @@ const ACTION_OUTCOME: Record<string, string> = {
   failed: "failed",
   unavailable: "unavailable",
   needs_clarification: "needed details",
+  already_sent: "already done earlier, not repeated",
   saved: "saved",
   skipped: "skipped by the user",
   changed: "not saved, the skill had changed",
@@ -90,6 +94,56 @@ function traceText(value: unknown): string | null {
     : clean;
 }
 
+// What the user was asked and how they answered. A saved key is only ever
+// "saved": its value never reaches the conversation.
+function interactionTrace({ payload, state, result }: InteractionRecord): {
+  arg: string;
+  outcome: string;
+} {
+  if (payload.kind !== "questions") {
+    const arg =
+      payload.kind === "access"
+        ? payload.resource
+        : payload.kind === "apiKey"
+          ? payload.provider
+          : payload.target;
+    return { arg, outcome: interactionOutcome(state, result) };
+  }
+  if (result?.status !== "answered") {
+    return {
+      arg: payload.questions.map((question) => traceText(question.prompt)).join("; "),
+      outcome: interactionOutcome(state, result),
+    };
+  }
+  const answered = payload.questions.map((question) => {
+    const text = answerText(question, result.answers[question.id]);
+    return `${traceText(question.prompt)} → ${traceText(text) ?? "nothing chosen"}`;
+  });
+  return { arg: answered.join("; "), outcome: "answered" };
+}
+
+function interactionOutcome(
+  state: InteractionRecord["state"],
+  result: InteractionRecord["result"]
+): string {
+  if (!result) return state === "interrupted" ? "not answered yet" : "waiting for the user";
+  switch (result.status) {
+    case "cancelled":
+      return "dismissed by the user";
+    case "not_answered":
+      return "not answered";
+    case "done":
+      return result.ready === false ? "back from settings, still not set up" : "done";
+    default:
+      return result.status;
+  }
+}
+
+/** A connector tool that asked to connect its service first: it runs once that's done. */
+export function connectsFirst(call: ToolCallInfo): boolean {
+  return call.interaction?.payload.kind === "connection" && call.name !== "request_connection";
+}
+
 /**
  * A short record of the tools a turn called, so the model sees its own
  * precedent. Never results: query items and web results are other people's
@@ -102,10 +156,17 @@ export function toolTrace(toolCalls: ReadonlyArray<ToolCallInfo> | undefined): s
   const entries = toolCalls
     .filter((call) => call.name !== "grounded_product_help")
     .map((call) => {
+      // A tool that asked to connect its service first is traced by what it then did.
+      if (call.interaction && !connectsFirst(call)) {
+        const { arg, outcome } = interactionTrace(call.interaction);
+        return `${call.name} ("${arg}") (${outcome})`;
+      }
       const arg = traceArgument(call);
-      // A call still executing was cut off before its result arrived, but its side
-      // effect may have happened (a send commits in main after Esc).
-      const outcome = call.status === "executing" ? "outcome not recorded" : traceOutcome(call);
+      // A call cut off before its result arrived may still have had its side
+      // effect (a send commits in main after Esc), unless the stop recorded
+      // that it never ran.
+      const cutOff = call.status === "executing" || call.status === "stopped";
+      const outcome = traceOutcome(call) ?? (cutOff ? "outcome not recorded" : null);
       return `${call.name}${arg ? ` ("${arg}")` : ""}${outcome ? ` (${outcome})` : ""}`;
     });
   return entries.length ? `${TRACE_OPENING} ${entries.join(", ")}]` : "";
@@ -124,13 +185,29 @@ export function withoutEchoedToolTrace(content: string): string {
   return content.replace(ECHOED_TRACE, "");
 }
 
-/** The last messages as the model sees them, with earlier tool use noted on assistant turns. */
+/**
+ * The last messages as the model sees them, with earlier tool use noted on
+ * assistant turns and the selected text a request was about kept with it. A
+ * failed reply with nothing in it is left out: some providers reject an empty
+ * assistant message.
+ */
 export function toHistoryMessages(
   messages: ReadonlyArray<Message>,
   { includeToolTrace }: { includeToolTrace: boolean }
 ): HistoryMessage[] {
-  return messages.slice(-HISTORY_LIMIT).map((m) => {
+  return messages.slice(-HISTORY_LIMIT).flatMap((m) => {
+    if (m.role === "user" && m.selectedContext) {
+      return {
+        role: m.role,
+        content: buildAgentRequestText(m.content, {
+          text: m.selectedContext,
+          sourceMessageId: "",
+          source: m.selectedContextSource,
+        }),
+      };
+    }
     const trace = includeToolTrace && m.role === "assistant" ? toolTrace(m.toolCalls) : "";
-    return { role: m.role, content: trace ? `${trace}\n\n${m.content}` : m.content };
+    const content = trace ? `${trace}\n\n${m.content}` : m.content;
+    return m.turn?.status === "error" && !content.trim() ? [] : { role: m.role, content };
   });
 }

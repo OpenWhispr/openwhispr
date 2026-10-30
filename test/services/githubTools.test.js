@@ -27,14 +27,12 @@ const GITHUB = {
   manageUrl: "https://github.com/apps/openwhispr-dev/installations/new",
 };
 
-// A fresh turn: counts delivery holds, and caps cards like a real chat send.
+// A fresh turn that caps cards like a real chat send.
 async function turn() {
   const { createToolExecutionScope } = await loadScope();
-  const holds = { count: 0 };
-  const scope = createToolExecutionScope({ onHoldDelivery: () => (holds.count += 1) });
+  const scope = createToolExecutionScope();
   let next = 0;
   return {
-    holds,
     context: () => scope.createContext({ messageId: "m1", toolCallId: `call-${++next}` }),
   };
 }
@@ -120,7 +118,7 @@ test("github_search_issues searches through the query path with its defaults", a
   });
   await setGithubStatus(t);
   const { githubSearchIssuesTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   // Models often send null for an argument they leave out.
   const result = await githubSearchIssuesTool.execute(
@@ -129,7 +127,6 @@ test("github_search_issues searches through the query path with its defaults", a
   );
   // Other people's text shapes the answer, so a voice turn keeps it in the
   // panel rather than pasting it at the caret.
-  assert.equal(holds.count, 1);
   await githubSearchIssuesTool.execute(
     { query: "flaky", repo: " acme/api ", state: "all", type: "pr" },
     context()
@@ -153,7 +150,7 @@ test("a state or type outside the list is refused, never swapped for the default
   });
   await setGithubStatus(t);
   const { githubSearchIssuesTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   // "closed" used to become open-only: the model would read open issues as
   // the closed ones it asked for.
@@ -174,7 +171,6 @@ test("a state or type outside the list is refused, never swapped for the default
   assert.equal(closed.displayText, "That didn't work on GitHub.");
   assert.equal(bug.displayText, "That didn't work on GitHub.");
   assert.equal(queried, 0);
-  assert.equal(holds.count, 2);
 });
 
 test("an empty or over-long search never reaches main", async (t) => {
@@ -234,7 +230,7 @@ test("a login already marked for reconnecting is refused before any IPC", async 
   });
   await setGithubStatus(t, { ...GITHUB, needsReconnect: true });
   const { githubSearchIssuesTool, githubCreateIssueTool, githubCommentTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const results = [
     await githubSearchIssuesTool.execute({ query: "timeout" }, context()),
@@ -251,7 +247,6 @@ test("a login already marked for reconnecting is refused before any IPC", async 
     ]
   );
   assert.equal(calls, 0);
-  assert.equal(holds.count, 3, "every GitHub tool still keeps the turn in the panel");
 });
 
 test("no chosen repositories: the model is sent to Settings with the install page", async (t) => {
@@ -364,7 +359,7 @@ test("github_create_issue prepares a card with one-line title, body and labels",
   });
   await setGithubStatus(t);
   const [{ githubCreateIssueTool }, approvals] = await Promise.all([loadTools(), resetApprovals()]);
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const pending = githubCreateIssueTool.execute(
     {
@@ -392,7 +387,6 @@ test("github_create_issue prepares a card with one-line title, body and labels",
   ]);
   assert.equal(result.data.status, "sent");
   assert.equal(result.data.url, "https://github.com/acme/api/issues/212");
-  assert.equal(holds.count, 1);
 });
 
 test("github_create_issue takes a single label given as a string", async (t) => {
@@ -430,7 +424,7 @@ test("a description or label that isn't text is refused, never dropped", async (
   });
   await setGithubStatus(t);
   const { githubCreateIssueTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const results = [
     // The card would open with an empty description.
@@ -448,7 +442,6 @@ test("a description or label that isn't text is refused, never dropped", async (
   assert.match(results[0].data.error, /body is the description, as Markdown text/);
   assert.match(results[2].data.error, /labels is a list of existing label names/);
   assert.equal(prepared, 0);
-  assert.equal(holds.count, 4);
 });
 
 test("a repo that isn't text is refused, never widened to every repository", async (t) => {
@@ -513,14 +506,13 @@ test("github_create_issue without a repo leaves the choice to main, and passes i
   });
   await setGithubStatus(t);
   const { githubCreateIssueTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const result = await githubCreateIssueTool.execute({ title: "Bug", repo: "  " }, context());
 
   assert.deepEqual(prepared, [["github", "create_issue", { title: "Bug", body: "" }]]);
   assert.equal(result.data.status, "needs_clarification");
   assert.deepEqual(result.data.candidates, ["acme/api", "acme/web"]);
-  assert.equal(holds.count, 1, "the question stays in the panel");
 });
 
 test("github_create_issue checks its title and description before any IPC", async (t) => {
@@ -530,7 +522,7 @@ test("github_create_issue checks its title and description before any IPC", asyn
   });
   await setGithubStatus(t);
   const { githubCreateIssueTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const results = [
     await githubCreateIssueTool.execute({ title: " \n " }, context()),
@@ -547,7 +539,6 @@ test("github_create_issue checks its title and description before any IPC", asyn
     ]
   );
   assert.equal(prepared, 0);
-  assert.equal(holds.count, 3);
 });
 
 test("github_comment accepts owner/repo#12, repo#12, #12 and github.com issue or PR links only", async (t) => {
@@ -564,7 +555,7 @@ test("github_comment accepts owner/repo#12, repo#12, #12 and github.com issue or
   });
   await setGithubStatus(t);
   const { githubCommentTool } = await loadTools();
-  const { context, holds } = await turn();
+  const { context } = await turn();
   const accepted = [
     "acme/api#12",
     "api#12",
@@ -605,7 +596,6 @@ test("github_comment accepts owner/repo#12, repo#12, #12 and github.com issue or
   }
 
   assert.deepEqual(targets, accepted);
-  assert.equal(holds.count, accepted.length + refused.length);
 });
 
 test("github_comment asks for a body rather than posting an empty comment", async (t) => {
@@ -628,7 +618,7 @@ test("github_comment asks for a body rather than posting an empty comment", asyn
   assert.equal(prepared, 0);
 });
 
-test("create and comment hold delivery on every outcome", async (t) => {
+test("create and comment report each outcome: refused, failed, unavailable, cancelled, unknown", async (t) => {
   // Made on demand, so the rejection is always awaited.
   const answers = [
     () => Promise.reject(new Error("IPC gone")),
@@ -654,7 +644,7 @@ test("create and comment hold delivery on every outcome", async (t) => {
     loadTools(),
     resetApprovals(),
   ]);
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   const statuses = [];
   statuses.push((await githubCreateIssueTool.execute({ title: "Bug" }, context())).data.status);
@@ -676,7 +666,6 @@ test("create and comment hold delivery on every outcome", async (t) => {
     "cancelled_by_user",
     "unknown",
   ]);
-  assert.equal(holds.count, 5);
 });
 
 test("an unconfirmed issue or comment sends the user to GitHub to check before retrying", async (t) => {
@@ -868,7 +857,7 @@ test("a sixth card in one turn is refused by the shared card cap", async (t) => 
   });
   await setGithubStatus(t);
   const [{ githubCreateIssueTool }, approvals] = await Promise.all([loadTools(), resetApprovals()]);
-  const { context, holds } = await turn();
+  const { context } = await turn();
 
   // The AI SDK runs a step's tool calls in parallel.
   const calls = Array.from({ length: 6 }, (_, index) =>
@@ -883,10 +872,9 @@ test("a sixth card in one turn is refused by the shared card cap", async (t) => 
   assert.equal(sixth.data.status, "not_sent");
   assert.equal(sixth.data.reason, "card_limit");
   assert.equal(prepared, 5);
-  assert.equal(holds.count, 6);
 });
 
-test("a card whose login lapsed by Send tells the model to reconnect GitHub", async (t) => {
+test("a card whose login lapsed by Send asks to connect GitHub again", async (t) => {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -900,24 +888,17 @@ test("a card whose login lapsed by Send tells the model to reconnect GitHub", as
     },
   });
   await setGithubStatus(t);
-  const [{ githubCreateIssueTool, GITHUB_RECONNECT_GUIDANCE }, approvals] = await Promise.all([
-    loadTools(),
-    resetApprovals(),
-  ]);
+  const [{ githubCreateIssueTool }, approvals] = await Promise.all([loadTools(), resetApprovals()]);
   const { context } = await turn();
 
   const pending = githubCreateIssueTool.execute({ title: "Bug" }, context());
   const key = await cardFor(approvals, "call-1");
   await approvals.approveAction(key);
+  assert.equal(approvals.useConnectorApprovalStore.getState().entries[key].reconnect, "prompt");
+  approvals.cancelApproval(key);
   const result = await pending;
 
-  assert.equal(result.data.status, "unavailable");
-  assert.equal(result.data.guidance, GITHUB_RECONNECT_GUIDANCE);
-  // The card itself still says what happened.
-  assert.equal(
-    approvals.useConnectorApprovalStore.getState().entries[key].errorCode,
-    "reconnect_needed"
-  );
+  assert.equal(result.data.status, "cancelled_by_user");
 });
 
 test("each GitHub tool has a step icon, and an English name and working line after find_contact's", async (t) => {

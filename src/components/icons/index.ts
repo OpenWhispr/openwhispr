@@ -4,18 +4,22 @@ import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
 export {
+  ArrowUp,
   Bold,
   ChevronsUpDown,
   Circle,
   CopyRounded,
   EyeOff,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
   List,
   ListChecks,
   ListEnd,
   ListOrdered,
+  Maximize,
+  Minimize,
   Quote,
   SkillStack,
   Square,
@@ -23,6 +27,8 @@ export {
   SquareSparkle,
   Strikethrough,
   Table,
+  TextSelect,
+  Volume,
 } from "./primitives";
 
 export const AlertCircle = createIcon("alert-circle", Nucleo.CircleWarningOutline24);
