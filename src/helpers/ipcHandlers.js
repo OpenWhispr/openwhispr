@@ -6368,11 +6368,13 @@ class IPCHandlers {
         const modelManager = require("./modelManagerBridge").default;
         // Resolves the model's runtime: a GenieX (NPU) model comes back on the
         // GenieX server's port, everything else on the llama.cpp server — the
-        // streaming chat client only needs an OpenAI-compatible port.
-        const { port } = await modelManager.ensureServerForModel(modelId);
+        // streaming chat client only needs an OpenAI-compatible port. The
+        // served id is what the server answers requests for (GenieX cache refs
+        // differ from registry ids), so streaming clients send that.
+        const { port, servedModelId } = await modelManager.ensureServerForModel(modelId);
 
         this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-        return { success: true, port };
+        return { success: true, port, modelId: servedModelId };
       } catch (error) {
         return { success: false, error: error.message };
       }

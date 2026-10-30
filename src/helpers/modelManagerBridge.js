@@ -986,12 +986,19 @@ class ModelManager {
 
     await serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
     this.currentServerModelId = modelId;
+    // The id the server actually serves: llama.cpp answers any model string,
+    // but GenieX resolves requests against its cache by the pulled ref (which
+    // may carry a ":PRECISION" suffix) — a streaming client that sends the
+    // bare registry id would get "not found in local cache".
+    const servedModelId =
+      serverManager === this.serverManager ? modelId : serverManager.modelRef || modelId;
     debugLogger.info("Streaming server ready", {
       modelId,
+      servedModelId,
       runtime: modelInfo.model.runtime || "llama",
       port: serverManager.port,
     });
-    return { port: serverManager.port, runtime: modelInfo.model.runtime || "llama" };
+    return { port: serverManager.port, servedModelId, runtime: modelInfo.model.runtime || "llama" };
   }
 
   async prewarmServer(modelId) {

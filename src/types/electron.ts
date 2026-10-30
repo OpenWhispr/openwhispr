@@ -2441,7 +2441,13 @@ declare global {
       // llama-server
       llamaServerStart: (
         modelId: string
-      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        port?: number;
+        /** The id the server answers requests for — a GenieX cache ref differs from the registry id. */
+        modelId?: string;
+        error?: string;
+      }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
