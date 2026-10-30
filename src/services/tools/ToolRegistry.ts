@@ -19,6 +19,7 @@ export interface ToolExecutionContext {
   toolCallId: string;
   /** Aborts when the turn is cancelled or its conversation ends. */
   signal: AbortSignal;
+  onApprovalRequested: () => void;
   /**
    * Counts one use of `key` in this turn and reports whether it stays within
    * `limit`, so a tool can cap what one turn does (drafts opened, clipboard
@@ -62,22 +63,30 @@ const ABORTED_RESULT: ToolResult = { success: false, data: null, displayText: ""
 /**
  * Runs a tool, but settles as soon as its turn is aborted: a tool that
  * ignores the signal (a fetch with no timeout) must not keep a cancelled turn,
- * and the chat's send lock, waiting. Its late result is dropped, and a call
- * that arrives after the abort never runs.
+ * and the chat's send lock, waiting. Its late result is kept out of the model,
+ * but onResult still observes it so committed writes can be saved to history.
+ * A call that arrives after the abort never runs.
  */
 export function executeTool(
   def: ToolDefinition,
   args: Record<string, unknown>,
-  context?: ToolExecutionContext
+  context?: ToolExecutionContext,
+  onResult?: (result: ToolResult) => void
 ): Promise<ToolResult> {
+  const recordResult = (result: ToolResult): ToolResult => {
+    onResult?.(result);
+    return result;
+  };
   const signal = context?.signal;
-  if (!signal) return def.execute(args, context);
+  if (!signal) return def.execute(args, context).then(recordResult);
   if (signal.aborted) return Promise.resolve(ABORTED_RESULT);
   return new Promise((resolve, reject) => {
     const settleAborted = () => resolve(ABORTED_RESULT);
     signal.addEventListener("abort", settleAborted, { once: true });
     def
       .execute(args, context)
+      // A cancelled turn releases immediately, but an approved write may still commit.
+      .then(recordResult)
       .then(resolve, reject)
       .finally(() => signal.removeEventListener("abort", settleAborted));
   });
@@ -104,7 +113,7 @@ export class ToolRegistry {
    */
   toAISDKFormat(
     createContext?: (toolCallId: string, abortSignal?: AbortSignal) => ToolExecutionContext,
-    onDisplayText?: (toolCallId: string, displayText: string) => void
+    onDisplayText?: (toolCallId: string, displayText: string, result: ToolResult) => void
   ): Record<string, Tool> {
     const result: Record<string, Tool> = {};
     for (const def of this.getAll()) {
@@ -116,9 +125,9 @@ export class ToolRegistry {
             const toolResult = await executeTool(
               def,
               args as Record<string, unknown>,
-              createContext?.(options.toolCallId, options.abortSignal)
+              createContext?.(options.toolCallId, options.abortSignal),
+              (result) => onDisplayText?.(options.toolCallId, result.displayText, result)
             );
-            onDisplayText?.(options.toolCallId, toolResult.displayText);
             return toolResult.success ? toolResult.data : { error: toolResult.displayText };
           } catch (error) {
             return { error: (error as Error).message || "Tool execution failed" };

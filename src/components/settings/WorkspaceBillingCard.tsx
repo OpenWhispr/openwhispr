@@ -15,6 +15,7 @@ import {
 import { useToast } from "../ui/useToast";
 import { WorkspacesService, type SeatPreview } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { workspaceCan } from "../../lib/capabilities";
 import { hasActiveWorkspaceSubscription } from "../../lib/workspaceBilling";
 import { formatAmount } from "../../utils/formatAmount";
 import type { Workspace } from "../../types/electron";
@@ -34,9 +35,11 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
     void refresh();
     void onRefreshEntitlement?.();
   });
-  const isOwner = workspace.role === "owner";
-  const hasSubscription = Boolean(workspace.stripe_subscription_id);
-  const canAddSeats = hasSubscription && hasActiveWorkspaceSubscription(workspace);
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  // Add seat and Manage in Stripe need a Stripe subscription, so they read the raw id:
+  // `has_subscription` is also true for a paid plan provisioned without Stripe.
+  const subscribed = Boolean(workspace.stripe_subscription_id);
+  const canAddSeats = subscribed && hasActiveWorkspaceSubscription(workspace);
   const seatsUsed = workspace.seats_used ?? workspace.seats;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal > 0 ? Math.min(100, (seatsUsed / seatsTotal) * 100) : 0;
@@ -163,7 +166,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         </div>
       )}
 
-      {!isOwner ? (
+      {!canManageBilling ? (
         <p className="text-xs text-muted-foreground">
           {workspace.billing_manager
             ? t("settingsPage.unifiedBilling.managedBy", {
@@ -173,7 +176,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
         </p>
       ) : (
         <div className="flex flex-wrap gap-2 pt-1">
-          {hasSubscription ? (
+          {subscribed ? (
             <>
               {canAddSeats && (
                 <Button

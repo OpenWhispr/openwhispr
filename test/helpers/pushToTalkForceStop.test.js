@@ -65,7 +65,11 @@ Module._load = originalLoad;
 function makeManager() {
   const sent = [];
   const manager = new WindowManager();
-  manager.hotkeyManager = { isInListeningMode: () => false };
+  const hotkeyEvents = [];
+  manager.hotkeyManager = {
+    isInListeningMode: () => false,
+    logHotkeyEvent: (...args) => hotkeyEvents.push(args),
+  };
   // Before mainWindow is attached, so its own teardown sends stay out of `sent`.
   manager.setOnboardingActive(false);
   manager.mainWindow = {
@@ -80,6 +84,7 @@ function makeManager() {
     manager,
     sent,
     hides,
+    hotkeyEvents,
     channels: () => sent.map((entry) => entry.channel),
   };
 }
@@ -141,6 +146,22 @@ test("the macOS compound ceiling reports a forced stop on the same channel", (t)
     "stop-dictation",
   ]);
   assert.deepEqual(harness.sent.at(-2).payload, { reason: "timeout" });
+});
+
+// globalShortcut reports the press but never the release, so the modifier release
+// that ends the hold is what tells the debug log the key came up.
+test("releasing a macOS compound hold logs the hotkey's release", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+
+  const harness = makeManager();
+  harness.manager.startMacCompoundPushToTalk("Control+Option");
+  t.mock.timers.tick(150);
+  harness.manager.handleMacPushModifierUp("shift");
+  harness.manager.handleMacPushModifierUp("control");
+
+  assert.deepEqual(harness.hotkeyEvents, [["macos-native", "up", "Control+Option"]]);
+  assert.equal(harness.channels().at(-1), "stop-dictation");
 });
 
 // The transcript arrives seconds after the stop and is surfaced by a toast inside

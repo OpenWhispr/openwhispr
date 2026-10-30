@@ -4,7 +4,6 @@ import { Lock, Mail } from "./icons";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ConnectorLoginRow } from "./connectors/ConnectorLoginRow";
-import { BetaBadge } from "./connectors/BetaBadge";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { UpsellBar } from "./integrations/IntegrationsPane";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -77,12 +76,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
               <Mail className="h-4 w-4 text-primary/80" strokeWidth={2} aria-hidden="true" />
             </div>
             <div className="flex-1 basis-52 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-xs font-semibold text-foreground">
-                  {t("connectors.email.title")}
-                </p>
-                <BetaBadge />
-              </div>
+              <p className="text-xs font-semibold text-foreground">{t("connectors.email.title")}</p>
               <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
                 {description}
               </p>

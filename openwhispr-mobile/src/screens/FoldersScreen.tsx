@@ -10,6 +10,7 @@ import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { FolderRow } from '@/components/notes/FolderRow';
 import { NoteRow } from '@/components/notes/NoteRow';
+import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
@@ -102,11 +103,16 @@ export default function FoldersScreen() {
   );
 
   const handleDeleteNote = useCallback(
-    (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+    (id: number, restoreRow: RestoreRow) => {
+      confirmDestructive(
+        'Delete Note',
+        'This note will be deleted permanently.',
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { onCancel: restoreRow },
+      );
     },
     [deleteNote],
   );
@@ -218,7 +224,7 @@ export default function FoldersScreen() {
                       bucket={bucket.key}
                       tinted
                       onPress={() => handleNotePress(note.id)}
-                      onDelete={() => handleDeleteNote(note.id)}
+                      onDelete={(restoreRow) => handleDeleteNote(note.id, restoreRow)}
                     />
                   ))}
                 </GroupedList>

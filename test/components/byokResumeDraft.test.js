@@ -48,3 +48,24 @@ for (const [name, options] of [
     }
   });
 }
+
+// A legacy model is listed only while it is the selection, so browsing another
+// provider and coming back must not strand the user's saved one.
+test("returning to the provider the step opened on restores its legacy model", async (t) => {
+  const step = await mountByokStep(t, {
+    stepId: "byok-assistant",
+    resumeState: {
+      selectedProvider: "openai",
+      selectedModel: "gpt-5-mini",
+      baseUrl: "",
+      customModel: "",
+    },
+  });
+  assert.deepEqual(step.selectValues(), ["openai", "gpt-5-mini"]);
+
+  await step.chooseProvider("anthropic");
+  assert.notEqual(step.selectValues()[1], "gpt-5-mini");
+
+  await step.chooseProvider("openai");
+  assert.deepEqual(step.selectValues(), ["openai", "gpt-5-mini"]);
+});

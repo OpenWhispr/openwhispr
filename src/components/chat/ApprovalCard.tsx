@@ -45,6 +45,9 @@ import {
 } from "./interactions/cardStyles";
 import slackMark from "../../assets/icons/slack.svg";
 
+export const APPROVAL_CARD_CLASS =
+  "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring";
+
 /** The message body: edited in place while the card can still send it. */
 function BodyField({
   value,

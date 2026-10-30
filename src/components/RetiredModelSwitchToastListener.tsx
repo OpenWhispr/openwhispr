@@ -11,6 +11,7 @@ import { isDictationPanelWindow } from "../utils/windowContext";
 const RETIRED_MESSAGE_KEYS: Record<RetiredModelProvider, string> = {
   groq: "reasoning.groq.modelRetired",
   tinfoil: "reasoning.tinfoil.modelRetired",
+  openai: "reasoning.openai.modelRetired",
 };
 
 /** Alerts the user when a retired cloud model was switched out from under them. */

@@ -17,85 +17,183 @@ private enum KeyboardLog {
   }
 }
 
-private final class KeyButton: UIButton {
-  var hitTestOutsets = UIEdgeInsets(top: 6, left: 3, bottom: 6, right: 3)
-
-  var normalBackground: UIColor = .clear {
-    didSet { if !isHighlighted { backgroundColor = normalBackground } }
+/// Every colour the keyboard draws. Theme-dependent ones are dynamic: iOS applies both a
+/// light/dark switch and the host field's keyboardAppearance to the extension, so views
+/// restyle with no code. (Overriding the style from textDocumentProxy.keyboardAppearance
+/// freezes it: for a default field the proxy reports the style resolved at focus.)
+private enum Palette {
+  /// A colour that resolves differently for light vs dark appearance.
+  private static func dynamic(light: UIColor, dark: UIColor) -> UIColor {
+    UIColor { traits in traits.userInterfaceStyle == .dark ? dark : light }
   }
 
-  // Same luminous-rim treatment as PillBackgroundView: a white top-lit gradient
-  // masked to the border stroke, so the key reads as glass-edged. Opt-in —
-  // regular keys stay layer-free.
-  var showsGlassRim = false {
-    didSet {
-      guard showsGlassRim != oldValue else { return }
-      if showsGlassRim { installGlassRim() } else { removeGlassRim() }
+  private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> UIColor {
+    UIColor(red: r / 255, green: g / 255, blue: b / 255, alpha: 1)
+  }
+
+  // Apple's iOS 26 keys, one colour for every key, measured over the system glass:
+  // (255,255,255) on (226,228,232) light, (61,61,61) on (23,23,23) dark. The view is
+  // transparent, so the system draws the glass and these composite over it. Dark is a
+  // grey that also matches Apple over a coloured backdrop ((126,61,63) on (108,22,24)).
+  // Apple's light keys blend with the app content beneath the glass, which an extension
+  // cannot see, so light matches on plain backdrops only.
+  static let keyBackground = dynamic(light: UIColor(white: 1, alpha: 0.96), dark: UIColor(white: 0.73, alpha: 0.235))
+  // Pressed function key: (196,197,200) light, (125,125,125) dark.
+  static let keyPressedBackground = dynamic(light: UIColor(white: 0, alpha: 0.135), dark: UIColor(white: 1, alpha: 0.44))
+  // Disabled return: key (191,193,197) / (116,116,116), glyph (172,173,177) / (129,129,129).
+  static let keyDisabledBackground = dynamic(light: UIColor(white: 0, alpha: 0.155), dark: UIColor(white: 1, alpha: 0.40))
+  static let keyDisabledText = dynamic(light: rgb(172, 173, 177), dark: rgb(129, 129, 129))
+  // The prominent return key (Go, Search, Send, Done…) is system blue in both modes; held,
+  // it shows as a plain key (keyBackground, keyText glyph).
+  static let returnKeyProminent = rgb(0, 122, 255)
+  static let keyText = dynamic(light: .black, dark: .white)
+  // Key preview balloon, opaque as Apple's in both modes: the key under it stays hidden (its
+  // glyph shows through Apple's dark one by at most 3). No shadow.
+  static let popupBackground = dynamic(light: .white, dark: UIColor(white: 80 / 255, alpha: 1))
+
+  // Brand blue and the warning amber read well on both appearances, so they
+  // stay fixed.
+  static let accent = UIColor(red: 0.03, green: 0.52, blue: 1.00, alpha: 1.0)
+  static let issue = UIColor(red: 1.00, green: 0.62, blue: 0.04, alpha: 1.0)
+
+  // Ink for the persistent "Turn on Full Access" pill (#1C1300 on issue amber
+  // = 5.6:1, passes AA). White on the same amber is 2.1:1 and fails. The
+  // transient amber states keep white ink — a 1.2s flash is not something a
+  // low-vision user has to read, a permanent notice is.
+  static let issueInk = UIColor(red: 0.110, green: 0.075, blue: 0.000, alpha: 1.0)
+
+  // The desktop app's accent purple (#6C50E9, oklch(0.55 0.22 285)). Tints the
+  // cancel button while cleanup runs. Fixed across appearances like accent.
+  static let cleanupAccent = UIColor(red: 0.424, green: 0.314, blue: 0.914, alpha: 1.0)
+
+  // App-icon blue gradient (deep cobalt → navy, #2457D6 → #0E3690), sampled
+  // from the OpenWhispr app icon. Used for the "Activate" button.
+  static let brandGradientStart = UIColor(red: 0.141, green: 0.341, blue: 0.839, alpha: 1.0)
+  static let brandGradientEnd = UIColor(red: 0.055, green: 0.212, blue: 0.565, alpha: 1.0)
+}
+
+/// Apple's iOS 26 keycap type, measured at 3x on the iPhone 17 Pro: capitals and digits
+/// have a 15.3pt cap height and lowercase a 13pt x-height (Apple draws lowercase larger),
+/// all regular weight, on one baseline 6.5pt below the key's centre in portrait. The faces
+/// that change with orientation are in Keycaps.
+private enum KeyFont {
+  static let modeLabel = UIFont.systemFont(ofSize: 17.75, weight: .regular)  // 123, ABC
+  static let pageLabel = UIFont.systemFont(ofSize: 15, weight: .regular)  // 123 in row 3
+  static let domainLabel = UIFont.systemFont(ofSize: 19, weight: .regular)  // .com, larger than 123/ABC
+  static let moreSymbolsLabel = UIFont.systemFont(ofSize: 12, weight: .semibold)  // #+= in row 3
+  static let glyph = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)  // shift, delete, return, globe
+  static let characterBaseline: CGFloat = 6.5
+  static let moreSymbolsBaseline: CGFloat = 3.17
+
+  /// Apple sets ".", ",", "_", "#" and ":" lower than the other characters' baseline.
+  static func baseline(for character: String) -> CGFloat {
+    switch character {
+    case ".", ",": return characterBaseline + 2.67
+    case "_": return characterBaseline + 3
+    case "#", ":": return characterBaseline + 1
+    default: return characterBaseline
     }
   }
 
-  private static let glassRimWidth: CGFloat = 1.5
-  private var glassRimLayer: CAGradientLayer?
-
-  private func installGlassRim() {
-    let rim = CAGradientLayer()
-    rim.colors = [
-      UIColor(white: 1, alpha: 0.55).cgColor,
-      UIColor(white: 1, alpha: 0.12).cgColor,
-    ]
-    rim.startPoint = CGPoint(x: 0.5, y: 0)
-    rim.endPoint = CGPoint(x: 0.5, y: 1)
-    let mask = CAShapeLayer()
-    mask.fillColor = UIColor.clear.cgColor
-    mask.strokeColor = UIColor.black.cgColor
-    mask.lineWidth = Self.glassRimWidth
-    rim.mask = mask
-    layer.addSublayer(rim)
-    glassRimLayer = rim
-    setNeedsLayout()
-  }
-
-  private func removeGlassRim() {
-    glassRimLayer?.removeFromSuperlayer()
-    glassRimLayer = nil
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    guard let rim = glassRimLayer, let mask = rim.mask as? CAShapeLayer else { return }
-    rim.frame = bounds
-    mask.frame = bounds
-    let inset = Self.glassRimWidth / 2
-    mask.path = UIBezierPath(
-      roundedRect: bounds.insetBy(dx: inset, dy: inset),
-      cornerRadius: max(0, layer.cornerRadius - inset)
-    ).cgPath
-  }
-
-  override var isHighlighted: Bool {
-    didSet {
-      guard isHighlighted else {
-        backgroundColor = normalBackground
-        return
-      }
-      // Resolve the (possibly dynamic) colour for the current appearance, then
-      // nudge it for press feedback: lighter on dark keys, darker on light keys.
-      let resolved = normalBackground.resolvedColor(with: traitCollection)
-      let delta: CGFloat = traitCollection.userInterfaceStyle == .dark ? 0.12 : -0.10
-      backgroundColor = resolved.brightened(by: delta)
+  /// The bottom row's field keys: its "#" is the regular-size one, on the shared baseline.
+  static func shortcutBaseline(for character: String, raisesPeriod: Bool) -> CGFloat {
+    switch character {
+    case "#": return characterBaseline
+    case "." where raisesPeriod: return baseline(for: character) - 4
+    default: return baseline(for: character)
     }
   }
+  // Apple's caps-lock glyph sits a little above centre (shift/delete: Keycaps; return glyphs:
+  // ReturnKeyStyle).
+  static let capsLockGlyphOffset: CGFloat = -0.33
 
-  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-    let expanded = bounds.inset(
-      by: UIEdgeInsets(
-        top: -hitTestOutsets.top,
-        left: -hitTestOutsets.left,
-        bottom: -hitTestOutsets.bottom,
-        right: -hitTestOutsets.right
+  /// Apple's iOS 26 keycaps are SF Compact (narrower round letters than SF Pro), which has no
+  /// public font API, so this loads the copy iOS ships. Sizes keep SF Pro's cap and x-heights.
+  /// Nil where the file is missing; the SF Pro fallback then matches every height and baseline.
+  static func compact(size: CGFloat, weight: CGFloat, caseSensitive: Bool = false) -> UIFont? {
+    var path = "/System/Library/Fonts/Core/SFCompact.ttf"
+    #if targetEnvironment(simulator)
+    path = (ProcessInfo.processInfo.environment["IPHONE_SIMULATOR_ROOT"] ?? "") + path
+    #endif
+    guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(
+      URL(fileURLWithPath: path) as CFURL
+    ) as? [CTFontDescriptor], let descriptor = descriptors.first else { return nil }
+    var weighted = CTFontDescriptorCreateCopyWithVariation(descriptor, 0x7767_6874 as CFNumber, weight)
+    if caseSensitive {
+      weighted = CTFontDescriptorCreateCopyWithFeature(
+        weighted, kCaseSensitiveLayoutType as CFNumber, kCaseSensitiveLayoutOnSelector as CFNumber
       )
-    )
-    return expanded.contains(point)
+    }
+    return CTFontCreateWithFontDescriptor(weighted, size, nil) as UIFont
+  }
+}
+
+/// The keycap faces and nudges that change with orientation. Landscape keys are shorter:
+/// there Apple sets letters 11% smaller with lowercase 0.67pt higher, the "123" key at the
+/// 15pt row-3 size but "ABC" full size and 0.5pt lower, ".com" 0.5pt lower and shift/delete
+/// on centre (17 Pro).
+private struct Keycaps: Equatable {
+  struct Label: Equatable {
+    let font: UIFont
+    let baseline: CGFloat
+  }
+
+  let lowercase: UIFont
+  /// Also digits and symbols, which Apple raises to the capitals (case-sensitive forms).
+  let uppercase: UIFont
+  /// …except ":", "#" and "_", which Apple draws larger and without those forms.
+  let large: UIFont
+  /// The mode key's titles: "123" on the letters page, "ABC" on the others.
+  let label123: Label
+  let labelABC: Label
+  let domainBaseline: CGFloat  // .com
+  /// The lowercase baseline, from the capitals'.
+  let lowercaseBaselineShift: CGFloat
+  /// Shift and delete glyphs, from UIKit's centring.
+  let edgeGlyphOffset: CGFloat
+
+  static let portrait = Keycaps(
+    scale: 1,
+    label123: Label(font: KeyFont.modeLabel, baseline: 5.5),
+    labelABC: Label(font: KeyFont.modeLabel, baseline: 5.5),
+    domainBaseline: 3.67,
+    lowercaseBaselineShift: 0,
+    edgeGlyphOffset: 0.67
+  )
+  static let landscape = Keycaps(
+    scale: 0.89,
+    label123: Label(font: KeyFont.pageLabel, baseline: 4.83),
+    labelABC: Label(font: KeyFont.modeLabel, baseline: 6),
+    domainBaseline: 4.17,
+    lowercaseBaselineShift: -0.67,
+    edgeGlyphOffset: 0
+  )
+
+  private init(
+    scale: CGFloat,
+    label123: Label,
+    labelABC: Label,
+    domainBaseline: CGFloat,
+    lowercaseBaselineShift: CGFloat,
+    edgeGlyphOffset: CGFloat
+  ) {
+    lowercase = KeyFont.compact(size: 24.67 * scale, weight: 420)
+      ?? UIFont.systemFont(ofSize: 24.5 * scale, weight: UIFont.Weight(-0.08))
+    uppercase = KeyFont.compact(size: 22.4 * scale, weight: 480, caseSensitive: true)
+      ?? UIFont.systemFont(ofSize: 21.5 * scale, weight: UIFont.Weight(0.1))
+    large = KeyFont.compact(size: 27 * scale, weight: 480) ?? uppercase
+    self.label123 = label123
+    self.labelABC = labelABC
+    self.domainBaseline = domainBaseline
+    self.lowercaseBaselineShift = lowercaseBaselineShift
+    self.edgeGlyphOffset = edgeGlyphOffset
+  }
+
+  func character(_ display: String) -> UIFont {
+    switch display {
+    case ":", "#", "_": return large
+    default: return uppercase
+    }
   }
 }
 
@@ -164,6 +262,130 @@ private extension UIColor {
     var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
     getHue(&h, saturation: &s, brightness: &b, alpha: &a)
     return UIColor(hue: h, saturation: s, brightness: max(0, min(b + amount, 1.0)), alpha: a)
+  }
+}
+
+private final class KeyButton: UIButton {
+  var hitTestOutsets = UIEdgeInsets(top: 6, left: 3, bottom: 6, right: 3)
+  /// What the key inserts; the title is only what it shows (” displays, " inserts).
+  var output: String?
+
+  var normalBackground: UIColor = .clear {
+    didSet { refreshPressedLook() }
+  }
+  var pressedBackground: UIColor?
+  /// The glyph colour while pressed, where it isn't the key's tint (the held blue return).
+  var pressedTint: UIColor? {
+    didSet { refreshPressedLook() }
+  }
+  /// Keeps the pressed look while a long press owns the touch (delete repeating), as Apple's
+  /// key stays pressed for the whole hold.
+  var isLongPressed = false {
+    didSet { refreshPressedLook() }
+  }
+  /// Where the title's baseline sits below the key's centre; nil keeps UIKit's centring.
+  var titleBaselineFromCenter: CGFloat? {
+    didSet { setNeedsLayout() }
+  }
+  /// Nudges the glyph down (or up, negative) from UIKit's centring to Apple's position.
+  var imageOffsetY: CGFloat = 0 {
+    didSet { setNeedsLayout() }
+  }
+
+  // UIKit asks for this rect on every layout, so the nudge neither accumulates nor gets lost
+  // when the image changes, as a frame offset or a transform applied after layout did.
+  override func imageRect(forContentRect contentRect: CGRect) -> CGRect {
+    super.imageRect(forContentRect: contentRect).offsetBy(dx: 0, dy: imageOffsetY)
+  }
+
+  // Same luminous-rim treatment as PillBackgroundView: a white top-lit gradient
+  // masked to the border stroke, so the button reads as glass-edged. Opt-in —
+  // only the toolbar's tone and agent buttons use it.
+  var showsGlassRim = false {
+    didSet {
+      guard showsGlassRim != oldValue else { return }
+      if showsGlassRim { installGlassRim() } else { removeGlassRim() }
+    }
+  }
+
+  private static let glassRimWidth: CGFloat = 1.5
+  private var glassRimLayer: CAGradientLayer?
+
+  private func installGlassRim() {
+    let rim = CAGradientLayer()
+    rim.colors = [
+      UIColor(white: 1, alpha: 0.55).cgColor,
+      UIColor(white: 1, alpha: 0.12).cgColor,
+    ]
+    rim.startPoint = CGPoint(x: 0.5, y: 0)
+    rim.endPoint = CGPoint(x: 0.5, y: 1)
+    let mask = CAShapeLayer()
+    mask.fillColor = UIColor.clear.cgColor
+    mask.strokeColor = UIColor.black.cgColor
+    mask.lineWidth = Self.glassRimWidth
+    rim.mask = mask
+    layer.addSublayer(rim)
+    glassRimLayer = rim
+    setNeedsLayout()
+  }
+
+  private func removeGlassRim() {
+    glassRimLayer?.removeFromSuperlayer()
+    glassRimLayer = nil
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    if let titleBaselineFromCenter, let label = titleLabel, let font = label.font {
+      label.frame.origin.y =
+        bounds.midY + titleBaselineFromCenter - font.ascender - (label.bounds.height - font.lineHeight) / 2
+    }
+    if let rim = glassRimLayer, let mask = rim.mask as? CAShapeLayer {
+      rim.frame = bounds
+      mask.frame = bounds
+      let inset = Self.glassRimWidth / 2
+      mask.path = UIBezierPath(
+        roundedRect: bounds.insetBy(dx: inset, dy: inset),
+        cornerRadius: max(0, layer.cornerRadius - inset)
+      ).cgPath
+    }
+  }
+
+  override var isHighlighted: Bool {
+    didSet { refreshPressedLook() }
+  }
+
+  // UIKit darkens a highlighted image that falls back to the normal state's; Apple's pressed
+  // glyphs keep their colour, so the highlighted state carries the same image and size.
+  override func setImage(_ image: UIImage?, for state: UIControl.State) {
+    super.setImage(image, for: state)
+    if state == .normal { super.setImage(image, for: .highlighted) }
+  }
+
+  override func setPreferredSymbolConfiguration(
+    _ configuration: UIImage.SymbolConfiguration?, forImageIn state: UIControl.State
+  ) {
+    super.setPreferredSymbolConfiguration(configuration, forImageIn: state)
+    if state == .normal { super.setPreferredSymbolConfiguration(configuration, forImageIn: .highlighted) }
+  }
+
+  private func refreshPressedLook() {
+    let isPressed = isHighlighted || isLongPressed
+    backgroundColor = isPressed ? (pressedBackground ?? normalBackground) : normalBackground
+    // nil hands the glyph back to the button's tint.
+    imageView?.tintColor = isPressed ? pressedTint : nil
+  }
+
+  override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+    let expanded = bounds.inset(
+      by: UIEdgeInsets(
+        top: -hitTestOutsets.top,
+        left: -hitTestOutsets.left,
+        bottom: -hitTestOutsets.bottom,
+        right: -hitTestOutsets.right
+      )
+    )
+    return expanded.contains(point)
   }
 }
 
@@ -355,6 +577,148 @@ private final class ProcessingDotsView: UIView {
   }
 }
 
+/// Apple's iOS 26 key preview, measured on the iPhone 17 Pro: a head 12pt wider than the
+/// key on each side with 12pt corners, its top 66pt above the key's, joined to the key by
+/// an S-curve, and no shadow. Extensions can't draw above their view, so a top-row head
+/// starts at the view's top instead. An edge key's head is flush with the key's outer side
+/// and reaches 22pt (left edge) or 20pt (right edge) past its inner side, its letter centred
+/// where a full-width head ending there would centre it (17 Pro and Pro Max).
+private final class KeyPopupView: UIView {
+  private static let headOutset: CGFloat = 12
+  private static let leftEdgeReach: CGFloat = 22
+  private static let rightEdgeReach: CGFloat = 20
+  private static let headRise: CGFloat = 66
+  private static let headHeight: CGFloat = 50
+  private static let headRadius: CGFloat = 12
+  private static let neckLength: CGFloat = 22
+  private static let glyphBaseline: CGFloat = 47
+  private static let glyphScale: CGFloat = 1.556
+
+  private let fill = UIView()
+  private let shapeMask = CAShapeLayer()
+  private let label = UILabel()
+  private weak var owner: UIView?
+  private var pendingHide: DispatchWorkItem?
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isUserInteractionEnabled = false
+    isHidden = true
+    fill.backgroundColor = Palette.popupBackground
+    shapeMask.fillColor = UIColor.black.cgColor
+    fill.layer.mask = shapeMask
+    addSubview(fill)
+    label.textAlignment = .center
+    label.textColor = Palette.keyText
+    addSubview(label)
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  /// Shows `text` over `keyFrame` (superview coordinates), kept inside `container`.
+  func show(
+    _ text: String,
+    font: UIFont,
+    keyFrame: CGRect,
+    keyCornerRadius: CGFloat,
+    container: CGRect,
+    owner: UIView
+  ) {
+    var (minX, maxX) = (keyFrame.minX - Self.headOutset, keyFrame.maxX + Self.headOutset)
+    var glyphMidX = keyFrame.midX
+    if minX < container.minX {
+      (minX, maxX) = (keyFrame.minX, keyFrame.maxX + Self.leftEdgeReach)
+      glyphMidX = maxX - keyFrame.width / 2 - Self.headOutset
+    } else if maxX > container.maxX {
+      (minX, maxX) = (keyFrame.minX - Self.rightEdgeReach, keyFrame.maxX)
+      glyphMidX = minX + keyFrame.width / 2 + Self.headOutset
+    }
+    let head = CGRect(
+      x: minX,
+      y: max(container.minY, keyFrame.minY - Self.headRise),
+      width: maxX - minX,
+      height: Self.headHeight
+    )
+    frame = head.union(keyFrame)
+    let headRect = head.offsetBy(dx: -frame.minX, dy: -frame.minY)
+    let keyRect = keyFrame.offsetBy(dx: -frame.minX, dy: -frame.minY)
+    fill.frame = bounds
+    shapeMask.frame = fill.bounds
+    shapeMask.path = Self.balloon(head: headRect, key: keyRect, keyCornerRadius: keyCornerRadius).cgPath
+
+    // The keycap's own face and weight, enlarged: Apple's preview letter matches its key's.
+    label.font = font.withSize(font.pointSize * Self.glyphScale)
+    label.text = text
+    label.sizeToFit()
+    label.frame.origin = CGPoint(
+      x: glyphMidX - frame.minX - label.bounds.width / 2,
+      y: headRect.minY + Self.glyphBaseline - label.font.ascender
+        - (label.bounds.height - label.font.lineHeight) / 2
+    )
+    pendingHide?.cancel()
+    pendingHide = nil
+    self.owner = owner
+    isHidden = false
+  }
+
+  /// Hides the preview, but only for the key that showed it when `owner` is given, so a
+  /// rolled second key's preview survives the first key's release. `after` keeps it up a
+  /// moment past the release, as Apple's does (~50ms, measured on iOS 26.5); a new
+  /// `show` or an immediate `hide` cancels the wait.
+  func hide(owner: UIView? = nil, after delay: TimeInterval = 0) {
+    guard owner == nil || owner === self.owner else { return }
+    pendingHide?.cancel()
+    pendingHide = nil
+    guard delay > 0 else {
+      isHidden = true
+      self.owner = nil
+      return
+    }
+    let work = DispatchWorkItem { [weak self] in self?.hide(owner: owner) }
+    pendingHide = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+  }
+
+  private static func balloon(head: CGRect, key: CGRect, keyCornerRadius r: CGFloat) -> UIBezierPath {
+    let neckEnd = min(head.maxY + neckLength, key.maxY - r)
+    let neckMid = (head.maxY + neckEnd) / 2
+    let path = UIBezierPath()
+    path.move(to: CGPoint(x: head.minX, y: head.minY + headRadius))
+    path.addArc(
+      withCenter: CGPoint(x: head.minX + headRadius, y: head.minY + headRadius),
+      radius: headRadius, startAngle: .pi, endAngle: 1.5 * .pi, clockwise: true
+    )
+    path.addArc(
+      withCenter: CGPoint(x: head.maxX - headRadius, y: head.minY + headRadius),
+      radius: headRadius, startAngle: 1.5 * .pi, endAngle: 0, clockwise: true
+    )
+    path.addLine(to: CGPoint(x: head.maxX, y: head.maxY))
+    path.addCurve(
+      to: CGPoint(x: key.maxX, y: neckEnd),
+      controlPoint1: CGPoint(x: head.maxX, y: neckMid),
+      controlPoint2: CGPoint(x: key.maxX, y: neckMid)
+    )
+    path.addArc(
+      withCenter: CGPoint(x: key.maxX - r, y: key.maxY - r),
+      radius: r, startAngle: 0, endAngle: 0.5 * .pi, clockwise: true
+    )
+    path.addArc(
+      withCenter: CGPoint(x: key.minX + r, y: key.maxY - r),
+      radius: r, startAngle: 0.5 * .pi, endAngle: .pi, clockwise: true
+    )
+    path.addLine(to: CGPoint(x: key.minX, y: neckEnd))
+    path.addCurve(
+      to: CGPoint(x: head.minX, y: head.maxY),
+      controlPoint1: CGPoint(x: key.minX, y: neckMid),
+      controlPoint2: CGPoint(x: head.minX, y: neckMid)
+    )
+    path.close()
+    return path
+  }
+}
+
 private struct DictationLinkView: View {
   let url: URL
 
@@ -396,55 +760,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private enum KeyboardLayoutMode {
     case letters
     case numbers
+    case symbols
   }
 
   private enum KeyRole {
     case character
     case utility
-    case space
-  }
-
-  private enum Palette {
-    /// A colour that resolves differently for light vs dark appearance.
-    private static func dynamic(light: UIColor, dark: UIColor) -> UIColor {
-      UIColor { traits in traits.userInterfaceStyle == .dark ? dark : light }
-    }
-
-    // Keys adapt to the native keyboard per appearance: white letter keys and
-    // grey special keys on a light backdrop, dark greys on dark. The root view
-    // is transparent, so the backdrop itself is supplied by the system.
-    static let keyBackground = dynamic(
-      light: UIColor(red: 1.00, green: 1.00, blue: 1.00, alpha: 1.0),
-      dark: UIColor(red: 0.34, green: 0.35, blue: 0.37, alpha: 1.0)
-    )
-    static let utilityKeyBackground = dynamic(
-      light: UIColor(red: 0.68, green: 0.70, blue: 0.74, alpha: 1.0),
-      dark: UIColor(red: 0.39, green: 0.40, blue: 0.43, alpha: 1.0)
-    )
-    static let keyText = dynamic(
-      light: UIColor(red: 0.00, green: 0.00, blue: 0.00, alpha: 1.0),
-      dark: UIColor(red: 0.96, green: 0.96, blue: 0.97, alpha: 1.0)
-    )
-
-    // Brand blue and the warning amber read well on both appearances, so they
-    // stay fixed.
-    static let accent = UIColor(red: 0.03, green: 0.52, blue: 1.00, alpha: 1.0)
-    static let issue = UIColor(red: 1.00, green: 0.62, blue: 0.04, alpha: 1.0)
-
-    // Ink for the persistent "Turn on Full Access" pill (#1C1300 on issue amber
-    // = 5.6:1, passes AA). White on the same amber is 2.1:1 and fails. The
-    // transient amber states keep white ink — a 1.2s flash is not something a
-    // low-vision user has to read, a permanent notice is.
-    static let issueInk = UIColor(red: 0.110, green: 0.075, blue: 0.000, alpha: 1.0)
-
-    // The desktop app's accent purple (#6C50E9, oklch(0.55 0.22 285)). Tints the
-    // cancel button while cleanup runs. Fixed across appearances like accent.
-    static let cleanupAccent = UIColor(red: 0.424, green: 0.314, blue: 0.914, alpha: 1.0)
-
-    // App-icon blue gradient (deep cobalt → navy, #2457D6 → #0E3690), sampled
-    // from the OpenWhispr app icon. Used for the "Activate" button.
-    static let brandGradientStart = UIColor(red: 0.141, green: 0.341, blue: 0.839, alpha: 1.0)
-    static let brandGradientEnd = UIColor(red: 0.055, green: 0.212, blue: 0.565, alpha: 1.0)
   }
 
   private enum CachedImages {
@@ -499,12 +820,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private enum Metrics {
+    // The toolbar: tone, the centred dictation pill, agent.
     static let dictationButtonSize: CGFloat = 40
+    /// Where the pill's icon starts; the animated dots overlay the icon's place.
+    static let pillLeadingInset: CGFloat = 16
+    static let toolbarButtonSize: CGFloat = 36
+    static let toolbarButtonInset: CGFloat = 8
+    static let processingCancelSize: CGFloat = 30
     static let recordingWaveformBarCount = 28
     static let recordingWaveformHeight: CGFloat = 84
     static let recordingWaveformBarWidth: CGFloat = 3
     static let recordingWaveformBarSpacing: CGFloat = 4
     static let recordingActionButtonSize: CGFloat = 36
+    /// The keyboard grows by this while the agent review card shows: at Apple's height its
+    /// text gets about three lines in landscape. Back to 299pt on a 17 Pro, as before the
+    /// keys were rebuilt to Apple's.
+    static let agentReviewExtraHeight: CGFloat = 40
   }
 
   private enum KeyboardSize {
@@ -521,55 +852,212 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private struct KeyboardMetrics: Equatable {
-    let keyboardHeightPortrait: CGFloat
-    let keyboardHeightLandscape: CGFloat
-    let rootHorizontalPadding: CGFloat
-    let rootTopPadding: CGFloat
-    let rootBottomPadding: CGFloat
-    let rootSectionSpacing: CGFloat
-    let dictationStripHeight: CGFloat
-    let keyboardRowSpacing: CGFloat
-    let rowHeight: CGFloat
-    let keySpacing: CGFloat
+    /// The toolbar strip, where the pill and buttons centre: from the view's top, its height,
+    /// and the gap below it to row 1. The band above the keys is the three together.
+    var stripTop: CGFloat
+    var stripHeight: CGFloat
+    var stripGapBelow: CGFloat
+    /// The toolbar's side inset, from the keyboard's edge: tone and agent sit this far in, plus
+    /// their own 8pt. The bar itself starts at sideMargin, so the strip reaches past it.
+    var stripSideInset: CGFloat
+    let sideMargin: CGFloat
+    let keyGap: CGFloat
+    let keyHeight: CGFloat
+    let rowGap: CGFloat
+    let bottomPadding: CGFloat
     let keyCornerRadius: CGFloat
+    /// Shift, delete, and the #+= / 123 key on the symbol pages, in letter keys.
+    var functionKeys: CGFloat = 1.35
+    /// 123/ABC and return: 2.5w + 1.5g in portrait, so they end under Z and start under M.
+    var bottomKeys: CGFloat = 2.5
+    var bottomGaps: CGFloat = 1.5
+    /// The webSearch "." key, in letter keys.
+    var searchShortcutKeys: CGFloat = 1
+    /// Return beside it: 1.75w + 0.75g in portrait (63.33pt on the 17 Pro, 70pt on the Pro Max).
+    var narrowReturnKeys: CGFloat = 1.75
+    var narrowReturnGaps: CGFloat = 0.75
+    var keycaps = Keycaps.portrait
 
-    static let compact = KeyboardMetrics(
-      keyboardHeightPortrait: 222, keyboardHeightLandscape: 168,
-      rootHorizontalPadding: 3, rootTopPadding: 5, rootBottomPadding: 5,
-      rootSectionSpacing: 8, dictationStripHeight: 46,
-      keyboardRowSpacing: 9, rowHeight: 38,
-      keySpacing: 5, keyCornerRadius: 5
-    )
+    var topBarHeight: CGFloat { stripTop + stripHeight + stripGapBelow }
+    var keyboardHeight: CGFloat { topBarHeight + 4 * keyHeight + 3 * rowGap + bottomPadding }
 
+    // Keys: Apple's iOS 26 keyboard, measured on the iOS 26.5 simulator at 3x: 17 Pro
+    // (402pt) and 17 Pro Max (440pt). Margins and gaps stay put; keys grow with width.
+    // Toolbar: a strip as tall as the pill, one row gap above row 1. iOS 26 draws ~17pt of
+    // glass above the view, where nothing can be drawn, so that glass is the space above the
+    // pill; before iOS 26 the strip gets a row gap.
     static let regular = KeyboardMetrics(
-      keyboardHeightPortrait: 299, keyboardHeightLandscape: 224,
-      rootHorizontalPadding: 3, rootTopPadding: 6, rootBottomPadding: 6,
-      rootSectionSpacing: 10, dictationStripHeight: 52,
-      keyboardRowSpacing: 11, rowHeight: 42,
-      keySpacing: 6, keyCornerRadius: 5
+      stripTop: 0, stripHeight: 40, stripGapBelow: 11, stripSideInset: 3,
+      sideMargin: 6.5, keyGap: 6, keyHeight: 43, rowGap: 11, bottomPadding: 3,
+      keyCornerRadius: 8
     )
-
+    // 17 Pro Max: rows sit 2pt higher than on the 17 Pro's 3pt padding.
     static let large = KeyboardMetrics(
-      keyboardHeightPortrait: 309, keyboardHeightLandscape: 236,
-      rootHorizontalPadding: 4, rootTopPadding: 7, rootBottomPadding: 7,
-      rootSectionSpacing: 11, dictationStripHeight: 54,
-      keyboardRowSpacing: 12, rowHeight: 44,
-      keySpacing: 6, keyCornerRadius: 6
+      stripTop: 0, stripHeight: 40, stripGapBelow: 11, stripSideInset: 4,
+      sideMargin: 6.5, keyGap: 6, keyHeight: 45, rowGap: 11, bottomPadding: 5,
+      keyCornerRadius: 8
+    )
+    // Home-button phones (needsInputModeSwitchKey, no system bar): iPhone SE (3rd gen),
+    // 375pt at 2x. Same margins; shorter keys, wider row gaps.
+    static let homeButton = KeyboardMetrics(
+      stripTop: 0, stripHeight: 40, stripGapBelow: 12, stripSideInset: 3,
+      sideMargin: 6.5, keyGap: 6, keyHeight: 42, rowGap: 12, bottomPadding: 4,
+      keyCornerRadius: 8
+    )
+    // Under 375pt without a globe key: Display Zoom on Face ID phones (320pt), which
+    // can't be measured here. Apple's margins, shorter keys.
+    static let compact = KeyboardMetrics(
+      stripTop: 0, stripHeight: 40, stripGapBelow: 10, stripSideInset: 3,
+      sideMargin: 6.5, keyGap: 6, keyHeight: 39, rowGap: 10, bottomPadding: 3,
+      keyCornerRadius: 7
+    )
+    // 17 Pro landscape: 123 and return span two keys (Q–W, O–P); key corners as in
+    // portrait. No glass is drawn above the view here; the pill sits 5pt from the top and
+    // from row 1, so the keys keep Apple's landscape height.
+    static let landscape = KeyboardMetrics(
+      stripTop: 5, stripHeight: 40, stripGapBelow: 5, stripSideInset: 4,
+      sideMargin: 4, keyGap: 6, keyHeight: 27.33, rowGap: 8, bottomPadding: 4,
+      keyCornerRadius: 8, functionKeys: 1.33, bottomKeys: 2, bottomGaps: 1,
+      searchShortcutKeys: 0.785, narrowReturnKeys: 1.435, narrowReturnGaps: 0, keycaps: .landscape
     )
 
-    static func current(forWidth width: CGFloat) -> KeyboardMetrics {
-      switch KeyboardSize.detect(width: width) {
-      case .compact: return .compact
-      case .regular: return .regular
-      case .large: return .large
+    // iPad, docked across the screen: Apple's iPad keyboard isn't modelled, so the phone
+    // layout keeps the 309pt height and the gap above the strip it had before this rebuild
+    // (the iOS 26 glass above the view is unverified on iPad).
+    static let tablet = KeyboardMetrics(
+      stripTop: 7, stripHeight: 40, stripGapBelow: 11, stripSideInset: 4,
+      sideMargin: 6.5, keyGap: 6, keyHeight: 53, rowGap: 11, bottomPadding: 6,
+      keyCornerRadius: 8
+    )
+
+    static func current(for inputs: LayoutInputs) -> KeyboardMetrics {
+      if inputs.tablet { return .tablet }
+      if inputs.landscape { return .landscape }
+      var metrics: KeyboardMetrics
+      let size = KeyboardSize.detect(width: inputs.width)
+      if inputs.homeButton, size != .large {
+        metrics = .homeButton
+      } else {
+        switch size {
+        case .compact: metrics = .compact
+        case .regular: metrics = .regular
+        case .large: metrics = .large
+        }
+      }
+      // Before iOS 26 nothing is drawn above the view, so the strip keeps a row gap above it
+      // (unverified here: only the iOS 26.5 simulator is installed).
+      if #unavailable(iOS 26) { metrics.stripTop = metrics.rowGap }
+      return metrics
+    }
+  }
+
+  /// The bottom row Apple shows for a keyboard type: the field keys between space and
+  /// return, and how wide they are.
+  private struct BottomRowLayout: Equatable {
+    enum ShortcutWidth {
+      case shared  // URL: the keys share the space bar's span
+      case half    // email, twitter: half a 123 key each
+      case letter  // webSearch: one letter key
+    }
+
+    var shortcuts: [String] = []
+    var shortcutWidth = ShortcutWidth.half
+    var showsSpace = true
+    var showsReturn = true
+    var narrowReturn = false
+    /// Apple draws email's and web search's "." 4pt higher than a typed period (17 Pro).
+    var raisesPeriod = false
+
+    /// `letters`: the page showing. Twitter's @ and # replace return on letters only; its
+    /// 123 and #+= pages have Apple's usual space and return (iOS 26.5).
+    static func forKeyboardType(_ type: UIKeyboardType?, letters: Bool) -> BottomRowLayout {
+      switch type {
+      case .twitter? where !letters: return BottomRowLayout()
+      case .URL?: return BottomRowLayout(shortcuts: [".", "/", ".com"], shortcutWidth: .shared, showsSpace: false)
+      case .emailAddress?: return BottomRowLayout(shortcuts: ["@", "."], raisesPeriod: true)
+      case .webSearch?:
+        return BottomRowLayout(shortcuts: ["."], shortcutWidth: .letter, narrowReturn: true, raisesPeriod: true)
+      case .twitter?: return BottomRowLayout(shortcuts: ["@", "#"], showsReturn: false)
+      default: return BottomRowLayout()
       }
     }
   }
 
-  private var metrics: KeyboardMetrics = .current(forWidth: UIScreen.main.bounds.width)
+  /// Width constraints refreshBottomRow switches between, rebuilt with the keys.
+  private struct BottomRowConstraints {
+    var halfWidth: [NSLayoutConstraint] = []
+    var letterWidth: [NSLayoutConstraint] = []
+    var sharedWidth: [NSLayoutConstraint] = []
+    var returnWidth: NSLayoutConstraint?
+    var narrowReturnWidth: NSLayoutConstraint?
+  }
+
+  /// Apple's iOS 26 return key per returnKeyType: a glyph, and blue for the actions.
+  private struct ReturnKeyStyle: Equatable {
+    let symbolName: String
+    let accessibilityLabel: String
+    let isProminent: Bool
+    /// From UIKit's centring to Apple's position (17 Pro): its return glyphs sit 1.83pt above
+    /// the key's centre, ✓ 1.5pt, ↵ 0.5pt above and the phone 6.33pt below.
+    var glyphOffsetY: CGFloat = -1.83
+
+    static func forReturnKeyType(_ type: UIReturnKeyType?) -> ReturnKeyStyle {
+      switch type ?? .default {
+      case .go: return ReturnKeyStyle(symbolName: "arrow.right", accessibilityLabel: "Go", isProminent: true)
+      case .join: return ReturnKeyStyle(symbolName: "arrow.right", accessibilityLabel: "Join", isProminent: true)
+      case .route: return ReturnKeyStyle(symbolName: "arrow.right", accessibilityLabel: "Route", isProminent: true)
+      case .search, .google, .yahoo:
+        return ReturnKeyStyle(symbolName: "magnifyingglass", accessibilityLabel: "Search", isProminent: true)
+      case .send: return ReturnKeyStyle(symbolName: "arrow.up", accessibilityLabel: "Send", isProminent: true)
+      case .done:
+        return ReturnKeyStyle(symbolName: "checkmark", accessibilityLabel: "Done", isProminent: true, glyphOffsetY: -1.5)
+      case .emergencyCall:
+        return ReturnKeyStyle(
+          symbolName: "phone", accessibilityLabel: "Emergency call", isProminent: true, glyphOffsetY: 6.33
+        )
+      case .next: return ReturnKeyStyle(symbolName: "chevron.right", accessibilityLabel: "Next", isProminent: false)
+      case .continue:
+        return ReturnKeyStyle(symbolName: "chevron.right", accessibilityLabel: "Continue", isProminent: false)
+      default:
+        return ReturnKeyStyle(
+          symbolName: "return.left", accessibilityLabel: "Return", isProminent: false, glyphOffsetY: -0.5
+        )
+      }
+    }
+  }
+
+  private struct ReturnKeyState: Equatable {
+    let style: ReturnKeyStyle
+    /// Greyed while the field is empty and asks for that (enablesReturnKeyAutomatically).
+    let isDisabled: Bool
+  }
+
+  /// What the key metrics and the built keys depend on.
+  private struct LayoutInputs: Equatable {
+    var width: CGFloat
+    var landscape: Bool
+    /// needsInputModeSwitchKey: the globe key shows, on Home-button iPhones.
+    var homeButton: Bool
+    var tablet: Bool
+
+    /// Equal but for a sub-point width change, which is only pixel rounding.
+    func matches(_ other: LayoutInputs) -> Bool {
+      var widthAligned = other
+      widthAligned.width = width
+      return abs(width - other.width) <= 1 && widthAligned == self
+    }
+  }
+
+  private var metrics: KeyboardMetrics = .current(
+    for: LayoutInputs(width: UIScreen.main.bounds.width, landscape: false, homeButton: false, tablet: false)
+  )
 
   private let rootStack = UIStackView()
-  private let dictationStrip = UIView()
+  // The toolbar: tone, the centred dictation pill, agent. The strip guide is the
+  // pill-high strip at the top of the band, where the buttons centre.
+  private let topBar = UIView()
+  private let stripGuide = UILayoutGuide()
+  private var stripConstraints: [NSLayoutConstraint] = []
   private let recordButton = UIButton(type: .system)
   private let recordButtonBackground = PillBackgroundView()
   private let processingDots = ProcessingDotsView()
@@ -580,6 +1068,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private let keyboardRowsStack = KeyboardRowsStack()
   private let lettersRowsStack = UIStackView()
   private let numbersRowsStack = UIStackView()
+  private let symbolsRowsStack = UIStackView()
+  private let keyPopup = KeyPopupView()
+  // One letter key's width, (row width − 9 gaps) / 10. Every key width is a multiple of
+  // it, so the layout follows the screen width without any width constants.
+  private let keyWidthGuide = UILayoutGuide()
+  private var keyWidthGuideConstraint: NSLayoutConstraint?
 
   private let recordingCanvas = UIView()
   // Shown whenever hasFullAccess is false, in place of the keys AND the
@@ -625,12 +1119,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var characterButtons: [KeyButton] = []
   private var shiftButton: KeyButton?
   private var modeButton: KeyButton?
+  private var spaceButton: KeyButton?
   private var returnButton: KeyButton?
-  private var fieldShortcutButton: KeyButton?
-  private var fieldShortcutWidthConstraint: NSLayoutConstraint?
-  // Leading gap before the field shortcut. Collapses to 0 when the shortcut is
-  // hidden so space and return keep a single keySpacing gap, matching every other key.
-  private var fieldShortcutGapConstraint: NSLayoutConstraint?
+  // The bottom row's field-specific keys (URL ". / .com", email "@ .", …) and the width
+  // constraints refreshBottomRow switches between.
+  private var shortcutButtons: [KeyButton] = []
+  private var bottomRowConstraints = BottomRowConstraints()
+  private var appliedBottomRowLayout: BottomRowLayout?
+  /// What the return key last drew, so a keystroke that doesn't change it skips the redraw.
+  private var appliedReturnKeyState: ReturnKeyState?
+  /// The field the keyboard last typed into, and the last one seen reporting text.
+  private var typedDocument: UUID?
+  private var reportingDocument: UUID?
   private var dictationLinkHosting: UIHostingController<DictationLinkView>?
   // Detected once at setup (the host is fixed for the extension's lifetime).
   // Avoids calling the heavy private-API host detection on every button refresh.
@@ -638,6 +1138,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var didRequestCancelForCurrentSession = false
 
   private var layoutMode: KeyboardLayoutMode = .letters
+  /// Something was typed on the 123/#+= pages since leaving letters; space then returns to
+  /// letters, as on Apple's keyboard (a bare space keeps the page).
+  private var typedOnSymbolPage = false
   private var isShiftEnabled = true
   private var isCapsLocked = false
   private var lastShiftTapDate: Date?
@@ -650,7 +1153,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var isObservingHandoffNotifications = false
   private var didBuildKeyboard = false
   private var lastMetricsWidth: CGFloat = 0
-  private var dictationStripHeightConstraint: NSLayoutConstraint?
+  private var appliedLayoutInputs: LayoutInputs?
+  private var keysBuiltWithGlobe = false
+  private var rootHeightConstraint: NSLayoutConstraint?
+  private var topBarHeightConstraint: NSLayoutConstraint?
   private var keyboardHeightConstraint: NSLayoutConstraint?
   private var rowHeightConstraints: [NSLayoutConstraint] = []
   private var isRemoteRecordingActive = false
@@ -716,7 +1222,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // A card action (regenerate or follow-up) is generating with the previous
   // versions retained underneath: an error/app-death/cancel restores the card
   // (existing versions stay insertable) instead of dropping to idle, per the plan.
-  private var isAgentActionInFlight = false
+  // The keyboard keeps the card's extra height until the action ends, so it doesn't
+  // shrink and grow again under the host app.
+  private var isAgentActionInFlight = false {
+    didSet { if isViewLoaded { view.setNeedsLayout() } }
+  }
   // Set while a regenerate is generating: the session/recording-job is unchanged
   // so the pre-action result is still readable. Any result adopted (poll OR the
   // Darwin agent_ready path) must be newer than this action timestamp. nil for
@@ -733,12 +1243,35 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var rejectedAgentJobIds: Set<String> = []
   private var rejectedAgentActionAtMs: Set<Int64> = []
 
+  private var layoutWidth: CGFloat {
+    view.bounds.width > 0 ? view.bounds.width : UIScreen.main.bounds.width
+  }
+
+  private var isLandscapeLayout: Bool {
+    switch traitCollection.verticalSizeClass {
+    case .compact: return true
+    case .regular: return false
+    default: return UIScreen.main.bounds.width > UIScreen.main.bounds.height
+    }
+  }
+
+  private func layoutInputs(width: CGFloat) -> LayoutInputs {
+    LayoutInputs(
+      width: width,
+      landscape: isLandscapeLayout,
+      homeButton: needsInputModeSwitchKey,
+      // A floating iPad keyboard is phone-sized and takes the phone layout.
+      tablet: UIDevice.current.userInterfaceIdiom == .pad && width >= 600
+    )
+  }
+
   override func viewDidLoad() {
     super.viewDidLoad()
     KeyboardLog.ui.info("Keyboard loaded. hasFullAccess=\(self.hasFullAccess, privacy: .public)")
     KeyboardLog.echo("Keyboard loaded. hasFullAccess=\(self.hasFullAccess)")
-    metrics = KeyboardMetrics.current(forWidth: view.bounds.width)
+    metrics = KeyboardMetrics.current(for: layoutInputs(width: layoutWidth))
     setupLayout()
+    applyKeyboardHeight()
     refreshRecordButton()
     buildKeyboardIfNeeded()
   }
@@ -750,9 +1283,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func applyKeyboardHeight() {
-    let keyboardHeight = traitCollection.verticalSizeClass == .compact
-      ? metrics.keyboardHeightLandscape
-      : metrics.keyboardHeightPortrait
+    // The keys keep their height at the bottom; the card above them takes the extra.
+    let showsCardHeight = isAgentReviewShown || isAgentActionInFlight
+    let keyboardHeight = metrics.keyboardHeight + (showsCardHeight ? Metrics.agentReviewExtraHeight : 0)
 
     if let keyboardHeightConstraint {
       keyboardHeightConstraint.constant = keyboardHeight
@@ -767,9 +1300,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
+    noteFieldReport()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
+  }
+
+  // The field's text and traits may not be known at viewDidLoad, and iOS needn't send
+  // textDidChange when the keyboard opens: shift and the return key follow the field here.
+  override func viewWillAppear(_ animated: Bool) {
+    super.viewWillAppear(animated)
+    noteFieldReport()
+    syncShiftWithContextIfNeeded()
+    refreshFieldAwareKeys()
   }
 
   override func viewDidAppear(_ animated: Bool) {
@@ -834,25 +1377,45 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     stopHandoffObservers()
   }
 
-  @objc private func handleCharacterKeyTapped(_ sender: UIButton) {
-    guard let title = sender.title(for: .normal), !title.isEmpty else { return }
+  @objc private func handleCharacterKeyTapped(_ sender: KeyButton) {
+    guard let output = sender.output else { return }
     playKeyClick()
 
-    let insertion: String
-    if layoutMode == .letters {
-      let baseCharacter = title.lowercased()
-      insertion = isShiftEnabled ? baseCharacter.uppercased() : baseCharacter
-    } else {
-      insertion = title
+    let insertion = layoutMode == .letters && isShiftEnabled ? output.uppercased() : output
+    let text = smartQuoteSubstitution(for: insertion) ?? insertion
+    typeText(text)
+    if layoutMode != .letters {
+      // Apple's apostrophe returns to letters at once ("rock 'n' roll", "'90s").
+      if output == "'" { returnToLetters() } else { typedOnSymbolPage = true }
     }
 
-    let smartInsertion = smartQuoteSubstitution(for: insertion) ?? insertion
-    textDocumentProxy.insertText(smartInsertion)
-
-    if layoutMode == .letters && isShiftEnabled && !isCapsLocked {
-      isShiftEnabled = false
-      refreshShiftState()
+    // Shift ends after one letter unless the field capitalizes the next one too (all
+    // characters). Decided from the field, not the text before the cursor: iOS doesn't
+    // report the keyboard's own inserts back in time, and some hosts never report text.
+    if layoutMode == .letters && !isCapsLocked {
+      let shiftStaysOn = fieldCapitalization == .allCharacters
+      if shiftStaysOn != isShiftEnabled {
+        isShiftEnabled = shiftStaysOn
+        refreshShiftState()
+      }
     }
+    refreshAfterEdit()
+  }
+
+  @objc private func handleCharacterKeyDown(_ sender: KeyButton) {
+    guard let text = sender.title(for: .normal) else { return }
+    keyPopup.show(
+      text,
+      font: sender.titleLabel?.font ?? metrics.keycaps.uppercase,
+      keyFrame: sender.convert(sender.bounds, to: rootStack),
+      keyCornerRadius: metrics.keyCornerRadius,
+      container: rootStack.layoutMarginsGuide.layoutFrame,
+      owner: sender
+    )
+  }
+
+  @objc private func handleCharacterKeyReleased(_ sender: KeyButton) {
+    keyPopup.hide(owner: sender, after: 0.05)
   }
 
   @objc private func handleShiftTapped() {
@@ -885,41 +1448,70 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   @objc private func handleBackspaceTapped() {
     playKeyClick()
     textDocumentProxy.deleteBackward()
+    // "Hello. W" ⌫ starts a sentence again.
+    syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
   @objc private func handleBackspaceLongPress(_ gesture: UILongPressGestureRecognizer) {
     switch gesture.state {
     case .began:
+      (gesture.view as? KeyButton)?.isLongPressed = true
       startDeleteRepeating()
     case .ended, .cancelled, .failed:
+      (gesture.view as? KeyButton)?.isLongPressed = false
       stopDeleteRepeating()
+      syncShiftWithContextIfNeeded()
+      refreshAfterEdit()
     default:
       break
     }
   }
 
-  @objc private func handleLayoutModeSwitchTapped() {
+  /// Bottom row 123/ABC: letters ⇄ numbers.
+  @objc private func handleModeKeyTapped() {
     playKeyClick()
     layoutMode = layoutMode == .letters ? .numbers : .letters
+    typedOnSymbolPage = false
     isCapsLocked = false
     isShiftEnabled = layoutMode == .letters ? shouldAutoCapitalize() : false
     refreshVisibleKeyboardMode()
     refreshShiftState()
   }
 
+  /// Row 3 #+= / 123: numbers ⇄ symbols.
+  @objc private func handlePageKeyTapped() {
+    playKeyClick()
+    layoutMode = layoutMode == .numbers ? .symbols : .numbers
+    refreshVisibleKeyboardMode()
+  }
+
   @objc private func handleSpaceTapped() {
     playKeyClick()
     if !applyDoubleSpacePeriod() {
-      textDocumentProxy.insertText(" ")
+      typeText(" ")
     }
+    if layoutMode != .letters && typedOnSymbolPage { returnToLetters() }
     syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
-  @objc private func handleShortcutTapped(_ sender: UIButton) {
-    guard let title = sender.title(for: .normal), !title.isEmpty else { return }
+  /// Leaves the 123/#+= pages for letters, with shift following the text (after "e.g. " too).
+  private func returnToLetters() {
+    layoutMode = .letters
+    typedOnSymbolPage = false
+    isCapsLocked = false
+    isShiftEnabled = shouldAutoCapitalize()
+    refreshVisibleKeyboardMode()
+    refreshShiftState()
+  }
+
+  @objc private func handleShortcutTapped(_ sender: KeyButton) {
+    guard let output = sender.output else { return }
     playKeyClick()
-    textDocumentProxy.insertText(title)
+    typeText(output)
     syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
   @objc private func handleNextKeyboardTapped() {
@@ -932,6 +1524,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func applyDoubleSpacePeriod() -> Bool {
+    // Space over a selection replaces it with a space, never ". ".
+    guard (textDocumentProxy.selectedText ?? "").isEmpty else { return false }
     let context = textDocumentProxy.documentContextBeforeInput ?? ""
     let chars = Array(context)
     guard chars.count >= 2 else { return false }
@@ -940,18 +1534,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard prior.isLetter || prior.isNumber else { return false }
 
     textDocumentProxy.deleteBackward()
-    textDocumentProxy.insertText(". ")
+    typeText(". ")
     return true
   }
 
   private func smartQuoteSubstitution(for character: String) -> String? {
-    guard character == "\"" || character == "'" else { return nil }
+    guard character == "\"" || character == "'", usesSmartQuotes else { return nil }
     let context = textDocumentProxy.documentContextBeforeInput ?? ""
     let opening = shouldUseOpeningQuote(context: context)
     if character == "\"" {
       return opening ? "\u{201C}" : "\u{201D}"
     }
     return opening ? "\u{2018}" : "\u{2019}"
+  }
+
+  /// The field's smart-quotes setting; by default off where a curly quote breaks the text
+  /// (addresses, URLs, passwords), as UIKit's default depends on the keyboard type.
+  private var usesSmartQuotes: Bool {
+    switch textDocumentProxy.smartQuotesType ?? .default {
+    case .no: return false
+    case .yes: return true
+    default: break
+    }
+    if textDocumentProxy.isSecureTextEntry == true { return false }
+    switch textDocumentProxy.keyboardType ?? .default {
+    case .URL, .emailAddress: return false
+    default: return true
+    }
   }
 
   private func shouldUseOpeningQuote(context: String) -> Bool {
@@ -962,20 +1571,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleReturnTapped() {
+    // Greyed: Apple's does nothing. Asked fresh, as hasText may have changed since the redraw.
+    guard !isReturnKeyDisabled else { return }
     playKeyClick()
-    textDocumentProxy.insertText("\n")
+    typeText("\n")
     syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
   private func setupLayout() {
-    // Transparent so the system keyboard backdrop shows through, letting the
+    // (Nearly) transparent so the system keyboard backdrop shows through, letting the
     // keyboard blend seamlessly with the system chrome above and below (the
     // candidate area and the globe/dictation safe-area bar) instead of sitting
     // on a mismatched grey panel. Keys keep their own backgrounds.
-    view.backgroundColor = .clear
+    // iOS sends a keyboard extension no touches where its pixels are fully transparent, so
+    // a clear view drops every tap in the gaps and padding that KeyboardRowsStack routes.
+    // 0.1% black is invisible (no pixel value changes) and keeps those taps.
+    view.backgroundColor = UIColor(white: 0, alpha: 0.001)
 
+    // The toolbar, then the gap to row 1, then the rows.
     rootStack.axis = .vertical
-    rootStack.spacing = metrics.rootSectionSpacing
+    rootStack.spacing = metrics.stripGapBelow
     // The padding is a layout margin, not an offset from the edges, so the stack
     // spans the whole keyboard and touches in the padding can reach the rows.
     rootStack.isLayoutMarginsRelativeArrangement = true
@@ -983,15 +1599,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rootStack.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(rootStack)
 
+    // iOS first lays a third-party keyboard out at its own default height (444pt on a
+    // 17 Pro) for a frame or two before adopting ours. The content keeps its own height
+    // on the bottom edge, so keys never stretch; only the top constraint yields.
+    rootHeightConstraint = rootStack.heightAnchor.constraint(equalToConstant: metrics.keyboardHeight)
+    rootHeightConstraint?.priority = UILayoutPriority(999)
+    let rootTopConstraint = rootStack.topAnchor.constraint(equalTo: view.topAnchor)
+    rootTopConstraint.priority = .defaultHigh
+
     NSLayoutConstraint.activate([
       rootStack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       rootStack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      rootStack.topAnchor.constraint(equalTo: view.topAnchor),
       rootStack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-    ])
+      rootTopConstraint,
+      // A view shorter than the keyboard squeezes the rows (their heights yield) rather
+      // than pushing the toolbar off the top, where it can't be tapped.
+      rootStack.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor),
+      rootHeightConstraint,
+    ].compactMap { $0 })
     applyRootPadding()
 
-    setupDictationStrip()
+    setupTopBar()
     setupKeyboardArea()
     setupRecordingCanvas()
     setupAgentReviewCanvas()
@@ -1476,8 +2104,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         equalToConstant: Metrics.recordingActionButtonSize
       ),
 
-      // Centered slightly high so the 168pt landscape-compact height still
-      // clears the ✕ above and the globe below.
+      // Centered slightly high so the 187pt landscape height still clears
+      // the ✕ above and the globe below.
       fullAccessPanelTitleLabel.centerXAnchor.constraint(equalTo: fullAccessPanel.centerXAnchor),
       fullAccessPanelTitleLabel.centerYAnchor.constraint(
         equalTo: fullAccessPanel.centerYAnchor, constant: -16
@@ -1608,18 +2236,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
-  private func setupDictationStrip() {
-    dictationStrip.translatesAutoresizingMaskIntoConstraints = false
+  /// The toolbar: the tone menu on the left, the dictation pill centred, the agent wand on
+  /// the right.
+  private func setupTopBar() {
+    topBar.translatesAutoresizingMaskIntoConstraints = false
+    topBar.addLayoutGuide(stripGuide)
 
     // The pill background sits behind the button; the button itself is
     // transparent so its icon and label render on top. Corner radius is half the
     // height, giving a full pill in every state.
     recordButtonBackground.translatesAutoresizingMaskIntoConstraints = false
     recordButtonBackground.layer.cornerRadius = Metrics.dictationButtonSize / 2
-    dictationStrip.addSubview(recordButtonBackground)
+    topBar.addSubview(recordButtonBackground)
 
     recordButton.translatesAutoresizingMaskIntoConstraints = false
-    dictationStrip.addSubview(recordButton)
+    topBar.addSubview(recordButton)
 
     // Press feedback. The hand-off tap is handled by the SwiftUI link overlay,
     // so observe touches without consuming them (cancelsTouchesInView = false)
@@ -1634,13 +2265,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     pressGesture.delegate = self
     recordButton.addGestureRecognizer(pressGesture)
 
-    // Animated dots overlaid where the leading icon sits (leading inset 16),
-    // shown only in the "Processing"/"Starting"/"Stopping" states.
+    // Animated dots overlaid where the leading icon sits, shown only in the
+    // "Processing"/"Starting"/"Stopping" states.
     processingDots.translatesAutoresizingMaskIntoConstraints = false
     processingDots.isHidden = true
     recordButton.addSubview(processingDots)
     NSLayoutConstraint.activate([
-      processingDots.leadingAnchor.constraint(equalTo: recordButton.leadingAnchor, constant: 16),
+      processingDots.leadingAnchor.constraint(equalTo: recordButton.leadingAnchor, constant: Metrics.pillLeadingInset),
       processingDots.centerYAnchor.constraint(equalTo: recordButton.centerYAnchor),
       processingDots.widthAnchor.constraint(equalToConstant: ProcessingDotsView.preferredSize.width),
       processingDots.heightAnchor.constraint(equalToConstant: ProcessingDotsView.preferredSize.height),
@@ -1649,66 +2280,35 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // X to cancel an in-flight transcription, pinned just past the pill's
     // trailing edge; shown only in the "Transcribing"/"Cleaning up" states
     // (see showLongRunningRecordState).
-    let processingCancelSize: CGFloat = 30
     configureIconButton(
       processingCancelButton,
       systemImage: "xmark",
       accessibilityLabel: "Cancel transcription",
       action: #selector(handleProcessingCancelTapped),
-      size: processingCancelSize,
+      size: Metrics.processingCancelSize,
       symbolPointSize: 13
     )
     processingCancelButton.isHidden = true
-    dictationStrip.addSubview(processingCancelButton)
-    NSLayoutConstraint.activate([
-      processingCancelButton.leadingAnchor.constraint(equalTo: recordButton.trailingAnchor, constant: 8),
-      processingCancelButton.centerYAnchor.constraint(equalTo: recordButton.centerYAnchor),
-      processingCancelButton.widthAnchor.constraint(equalToConstant: processingCancelSize),
-      processingCancelButton.heightAnchor.constraint(equalToConstant: processingCancelSize),
-    ])
+    topBar.addSubview(processingCancelButton)
 
-    let toneButtonSize: CGFloat = 36
-    toneButton.translatesAutoresizingMaskIntoConstraints = false
-    toneButton.tintColor = .label
-    toneButton.normalBackground = UIColor.secondarySystemBackground
-    toneButton.layer.cornerRadius = toneButtonSize / 2
-    toneButton.showsGlassRim = true
     // gauge.with.dots.needle.bottom.50percent is iOS 16+; fall back to the classic
     // gauge on the extension's 15.1 deployment target.
-    toneButton.setImage(
-      UIImage(systemName: "gauge.with.dots.needle.bottom.50percent") ?? UIImage(systemName: "gauge"),
-      for: .normal
+    configureToolbarButton(
+      toneButton,
+      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent") ?? UIImage(systemName: "gauge"),
+      accessibilityLabel: "Dictation tone"
     )
-    toneButton.setPreferredSymbolConfiguration(
-      UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold),
-      forImageIn: .normal
-    )
-    toneButton.accessibilityLabel = "Dictation tone"
     toneButton.showsMenuAsPrimaryAction = true
-    dictationStrip.addSubview(toneButton)
-    NSLayoutConstraint.activate([
-      toneButton.leadingAnchor.constraint(equalTo: dictationStrip.leadingAnchor, constant: 8),
-      toneButton.centerYAnchor.constraint(equalTo: dictationStrip.centerYAnchor),
-      toneButton.widthAnchor.constraint(equalToConstant: toneButtonSize),
-      toneButton.heightAnchor.constraint(equalToConstant: toneButtonSize),
-    ])
     refreshToneButton()
 
     // Agent entry button, mirroring the tone button on the trailing edge. A press
     // gesture (not a tap target) so it can write the request before the Link
     // overlay fires the handoff — the same coordination the record button uses.
-    let agentButtonSize: CGFloat = 36
-    agentButton.translatesAutoresizingMaskIntoConstraints = false
-    agentButton.tintColor = .label
-    agentButton.normalBackground = UIColor.secondarySystemBackground
-    agentButton.layer.cornerRadius = agentButtonSize / 2
-    agentButton.showsGlassRim = true
-    agentButton.setImage(UIImage(systemName: "wand.and.stars"), for: .normal)
-    agentButton.setPreferredSymbolConfiguration(
-      UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold),
-      forImageIn: .normal
+    configureToolbarButton(
+      agentButton,
+      image: UIImage(systemName: "wand.and.stars"),
+      accessibilityLabel: "Ask the voice assistant"
     )
-    agentButton.accessibilityLabel = "Ask the voice assistant"
     let agentPress = UILongPressGestureRecognizer(
       target: self,
       action: #selector(handleAgentButtonPress(_:))
@@ -1718,41 +2318,109 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     agentPress.delaysTouchesBegan = false
     agentPress.delegate = self
     agentButton.addGestureRecognizer(agentPress)
-    dictationStrip.addSubview(agentButton)
-    NSLayoutConstraint.activate([
-      agentButton.trailingAnchor.constraint(equalTo: dictationStrip.trailingAnchor, constant: -8),
-      agentButton.centerYAnchor.constraint(equalTo: dictationStrip.centerYAnchor),
-      agentButton.widthAnchor.constraint(equalToConstant: agentButtonSize),
-      agentButton.heightAnchor.constraint(equalToConstant: agentButtonSize),
-    ])
-    setupAgentLink()
-    refreshAgentButton()
 
-    // The button is centered in the strip and sizes itself to its content,
-    // capped so a long label can't overflow the strip.
-    NSLayoutConstraint.activate([
-      {
-        let constraint = dictationStrip.heightAnchor.constraint(
-          equalToConstant: metrics.dictationStripHeight
-        )
-        dictationStripHeightConstraint = constraint
-        return constraint
-      }(),
-      recordButton.centerXAnchor.constraint(equalTo: dictationStrip.centerXAnchor),
-      recordButton.centerYAnchor.constraint(equalTo: dictationStrip.centerYAnchor),
+    let topBarHeight = topBar.heightAnchor.constraint(equalToConstant: metrics.stripTop + metrics.stripHeight)
+    topBarHeightConstraint = topBarHeight
+    stripConstraints = [
+      stripGuide.topAnchor.constraint(equalTo: topBar.topAnchor, constant: metrics.stripTop),
+      stripGuide.heightAnchor.constraint(equalToConstant: metrics.stripHeight),
+      stripGuide.leadingAnchor.constraint(equalTo: topBar.leadingAnchor, constant: stripEdgeOffset),
+      stripGuide.trailingAnchor.constraint(equalTo: topBar.trailingAnchor, constant: -stripEdgeOffset),
+    ]
+    // The pill is centred in the strip and sizes itself to its content, capped so a
+    // long label can't overflow the strip.
+    NSLayoutConstraint.activate(stripConstraints + [
+      topBarHeight,
+
+      toneButton.leadingAnchor.constraint(equalTo: stripGuide.leadingAnchor, constant: Metrics.toolbarButtonInset),
+      toneButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
+      toneButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      toneButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+
+      agentButton.trailingAnchor.constraint(equalTo: stripGuide.trailingAnchor, constant: -Metrics.toolbarButtonInset),
+      agentButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
+      agentButton.widthAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+      agentButton.heightAnchor.constraint(equalToConstant: Metrics.toolbarButtonSize),
+
+      recordButton.centerXAnchor.constraint(equalTo: stripGuide.centerXAnchor),
+      recordButton.centerYAnchor.constraint(equalTo: stripGuide.centerYAnchor),
       recordButton.heightAnchor.constraint(equalToConstant: Metrics.dictationButtonSize),
-      recordButton.widthAnchor.constraint(lessThanOrEqualTo: dictationStrip.widthAnchor, constant: -16),
+      recordButton.widthAnchor.constraint(lessThanOrEqualTo: stripGuide.widthAnchor, constant: -16),
 
       // Background tracks the button's frame exactly.
       recordButtonBackground.leadingAnchor.constraint(equalTo: recordButton.leadingAnchor),
       recordButtonBackground.trailingAnchor.constraint(equalTo: recordButton.trailingAnchor),
       recordButtonBackground.topAnchor.constraint(equalTo: recordButton.topAnchor),
       recordButtonBackground.bottomAnchor.constraint(equalTo: recordButton.bottomAnchor),
+
+      processingCancelButton.leadingAnchor.constraint(equalTo: recordButton.trailingAnchor, constant: 8),
+      processingCancelButton.centerYAnchor.constraint(equalTo: recordButton.centerYAnchor),
+      processingCancelButton.widthAnchor.constraint(equalToConstant: Metrics.processingCancelSize),
+      processingCancelButton.heightAnchor.constraint(equalToConstant: Metrics.processingCancelSize),
     ])
 
+    setupAgentLink()
+    refreshAgentButton()
     setupDictationLink()
 
-    rootStack.addArrangedSubview(dictationStrip)
+    rootStack.addArrangedSubview(topBar)
+  }
+
+  /// The round tone and agent buttons: a grey disc with a glass rim.
+  private func configureToolbarButton(_ button: KeyButton, image: UIImage?, accessibilityLabel: String) {
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.tintColor = .label
+    button.normalBackground = UIColor.secondarySystemBackground
+    button.pressedBackground = UIColor { traits in
+      let delta: CGFloat = traits.userInterfaceStyle == .dark ? 0.12 : -0.10
+      return UIColor.secondarySystemBackground.resolvedColor(with: traits).brightened(by: delta)
+    }
+    button.layer.cornerRadius = Metrics.toolbarButtonSize / 2
+    button.showsGlassRim = true
+    button.setImage(image, for: .normal)
+    button.setPreferredSymbolConfiguration(
+      UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold),
+      forImageIn: .normal
+    )
+    button.accessibilityLabel = accessibilityLabel
+    topBar.addSubview(button)
+  }
+
+  /// The strip's inset from the bar, which starts at the keys' side margin.
+  private var stripEdgeOffset: CGFloat { metrics.stripSideInset - metrics.sideMargin }
+
+  private func updateStripConstraints() {
+    let constants = [metrics.stripTop, metrics.stripHeight, stripEdgeOffset, -stripEdgeOffset]
+    for (constraint, constant) in zip(stripConstraints, constants) {
+      constraint.constant = constant
+    }
+  }
+
+  private func refreshAfterEdit() {
+    noteFieldReport()
+    refreshReturnKey()
+  }
+
+  private func typeText(_ text: String) {
+    textDocumentProxy.insertText(text)
+    typedDocument = textDocumentProxy.documentIdentifier
+  }
+
+  private func noteFieldReport() {
+    let proxy = textDocumentProxy
+    if proxy.hasText || proxy.documentContextBeforeInput?.isEmpty == false
+      || proxy.documentContextAfterInput?.isEmpty == false
+    {
+      reportingDocument = proxy.documentIdentifier
+    }
+  }
+
+  /// The field holds text it doesn't report: the keyboard typed into it and the host has
+  /// reported no text in it since. Some hosts never report it, so shift and the return key
+  /// can't go by it there.
+  private var fieldHidesItsText: Bool {
+    let document = textDocumentProxy.documentIdentifier
+    return typedDocument == document && reportingDocument != document
   }
 
   private static let toneMenuItems: [(value: String, title: String)] = [
@@ -1910,15 +2578,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   private func setupKeyboardArea() {
     keyboardRowsStack.axis = .vertical
-    keyboardRowsStack.spacing = metrics.keyboardRowSpacing
+    keyboardRowsStack.spacing = metrics.rowGap
     keyboardRowsStack.translatesAutoresizingMaskIntoConstraints = false
     rootStack.addArrangedSubview(keyboardRowsStack)
 
-    [lettersRowsStack, numbersRowsStack].forEach { stack in
+    [lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach { stack in
       stack.axis = .vertical
-      stack.spacing = metrics.keyboardRowSpacing
+      stack.spacing = metrics.rowGap
       stack.translatesAutoresizingMaskIntoConstraints = false
     }
+
+    keyboardRowsStack.addLayoutGuide(keyWidthGuide)
+    let guideWidth = keyWidthGuide.widthAnchor.constraint(
+      equalTo: keyboardRowsStack.widthAnchor,
+      multiplier: 0.1,
+      constant: -0.9 * metrics.keyGap
+    )
+    NSLayoutConstraint.activate([
+      guideWidth,
+      keyWidthGuide.leadingAnchor.constraint(equalTo: keyboardRowsStack.leadingAnchor),
+      keyWidthGuide.topAnchor.constraint(equalTo: keyboardRowsStack.topAnchor),
+      keyWidthGuide.heightAnchor.constraint(equalToConstant: 0),
+    ])
+    keyWidthGuideConstraint = guideWidth
+
+    // Above the bar and the keys, and inside rootStack so it fades and locks with them
+    // whenever a canvas covers the keyboard.
+    rootStack.addSubview(keyPopup)
   }
 
   private func buildKeyboardIfNeeded() {
@@ -1930,248 +2616,359 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     rebuildKeyboard()
   }
 
+  private static let letterRows: [[String]] = [
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+    ["z", "x", "c", "v", "b", "n", "m"],
+  ]
+  // (display, output): the quote keys show curly marks and insert straight ones, which
+  // smartQuoteSubstitution turns into context-aware curly quotes.
+  private static let numberRows: [[(display: String, output: String)]] = [
+    "1234567890".map { (String($0), String($0)) },
+    ["-", "/", ":", ";", "(", ")", "$", "&", "@"].map { ($0, $0) } + [("\u{201D}", "\"")],
+  ]
+  private static let symbolRows: [[(display: String, output: String)]] = [
+    ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="].map { ($0, $0) },
+    ["_", "\\", "|", "~", "<", ">", "\u{20AC}", "\u{00A3}", "\u{00A5}", "\u{2022}"].map { ($0, $0) },
+  ]
+  private static let punctuationRow: [(display: String, output: String)] = [
+    (".", "."), (",", ","), ("?", "?"), ("!", "!"), ("\u{2019}", "'"),
+  ]
+
   private func rebuildKeyboard() {
-    keyboardRowsStack.arrangedSubviews.forEach { view in
-      keyboardRowsStack.removeArrangedSubview(view)
-      view.removeFromSuperview()
+    keyPopup.hide()
+    for stack in [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack] {
+      stack.arrangedSubviews.forEach { view in
+        stack.removeArrangedSubview(view)
+        view.removeFromSuperview()
+      }
     }
 
     characterButtons.removeAll()
-    fieldShortcutButton = nil
-    fieldShortcutWidthConstraint = nil
-    fieldShortcutGapConstraint = nil
+    shortcutButtons.removeAll()
+    bottomRowConstraints = BottomRowConstraints()
+    appliedBottomRowLayout = nil
+    appliedReturnKeyState = nil
+    keysBuiltWithGlobe = needsInputModeSwitchKey
     shiftButton = nil
     modeButton = nil
+    spaceButton = nil
     returnButton = nil
     rowHeightConstraints.removeAll(keepingCapacity: true)
 
-    lettersRowsStack.arrangedSubviews.forEach { view in
-      lettersRowsStack.removeArrangedSubview(view)
-      view.removeFromSuperview()
-    }
-    numbersRowsStack.arrangedSubviews.forEach { view in
-      numbersRowsStack.removeArrangedSubview(view)
-      view.removeFromSuperview()
-    }
-
-    lettersRowsStack.addArrangedSubview(
-      makeCharacterRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], registersLetters: true)
-    )
-    lettersRowsStack.addArrangedSubview(
-      makeCharacterRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"], inset: 18, registersLetters: true)
-    )
-    lettersRowsStack.addArrangedSubview(makeLettersThirdRow())
-
-    numbersRowsStack.addArrangedSubview(
-      makeCharacterRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
-    )
-    numbersRowsStack.addArrangedSubview(
-      makeCharacterRow(["-", "/", ":", ";", "(", ")", "$", "&", "@", "\""])
-    )
-    numbersRowsStack.addArrangedSubview(makeNumbersThirdRow())
-
+    // Pages first: key widths are constraints on keyWidthGuide, which can only be
+    // activated once a row shares an ancestor with it.
     keyboardRowsStack.addArrangedSubview(lettersRowsStack)
     keyboardRowsStack.addArrangedSubview(numbersRowsStack)
-    keyboardRowsStack.addArrangedSubview(makeMainBottomRow())
+    keyboardRowsStack.addArrangedSubview(symbolsRowsStack)
+
+    let letters = Self.letterRows.map { row in row.map { (display: $0, output: $0) } }
+    addCharacterRow(letters[0], to: lettersRowsStack, registersLetters: true)
+    addCharacterRow(letters[1], to: lettersRowsStack, registersLetters: true)
+    addLettersThirdRow(letters[2], to: lettersRowsStack)
+    addMainBottomRow(to: keyboardRowsStack)
     refreshVisibleKeyboardMode()
-    refreshFieldAwareKeys()
     refreshShiftState()
   }
 
   private func constrainRowHeight(_ row: UIView) {
-    let constraint = row.heightAnchor.constraint(equalToConstant: metrics.rowHeight)
+    let constraint = row.heightAnchor.constraint(equalToConstant: metrics.keyHeight)
+    // Below required so a view shorter than the keyboard squeezes the rows, not the toolbar.
+    constraint.priority = UILayoutPriority(999)
     constraint.isActive = true
     rowHeightConstraints.append(constraint)
   }
 
+  /// A width of `keys` letter keys plus `gaps` key gaps.
+  private func widthOfKeys(
+    _ view: UIView,
+    keys: CGFloat,
+    gaps: CGFloat = 0,
+    priority: UILayoutPriority = .required
+  ) -> NSLayoutConstraint {
+    let constraint = view.widthAnchor.constraint(
+      equalTo: keyWidthGuide.widthAnchor,
+      multiplier: keys,
+      constant: gaps * metrics.keyGap
+    )
+    constraint.priority = priority
+    return constraint
+  }
+
+  /// A letter key's width at the current keyboard width, before layout has run.
+  private var estimatedKeyWidth: CGFloat {
+    let width = lastMetricsWidth > 0 ? lastMetricsWidth : UIScreen.main.bounds.width
+    return max(0, (width - 2 * metrics.sideMargin - 9 * metrics.keyGap) / 10)
+  }
+
   private func applyRootPadding() {
     rootStack.directionalLayoutMargins = NSDirectionalEdgeInsets(
-      top: metrics.rootTopPadding,
-      leading: metrics.rootHorizontalPadding,
-      bottom: metrics.rootBottomPadding,
-      trailing: metrics.rootHorizontalPadding
+      top: 0, leading: metrics.sideMargin, bottom: metrics.bottomPadding, trailing: metrics.sideMargin
     )
-    // The rows take the padding at the keyboard's sides and bottom, and the half
-    // of the gap below the dictation strip that is nearer to them.
+    rootStack.spacing = metrics.stripGapBelow
+    // The rows take the padding at the keyboard's sides and bottom, and the half of the
+    // gap below the toolbar that is nearer to them. The side margin is a half point, which
+    // layout rounds to pixels; one more point reaches the screen edge whatever the scale.
     keyboardRowsStack.touchMargins = UIEdgeInsets(
-      top: metrics.rootSectionSpacing / 2,
-      left: metrics.rootHorizontalPadding,
-      bottom: metrics.rootBottomPadding,
-      right: metrics.rootHorizontalPadding
+      top: metrics.stripGapBelow / 2,
+      left: metrics.sideMargin + 1,
+      bottom: metrics.bottomPadding + 1,
+      right: metrics.sideMargin + 1
     )
   }
 
   private func refreshMetricsIfNeeded() {
     let width = view.bounds.width
-    guard width.isFinite, width > 0, abs(width - lastMetricsWidth) > 1 else { return }
+    guard width.isFinite, width > 0 else { return }
+    // Orientation and the globe key count as well as width: a rotation can lay out at the
+    // new width before the size class flips, and needsInputModeSwitchKey can settle late.
+    let inputs = layoutInputs(width: width)
+    if let appliedLayoutInputs, appliedLayoutInputs.matches(inputs) { return }
+    appliedLayoutInputs = inputs
+    let widthChanged = abs(width - lastMetricsWidth) > 1
     lastMetricsWidth = width
 
-    let nextMetrics = KeyboardMetrics.current(forWidth: width)
-    guard nextMetrics != metrics else { return }
-    metrics = nextMetrics
+    let nextMetrics = KeyboardMetrics.current(for: inputs)
+    let metricsChanged = nextMetrics != metrics
+    if metricsChanged {
+      metrics = nextMetrics
+      applyRootPadding()
+      rootHeightConstraint?.constant = metrics.keyboardHeight
+      [keyboardRowsStack, lettersRowsStack, numbersRowsStack, symbolsRowsStack].forEach {
+        $0.spacing = metrics.rowGap
+      }
+      keyWidthGuideConstraint?.constant = -0.9 * metrics.keyGap
+      topBarHeightConstraint?.constant = metrics.stripTop + metrics.stripHeight
+      updateStripConstraints()
+    }
 
-    applyRootPadding()
-    rootStack.spacing = metrics.rootSectionSpacing
-    keyboardRowsStack.spacing = metrics.keyboardRowSpacing
-    lettersRowsStack.spacing = metrics.keyboardRowSpacing
-    numbersRowsStack.spacing = metrics.keyboardRowSpacing
-    dictationStripHeightConstraint?.constant = metrics.dictationStripHeight
-
-    if didBuildKeyboard {
+    guard didBuildKeyboard else { return }
+    if metricsChanged || keysBuiltWithGlobe != inputs.homeButton {
       rebuildKeyboard()
+    } else if widthChanged {
+      // The keys were built against an estimated width (the screen's, before the first
+      // layout); their touch targets reach a key's width across the gaps.
+      refreshKeyTouchOutsets()
     }
   }
 
+  private var keyTouchOutsets: UIEdgeInsets {
+    UIEdgeInsets(top: metrics.rowGap, left: estimatedKeyWidth, bottom: metrics.rowGap, right: estimatedKeyWidth)
+  }
+
+  private func refreshKeyTouchOutsets() {
+    func visit(_ view: UIView) {
+      if let key = view as? KeyButton {
+        key.hitTestOutsets = keyTouchOutsets
+        return
+      }
+      view.subviews.forEach(visit)
+    }
+    visit(keyboardRowsStack)
+  }
+
   private func refreshVisibleKeyboardMode() {
+    keyPopup.hide()
+    buildPageIfNeeded()
     lettersRowsStack.isHidden = layoutMode != .letters
     numbersRowsStack.isHidden = layoutMode != .numbers
+    symbolsRowsStack.isHidden = layoutMode != .symbols
+    let modeLabel = layoutMode == .letters ? metrics.keycaps.label123 : metrics.keycaps.labelABC
     modeButton?.setTitle(layoutMode == .letters ? "123" : "ABC", for: .normal)
+    modeButton?.accessibilityLabel = layoutMode == .letters ? "numbers" : "letters"
+    modeButton?.titleLabel?.font = modeLabel.font
+    modeButton?.titleBaselineFromCenter = modeLabel.baseline
     refreshFieldAwareKeys()
+  }
+
+  /// The 123 and #+= pages are built the first time they show: built up front, they held
+  /// about 2MB of the extension's memory while hidden.
+  private func buildPageIfNeeded() {
+    switch layoutMode {
+    case .numbers where numbersRowsStack.arrangedSubviews.isEmpty:
+      addCharacterRow(Self.numberRows[0], to: numbersRowsStack)
+      addCharacterRow(Self.numberRows[1], to: numbersRowsStack)
+      addPunctuationThirdRow(pageKeyTitle: "#+=", to: numbersRowsStack)
+    case .symbols where symbolsRowsStack.arrangedSubviews.isEmpty:
+      addCharacterRow(Self.symbolRows[0], to: symbolsRowsStack)
+      addCharacterRow(Self.symbolRows[1], to: symbolsRowsStack)
+      addPunctuationThirdRow(pageKeyTitle: "123", to: symbolsRowsStack)
+    default:
+      break
+    }
   }
 
   private func refreshFieldAwareKeys() {
     refreshReturnKey()
-    refreshFieldShortcuts()
+    refreshBottomRow()
+  }
+
+  private var isReturnKeyDisabled: Bool {
+    // A field that hides its text can't show it's empty, so its return key stays usable.
+    textDocumentProxy.enablesReturnKeyAutomatically == true && !textDocumentProxy.hasText && !fieldHidesItsText
   }
 
   private func refreshReturnKey() {
     guard let returnButton else { return }
-
-    let label: String?
-    switch textDocumentProxy.returnKeyType {
-    case .go:
-      label = "Go"
-    case .search:
-      label = "Search"
-    case .send:
-      label = "Send"
-    case .done:
-      label = "Done"
-    case .next:
-      label = "Next"
-    case .join:
-      label = "Join"
-    default:
-      label = nil
-    }
-
-    if let label {
-      returnButton.setImage(nil, for: .normal)
-      returnButton.setTitle(label, for: .normal)
-      returnButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+    let style = ReturnKeyStyle.forReturnKeyType(textDocumentProxy.returnKeyType)
+    let isDisabled = isReturnKeyDisabled
+    let state = ReturnKeyState(style: style, isDisabled: isDisabled)
+    guard state != appliedReturnKeyState else { return }
+    appliedReturnKeyState = state
+    returnButton.setImage(UIImage(systemName: style.symbolName)?.withRenderingMode(.alwaysTemplate), for: .normal)
+    returnButton.imageOffsetY = style.glyphOffsetY
+    returnButton.accessibilityLabel = style.accessibilityLabel
+    // Neither isEnabled (UIKit would dim the glyph on top of Apple's disabled colours) nor
+    // isUserInteractionEnabled: KeyboardRowsStack would pass the key over and give its taps
+    // to the space or ".com" key beside it. The key keeps its taps; handleReturnTapped
+    // ignores them while it's greyed.
+    returnButton.accessibilityTraits = isDisabled ? [.button, .notEnabled] : .button
+    if isDisabled {
+      returnButton.normalBackground = Palette.keyDisabledBackground
+      returnButton.pressedBackground = nil
+      returnButton.pressedTint = nil
+      returnButton.tintColor = Palette.keyDisabledText
+    } else if style.isProminent {
+      returnButton.normalBackground = Palette.returnKeyProminent
+      returnButton.pressedBackground = Palette.keyBackground
+      returnButton.pressedTint = Palette.keyText
+      returnButton.tintColor = .white
     } else {
-      returnButton.setTitle(nil, for: .normal)
-      returnButton.setImage(UIImage(systemName: "return.left")?.withRenderingMode(.alwaysTemplate), for: .normal)
-      returnButton.setPreferredSymbolConfiguration(
-        UIImage.SymbolConfiguration(pointSize: 18, weight: .medium),
-        forImageIn: .normal
-      )
+      returnButton.normalBackground = Palette.keyBackground
+      returnButton.pressedBackground = Palette.keyPressedBackground
+      returnButton.pressedTint = nil
+      returnButton.tintColor = Palette.keyText
     }
   }
 
-  private func refreshFieldShortcuts() {
-    guard let button = fieldShortcutButton,
-          let widthConstraint = fieldShortcutWidthConstraint,
-          let gapConstraint = fieldShortcutGapConstraint else { return }
+  private func refreshBottomRow() {
+    let layout = BottomRowLayout.forKeyboardType(textDocumentProxy.keyboardType, letters: layoutMode == .letters)
+    guard layout != appliedBottomRowLayout, shortcutButtons.count == 3, let spaceButton, let returnButton
+    else { return }
+    appliedBottomRowLayout = layout
 
-    let shortcut: String?
-    switch textDocumentProxy.keyboardType {
-    case .URL:
-      shortcut = "/"
-    case .webSearch:
-      shortcut = "."
-    default:
-      shortcut = nil
+    let constraints = bottomRowConstraints
+    NSLayoutConstraint.deactivate(constraints.halfWidth + constraints.letterWidth + constraints.sharedWidth)
+    for (index, button) in shortcutButtons.enumerated() {
+      let value = layout.shortcuts.indices.contains(index) ? layout.shortcuts[index] : nil
+      button.output = value
+      button.setTitle(value, for: .normal)
+      button.isHidden = value == nil
+      guard let value else { continue }
+      let isDomain = value.count > 1
+      button.titleLabel?.font = isDomain ? KeyFont.domainLabel : metrics.keycaps.uppercase
+      button.titleBaselineFromCenter = isDomain
+        ? metrics.keycaps.domainBaseline
+        : KeyFont.shortcutBaseline(for: value, raisesPeriod: layout.raisesPeriod)
+      switch layout.shortcutWidth {
+      case .shared:
+        if index > 0 { constraints.sharedWidth[index - 1].isActive = true }
+      case .half:
+        constraints.halfWidth[index].isActive = true
+      case .letter:
+        constraints.letterWidth[index].isActive = true
+      }
     }
-
-    button.setTitle(shortcut, for: .normal)
-    button.isHidden = shortcut == nil
-    widthConstraint.constant = shortcut == nil ? 0 : 44
-    gapConstraint.constant = shortcut == nil ? 0 : -metrics.keySpacing
+    spaceButton.isHidden = !layout.showsSpace
+    returnButton.isHidden = !layout.showsReturn
+    constraints.returnWidth?.isActive = !layout.narrowReturn
+    constraints.narrowReturnWidth?.isActive = layout.narrowReturn
   }
 
   private func playKeyClick() {
     UIDevice.current.playInputClick()
   }
 
-  private func makeCharacterRow(
-    _ keys: [String],
-    inset: CGFloat = 0,
-    registersLetters: Bool = false
-  ) -> UIView {
+  /// A row container, already in `stack` so its keys can be sized against keyWidthGuide.
+  private func addRowContainer(to stack: UIStackView) -> UIView {
     let rowContainer = UIView()
     rowContainer.translatesAutoresizingMaskIntoConstraints = false
+    stack.addArrangedSubview(rowContainer)
     constrainRowHeight(rowContainer)
+    return rowContainer
+  }
 
-    let rowStack = UIStackView()
-    rowStack.axis = .horizontal
-    rowStack.spacing = metrics.keySpacing
-    rowStack.distribution = .fillEqually
-    rowStack.translatesAutoresizingMaskIntoConstraints = false
+  /// One row of equal character keys. Rows shorter than ten keys are centred, which
+  /// gives the A row Apple's half-key indent.
+  private func addCharacterRow(
+    _ keys: [(display: String, output: String)],
+    to stack: UIStackView,
+    registersLetters: Bool = false
+  ) {
+    let rowContainer = addRowContainer(to: stack)
+    let rowStack = makeKeyStack(keys, registersLetters: registersLetters)
     rowContainer.addSubview(rowStack)
-
     NSLayoutConstraint.activate([
-      rowStack.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor, constant: inset),
-      rowStack.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor, constant: -inset),
+      rowStack.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
+      widthOfKeys(rowStack, keys: CGFloat(keys.count), gaps: CGFloat(keys.count - 1)),
       rowStack.topAnchor.constraint(equalTo: rowContainer.topAnchor),
       rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
     ])
+  }
 
+  private func makeKeyStack(
+    _ keys: [(display: String, output: String)],
+    registersLetters: Bool
+  ) -> UIStackView {
+    let stack = UIStackView()
+    stack.axis = .horizontal
+    stack.spacing = metrics.keyGap
+    stack.distribution = .fillEqually
+    stack.translatesAutoresizingMaskIntoConstraints = false
     for key in keys {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
+      let button = makeKeyButton(display: key.display, output: key.output, role: .character)
+      // The face is a closing quote; what it types depends on the text before it.
+      switch key.output {
+      case "\"": button.accessibilityLabel = "quotation mark"
+      case "'": button.accessibilityLabel = "apostrophe"
+      default: break
+      }
+      button.addTarget(self, action: #selector(handleCharacterKeyTapped(_:)), for: .touchUpInside)
+      button.addTarget(self, action: #selector(handleCharacterKeyDown(_:)), for: .touchDown)
+      button.addTarget(
+        self,
+        action: #selector(handleCharacterKeyReleased(_:)),
+        for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit]
+      )
       if registersLetters {
         characterButtons.append(button)
       }
-      rowStack.addArrangedSubview(button)
+      stack.addArrangedSubview(button)
     }
-
-    // Like the system keyboard, an inset row's end keys take taps in the inset.
-    if let first = rowStack.arrangedSubviews.first as? KeyButton,
-       let last = rowStack.arrangedSubviews.last as? KeyButton {
-      first.hitTestOutsets.left += inset
-      last.hitTestOutsets.right += inset
-    }
-
-    return rowContainer
+    return stack
   }
 
-  private func makeLettersThirdRow() -> UIView {
-    let rowContainer = UIView()
-    rowContainer.translatesAutoresizingMaskIntoConstraints = false
-    constrainRowHeight(rowContainer)
-
-    let rowStack = UIStackView()
-    rowStack.axis = .horizontal
-    rowStack.spacing = metrics.keySpacing
-    rowStack.translatesAutoresizingMaskIntoConstraints = false
-    rowContainer.addSubview(rowStack)
-
-    NSLayoutConstraint.activate([
-      rowStack.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor),
-      rowStack.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
-      rowStack.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-    ])
-
-    let shift = makeKeyButton(title: nil, imageSystemName: "shift", role: .utility)
+  private func addLettersThirdRow(_ keys: [(display: String, output: String)], to stack: UIStackView) {
+    let shift = makeKeyButton(display: nil, imageSystemName: "shift", role: .utility)
+    shift.imageOffsetY = metrics.keycaps.edgeGlyphOffset
     shift.addTarget(self, action: #selector(handleShiftTapped), for: .touchUpInside)
-    shift.widthAnchor.constraint(equalToConstant: 52).isActive = true
     shiftButton = shift
+    addThirdRow(leadingKey: shift, keys: makeKeyStack(keys, registersLetters: true), to: stack)
+  }
 
-    let lettersStack = UIStackView()
-    lettersStack.axis = .horizontal
-    lettersStack.spacing = metrics.keySpacing
-    lettersStack.distribution = .fillEqually
-
-    for key in ["z", "x", "c", "v", "b", "n", "m"] {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
-      characterButtons.append(button)
-      lettersStack.addArrangedSubview(button)
+  private func addPunctuationThirdRow(pageKeyTitle: String, to stack: UIStackView) {
+    let pageKey = makeKeyButton(display: pageKeyTitle, role: .utility)
+    pageKey.accessibilityLabel = pageKeyTitle == "#+=" ? "more symbols" : "numbers"
+    if pageKeyTitle == "#+=" {
+      pageKey.titleLabel?.font = KeyFont.moreSymbolsLabel
+      pageKey.titleBaselineFromCenter = KeyFont.moreSymbolsBaseline
+    } else {
+      pageKey.titleLabel?.font = KeyFont.pageLabel
     }
+    pageKey.addTarget(self, action: #selector(handlePageKeyTapped), for: .touchUpInside)
+    addThirdRow(
+      leadingKey: pageKey, keys: makeKeyStack(Self.punctuationRow, registersLetters: false), to: stack
+    )
+  }
 
-    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility)
+  /// Row 3 of every page: a function key at each edge and seven letter widths of keys
+  /// centred between them, so Z sits under S and the five symbol keys span Z…M.
+  private func addThirdRow(leadingKey: KeyButton, keys: UIStackView, to stack: UIStackView) {
+    let rowContainer = addRowContainer(to: stack)
+
+    let backspace = makeKeyButton(display: nil, imageSystemName: "delete.left", role: .utility)
+    backspace.imageOffsetY = metrics.keycaps.edgeGlyphOffset
+    backspace.accessibilityLabel = "delete"
     backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
     let longPress = UILongPressGestureRecognizer(
       target: self,
@@ -2179,145 +2976,93 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     )
     longPress.minimumPressDuration = 0.35
     backspace.addGestureRecognizer(longPress)
-    backspace.widthAnchor.constraint(equalToConstant: 58).isActive = true
 
-    rowStack.addArrangedSubview(shift)
-    rowStack.addArrangedSubview(lettersStack)
-    rowStack.addArrangedSubview(backspace)
-
-    return rowContainer
-  }
-
-  private func makeNumbersThirdRow() -> UIView {
-    let rowContainer = UIView()
-    rowContainer.translatesAutoresizingMaskIntoConstraints = false
-    constrainRowHeight(rowContainer)
-
-    let rowStack = UIStackView()
-    rowStack.axis = .horizontal
-    rowStack.spacing = metrics.keySpacing
-    rowStack.translatesAutoresizingMaskIntoConstraints = false
-    rowContainer.addSubview(rowStack)
-
+    for item in [leadingKey, keys, backspace] {
+      rowContainer.addSubview(item)
+      item.topAnchor.constraint(equalTo: rowContainer.topAnchor).isActive = true
+      item.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor).isActive = true
+    }
     NSLayoutConstraint.activate([
-      rowStack.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor),
-      rowStack.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
-      rowStack.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      rowStack.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
+      leadingKey.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor),
+      widthOfKeys(leadingKey, keys: metrics.functionKeys),
+      backspace.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
+      widthOfKeys(backspace, keys: metrics.functionKeys),
+      keys.centerXAnchor.constraint(equalTo: rowContainer.centerXAnchor),
+      widthOfKeys(keys, keys: 7, gaps: 6),
     ])
-
-    let symbolToggleButton = makeKeyButton(title: "#+=", role: .utility)
-    symbolToggleButton.addTarget(self, action: #selector(handleLayoutModeSwitchTapped), for: .touchUpInside)
-    symbolToggleButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
-
-    let symbolsStack = UIStackView()
-    symbolsStack.axis = .horizontal
-    symbolsStack.spacing = metrics.keySpacing
-    symbolsStack.distribution = .fillEqually
-
-    for key in [".", ",", "?", "!", "'"] {
-      let button = makeKeyButton(title: key, role: .character)
-      button.addTarget(self, action: #selector(handleCharacterKeyTapped), for: .touchUpInside)
-      symbolsStack.addArrangedSubview(button)
-    }
-
-    let backspace = makeKeyButton(title: nil, imageSystemName: "delete.left", role: .utility)
-    backspace.addTarget(self, action: #selector(handleBackspaceTapped), for: .touchUpInside)
-    let longPress = UILongPressGestureRecognizer(
-      target: self,
-      action: #selector(handleBackspaceLongPress(_:))
-    )
-    longPress.minimumPressDuration = 0.35
-    backspace.addGestureRecognizer(longPress)
-    backspace.widthAnchor.constraint(equalToConstant: 58).isActive = true
-
-    rowStack.addArrangedSubview(symbolToggleButton)
-    rowStack.addArrangedSubview(symbolsStack)
-    rowStack.addArrangedSubview(backspace)
-
-    return rowContainer
   }
 
-  private func makeMainBottomRow() -> UIView {
-    let rowContainer = UIView()
-    rowContainer.translatesAutoresizingMaskIntoConstraints = false
-    constrainRowHeight(rowContainer)
+  /// 123 · (globe) · space · field keys · return. Widths follow Apple's: 123 ends under Z
+  /// and return starts under M; the field keys and return change with the keyboard type.
+  private func addMainBottomRow(to stack: UIStackView) {
+    let row = UIStackView()
+    row.axis = .horizontal
+    row.spacing = metrics.keyGap
+    row.translatesAutoresizingMaskIntoConstraints = false
+    stack.addArrangedSubview(row)
+    constrainRowHeight(row)
 
-    let modeButton = makeKeyButton(
-      title: layoutMode == .letters ? "123" : "ABC",
-      role: .utility
-    )
-    modeButton.addTarget(self, action: #selector(handleLayoutModeSwitchTapped), for: .touchUpInside)
-    modeButton.translatesAutoresizingMaskIntoConstraints = false
-    modeButton.widthAnchor.constraint(equalToConstant: 56).isActive = true
+    let modeButton = makeKeyButton(display: layoutMode == .letters ? "123" : "ABC", role: .utility)
+    modeButton.addTarget(self, action: #selector(handleModeKeyTapped), for: .touchUpInside)
     self.modeButton = modeButton
 
-    let nextKeyboardButton = makeNextKeyboardButton()
-    nextKeyboardButton.translatesAutoresizingMaskIntoConstraints = false
-    nextKeyboardButton.widthAnchor.constraint(equalToConstant: needsInputModeSwitchKey ? 42 : 0).isActive = true
+    // After 123, as Apple's; with it showing, 123 and the globe share one 123 width.
+    let globeButton = makeNextKeyboardButton()
 
-    let spaceButton = makeKeyButton(title: nil, role: .space)
+    let spaceButton = makeKeyButton(display: nil, role: .utility)
     spaceButton.addTarget(self, action: #selector(handleSpaceTapped), for: .touchUpInside)
-    spaceButton.translatesAutoresizingMaskIntoConstraints = false
-    addSpaceBranding(to: spaceButton)
+    spaceButton.setContentHuggingPriority(UILayoutPriority(1), for: .horizontal)
+    spaceButton.setContentCompressionResistancePriority(UILayoutPriority(1), for: .horizontal)
+    // Blank, as Apple's is; the OpenWhispr logo sits in the dictation pill.
+    spaceButton.accessibilityLabel = "space"
+    self.spaceButton = spaceButton
 
-    let returnButton = makeKeyButton(title: nil, imageSystemName: "return.left", role: .utility)
+    let shortcuts = (0..<3).map { _ in
+      let button = makeKeyButton(display: nil, role: .utility)
+      button.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
+      return button
+    }
+    shortcutButtons = shortcuts
+
+    let returnButton = makeKeyButton(display: nil, imageSystemName: "return.left", role: .utility)
     returnButton.addTarget(self, action: #selector(handleReturnTapped), for: .touchUpInside)
-    returnButton.translatesAutoresizingMaskIntoConstraints = false
-    returnButton.widthAnchor.constraint(equalToConstant: 62).isActive = true
     self.returnButton = returnButton
 
-    let shortcutButton = makeKeyButton(title: nil, role: .utility)
-    shortcutButton.addTarget(self, action: #selector(handleShortcutTapped(_:)), for: .touchUpInside)
-    shortcutButton.translatesAutoresizingMaskIntoConstraints = false
-    shortcutButton.isHidden = true
-    let shortcutWidth = shortcutButton.widthAnchor.constraint(equalToConstant: 0)
-    shortcutWidth.isActive = true
-    fieldShortcutButton = shortcutButton
-    fieldShortcutWidthConstraint = shortcutWidth
+    ([modeButton, globeButton, spaceButton] + shortcuts + [returnButton]).forEach(row.addArrangedSubview)
 
-    // Captured so refreshFieldShortcuts can collapse the gap when the shortcut hides.
-    let spaceToShortcutGap = spaceButton.trailingAnchor.constraint(
-      equalTo: shortcutButton.leadingAnchor, constant: 0)
-    fieldShortcutGapConstraint = spaceToShortcutGap
-
-    rowContainer.addSubview(nextKeyboardButton)
-    rowContainer.addSubview(modeButton)
-    rowContainer.addSubview(spaceButton)
-    rowContainer.addSubview(shortcutButton)
-    rowContainer.addSubview(returnButton)
-
-    NSLayoutConstraint.activate([
-      nextKeyboardButton.leadingAnchor.constraint(equalTo: rowContainer.leadingAnchor),
-      nextKeyboardButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      nextKeyboardButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-
-      modeButton.leadingAnchor.constraint(
-        equalTo: nextKeyboardButton.trailingAnchor,
-        constant: needsInputModeSwitchKey ? metrics.keySpacing : 0
+    // Keys that can hide in the stack get 999 widths, so the stack's own zero-width
+    // hiding constraint wins without a conflict.
+    let hideable = UILayoutPriority.required - 1
+    let halfBottomKey = { (view: UIView) in
+      self.widthOfKeys(
+        view, keys: self.metrics.bottomKeys / 2, gaps: (self.metrics.bottomGaps - 1) / 2, priority: hideable
+      )
+    }
+    bottomRowConstraints = BottomRowConstraints(
+      halfWidth: shortcuts.map(halfBottomKey),
+      letterWidth: shortcuts.map { widthOfKeys($0, keys: metrics.searchShortcutKeys, priority: hideable) },
+      sharedWidth: shortcuts.dropFirst().map {
+        let constraint = $0.widthAnchor.constraint(equalTo: shortcuts[0].widthAnchor)
+        constraint.priority = hideable
+        return constraint
+      },
+      returnWidth: widthOfKeys(
+        returnButton, keys: metrics.bottomKeys, gaps: metrics.bottomGaps, priority: hideable
       ),
-      modeButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      modeButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-
-      returnButton.trailingAnchor.constraint(equalTo: rowContainer.trailingAnchor),
-      returnButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      returnButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-
-      spaceButton.leadingAnchor.constraint(equalTo: modeButton.trailingAnchor, constant: metrics.keySpacing),
-      spaceToShortcutGap,
-      spaceButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      spaceButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
-
-      shortcutButton.trailingAnchor.constraint(equalTo: returnButton.leadingAnchor, constant: -metrics.keySpacing),
-      shortcutButton.topAnchor.constraint(equalTo: rowContainer.topAnchor),
-      shortcutButton.bottomAnchor.constraint(equalTo: rowContainer.bottomAnchor),
+      narrowReturnWidth: widthOfKeys(
+        returnButton, keys: metrics.narrowReturnKeys, gaps: metrics.narrowReturnGaps, priority: hideable
+      )
+    )
+    NSLayoutConstraint.activate([
+      needsInputModeSwitchKey
+        ? halfBottomKey(modeButton)
+        : widthOfKeys(modeButton, keys: metrics.bottomKeys, gaps: metrics.bottomGaps),
+      halfBottomKey(globeButton),
     ])
-
-    return rowContainer
   }
 
   private func makeNextKeyboardButton() -> KeyButton {
-    let button = makeKeyButton(title: nil, imageSystemName: "globe", role: .utility)
+    let button = makeKeyButton(display: nil, imageSystemName: "globe", role: .utility)
     button.accessibilityLabel = "Next keyboard"
     button.isHidden = !needsInputModeSwitchKey
     button.addTarget(self, action: #selector(handleNextKeyboardTapped), for: .touchUpInside)
@@ -2329,68 +3074,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     return button
   }
 
-  // The space bar shows the OpenWhispr logo + wordmark instead of "space". The
-  // overlay is non-interactive so taps still reach the underlying space key.
-  private func addSpaceBranding(to spaceButton: UIButton) {
-    let logo = UIImageView(image: CachedImages.brandLogoMark)
-    logo.tintColor = Palette.keyText
-    logo.contentMode = .scaleAspectFit
-
-    let label = UILabel()
-    label.text = "OpenWhispr"
-    label.font = UIFont.systemFont(ofSize: 15, weight: .medium)
-    label.textColor = Palette.keyText
-
-    let stack = UIStackView(arrangedSubviews: [logo, label])
-    stack.axis = .horizontal
-    stack.spacing = 7
-    stack.alignment = .center
-    stack.isUserInteractionEnabled = false
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    spaceButton.addSubview(stack)
-
-    NSLayoutConstraint.activate([
-      stack.centerXAnchor.constraint(equalTo: spaceButton.centerXAnchor),
-      stack.centerYAnchor.constraint(equalTo: spaceButton.centerYAnchor),
-      logo.widthAnchor.constraint(equalToConstant: 18),
-      logo.heightAnchor.constraint(equalToConstant: 18),
-    ])
-  }
-
   private func makeKeyButton(
-    title: String?,
+    display: String?,
+    output: String? = nil,
     imageSystemName: String? = nil,
     role: KeyRole
   ) -> KeyButton {
     let button = KeyButton(type: .custom)
-    // Each key's target reaches its neighbours and the keyboard's padding, so no
-    // gap or pixel-rounding sliver is dead; KeyboardRowsStack resolves overlaps.
-    button.hitTestOutsets = UIEdgeInsets(
-      top: metrics.keyboardRowSpacing,
-      left: metrics.keySpacing,
-      bottom: metrics.keyboardRowSpacing,
-      right: metrics.keySpacing
-    )
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.output = output
+    // Each key's target reaches across the gaps, Apple's half-key indent on the A row and
+    // the keyboard's padding, so no gap or pixel-rounding sliver is dead;
+    // KeyboardRowsStack gives every touch to the nearest key.
+    button.hitTestOutsets = keyTouchOutsets
     button.layer.cornerRadius = metrics.keyCornerRadius
     button.layer.cornerCurve = .continuous
 
-    let bgColor: UIColor
-    switch role {
-    case .character, .space:
-      bgColor = Palette.keyBackground
-    case .utility:
-      bgColor = Palette.utilityKeyBackground
-    }
-    button.normalBackground = bgColor
+    // One colour for every key, as Apple's; no shadow. Character keys show a pop-up
+    // instead of a pressed colour.
+    button.normalBackground = Palette.keyBackground
+    button.pressedBackground = role == .character ? nil : Palette.keyPressedBackground
     button.setTitleColor(Palette.keyText, for: .normal)
-    button.setTitleColor(Palette.keyText.withAlphaComponent(0.5), for: .highlighted)
 
-    if let title {
-      button.setTitle(title, for: .normal)
-      button.titleLabel?.font = UIFont.systemFont(
-        ofSize: role == .character ? 22 : 15,
-        weight: role == .character ? .light : .medium
-      )
+    if let display {
+      button.setTitle(display, for: .normal)
+      button.titleLabel?.font = role == .character ? metrics.keycaps.character(display) : metrics.keycaps.label123.font
+      button.titleBaselineFromCenter =
+        role == .character ? KeyFont.baseline(for: display) : metrics.keycaps.label123.baseline
     }
 
     if let imageSystemName {
@@ -2399,10 +3109,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       button.setImage(image, for: .normal)
       button.tintColor = Palette.keyText
       button.imageView?.contentMode = .scaleAspectFit
-      button.setPreferredSymbolConfiguration(
-        UIImage.SymbolConfiguration(pointSize: 18, weight: .medium),
-        forImageIn: .normal
-      )
+      button.setPreferredSymbolConfiguration(KeyFont.glyph, forImageIn: .normal)
     }
 
     return button
@@ -2412,30 +3119,33 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     guard layoutMode == .letters else { return }
 
     for button in characterButtons {
-      guard let title = button.title(for: .normal), !title.isEmpty else { continue }
-      let lowercase = title.lowercased()
-      button.setTitle(isShiftEnabled ? lowercase.uppercased() : lowercase, for: .normal)
+      guard let output = button.output else { continue }
+      button.setTitle(isShiftEnabled ? output.uppercased() : output, for: .normal)
+      button.titleLabel?.font = isShiftEnabled ? metrics.keycaps.uppercase : metrics.keycaps.lowercase
+      button.titleBaselineFromCenter =
+        KeyFont.characterBaseline + (isShiftEnabled ? 0 : metrics.keycaps.lowercaseBaselineShift)
     }
 
-    guard let shiftButton else { return }
-
-    if isCapsLocked {
-      shiftButton.setImage(CachedImages.capslockFill, for: .normal)
-      shiftButton.normalBackground = Palette.accent
-      shiftButton.tintColor = .white
-    } else if isShiftEnabled {
-      shiftButton.setImage(CachedImages.shiftFill, for: .normal)
-      shiftButton.normalBackground = Palette.accent
-      shiftButton.tintColor = .white
-    } else {
-      shiftButton.setImage(CachedImages.shift, for: .normal)
-      shiftButton.normalBackground = Palette.utilityKeyBackground
-      shiftButton.tintColor = Palette.keyText
-    }
+    // Apple changes only the glyph; the key keeps its colour.
+    let shiftImage = isCapsLocked
+      ? CachedImages.capslockFill
+      : (isShiftEnabled ? CachedImages.shiftFill : CachedImages.shift)
+    shiftButton?.setImage(shiftImage, for: .normal)
+    shiftButton?.imageOffsetY = isCapsLocked ? KeyFont.capsLockGlyphOffset : metrics.keycaps.edgeGlyphOffset
+    shiftButton?.accessibilityLabel = isCapsLocked ? "caps lock" : "shift"
+    shiftButton?.accessibilityTraits = isShiftEnabled ? [.button, .selected] : .button
   }
 
   private func syncShiftWithContextIfNeeded() {
     guard layoutMode == .letters && !isCapsLocked else { return }
+    // A field with text that reports none around the cursor hides it: leave shift as it is
+    // rather than capitalising mid-word.
+    let proxy = textDocumentProxy
+    if proxy.documentContextBeforeInput == nil && proxy.documentContextAfterInput == nil
+      && (proxy.hasText || fieldHidesItsText)
+    {
+      return
+    }
 
     let shouldEnableShift = shouldAutoCapitalize()
     if shouldEnableShift != isShiftEnabled {
@@ -2444,21 +3154,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
   }
 
+  /// Follows the field's autocapitalization type, as Apple's keyboard does (URL and email
+  /// fields start lowercase).
   private func shouldAutoCapitalize() -> Bool {
-    guard let context = textDocumentProxy.documentContextBeforeInput else {
-      return true
-    }
+    fieldCapitalization.capitalizesNext(after: textDocumentProxy.documentContextBeforeInput)
+  }
 
-    let trimmed = context.trimmingCharacters(in: .whitespaces)
-    if trimmed.isEmpty {
-      return true
+  private var fieldCapitalization: AutoCapitalization {
+    switch textDocumentProxy.autocapitalizationType ?? .sentences {
+    case .none: return .none
+    case .words: return .words
+    case .allCharacters: return .allCharacters
+    default: return .sentences
     }
-
-    guard let lastCharacter = trimmed.last else {
-      return true
-    }
-
-    return lastCharacter == "." || lastCharacter == "!" || lastCharacter == "?" || lastCharacter == "\n"
   }
 
   private func startDeleteRepeating() {
@@ -2850,7 +3558,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     if recordsInPlace {
-      applyRecordButtonStyle(title: "Tap to speak", systemImage: "mic.fill")
+      applyRecordButtonStyle(title: "Tap to speak", image: CachedImages.brandLogoMark)
     } else {
       applyRecordButtonStyle(
         title: "Activate",
@@ -2955,7 +3663,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     config.imagePadding = 7
     config.imagePlacement = .leading
     config.baseForegroundColor = foreground
-    config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 18)
+    config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: Metrics.pillLeadingInset, bottom: 8, trailing: 18)
     config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)
     config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
       var outgoing = incoming
@@ -3171,7 +3879,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
       && !text.hasPrefix(".")
 
     let insertion = needsLeadingSpace ? " \(text)" : text
-    textDocumentProxy.insertText(insertion)
+    typeText(insertion)
+    // Shift follows the text (it was synced before the text arrived).
+    syncShiftWithContextIfNeeded()
+    refreshAfterEdit()
   }
 
   @discardableResult
@@ -3791,6 +4502,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// active index. Seeds the local pager/session state the middle controls act on.
   private func showAgentReviewCard(_ result: AgentResult) {
     isAgentReviewShown = true
+    applyKeyboardHeight()
     agentReviewVersions = result.versions
     agentReviewActiveIndex = result.activeIndex
     agentReviewSessionId = result.sessionId
@@ -3851,6 +4563,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   /// the card without a re-read (clearState: false).
   private func hideAgentReviewCard(clearState: Bool = true) {
     isAgentReviewShown = false
+    applyKeyboardHeight()
     agentReviewCanvas.isUserInteractionEnabled = false
     if clearState {
       agentReviewTextView.text = ""
@@ -3869,6 +4582,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private func restoreAgentReviewCard() {
     guard !agentReviewVersions.isEmpty else { return }
     isAgentReviewShown = true
+    applyKeyboardHeight()
     displayActiveAgentVersion()
     refreshAgentReviewControls()
     processingCancelButton.isHidden = true

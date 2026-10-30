@@ -9,6 +9,8 @@ export interface ToolCallInfo {
   /** stopped: still running when its turn ended (Stop, a switch, an error). */
   status: "executing" | "completed" | "error" | "stopped";
   result?: string;
+  /** Set when the call ran but didn't do what was asked; result then says why. */
+  failed?: boolean;
   // Single object for note tools; search_notes attaches its result array.
   metadata?: Record<string, unknown> | Array<Record<string, unknown>>;
   /** Epoch milliseconds. */

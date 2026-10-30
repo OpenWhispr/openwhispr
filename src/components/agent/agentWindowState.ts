@@ -2,6 +2,7 @@ import type { AgentWindowLayout } from "../../types/electron";
 import type { AgentSelectionContext } from "../../utils/agentSelectionContext";
 import type { InteractionPayload } from "../../types/agentInteractions";
 import { approvalKey, type ApprovalEntry } from "../../stores/connectorApprovalStore";
+import type { SkillApprovalEntry } from "../../stores/skillApprovalStore";
 import type { InteractionEntry } from "../../stores/agentInteractionStore";
 import type { ChatImageAttachment, Message, ToolCallInfo } from "../chat/types";
 
@@ -212,7 +213,13 @@ export function findPendingCard(
   messages: ReadonlyArray<Pick<Message, "id" | "toolCalls">>,
   interactions: Readonly<Record<string, Pick<InteractionEntry, "state" | "payload" | "restored">>>,
   approvals: Readonly<Record<string, Pick<ApprovalEntry, "state" | "awaitingRetry">>>,
-  { includeRestored = false }: { includeRestored?: boolean } = {}
+  {
+    includeRestored = false,
+    skillApprovals = {},
+  }: {
+    includeRestored?: boolean;
+    skillApprovals?: Readonly<Record<string, Pick<SkillApprovalEntry, "state">>>;
+  } = {}
 ): PendingCard | null {
   for (const message of messages) {
     for (const toolCall of message.toolCalls ?? []) {
@@ -225,6 +232,10 @@ export function findPendingCard(
       ) {
         const { kind } = interaction.payload;
         return { key, id: `${key}:${kind}`, messageId: message.id, toolCall, interaction: kind };
+      }
+      const skillApproval = skillApprovals[key];
+      if (skillApproval?.state === "pending") {
+        return { key, id: `${key}:skill`, messageId: message.id, toolCall, interaction: null };
       }
       const approval = approvals[key];
       if (approval?.state === "pending" || approval?.awaitingRetry) {

@@ -6,8 +6,10 @@ export type { IconComponent, IconProps } from "./createIcon";
 export {
   ArrowUp,
   Bold,
+  ChevronsUpDown,
   Circle,
   CopyRounded,
+  EyeOff,
   FolderRounded,
   GitFork,
   Heading,
@@ -21,6 +23,7 @@ export {
   MessageCircleQuestion,
   Minimize,
   Quote,
+  SkillStack,
   Square,
   SquareSlash,
   SquareSparkle,

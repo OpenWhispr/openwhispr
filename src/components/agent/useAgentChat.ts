@@ -3,6 +3,7 @@ import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
+import type { SendToAIOptions } from "../chat/useChatStreaming";
 import type { Message } from "../chat/types";
 
 const conversationTitle = (text: string) => (text.length > 50 ? `${text.slice(0, 50)}...` : text);
@@ -20,11 +21,28 @@ export function useAgentChat({
   onRegenerateFailed: () => void;
 }) {
   const persistence = useChatPersistence();
+  const [pickedSkill, setPickedSkill] = useState<{ name: string; displayName: string } | null>(
+    null
+  );
+  const [skillPickOff, setSkillPickOff] = useState(false);
+  const removePickedSkill = useCallback(() => {
+    setPickedSkill(null);
+    setSkillPickOff(true);
+  }, []);
+  const skillSendOptions = useCallback(
+    (): SendToAIOptions => ({
+      attachedSkill: pickedSkill ? { name: pickedSkill.name } : undefined,
+      allowSkillPick: !skillPickOff,
+      onSkillPicked: setPickedSkill,
+    }),
+    [pickedSkill, skillPickOff]
+  );
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
     inferenceScope: "dictationAgent",
     allowConnectors: true,
     allowInteractions: true,
+    skillsEnabled: true,
     onStreamComplete: persistence.saveAssistantMessage,
     onTurnCheckpoint: persistence.saveAssistantMessage,
   });
@@ -35,13 +53,18 @@ export function useAgentChat({
     (text: string) => createPersisted(conversationTitle(text)),
     [createPersisted]
   );
-  const send = useChatMessageSender({
+  const sendMessage = useChatMessageSender({
     conversationId: persistence.conversationId,
     persistence,
     streaming,
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  const send = useCallback(
+    (text: string, options?: SendToAIOptions) =>
+      sendMessage(text, { ...options, ...skillSendOptions() }),
+    [sendMessage, skillSendOptions]
+  );
   useInterruptedInteractions(persistence, send);
 
   // Read through a ref, so these stay the same while a reply streams.
@@ -56,7 +79,12 @@ export function useAgentChat({
   const switchChat = useCallback(
     async (id: number) => {
       cancelStream();
-      return loadConversation(id);
+      const conversation = await loadConversation(id);
+      if (conversation) {
+        setPickedSkill(null);
+        setSkillPickOff(false);
+      }
+      return conversation;
     },
     [cancelStream, loadConversation]
   );
@@ -64,6 +92,8 @@ export function useAgentChat({
   const newChat = useCallback(() => {
     cancelStream();
     handleNewChat();
+    setPickedSkill(null);
+    setSkillPickOff(false);
   }, [cancelStream, handleNewChat]);
 
   const fork = useCallback(
@@ -91,16 +121,19 @@ export function useAgentChat({
       }
       busyRef.current = true;
       void sendToAI(request.content, messages.slice(0, index), {
+        ...skillSendOptions(),
         conversationId,
         replaceMessage: messages[index],
         onReplaceFailed: onRegenerateFailed,
       });
     },
-    [conversationId, onRegenerateFailed, sendToAI]
+    [conversationId, onRegenerateFailed, sendToAI, skillSendOptions]
   );
 
   return {
     messages: persistence.messages,
+    pickedSkill,
+    removePickedSkill,
     conversationId,
     forkOrigin: persistence.forkOrigin,
     agentState: streaming.agentState,

@@ -4,6 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
+import { defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -23,7 +24,10 @@ interface WorkspaceState {
 // Shared by every window of this origin; the dictation window mirrors it (lib/accountScopeMirror).
 export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 
-function readActiveWorkspaceId(): string | null {
+// The workspace every window uses right now. A window's store follows it
+// through storage events, which arrive a task later; work that must not run for
+// a workspace another window just left reads this instead.
+export function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
 }
@@ -32,6 +36,63 @@ function writeActiveWorkspaceId(id: string | null): void {
   if (typeof window === "undefined") return;
   if (id) localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
   else localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+}
+
+// Last successful workspace list, shown when a signed-in session can't load the list (the API
+// is unreachable or the request fails). It is only read for the account that wrote it, and only
+// while it is recent: the server still decides every action, but a list this old is likely wrong.
+export const WORKSPACE_LIST_CACHE_KEY = "workspaceListCache";
+const WORKSPACE_LIST_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+function writeWorkspaceListCache(accountId: string | null, workspaces: Workspace[]): void {
+  if (typeof window === "undefined" || !accountId) return;
+  try {
+    localStorage.setItem(
+      WORKSPACE_LIST_CACHE_KEY,
+      JSON.stringify({ accountId, fetchedAt: Date.now(), workspaces })
+    );
+  } catch {
+    // Storage can be full or blocked; the cache is only a convenience.
+  }
+}
+
+function readWorkspaceListCache(accountId: string | null): Workspace[] | null {
+  if (typeof window === "undefined" || !accountId) return null;
+  try {
+    const raw = localStorage.getItem(WORKSPACE_LIST_CACHE_KEY);
+    if (!raw) return null;
+    const cached: unknown = JSON.parse(raw);
+    if (!cached || typeof cached !== "object") return null;
+    const {
+      accountId: cachedAccountId,
+      fetchedAt,
+      workspaces,
+    } = cached as {
+      accountId?: unknown;
+      fetchedAt?: unknown;
+      workspaces?: unknown;
+    };
+    if (cachedAccountId !== accountId || !Array.isArray(workspaces)) return null;
+    if (typeof fetchedAt !== "number" || Date.now() - fetchedAt > WORKSPACE_LIST_CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    // A malformed entry would throw in later `.find(w => w.id …)` calls.
+    const wellFormed = workspaces.every(
+      (entry) => entry && typeof entry === "object" && typeof entry.id === "string"
+    );
+    return wellFormed ? (workspaces as Workspace[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearWorkspaceListCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
+  } catch {
+    // Nothing to clear if storage is unreachable.
+  }
 }
 
 let refreshPromise: Promise<void> | null = null;
@@ -49,8 +110,9 @@ export function refreshManagedEnterpriseIdentity(
   workspaceId: string | null = useWorkspaceStore.getState().activeWorkspaceId
 ): void {
   const enterprise = useEnterpriseIdentityStore.getState();
+  const clearOptions = accountId ? { next: { accountId, workspaceId } } : undefined;
   if (!workspaceId || !accountId || authGeneration == null) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
     return;
   }
   if (
@@ -58,7 +120,7 @@ export function refreshManagedEnterpriseIdentity(
     enterprise.accountId !== accountId ||
     enterprise.authGeneration !== authGeneration
   ) {
-    enterprise.clear();
+    enterprise.clear(clearOptions);
   }
   void enterprise.refresh(accountId, workspaceId, authGeneration);
 }
@@ -92,6 +154,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
     writeActiveWorkspaceId(null);
+    clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
     set({
       workspaces: [],
@@ -114,11 +177,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         if (generation !== accountGeneration) return;
         const activeId = get().activeWorkspaceId;
         const stillValid = activeId && workspaces.some((w) => w.id === activeId);
-        const resolvedActiveId = stillValid
-          ? activeId
-          : workspaces.length === 1
-            ? workspaces[0].id
-            : null;
+        const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        // Written before the state changes, as setActiveWorkspaceId does: the
+        // subscribers publish for the workspace localStorage names.
+        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
@@ -126,7 +188,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           error: false,
           activeWorkspaceId: resolvedActiveId,
         });
-        if (resolvedActiveId !== activeId) writeActiveWorkspaceId(resolvedActiveId);
+        writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
         if (generation !== accountGeneration) return;
@@ -135,7 +197,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           { error: (error as Error).message },
           "workspaces"
         );
-        set({ loading: false, loaded: true, error: true });
+        // Nothing in memory: show the last list this account saw. `error` stays true so the
+        // reconnect retry replaces it with the server's answer and the UI marks it out of date.
+        const cached =
+          get().workspaces.length === 0
+            ? readWorkspaceListCache(usePolicyStore.getState().accountId)
+            : null;
+        set({
+          ...(cached ? { workspaces: cached } : {}),
+          loading: false,
+          loaded: true,
+          error: true,
+        });
       } finally {
         if (refreshPromise === request) refreshPromise = null;
       }
@@ -170,3 +243,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 }));
+
+// Another window switched, auto-selected or cleared the workspace: follow it,
+// or this window keeps dictating, syncing and publishing shared words for the
+// old one. Nothing is written back, and the managed enterprise identity is
+// left to the window's own refresh (the dictation window re-resolves it in
+// accountScopeMirror on this same event).
+export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key !== ACTIVE_WORKSPACE_KEY) return;
+  const id = event.newValue;
+  if (id === useWorkspaceStore.getState().activeWorkspaceId) return;
+  // The old workspace's roster must not land under the new one.
+  membersRequestSeq++;
+  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [] });
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("storage", handleActiveWorkspaceStorage);
+}

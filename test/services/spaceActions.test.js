@@ -158,6 +158,56 @@ test("renameSpace leaves a server-successful rename pending when mirroring fails
   );
 });
 
+test("renameSpace keeps the mirror's access fields, which the rename response omits", async () => {
+  const { createSpaceActions } = await load();
+  const { deps } = makeHarness();
+  const capabilities = {
+    edit_notes: true,
+    manage_members: true,
+    manage_settings: true,
+    leave: true,
+  };
+  const teams = [{ id: "team-1", name: "Design", my_role: "admin" }];
+  const space = {
+    id: 7,
+    cloud_space_id: "cloud-space-1",
+    name: "Roadmap",
+    emoji: null,
+    my_role: "admin",
+    my_direct_role: null,
+    member_count: 4,
+    teams,
+    capabilities,
+  };
+  // PATCH /api/spaces/:id answers with the space row only.
+  deps.spaces.update = async (spaceId, updates) => ({
+    id: spaceId,
+    workspace_id: "ws-1",
+    slug: "roadmap",
+    description: null,
+    created_at: "2026-10-01T00:00:00.000Z",
+    updated_at: "2026-10-23T00:00:00.000Z",
+    ...updates,
+  });
+  let upserted = null;
+  deps.local.upsertSpaceFromCloud = async (row) => {
+    upserted = row;
+    return space;
+  };
+  const actions = createSpaceActions(deps);
+
+  assert.deepEqual(await actions.renameSpace(space, { name: "Plans", emoji: null }), {
+    success: true,
+  });
+  assert.equal(upserted.id, "cloud-space-1");
+  assert.equal(upserted.name, "Plans");
+  assert.equal(upserted.my_role, "admin");
+  assert.equal(upserted.my_direct_role, null);
+  assert.equal(upserted.member_count, 4);
+  assert.deepEqual(upserted.teams, teams);
+  assert.deepEqual(upserted.capabilities, capabilities);
+});
+
 test("deleteSpace archives and guards cloud rows before local purge", async () => {
   const { createSpaceActions } = await load();
   const { calls, deps, localSpace } = makeHarness();

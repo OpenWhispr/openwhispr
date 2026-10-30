@@ -1,7 +1,10 @@
 import Purchases from 'react-native-purchases';
 import {
   getAppStorefrontCountryCode,
+  reconcileRevenueCatPurchases,
+  identifyRevenueCatUser,
   recordRevenueCatPurchase,
+  resetRevenueCatUser,
   showAppStoreManageSubscriptions,
 } from '../revenuecat';
 
@@ -10,6 +13,9 @@ jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
     configure: jest.fn(),
+    logIn: jest.fn(),
+    logOut: jest.fn(),
+    syncPurchasesForResult: jest.fn(),
     getStorefront: jest.fn(),
     recordPurchase: jest.fn(),
     showManageSubscriptions: jest.fn(),
@@ -67,4 +73,119 @@ describe('RevenueCat StoreKit helpers', () => {
 
     await expect(recordRevenueCatPurchase('pro.monthly')).resolves.toBe(false);
   });
+});
+
+it('does not sync an old account when login finishes after an account switch', async () => {
+  let release!: (value: never) => void;
+  let current = true;
+  mockPurchases.logIn.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = reconcileRevenueCatPurchases('billing-a', () => current);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  current = false;
+  release({} as never);
+  expect(await pending).toBe(false);
+  expect(mockPurchases.syncPurchasesForResult).not.toHaveBeenCalled();
+});
+it('serializes another login behind an in-progress purchase sync', async () => {
+  jest.clearAllMocks();
+  let release!: (value: never) => void;
+  mockPurchases.logIn.mockResolvedValue({} as never);
+  mockPurchases.syncPurchasesForResult.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const pending = reconcileRevenueCatPurchases('billing-a', () => true);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const next = identifyRevenueCatUser('billing-b');
+  expect(mockPurchases.logIn).toHaveBeenCalledTimes(1);
+  release({} as never);
+  expect(await pending).toBe(true);
+  expect(await next).toBe(true);
+  expect(mockPurchases.logIn.mock.calls.map(([id]) => id)).toEqual(['billing-a', 'billing-b']);
+});
+
+it('releases a hung call at its deadline and still runs queued identity changes in order', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  let release!: (value: never) => void;
+  mockPurchases.recordPurchase.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  mockPurchases.logIn.mockResolvedValue({} as never);
+  const recording = recordRevenueCatPurchase('monthly');
+  await Promise.resolve();
+  const next = identifyRevenueCatUser('billing-b');
+  const reset = resetRevenueCatUser();
+  await jest.advanceTimersByTimeAsync(10001);
+  expect(await recording).toBe(false);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  release({} as never);
+  expect(await next).toBe(true);
+  await reset;
+  expect(mockPurchases.logIn).toHaveBeenCalledWith('billing-b');
+  expect(mockPurchases.logOut).toHaveBeenCalledTimes(1);
+  jest.useRealTimers();
+});
+it('releases a caller stuck behind a call that never settles, then still runs its work', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  let release!: (value: never) => void;
+  mockPurchases.recordPurchase.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  mockPurchases.logIn.mockResolvedValue({} as never);
+  const recording = recordRevenueCatPurchase('monthly');
+  const next = identifyRevenueCatUser('billing-b');
+  await jest.advanceTimersByTimeAsync(90001);
+  expect(await recording).toBe(false);
+  expect(await next).toBe(false);
+  expect(mockPurchases.logIn).not.toHaveBeenCalled();
+  release({} as never);
+  await jest.advanceTimersByTimeAsync(1);
+  expect(mockPurchases.logIn).toHaveBeenCalledWith('billing-b');
+  jest.useRealTimers();
+});
+it('starts a queued call’s deadline when it runs, not when it was queued', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  mockPurchases.recordPurchase.mockImplementationOnce(
+    () => new Promise((resolve) => setTimeout(() => resolve({} as never), 9000)),
+  );
+  mockPurchases.logIn.mockImplementation(
+    () => new Promise((resolve) => setTimeout(() => resolve({} as never), 2000)),
+  );
+  mockPurchases.syncPurchasesForResult.mockImplementation(
+    () => new Promise((resolve) => setTimeout(() => resolve({} as never), 2000)),
+  );
+  const recording = recordRevenueCatPurchase('monthly');
+  const reconciling = reconcileRevenueCatPurchases('billing-a', () => true);
+  await jest.advanceTimersByTimeAsync(13001);
+  expect(await recording).toBe(true);
+  expect(await reconciling).toBe(true);
+  jest.useRealTimers();
+});
+it('gives a slow purchase restore time to finish instead of the login deadline', async () => {
+  jest.clearAllMocks();
+  jest.useFakeTimers();
+  mockPurchases.logIn.mockResolvedValue({} as never);
+  mockPurchases.syncPurchasesForResult.mockImplementationOnce(
+    () => new Promise((resolve) => setTimeout(() => resolve({} as never), 30_000)),
+  );
+  const reconciling = reconcileRevenueCatPurchases('billing-a', () => true);
+  await jest.advanceTimersByTimeAsync(30_001);
+  expect(await reconciling).toBe(true);
+  jest.useRealTimers();
 });

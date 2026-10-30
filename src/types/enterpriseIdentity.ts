@@ -1,6 +1,11 @@
+import type {
+  EnterpriseAudioOperation,
+  EnterpriseAudioNetwork,
+  EnterpriseCaBundle,
+} from "./enterpriseAudio";
 import type { InferenceScope } from "../config/inferenceScopes";
 
-export type ManagedEnterpriseProvider = "bedrock" | "azure";
+export type ManagedEnterpriseProvider = "bedrock" | "azure" | "openai-compatible";
 export type ManagedEnterpriseProviderMode = "disabled" | "managed_default" | "managed_required";
 export type EnterpriseSetupMode = "auto" | "managed" | "manual";
 
@@ -23,7 +28,10 @@ export interface ManagedEnterpriseProviderRecord {
     endpoint?: string;
     apiVersion?: string;
     allowedDeployments?: string[];
-    /** Azure-only managed speech-to-text section. */
+    batch?: EnterpriseAudioOperation;
+    realtime?: EnterpriseAudioOperation;
+    network?: EnterpriseAudioNetwork;
+    /** Azure managed speech-to-text section. */
     transcription?: {
       allowedDeployments: string[];
       defaultDeployment: string;
@@ -47,6 +55,8 @@ export interface ManagedEnterpriseConfig {
     audiences: Record<ManagedEnterpriseProvider, string>;
   };
   providers: ManagedEnterpriseProviderRecord[];
+  audioContractVersion?: 1;
+  certificateBundles?: EnterpriseCaBundle[];
 }
 
 export type ManagedEnterpriseScopeResolution =
@@ -70,4 +80,5 @@ export interface ManagedEnterpriseRequestContext {
   provider: ManagedEnterpriseProvider;
   generation: number;
   providerVersion: number;
+  operation?: "batch" | "realtime";
 }

@@ -27,6 +27,13 @@ import { InteractionCard } from "./InteractionCard";
 import { ApiKeySavedRow } from "./interactions/ApiKeyCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { SkillApprovalCard, SkillCardSummary } from "./SkillApprovalCard";
+import { readSkillCardRecord } from "./skillCardRecord";
+import { CodeBlockActions } from "./CodeBlockActions";
+import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
+
+// Module-level, so the markdown keeps the same callback from render to render.
+const copyCodeBlock = (code: string) => <CodeBlockActions code={code} />;
 
 interface ChatMessageProps {
   messageId: string;
@@ -157,11 +164,15 @@ function useToolCallCard({ messageId, toolCall }: ToolCallProps): ReactElement |
   const key = approvalKey(messageId, toolCall.id);
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
   const interaction = useAgentInteractionStore((state) => state.entries[key]);
+  const skillApproval = useSkillApprovalStore((state) => state.entries[key]);
   // An open question goes first: after Retry, the Slack picker waits under the
   // key of the answer card it settled.
   if (interaction && interaction.state !== "settled")
     return <InteractionCard entry={interaction} />;
   if (approval) return <ApprovalCard entry={approval} />;
+  if (skillApproval) return <SkillApprovalCard entry={skillApproval} />;
+  const skillRecord = readSkillCardRecord(toolCall);
+  if (skillRecord) return <SkillCardSummary record={skillRecord} />;
   if (!interaction) return null;
   // A saved key stays visible as saved; every other settled card gives way to its step.
   return interaction.payload.kind === "apiKey" && interaction.result?.status === "saved" ? (
@@ -359,6 +370,7 @@ export const ChatMessage = memo(function ChatMessage({
           <MarkdownRenderer
             content={content}
             className="text-[13px] leading-relaxed [&_p]:text-[13px] [&_li]:text-[13px]"
+            codeBlockActions={copyCodeBlock}
           />
         )}
 

@@ -735,6 +735,10 @@ class ReasoningService extends BaseReasoningService {
       model,
       surface: "llm",
     };
+    const timeoutError = () =>
+      route.kind === "self-hosted"
+        ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
+        : new Error("Streaming request timed out");
     let response: Response;
     try {
       response = await fetchWithParamFallback(
@@ -753,17 +757,24 @@ class ReasoningService extends BaseReasoningService {
       clearTimeout(timeoutId);
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw route.kind === "self-hosted"
-          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
-          : new Error("Streaming request timed out");
+        throw timeoutError();
       }
       // A stopped LAN server rejects the fetch before any response.
       throw route.kind === "self-hosted" ? asProviderError(error, selfHostedErrorContext) : error;
     }
 
     if (!response.ok) {
-      clearTimeout(timeoutId);
-      const errorText = await response.text();
+      // Keep the deadline running while the error body arrives, or a stalled body hangs.
+      let errorText: string;
+      try {
+        errorText = await response.text();
+      } catch (error) {
+        if (!abortController.signal.aborted) throw error;
+        if (!timeoutTriggered) return;
+        throw timeoutError();
+      } finally {
+        clearTimeout(timeoutId);
+      }
       logger.logReasoning("AGENT_STREAM_ERROR", {
         status: response.status,
         body: redactProviderBody(errorText),
@@ -845,9 +856,7 @@ class ReasoningService extends BaseReasoningService {
     } catch (error) {
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
         if (!timeoutTriggered) return;
-        throw route.kind === "self-hosted"
-          ? providerError(PROVIDER_ERROR_CODES.TIMEOUT, selfHostedErrorContext)
-          : new Error("Streaming request timed out");
+        throw timeoutError();
       }
       throw error;
     } finally {
@@ -969,7 +978,7 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    const needsGeminiThinkingSuppressed = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
       // The effort value is a family fact: gpt-oss has no "none" (#1611).
       ...(needsGroqDisableThinking
@@ -980,8 +989,16 @@ class ReasoningService extends BaseReasoningService {
             },
           }
         : {}),
-      ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+      ...(needsGeminiThinkingSuppressed
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel:
+                  getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
+                includeThoughts: false,
+              },
+            },
+          }
         : {}),
       ...(reasoningEffort && provider === "groq" ? { groq: { reasoningEffort } } : {}),
       ...(reasoningEffort && provider === "gemini"

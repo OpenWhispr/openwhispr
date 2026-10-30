@@ -88,7 +88,7 @@ async function fixture(t, fetchImpl) {
         // The server mints only for builds that declare they can run Orukeet.
         assert.equal(
           options.headers["x-openwhispr-capabilities"],
-          "orukeet,orukeet-pipeline-v2,orukeet-language-routing"
+          "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1"
         );
         assert.equal(options.useSessionCookies, false);
         assert.equal(options.redirect, "error");
