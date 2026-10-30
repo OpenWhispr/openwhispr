@@ -8,6 +8,9 @@ interface DictionaryEntryInput {
   client_dict_id?: string;
   created_at?: string;
   updated_at?: string;
+  // Set once the word was shared into a team list; null makes it plain
+  // personal, and leaving it out keeps the server's value.
+  shared_at?: string | null;
 }
 
 export interface CloudDictionaryEntry {
@@ -16,6 +19,8 @@ export interface CloudDictionaryEntry {
   word: string;
   source: DictionarySource;
   deleted_at: string | null;
+  // Absent from an API that predates sharing.
+  shared_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,7 +35,8 @@ async function batchCreate(
 
 async function update(
   id: string,
-  updates: { word?: string; source?: DictionarySource }
+  // shared_at as for batchCreate: absent keeps, null clears.
+  updates: { word?: string; source?: DictionarySource; shared_at?: string | null }
 ): Promise<CloudDictionaryEntry> {
   return cloudPatch<CloudDictionaryEntry>("/api/dictionary/update", { id, ...updates });
 }
@@ -39,7 +45,22 @@ async function deleteEntry(id: string): Promise<void> {
   await cloudDelete("/api/dictionary/delete", { id });
 }
 
-async function list(
+async function listSnapshot(
+  cursor?: string,
+  limit?: number,
+  cursorId?: string
+): Promise<{ entries: CloudDictionaryEntry[]; hasMore: boolean }> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+  if (cursorId) params.set("cursor_id", cursorId);
+  if (limit) params.set("limit", String(limit));
+  const query = params.toString() ? `?${params}` : "";
+  return cloudGet<{ entries: CloudDictionaryEntry[]; hasMore: boolean }>(
+    `/api/dictionary/list${query}`
+  );
+}
+
+async function listDelta(
   since?: string,
   limit?: number,
   sinceId?: string
@@ -58,5 +79,6 @@ export const DictionaryService = {
   batchCreate,
   update,
   delete: deleteEntry,
-  list,
+  listSnapshot,
+  listDelta,
 };

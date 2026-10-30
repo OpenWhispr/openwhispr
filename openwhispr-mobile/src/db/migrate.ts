@@ -187,6 +187,25 @@ export function runMigrations(): void {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      text TEXT NOT NULL,
+      steps_json TEXT,
+      sources_json TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id, created_at);
+
     CREATE TABLE IF NOT EXISTS transcript_segments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
@@ -369,6 +388,8 @@ export function runMigrations(): void {
   addColumnIfMissing('notes', 'cloud_updated_at', 'TEXT');
   addColumnIfMissing('notes', 'conflict_server_note', 'TEXT');
   addColumnIfMissing('notes', 'left_team', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('dictionary_entries', 'shared_at', 'TEXT');
+  addColumnIfMissing('dictionary_entries', 'shared_at_cleared', 'INTEGER NOT NULL DEFAULT 0');
 
   tryAlter(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_client_id ON folders(client_folder_id) WHERE client_folder_id IS NOT NULL',

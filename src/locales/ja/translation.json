@@ -214,6 +214,7 @@
     "policyUnresolved": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。",
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
+    "managedConfigAmbiguous": "組織のマネージド設定に矛盾があります。管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
     "resizePanel": "パネルのサイズを変更"
   },
@@ -883,6 +884,9 @@
       "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
       "refreshingModels": "モデルを更新しています…"
     },
+    "openai": {
+      "modelRetired": "OpenAI は {{from}} を提供終了しました。{{to}} に切り替えました。"
+    },
     "corti": {
       "euOnly": "Corti のモデルは EU リージョンでのみ利用できます。"
     }
@@ -969,6 +973,9 @@
         "managedTranscriptionUnavailable": "マネージド文字起こしは現在利用できません。しばらくしてからもう一度お試しください。",
         "managedRouteInvalid": "設定の不一致により、マネージド文字起こしを開始できませんでした。もう一度お試しいただくか、管理者にお問い合わせください。",
         "managedAuthRejected": "組織のマネージド文字起こしの認証情報が拒否されました。管理者にお問い合わせください。",
+        "managedRequestRejected": "組織の文字起こしサービスがこの音声を拒否しました（HTTP {{status}}）。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedResponseMalformed": "組織の文字起こしサービスから OpenWhispr が読み取れない応答が返されました。もう一度お試しいただくか、管理者にお問い合わせください。",
+        "managedChunkTooLarge": "この音声を組織の文字起こしサービスに送れるほど小さく分割できませんでした。管理者にお問い合わせください。",
         "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
         "providerKeyMissing": "文字起こしプロバイダーのAPIキーが設定されていません。設定 → 音声テキスト変換 から追加してください。",
         "cleanupTruncated": "AI モデルの出力が上限に達し、ディクテーションのクリーンアップが完了しませんでした。",
@@ -1755,6 +1762,8 @@
       },
       "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
+        "endMeetingDescription": "サインアウトすると、録音中の会議が終了します。それまでに記録された内容はノートに残ります。",
+        "endMeetingTitle": "会議の録音を終了しますか？",
         "failedDescription": "サインアウト中に問題が発生しました。もう一度お試しください。",
         "failedTitle": "サインアウトできませんでした",
         "signOut": "サインアウト",
@@ -2411,6 +2420,7 @@
         "description": "接続を確認して、もう一度お試しください。",
         "retry": "再試行"
       },
+      "staleList": "OpenWhispr に接続できませんでした。前回接続したときのワークスペースを表示しています。",
       "tab": {
         "general": "一般",
         "members": "メンバー",
@@ -2630,6 +2640,8 @@
   "models": {
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
+    "legacy": "旧モデル",
+    "legacyHint": "提供は終了しました。別のモデルに切り替えると、今後は表示されません。",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "最高精度のローカルASR(平均WER 5.42%、14言語)。言語の自動検出はありません"
@@ -2639,7 +2651,8 @@
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
         "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
         "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）",
-        "orukeet": "多言語音声認識向けに調整したParakeet"
+        "orukeet": "多言語音声認識向けに調整したParakeet",
+        "parakeet_tdt_110m_en": "低スペックマシン向けの句読点付き軽量英語 ASR"
       },
       "whisper": {
         "tiny": "最速、品質は低め",
@@ -2647,7 +2660,9 @@
         "small": "より高品質、やや低速",
         "medium": "高品質",
         "large": "最高品質、最も低速",
-        "turbo": "高速で高品質"
+        "turbo": "高速で高品質",
+        "large_q5": "ダウンロードサイズ 3 分の 1 の Large",
+        "turbo_q5": "ダウンロードサイズ 3 分の 1 の Turbo"
       },
       "transcription": {
         "openai_gpt_transcribe": "最新かつ最も正確な文字起こし",
@@ -2665,7 +2680,10 @@
         "deepgram_nova_3": "Deepgram で最も高精度なリアルタイムモデル",
         "assemblyai_universal_streaming_english": "変化しないリアルタイム文字起こし（英語）",
         "assemblyai_universal_streaming_multilingual": "変化しないリアルタイム文字起こし（多言語）",
-        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語"
+        "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
+        "assemblyai_universal_3_6_pro": "最高精度のリアルタイム、32言語",
+        "mistral_voxtral_mini_transcribe_3_0": "50 以上の言語に対応した高速文字起こし（プレビュー）",
+        "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -2673,7 +2691,6 @@
         "openai_gpt_5_nano": "超高速、低レイテンシー",
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
-        "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_fable_5_1": "Anthropic の最も高性能なモデル、Mythos クラス",
         "anthropic_claude_fable_5": "前世代の Mythos クラスのフラッグシップ",
         "anthropic_claude_opus_5_5": "複雑な推論向けの最新 Opus モデル、100 万トークンコンテキスト",
@@ -2683,7 +2700,7 @@
         "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
         "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_5_flash": "高速で高性能な Gemini モデル",
         "gemini_gemini_3_5_flash_lite": "最速かつ最も低コストの 3.5 モデル",
         "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_1_flash_lite": "フロンティア級の性能を低コストで",
@@ -2711,18 +2728,29 @@
         "corti_corti_s1_instant": "高速なヘルスケアモデル、推論トレースなし",
         "corti_corti_s1": "推論対応の最も高性能な臨床モデル",
         "corti_corti_s1_mini_instant": "コンパクトなヘルスケアモデル、最速かつ最も低コスト",
-        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で"
+        "corti_corti_s1_mini": "推論対応のコンパクトな臨床モデルを半額で",
+        "openai_gpt_6_1_sol": "Astra に迫る性能をより低コストで、チャットとエージェント作業向け",
+        "openai_gpt_6_luna": "最速かつ最も低コストの GPT-6",
+        "gemini_gemini_3_6_flash": "高速で高性能な Gemini モデル",
+        "gemini_gemini_3_8_flash": "最も高性能な Flash モデル",
+        "gemini_gemini_4_argon": "Google の最先端推論モデル",
+        "tinfoil_kimi_k3": "ネイティブ推論と画像理解に対応したプライベートな Moonshot フラッグシップ、256K コンテキスト",
+        "tinfoil_deepseek_v4_1_flash": "推論を任意で使えるプライベートで高速な DeepSeek モデル、1M コンテキスト"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "最も高性能な Claude モデル。最も難しいアシスタントタスクに最適です。",
-        "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_haiku_4_5": "前世代の Haiku。テキスト整形向けの高速で低コストなモデルです。",
+        "bedrock_claude_sonnet_5": "前世代の Sonnet。アシスタントタスク向けの高速で有能なモデルです。",
         "bedrock_claude_opus_4_8": "最高性能。複雑なアシスタントタスクに最適です。",
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。アシスタントタスクに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
-        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
-        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+        "bedrock_claude_sonnet_5_5": "バランス型。アシスタントタスクの既定モデルに最適です。",
+        "bedrock_claude_haiku_5_5": "最速の Claude モデル。テキスト整形に最適です。",
+        "bedrock_claude_opus_5_5": "最高性能。複雑なアシスタントタスクに最適です。",
+        "vertex_gemini_3_8_flash": "Vertex 経由で最も高性能な Flash モデル",
+        "vertex_gemini_3_5_flash_lite": "Vertex 経由で最速かつ最も低コストのモデル",
+        "vertex_gemini_4_argon": "Vertex 経由の Google 最先端推論モデル"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強力なハイブリッドモデル",
@@ -2759,7 +2787,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AIのMoE、わずか1.5Bのアクティブパラメータで高品質",
         "liquidai_lfm2_2_6b_q4_k_m": "より高品質なクリーンアップ向けのバランス型LFM2",
         "liquidai_lfm2_5_350m_q8_0": "高速な口述クリーンアップ向けの超軽量モデル",
-        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ"
+        "liquidai_lfm2_5_230m_q8_0": "小型モデル、控えめなハードウェアでも即座にクリーンアップ",
+        "qwen_qwen3_5_0_8b_q4_k_m": "最速の整形向け超小型 Qwen3.5",
+        "qwen_qwen3_8_27b_q4_k_m": "32 GB マシン向けで最も高性能な Qwen モデル",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "高速な Mixture-of-Experts モデル、アクティブパラメータ 3B",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "ツール使用に対応した Mistral の 14B モデル、256K コンテキスト",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "整形とツール向けの思考なし高速モデル",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "口述の整形向けの小型で高速なモデル",
+        "gemma_gemma_4_12b_it_qat_q4_0": "Google 公式の QAT ビルド、16 GB マシンに最適"
       },
       "diarization": {
         "segmentation": "話者分離のための発話区間検出",
@@ -2795,7 +2830,6 @@
       "personal": "個人",
       "privateTooltip": "パーソナルスペースはあなただけが見られます",
       "newSpace": "新しいチームスペース",
-      "newSpaceInWorkspace": "{{workspace}} に新しいチームスペース",
       "createTitle": "チームスペースを作成",
       "createDescription": "ワークスペース内の共有エリアです。追加した人やグループがアクセスできます。",
       "nameAndIconLabel": "名前とアイコン",
@@ -3278,7 +3312,8 @@
       "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
       "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
       "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。",
-      "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。"
+      "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
+      "disabledByOrg": "組織によって音声のアップロードが無効にされています。"
     },
     "meeting": {
       "title": "議事録",
@@ -3305,7 +3340,11 @@
       "systemAudioQuiet": {
         "title": "会議の音声が無音になりました",
         "description": "数分間、誰の声も検出されていません。通話が続いている場合は、音声出力デバイスを確認してください。"
-      }
+      },
+      "recordingDisabledByOrg": "組織によって会議の録音が無効にされています。",
+      "stoppedAccountChanged": "サインアウトまたはアカウントの切り替えにより、録音を停止しました。",
+      "stoppedPolicyUnresolved": "組織の設定を確認できなかったため、録音を停止しました。",
+      "stoppedWorkspaceChanged": "ワークスペースを切り替えたため、録音を停止しました。"
     },
     "meetingPill": {
       "returnToNote": "録音に戻る",
@@ -3342,6 +3381,7 @@
     },
     "speaker": {
       "you": "あなた",
+      "noteTaker": "記録者",
       "them": "相手",
       "unknown": "不明な話者",
       "label": "話者 {{n}}",
@@ -3438,18 +3478,14 @@
   },
   "dictionary": {
     "addWord": "単語を追加",
-    "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
     "add": "追加",
     "importWords": "単語をインポート",
     "importPlaceholder": "カンマまたは改行区切りの単語を貼り付け...",
     "separateWithCommas": "1行に1語、またはカンマ区切り",
     "wordsReady_other": "{{count}} 個の単語が準備完了",
-    "import": "インポート",
-    "yourDictionary": "あなたの辞書",
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
@@ -3485,7 +3521,155 @@
     "emptyTitle": "辞書に単語を追加しましょう",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
-    "agentDefault": "デフォルトで追加済み"
+    "agentDefault": "デフォルトで追加済み",
+    "shared": {
+      "allWords": "すべての単語",
+      "personal": "個人",
+      "group": "共有",
+      "allShared": "すべて",
+      "everyoneAt": "{{workspace}} の全員",
+      "hidden": "非表示",
+      "add": {
+        "placeholder": "カンマ区切りで単語を追加",
+        "to": "{{list}} に追加",
+        "chooseList": "追加先のリストを選択",
+        "hiddenForYou": "{{list}} で非表示にしています",
+        "notAdded_one": "{{count}} 個の単語を追加できませんでした：{{words}}",
+        "notAdded_other": "{{count}} 個の単語を追加できませんでした：{{words}}"
+      },
+      "alreadyIn": "{{list}} に追加済み",
+      "importTo": "{{list}} にインポート",
+      "actions": {
+        "share": "共有",
+        "edit": "編集",
+        "delete": "削除",
+        "hide": "自分には非表示",
+        "deleteForEveryone": "全員から削除",
+        "unhide": "再表示",
+        "shareWord": "{{word}} を共有",
+        "deleteWord": "{{word}} を削除",
+        "hideWord": "{{word}} を自分には非表示",
+        "deleteForEveryoneWord": "{{word}} を全員から削除",
+        "unhideWord": "{{word}} を再表示"
+      },
+      "attribution": {
+        "you": "あなた",
+        "former": "元メンバー"
+      },
+      "toolbar": {
+        "search": "検索",
+        "searchPlaceholder": "このリストを検索",
+        "closeSearch": "検索を閉じる",
+        "sort": "並べ替え",
+        "sync": "今すぐ同期",
+        "syncedAgo": "{{time}}前に同期",
+        "syncedJustNow": "たった今同期",
+        "notSynced": "まだ同期されていません"
+      },
+      "sort": {
+        "az": "A–Z",
+        "za": "Z–A",
+        "newest": "新しい順",
+        "oldest": "古い順"
+      },
+      "memberCount_one": "{{count}} 人のメンバー",
+      "memberCount_other": "{{count}} 人のメンバー",
+      "emptyList": "{{list}} にはまだ単語がありません",
+      "allHiddenList": "{{list}} の単語はすべて自分には非表示になっています",
+      "noMatches": "「{{query}}」に一致する単語はありません",
+      "deletedForEveryone": "「{{word}}」を全員から削除しました",
+      "undo": "元に戻す",
+      "errors": {
+        "generic": "{{list}} を更新できませんでした。もう一度お試しください。",
+        "listFull": "{{list}} がいっぱいです",
+        "planRequired": "共有辞書には Business プランが必要なため、{{list}} は変更されませんでした",
+        "ssoRequired": "{{list}} を変更するには、会社の SSO でサインインしてください",
+        "notMember": "{{list}} にアクセスできなくなりました",
+        "invalid": "{{list}} に追加できるのは短い用語だけです（64 文字・6 語まで。カンマ、文末の句読点、< > { } [ ] ` | などの記号は使えません）",
+        "recentlyDeleted": "この単語は {{list}} から削除されたばかりです。もう一度追加してください。"
+      },
+      "deleteOneTitle": "「{{word}}」を削除しますか？",
+      "deleteDescription": "{{list}} の全員に適用されます。",
+      "deleteManyTitle_one": "{{count}} 個の単語を削除しますか？",
+      "deleteManyTitle_other": "{{count}} 個の単語を削除しますか？",
+      "deletedManyForEveryone_one": "{{count}} 個の単語を全員から削除しました",
+      "deletedManyForEveryone_other": "{{count}} 個の単語を全員から削除しました",
+      "deletedPersonalMany_one": "{{count}} 個の単語を削除しました",
+      "deletedPersonalMany_other": "{{count}} 個の単語を削除しました",
+      "selection": {
+        "count_one": "{{count}} 件を選択中",
+        "count_other": "{{count}} 件を選択中",
+        "selectAll": "{{total}} 件すべてを選択",
+        "shareWith": "共有先…",
+        "clear": "選択を解除",
+        "selectWord": "{{word}} を選択",
+        "label": "選択した単語"
+      },
+      "share": {
+        "titleOne": "「{{word}}」の共有先",
+        "titleMany_one": "{{count}} 個の単語の共有先",
+        "titleMany_other": "{{count}} 個の単語の共有先",
+        "alreadyShared": "共有済み",
+        "movesOutOne": "個人から移動します",
+        "movesOutMany": "個人から移動します",
+        "partial_one": "{{total}} 個中 {{moved}} 個の単語を共有しました。{{count}} 個は共有されませんでした。",
+        "partial_other": "{{total}} 個中 {{moved}} 個の単語を共有しました。{{count}} 個は共有されませんでした。",
+        "reasons": {
+          "personalChanged": "別のデバイスで単語が変更されました。もう一度お試しください。",
+          "network": "接続を確認して、もう一度お試しください。",
+          "aListFull": "リストがいっぱいです"
+        }
+      },
+      "locked": {
+        "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
+        "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
+        "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
+        "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
+        "paused_other": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
+        "workspaceTitle": "ワークスペースの全員",
+        "workspaceDescription": "会社全体で使う単語",
+        "spaceTitle": "スペースごとのリスト",
+        "spaceDescription": "1 つのチームだけが必要とする単語",
+        "wordCount_one": "{{count}} 個の単語",
+        "wordCount_other": "{{count}} 個の単語",
+        "lockLabel": "Business プランに含まれます",
+        "ssoRequired": "{{workspace}} では会社の SSO が必要です。サインアウトしてから SSO でサインインし直すと、共有単語を使えます。",
+        "noAccess": "{{workspace}} の共有単語にアクセスできなくなりました。心当たりがない場合は管理者にお問い合わせください。",
+        "pausedMember_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。管理者またはオーナーに Business へのアップグレードを依頼すると、再び音声入力で使えます。",
+        "pausedMember_other": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。管理者またはオーナーに Business へのアップグレードを依頼すると、再び音声入力で使えます。"
+      },
+      "empty": {
+        "body": "このチームが使う用語を追加するか、個人リストから共有しましょう。{{list}} の全員（{{count}} 人）に届きます。",
+        "import": "リストをインポート",
+        "shareFromPersonal": "個人から共有"
+      },
+      "arrival": {
+        "title_one": "チームの単語を {{count}} 件追加しました",
+        "title_other": "チームの単語を {{count}} 件追加しました",
+        "description": "{{workspace}} の共有単語が、音声入力と会議ノートに適用されるようになりました。",
+        "descriptionNoWorkspace": "チームの共有単語が、音声入力と会議ノートに適用されるようになりました。",
+        "viewWords": "単語を表示"
+      },
+      "lockedEntry": "ロック中",
+      "notTermLike": "共有リストに追加できるのは短い用語だけです（64 文字・6 語まで。カンマ、文末の句読点、< > { } [ ] ` | などの記号、不可視文字は使えません）",
+      "notUsed": "音声入力では使われません",
+      "notUsedTooltip": "64 文字または 6 語を超える共有単語や、カンマ・文末の句読点・< > { } [ ] ` | などの記号・不可視文字を含む共有単語は音声入力で使われません",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_one": "{{count}} 個の単語を除外しました：{{words}}",
+      "skipped_other": "{{count}} 個の単語を除外しました：{{words}}",
+      "partial": {
+        "add_one": "{{total}} 個中 {{applied}} 個の単語を {{list}} に追加しました。{{count}} 個は追加されませんでした。",
+        "add_other": "{{total}} 個中 {{applied}} 個の単語を {{list}} に追加しました。{{count}} 個は追加されませんでした。",
+        "hide_one": "{{total}} 個中 {{applied}} 個の単語を自分だけ非表示にしました。{{count}} 個は非表示になりませんでした。",
+        "hide_other": "{{total}} 個中 {{applied}} 個の単語を自分だけ非表示にしました。{{count}} 個は非表示になりませんでした。",
+        "unhide_one": "{{total}} 個中 {{applied}} 個の単語を再表示しました。{{count}} 個はまだ非表示です。",
+        "unhide_other": "{{total}} 個中 {{applied}} 個の単語を再表示しました。{{count}} 個はまだ非表示です。",
+        "delete_one": "{{total}} 個中 {{applied}} 個の単語を全員から削除しました。{{count}} 個は削除されませんでした。",
+        "delete_other": "{{total}} 個中 {{applied}} 個の単語を全員から削除しました。{{count}} 個は削除されませんでした。"
+      },
+      "hiddenWord": "「{{word}}」を自分だけ非表示にしました",
+      "stillIn": "「{{word}}」はまだ {{list}} にあります"
+    }
   },
   "referral": {
     "title": "紹介して特典をゲット",
@@ -3692,7 +3876,6 @@
     "upload": "アップロード",
     "dictionary": "辞書",
     "referral": "1か月無料を取得",
-    "inviteTeam": "チームを招待",
     "settings": "設定",
     "support": "サポート",
     "limitReached": "週間のクラウド上限に達しました",
@@ -3706,7 +3889,7 @@
     "learnMore": "詳しく見る",
     "integrations": "連携",
     "defaultUser": "ユーザー",
-    "notSignedIn": "未サインイン",
+    "accountMenu": "アカウント：{{name}}",
     "chat": "チャット",
     "collapse": "サイドバーを折りたたむ",
     "expand": "サイドバーを展開"
@@ -3773,6 +3956,12 @@
     "active": "GPU アクセラレーション有効",
     "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
+    "activeBackend": "{{backend}} アクセラレーション有効",
+    "readyBackend": "{{backend}} アクセラレーション準備完了",
+    "activatingBackend": "{{backend}} を有効化中...",
+    "enableBackend": "{{backend}} を有効化",
+    "cudaDescription": "対応する NVIDIA GPU 向けの CUDA アクセラレーションです。現在の互換性のある NVIDIA ドライバーが必要です。",
+    "vulkanDescription": "対応する AMD、Intel、NVIDIA GPU 向けの Vulkan アクセラレーションです。",
     "activationFailed": "GPU アクセラレーションを利用できません",
     "activationFailedDescription": "OpenWhispr は CPU 文字起こしに切り替えました。",
     "reasoningActivationFailedDescription": "OpenWhispr は CPU 処理に切り替えました。",
@@ -3917,6 +4106,9 @@
       "get_noteStatus": "ノートを読み込み中...",
       "create_noteStatus": "ノートを作成中...",
       "update_noteStatus": "ノートを更新中...",
+      "load_skillStatus": "スキルを読み込み中…",
+      "propose_skillStatus": "スキルを準備中…",
+      "update_skillStatus": "変更を準備中…",
       "copiedToClipboard": "クリップボードにコピーしました",
       "openNote": "ノートを開く",
       "unknownTool": "不明なツール: {{name}}",
@@ -3924,6 +4116,9 @@
       "search_openwhispr_helpName": "OpenWhisprのヘルプを検索",
       "read_openwhispr_helpName": "OpenWhisprのヘルプを読む",
       "get_openwhispr_contextName": "OpenWhisprの設定を読む",
+      "load_skillName": "スキルを読み込み",
+      "propose_skillName": "スキルを提案",
+      "update_skillName": "スキルを更新",
       "search_openwhispr_helpStatus": "OpenWhisprのヘルプを検索中...",
       "read_openwhispr_helpStatus": "OpenWhisprのヘルプを読み込み中...",
       "get_openwhispr_contextStatus": "OpenWhisprの設定を読み込み中...",
@@ -4155,6 +4350,7 @@
       },
       "sections": {
         "connectors": "コネクタ",
+        "skills": "スキル",
         "calendars": "カレンダー",
         "api": "APIキー",
         "mcp": "MCPサーバー",
@@ -4620,6 +4816,227 @@
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
     "locked": "有料プランに含まれます"
   },
+  "skills": {
+    "pane": {
+      "description": "ワークフローを一度アシスタントに教えると、合う場面でいつでも使われます。",
+      "search": "スキルを検索",
+      "manage": "スキルを管理",
+      "add": "追加",
+      "addMenu": {
+        "createWithAssistant": "アシスタントと作成",
+        "create": "スキルを作成",
+        "upload": "スキルをアップロード"
+      },
+      "installed": "インストール済み",
+      "recommended": "おすすめ",
+      "seeOne": "{{first}}を表示",
+      "seeTwo": "{{first}}と{{second}}を表示",
+      "seeMore_one": "{{first}}、{{second}}、ほか{{count}}件を表示",
+      "seeMore_other": "{{first}}、{{second}}、ほか{{count}}件を表示",
+      "noMatches": "「{{query}}」に一致するインストール済みのスキルはありません。",
+      "stateOn": "オン",
+      "stateOff": "オフ",
+      "stateNeedsFix": "要修正",
+      "off": "オフ",
+      "needsFix": "要修正",
+      "cardLabel": "{{name}}、{{state}}。詳細を開く",
+      "addRecommended": "{{name}}を追加",
+      "empty": {
+        "title": "スキルはまだありません",
+        "description": "アシスタントと一緒に作成するか、お持ちのスキルをアップロードしてください。",
+        "descriptionNoAssistant": "お持ちのスキルをアップロードするか、自分で作成してください。"
+      }
+    },
+    "breadcrumb": {
+      "label": "パンくずリスト",
+      "root": "スキル"
+    },
+    "detail": {
+      "skillLabel": "スキル",
+      "toggle": "{{name}}のオン/オフ",
+      "more": "{{name}}のその他の操作",
+      "files": "ファイル",
+      "copyFile": "{{path}}をコピー",
+      "neverRun": "OpenWhisprはスクリプトを実行しません",
+      "uninstall": "アンインストール",
+      "uninstallConfirm": "{{name}}をアンインストールしますか？このコンピューターから削除されます。",
+      "problem": "このスキルは修正するまで使えません: {{reason}}",
+      "tryNow": "今すぐ試す"
+    },
+    "menu": {
+      "copyMarkdown": "Markdownをコピー",
+      "uninstall": "アンインストール"
+    },
+    "toasts": {
+      "added": "{{name}}を追加しました",
+      "created": "{{name}}を作成しました",
+      "uploaded_one": "{{count}}件のスキルをアップロードしました",
+      "uploaded_other": "{{count}}件のスキルをアップロードしました",
+      "uninstalled": "{{name}}をアンインストールしました",
+      "removedFromComputer": "このコンピューターから削除しました。",
+      "copiedMarkdown": "Markdownをコピーしました",
+      "copyFailed": "コピーできませんでした",
+      "revealFailed": "スキルのフォルダーが見つかりませんでした",
+      "writeFailed": "スキルを保存できませんでした",
+      "writeFailedNoSpace": "ディスクの空き容量がありません。",
+      "writeFailedPermission": "OpenWhisprがスキルフォルダーに書き込めません。",
+      "loadFailed": "スキルを読み込めませんでした"
+    },
+    "manage": {
+      "title": "スキルを管理",
+      "description": "スキルのオン/オフを切り替えたり、使わないスキルを削除したりできます。スキルはすべてこのコンピューターに保存されます。",
+      "noMatches": "「{{query}}」に一致するスキルはありません。",
+      "none": "スキルはまだありません。"
+    },
+    "upload": {
+      "title": "スキルをアップロード",
+      "description": "ClaudeやCodexなど、他の場所で作成したスキルを追加できます。",
+      "crumb": "スキルをアップロード",
+      "drop": "スキルファイルをここにドラッグ、または参照",
+      "dropActive": "ドロップして追加",
+      "several": "複数を一度に追加できます。",
+      "ruleMd": ".mdファイルには先頭に名前と説明が必要です",
+      "ruleZip": ".zipと.skillファイルには中にSKILL.mdが必要です",
+      "fileCount_one": "{{count}}個のファイル",
+      "fileCount_other": "{{count}}個のファイル",
+      "ready": "準備完了",
+      "duplicate": "このスキルはすでにあります",
+      "replace": "置き換える",
+      "willReplace": "現在のスキルを置き換えます",
+      "willReplaceCopy": "もう一方のファイルの代わりに使われます",
+      "alsoInUpload": "このアップロードの別のファイルに同じスキルがあります",
+      "skipped": "スキップ",
+      "undo": "元に戻す",
+      "chooseFile": "続けるにはファイルを選択してください。",
+      "submit": "アップロード",
+      "submitCount_one": "{{count}}件のスキルをアップロード",
+      "submitCount_other": "{{count}}件のスキルをアップロード"
+    },
+    "create": {
+      "title": "スキルを作成",
+      "description": "自分で書きます。リクエストが説明に合うと、アシスタントがいつでも使います。",
+      "crumb": "スキルを作成",
+      "name": "名前",
+      "namePlaceholder": "週次ステータスレポート",
+      "nameMissing": "名前を入力してください。",
+      "descriptionLabel": "説明",
+      "descriptionPlaceholder": "何をするか、いつ使うか。例: 今週のメモから週次報告を作成します。週次報告を頼んだときに使います。",
+      "descriptionHint": "アシスタントはこれを読んで、スキルを使うタイミングを判断します。",
+      "descriptionMissing": "アシスタントが使うタイミングを判断できるよう、説明を入力してください。",
+      "instructions": "指示",
+      "instructionsPlaceholder": "## 使うタイミング\n週次報告を頼んだとき。\n\n## 手順\n1. 今週のメモを読む。\n2. 成果、課題、来週の予定に分ける。\n\n## 出力形式\n短いリストを3つ。",
+      "instructionsMissing": "指示を入力してください。",
+      "addFile": "ファイルを追加",
+      "filesTooLarge": "スキルのファイルは合計25 MBまでです。",
+      "removeFile": "{{path}}を削除",
+      "submit": "作成",
+      "unsaved": "保存されていない変更があります",
+      "keepEditing": "編集を続ける",
+      "discard": "破棄",
+      "draftWithAssistant": "アシスタントと下書き"
+    },
+    "problems": {
+      "missingName": "先頭に名前が必要です",
+      "missingDescription": "先頭に説明が必要です",
+      "frontmatterMissing": "先頭に名前と説明が必要です",
+      "frontmatterInvalid": "先頭の情報を読み取れません",
+      "frontmatterNotMapping": "先頭の情報が想定された形式ではありません",
+      "nameFormat": "名前には小文字の英字、数字、単独のハイフンのみ使えます",
+      "nameTooLong": "名前が64文字を超えています",
+      "descriptionTooLong": "説明が{{max}}文字を超えています",
+      "descriptionAngleBrackets": "説明に < や > は使えません",
+      "noSkillFile": "中にSKILL.mdがありません",
+      "multipleSkillFiles": "中にSKILL.mdが複数あります",
+      "skillFileTooDeep": "SKILL.mdは最上位か、1つのフォルダー内に置く必要があります",
+      "unsafePath": "使用できないファイル名またはパスが含まれています",
+      "symlink": "他のファイルへのリンクが含まれていますが、これは使用できません",
+      "tooLarge": "25 MBを超えています",
+      "tooManyFiles": "ファイルが500個を超えています",
+      "unsupportedFile": "追加できるのは.md、.zip、.skillファイルのみです",
+      "unreadableArchive": "このファイルを開けません",
+      "nameMismatch": "SKILL.md内の名前がフォルダー名と一致しません",
+      "unreadable": "スキルのファイルを読み取れません",
+      "skillFileNotUtf8": "SKILL.mdはUTF-8のテキストとして保存する必要があります",
+      "placeholder": "先に [TODO: …] のプレースホルダーを置き換えてください",
+      "nameTaken": "「{{name}}」という名前のスキルはすでにあります"
+    },
+    "warnings": {
+      "folderRenamed": "フォルダー名はスキル名に合わせて変更されます",
+      "reservedWord": "「claude」または「anthropic」を含む名前はClaudeにアップロードできません",
+      "longBody": "指示が500行を超えているため、アシスタントの動作が遅くなることがあります",
+      "longDescription": "説明が300文字を超えています。短い説明のほうが確実に選ばれます",
+      "unknownKeys": "先頭に追加の情報があります。OpenWhisprは保持しますが使用しません"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "アクションをLinearへ",
+        "description": "会議からアクションを抽出し、承認用のLinearの課題を下書きします。会議の後にアクションの洗い出しを頼んだときに使います。"
+      },
+      "meeting-summary-to-slack": {
+        "title": "会議の要約をSlackへ",
+        "description": "会議の短い要約を書き、Slackチャンネル向けに下書きします。会議の要約を共有したいと頼んだときに使います。"
+      },
+      "one-on-one-prep": {
+        "title": "1on1の準備",
+        "description": "特定の相手との前回の1on1以降に変わったことをまとめます。1on1の準備を頼んだときに使います。"
+      },
+      "meeting-decisions": {
+        "title": "会議の決定事項",
+        "description": "会議メモから決定事項を探し、それぞれの日付と会議を示します。何を決めたか尋ねたときに使います。"
+      }
+    },
+    "chat": {
+      "chipRemove": "{{name}}をこのチャットから外す",
+      "placeholderWith": "何でも聞いてください — このチャットでは{{name}}を使います",
+      "usingSkill": "スキルを使用中 · {{name}}",
+      "usingSkillFailed": "スキルを使用できませんでした · {{name}}",
+      "creatorName": "スキル作成ツール",
+      "creatorOpening": "何度も繰り返していることは何ですか？前回どうだったか教えてください。ノートを選んで始めることもできます。",
+      "draftPrompt": "このスキルの仕上げを手伝ってください。\n名前: {{name}}\n説明: {{description}}",
+      "draftInstructions": "ここまでの手順:\n{{instructions}}",
+      "draftFiles": "追加したファイル: {{files}}",
+      "noneYet": "（未入力）"
+    },
+    "approval": {
+      "createHeader": "スキルを作成",
+      "newSkill": "新しいスキル",
+      "replacesExisting": "このスキルはすでにあります。保存すると更新されます。",
+      "replacesExistingTurnsOn": "このスキルはすでにあります。保存すると更新され、オンになります。",
+      "nameLabel": "スキル名",
+      "descriptionLabel": "使われる場面",
+      "seeFull": "スキル全体を見る",
+      "save": "スキルを保存",
+      "saving": "保存中…",
+      "saved": "保存しました",
+      "openSkill": "スキルを開く",
+      "skippedCreate": "スキップしました。何も保存されていません。",
+      "updated": "更新しました",
+      "undo": "元に戻す",
+      "undone": "元に戻しました。スキルは以前の状態です。",
+      "undoStale": "元に戻せませんでした。その後スキルが変更されています。",
+      "outdated": "保存されませんでした。このカードの作成後にスキルが変更されています。",
+      "unchangedLines_one": "⋯ 変更のない {{count}} 行",
+      "unchangedLines_other": "⋯ 変更のない {{count}} 行",
+      "undoFailed": "元に戻せませんでした。もう一度お試しください。",
+      "failed": "スキルを保存できませんでした。",
+      "notSaved": "何も保存されていません。",
+      "updateHeader": "スキルを更新",
+      "removes": "削除されるもの:",
+      "learnedFrom": "学習元: {{title}} · {{date}}",
+      "today": "今日",
+      "seeChanges": "変更の詳細を見る",
+      "added": "追加:",
+      "removed": "削除:",
+      "update": "スキルを更新",
+      "skippedUpdate": "スキップしました。スキルは変更されていません。"
+    },
+    "code": {
+      "paste": "アプリに貼り付け",
+      "pasteNote": "Enter キーを押さずに貼り付けるので、実行するタイミングは自分で決められます。",
+      "pasted": "貼り付けました",
+      "pasteFailed": "貼り付けできませんでした。テキストはクリップボードにあります。"
+    }
+  },
   "calendar": {
     "title": "Google カレンダー",
     "status": "ステータス",
@@ -4858,7 +5275,9 @@
   "workspaces": {
     "switcher": {
       "workspaces": "ワークスペース",
-      "create": "ワークスペースを作成…"
+      "create": "ワークスペースを作成…",
+      "add": "ワークスペースを追加",
+      "invitePeople": "メンバーを招待"
     },
     "create": {
       "title": "ワークスペースを作成",
@@ -4962,6 +5381,7 @@
     },
     "start": "メモを取る",
     "join": "参加して文字起こし",
+    "joinOnly": "会議に参加",
     "folders": {
       "choose": "会議フォルダーを選択",
       "search": "フォルダーを検索",
@@ -4994,7 +5414,9 @@
         "CREATE_FAILED": "完了できませんでした。再試行してください。",
         "LINKED_NOTE_CHANGED": "保存先を確認し、もう一度参加してください。",
         "NOTE_UNAVAILABLE": "このノートは利用できません。新規作成せずに再試行してください。",
-        "START_FAILED": "完了できませんでした。再試行してください。"
+        "START_FAILED": "完了できませんでした。再試行してください。",
+        "POLICY_MEETING_RECORDING_DISABLED": "組織によって会議の録音が無効にされています。",
+        "POLICY_UNRESOLVABLE": "組織の設定がまだ読み込まれていません。しばらくしてからもう一度お試しください。"
       }
     }
   },
@@ -5175,5 +5597,51 @@
     "permissionDenied": "拒否",
     "permissionRestricted": "制限あり",
     "permissionNotDetermined": "未要求"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "企業向け音声の設定",
+      "description": "この端末に認証情報を設定し、組織の音声接続をテストします。",
+      "provider": "音声プロバイダー",
+      "gateway": "音声ゲートウェイ",
+      "provisioned": "認証情報を設定済み",
+      "credentialMissing": "認証情報が必要です",
+      "proxyCredentialFormat": "プロキシには username と password を含む JSON、音声には API キーを入力してください。",
+      "probeConsent": "プロバイダーの料金が発生する可能性がある短い音声テストを許可します。",
+      "testBatch": "ファイル文字起こしをテスト",
+      "testRealtime": "会議の接続をテスト",
+      "testPassed": "接続テストに成功し、管理者に報告しました。",
+      "testFailed": "接続テストに失敗しました。",
+      "setupFailed": "設定に失敗しました。サインイン、アクセス権、ネットワークを確認してください。",
+      "saved": "認証情報をこの端末に保存しました。",
+      "operationUnavailable": "組織がこの音声処理を設定していません。",
+      "certificateUnavailable": "組織の証明書バンドルを利用できません。",
+      "partialUpload": "音声の {{count}} 区間で失敗しました。文字起こしは不完全です。",
+      "importBootstrap": "組織の設定をインポート",
+      "importedBootstrap": "設定の認証情報をインポートしました。",
+      "bootstrapNotFound": "設定ファイルが見つかりません。",
+      "checks": {
+        "authRejected": "音声プロバイダーがこのデバイスの認証情報を拒否しました。登録済みのキーまたは ID 設定を確認してください。",
+        "tlsFailed": "安全な接続を検証できませんでした。組織の証明書を確認してください。",
+        "proxyFailed": "組織のプロキシ経由の接続に失敗しました。プロキシの設定と認証情報を確認してください。",
+        "timeout": "音声プロバイダーが時間内に応答しませんでした。ネットワークまたは VPN を確認してください。",
+        "credentialMissing": "この接続に必要な認証情報がこのデバイスに登録されていません。",
+        "configChanged": "組織がこの音声設定を変更しました。セットアップを開き直して、もう一度お試しください。",
+        "protocolFailed": "音声プロバイダーが OpenWhispr で対応していない形式で応答しました。デプロイとプロトコルを確認してください。",
+        "networkFailed": "音声プロバイダーに接続できませんでした。ネットワーク、VPN、DNS を確認してください。",
+        "secureStorageUnavailable": "このデバイスには安全な認証情報ストレージがありません。Linux ではキーリング（GNOME Keyring や KWallet など）をインストールしてロックを解除し、もう一度お試しください。"
+      },
+      "errors": {
+        "ssoRequired": "組織で会社の SSO が必須になっています。SSO でサインインして、もう一度お試しください。",
+        "enterpriseRequired": "エンタープライズ音声を使うには、このワークスペースで有効な Enterprise プランが必要です。",
+        "signInRequired": "セッションの有効期限が切れました。もう一度サインインしてやり直してください。",
+        "accessDenied": "このアカウントではこのワークスペースの音声を設定できません。メンバーであること、正しいワークスペースにサインインしていることを確認してください。",
+        "rateLimited": "テストのリクエストが多すぎます。数分待ってからもう一度お試しください。"
+      },
+      "bootstrapNotProtected": "ブートストラップファイルはあなたが所有し、あなただけが読み取れる必要があります。IT 部門に再配布を依頼してください。",
+      "bootstrapUnreadable": "OpenWhispr がブートストラップファイルを読み取れません。あなたのアカウントで読み取れるよう IT 部門に依頼してください。",
+      "bootstrapMismatch": "ブートストラップファイルがあなたのアカウント、このワークスペース、またはその設定済み認証情報と一致しません。",
+      "testLinkOtherWorkspace": "このテストリンクは別のワークスペース用です。そのワークスペースに切り替えてから、もう一度リンクを開いてください。"
+    }
   }
 }

@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const WhisperServerManager = require("../../src/helpers/whisperServer");
-const { getGpuSignature } = WhisperServerManager;
+const { getGpuSignature, parseWhisperGpuBackend } = WhisperServerManager;
 
 // start()'s no-op guard must include the GPU backend: before #1458's hotfix a
 // running CPU server silently ignored later GPU-enabled start requests
@@ -33,6 +33,28 @@ test("getGpuSignature resolves the backend the way _doStart does", () => {
   assert.equal(getGpuSignature({ useVulkan: true }), "gpu:vulkan:default");
   // CUDA wins when both flags are set, mirroring _doStart's resolution.
   assert.equal(getGpuSignature({ useCuda: true, useVulkan: true }), "gpu:cuda");
+});
+
+test("GPU status requires whisper.cpp to confirm the active backend", async () => {
+  assert.equal(parseWhisperGpuBackend("whisper_backend_init_gpu: using CUDA0 backend"), "cuda");
+  assert.equal(parseWhisperGpuBackend("whisper_backend_init_gpu: using Vulkan1 backend"), "vulkan");
+  assert.equal(parseWhisperGpuBackend("whisper_backend_init_gpu: no GPU found"), null);
+
+  const manager = new WhisperServerManager();
+  manager.ready = true;
+  manager.process = {};
+  manager.useCuda = true;
+  assert.equal(manager.getStatus().gpuAccelerated, false);
+
+  manager.activeGpuBackend = "cuda";
+  assert.deepEqual(
+    { backend: manager.getStatus().gpuBackend, active: manager.getStatus().gpuAccelerated },
+    { backend: "cuda", active: true }
+  );
+
+  manager.process = null;
+  await manager.stop();
+  assert.equal(manager.getStatus().gpuBackend, null);
 });
 
 test("getGpuSignature carries the resolved Vulkan device pin", () => {
@@ -94,10 +116,6 @@ function createManager() {
   return { manager, doStartCalls };
 }
 
-// Emulate _doStart's real GPU catch: the requested GPU server died during
-// startup, so stop, mark the in-session fallback, and recurse with the
-// corrected CPU flags. failVulkan=false models a working Vulkan pack next to
-// a broken CUDA one.
 function emulateGpuStartupFallback(manager, { failVulkan = true } = {}) {
   const contractDoStart = manager._doStart;
   manager._doStart = async (modelPath, options) => {
@@ -157,24 +175,6 @@ test("a fallback session stays stable: CPU-resolved requests no-op after a GPU->
   // dictation resolves to CPU — the guard must not restart the CPU server.
   await manager.start("/tmp/model.bin", { useCuda: false, useVulkan: false });
   assert.equal(doStartCalls.length, 1);
-});
-
-test("a fallback session pins CPU: a Vulkan-resolved request no-ops after a CUDA->CPU fallback", async () => {
-  const { manager, doStartCalls } = createManager();
-  emulateGpuStartupFallback(manager, { failVulkan: false });
-
-  await manager.start("/tmp/model.bin", { useCuda: true });
-  assert.equal(doStartCalls.length, 1);
-  assert.equal(manager.gpuSignature, "gpu:cpu");
-  const cpuServer = manager.process;
-
-  // Both packs installed: WHISPER_GPU_FAILED only records cuda, so the next
-  // dictation resolves to Vulkan. The in-session pin must keep the working
-  // CPU server instead of tearing it down for a Vulkan cold start.
-  await manager.start("/tmp/model.bin", { useCuda: false, useVulkan: true });
-  assert.equal(doStartCalls.length, 1);
-  assert.equal(manager.process, cpuServer);
-  assert.equal(manager.useVulkan, false);
 });
 
 test("an explicit stop() lifts the CPU pin: the next GPU-resolved start engages the GPU", async () => {

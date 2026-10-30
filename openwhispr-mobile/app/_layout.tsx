@@ -19,12 +19,14 @@ import { startRetiredPromptSweep } from '@/store/useCustomPromptsStore';
 import { useOnboardingStore } from '@/store/useOnboardingStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { resolveResumeAction } from '@/lib/appResume';
+import { navigateHome } from '@/lib/navigateHome';
 import { consumeRecoveryDeepLink } from '@/store/useKeyboardRecoveryStore';
 import AuthScreen from '@/screens/AuthScreen';
 import { OnboardingFlow } from '@/screens/onboarding/OnboardingFlow';
 import { AnimatedSplash } from '@/components/features/AnimatedSplash';
 import { useKeyboardHandoff } from '@/hooks/useKeyboardHandoff';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
+import { useAffiliateAttribution } from '@/hooks/useAffiliateAttribution';
 import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSession';
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
@@ -48,6 +50,7 @@ function RootLayout() {
   useKeyboardHandoff();
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
+  useAffiliateAttribution();
   useGuestPrivateMode();
 
   const [fontsLoaded] = useFonts({
@@ -77,8 +80,11 @@ function RootLayout() {
   // the post-auth effect can tell when Home is already on top. Segments include
   // group names, so Home reads as ['(tabs)', '(record)'].
   const segments = useSegments() as string[];
-  const alreadyOnHomeRef = useRef(false);
-  alreadyOnHomeRef.current = segments[0] === '(tabs)' && segments[1] === '(record)';
+  const homeRouteRef = useRef({ inTabs: false, onHome: false });
+  homeRouteRef.current = {
+    inTabs: segments[0] === '(tabs)',
+    onHome: segments[0] === '(tabs)' && segments[1] === '(record)',
+  };
 
   useEffect(() => {
     initialize();
@@ -139,8 +145,8 @@ function RootLayout() {
       // expo-router never saw it. Send them there now rather than to Home.
       if (consumeRecoveryDeepLink()) {
         router.replace('/keyboard-full-access');
-      } else if (!alreadyOnHomeRef.current) {
-        router.replace('/(tabs)/(record)');
+      } else if (!homeRouteRef.current.onHome) {
+        navigateHome(homeRouteRef.current.inTabs);
       }
     }
   }, [isInitialized, onboardingFinished, user, isGuest]);
@@ -168,13 +174,13 @@ function RootLayout() {
       }
       if (state === 'active' && backgrounded) {
         backgrounded = false;
-        const { resetToHome, refreshUsage } = resolveResumeAction(alreadyOnHomeRef.current);
+        const { resetToHome, refreshUsage } = resolveResumeAction(homeRouteRef.current.onHome);
         if (refreshUsage) {
           const usageStore = useUsageStore.getState();
           usageStore.endBillingSession();
           usageStore.load(true);
         }
-        if (resetToHome) router.replace('/(tabs)/(record)');
+        if (resetToHome) navigateHome(homeRouteRef.current.inTabs);
       }
     });
     return () => sub.remove();
@@ -190,7 +196,7 @@ function RootLayout() {
     return (
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <Stack screenOptions={{ headerShown: false }}>
-          {/* Home is re-entered via router.replace on warm resume / post-auth; suppress
+          {/* Returning Home from outside the tabs replaces the root screen; suppress
               the default slide so reopening to Home doesn't animate as if navigating. */}
           <Stack.Screen name="index" options={{ animation: 'none' }} />
           <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />

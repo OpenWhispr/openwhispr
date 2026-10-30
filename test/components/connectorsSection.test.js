@@ -280,8 +280,8 @@ test("free users with no login see a single View plans and no Connect", async (t
   const none = await renderSection(t, { isPaid: false, blocked: false });
   assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 1);
   assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
-  // Every connector is still listed, each marked beta: email, Gmail, Slack, Linear and GitHub.
-  assert.equal(count(none.textContent, /connectors\.beta/g), 5);
+  // The beta badge sits on the Connectors title, not on each row.
+  assert.doesNotMatch(none.textContent, /connectors\.beta/);
 });
 
 test("free users can always disconnect a login they have", async (t) => {

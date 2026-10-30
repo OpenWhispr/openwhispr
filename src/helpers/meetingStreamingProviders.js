@@ -6,6 +6,7 @@ const { TinfoilRealtimeStreaming } = require("./tinfoilRealtimeStreaming");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
+  "enterprise-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
   "corti-realtime": CortiStreaming,
@@ -36,8 +37,12 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
     environment: options.environment,
     tenant: options.tenant,
     keyterms: options.keyterms,
+    managedContext: options.managedContext,
+    enterpriseConnection: options.enterpriseConnection,
     credentialGeneration:
-      options.mode === "byok" || SAVED_KEY_PROVIDERS.has(options.provider)
+      options.mode === "enterprise" ||
+      options.mode === "byok" ||
+      SAVED_KEY_PROVIDERS.has(options.provider)
         ? credentialGeneration
         : null,
   });

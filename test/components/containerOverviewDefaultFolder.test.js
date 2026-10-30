@@ -35,7 +35,8 @@ async function renderOverview(t, { lng, folder }) {
         export const folderContainerKey = (id) => "f:" + id;
       `,
       "/hooks/useContainerChat": "export const useContainerChat = () => ({});",
-      "/lib/spacePermissions": "export const canManageSpace = () => false;",
+      "/lib/capabilities":
+        "export const spaceCan = () => false; export const workspaceCan = () => false;",
       "/InviteTeammateDialog": "export default function Mock() { return null; }",
       "/OverviewExplainerBanner": "export const OverviewExplainerBanner = () => null;",
       "/OverviewAskSection": "export const OverviewAskSection = () => null;",

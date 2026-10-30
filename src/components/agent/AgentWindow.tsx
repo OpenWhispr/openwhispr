@@ -29,6 +29,7 @@ import { AgentPill } from "./AgentPill";
 import { AgentComposer } from "./AgentComposer";
 import { AgentModal } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
+import { SkillChip } from "../chat/SkillChip";
 import { SelectedContextBlock } from "./AgentContext";
 
 // How long a spoken request waits for the press-time selection and screenshot.
@@ -534,7 +535,16 @@ export default function AgentWindow() {
       micDisabled={busy || transcribing}
       micUnavailableHint={micHint}
       focused={surface.shown && surfaceFocus}
-      header={!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+      header={
+        <>
+          {chat.pickedSkill && (
+            <div className="pb-2">
+              <SkillChip name={chat.pickedSkill.displayName} onRemove={chat.removePickedSkill} />
+            </div>
+          )}
+          {!inModal && pendingContext ? <div className="pb-2">{pendingContext}</div> : null}
+        </>
+      }
       className={inModal ? "min-h-[92px]" : "h-[145px] w-[510px]"}
     />
   );

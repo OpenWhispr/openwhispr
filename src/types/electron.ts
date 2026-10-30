@@ -5,6 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
+import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
 import type { RemovedTranscriptSegment } from "../utils/diarizationCompletion";
@@ -37,6 +38,31 @@ import type {
   NoteAttendee,
   NoteAttendeesRequest,
 } from "./connectors";
+import type {
+  SkillCommitResult,
+  SkillCreateInput,
+  SkillDetail,
+  SkillForModel,
+  SkillInvalidRequest,
+  SkillProposal,
+  SkillProposalCheck,
+  SkillRef,
+  SkillSaveResult,
+  SkillSummary,
+  SkillUpdate,
+  SkillUploadItem,
+  SkillUploadPreview,
+  SkillWriteError,
+} from "./skills";
+import type {
+  CloudSharedEntry,
+  SharedDictionaryHideRecord,
+  SharedDictionaryMeta,
+  SharedDictionarySnapshot,
+} from "./sharedDictionary";
+import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+
+export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
@@ -80,6 +106,8 @@ export interface PolicyFailureMetadata {
   status?: number;
   minAppVersion?: string;
   details?: unknown;
+  messageKey?: string;
+  messageParams?: Record<string, unknown>;
 }
 
 export interface NoteRecordingProviderModel {
@@ -104,6 +132,7 @@ export interface DictationRealtimeSessionOptions {
   pipelineOptions?: {
     agentName?: string;
     customDictionary?: string[];
+    sharedDictionary?: string[];
     customPrompt?: string;
     tone?: DictationTone;
     appCategory?: ToneAppCategory;
@@ -171,6 +200,11 @@ export interface MeetingNotificationData {
   event: { summary?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
+  /** Set while the org refuses meeting recording: the card can only join. */
+  recordingRefusal?: Extract<
+    MeetingError,
+    "POLICY_MEETING_RECORDING_DISABLED" | "POLICY_UNRESOLVABLE"
+  >;
 }
 
 export interface MeetingFolderRef {
@@ -213,7 +247,9 @@ export type MeetingError =
   | "CREATE_FAILED"
   | "LINKED_NOTE_CHANGED"
   | "NOTE_UNAVAILABLE"
-  | "START_FAILED";
+  | "START_FAILED"
+  | "POLICY_MEETING_RECORDING_DISABLED"
+  | "POLICY_UNRESOLVABLE";
 
 export type MeetingResult<T> =
   | { success: true; value: T }
@@ -676,6 +712,9 @@ export interface SpaceItem {
   // Direct space_members grant, null when access comes only via teams or the
   // workspace role. Absent on mirrors written before the API shipped it.
   my_direct_role?: TeamRole | null;
+  // Server-computed permissions for the caller. Absent on mirrors written
+  // before the API shipped it; read through spaceCan() so the role fallback applies.
+  capabilities?: SpaceCapabilities | null;
   // Server-computed deduped union of direct members and assigned team rosters.
   member_count: number | null;
   teams: SpaceTeamRef[];
@@ -695,6 +734,12 @@ export interface DictionaryEntryItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  // Set once the word was shared into a team list; the row stays live.
+  shared_at: string | null;
+  // 1 while a local set or clear of shared_at awaits its push.
+  shared_at_dirty?: number;
+  // 1 on a local tombstone of a moved word whose shared copy went.
+  fallback_retired?: number;
 }
 
 export interface SnippetEntryItem {
@@ -710,6 +755,25 @@ export interface SnippetEntryItem {
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
+
+// Server-computed permissions, snake_case as sent by the API.
+export interface WorkspaceCapabilities {
+  manage_members: boolean;
+  manage_teams: boolean;
+  create_spaces: boolean;
+  manage_settings: boolean;
+  manage_billing: boolean;
+  delete_workspace: boolean;
+  transfer_ownership: boolean;
+  leave: boolean;
+}
+
+export interface SpaceCapabilities {
+  edit_notes: boolean;
+  manage_members: boolean;
+  manage_settings: boolean;
+  leave: boolean;
+}
 
 export interface Workspace {
   id: string;
@@ -731,6 +795,9 @@ export interface Workspace {
   role: WorkspaceRole;
   is_billable?: boolean;
   billing_manager?: string | null;
+  // Absent on API responses that predate capabilities; read through workspaceCan().
+  capabilities?: WorkspaceCapabilities;
+  has_subscription?: boolean;
 }
 
 export interface WorkspaceMember {
@@ -904,6 +971,8 @@ export interface CudaWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface VulkanWhisperStatus {
@@ -920,6 +989,8 @@ export interface VulkanWhisperStatus {
   inUse?: boolean;
   /** An older release installed the pack and this version can't use it. */
   needsUpdate?: boolean;
+  /** The bundled whisper-server is itself a GPU build and runs on the GPU, so no pack is offered. */
+  bundledGpu?: boolean;
 }
 
 export interface WhisperServerStatus {
@@ -1450,6 +1521,10 @@ declare global {
           fromStreaming?: boolean;
           restoreClipboard?: boolean;
           allowClipboardFallback?: boolean;
+          /** Paste exactly this text: no smart spacing, no AutoLearn. */
+          raw?: boolean;
+          /** Paste only into the app the assistant panel's voice command was spoken over. */
+          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -1463,6 +1538,8 @@ declare global {
             code: "ACCESSIBILITY_PERMISSION_REQUIRED";
             clipboardCopied: true;
           }
+        /** assistantTarget: no app to paste into, so nothing was pasted or copied. */
+        | { success: false; pasted: false; reason: "no-target" }
       >;
       captureSelectedText?: () => Promise<
         | {
@@ -1507,6 +1584,7 @@ declare global {
       onToggleDictation: (callback: () => void) => () => void;
       onToggleVoiceAgent?: (callback: () => void) => () => void;
       onToggleTranslation?: (callback: () => void) => () => void;
+      onMeetingStartRefused?: (callback: (code: string) => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
       onPrepareDictation?: (callback: () => void) => () => void;
@@ -1676,7 +1754,7 @@ declare global {
           remoteTranscriptionModel?: string;
           managed?: {
             kind: "managed";
-            provider: "azure";
+            provider: "azure" | "openai-compatible";
             deployment: string;
             context: ManagedEnterpriseRequestContext;
           };
@@ -1711,6 +1789,49 @@ declare global {
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
       ) => () => void;
+      skillsList?: () => Promise<{ skills: SkillSummary[] }>;
+      skillsGet?: (name: string) => Promise<SkillDetail | null>;
+      /** A text file inside the skill, or null for anything else. */
+      skillsReadFile?: (name: string, path: string) => Promise<{ text: string } | null>;
+      skillsSetEnabled?: (
+        name: string,
+        enabled: boolean
+      ) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsUninstall?: (
+        name: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      skillsReveal?: (name: string) => Promise<{ ok: boolean }>;
+      skillsPreviewUpload?: (
+        items: SkillUploadItem[]
+      ) => Promise<{ items: SkillUploadPreview[] } | SkillInvalidRequest>;
+      skillsCommitUpload?: (request: {
+        tokens: string[];
+        replace: string[];
+      }) => Promise<SkillCommitResult | SkillInvalidRequest>;
+      /** Frees previewed uploads that will not be installed. */
+      skillsDiscardUploads?: (tokens: string[]) => Promise<{ ok: true } | SkillInvalidRequest>;
+      skillsCreate?: (input: SkillCreateInput) => Promise<SkillSaveResult>;
+      skillsAddRecommended?: (
+        id: string,
+        copy: { title: string; description: string }
+      ) => Promise<SkillSaveResult>;
+      /** The built-in creator, or a skill that is on and valid; null for anything else. */
+      skillsReadForModel?: (
+        ref: SkillRef & { file?: string; withFiles?: boolean }
+      ) => Promise<SkillForModel | null>;
+      skillsCheckProposal?: (
+        request:
+          { kind: "create"; proposal: SkillProposal } | { kind: "update"; update: SkillUpdate }
+      ) => Promise<SkillProposalCheck | SkillInvalidRequest>;
+      skillsSaveProposal?: (proposal: SkillProposal) => Promise<SkillSaveResult>;
+      skillsApplyUpdate?: (update: SkillUpdate) => Promise<SkillSaveResult>;
+      skillsMarkUsed?: (name: string) => Promise<void>;
+      /** Puts back the copy a save or update kept, then forgets it. */
+      skillsUndo?: (
+        name: string,
+        versionId: string
+      ) => Promise<{ ok: true } | { ok: false; error: SkillWriteError } | SkillInvalidRequest>;
+      onSkillsChanged?: (callback: () => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -1723,14 +1844,16 @@ declare global {
         sourceFile?: string | null,
         audioDuration?: number | null,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        transcript?: string | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
         noteType?: string | null,
         limit?: number,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       getSpaceNotes: (spaceId: number, limit?: number) => Promise<NoteItem[]>;
       updateNote: (
@@ -1779,7 +1902,8 @@ declare global {
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
       semanticSearchNotes: (
         query: string,
@@ -1942,6 +2066,7 @@ declare global {
           model?: string;
           language?: string;
           requestId?: string;
+          purpose?: "dictation" | "upload";
           [key: string]: unknown;
         }
       ) => Promise<{ success: boolean; text?: string; error?: string; code?: string }>;
@@ -2531,6 +2656,7 @@ declare global {
         error?: string;
         enforcementRequired?: boolean;
         enforcedScopes?: string[];
+        enforcedAudioOperations?: string[];
       }>;
       onManagedEnterpriseConfigChanged?: (
         callback: (snapshot: {
@@ -2541,17 +2667,61 @@ declare global {
           code: string | null;
           enforcementRequired?: boolean;
           enforcedScopes?: string[];
+          enforcedAudioOperations?: string[];
         }) => void
       ) => () => void;
-      clearManagedEnterpriseIdentity?: () => Promise<void>;
+      clearManagedEnterpriseIdentity?: (options?: {
+        next?: { accountId: string; workspaceId: string | null };
+      }) => Promise<void>;
+      getPendingEnterpriseAudioTest?: (
+        consume?: boolean
+      ) => Promise<EnterpriseAudioTestLink | null>;
+      claimEnterpriseAudioTest?: () => Promise<EnterpriseAudioTestLink | null>;
+      onEnterpriseAudioTestRequested?: (callback: () => void) => () => void;
+      enterpriseAudioImportBootstrap?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{ success: boolean; imported?: boolean; messageKey?: string }>;
+      enterpriseAudioStatus?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+      }) => Promise<{
+        success: boolean;
+        slots?: { slot: string; present: boolean }[];
+        operations?: ("batch" | "realtime")[];
+        configFingerprint?: string;
+        messageKey?: string;
+      }>;
+      enterpriseAudioSaveCredential?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        slot: string;
+        secret?: string;
+        remove?: boolean;
+      }) => Promise<{ success: boolean; messageKey?: string }>;
+      enterpriseAudioTest?: (data: {
+        provider: "azure" | "openai-compatible";
+        context: EnterpriseAudioSetupContext;
+        operation: "batch" | "realtime";
+        allowInferenceValidation: boolean;
+      }) => Promise<{ success: boolean; passed?: boolean; code?: string; messageKey?: string }>;
       managedTranscribe?: (data: {
         audioBuffer: ArrayBuffer;
         fileName: string;
         mimeType: string;
         language?: string;
         prompt?: string;
-        managed: { provider: "azure"; context: ManagedEnterpriseRequestContext };
-      }) => Promise<{ text?: string; error?: string; code?: string; messageKey?: string }>;
+        managed: {
+          provider: "azure" | "openai-compatible";
+          context: ManagedEnterpriseRequestContext;
+        };
+      }) => Promise<{
+        text?: string;
+        warning?: string;
+        error?: string;
+        code?: string;
+        messageKey?: string;
+      }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -2689,6 +2859,7 @@ declare global {
           model?: string;
           agentName?: string;
           customDictionary?: string[];
+          sharedDictionary?: string[];
           customPrompt?: string;
           systemPrompt?: string;
           requestPurpose?: "agent";
@@ -2810,7 +2981,7 @@ declare global {
       // Cloud audio file transcription
       transcribeAudioFileCloud?: (
         filePath: string,
-        options?: { requestId?: string }
+        options?: { requestId?: string; purpose?: "dictation" | "upload" }
       ) => Promise<
         {
           success: boolean;
@@ -2830,6 +3001,8 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
+        requestId?: string;
+        purpose?: "dictation" | "upload";
         apiKey: string;
         baseUrl: string;
         model: string;
@@ -2844,7 +3017,7 @@ declare global {
         remoteTranscriptionModel?: string;
         managed?: {
           kind: "managed";
-          provider: "azure";
+          provider: "azure" | "openai-compatible";
           deployment: string;
           context: ManagedEnterpriseRequestContext;
         };
@@ -3267,11 +3440,21 @@ declare global {
 
       // Meeting transcription (streaming, dual-channel)
       meetingTranscriptionPrepare?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
+        enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
+        enterpriseIdentity?: Pick<
+          ManagedEnterpriseRequestContext,
+          "accountId" | "workspaceId" | "authGeneration"
+        >;
         provider?: string;
         model?: string;
         language?: string;
@@ -3291,7 +3474,11 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
-      meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
+      meetingTranscriptionSend?: (
+        buffer: ArrayBuffer,
+        source: "mic" | "system",
+        capturedAt?: number
+      ) => void;
       meetingTranscriptionSetSystemAudioAvailable?: (
         sessionId: string,
         available: boolean
@@ -3363,7 +3550,12 @@ declare global {
         segments: Array<{ start: number; end: number; speaker: string }>,
         text: string,
         duration: number
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        segments?: Array<{ text: string; start: number; end: number; speaker: string }>;
+        error?: string;
+      }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number; requestId?: string }
@@ -3575,8 +3767,11 @@ declare global {
         navigationId: string,
         status?: "ready" | "cancel"
       ) => Promise<MeetingResult<NoteItem>>;
-      joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      startManualMeeting?: () => Promise<void>;
+      joinCalendarMeeting?: (
+        eventId: string
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Resolves with nothing once started, or with why it could not start.
+      startManualMeeting?: () => Promise<{ success: false; code?: string; error: string } | void>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         navigationId?: string;
         spaceId?: number;
@@ -3728,13 +3923,67 @@ declare global {
       upsertDictionaryFromCloud?: (
         cloudEntry: Record<string, unknown>
       ) => Promise<DictionaryEntryItem | null>;
+      /** `pushed` (the row as pushed) keeps a row edited since then pending. */
       markDictionarySynced?: (
         id: number,
-        cloudId: string
+        cloudId: string,
+        serverUpdatedAt?: string,
+        expectedWord?: string,
+        expectedSource?: DictionaryEntryItem["source"],
+        serverSource?: DictionaryEntryItem["source"],
+        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">
       ) => Promise<{ success: boolean; changes: number }>;
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
+      /** Live personal words matching `words` case-insensitively, in their stored spelling. */
+      getDictionaryEntriesByWords?: (
+        words: string[]
+      ) => Promise<Array<{ word: string; cloudId: string | null }>>;
+      /**
+       * Records a share the server accepted; sync state is left unchanged, except
+       * for `pendingWords`, which went as plain words and still need shared_at pushed.
+       */
+      markDictionaryWordsShared?: (
+        words: string[],
+        sharedAt: string,
+        options?: { pendingWords?: string[] }
+      ) => Promise<{ marked: string[] }>;
+      /** Live personal words that were shared into a team list. */
+      getMovedDictionaryWords?: () => Promise<string[]>;
+      /** Removes moved personal words whose shared copy is gone for the sharer. */
+      /** `includeSynced: false` leaves rows the cloud has to the personal pull. */
+      retireMovedDictionaryWords?: (
+        words: string[],
+        options?: { includeSynced?: boolean }
+      ) => Promise<{ retired: string[] }>;
+      /** Brings back fallbacks retired for these words, once their shared copy returns. */
+      reviveRetiredDictionaryWords?: (words: string[]) => Promise<{ revived: string[] }>;
+
+      getSharedDictionary?: (workspaceId: string) => Promise<SharedDictionarySnapshot>;
+      applySharedDictionaryPull?: (
+        workspaceId: string,
+        change: { upserts: CloudSharedEntry[]; deletedIds: string[]; meta?: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      /** Snapshot write: the workspace's entries become exactly `full.entries`. */
+      replaceSharedDictionary?: (
+        workspaceId: string,
+        full: { entries: CloudSharedEntry[]; meta: SharedDictionaryMeta }
+      ) => Promise<{ changed: number }>;
+      applySharedDictionaryHides?: (
+        workspaceId: string,
+        change: { hidden: SharedDictionaryHideRecord[]; unhidden: string[] }
+      ) => Promise<{ changed: number }>;
+      replaceSharedDictionaryHides?: (
+        workspaceId: string,
+        hidden: SharedDictionaryHideRecord[]
+      ) => Promise<{ changed: number }>;
+      /** With no workspace, clears every workspace's shared words. `changed` counts rows removed. */
+      clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
+      /** Clears every workspace's shared words except these workspaces'. */
+      pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
+      /** Tells main which shared words apply, so auto-learn skips them. */
+      setSharedDictionaryHints?: (hints: SharedHintWords) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;

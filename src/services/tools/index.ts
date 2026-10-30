@@ -20,6 +20,13 @@ import {
   requireConnection,
   type InteractionToolOptions,
 } from "./interactionTools";
+import {
+  createLoadSkillTool,
+  createProposeSkillTool,
+  createUpdateSkillTool,
+  type SkillToolDeps,
+} from "./skillTools";
+
 import { getSettings, selectCalendarConnected } from "../../stores/settingsStore";
 import type { ContainerScope } from "../../types/chat";
 
@@ -43,6 +50,8 @@ interface ToolRegistrySettings {
   keepNotesUnchanged?: boolean;
   /** Present only on surfaces that can show interactions (questions, connect cards). */
   interactions?: InteractionToolOptions;
+  /** The user's skills; load_skill is offered once one is usable. */
+  skills?: SkillToolDeps;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -84,6 +93,19 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
 
   if (settings.interactions) {
     for (const tool of createInteractionTools(settings.interactions)) registry.register(tool);
+  }
+  if (settings.skills) {
+    const hasSkills = settings.skills.usable.length > 0;
+    if (hasSkills) {
+      registry.register(createLoadSkillTool(settings.skills));
+      registry.register(createUpdateSkillTool(settings.skills.usable));
+    }
+    // A skill card writes only on this computer, so it needs no sign-in, plan or connector.
+    // Someone with no skills makes their first through the skill creator, so every other
+    // request leaves the tool out.
+    if (hasSkills || settings.skills.creatorAttached) {
+      registry.register(createProposeSkillTool());
+    }
   }
 
   return registry;

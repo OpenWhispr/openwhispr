@@ -1,7 +1,7 @@
 import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
 import { resolveCleanupLanguage } from "../utils/chineseScript";
-import { getDictionaryHintWords } from "../utils/snippets";
+import { getLlmDictionaryWords } from "../utils/snippets";
 import type { InferenceScope } from "../config/inferenceScopes";
 import type { DictationToneStyle } from "../config/toneStyle";
 import type { ScreenContextImage } from "../types/electron";
@@ -47,7 +47,7 @@ export abstract class BaseReasoningService {
   protected isProcessing = false;
 
   protected getCustomDictionary(): string[] {
-    return getDictionaryHintWords(getSettings());
+    return getLlmDictionaryWords(getSettings(), { includeTriggers: true });
   }
 
   // Auto must remain auto here: zh-CN/zh-TW instructions make cleanup write its
