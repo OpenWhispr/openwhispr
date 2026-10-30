@@ -28,7 +28,7 @@ const PREVIEW = {
   body: "Quarterly numbers attached",
 };
 
-test("a pending card shows the exact content and Send, Edit, Cancel", async (t) => {
+test("a pending card shows the exact content, editable in place, with Copy, Cancel and Send", async (t) => {
   const markup = await renderCard(t, {
     toolCallId: "call-1",
     actionId: "a1",
@@ -40,9 +40,11 @@ test("a pending card shows the exact content and Send, Edit, Cancel", async (t) 
   assert.match(markup, /Quarterly numbers attached/);
   assert.match(markup, /connectors\.approval\.headers\.default/);
   assert.match(markup, /connectors\.approval\.identityWithWorkspace/);
-  assert.match(markup, /connectors\.approval\.send/);
-  assert.match(markup, /connectors\.approval\.edit/);
+  assert.match(markup, /<textarea[^>]*aria-label="connectors\.approval\.bodyLabel"/);
+  assert.match(markup, /common\.copy/);
   assert.match(markup, /connectors\.approval\.cancel/);
+  assert.match(markup, /connectors\.approval\.send/);
+  assert.doesNotMatch(markup, /connectors\.approval\.edit/);
   assert.doesNotMatch(markup, /autofocus/i);
 });
 
@@ -57,9 +59,12 @@ test("an unknown outcome tells the user to check, with no retry", async (t) => {
   });
   assert.match(markup, /connectors\.approval\.unknown/);
   assert.doesNotMatch(markup, /connectors\.approval\.send/);
+  assert.doesNotMatch(markup, /common\.retry/);
+  assert.doesNotMatch(markup, /<textarea/, "nothing to edit");
+  assert.match(markup, /common\.copy/);
 });
 
-test("a sent card offers Open", async (t) => {
+test("a sent card keeps the message and offers Open and Copy", async (t) => {
   const markup = await renderCard(t, {
     toolCallId: "call-3",
     actionId: "a3",
@@ -70,7 +75,11 @@ test("a sent card offers Open", async (t) => {
     url: "https://slack.test/p/1",
   });
   assert.match(markup, /connectors\.approval\.sent/);
+  assert.match(markup, /connectors\.approval\.sentLabel/);
   assert.match(markup, /connectors\.approval\.open/);
+  assert.match(markup, /Quarterly numbers attached/);
+  assert.match(markup, /common\.copy/);
+  assert.doesNotMatch(markup, /connectors\.approval\.cancel/);
 });
 
 test("a pending card after a failed policy check says why nothing was sent", async (t) => {
@@ -148,14 +157,15 @@ const emailEntry = (fields = EMAIL_PREVIEW.fields, state = "pending") => ({
 
 test("an email card shows who it's from, To, Cc, Subject and Body, with Send enabled", async (t) => {
   const markup = await renderCard(t, emailEntry());
-  assert.match(markup, /connectors\.approval\.email\.from/);
+  assert.match(markup, /connectors\.approval\.email\.fromLabel/);
+  assert.match(markup, /you@example\.test/);
   assert.doesNotMatch(markup, /connectors\.approval\.identity/);
   assert.match(markup, /josh@acme\.test, dana@acme\.test/);
   assert.match(markup, /sam@acme\.test/);
   assert.match(markup, /Q3 numbers/);
   assert.match(markup, /Numbers attached\./);
   assert.match(markup, /aria-live="polite"[^>]*><\/p>/, "the reason region is empty");
-  assert.doesNotMatch(markup, /<button[^>]*disabled/);
+  assert.doesNotMatch(markup, /<button[^>]*\sdisabled=""/);
 });
 
 test("an email card with a bad or missing recipient, or past Gmail's limits, disables Send and says why", async (t) => {
@@ -180,7 +190,8 @@ test("an email card with a bad or missing recipient, or past Gmail's limits, dis
       new RegExp(`aria-live="polite"[^>]*>connectors\\.approval\\.email\\.${announced}<`)
     );
     // Still focusable, and it says why it can't send.
-    const send = markup.match(/<button[^>]*>connectors\.approval\.send</)?.[0] ?? "";
+    const send =
+      markup.match(/<button[^>]*>(?:<svg.*?<\/svg>)?connectors\.approval\.send</)?.[0] ?? "";
     assert.match(send, /aria-disabled="true"/);
     assert.match(send, new RegExp(`aria-describedby="${reasonId}"`));
     assert.doesNotMatch(send, /\sdisabled=""/);
@@ -197,7 +208,7 @@ test("an email preview without fields falls back to the plain card", async (t) =
   });
   assert.match(markup, /Numbers attached\./);
   assert.doesNotMatch(markup, /connectors\.approval\.email\./);
-  assert.doesNotMatch(markup, /<button[^>]*disabled/);
+  assert.doesNotMatch(markup, /<button[^>]*\sdisabled=""/);
 });
 
 // Shows each call's destination, so the header's recipients can be read.
@@ -226,23 +237,10 @@ async function renderCardWithDestinations(t, entry) {
 
 test("an email card names the recipients it shows, and after Send the ones main reports", async (t) => {
   const edited = { ...EMAIL_PREVIEW.fields, to: ["dana@acme.test"], cc: [] };
-  const pending = await renderCardWithDestinations(t, emailEntry(edited));
-  assert.match(pending, /connectors\.approval\.headers\.email\[dana@acme\.test\]/);
-  assert.doesNotMatch(pending, /josh@acme\.test/);
-
   const sent = await renderCardWithDestinations(t, {
     ...emailEntry(edited, "sent"),
     destinationLabel: "dana@acme.test",
   });
   assert.match(sent, /connectors\.approval\.sent\[dana@acme\.test\]/);
-
-  const emptied = await renderCardWithDestinations(
-    t,
-    emailEntry({ ...EMAIL_PREVIEW.fields, to: [], cc: [] })
-  );
-  assert.match(
-    emptied,
-    /connectors\.approval\.headers\.email\[josh@acme\.test \+1\]/,
-    "with no recipients left, the header keeps the prepared label"
-  );
+  assert.doesNotMatch(sent, /josh@acme\.test/);
 });

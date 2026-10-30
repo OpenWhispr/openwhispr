@@ -218,9 +218,11 @@ const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NUL
 // the last second of the final day — one second later is the exclusive end
 // day in both cases. REST rows are never collapsed — Google and Microsoft are
 // never mirrors of each other.
-const MIRROR_SLOT = `CASE WHEN is_all_day THEN 'day:' || CASE WHEN length(start_time) = 10
-  THEN start_time || '|' || end_time
-  ELSE date(start_time, 'localtime') || '|' || date(end_time, '+1 second', 'localtime') END
+const ALL_DAY_FIRST_DAY = `CASE WHEN length(start_time) = 10 THEN start_time
+  ELSE date(start_time, 'localtime') END`;
+const ALL_DAY_END_DAY = `CASE WHEN length(end_time) = 10 THEN end_time
+  ELSE date(end_time, '+1 second', 'localtime') END`;
+const MIRROR_SLOT = `CASE WHEN is_all_day THEN 'day:' || ${ALL_DAY_FIRST_DAY} || '|' || ${ALL_DAY_END_DAY}
   ELSE datetime(start_time) || '|' || datetime(end_time) END`;
 
 function dedupedEventsQuery(where) {
@@ -754,6 +756,21 @@ class DatabaseManager {
       this.db.exec(
         "CREATE INDEX IF NOT EXISTS idx_agent_conversations_container ON agent_conversations(space_id, folder_id)"
       );
+      // A fork records the chat it was copied from, here and by the client id
+      // every device shares, how many of its first messages it copied and the
+      // text it was forked with. All but the local parent id sync.
+      for (const column of [
+        "parent_conversation_id INTEGER",
+        "parent_client_conversation_id TEXT",
+        "fork_message_count INTEGER",
+        "fork_context TEXT",
+      ]) {
+        try {
+          this.db.exec(`ALTER TABLE agent_conversations ADD COLUMN ${column}`);
+        } catch (err) {
+          if (!err.message.includes("duplicate column")) throw err;
+        }
+      }
       // The private space is shared by every account on the device, so its
       // root chats need an owner the way private notes and folders do; note
       // and folder chats are owned through their parent row.
@@ -5606,11 +5623,23 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const conversation = this.db
-        .prepare("SELECT * FROM agent_conversations WHERE id = ? AND deleted_at IS NULL")
+        .prepare(
+          `SELECT c.*, p.title AS parent_title
+           FROM agent_conversations c
+           LEFT JOIN agent_conversations p
+             ON p.id = c.parent_conversation_id AND p.deleted_at IS NULL
+           WHERE c.id = ? AND c.deleted_at IS NULL`
+        )
         .get(id);
       if (!conversation) return null;
+      // Messages saved within the same second keep the order they were added in.
+      // datetime() because a pulled message's time is ISO ("…T…Z") and a local
+      // one SQLite's ("… …"): compared as text, a local message sorts before
+      // every pulled one of its day, and a fork would hide the user's own turns.
       const messages = this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare(
+          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY datetime(created_at) ASC, id ASC"
+        )
         .all(id);
       return { ...conversation, messages };
     } catch (error) {
@@ -5729,6 +5758,87 @@ class DatabaseManager {
       })();
     } catch (error) {
       debugLogger.error("Error adding agent message", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // A reply saved while it waited on the user is completed in place.
+  updateAgentMessage(id, content, metadata) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.transaction(() => {
+        const message = this.db
+          .prepare(
+            `SELECT m.conversation_id FROM agent_messages m
+             JOIN agent_conversations c ON c.id = m.conversation_id
+             WHERE m.id = ? AND c.deleted_at IS NULL`
+          )
+          .get(id);
+        if (!message) return null;
+
+        this.db
+          .prepare("UPDATE agent_messages SET content = ?, metadata = ? WHERE id = ?")
+          .run(content, metadata ? JSON.stringify(metadata) : null, id);
+        this.db
+          .prepare("UPDATE agent_conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(message.conversation_id);
+        return this.db.prepare("SELECT * FROM agent_messages WHERE id = ?").get(id);
+      })();
+    } catch (error) {
+      debugLogger.error("Error updating agent message", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // A new chat with the history up to and including one message, in order and
+  // with its metadata. The original is never modified.
+  forkAgentConversation(conversationId, throughMessageId, forkContext = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const forkId = this.db.transaction(() => {
+        const source = this.db
+          .prepare("SELECT * FROM agent_conversations WHERE id = ? AND deleted_at IS NULL")
+          .get(conversationId);
+        const through = this.db
+          .prepare(
+            `SELECT (SELECT COUNT(*) FROM agent_messages
+                      WHERE conversation_id = m.conversation_id AND id <= m.id) AS position
+             FROM agent_messages m WHERE m.id = ? AND m.conversation_id = ?`
+          )
+          .get(throughMessageId, conversationId);
+        if (!source || !through) return null;
+
+        const result = this.db
+          .prepare(
+            `INSERT INTO agent_conversations
+               (title, note_id, space_id, folder_id, client_conversation_id,
+                parent_conversation_id, parent_client_conversation_id,
+                fork_message_count, fork_context)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            source.title,
+            source.note_id,
+            source.space_id,
+            source.folder_id,
+            randomUUID(),
+            conversationId,
+            source.client_conversation_id,
+            through.position,
+            forkContext || null
+          );
+        this.db
+          .prepare(
+            `INSERT INTO agent_messages (conversation_id, role, content, metadata, created_at)
+             SELECT ?, role, content, metadata, created_at FROM agent_messages
+             WHERE conversation_id = ? AND id <= ? ORDER BY id`
+          )
+          .run(result.lastInsertRowid, conversationId, throughMessageId);
+        return result.lastInsertRowid;
+      })();
+      return forkId == null ? null : this.getAgentConversation(forkId);
+    } catch (error) {
+      debugLogger.error("Error forking agent conversation", { error: error.message }, "database");
       throw error;
     }
   }
@@ -5871,7 +5981,9 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
-        .prepare("SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY created_at ASC")
+        .prepare(
+          "SELECT * FROM agent_messages WHERE conversation_id = ? ORDER BY datetime(created_at) ASC, id ASC"
+        )
         .all(conversationId);
     } catch (error) {
       debugLogger.error("Error getting agent messages", { error: error.message }, "database");
@@ -5988,16 +6100,23 @@ class DatabaseManager {
     }
   }
 
-  getUpcomingEvents(windowMinutes = 1440) {
+  // includeAllDay adds all-day events from today up to the day the window
+  // ends in, not that day itself: the assistant's calendar tool ends each
+  // window at the end of a local day, rounded up to just past midnight
+  // (reminders and the meeting list skip all-day events).
+  getUpcomingEvents(windowMinutes = 1440, { includeAllDay = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const timed =
+        "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0";
+      const allDay = `is_all_day = 1 AND ${ALL_DAY_FIRST_DAY} < date('now', '+' || ? || ' minutes', 'localtime') AND ${ALL_DAY_END_DAY} > date('now', 'localtime')`;
       return this.db
         .prepare(
           dedupedEventsQuery(
-            "((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0 AND status IN ('confirmed', 'tentative')"
+            `(${includeAllDay ? `(${timed}) OR (${allDay})` : timed}) AND status IN ('confirmed', 'tentative')`
           )
         )
-        .all(windowMinutes)
+        .all(...(includeAllDay ? [windowMinutes, windowMinutes] : [windowMinutes]))
         .filter((event) => event.self_response_status !== "declined")
         .map(stripDedupeColumn);
     } catch (error) {
@@ -6898,9 +7017,10 @@ class DatabaseManager {
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
+            c.parent_conversation_id,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           ${archiveFilter}
@@ -6926,9 +7046,10 @@ class DatabaseManager {
       return this.db
         .prepare(
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
+            c.parent_conversation_id,
             COUNT(m.id) AS message_count,
-            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message,
-            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_role
+            (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message,
+            (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY datetime(created_at) DESC, id DESC LIMIT 1) AS last_message_role
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN agent_messages ms ON ms.conversation_id = c.id
@@ -8799,27 +8920,65 @@ class DatabaseManager {
         }
         if (existing?.deleted_at) return existing;
 
+        // A fork's origin never changes, so a cloud copy without it (from an
+        // API or app that predates it) keeps the one this device has.
         const convStmt = this.db.prepare(`
-          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 'synced', ?, ?)
+          INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at,
+            parent_client_conversation_id, fork_message_count, fork_context)
+          VALUES (?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?)
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             cloud_id = excluded.cloud_id,
             title = excluded.title,
             note_id = excluded.note_id,
             sync_status = 'synced',
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            parent_client_conversation_id = COALESCE(parent_client_conversation_id, excluded.parent_client_conversation_id),
+            fork_message_count = COALESCE(fork_message_count, excluded.fork_message_count),
+            fork_context = COALESCE(fork_context, excluded.fork_context)
         `);
+        // The origin as the cloud has it, made sane: a chat isn't its own
+        // parent, and a fork copied at least one of its messages and no more
+        // than it has (a larger count would hide every message it shows).
+        const parentClientId =
+          cloudConv.parent_client_conversation_id &&
+          cloudConv.parent_client_conversation_id !== cloudConv.client_conversation_id
+            ? cloudConv.parent_client_conversation_id
+            : null;
+        // A database driver may send an integer column as a string.
+        const copied = Number(cloudConv.fork_message_count);
+        const forkMessageCount =
+          parentClientId && Number.isInteger(copied) && copied > 0
+            ? Math.min(copied, messages?.length || copied)
+            : null;
         convStmt.run(
           cloudConv.client_conversation_id ?? null,
           cloudConv.id ?? null,
           cloudConv.title ?? "Untitled",
           cloudConv.note_id ?? null,
           cloudConv.created_at ?? new Date().toISOString(),
-          cloudConv.updated_at ?? new Date().toISOString()
+          cloudConv.updated_at ?? new Date().toISOString(),
+          parentClientId,
+          forkMessageCount,
+          parentClientId ? (cloudConv.fork_context ?? null) : null
         );
         const conv = this.db
           .prepare("SELECT * FROM agent_conversations WHERE client_conversation_id = ?")
           .get(cloudConv.client_conversation_id);
+        // Link this fork to its parent, or the forks waiting on this chat to it,
+        // whichever arrived first. A parent deleted or never synced here leaves
+        // the fork a plain chat, and so does a parent that is itself its fork.
+        this.db
+          .prepare(
+            `UPDATE agent_conversations
+             SET parent_conversation_id = (
+               SELECT parent.id FROM agent_conversations parent
+               WHERE parent.client_conversation_id = agent_conversations.parent_client_conversation_id
+                 AND parent.deleted_at IS NULL
+                 AND parent.parent_conversation_id IS NOT agent_conversations.id)
+             WHERE parent_conversation_id IS NULL
+               AND (id = ? OR parent_client_conversation_id = ?)`
+          )
+          .run(conv.id, conv.client_conversation_id);
         this.db.prepare("DELETE FROM agent_messages WHERE conversation_id = ?").run(conv.id);
         if (messages && messages.length > 0) {
           const msgStmt = this.db.prepare(

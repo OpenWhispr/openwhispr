@@ -26,7 +26,6 @@ export default class FakeAudioManager {
   shouldUseStreaming() { return false; }
   prepareMicCapture() {}
   setVoiceAgentRequested() {}
-  setAssistantSelectionContext() {}
   setTranslationRequested() {}
   async startRecording() { globalThis.__sttRefreshStarts.push(globalThis.__sttRefreshFetches); return true; }
   cleanup() {}
@@ -73,7 +72,7 @@ test("a recording start refreshes a stale STT config in the background", async (
         captureDictationTarget: async () => {},
         completeDictationPreview: async () => {},
         hideDictationPreview: async () => {},
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });

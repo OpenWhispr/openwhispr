@@ -11,6 +11,7 @@ const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
+const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
@@ -45,6 +46,7 @@ const {
   asProviderError,
   redactProviderBody,
 } = require("./providerHttpErrors");
+const { isSettingsTarget } = require("./settingsTargets");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -710,6 +712,7 @@ class IPCHandlers {
     this._cloudReasonRequests = new AgentStreamRequestRegistry();
     this._cloudTranscriptionRequests = new AgentStreamRequestRegistry();
     this._enterpriseReasoningRequests = new AgentStreamRequestRegistry();
+    this._calendarAuthorizationRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
     this.assemblyAiStreaming = null;
@@ -892,6 +895,7 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
+    this._cancelCalendarAuthorizations();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
@@ -926,6 +930,12 @@ class IPCHandlers {
     });
     // A sign-out or another account changes whose login shows.
     void this.connectorManager?.notifyStatusChanged();
+  }
+
+  _cancelCalendarAuthorizations() {
+    for (const senderId of this._calendarAuthorizationRequests?.requestsBySender.keys() ?? []) {
+      this._calendarAuthorizationRequests.cancelSender(senderId);
+    }
   }
 
   // Reconstructing counters from the transcripts already on disk records exactly
@@ -1657,6 +1667,35 @@ class IPCHandlers {
       this.windowManager.permissionGuide.startDrag(event, target)
     );
 
+    // The agent window's own channels; each checks that it is the sender.
+    ipcMain.on("agent-window-ready", (event) => this.windowManager.agentWindow?.markReady(event));
+    ipcMain.on("agent-window-drag", (event, dragging) =>
+      this.windowManager.agentWindow?.setDragging(event, dragging)
+    );
+    ipcMain.handle(
+      "agent-window-set-layout",
+      (event, request) => this.windowManager.agentWindow?.setLayout(event, request) ?? false
+    );
+    ipcMain.handle("agent-window-hide", (event) =>
+      Boolean(this.windowManager.agentWindow?.hide(event))
+    );
+    ipcMain.handle(
+      "agent-window-voice-state",
+      (event, state, attempt) =>
+        this.windowManager.agentWindow?.setVoiceState(event, state, attempt) ?? false
+    );
+    // The dictation window's ways into the assistant: its pill menu's Ask
+    // assistant, and a conversational wake-word command it transcribed.
+    ipcMain.handle("open-agent-window", (event) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      this.windowManager.openAgentWindow();
+      return true;
+    });
+    ipcMain.handle("agent-window-submit-command", (event, command) => {
+      if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
+      return this.windowManager.agentWindow?.deliverCommand(command) ?? false;
+    });
+
     // WindowManager owns every teardown path for a demo (id-matched end,
     // onboarding-set-active(false), control panel closed); without this hook a
     // renderer crash mid-demo would leave the session set and broadcast every
@@ -1810,7 +1849,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-settings-section", async (_event, section) => {
-      if (!isProviderSettingsTarget(section)) return { success: false };
+      if (!isSettingsTarget(section) && !isProviderSettingsTarget(section)) {
+        return { success: false };
+      }
       await this.windowManager.openSettings(section);
       return { success: true };
     });
@@ -2150,43 +2191,14 @@ class IPCHandlers {
 
     // Hotkey handlers run in main, while AudioManager owns the real lifecycle
     // in the dictation renderer. Only confirmed renderer state may change the
-    // main-process recording gate; raw key presses are merely requests and can
-    // be declined while a transcript is still being finalized.
-    ipcMain.on("dictation-lifecycle-state-changed", (event, state, inputKind) => {
+    // main-process recording gate. Preparing reserves it before the renderer
+    // opens the mic; an older attempt cannot release a newer reservation.
+    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt) => {
       const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
+      if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
+        return false;
       }
-      this.windowManager.setDictationLifecycleState(state, inputKind);
-    });
-
-    ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      if (typeof text !== "string" || !text.trim()) return;
-      this.windowManager.showAgentDictationFinalTranscript(text);
-    });
-
-    ipcMain.on("dictation-audio-level-changed", (event, level) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return;
-      }
-      this.windowManager.setDictationAudioLevel(level);
+      return this.windowManager.setDictationLifecycleState(state, attempt);
     });
 
     // Dictionary handlers
@@ -2712,6 +2724,7 @@ class IPCHandlers {
           this._enterpriseAudioOwner = null;
         }
         this.windowManager.retireMeetingNotificationScope();
+        this._cancelCalendarAuthorizations();
       } else if (guestPolicy) {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
@@ -2861,6 +2874,52 @@ class IPCHandlers {
       return result;
     });
 
+    // One renderer owns a running turn or a recoverable question. Process lifecycle
+    // events release it even when the renderer cannot run its effect cleanup.
+    const conversationOwners = new Map();
+    const conversationScope = () =>
+      `${this.databaseManager.activeAccountId ?? ""}:${tokenStore.getState().generation}`;
+    ipcMain.handle("claim-agent-conversation", (event, id, ownerId) => {
+      if (
+        !Number.isSafeInteger(id) ||
+        typeof ownerId !== "string" ||
+        !ownerId ||
+        ownerId.length > 128
+      ) {
+        return { owned: false, conversation: null };
+      }
+      const conversation = this.databaseManager.getAgentConversation(id);
+      if (!conversation) return { owned: false, conversation: null };
+      const scope = conversationScope();
+      let owner = conversationOwners.get(id);
+      if (owner && owner.scope !== scope) {
+        owner.release();
+        owner = undefined;
+      }
+      if (owner) {
+        return { owned: owner.sender === event.sender && owner.id === ownerId, conversation };
+      }
+      const sender = event.sender;
+      const release = () => {
+        if (conversationOwners.get(id) !== entry) return;
+        conversationOwners.delete(id);
+        sender.removeListener("destroyed", release);
+        sender.removeListener("render-process-gone", release);
+        sender.removeListener("did-navigate", release);
+        broadcastToWindows("agent-conversation-released", { conversationId: id });
+      };
+      const entry = { sender, id: ownerId, scope, release };
+      conversationOwners.set(id, entry);
+      sender.once("destroyed", release);
+      sender.once("render-process-gone", release);
+      sender.on("did-navigate", release);
+      return { owned: true, conversation };
+    });
+    ipcMain.handle("release-agent-conversation", (event, id, ownerId) => {
+      const owner = conversationOwners.get(id);
+      if (owner?.sender === event.sender && owner.id === ownerId) owner.release();
+    });
+
     // Agent conversation handlers
     ipcMain.handle(
       "db-create-agent-conversation",
@@ -2885,7 +2944,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-get-agent-conversation", async (event, id) => {
-      return this.databaseManager.getAgentConversation(id);
+      const conversation = this.databaseManager.getAgentConversation(id);
+      return conversation
+        ? {
+            ...conversation,
+            has_active_turn: conversationOwners.get(id)?.scope === conversationScope(),
+          }
+        : null;
     });
 
     ipcMain.handle("db-delete-agent-conversation", async (event, id) => {
@@ -2918,6 +2983,21 @@ class IPCHandlers {
           }
         }
         return result;
+      }
+    );
+
+    ipcMain.handle("db-update-agent-message", async (event, id, content, metadata) => {
+      return this.databaseManager.updateAgentMessage(id, content, metadata);
+    });
+
+    ipcMain.handle(
+      "db-fork-agent-conversation",
+      async (event, conversationId, throughMessageId, forkContext) => {
+        return this.databaseManager.forkAgentConversation(
+          conversationId,
+          throughMessageId,
+          forkContext
+        );
       }
     );
 
@@ -3490,13 +3570,15 @@ class IPCHandlers {
       });
     });
 
-    ipcMain.handle("capture-selected-text", async (event, options = {}) => {
+    ipcMain.handle("capture-selected-text", async () => {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
-      return this.selectionManager.captureSelectedText({
-        probeEditable: options.probeEditable === true,
-      });
+      return this.selectionManager.captureSelectedText();
+    });
+
+    ipcMain.handle("cancel-selection-edit", (_event, sessionId) => {
+      this.selectionManager?.cancelSelectionEdit(sessionId);
     });
 
     ipcMain.handle("replace-selected-text", async (event, sessionId, text, options = {}) => {
@@ -3504,17 +3586,6 @@ class IPCHandlers {
         return { success: false, code: "selection_manager_unavailable" };
       }
       return this.selectionManager.replaceSelectedText(sessionId, text, {
-        restoreClipboard: options.restoreClipboard !== false,
-        allowClipboardFallback: options.allowClipboardFallback === true,
-        webContents: event.sender,
-      });
-    });
-
-    ipcMain.handle("paste-at-captured-target", async (event, sessionId, text, options = {}) => {
-      if (!this.selectionManager) {
-        return { success: false, code: "selection_manager_unavailable" };
-      }
-      return this.selectionManager.pasteAtCapturedTarget(sessionId, text, {
         restoreClipboard: options.restoreClipboard !== false,
         allowClipboardFallback: options.allowClipboardFallback === true,
         webContents: event.sender,
@@ -3531,29 +3602,17 @@ class IPCHandlers {
         return { success: true, pasted: false };
       }
 
-      // A raw paste (a command from a code block) lands exactly as given: no smart
-      // space, and no AutoLearn watching the user edit it. One for the assistant panel goes
-      // only to the app its voice command was spoken over, never to wherever the last
-      // dictation went or to OpenWhispr itself (assistantPasteTarget.js).
-      const { raw, assistantTarget: toAssistantTarget, ...pasteOptions } = options ?? {};
-      const assistantPasteTarget = this.windowManager?.assistantPasteTarget;
-      const assistantTarget =
-        toAssistantTarget === true ? ((await assistantPasteTarget?.current()) ?? null) : undefined;
-      const noTarget = { success: false, pasted: false, reason: "no-target" };
-      if (assistantTarget === null) return noTarget;
+      // A raw paste lands exactly as given: no smart space, and no AutoLearn watching edits.
+      const { raw, ...pasteOptions } = options ?? {};
 
       const mainWindow = this.windowManager?.mainWindow;
-      const targetPid = assistantTarget?.pid ?? (this.textEditMonitor?.lastTargetPid || null);
+      const targetPid = this.textEditMonitor?.lastTargetPid || null;
 
       // Activating the target by PID is more reliable than hide()'s implicit
       // focus hand-off for Chromium apps like Claude desktop and Brave (#668).
       let activated = false;
       if (process.platform === "darwin" && this.textEditMonitor) {
-        activated = assistantTarget
-          ? await this.textEditMonitor.activatePid(assistantTarget.pid)
-          : await this.textEditMonitor.activateTargetPid();
-        // The command's app couldn't be brought forward; whatever is in front isn't it.
-        if (assistantTarget && !activated) return noTarget;
+        activated = await this.textEditMonitor.activateTargetPid();
       }
 
       if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
@@ -3563,20 +3622,11 @@ class IPCHandlers {
           mainWindow.showInactive();
         } else {
           mainWindow.blur();
-          // On Linux blur() leaves X focus on the pill, where the assistant panel
-          // took it, so the paste would land in the panel.
+          // On Linux blur() leaves X focus on the pill, so the paste would land
+          // in the pill.
           if (process.platform === "linux") this.windowManager.returnLinuxKeyboardFocus();
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
-      }
-
-      // macOS confirmed the app came forward above; elsewhere what's in front gets the paste.
-      if (
-        process.platform !== "darwin" &&
-        assistantTarget &&
-        !(await assistantPasteTarget.isInFront(assistantTarget))
-      ) {
-        return noTarget;
       }
 
       // Smart spacing (#856): append a trailing space so the next paste's leading
@@ -3591,7 +3641,7 @@ class IPCHandlers {
       // activateTargetPid above; Linux re-detects the target inside pasteLinux.
       const winTarget =
         process.platform === "win32"
-          ? (assistantTarget?.window ?? (await this.selectionManager?.getWinTarget?.()) ?? null)
+          ? ((await this.selectionManager?.getWinTarget?.()) ?? null)
           : null;
       const targetWindow =
         winTarget &&
@@ -4964,16 +5014,40 @@ class IPCHandlers {
       return this.windowManager.getHyprlandConfigStatus();
     });
 
+    // Esc goes to the window that is recording (dictation or the agent
+    // window), and only that window may take it back. A renderer that
+    // reloads, crashes or closes can't, so it gives Esc back by going.
+    const releaseCancelHotkey = () => {
+      this._cancelHotkeyOwner = null;
+      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+    };
+    const watchedCancelOwners = new WeakSet();
+    const watchCancelOwner = (owner) => {
+      if (watchedCancelOwners.has(owner)) return;
+      watchedCancelOwners.add(owner);
+      const releaseIfOwner = () => {
+        if (this._cancelHotkeyOwner === owner) releaseCancelHotkey();
+      };
+      // A committed main-frame navigation only: one will-navigate blocks keeps the renderer.
+      owner.on("did-navigate", releaseIfOwner);
+      owner.on("render-process-gone", releaseIfOwner);
+      owner.once("destroyed", releaseIfOwner);
+    };
+
     ipcMain.handle("register-cancel-hotkey", async (event, key) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
-      const mainWindow = this.windowManager.mainWindow;
+      const owner = event.sender;
+      this._cancelHotkeyOwner = owner;
+      watchCancelOwner(owner);
       return hotkeyManager.registerSlot("cancel", key, () => {
-        mainWindow?.webContents?.send("cancel-hotkey-pressed");
+        if (!owner.isDestroyed()) owner.send("cancel-hotkey-pressed");
       });
     });
 
-    ipcMain.handle("unregister-cancel-hotkey", async () => {
-      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+    ipcMain.handle("unregister-cancel-hotkey", async (event) => {
+      const owner = this._cancelHotkeyOwner;
+      if (owner && !owner.isDestroyed() && owner !== event.sender) return { success: false };
+      releaseCancelHotkey();
       return { success: true };
     });
 
@@ -6345,47 +6419,75 @@ class IPCHandlers {
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", async (event) => {
-      // Capture immediately so the screenshot reflects the invocation moment;
-      // the policy verdict resolves concurrently and decides whether to
-      // return it. A signed-out user has no workspace and no policy; managed
-      // users are gated even if a stale renderer asks. null matches capture's
-      // contract — a screenshot must never break the dictation it accompanies.
-      // The target's window rect picks the display it is on rather than the one
-      // under the cursor, and the panel reposition has normally cached it already.
-      // A failed rect read falls back to the cursor rather than rejecting: the
-      // policy branch below can abandon this promise, and capture's contract is
-      // to yield null, never to throw.
-      const targetPid = this.textEditMonitor?.lastTargetPid;
-      const capturePromise = Promise.resolve(
-        targetPid ? this.textEditMonitor.getTargetWindowBounds?.(targetPid) : null
-      )
-        .catch(() => null)
-        .then((targetBounds) => screenContextCapture.captureActiveDisplay(targetBounds));
-      const authHeaders = await getAuthHeader(event);
-      if (authHeaders.Authorization || authHeaders.Cookie) {
-        // Bound the verdict wait: a lapsed policy TTL on a degraded network
-        // must not stall an allowed user's capture past the renderer's 3s
-        // consume race. The renderer gate already fails closed while policy
-        // is unresolved, so this defense-in-depth gate lets an unresolved
-        // verdict through while the refresh completes in flight — a resolved
-        // denial (cached or fresh) still blocks.
-        const snapshot = await Promise.race([
-          workspacePolicyManager.getPolicy({
-            expectedAuthGeneration: tokenStore.getState().generation,
-            authHeaders,
-          }),
-          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-        ]);
-        if (snapshot && isScreenContextBlocked(snapshot)) {
-          debugLogger.warn(
-            "Screen context capture blocked by org policy",
-            { code: snapshot.code ?? null },
-            "screenContext"
-          );
-          return null;
+      const panel = this.windowManager.controlPanelWindow;
+      const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
+      const focused = hidePanel && panel.isFocused();
+      const panelBounds = hidePanel ? panel.getBounds() : null;
+      let restorePanel = hidePanel;
+      const closed = () => {
+        restorePanel = false;
+      };
+      if (hidePanel) {
+        panel.once("close", closed);
+        panel.hide();
+      }
+      try {
+        if (hidePanel) await new Promise((resolve) => setTimeout(resolve, 80));
+        // Outside the Control Panel, capture immediately at the invocation moment;
+        // the policy verdict resolves concurrently and decides whether to
+        // return it. A signed-out user has no workspace and no policy; managed
+        // users are gated even if a stale renderer asks. null matches capture's
+        // contract — a screenshot must never break the dictation it accompanies.
+        // The target's window rect picks the display it is on rather than the one
+        // under the cursor, and the panel reposition has normally cached it already.
+        // A failed rect read falls back to the cursor rather than rejecting: the
+        // policy branch below can abandon this promise, and capture's contract is
+        // to yield null, never to throw.
+        const targetPid = this.textEditMonitor?.lastTargetPid;
+        const capturePromise = Promise.resolve(
+          panelBounds ??
+            (targetPid ? this.textEditMonitor.getTargetWindowBounds?.(targetPid) : null)
+        )
+          .catch(() => null)
+          .then((targetBounds) => screenContextCapture.captureActiveDisplay(targetBounds));
+        const authHeaders = await getAuthHeader(event);
+        if (authHeaders.Authorization || authHeaders.Cookie) {
+          // Bound the verdict wait: a lapsed policy TTL on a degraded network
+          // must not stall an allowed user's capture past the renderer's 3s
+          // consume race. The renderer gate already fails closed while policy
+          // is unresolved, so this defense-in-depth gate lets an unresolved
+          // verdict through while the refresh completes in flight — a resolved
+          // denial (cached or fresh) still blocks.
+          const snapshot = await Promise.race([
+            workspacePolicyManager.getPolicy({
+              expectedAuthGeneration: tokenStore.getState().generation,
+              authHeaders,
+            }),
+            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+          ]);
+          if (snapshot && isScreenContextBlocked(snapshot)) {
+            debugLogger.warn(
+              "Screen context capture blocked by org policy",
+              { code: snapshot.code ?? null },
+              "screenContext"
+            );
+            return null;
+          }
+        }
+        return await capturePromise;
+      } finally {
+        if (hidePanel) panel.removeListener("close", closed);
+        if (
+          restorePanel &&
+          this.windowManager.controlPanelWindow === panel &&
+          !panel.isDestroyed()
+        ) {
+          if (focused) {
+            panel.show();
+            panel.focus();
+          } else panel.showInactive();
         }
       }
-      return capturePromise;
     });
 
     // Snapshot the launch-time TCC status so a mid-session grant (which macOS
@@ -6407,92 +6509,6 @@ class IPCHandlers {
     // temporarily disabled for screen recording.
     ipcMain.handle("screen-context-set-enabled", (event, enabled) => {
       this.windowManager?.setScreenContextProtection(enabled);
-      return { success: true };
-    });
-
-    // Panel open: window becomes focusable so follow-up keyboard input works.
-    // Only the dictation renderer may flip main-window focusability.
-    ipcMain.handle("set-assistant-panel-open", (event, open) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelOpen(open);
-      return { success: true };
-    });
-
-    // The panel takes the app its voice command was spoken over as Paste into app's target
-    // ("adopt"), or drops any target when it opens without one ("forget"). True when there is
-    // a target that isn't OpenWhispr.
-    ipcMain.handle("assistant-paste-target", async (event, action) => {
-      const target = this.windowManager?.assistantPasteTarget;
-      if (!target || event.sender !== this.windowManager?.mainWindow?.webContents) return false;
-      if (action === "adopt") return target.adopt();
-      target.clear();
-      return false;
-    });
-
-    // Busy state is enforced in the main process so a hotkey cannot trigger
-    // native capture side effects before the renderer has a chance to reject it.
-    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
-      const dictationWindow = this.windowManager?.mainWindow;
-      if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
-      ) {
-        return { success: false, error: "Not the dictation window" };
-      }
-      this.windowManager.setAssistantPanelBusy(busy);
-      return { success: true };
-    });
-
-    const isAgentDictationPill = (event) => {
-      const pillWindow = this.windowManager?.agentDictationPillWindow;
-      return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
-    };
-
-    // The pill disables its own controls when an assistant or translation
-    // capture owns the lifecycle, but that state travels by IPC — a click can
-    // race it. Re-check here so a stale pill can never toggle or cancel a
-    // recording it does not own.
-    const isAgentDictationPillInteractive = () =>
-      this.windowManager.getAgentDictationPillState().interactive;
-
-    ipcMain.handle("toggle-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendToggleDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("cancel-agent-panel-dictation", (event) => {
-      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
-        return { success: false };
-      }
-      this.windowManager.sendCancelActiveDictation();
-      return { success: true };
-    });
-
-    ipcMain.handle("get-agent-dictation-pill-state", (event) => {
-      return isAgentDictationPill(event)
-        ? this.windowManager.getAgentDictationPillState()
-        : { lifecycle: "idle", interactive: false, horizontalDirection: "left" };
-    });
-
-    ipcMain.handle("resize-agent-dictation-pill-to-content", (event, surfaceHeight = null) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
-    });
-
-    ipcMain.handle("set-agent-dictation-pill-interactivity", (event, interactive) => {
-      if (!isAgentDictationPill(event)) return { success: false };
-      this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
       return { success: true };
     });
 
@@ -13056,15 +13072,36 @@ class IPCHandlers {
       }
     });
 
-    // Google Calendar
-    ipcMain.handle("gcal-start-oauth", async () => {
+    const authorizeCalendar = async (event, requestId, authorize) => {
+      requestId = requestId || crypto.randomUUID();
+      const requests = this._calendarAuthorizationRequests;
+      const controller = requests.begin(event.sender.id, requestId);
+      const abort = () => controller.abort();
+      event.sender.once("destroyed", abort);
       try {
-        return await this.googleCalendarManager.startOAuth();
+        const result = await authorize(controller.signal);
+        controller.signal.throwIfAborted();
+        return result;
       } catch (error) {
-        debugLogger.error("Google Calendar OAuth failed", { error: error.message }, "calendar");
+        if (controller.signal.aborted)
+          return { success: false, error: "oauth_cancelled", reason: "cancelled" };
+        debugLogger.error("Calendar authorization failed", { error: error.message }, "calendar");
         return { success: false, error: error.message };
+      } finally {
+        event.sender.removeListener("destroyed", abort);
+        requests.complete(event.sender.id, requestId, controller);
       }
-    });
+    };
+    ipcMain.handle("calendar-cancel-connect", (event, requestId) =>
+      this._calendarAuthorizationRequests.cancel(event.sender.id, requestId)
+    );
+
+    // Google Calendar
+    ipcMain.handle("gcal-start-oauth", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) =>
+        this.googleCalendarManager.startOAuth({ signal })
+      )
+    );
 
     ipcMain.handle("gcal-disconnect", async (_event, email) => {
       try {
@@ -13123,11 +13160,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-get-upcoming-events", async (_event, windowMinutes) => {
+    ipcMain.handle("gcal-get-upcoming-events", async (_event, windowMinutes, options) => {
       try {
         return {
           success: true,
-          events: await this.googleCalendarManager.getUpcomingEvents(windowMinutes),
+          events: await this.googleCalendarManager.getUpcomingEvents(windowMinutes, {
+            includeAllDay: options?.includeAllDay === true,
+          }),
         };
       } catch (error) {
         return { success: false, events: [] };
@@ -13161,14 +13200,11 @@ class IPCHandlers {
     });
 
     // Microsoft Calendar
-    ipcMain.handle("mcal-start-oauth", async () => {
-      try {
-        return await this.microsoftCalendarManager.startOAuth();
-      } catch (error) {
-        debugLogger.error("Microsoft Calendar OAuth failed", { error: error.message }, "calendar");
-        return { success: false, error: error.message };
-      }
-    });
+    ipcMain.handle("mcal-start-oauth", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) =>
+        this.microsoftCalendarManager.startOAuth({ signal })
+      )
+    );
 
     ipcMain.handle("mcal-disconnect", async (_event, email) => {
       try {
@@ -13207,14 +13243,9 @@ class IPCHandlers {
     });
 
     // Apple Calendar (macOS EventKit)
-    ipcMain.handle("acal-connect", async () => {
-      try {
-        return await this.appleCalendarManager.connect();
-      } catch (error) {
-        debugLogger.error("Apple Calendar connect failed", { error: error.message }, "acal");
-        return { success: false, error: error.message };
-      }
-    });
+    ipcMain.handle("acal-connect", (event, requestId) =>
+      authorizeCalendar(event, requestId, (signal) => this.appleCalendarManager.connect({ signal }))
+    );
 
     ipcMain.handle("acal-disconnect", async () => {
       try {

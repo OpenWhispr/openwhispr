@@ -56,8 +56,16 @@ const NOTE_FIELDS = [
 const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 
 // Conversations are read-only here: only the pull is modelled, so `messages`
-// rides along as a plain stored field.
-const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
+// rides along as a plain stored field. A row seeded without a fork's origin
+// lacks those keys, as every row from an API without them does.
+const CONVERSATION_FIELDS = [
+  "title",
+  "archived_at",
+  "messages",
+  "parent_client_conversation_id",
+  "fork_message_count",
+  "fork_context",
+];
 
 const DICTIONARY_FIELDS = ["word", "source"];
 

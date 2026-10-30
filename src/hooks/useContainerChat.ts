@@ -71,13 +71,11 @@ export function useContainerChat({
   );
 
   const streaming = useChatStreaming({
-    messages: persistence.messages,
     setMessages: persistence.setMessages,
     noteContext: containerContext,
     searchScope,
-    onStreamComplete: (_id, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
-    },
+    onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
   });
 
   const fetchConversations = useCallback(

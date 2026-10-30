@@ -67,6 +67,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
+  // A typed answer in any script; an API key, always LTR.
   "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
   "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
   "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
@@ -98,12 +99,18 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
+  // An answer card's title and message: prose in any script.
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
-  // To, Cc, Subject, Body: people's names and prose in any script.
-  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
+  // To, Cc, Subject: people's names and prose in any script.
+  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto"],
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
+  // An API key, always LTR; a typed answer in any script.
+  "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
+  "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
   // A proposed skill's name and when it's used, and an update's description: prose.
   "src/components/chat/SkillApprovalCard.tsx": ["auto", "auto", "auto", "auto", "auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],

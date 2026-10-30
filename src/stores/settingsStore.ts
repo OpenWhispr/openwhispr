@@ -840,7 +840,7 @@ migrateLLMScopeKeys();
 
 // The Voice Assistant scope shipped unseeded — empty provider and model, mode
 // defaulting to cloud — while the assistant panel answered on the Chat scope.
-// The panel now answers on the Voice Assistant scope, so a profile that never
+// The assistant now answers on the Voice Assistant scope, so a profile that never
 // configured it (no onboarding fan-out or Settings edit wrote its mode,
 // provider or model) copies the Chat scope over once; otherwise a signed-in
 // profile whose Chat runs local or BYOK would have its spoken commands move to
@@ -2946,6 +2946,11 @@ if (isBrowser) {
 // model or the notes onboarding mode toggle sets cleanupMode and leaves that field stale.
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
   state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
+
+// The calendar tools read the shared provider-deduped events table, so any
+// connected provider enables them.
+export const selectCalendarConnected = (state: SettingsState) =>
+  state.gcalConnected || state.mcalConnected || state.appleCalendarConnected;
 
 export const selectEffectiveCleanupProvider = (state: SettingsState) =>
   selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;

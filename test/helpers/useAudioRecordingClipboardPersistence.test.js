@@ -113,7 +113,7 @@ async function mountCompletionHarness(
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged: NOOP,
+        dictationLifecycleStateChanged: async () => true,
         completeDictationPreview: NOOP,
         hideDictationPreview: NOOP,
         setScreenContextEnabled: NOOP,

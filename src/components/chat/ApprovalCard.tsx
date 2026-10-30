@@ -1,13 +1,20 @@
-import { useId, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
+import { useId, useRef, type KeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "../ui/button";
+import { Check, CopyRounded, ExternalLink, Send } from "../icons";
+import { cn } from "../lib/utils";
 import {
   approveAction,
   cancelApproval,
+  connectToSend,
+  dismissReconnect,
+  retryApproval,
   updateApprovalDraft,
   type ApprovalEntry,
 } from "../../stores/connectorApprovalStore";
+import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { connectorErrorText } from "../../utils/connectorErrorCopy";
+import { CONNECTION_TARGET_NAMES } from "../../config/agentCapabilities";
+import type { ConnectionTarget } from "../../types/agentInteractions";
 import {
   MAX_EMAIL_RECIPIENTS,
   MAX_EMAIL_SUBJECT_LENGTH,
@@ -28,19 +35,71 @@ import {
 } from "../../utils/issueApprovalFields";
 import { EmailApprovalFields } from "./EmailApprovalFields";
 import { IssueApprovalFields } from "./IssueApprovalFields";
+import { ConnectRow } from "./interactions/ConnectionCard";
+import { HeaderRow } from "./interactions/HeaderRow";
+import {
+  INLINE_TEXT_FIELD,
+  INLINE_TITLE_FIELD,
+  PILL_BUTTON,
+  PRIMARY_PILL_BUTTON,
+} from "./interactions/cardStyles";
+import slackMark from "../../assets/icons/slack.svg";
 
 export const APPROVAL_CARD_CLASS =
   "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
-// The draft lives in the store, so edit mode only changes how it is shown:
-// Send always commits exactly what the card displays.
+/** The message body: edited in place while the card can still send it. */
+function BodyField({
+  value,
+  editing,
+  label,
+  invalidBecause,
+  onChange,
+}: {
+  value: string;
+  editing: boolean;
+  label: string;
+  /** The id of the text saying why Send is blocked, when the body is the reason. */
+  invalidBecause?: string;
+  onChange: (value: string) => void;
+}): ReactElement {
+  return editing ? (
+    <textarea
+      data-approval-field="body"
+      aria-label={label}
+      {...(invalidBecause ? { "aria-invalid": true, "aria-describedby": invalidBecause } : {})}
+      dir="auto"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={INLINE_TEXT_FIELD}
+    />
+  ) : (
+    <p
+      className="whitespace-pre-wrap break-words leading-6 text-foreground agent:leading-snug"
+      dir="auto"
+    >
+      {value}
+    </p>
+  );
+}
+
+/**
+ * An outside action waiting on the user: who it goes to and as whom, the
+ * message (edited in place, scrolling inside the card when long), and Copy,
+ * Cancel and Send. It keeps the message through Sending and after Sent, and
+ * after a failure the draft is editable again with Retry. When Send needs the
+ * service connected first, the card asks for that in place of its actions.
+ * The draft lives in the store, so Send commits exactly what the card shows.
+ */
 export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement {
   const { t } = useTranslation();
   const { preview, draft } = entry;
-  const [editing, setEditing] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  // The fields exist only while the card can still change.
-  const showEditor = editing && entry.state === "pending";
+  const pending = entry.state === "pending";
+  const waitingForRetry = Boolean(entry.awaitingRetry);
+  // The draft is editable while it can still go out: before Send, or after a
+  // failure while Retry waits.
+  const editing = (pending && !entry.reconnect) || waitingForRetry;
   // An email card lays out its fields; a malformed one without them falls
   // back to the plain layout rather than showing empty fields.
   const emailFields =
@@ -48,6 +107,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   // So does an issue or comment card, with its title and body.
   const verb = issueVerb(preview.verbKey);
   const issueFields = verb && draft.fields ? toIssueFields(draft.fields, verb) : null;
+  const slack = preview.verbKey === "slackPost";
   // Who it goes to follows the user's edits: main's answer once sent,
   // otherwise the card's own To and Cc.
   const destination =
@@ -83,6 +143,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       ? t("connectors.approval.email.invalidAddressAnnouncement")
       : problemText;
   const hasFieldLayout = Boolean(emailFields || issueFields);
+  // Copy takes the message itself, as the card shows it now.
+  const body = emailFields?.body ?? issueFields?.body ?? draft.body;
+  const { copied, copyText, confirmCopied } = useCopyFeedback(body);
 
   // Each layout names its own button and outcomes ("Create issue",
   // "Created ENG-124"); every other card keeps Send and "Sent to …".
@@ -92,7 +155,9 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const sentRef = verb ? issueSentCopy(verb, destination, entry.resultLabel) : null;
   const sentText = sentRef
     ? t(sentRef.key, sentRef.values)
-    : t("connectors.approval.sent", { destination });
+    : entry.outsideThread
+      ? t("connectors.approval.slack.sentOutsideThread", { destination })
+      : t("connectors.approval.sent", { destination });
   const unknownRef = verb ? issueUnknownCopy(verb, destination) : null;
   const unknownText = emailFields
     ? t("connectors.approval.email.unknown")
@@ -102,21 +167,15 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
 
   // Send and Cancel remove the button that had focus; the card keeps it, so
   // keyboard and screen-reader users land on the result.
-  const leaveEditingAndFocusCard = (): void => {
-    setEditing(false);
-    cardRef.current?.focus();
+  const focusCardAnd = (action: () => unknown): void => {
+    cardRef.current?.focus({ preventScroll: true });
+    void action();
   };
-
-  // Esc anywhere on the card while editing (a field, or the Edit button that
-  // keeps focus) ends editing and keeps the draft. It must not reach the
-  // assistant panel, whose Esc cancels the whole turn and withdraws the card.
-  const onEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    event.stopPropagation();
-    setEditing(false);
+  // Esc in a field or on a button must not reach the agent window, whose Esc
+  // cancels the whole turn and withdraws the card.
+  const keepEscape = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === "Escape") event.stopPropagation();
   };
-
   const openLink = (url: string): void => {
     void window.electronAPI?.openExternal?.(url);
   };
@@ -125,6 +184,128 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   const openLabel = t(`connectors.approval.openIn.${entry.connectorId}`, {
     defaultValue: t("connectors.approval.open"),
   });
+  const setBody = (value: string) =>
+    updateApprovalDraft(entry.key, draft.fields ? { fields: { body: value } } : { body: value });
+
+  const header = emailFields ? (
+    <EmailApprovalFields
+      fields={emailFields}
+      editing={editing}
+      showCc={emailFields.cc.length > 0 || (preview.fields?.cc?.length ?? 0) > 0}
+      accountLabel={preview.accountLabel}
+      problems={problems}
+      problemsId={problemsId}
+      onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
+    />
+  ) : slack ? (
+    <>
+      <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
+          <img
+            src={slackMark}
+            alt=""
+            aria-hidden="true"
+            width={14}
+            height={14}
+            decoding="async"
+            draggable={false}
+            className="shrink-0"
+          />
+          <span className="truncate">
+            {preview.workspaceLabel
+              ? t("connectors.approval.slack.destination", {
+                  workspace: preview.workspaceLabel,
+                  destination,
+                })
+              : destination}
+          </span>
+        </span>
+      </HeaderRow>
+      <HeaderRow label={t("connectors.approval.slack.asLabel")}>
+        <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">
+          {preview.accountLabel}
+        </span>
+      </HeaderRow>
+    </>
+  ) : (
+    <>
+      <p className="font-medium text-foreground">
+        {t(`connectors.approval.headers.${preview.verbKey}`, {
+          destination,
+          defaultValue: t("connectors.approval.headers.default", { destination }),
+        })}
+      </p>
+      <p className="text-xs text-muted-foreground agent:text-[13px]">
+        {preview.workspaceLabel
+          ? t("connectors.approval.identityWithWorkspace", {
+              account: preview.accountLabel,
+              workspace: preview.workspaceLabel,
+            })
+          : t("connectors.approval.identity", { account: preview.accountLabel })}
+      </p>
+    </>
+  );
+
+  const message =
+    issueFields && verb ? (
+      <IssueApprovalFields
+        connectorId={entry.connectorId}
+        pending={editing}
+        verb={verb}
+        fields={issueFields}
+        editing={editing}
+        problem={issueProblem}
+        problemsId={problemsId}
+        onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
+      />
+    ) : (
+      <>
+        {draft.title !== undefined &&
+          (editing ? (
+            <input
+              aria-label={t("connectors.approval.titleLabel")}
+              className={INLINE_TITLE_FIELD}
+              dir="auto"
+              value={draft.title}
+              onChange={(event) => updateApprovalDraft(entry.key, { title: event.target.value })}
+            />
+          ) : (
+            <p className="mb-1 font-medium" dir="auto">
+              {draft.title}
+            </p>
+          ))}
+        <BodyField
+          value={body}
+          editing={editing}
+          label={t(
+            emailFields ? "connectors.approval.email.bodyLabel" : "connectors.approval.bodyLabel"
+          )}
+          invalidBecause={problems?.bodyTooLong ? problemsId : undefined}
+          onChange={setBody}
+        />
+      </>
+    );
+
+  const copyButton = (
+    <button
+      type="button"
+      onClick={() => void copyText(body).then((done) => done && confirmCopied(body))}
+      className={PILL_BUTTON}
+    >
+      {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
+      {t(copied ? "common.copied" : "common.copy")}
+    </button>
+  );
+  const outcomeLink = (entry.state === "sent" || entry.state === "unknown") && entry.url && (
+    <button
+      type="button"
+      onClick={() => openLink(entry.url as string)}
+      className="me-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:text-[13px]"
+    >
+      <ExternalLink size={12} />
+      {openLabel}
+    </button>
+  );
 
   return (
     <div
@@ -132,181 +313,159 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       tabIndex={-1}
       data-approval-card={entry.key}
       data-state={entry.state}
-      onKeyDown={showEditor ? onEditorKeyDown : undefined}
-      className={APPROVAL_CARD_CLASS}
+      onKeyDown={keepEscape}
+      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring agent:border-border agent:text-[15px]"
     >
-      <p className="font-medium text-foreground">
-        {t(`connectors.approval.headers.${preview.verbKey}`, {
-          destination,
-          defaultValue: t("connectors.approval.headers.default", { destination }),
-        })}
-      </p>
-      <p className="text-xs text-muted-foreground">
-        {emailFields
-          ? t("connectors.approval.email.from", { account: preview.accountLabel })
-          : preview.workspaceLabel
-            ? t("connectors.approval.identityWithWorkspace", {
-                account: preview.accountLabel,
-                workspace: preview.workspaceLabel,
-              })
-            : t("connectors.approval.identity", { account: preview.accountLabel })}
-      </p>
-
-      {emailFields ? (
-        <div className="mt-2">
-          <EmailApprovalFields
-            fields={emailFields}
-            editing={showEditor}
-            problems={problems}
-            problemsId={problemsId}
-            onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
-          />
-        </div>
-      ) : issueFields && verb ? (
-        <div className="mt-2">
-          <IssueApprovalFields
-            connectorId={entry.connectorId}
-            pending={entry.state === "pending"}
-            verb={verb}
-            fields={issueFields}
-            editing={showEditor}
-            problem={issueProblem}
-            problemsId={problemsId}
-            onChange={(patch) => updateApprovalDraft(entry.key, { fields: patch })}
-          />
-        </div>
-      ) : showEditor ? (
-        <div className="mt-2 space-y-2">
-          {draft.title !== undefined && (
-            <input
-              aria-label={t("connectors.approval.titleLabel")}
-              className="w-full rounded-md border border-border/70 bg-background px-2 py-1"
-              dir="auto"
-              value={draft.title}
-              onChange={(event) => updateApprovalDraft(entry.key, { title: event.target.value })}
-            />
-          )}
-          <textarea
-            aria-label={t("connectors.approval.bodyLabel")}
-            className="min-h-24 w-full rounded-md border border-border/70 bg-background px-2 py-1"
-            dir="auto"
-            value={draft.body}
-            onChange={(event) => updateApprovalDraft(entry.key, { body: event.target.value })}
-          />
-        </div>
-      ) : (
-        <div className="mt-2">
-          {draft.title !== undefined && <p className="font-medium">{draft.title}</p>}
-          <p className="whitespace-pre-wrap" dir="auto">
-            {draft.body}
-          </p>
-        </div>
-      )}
-
-      {hasFieldLayout && entry.state === "pending" && (
-        <>
-          <p id={problemsId} className="mt-2 text-xs text-destructive empty:mt-0">
-            {problemText}
-          </p>
-          {/* Always present while pending, so each new reason is heard. */}
-          <p aria-live="polite" className="sr-only">
-            {problemAnnouncement}
-          </p>
-        </>
-      )}
-
-      {preview.notes?.map((note) => (
-        <p key={note.key} className="mt-1 text-xs text-muted-foreground" dir="auto">
-          {/* Some note copy (issue.notes.droppedLabels) interpolates the
-              card's destination, which connectors don't themselves send in
-              note values — the note's own values win on conflict. */}
-          {t(note.key, { destination, ...note.values })}
-        </p>
-      ))}
-
-      {/* One live region for every outcome, rendered from the start so a
-          screen reader announces each change. */}
-      <div role="status" aria-live="polite" className="text-xs">
-        {entry.state === "pending" && entry.notice === "policy_retry" && (
-          <p className="mt-2 text-muted-foreground">{t("connectors.approval.policyRetry")}</p>
-        )}
-        {entry.state === "committing" && (
-          <p className="mt-2 text-muted-foreground">{t("connectors.approval.sending")}</p>
-        )}
-        {entry.state === "sent" && (
-          <p className="mt-2 text-foreground">
-            {sentText}
-            {entry.url && (
-              <Button size="sm" variant="link" onClick={() => openLink(entry.url as string)}>
-                {openLabel}
-              </Button>
-            )}
-          </p>
-        )}
-        {/* Translated copy only: entry.message is the connector's English,
-            written for the model. */}
-        {entry.state === "failed" && (
-          <p className="mt-2 text-destructive">
-            {t("connectors.approval.failed", {
-              message: connectorErrorText(t, "approval", entry.connectorId, entry.errorCode, {
-                destination,
-                max: MAX_EMAIL_RECIPIENTS,
-              }),
-            })}
-          </p>
-        )}
-        {entry.state === "unknown" && (
-          <p className="mt-2 text-foreground">
-            {unknownText}
-            {entry.url && (
-              <Button size="sm" variant="link" onClick={() => openLink(entry.url as string)}>
-                {openLabel}
-              </Button>
-            )}
-          </p>
-        )}
-        {entry.state === "cancelled" && (
-          <p className="mt-2 text-muted-foreground">{t("connectors.approval.cancelled")}</p>
-        )}
-        {entry.state === "not_sent" && (
-          <p className="mt-2 text-muted-foreground">{t("connectors.approval.notSent")}</p>
-        )}
+      <div className="space-y-1 px-4 pt-3 pb-2.5 agent:space-y-0.5">{header}</div>
+      <div className="border-t border-border/50 agent:border-border" />
+      {/* A long message scrolls here; who it goes to and the actions stay put. */}
+      <div
+        data-approval-body=""
+        className="agent-chat-scroll max-h-44 overflow-y-auto px-4 py-3 text-[14px] agent:text-[15px]"
+      >
+        {message}
       </div>
 
-      {entry.state === "pending" && (
-        <div className="mt-2 flex gap-2">
-          {/* aria-disabled rather than disabled: Send stays focusable, and
-              says why it can't send. */}
-          <Button
-            size="sm"
-            aria-disabled={sendBlocked || undefined}
-            aria-describedby={sendBlocked ? problemsId : undefined}
-            className={sendBlocked ? "cursor-not-allowed opacity-50" : undefined}
-            onClick={() => {
-              if (sendBlocked) return;
-              // Leaving the editor also means a frozen textarea never looks
-              // editable while the draft sends.
-              leaveEditingAndFocusCard();
-              void approveAction(entry.key);
-            }}
-          >
-            {sendLabel}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setEditing((value) => !value)}>
-            {editing ? t("connectors.approval.doneEditing") : t("connectors.approval.edit")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              leaveEditingAndFocusCard();
-              cancelApproval(entry.key);
-            }}
-          >
-            {t("connectors.approval.cancel")}
-          </Button>
+      <div className="px-4">
+        {hasFieldLayout && editing && (
+          <>
+            <p
+              id={problemsId}
+              className="pb-1 text-xs text-destructive empty:hidden agent:text-[13px]"
+            >
+              {problemText}
+            </p>
+            {/* Always present while editable, so each new reason is heard. */}
+            <p aria-live="polite" className="sr-only">
+              {problemAnnouncement}
+            </p>
+          </>
+        )}
+        {preview.notes
+          ?.filter(
+            (note) =>
+              !entry.outsideThread || note.key !== "connectors.approval.slack.notes.replyInThread"
+          )
+          .map((note) => (
+            <p
+              key={note.key}
+              className="pb-1 text-xs text-muted-foreground agent:text-[13px]"
+              dir="auto"
+            >
+              {/* Some note copy (issue.notes.droppedLabels) interpolates the
+                card's destination, which connectors don't themselves send in
+                note values — the note's own values win on conflict. */}
+              {t(note.key, { destination, ...note.values })}
+            </p>
+          ))}
+        {/* One live region for every outcome, rendered from the start so a
+            screen reader announces each change. */}
+        <div role="status" aria-live="polite" className="text-xs agent:text-[13px]">
+          {pending && entry.notice === "policy_retry" && (
+            <p className="pb-1 text-muted-foreground">{t("connectors.approval.policyRetry")}</p>
+          )}
+          {pending && entry.notice === "identity_changed" && (
+            <p className="pb-1 text-muted-foreground" dir="auto">
+              {t("connectors.approval.identityChanged", { account: preview.accountLabel })}
+            </p>
+          )}
+          {entry.state === "committing" && (
+            <p className="sr-only">{t("connectors.approval.sending")}</p>
+          )}
+          {entry.state === "sent" && (
+            <p className={entry.outsideThread ? "pb-1 text-foreground" : "sr-only"}>{sentText}</p>
+          )}
+          {/* Translated copy only: entry.message is the connector's English,
+              written for the model. */}
+          {entry.state === "failed" && (
+            <p className="pb-1 text-destructive">
+              {t("connectors.approval.failed", {
+                message: connectorErrorText(t, "approval", entry.connectorId, entry.errorCode, {
+                  destination,
+                  max: MAX_EMAIL_RECIPIENTS,
+                }),
+              })}
+            </p>
+          )}
+          {entry.state === "unknown" && <p className="pb-1 text-foreground">{unknownText}</p>}
+          {entry.state === "cancelled" && (
+            <p className="pb-1 text-muted-foreground">{t("connectors.approval.cancelled")}</p>
+          )}
+          {entry.state === "not_sent" && (
+            <p className="pb-1 text-muted-foreground">{t("connectors.approval.notSent")}</p>
+          )}
         </div>
-      )}
+      </div>
+
+      <div className="px-3 pt-1 pb-3">
+        {pending && entry.reconnect ? (
+          <ConnectRow
+            target={entry.connectorId as ConnectionTarget}
+            title={t("connectors.approval.connectToSend", {
+              name:
+                CONNECTION_TARGET_NAMES[entry.connectorId as ConnectionTarget] ?? entry.connectorId,
+            })}
+            working={entry.reconnect === "connecting"}
+            error={entry.connectError}
+            onConnect={() => void connectToSend(entry.key)}
+            onDismiss={() => dismissReconnect(entry.key)}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {outcomeLink}
+            {copyButton}
+            {(pending || waitingForRetry) && (
+              <button
+                type="button"
+                onClick={() => focusCardAnd(() => cancelApproval(entry.key))}
+                className={cn(PILL_BUTTON, "text-muted-foreground")}
+              >
+                {t("connectors.approval.cancel")}
+              </button>
+            )}
+            {(pending || entry.state === "committing") && (
+              // aria-disabled rather than disabled: Send stays focusable, and
+              // says why it can't send.
+              <button
+                type="button"
+                aria-disabled={sendBlocked || entry.state === "committing" || undefined}
+                aria-describedby={sendBlocked ? problemsId : undefined}
+                onClick={() => {
+                  if (sendBlocked || !pending) return;
+                  focusCardAnd(() => approveAction(entry.key));
+                }}
+                className={cn(
+                  PRIMARY_PILL_BUTTON,
+                  (sendBlocked || !pending) && "cursor-not-allowed opacity-50"
+                )}
+              >
+                <Send size={14} className="rtl:scale-x-[-1]" />
+                {pending ? sendLabel : t("connectors.approval.sending")}
+              </button>
+            )}
+            {waitingForRetry && (
+              <button
+                type="button"
+                aria-disabled={sendBlocked || undefined}
+                aria-describedby={sendBlocked ? problemsId : undefined}
+                onClick={() => {
+                  if (sendBlocked) return;
+                  focusCardAnd(() => retryApproval(entry.key));
+                }}
+                className={cn(PRIMARY_PILL_BUTTON, sendBlocked && "cursor-not-allowed opacity-50")}
+              >
+                {t("common.retry")}
+              </button>
+            )}
+            {entry.state === "sent" && (
+              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
+                <Check size={14} />
+                {verb ? sentText : t("connectors.approval.sentLabel")}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

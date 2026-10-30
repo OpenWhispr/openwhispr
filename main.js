@@ -224,6 +224,7 @@ function getProtocolAppArgs() {
 // Register custom protocol for OAuth callbacks.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
+  if (process.platform === "darwin" && app.isDefaultProtocolClient(protocol)) return true;
   const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
   const appArgs = getProtocolAppArgs();
 
@@ -305,8 +306,8 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
-const { AssistantPasteTarget } = require("./src/helpers/assistantPasteTarget");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
+const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
 const {
@@ -685,13 +686,10 @@ function initializeCoreManagers() {
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
   windowManager.selectionManager = selectionManager;
-  windowManager.assistantPasteTarget = new AssistantPasteTarget({
-    textEditMonitor,
-    selectionManager,
-  });
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
+  windowManager.agentWindow = new AgentWindowManager(windowManager);
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
   } else if (process.platform === "win32") {

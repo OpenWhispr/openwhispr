@@ -246,3 +246,209 @@ test("a cloud conversation tombstone hard-deletes the local row and its messages
   );
   assert.equal(messageCount(db), 0, "the messages go with the conversation");
 });
+
+test("a conversation isn't pushed while a reply waits on the user, only once its turn ends", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const conversation = db.createAgentConversation("Waiting on a question");
+  db.addAgentMessage(conversation.id, "user", "Post the update");
+  const reply = db.addAgentMessage(conversation.id, "assistant", "", {
+    turn: { startedAt: Date.now(), status: "waiting" },
+  });
+  // A turn that old was cut off (the app quit); it goes as it is.
+  const cutOff = db.createAgentConversation("Cut off");
+  db.addAgentMessage(cutOff.id, "assistant", "", {
+    turn: { startedAt: Date.now() - 2 * 60 * 60 * 1000, status: "running" },
+  });
+
+  await service.syncAll(true);
+  assert.deepEqual(
+    cloud.logFor("/api/conversations/create").map((entry) => entry.body.title),
+    ["Cut off"]
+  );
+
+  db.updateAgentMessage(reply.id, "Posted.", {
+    turn: { startedAt: Date.now(), finishedAt: Date.now(), status: "complete" },
+  });
+  await service.syncAll(true);
+  const pushed = cloud.logFor("/api/conversations/create").at(-1).body;
+  assert.equal(pushed.title, "Waiting on a question");
+  assert.deepEqual(
+    pushed.messages.map((message) => message.content),
+    ["Post the update", "Posted."]
+  );
+});
+
+function seedForkedChat(db) {
+  const parent = db.createAgentConversation("Plan the launch");
+  const rows = [
+    db.addAgentMessage(parent.id, "user", "Draft the launch email"),
+    db.addAgentMessage(parent.id, "assistant", "Here is a draft."),
+    db.addAgentMessage(parent.id, "user", "Make it shorter"),
+  ];
+  const fork = db.forkAgentConversation(parent.id, rows[1].id, "Here is a draft.");
+  return { parent: db.getAgentConversation(parent.id), fork };
+}
+
+test("a fork is pushed with its parent's client id, its copied count and its text", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const { parent, fork } = seedForkedChat(db);
+
+  await service.syncAll(true);
+
+  const bodies = new Map(
+    cloud
+      .logFor("/api/conversations/create")
+      .map((entry) => [entry.body.client_conversation_id, entry.body])
+  );
+  const pushedFork = bodies.get(fork.client_conversation_id);
+  assert.equal(pushedFork.parent_client_conversation_id, parent.client_conversation_id);
+  assert.equal(pushedFork.fork_message_count, 2);
+  assert.equal(pushedFork.fork_context, "Here is a draft.");
+  assert.equal(pushedFork.messages.length, 2);
+  const pushedParent = bodies.get(parent.client_conversation_id);
+  assert.equal(pushedParent.parent_client_conversation_id, null);
+  assert.equal(pushedParent.fork_message_count, null);
+  assert.equal(pushedParent.fork_context, null);
+});
+
+const CLOUD_PARENT = {
+  client_conversation_id: "cloud-parent",
+  title: "Plan the launch",
+  created_at: "2026-07-20T08:00:00.000Z",
+  messages: [
+    { role: "user", content: "Draft the launch email" },
+    { role: "assistant", content: "Here is a draft." },
+  ],
+};
+
+function cloudFork(clientId, parentClientId, createdAt = "2026-07-20T09:00:00.000Z") {
+  return {
+    client_conversation_id: clientId,
+    title: "Plan the launch",
+    created_at: createdAt,
+    messages: [...CLOUD_PARENT.messages, { role: "user", content: "Only in the fork" }],
+    parent_client_conversation_id: parentClientId,
+    fork_message_count: 2,
+    fork_context: "Here is a draft.",
+  };
+}
+
+test("another device links a pulled fork to its parent, which the list sends after it", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  cloud.seedConversation(CLOUD_PARENT);
+  cloud.seedConversation(cloudFork("cloud-fork", "cloud-parent"));
+
+  await service.syncAll(true);
+
+  const [listed] = cloud.logFor("/api/conversations/list");
+  assert.equal(queryParam(listed.path, "since"), null, "a fresh device lists newest first");
+  const parent = db.getConversationByClientId("cloud-parent");
+  const fork = db.getAgentConversation(db.getConversationByClientId("cloud-fork").id);
+  assert.equal(fork.parent_conversation_id, parent.id);
+  assert.equal(fork.parent_title, "Plan the launch");
+  assert.equal(fork.fork_message_count, 2);
+  assert.equal(fork.fork_context, "Here is a draft.");
+  assert.equal(db.getAgentConversation(parent.id).parent_conversation_id, null);
+});
+
+test("a fork links once a later sync brings its parent; a deleted parent leaves a plain chat", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  cloud.seedConversation({
+    client_conversation_id: "deleted-parent",
+    created_at: "2026-07-20T07:00:00.000Z",
+    deleted_at: "2026-07-20T07:30:00.000Z",
+  });
+  cloud.seedConversation(cloudFork("fork-of-deleted", "deleted-parent"));
+  cloud.seedConversation(cloudFork("fork-waiting", "cloud-parent"));
+
+  await service.syncAll(true);
+
+  const waiting = db.getConversationByClientId("fork-waiting");
+  assert.equal(waiting.parent_conversation_id, null, "no parent on this device yet");
+  assert.equal(db.getAgentConversation(waiting.id).messages.length, 3);
+
+  cloud.seedConversation({ ...CLOUD_PARENT, updated_at: "2099-01-01T00:00:00.000Z" });
+  await service.syncAll(true);
+
+  const parent = db.getConversationByClientId("cloud-parent");
+  assert.ok(parent, "the parent arrived on the delta page");
+  assert.equal(db.getConversationByClientId("fork-waiting").parent_conversation_id, parent.id);
+  assert.equal(db.getConversationByClientId("fork-of-deleted").parent_conversation_id, null);
+});
+
+test("chats from an API without fork fields arrive plain, and a local fork keeps its origin", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const { parent, fork } = seedForkedChat(db);
+  // The fork went to an API that dropped its origin, then was renamed elsewhere.
+  const cloudCopy = cloud.seedConversation({
+    client_conversation_id: fork.client_conversation_id,
+    title: "Renamed elsewhere",
+    created_at: "2026-07-20T08:00:00.000Z",
+    updated_at: "2099-01-01T00:00:00.000Z",
+    messages: [
+      { role: "user", content: "Draft the launch email" },
+      { role: "assistant", content: "Here is a draft." },
+    ],
+  });
+  assert.equal("parent_client_conversation_id" in cloudCopy, false);
+  updateConversation(db, fork.id, {
+    cloud_id: cloudCopy.id,
+    sync_status: "synced",
+    updated_at: LOCAL_EARLY,
+  });
+  cloud.seedConversation({ client_conversation_id: "plain-elsewhere", title: "Plain" });
+
+  await service.syncAll(true);
+
+  const pulled = db.getAgentConversation(fork.id);
+  assert.equal(pulled.title, "Renamed elsewhere");
+  assert.equal(pulled.parent_conversation_id, parent.id);
+  assert.equal(pulled.fork_message_count, 2);
+  assert.equal(pulled.fork_context, "Here is a draft.");
+  assert.equal(db.getConversationByClientId("plain-elsewhere").parent_conversation_id, null);
+});
+
+test("both conversation upload paths omit reasoning while retaining local turn and selected context metadata", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  for (const method of ["pushConversation", "pushPendingConversations"]) {
+    const conversation = db.createAgentConversation(method);
+    const selected = { selectedContext: "Selected text", selectedContextSource: "external" };
+    db.addAgentMessage(conversation.id, "user", "Explain this", selected);
+    const metadata = {
+      turn: {
+        status: "complete",
+        startedAt: 1,
+        finishedAt: 2,
+        reasoning: "Private connector fact",
+      },
+      toolCalls: [{ id: "lookup", name: "find_contact", status: "completed" }],
+    };
+    const reply = db.addAgentMessage(conversation.id, "assistant", "Public answer", metadata);
+    await service[method](conversation.id);
+    const uploaded = cloud.logFor("/api/conversations/create").at(-1).body;
+    assert.deepEqual(uploaded.messages[0].metadata, selected);
+    assert.deepEqual(uploaded.messages[1].metadata, {
+      ...metadata,
+      turn: { status: "complete", startedAt: 1, finishedAt: 2 },
+    });
+    assert.deepEqual(
+      JSON.parse(
+        db.getAgentConversation(conversation.id).messages.find((row) => row.id === reply.id)
+          .metadata
+      ),
+      metadata
+    );
+  }
+});

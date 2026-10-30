@@ -1,5 +1,4 @@
 import { estimateNoteTokens, planNoteChunks } from "../helpers/noteChunking";
-import { HISTORY_LIMIT } from "../components/chat/historyMessages";
 import type { Message } from "../components/chat/types";
 import type { SkillForModel, SkillRef, SkillSummary } from "../types/skills";
 
@@ -8,6 +7,8 @@ export const SKILL_CATALOG_MAX_TOKENS = { hosted: 2_000, selfHosted: 330 } as co
 /** The text of the skills one turn uses. */
 export const SKILL_CONTEXT_MAX_TOKENS = { hosted: 16_000, selfHosted: 2_500 } as const;
 export type SkillTier = keyof typeof SKILL_CONTEXT_MAX_TOKENS;
+
+const SKILL_HISTORY_LIMIT = 20;
 
 const SCRIPTS_NOTE = "scripts are shown to the user to run, never run by you";
 const SKILL_CUT = "[The rest of this skill was cut to fit.]";
@@ -198,7 +199,7 @@ export function loadSkillTarget(argumentsJson: string): { name: string; file: bo
 export function activeSkillNames(history: Message[], attached?: SkillRef): SkillRef[] {
   const active: SkillRef[] = attached ? [attached] : [];
   const seen = new Set(attached && !attached.builtin ? [attached.name] : []);
-  for (const message of history.slice(-HISTORY_LIMIT).reverse()) {
+  for (const message of history.slice(-SKILL_HISTORY_LIMIT).reverse()) {
     for (const call of [...(message.toolCalls ?? [])].reverse()) {
       if (call.name !== "load_skill" || call.status !== "completed") continue;
       const target = loadSkillTarget(call.arguments);

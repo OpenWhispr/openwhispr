@@ -349,18 +349,68 @@ function installMicCaptureGlobals(t) {
   });
 }
 
+// A real DOM (happy-dom) on the globals React DOM and the components read,
+// for tests that click, type and press keys. Restored after the test.
+async function installHappyDom(t) {
+  const { Window } = await import("happy-dom");
+  const happyWindow = new Window();
+  const fromWindow = [
+    "document",
+    "Node",
+    "Element",
+    "HTMLElement",
+    "Event",
+    "KeyboardEvent",
+    "ResizeObserver",
+    "requestAnimationFrame",
+    "cancelAnimationFrame",
+  ];
+  const names = ["window", ...fromWindow, "localStorage", "IS_REACT_ACT_ENVIRONMENT"];
+  const originals = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  const define = (name, value) =>
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  define("window", happyWindow);
+  for (const name of fromWindow) {
+    const value = happyWindow[name];
+    define(
+      name,
+      typeof value === "function" && name.endsWith("AnimationFrame")
+        ? value.bind(happyWindow)
+        : value
+    );
+  }
+  define("localStorage", happyWindow.localStorage);
+  define("IS_REACT_ACT_ENVIRONMENT", true);
+  addTeardown(t, async () => {
+    for (const [name, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+    await happyWindow.happyDOM.close();
+  });
+  return happyWindow;
+}
+
 // The real useAuth loads the auth client, whose session work outlives a test's
 // browser globals; hooks that only read the user get a signed-out stand-in.
 const SIGNED_OUT_AUTH_MOCK = {
   "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
 };
 
+// The chat adds the app's context (the time, matching library notes) to the
+// end of the user's message; this is what the user wrote.
+function userTextOf(content) {
+  return content.split("\n\nContext from the app for this message")[0];
+}
+
 module.exports = {
   SIGNED_OUT_AUTH_MOCK,
   addTeardown,
   createRendererServer,
   installBrowserGlobals,
+  installHappyDom,
   installHookDom,
   installHostDom,
   installMicCaptureGlobals,
+  userTextOf,
 };

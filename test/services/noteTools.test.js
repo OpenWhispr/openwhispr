@@ -71,3 +71,21 @@ test("a cloud search keeps an untitled note and strips the fence from the rest",
   assert.match(result.data[1].title, /^Sync <meeting attendees>/);
   assert.doesNotMatch(JSON.stringify(result.data), /meeting_attendees/);
 });
+
+test("an empty cloud search tries the local library, preserving its container scope", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  t.mock.method(NotesService, "search", async () => ({ notes: [] }));
+  const queries = [];
+  global.window.electronAPI.semanticSearchNotes = async (...args) => {
+    queries.push(args);
+    return [NOTE];
+  };
+  const { createSearchNotesTool } = await import("../../src/services/tools/searchNotesTool.ts");
+  const result = await createSearchNotesTool({
+    useCloudSearch: true,
+    fixedScope: { spaceId: 1 },
+  }).execute({ query: "pricing" });
+  assert.equal(result.success, true);
+  assert.equal(result.data[0].id, 3);
+  assert.deepEqual(queries, [["pricing", 5, 1, null]]);
+});

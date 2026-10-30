@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const path = require("node:path");
+const sourceRoot = process.env.OPENWHISPR_TEST_SOURCE || path.resolve(__dirname, "../..");
 
 // #1110's desk as Electron reports it under KDE: the 1080p (left) keeps
 // workArea == bounds and the primary 4K (right) lost 236 DIP to the other
@@ -56,7 +58,11 @@ Module._load = function loadWithStubs(request, parent, isMain) {
       BrowserWindow: class {
         constructor({ x, y, width, height }) {
           this.bounds = { x, y, width, height };
-          this.webContents = { on: () => undefined, send: () => undefined };
+          this.contentsListeners = new Map();
+          this.webContents = {
+            on: (event, listener) => this.contentsListeners.set(event, listener),
+            send: () => undefined,
+          };
         }
         isDestroyed() {
           return false;
@@ -102,7 +108,7 @@ Module._load = function loadWithStubs(request, parent, isMain) {
   if (request === "./i18nMain") return { i18nMain: { t: (key) => key } };
   return originalLoad.call(this, request, parent, isMain);
 };
-const WindowManager = require("../../src/helpers/windowManager");
+const WindowManager = require(path.join(sourceRoot, "src/helpers/windowManager"));
 const DragManager = require("../../src/helpers/dragManager");
 const { WindowPositionUtil } = require("../../src/helpers/windowConfig");
 Module._load = originalLoad;
@@ -168,9 +174,12 @@ test("creating the pill starts watching Plasma, and a change re-anchors it", asy
   await manager.createMainWindow();
   assert.equal(bottomOf(manager.mainWindow.bounds), DISPLAYS[1].workArea.height - 4);
 
+  let agentRefits = 0;
+  manager.agentWindow = { refit: () => (agentRefits += 1) };
   plasmaAnswered = true;
   await workAreasChanged();
   assert.equal(bottomOf(manager.mainWindow.bounds), PLASMA_WORK_AREAS[35].height - 4);
+  assert.equal(agentRefits, 1, "the agent window re-anchors too");
 });
 
 test("work areas that arrive after placement re-anchor an auto-placed pill", async () => {
@@ -212,4 +221,27 @@ test("dragging stops at the monitor's own panel, not at the root work area", () 
   drag.updateWindowPosition();
 
   assert.deepEqual(positions, [{ x: 3950, y: 1223 - PILL.height }]);
+});
+
+test("a lost dictation document releases its reservation without clearing another window's", async () => {
+  const manager = new WindowManager();
+  for (const step of [
+    "setMainWindowInteractivity",
+    "registerMainWindowEvents",
+    "registerExternalLinkHandlers",
+    "loadMainWindow",
+    "initializeHotkey",
+  ])
+    manager[step] = async () => undefined;
+  await manager.createMainWindow();
+  const old = manager.mainWindow;
+  for (const event of ["did-navigate", "render-process-gone", "destroyed"]) {
+    manager.setDictationLifecycleState("preparing", event);
+    old.contentsListeners.get(event)?.();
+    assert.equal(manager.isDictationActive(), false, event);
+  }
+  manager.mainWindow = { webContents: {} };
+  manager.setDictationLifecycleState("preparing", "new-document");
+  old.contentsListeners.get("destroyed")?.();
+  assert.equal(manager.isDictationActive(), true);
 });

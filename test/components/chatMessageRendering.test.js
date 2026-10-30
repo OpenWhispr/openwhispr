@@ -94,7 +94,8 @@ test("a reply with a classified error shows an Open Settings link and technical 
   assert.match(container.textContent, /OpenAI rejected your API key\./);
   const settingsButton = findElement(
     container,
-    (element) => element.tagName === "BUTTON" && /providerErrors\.openSettings/.test(element.textContent)
+    (element) =>
+      element.tagName === "BUTTON" && /providerErrors\.openSettings/.test(element.textContent)
   );
   assert.ok(settingsButton, "shows the Open Settings affordance");
   assert.match(container.textContent, /reasoning\.enterprise\.technicalDetails\.title/);
@@ -111,4 +112,56 @@ test("a reply with no error shows neither the settings link nor technical detail
 
   assert.doesNotMatch(container.textContent, /providerErrors\.openSettings/);
   assert.doesNotMatch(container.textContent, /reasoning\.enterprise\.technicalDetails\.title/);
+});
+
+test("a failed reply loaded from history says it failed; one failing now shows its error once", async (t) => {
+  const { container, render } = await mountChatMessages(t);
+  const failed = {
+    id: "a",
+    role: "assistant",
+    content: "",
+    isStreaming: false,
+    turn: { startedAt: 1, finishedAt: 2, status: "error" },
+  };
+
+  await render({ messages: [failed] });
+  assert.match(container.textContent, /agentMode\.turn\.failed/);
+
+  await render({
+    messages: [{ ...failed, content: "Error: Groq rejected your API key.", error: {} }],
+  });
+  assert.doesNotMatch(container.textContent, /agentMode\.turn\.failed/);
+});
+
+test("a step still running when its turn stopped reads as stopped, never as working", async (t) => {
+  const { container, render } = await mountChatMessages(t);
+  await render({
+    messages: [
+      {
+        id: "a",
+        role: "assistant",
+        content: "",
+        isStreaming: false,
+        turn: { startedAt: 1, finishedAt: 2, status: "stopped" },
+        toolCalls: [
+          { id: "w1", name: "web_search", arguments: "{}", status: "stopped" },
+          { id: "c1", name: "copy_to_clipboard", arguments: "{}", status: "stopped" },
+          {
+            id: "q1",
+            name: "ask_user",
+            arguments: "{}",
+            status: "stopped",
+            interaction: {
+              payload: { kind: "questions", questions: [] },
+              state: "settled",
+              result: { status: "cancelled" },
+            },
+          },
+        ],
+      },
+    ],
+  });
+  assert.doesNotMatch(container.textContent, /agentMode\.tools\.(web_search|ask_user)Status/);
+  assert.doesNotMatch(container.textContent, /copiedToClipboard/, "a stopped copy never copied");
+  assert.match(container.textContent, /agentMode\.interactions\.status\.cancelled/);
 });

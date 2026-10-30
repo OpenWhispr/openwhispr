@@ -22,6 +22,14 @@ const RETRY_AFTER_REFRESH = new Set([
 const SLACK_ESCAPE_SPECIALS = true;
 const TOO_LARGE_FOR_NAMES =
   "This Slack workspace is too large to look people up by name. Ask the user for the person's email address, or the exact #channel name.";
+// A channel (C…, or G… for an older private one), a DM (D…) or a person (U…,
+// or W… on Enterprise Grid): nine or more characters with a digit. Shorter
+// names typed in capitals ("GABE", "D2C") never match; a longer one such as
+// "DESIGN2025" can, so findTarget tries a bare one as a name as well.
+const SLACK_ID = /^[CDGUW](?=[A-Z0-9]*\d)[A-Z0-9]{8,}$/;
+// A message in a link: p, then its ts without the dot.
+const LINK_MESSAGE = /^p(\d{10})(\d{6})$/;
+const MESSAGE_TS = /^\d{10}\.\d{6}$/;
 
 // Escaping &, < and > makes a message post exactly as the card showed it:
 // no channel-wide mention or link the user didn't see.
@@ -35,14 +43,64 @@ function formatMessage(text) {
   return SLACK_ESCAPE_SPECIALS ? escapeSpecials(text) : text;
 }
 
-function messageParams(channel, text) {
-  return { channel, markdown_text: formatMessage(text) };
+function messageParams(channel, text, threadTs) {
+  return {
+    channel,
+    markdown_text: formatMessage(text),
+    ...(threadTs ? { thread_ts: threadTs } : {}),
+  };
 }
 
-// chat.postMessage returns no permalink; this is Slack's permalink format.
-function messageUrl(teamUrl, channel, ts) {
+// chat.postMessage returns no permalink; this is Slack's permalink format. A
+// reply's link names its thread, as Slack's own do, so replying to it again
+// stays in that thread.
+function messageUrl(teamUrl, channel, ts, threadTs) {
   if (typeof teamUrl !== "string" || typeof ts !== "string") return undefined;
-  return `${teamUrl.replace(/\/?$/, "/")}archives/${channel}/p${ts.replace(".", "")}`;
+  const url = `${teamUrl.replace(/\/?$/, "/")}archives/${channel}/p${ts.replace(".", "")}`;
+  return threadTs ? `${url}?thread_ts=${threadTs}&cid=${channel}` : url;
+}
+
+// A link to a conversation, or to a message in it:
+// https://<…>.slack.com/archives/<C…|G…|D…>[/p<ts>]. Any Slack host:
+// Enterprise Grid and Slack Connect links aren't on the workspace's own
+// domain, and the conversation is pinned by its id (among the user's
+// channels, or against the destination) either way. A reply can't start a
+// thread, and its link names the one it is in (?thread_ts=), so threadTs is
+// that thread. Null for anything else, a cid naming another conversation
+// included.
+function parseSlackLink(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".slack.com")) return null;
+  const [archives, channelId, message, ...rest] = url.pathname.split("/").filter(Boolean);
+  if (archives !== "archives" || rest.length > 0) return null;
+  if (!/^[CDG]/.test(channelId ?? "") || !SLACK_ID.test(channelId)) return null;
+  const cid = url.searchParams.get("cid");
+  if (cid !== null && cid !== channelId) return null;
+  const ts = message === undefined ? null : LINK_MESSAGE.exec(message);
+  if (message !== undefined && !ts) return null;
+  const threadTs = url.searchParams.get("thread_ts");
+  if (threadTs !== null && !MESSAGE_TS.test(threadTs)) return null;
+  return { channelId, threadTs: threadTs ?? (ts ? `${ts[1]}.${ts[2]}` : null) };
+}
+
+// The card says which thread by when it started; the copy formats the time
+// (ms) in the UI's language and the user's time zone.
+function replyInThreadNote(threadTs) {
+  return {
+    key: "connectors.approval.slack.notes.replyInThread",
+    values: { started: String(Math.round(Number(threadTs) * 1000)) },
+  };
+}
+
+// A person's DM is known only once Send opens it, which checks the thread
+// again; until then, a thread outside any DM can't be with them.
+function threadFits(target, thread) {
+  return target.kind === "user" ? thread.channelId.startsWith("D") : target.id === thread.channelId;
 }
 
 function failureMessage(errorCode, label = "", fallback = "Slack didn't accept the message.") {
@@ -70,6 +128,16 @@ function failureMessage(errorCode, label = "", fallback = "Slack didn't accept t
       return "The message is too long for Slack (12,000 characters at most, once formatted).";
     case "no_text":
       return "The message is empty.";
+    case "thread_mismatch":
+      return `That thread is in a different conversation from ${label}, so nothing was sent. To reply there, pass the thread's link as the destination too.`;
+    case "invalid_thread":
+      return "The thread must be a link to a Slack message, like https://<workspace>.slack.com/archives/C0123ABCD/p1712345678901234. Nothing was sent.";
+    case "cannot_reply_to_message":
+    case "restricted_action_thread_locked":
+    case "restricted_action_non_threadable_channel":
+      return "Slack doesn't allow replies in that thread.";
+    case "restricted_action_thread_only_channel":
+      return `Only replies in threads can be posted in ${label}.`;
     default:
       return fallback;
   }
@@ -86,14 +154,28 @@ function parseDestination(raw) {
   if (value.startsWith("#")) return { kind: "channel", query: value.slice(1) };
   if (isValidEmailAddress(value)) return { kind: "email", query: value };
   if (value.startsWith("@")) return { kind: "person", query: value.slice(1) };
+  const link = parseSlackLink(value);
+  if (link) return { kind: "link", query: link.channelId };
+  if (SLACK_ID.test(value)) return { kind: "id", query: value };
   return { kind: "any", query: value };
 }
 
 function clarify(message, candidates = []) {
+  const labels = candidates.map((candidate) => candidate.hint ?? candidate.label);
   return {
     status: "needs_clarification",
     message,
-    candidates: candidates.map((candidate) => candidate.hint ?? candidate.label),
+    candidates: labels,
+    // What the user can pick from: each destination finds exactly that
+    // channel (#name) or person (@username) when prepared again.
+    ...(candidates.length > 0
+      ? {
+          choices: candidates.map((candidate, index) => ({
+            label: labels[index],
+            destination: candidate.kind === "channel" ? candidate.label : `@${candidate.handle}`,
+          })),
+        }
+      : {}),
   };
 }
 
@@ -101,8 +183,55 @@ function prepareFailed(errorCode, message) {
   return { status: "failed", errorCode, message };
 }
 
+// Which Slack login a lookup or an opened DM belongs to.
+function loginCacheKey(binding, credential) {
+  return `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
+}
+
 function createSlackConnector({ api, auth, directory, credentials }) {
-  async function findTarget(parsed, token, cacheKey) {
+  // Whose DM an id is takes im:read, which the app doesn't ask for, and the
+  // card must name who gets the message. So a DM id is known by the person a
+  // Send opened it with, per login, for as long as the app runs.
+  const openedDms = new Map();
+
+  // An id names exactly one channel, person or DM. A person's is looked up
+  // directly; a channel's must be among the user's channels, which a list
+  // cut off at the page cap may not show.
+  async function findById(id, token, cacheKey) {
+    if (id.startsWith("D")) {
+      const person = openedDms.get(`${cacheKey}:${id}`);
+      if (person) return { candidate: { id, kind: "dm", label: person.label } };
+      return {
+        clarify: clarify(
+          `Slack doesn't say whose direct message ${id} is. Ask the user who to send it to, by name or email.`
+        ),
+      };
+    }
+    if (id.startsWith("U") || id.startsWith("W")) {
+      const found = await directory.personById(token, id);
+      if (!found.ok) return { error: found.errorCode };
+      if (found.candidate) return { candidate: found.candidate };
+      return {
+        clarify: clarify(
+          `No one in this Slack workspace has the id ${id}. Ask the user who they meant.`
+        ),
+      };
+    }
+    const channels = await directory.channels(token, cacheKey);
+    if (!channels.ok) return { error: channels.errorCode };
+    const channel = channels.items.find((candidate) => candidate.id === id);
+    if (channel) return { candidate: channel };
+    return {
+      clarify: clarify(
+        channels.truncated
+          ? `The user is in more Slack channels than can be listed, and none of those read has the id ${id}. Ask the user where to send it.`
+          : `Couldn't find a channel with the id ${id} that the user is in. Ask the user where to send it.`
+      ),
+    };
+  }
+
+  // unmatched: no name was found, or could be in a list cut off at the page cap.
+  async function findByName(parsed, token, cacheKey) {
     if (parsed.kind === "email") {
       const found = await directory.personByEmail(token, parsed.query);
       if (!found.ok) return { error: found.errorCode };
@@ -123,11 +252,23 @@ function createSlackConnector({ api, auth, directory, credentials }) {
     if (failure) return { error: failure.errorCode };
     const candidates = lists.flatMap((list) => list.items);
 
+    // A username is unique in a workspace, so "@handle" (what the picker
+    // sends) finds exactly that person, even when it is also someone else's
+    // display name.
+    if (parsed.kind === "person") {
+      const handle = parsed.query.toLowerCase();
+      const exact = candidates.find((candidate) => candidate.handle?.toLowerCase() === handle);
+      if (exact) return { candidate: exact };
+    }
+
     // A name is only unique if every candidate was seen. When a list stopped
-    // at the page cap, only an exact channel name (unique in a workspace)
-    // still identifies something; a person needs an email address.
+    // at the page cap, only what is unique in a workspace still identifies
+    // something: an exact @username (above), an exact channel name, or an
+    // email address.
     if (lists.some((list) => list.truncated)) {
-      if (parsed.kind !== "channel") return { clarify: clarify(TOO_LARGE_FOR_NAMES) };
+      if (parsed.kind !== "channel") {
+        return { clarify: clarify(TOO_LARGE_FOR_NAMES), unmatched: true };
+      }
       const exact = resolveTarget(parsed.query, candidates, { exactOnly: true });
       if (exact.status === "match") return { candidate: exact.candidate };
       return {
@@ -151,7 +292,30 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       parsed.kind === "channel"
         ? `a channel called #${parsed.query} that the user is in`
         : `"${parsed.query}"`;
-    return { clarify: clarify(`Couldn't find ${where} in Slack. Ask the user where to send it.`) };
+    return {
+      clarify: clarify(`Couldn't find ${where} in Slack. Ask the user where to send it.`),
+      unmatched: true,
+    };
+  }
+
+  // A link names its conversation by id. A bare id-shaped value can also be a
+  // name ("DESIGN2025" is a channel): a DM id has no lookup of its own, so it
+  // is a DM only when no name matches; any other is looked up as an id first,
+  // and tried as a name when nothing has that id.
+  async function findTarget(parsed, token, cacheKey) {
+    if (parsed.kind === "link") return findById(parsed.query, token, cacheKey);
+    if (parsed.kind !== "id") return findByName(parsed, token, cacheKey);
+    const asName = { kind: "any", query: parsed.query };
+    if (parsed.query.startsWith("D")) {
+      const named = await findByName(asName, token, cacheKey);
+      return named.unmatched ? findById(parsed.query, token, cacheKey) : named;
+    }
+    const byId = await findById(parsed.query, token, cacheKey);
+    if (!byId.clarify) return byId;
+    // A name that matches nothing either: the id's own question says more
+    // (a cut-off list of channels, not "too large to look people up by name").
+    const named = await findByName(asName, token, cacheKey);
+    return named.unmatched ? byId : named;
   }
 
   // Slack refusing a token it just issued means the login itself is gone.
@@ -221,6 +385,11 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       const destination = typeof args.destination === "string" ? args.destination.trim() : "";
       if (!destination)
         return clarify("Ask the user which Slack channel or person to send this to.");
+      const threadLink = typeof args.thread === "string" ? args.thread.trim() : "";
+      const thread = threadLink ? parseSlackLink(threadLink) : null;
+      if (threadLink && !thread?.threadTs) {
+        return prepareFailed("invalid_thread", failureMessage("invalid_thread"));
+      }
 
       const access = await auth.getAccessToken(binding);
       if (!access.ok) {
@@ -230,13 +399,9 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         );
       }
       const { credential } = access;
-      const cacheKey = `${binding.ownerAccountId}:${credential.teamId}:${credential.userId}:${binding.generation}`;
-      const found = await findTargetWithRefresh(
-        parseDestination(destination),
-        binding,
-        access,
-        cacheKey
-      );
+      const parsed = parseDestination(destination);
+      const cacheKey = loginCacheKey(binding, credential);
+      const found = await findTargetWithRefresh(parsed, binding, access, cacheKey);
       if (found.clarify) return found.clarify;
       if (found.error) {
         return prepareFailed(
@@ -250,15 +415,27 @@ function createSlackConnector({ api, auth, directory, credentials }) {
         id: found.candidate.id,
         label: found.candidate.label,
       };
+      // A person's DM is known only once Send opens it, unless an earlier Send
+      // here opened the thread's DM with someone else: then nothing is opened.
+      const threadDm = thread && openedDms.get(`${cacheKey}:${thread.channelId}`);
+      const otherPersonsDm = target.kind === "user" && threadDm && threadDm.userId !== target.id;
+      if (thread && (!threadFits(target, thread) || otherPersonsDm)) {
+        return prepareFailed("thread_mismatch", failureMessage("thread_mismatch", target.label));
+      }
       return {
         status: "ready",
-        payload: { target, text },
+        payload: {
+          target,
+          text,
+          ...(thread ? { thread: { channelId: thread.channelId, ts: thread.threadTs } } : {}),
+        },
         preview: {
           verbKey: "slackPost",
           destinationLabel: target.label,
           accountLabel: credential.userName,
           workspaceLabel: credential.teamName,
           body: text,
+          ...(thread ? { notes: [replyInThreadNote(thread.threadTs)] } : {}),
         },
       };
     },
@@ -267,7 +444,7 @@ function createSlackConnector({ api, auth, directory, credentials }) {
       if (action !== "send_message") {
         return { state: "failed", errorCode: "unknown_action", message: "Unknown Slack action." };
       }
-      const { target } = payload;
+      const { target, thread } = payload;
       const text = typeof edits.body === "string" ? edits.body : payload.text;
       // Checked before anything reaches Slack, a DM open included.
       const problem = textProblem(text);
@@ -313,19 +490,41 @@ function createSlackConnector({ api, auth, directory, credentials }) {
           };
         }
         channel = channelId;
+        openedDms.set(`${loginCacheKey(binding, access.credential)}:${channelId}`, {
+          userId: target.id,
+          label: target.label,
+        });
+      }
+      if (thread && channel !== thread.channelId) {
+        return {
+          state: "failed",
+          errorCode: "thread_mismatch",
+          message: failureMessage("thread_mismatch", target.label),
+        };
       }
 
       const posted = await writeWithRefresh(
         "chat.postMessage",
-        messageParams(channel, text),
+        messageParams(channel, text, thread?.ts),
         binding,
         current
       );
       const { result } = posted;
       if (result.ok) {
+        // The thread Slack says the message went into, if any: one it didn't
+        // thread is linked as the new message it is, and the card says so,
+        // since it promised a reply in the thread.
+        const threadTs = thread ? result.data.message?.thread_ts : undefined;
+        const threaded = MESSAGE_TS.test(threadTs ?? "");
         return {
           state: "sent",
-          url: messageUrl(posted.access.credential.teamUrl, channel, result.data.ts),
+          url: messageUrl(
+            posted.access.credential.teamUrl,
+            channel,
+            result.data.ts,
+            threaded ? threadTs : undefined
+          ),
+          ...(thread && !threaded ? { outsideThread: true } : {}),
         };
       }
       if (result.outcome === "failed") {

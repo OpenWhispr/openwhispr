@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   SIGNED_OUT_AUTH_MOCK,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const noop = () => {};
@@ -15,7 +16,7 @@ const TRANSCRIPT =
 const PREVIEW_RULE = "only its start is shown (transcript_preview)";
 const REQUEST = "What is the launch code?";
 
-for (const surface of ["note chat", "assistant panel"]) {
+for (const surface of ["note chat", "agent window"]) {
   for (const provider of ["cloud", "byok"]) {
     test(`${surface}, ${provider}: bounded evidence reaches the reply and survives conversation reopen`, async (t) => {
       let root;
@@ -123,11 +124,13 @@ for (const surface of ["note chat", "assistant panel"]) {
           )
       );
       let chat;
-      let settled = false;
+      let agentChat;
       const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-      const { AssistantPanel } = await vite.ssrLoadModule(
-        "/components/dictation/AssistantPanel.tsx"
-      );
+      const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+      function AgentHarness() {
+        agentChat = useAgentChat({ onRegenerateFailed: noop });
+        return null;
+      }
       function Harness() {
         chat = useEmbeddedChat({
           noteId: 7,
@@ -141,50 +144,13 @@ for (const surface of ["note chat", "assistant panel"]) {
       }
       root = createRoot(container);
       await React.act(async () =>
-        root.render(
-          surface === "note chat"
-            ? React.createElement(Harness)
-            : React.createElement(AssistantPanel, {
-                pendingCommand: {
-                  id: 1,
-                  text: REQUEST,
-                  attachment: null,
-                  selectedContext: null,
-                  delivery: null,
-                },
-                initialConversationId: null,
-                onCommandConsumed: noop,
-                onCommandDiscarded: noop,
-                onCommandSettled: () => {
-                  settled = true;
-                },
-                onConversationIdChange: noop,
-                onClose: noop,
-                onBusyChange: noop,
-                onResponseReadyChange: noop,
-                onResponseContent: noop,
-                onConversationReset: noop,
-                onSelectionContextChange: noop,
-                skillChoice: { picked: null, pickOff: false },
-                onSkillChoiceChange: noop,
-                voiceState: "idle",
-                thinking: false,
-                open: true,
-                footerPhase: "actions",
-                horizontalDirection: "left",
-              })
-        )
+        root.render(React.createElement(surface === "note chat" ? Harness : AgentHarness))
       );
-      if (surface === "note chat") await React.act(async () => chat.sendMessage(REQUEST));
-      else {
-        for (let i = 0; !settled && i < 100; i++)
-          await React.act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          });
-        assert.equal(settled, true);
-      }
+      await React.act(async () =>
+        surface === "note chat" ? chat.sendMessage(REQUEST) : agentChat.send(REQUEST)
+      );
       assert.equal(stored.transcript, TRANSCRIPT);
-      assert.equal(request.messages.at(-1).content, REQUEST);
+      assert.equal(userTextOf(request.messages.at(-1).content), REQUEST);
       assert.ok(savedMessages.some((m) => m[1] === "assistant" && m[2].includes("violet heron")));
       if (surface === "note chat") {
         await React.act(async () => chat.startNewChat());

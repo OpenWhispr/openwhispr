@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useChatPersistence } from "./useChatPersistence";
 import { useChatStreaming } from "./useChatStreaming";
 import { useChatMessageSender } from "./useChatMessageSender";
+import { useInterruptedInteractions } from "./useInterruptedInteractions";
+import type { SendToAIOptions } from "./useChatStreaming";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
 import ConversationList from "./ConversationList";
@@ -15,6 +17,13 @@ import { SkillChatActionsContext } from "./skillChatActions";
 import { useDialogs } from "../../hooks/useDialogs";
 import { getCachedPlatform } from "../../utils/platform";
 import { observeChatComposerInset } from "./composerLayout";
+import { useToast } from "../ui/useToast";
+import { GitFork } from "../icons";
+import { unsentForkContext } from "../../utils/agentSelectionContext";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
+import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
+import { useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { findPendingCard } from "../agent/agentWindowState";
 import {
   NO_CHAT_SKILLS,
   forgetChatSkills,
@@ -30,17 +39,27 @@ const CommandSearch = lazy(() => import("../CommandSearch"));
 const platform = getCachedPlatform();
 
 interface ChatViewProps {
+  /**
+   * False while another Control Panel view shows. The chat stays mounted so a
+   * turn waiting on the user (a trip to Settings) survives.
+   */
+  active?: boolean;
+  /** Bumped to start a new chat from outside (the New chat menu). */
+  newChatRequest?: number;
+  onAttentionChange?: (waiting: boolean) => void;
   /** A new id opens a new chat with that skill attached. */
   skillRequest?: SkillChatRequest | null;
   onSkillRequestHandled?: () => void;
   /** Open skill on a saved skill card. */
   onOpenSkill?: (name: string) => void;
 }
-
 export default function ChatView({
+  active = true,
+  newChatRequest = 0,
   skillRequest = null,
   onSkillRequestHandled,
   onOpenSkill,
+  onAttentionChange,
 }: ChatViewProps) {
   const { t } = useTranslation();
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -48,10 +67,12 @@ export default function ChatView({
   const [refreshKey, setRefreshKey] = useState(0);
   const [showSearch, setShowSearch] = useState(false);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
+  const [draft, setDraft] = useState("");
   // A conversation's skills come back with it when the user returns to it.
   const [chatSkills, setChatSkills] = useState<ChatSkills>(NO_CHAT_SKILLS);
   const { attached: attachedSkill, pickOff: skillPickOff, removed: removedSkills } = chatSkills;
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
+  const { toast } = useToast();
 
   const persistence = useChatPersistence({
     conversationId: activeConversationId,
@@ -60,15 +81,31 @@ export default function ChatView({
       setRefreshKey((k) => k + 1);
     },
   });
+  const interactionWaiting = useAgentInteractionStore(
+    (store) =>
+      findPendingCard(persistence.messages, store.entries, {}, { includeRestored: true }) !== null
+  );
+  const approvalWaiting = useConnectorApprovalStore(
+    (store) => findPendingCard(persistence.messages, {}, store.entries) !== null
+  );
+  const skillWaiting = useSkillApprovalStore(
+    (store) =>
+      findPendingCard(persistence.messages, {}, {}, { skillApprovals: store.entries }) !== null
+  );
+  const waiting = interactionWaiting || approvalWaiting || skillWaiting;
+  useEffect(() => {
+    onAttentionChange?.(waiting);
+    return () => onAttentionChange?.(false);
+  }, [onAttentionChange, waiting]);
 
   const streaming = useChatStreaming({
-    messages: persistence.messages,
     setMessages: persistence.setMessages,
     allowConnectors: true,
+    allowInteractions: true,
+    onStreamComplete: persistence.saveAssistantMessage,
+    claimConversation: persistence.claimConversation,
+    onTurnCheckpoint: persistence.saveAssistantMessage,
     skillsEnabled: true,
-    onStreamComplete: (_id, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
-    },
   });
   // useChatStreaming returns a fresh object every render; cancelStream is
   // stable, so the callbacks below depend on it rather than on `streaming`.
@@ -77,17 +114,17 @@ export default function ChatView({
   const handleSelectConversation = useCallback(
     async (id: number) => {
       if (id === activeConversationId) return;
-      cancelStream();
-      setActiveConversationId(id);
-      setIsNewChat(false);
-      setChatSkills(readChatSkills(id));
-      if ((await persistence.loadConversation(id)) === null) {
-        setActiveConversationId(null);
-        setIsNewChat(true);
-        setChatSkills(NO_CHAT_SKILLS);
+      const opened = await persistence.loadConversation(id, () => {
+        cancelStream();
+        setActiveConversationId(id);
+        setIsNewChat(false);
+        setChatSkills(readChatSkills(id));
+      });
+      if (opened === null) {
+        toast({ title: t("chat.openFailed"), variant: "destructive" });
       }
     },
-    [activeConversationId, cancelStream, persistence]
+    [activeConversationId, cancelStream, persistence, t, toast]
   );
 
   const handleNewChat = useCallback(() => {
@@ -123,13 +160,71 @@ export default function ChatView({
     },
     [persistence]
   );
-  const handleTextSubmit = useChatMessageSender({
+  const sendMessage = useChatMessageSender({
     conversationId: activeConversationId,
     persistence,
     streaming,
     createConversation,
     onSendingChange: setSubmissionInFlight,
   });
+  // A fork made from selected text sends it with its first request.
+  const { forkOrigin } = persistence;
+  const forkContext = unsentForkContext(forkOrigin, persistence.messages);
+  const handleTextSubmit = useCallback(
+    async (text: string, options?: SendToAIOptions) => {
+      const version = persistence.getSessionVersion?.();
+      const sendOptions: SendToAIOptions = {
+        attachedSkill: attachedSkill?.ref,
+        allowSkillPick: !skillPickOff,
+        removedSkills,
+        onSkillPicked: ({ name, displayName }) =>
+          setChatSkills((skills) => ({
+            ...skills,
+            attached: { ref: { name }, displayName, picked: true },
+          })),
+        ...options,
+      };
+      const sent = await sendMessage(
+        text,
+        forkContext
+          ? { ...sendOptions, selectedContext: { text: forkContext, sourceMessageId: "" } }
+          : sendOptions
+      );
+      if (!sent && version === persistence.getSessionVersion?.()) {
+        setDraft((current) => current || text);
+        toast({ title: t("chat.sendNotStarted"), variant: "destructive" });
+      }
+      return sent;
+    },
+    [forkContext, persistence, sendMessage, t, toast, attachedSkill, skillPickOff, removedSkills]
+  );
+  useInterruptedInteractions(persistence, handleTextSubmit);
+
+  // Read through a ref, so the handler stays the same while a reply streams
+  // and every message's memo holds.
+  const messagesRef = useRef(persistence.messages);
+  messagesRef.current = persistence.messages;
+  const { forkConversation } = persistence;
+  const handleForkMessage = useCallback(
+    async (messageId: string) => {
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (!message) return;
+      const forkId = await forkConversation(message, undefined, cancelStream);
+      if (forkId === false) return;
+      if (forkId === null) {
+        toast({ title: t("chat.forkFailed"), variant: "destructive" });
+        return;
+      }
+      setActiveConversationId(forkId);
+      setIsNewChat(false);
+      setRefreshKey((k) => k + 1);
+    },
+    [cancelStream, forkConversation, t, toast]
+  );
+
+  const handleContinue = useCallback(() => {
+    void handleTextSubmit(t("agentMode.turn.continueMessage"));
+  }, [handleTextSubmit, t]);
 
   // Every send carries the chat's skill, and lets the app pick one until the user said no.
   const sendWithSkill = useCallback(
@@ -242,6 +337,7 @@ export default function ChatView({
   );
 
   useEffect(() => {
+    if (!active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
       if (mod && e.key === "n") {
@@ -251,7 +347,21 @@ export default function ChatView({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [startNewChat]);
+  }, [active, startNewChat]);
+
+  // Back from another view: chats may have been added meanwhile.
+  const wasActiveRef = useRef(active);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) setRefreshKey((k) => k + 1);
+    wasActiveRef.current = active;
+  }, [active]);
+
+  const handledNewChatRequestRef = useRef(newChatRequest);
+  useEffect(() => {
+    if (newChatRequest === handledNewChatRequestRef.current) return;
+    handledNewChatRequestRef.current = newChatRequest;
+    startNewChat();
+  }, [newChatRequest, startNewChat]);
 
   return (
     <>
@@ -287,9 +397,25 @@ export default function ChatView({
             />
           </div>
           <div className="relative flex-1 min-w-80 min-h-0 flex flex-col">
+            {forkOrigin?.parentTitle && (
+              <div className="px-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
+                  className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                >
+                  <GitFork size={11} className="shrink-0" />
+                  <span dir="auto" className="truncate">
+                    {t("chat.forkedFrom", { title: forkOrigin.parentTitle })}
+                  </span>
+                </button>
+              </div>
+            )}
             <ChatMessages
-              messages={persistence.messages}
               leading={attachedSkill?.ref.builtin ? <CreatorOpening /> : undefined}
+              messages={persistence.messages}
+              onForkMessage={handleForkMessage}
+              onContinue={handleContinue}
               emptyState={
                 <NewChatEmptyState
                   onPrompt={(prompt) => {
@@ -320,7 +446,9 @@ export default function ChatView({
                     : streaming.agentState
                 }
                 partialTranscript=""
-                onTextSubmit={(text) => void sendWithSkill(text, attachedSkill)}
+                draftText={draft}
+                onDraftChange={setDraft}
+                onTextSubmit={handleTextSubmit}
                 onCancel={streaming.cancelStream}
                 voiceDraft
                 focusOnIdle={false}
@@ -331,6 +459,7 @@ export default function ChatView({
                 }
                 variant="assistant"
                 expandOnFocus
+                active={active}
                 leadingRow={
                   attachedSkill && (
                     <SkillChip

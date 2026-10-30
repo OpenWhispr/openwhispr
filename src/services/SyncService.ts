@@ -369,6 +369,42 @@ function conversationCreateSnapshot(
   };
 }
 
+// A conversation is pushed once, so not while a reply is still running or
+// waiting on the user: another device would get a half turn and could answer
+// its question again. A turn that old was cut off (the app quit) and goes as is.
+const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
+
+function hasTurnInProgress(conversation: {
+  has_active_turn?: boolean;
+  messages: ReadonlyArray<{ metadata?: unknown }>;
+}) {
+  if (conversation.has_active_turn || conversation.messages.length === 0) return true;
+  return conversation.messages.some((message) => {
+    let metadata = message.metadata;
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        return false;
+      }
+    }
+    const turn = (metadata as { turn?: { status?: string; startedAt?: number } } | null)?.turn;
+    return (
+      (turn?.status === "waiting" || turn?.status === "running") &&
+      Date.now() - (turn.startedAt ?? 0) < TURN_IN_PROGRESS_MAX_AGE_MS
+    );
+  });
+}
+
+function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
+  const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const { turn, ...rest } = parsed as Record<string, unknown>;
+  if (!turn || typeof turn !== "object" || Array.isArray(turn)) return parsed;
+  const { reasoning: _reasoning, ...savedTurn } = turn as Record<string, unknown>;
+  return { ...rest, turn: savedTurn };
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -1212,21 +1248,20 @@ export class SyncService {
 
     if (full.cloud_id) {
       await ConversationsService.update(full.cloud_id, { title: full.title });
-    } else {
+    } else if (!hasTurnInProgress(full)) {
       const snapshot = conversationCreateSnapshot(full);
       const cloud = await ConversationsService.create({
         client_conversation_id: full.client_conversation_id ?? String(full.id),
         title: full.title,
         created_at: full.created_at,
         updated_at: full.updated_at,
+        parent_client_conversation_id: full.parent_client_conversation_id,
+        fork_message_count: full.fork_message_count,
+        fork_context: full.fork_context,
         messages: full.messages.map((m) => ({
           role: m.role,
           content: m.content,
-          metadata: m.metadata
-            ? typeof m.metadata === "string"
-              ? JSON.parse(m.metadata)
-              : m.metadata
-            : null,
+          metadata: conversationMessageMetadata(m.metadata),
         })),
       });
       await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id);
@@ -2503,21 +2538,20 @@ export class SyncService {
     for (const conv of fresh) {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
-        if (!full) continue;
+        if (!full || hasTurnInProgress(full)) continue;
         const snapshot = conversationCreateSnapshot(full);
         const cloudConv = await ConversationsService.create({
           client_conversation_id: full.client_conversation_id ?? String(full.id),
           title: full.title,
           created_at: full.created_at,
           updated_at: full.updated_at,
+          parent_client_conversation_id: full.parent_client_conversation_id,
+          fork_message_count: full.fork_message_count,
+          fork_context: full.fork_context,
           messages: full.messages.map((m) => ({
             role: m.role,
             content: m.content,
-            metadata: m.metadata
-              ? typeof m.metadata === "string"
-                ? JSON.parse(m.metadata)
-                : m.metadata
-              : null,
+            metadata: conversationMessageMetadata(m.metadata),
           })),
         });
         await this.acknowledgeConversationCreate(full.id, snapshot, cloudConv.id);

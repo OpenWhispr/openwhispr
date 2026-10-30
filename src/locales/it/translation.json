@@ -1851,7 +1851,7 @@
       },
       "examplesTitle": "Esempi",
       "helper": "Scegli qualcosa di breve e naturale da dire ad alta voce",
-      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Con l'incolla automatico attivo, la risposta viene incollata al cursore di un campo modificabile attivo; altrimenti si apre nel pannello flottante dell'assistente.",
+      "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, il testo evidenziato viene sostituito in sicurezza con il risultato. Le altre richieste si aprono nella finestra dell'assistente.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
       "placeholder": "es. Jarvis, Nova, Atlas...",
@@ -2015,7 +2015,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'assistente vocale",
-        "description": "Pronuncia un comando e l'assistente usa le tue note, il calendario e gli strumenti web. La risposta viene incollata a un cursore modificabile attivo, sostituisce il testo selezionato o si apre nel pannello flottante."
+        "description": "Pronuncia una richiesta e l'assistente risponde nella sua finestra, usando le tue note, il calendario e gli strumenti web. Il testo che evidenzi prima lo accompagna come contesto."
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -3939,7 +3939,13 @@
       "todos": "Elenca le mie attività recenti",
       "meeting": "Preparami per la prossima riunione",
       "sharedNotes": "Evidenzia le mie note condivise"
-    }
+    },
+    "fork": "Dirama",
+    "forked": "Chat diramata",
+    "forkedFrom": "Diramata da «{{title}}»",
+    "forkFailed": "Impossibile diramare questa chat",
+    "sendNotStarted": "Questa chat è occupata. Il messaggio non è stato inviato. Riprova al termine della richiesta in corso.",
+    "openFailed": "Questa chat non è più disponibile."
   },
   "support": {
     "documentation": "Documentazione",
@@ -4022,7 +4028,6 @@
       "hotkeyToSpeak": "{{hotkey}} per parlare",
       "recording": "Registrazione...",
       "processing": "Elaborazione...",
-      "clickToSpeak": "Clicca per parlare",
       "waitingForMicrophone": "In attesa del microfono…"
     },
     "buttons": {
@@ -4034,7 +4039,6 @@
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora",
       "askAssistant": "Chiedi all'assistente",
-      "busyRecording": "Prima termina la registrazione in corso",
       "startMeetingRecording": "Avvia registrazione meeting"
     }
   },
@@ -4137,30 +4141,155 @@
       "update_skillName": "Aggiorna skill",
       "search_openwhispr_helpStatus": "Ricerca nella guida di OpenWhispr...",
       "read_openwhispr_helpStatus": "Lettura della guida di OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lettura delle impostazioni di OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lettura delle impostazioni di OpenWhispr...",
+      "ask_userName": "Domanda",
+      "ask_userStatus": "Ti sto chiedendo...",
+      "request_connectionName": "Connessione",
+      "request_connectionStatus": "Richiesta di connessione...",
+      "request_accessName": "Accesso",
+      "request_accessStatus": "Richiesta di accesso...",
+      "look_at_screenName": "Guarda lo schermo",
+      "look_at_screenStatus": "Lettura dello schermo...",
+      "look_at_screenSuccess": "Schermata letta.",
+      "look_at_screenFailed": "Non è stato possibile leggere la schermata.",
+      "request_api_keyName": "Chiave API",
+      "request_api_keyStatus": "Richiesta di una chiave API...",
+      "open_settingsName": "Impostazioni",
+      "open_settingsStatus": "Ti indirizzo alle impostazioni..."
+    },
+    "turn": {
+      "reasoning": "Ragionamento",
+      "stopped": "Interrotto",
+      "stepLimit": "In pausa dopo il numero massimo di passaggi.",
+      "continue": "Continua",
+      "continueMessage": "Continua",
+      "failed": "Questa risposta non è riuscita.",
+      "unbackedClaim": "Non fatto: non è stato eseguito nulla di ciò che questa risposta dice di aver fatto."
+    },
+    "interactions": {
+      "notNow": "Non ora",
+      "cancel": "Annulla",
+      "questions": {
+        "recommended": "{{label}} (Consigliato)",
+        "submit": "Invia",
+        "placeholder": "Scrivi la tua risposta…",
+        "previous": "Domanda precedente",
+        "next": "Domanda successiva",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continua",
+        "typedAnswer": "La tua risposta: {{answer}}"
+      },
+      "connection": {
+        "title": "Connetti {{name}}",
+        "connect": "Connetti {{name}}",
+        "connecting": "Completa la connessione nel browser…",
+        "failed": "Impossibile connettersi. Riprova.",
+        "permissionDenied": "L'accesso al calendario è stato negato. Consentilo nelle Impostazioni di Sistema e riprova.",
+        "calendarTitle": "Connetti un calendario",
+        "yes": "Sì",
+        "reasons": {
+          "gmail": "Posso inviare l'email dal tuo Gmail.",
+          "slack": "Posso pubblicare il messaggio su Slack per te.",
+          "linear": "Posso trovare e creare issue di Linear per te.",
+          "github": "Posso trovare e creare issue di GitHub per te.",
+          "calendar": "Posso controllare la tua disponibilità e proporre degli orari."
+        }
+      },
+      "access": {
+        "screen": "Consentire l'accesso allo schermo?",
+        "allow": "Consenti",
+        "capturing": "Acquisizione…"
+      },
+      "apiKey": {
+        "title": "Aggiungi la tua chiave API di {{provider}}",
+        "placeholder": "Incolla o scrivi qui",
+        "save": "Salva",
+        "label": "Chiave API di {{provider}}",
+        "saved": "Chiave di {{provider}} salvata"
+      },
+      "settings": {
+        "done": "Fatto",
+        "technicalDetails": "Dettagli tecnici",
+        "checking": "Verifica in corso…"
+      },
+      "status": {
+        "answered": "Risposto",
+        "connected": "{{name}} connesso",
+        "granted": "Schermo condiviso",
+        "declined": "Non consentito",
+        "saved": "Chiave API salvata",
+        "done": "Di ritorno dalle impostazioni",
+        "cancelled": "Ignorato",
+        "notAnswered": "Senza risposta",
+        "invalid": "Impossibile mostrare la domanda"
+      },
+      "followUp": {
+        "connected": "Ho connesso {{name}}.",
+        "granted": "Ho consentito l'accesso al mio schermo.",
+        "saved": "Ho salvato la mia chiave API di {{provider}}.",
+        "done": "Ho finito nelle impostazioni."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Seleziona il testo da modificare con",
-      "selectedContext": "Testo selezionato aggiunto",
-      "removeSelectedContext": "Rimuovi testo selezionato",
-      "newConversation": "Nuova conversazione",
-      "copyToClipboard": "Copia negli appunti",
-      "suggestions": {
-        "summarizeNotes": "Riassumi le mie note recenti",
-        "calendar": "Cosa c’è nel mio calendario?",
-        "draft": "Aiutami a scrivere qualcosa"
-      }
+  "agentWindow": {
+    "title": "Assistente",
+    "actions": {
+      "expand": "Espandi",
+      "collapse": "Riduci",
+      "speak": "Parla",
+      "type": "Scrivi",
+      "stop": "Interrompi",
+      "close": "Chiudi",
+      "regenerate": "Rigenera",
+      "readAloud": "Leggi ad alta voce",
+      "stopReading": "Interrompi la lettura"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocazione",
-        "calling": "Chiamata",
-        "using": "Utilizzo"
-      },
-      "toolFallback": "Strumento"
-    }
+    "notices": {
+      "nothingHeard": "Non ho sentito nulla",
+      "transcriptionFailed": "Impossibile trascrivere",
+      "micUnavailable": "Microfono non disponibile",
+      "regenerateFailed": "Impossibile rigenerare la risposta",
+      "dictationActive": "La dettatura sta usando il microfono"
+    },
+    "composer": {
+      "placeholder": "Detta o scrivi la tua domanda…",
+      "followUpPlaceholder": "Fai una domanda di approfondimento…",
+      "answerPlaceholder": "Rispondi qui…",
+      "cardPlaceholder": "Rispondi nella scheda qui sopra…"
+    },
+    "empty": {
+      "title": "Come posso aiutarti?",
+      "description": "Scrivi la tua richiesta qui sotto."
+    },
+    "selectedContext": {
+      "title": "Contesto selezionato",
+      "remove": "Rimuovi il contesto selezionato",
+      "fromAnswer": "Dalla risposta: «{{text}}»",
+      "fromOtherApp": "Da un'altra app: «{{text}}»"
+    },
+    "selectionHint": "Seleziona del testo per approfondire o diramare",
+    "selectionToolbar": "Testo selezionato",
+    "followUp": "Approfondisci",
+    "forkFromHere": "Dirama da qui",
+    "chats": {
+      "title": "Chat",
+      "switch": "Cambia chat",
+      "new": "Nuova chat",
+      "empty": "Ancora nessuna chat",
+      "untitled": "Chat senza titolo",
+      "fork": "Diramata"
+    },
+    "progress": {
+      "callingTools_one": "Chiamata di {{count}} strumento…",
+      "callingTools_other": "Chiamata di {{count}} strumenti…",
+      "checkingAnswers": "Controllo delle risposte…",
+      "reasoning": "Ragionamento…",
+      "reasonedFor": "Ha ragionato per {{duration}}",
+      "workedFor": "Ha lavorato per {{duration}}",
+      "steps_one": "{{count}} passaggio",
+      "steps_other": "{{count}} passaggi"
+    },
+    "waitingForAnswer": "In attesa di risposta"
   },
   "integrations": {
     "title": "Integrazioni",
@@ -4283,7 +4412,6 @@
     "approval": {
       "headers": {
         "default": "Invia a {{destination}}",
-        "slackPost": "Pubblica su {{destination}}",
         "email": "Email a {{destination}}",
         "issue": "Crea issue in {{destination}}",
         "comment": "Commenta {{destination}}"
@@ -4291,8 +4419,6 @@
       "identity": "Come {{account}}",
       "identityWithWorkspace": "Come {{account}} in {{workspace}}",
       "send": "Invia",
-      "edit": "Modifica",
-      "doneEditing": "Modifica completata",
       "cancel": "Annulla",
       "titleLabel": "Titolo",
       "bodyLabel": "Messaggio",
@@ -4318,6 +4444,10 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla. Riprova.",
         "dm_failed": "Impossibile aprire il messaggio diretto a {{destination}}. Non è stato inviato nulla.",
         "restricted": "{{destination}} è di sola lettura o limitato per te.",
+        "thread_mismatch": "Quel thread è in una conversazione diversa da {{destination}}. Non è stato inviato nulla.",
+        "invalid_thread": "Non è un link a un messaggio di Slack. Non è stato inviato nulla.",
+        "thread_closed": "Slack non consente risposte in quel thread. Non è stato inviato nulla.",
+        "thread_only": "{{destination}} accetta solo risposte nei thread. Non è stato inviato nulla.",
         "generic": "Qualcosa è andato storto. Non è stato inviato nulla.",
         "github": {
           "reconnect_needed": "GitHub deve essere ricollegato nelle Impostazioni.",
@@ -4378,7 +4508,6 @@
         }
       },
       "email": {
-        "from": "Da {{account}}",
         "toLabel": "A",
         "ccLabel": "Cc",
         "subjectLabel": "Oggetto",
@@ -4391,7 +4520,8 @@
         "tooManyRecipients": "Un'email può andare al massimo a {{max}} indirizzi, tra A e Cc.",
         "subjectTooLong": "L'oggetto può contenere al massimo {{max}} caratteri.",
         "bodyTooLong": "Il messaggio è troppo lungo per Gmail. Accorcialo per inviarlo.",
-        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata."
+        "unknown": "Impossibile confermare l'invio. Controlla la cartella Posta inviata.",
+        "fromLabel": "Da"
       },
       "github": {
         "notes": {
@@ -4435,7 +4565,22 @@
         "notes": {
           "targetTitle": "Su «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Hai già tentato questa operazione in questa chat. Verifica se è riuscita prima di inviare di nuovo.",
+      "slack": {
+        "channelLabel": "Canale",
+        "asLabel": "Come",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Risposta nel thread iniziato il {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Inviato a {{destination}} come nuovo messaggio, non nel thread."
+      },
+      "sentLabel": "Inviato",
+      "identityChanged": "Ora verrà inviato come {{account}}. Premi Invia per inviarlo.",
+      "connectToSend": "Collega {{name}} per inviarlo",
+      "edit": "Modifica",
+      "doneEditing": "Modifica completata"
     },
     "policyOff": "La tua organizzazione ha disattivato i connettori.",
     "email": {
@@ -4484,7 +4629,8 @@
         "connectedBody": "Puoi chiudere questa scheda e tornare a OpenWhispr.",
         "failedTitle": "Slack non è stato connesso",
         "failedBody": "Torna a OpenWhispr per riprovare."
-      }
+      },
+      "pickDestination": "Quale «{{destination}}» intendevi?"
     },
     "github": {
       "title": "GitHub",
@@ -4660,6 +4806,10 @@
         "credential_save_failed": "Impossibile salvare l'accesso a Slack su questo computer. Non è stato inviato nulla.",
         "dm_failed": "Impossibile aprire il messaggio diretto. Non è stato inviato nulla.",
         "restricted": "Quel canale è di sola lettura o limitato.",
+        "thread_mismatch": "Quel thread è in un'altra conversazione. Non è stato inviato nulla.",
+        "invalid_thread": "Non è un link a un messaggio di Slack.",
+        "thread_closed": "Slack non consente risposte in quel thread.",
+        "thread_only": "Quel canale accetta solo risposte nei thread.",
         "generic": "Non ha funzionato.",
         "github": {
           "reconnect_needed": "GitHub deve essere ricollegato.",
@@ -4724,7 +4874,8 @@
       },
       "gmailDraftLimit": "Si possono preparare solo {{max}} email per richiesta.",
       "queryResults": "Risultati trovati: {{total}}",
-      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta."
+      "cardLimit": "Si possono preparare solo {{max}} schede per richiesta.",
+      "alreadySent": "Già fatto per questa richiesta"
     },
     "beta": "Beta",
     "upsell": "I connettori sono inclusi nei piani a pagamento. Effettua l'upgrade per far lavorare l'assistente nei tuoi strumenti.",

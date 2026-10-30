@@ -205,7 +205,12 @@ const LOCAL_SMALL = {
 const userMessage = (id, content) => ({ id, role: "user", content, isStreaming: false });
 const assistantMessage = (id, content) => ({ id, role: "assistant", content, isStreaming: false });
 const userTurns = (sent) => sent.filter((message) => message.role === "user");
-const latestUserText = (sent) => userTurns(sent).at(-1).content;
+// Compare the request and skill blocks independently of the running chat's fresh app context.
+const withoutAppContext = (content) =>
+  typeof content === "string"
+    ? content.split("\n\nContext from the app for this message (not written by the user):")[0]
+    : content;
+const latestUserText = (sent) => withoutAppContext(userTurns(sent).at(-1).content);
 const withRequest = (block, request) => `${block}\n\nUser request:\n${request}`;
 
 test("the saved user message is exactly what was typed", async (t) => {
@@ -218,6 +223,7 @@ test("the saved user message is exactly what was typed", async (t) => {
 
   assert.deepEqual(saved, ["prep me for my 2pm"]);
   assert.equal(getMessages()[0].content, "prep me for my 2pm");
+  assert.match(userTurns(sentMessages[0]).at(-1).content, /Context from the app for this message/);
   assert.equal(
     latestUserText(sentMessages[0]),
     withRequest(MEETING_PREP_BLOCK, "prep me for my 2pm")
@@ -238,7 +244,7 @@ test("the skill block rides only in the latest user turn sent to the model", asy
   const [system, ...turns] = sentMessages[0];
   assert.doesNotMatch(system.content, /<skill_content name=|Steps for meeting prep/);
   assert.deepEqual(
-    turns.map((turn) => turn.content),
+    turns.map((turn) => withoutAppContext(turn.content)),
     ["Hi", "Hello! What can I do?", withRequest(MEETING_PREP_BLOCK, "prep me")]
   );
 });
@@ -253,7 +259,7 @@ test("an earlier turn's skill block is not replayed", async (t) => {
   await captured.sendToAI("and the agenda?", second, MEETING_PREP);
 
   assert.deepEqual(
-    userTurns(sentMessages[1]).map((turn) => turn.content),
+    userTurns(sentMessages[1]).map((turn) => withoutAppContext(turn.content)),
     ["prep me", withRequest(MEETING_PREP_BLOCK, "and the agenda?")]
   );
 });
@@ -318,7 +324,14 @@ test("with skills off, nothing changes", async (t) => {
   const today = await renderChat(t, {}, { electronAPI: {} });
   await today.captured.sendToAI("prep me", history);
 
-  assert.deepEqual(off.sentMessages, today.sentMessages);
+  const requests = (sent) =>
+    sent.map((messages) =>
+      messages.map((message) => ({
+        ...message,
+        content: withoutAppContext(message.content),
+      }))
+    );
+  assert.deepEqual(requests(off.sentMessages), requests(today.sentMessages));
   assert.deepEqual(off.offeredTools, today.offeredTools);
   assert.deepEqual(calls, { list: 0, reads: [] });
 });
@@ -636,7 +649,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
         callId: call.id,
         toolName: call.name,
         displayText: result.displayText,
-        ...(result.failed ? { failed: true } : {}),
+        ...(result.isError ? { isError: true } : {}),
       };
     }
     yield { type: "done", finishReason: "stop" };
@@ -645,9 +658,9 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
   await captured.sendToAI("prep me", [userMessage("u1", "prep me")]);
 
   assert.deepEqual(
-    results.map((result) => [result.displayText, result.failed]),
+    results.map((result) => [result.displayText, result.isError]),
     [
-      ["Meeting prep", undefined],
+      ["Meeting prep", false],
       ['No skill named "meeting-perp"', true],
     ]
   );
@@ -656,7 +669,7 @@ test("a load_skill that fails is marked failed, and its step keeps the mark", as
     steps.map((step) => [step.status, step.result, step.failed]),
     [
       ["completed", "Meeting prep", undefined],
-      ["completed", 'No skill named "meeting-perp"', true],
+      ["error", 'No skill named "meeting-perp"', true],
     ]
   );
 });
@@ -855,7 +868,13 @@ for (const [ending, mode] of [
       skillsCheckProposal: async (input) => library.checkProposal(input),
       skillsSaveProposal: async (input) => ({ ok: true, ...library.saveProposal(input) }),
       addAgentMessage: async (id, role, content, metadata) => {
-        stored.push({ id, role, content, metadata });
+        const row = { id, role, content, metadata };
+        stored.push(row);
+        return { id: stored.length };
+      },
+      updateAgentMessage: async (rowId, content, metadata) => {
+        Object.assign(stored[rowId - 1], { content, metadata });
+        return true;
       },
       createAgentConversation: async () => ({ id: 17 }),
       getAgentConversation: async (id) => ({
@@ -874,8 +893,8 @@ for (const [ending, mode] of [
       t,
       {
         skillsEnabled: true,
-        onStreamComplete: (_id, content, toolCalls) => {
-          void chat.getPersistence().saveAssistantMessage(content, toolCalls);
+        onStreamComplete: (...args) => {
+          void chat.getPersistence().saveAssistantMessage(...args);
         },
       },
       {
@@ -998,7 +1017,13 @@ for (const [ending, mode, writeFails, partialText] of [
         return result;
       },
       addAgentMessage: async (id, role, content, metadata) => {
-        stored.push({ id, role, content, metadata });
+        const row = { id, role, content, metadata };
+        stored.push(row);
+        return { id: stored.length };
+      },
+      updateAgentMessage: async (rowId, content, metadata) => {
+        Object.assign(stored[rowId - 1], { content, metadata });
+        return true;
       },
       getAgentConversation: async (id) => ({
         id,

@@ -1851,7 +1851,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。启用自动粘贴后，如果可编辑文本框已获得焦点，回答会粘贴到光标处；否则会在悬浮助手面板中打开。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，选中的文本会安全地替换为结果。其他请求会在助手窗口中打开。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -2015,7 +2015,7 @@
       },
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
-        "description": "说出指令，助手会使用你的笔记、日历和网页工具。回答会粘贴到已聚焦的可编辑光标处、替换选中文本，或在悬浮面板中打开。"
+        "description": "说出请求，助手会在自己的窗口中回答，并使用你的笔记、日历和网页工具。事先选中的文本会作为上下文一并发送。"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -3921,7 +3921,13 @@
       "todos": "列出我最近的待办事项",
       "meeting": "帮我准备下一场会议",
       "sharedNotes": "突出显示我的共享笔记"
-    }
+    },
+    "fork": "分叉",
+    "forked": "分叉的对话",
+    "forkedFrom": "分叉自“{{title}}”",
+    "forkFailed": "无法分叉此对话",
+    "sendNotStarted": "此对话正忙。你的消息未发送。请在当前请求完成后重试。",
+    "openFailed": "此对话已不可用。"
   },
   "support": {
     "documentation": "文档",
@@ -4004,7 +4010,6 @@
       "hotkeyToSpeak": "{{hotkey}} 说话",
       "recording": "录音中...",
       "processing": "处理中...",
-      "clickToSpeak": "点击开始说话",
       "waitingForMicrophone": "等待麦克风…"
     },
     "buttons": {
@@ -4016,7 +4021,6 @@
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏",
       "askAssistant": "询问助手",
-      "busyRecording": "请先结束当前录音",
       "startMeetingRecording": "开始会议录音"
     }
   },
@@ -4119,30 +4123,155 @@
       "update_skillName": "更新技能",
       "search_openwhispr_helpStatus": "正在搜索 OpenWhispr 帮助...",
       "read_openwhispr_helpStatus": "正在阅读 OpenWhispr 帮助...",
-      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置..."
+      "get_openwhispr_contextStatus": "正在读取 OpenWhispr 设置...",
+      "ask_userName": "提问",
+      "ask_userStatus": "正在询问你...",
+      "request_connectionName": "连接",
+      "request_connectionStatus": "正在请求连接...",
+      "request_accessName": "访问",
+      "request_accessStatus": "正在请求访问...",
+      "look_at_screenName": "查看屏幕",
+      "look_at_screenStatus": "正在查看你的屏幕...",
+      "look_at_screenSuccess": "已读取屏幕。",
+      "look_at_screenFailed": "无法读取屏幕。",
+      "request_api_keyName": "API 密钥",
+      "request_api_keyStatus": "正在请求 API 密钥...",
+      "open_settingsName": "设置",
+      "open_settingsStatus": "正在引导你前往设置..."
+    },
+    "turn": {
+      "reasoning": "推理过程",
+      "stopped": "已停止",
+      "stepLimit": "已达到最大步骤数，已暂停。",
+      "continue": "继续",
+      "continueMessage": "继续",
+      "failed": "此回复失败。",
+      "unbackedClaim": "实际未完成：这条回复所说的操作并没有执行。"
+    },
+    "interactions": {
+      "notNow": "暂不",
+      "cancel": "取消",
+      "questions": {
+        "recommended": "{{label}}（推荐）",
+        "submit": "提交",
+        "placeholder": "输入你的回答…",
+        "previous": "上一个问题",
+        "next": "下一个问题",
+        "position": "{{current}}/{{total}}",
+        "continue": "继续",
+        "typedAnswer": "你的回答：{{answer}}"
+      },
+      "connection": {
+        "title": "连接 {{name}}",
+        "connect": "连接 {{name}}",
+        "connecting": "请在浏览器中完成连接…",
+        "failed": "无法连接，请重试。",
+        "permissionDenied": "日历访问被拒绝。请在系统设置中允许后重试。",
+        "calendarTitle": "连接日历",
+        "yes": "是",
+        "reasons": {
+          "gmail": "我可以通过你的 Gmail 发送邮件。",
+          "slack": "我可以替你把消息发到 Slack。",
+          "linear": "我可以替你查找和创建 Linear 问题。",
+          "github": "我可以替你查找和创建 GitHub Issue。",
+          "calendar": "我可以查看你的空闲时间并建议时间。"
+        }
+      },
+      "access": {
+        "screen": "允许访问你的屏幕吗？",
+        "allow": "允许",
+        "capturing": "正在截取…"
+      },
+      "apiKey": {
+        "title": "添加你的 {{provider}} API 密钥",
+        "placeholder": "在此粘贴或输入",
+        "save": "保存",
+        "label": "{{provider}} API 密钥",
+        "saved": "{{provider}} 密钥已保存"
+      },
+      "settings": {
+        "done": "我已完成",
+        "technicalDetails": "技术详情",
+        "checking": "正在检查…"
+      },
+      "status": {
+        "answered": "已回答",
+        "connected": "已连接 {{name}}",
+        "granted": "已共享屏幕",
+        "declined": "未允许",
+        "saved": "API 密钥已保存",
+        "done": "已从设置返回",
+        "cancelled": "已忽略",
+        "notAnswered": "未回答",
+        "invalid": "无法显示该问题"
+      },
+      "followUp": {
+        "connected": "我已连接 {{name}}。",
+        "granted": "我已允许访问我的屏幕。",
+        "saved": "我已保存我的 {{provider}} API 密钥。",
+        "done": "我已在设置中完成。"
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "选择要编辑的文本，然后按",
-      "selectedContext": "已添加所选文本",
-      "removeSelectedContext": "移除所选文本",
-      "newConversation": "新对话",
-      "copyToClipboard": "复制到剪贴板",
-      "suggestions": {
-        "summarizeNotes": "总结我最近的笔记",
-        "calendar": "我的日历上有什么安排？",
-        "draft": "帮我起草一些内容"
-      }
+  "agentWindow": {
+    "title": "助手",
+    "actions": {
+      "expand": "展开",
+      "collapse": "最小化",
+      "speak": "说话",
+      "type": "输入",
+      "stop": "停止",
+      "close": "关闭",
+      "regenerate": "重新生成",
+      "readAloud": "朗读",
+      "stopReading": "停止朗读"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "调用中",
-        "calling": "请求中",
-        "using": "使用中"
-      },
-      "toolFallback": "工具"
-    }
+    "notices": {
+      "nothingHeard": "没有听清",
+      "transcriptionFailed": "无法转写",
+      "micUnavailable": "无法打开麦克风",
+      "regenerateFailed": "无法重新生成回答",
+      "dictationActive": "听写正在使用麦克风"
+    },
+    "composer": {
+      "placeholder": "说出或输入你的问题…",
+      "followUpPlaceholder": "继续提问…",
+      "answerPlaceholder": "在此回答…",
+      "cardPlaceholder": "在上方卡片中回答…"
+    },
+    "empty": {
+      "title": "有什么可以帮你？",
+      "description": "在下方输入你的请求。"
+    },
+    "selectedContext": {
+      "title": "所选上下文",
+      "remove": "移除所选上下文",
+      "fromAnswer": "来自回答：“{{text}}”",
+      "fromOtherApp": "来自其他应用：“{{text}}”"
+    },
+    "selectionHint": "选择文本以追问或分叉",
+    "selectionToolbar": "所选文本",
+    "followUp": "追问",
+    "forkFromHere": "从这里分叉",
+    "chats": {
+      "title": "对话",
+      "switch": "切换对话",
+      "new": "新对话",
+      "empty": "还没有对话",
+      "untitled": "未命名对话",
+      "fork": "分叉"
+    },
+    "progress": {
+      "callingTools_one": "正在调用 {{count}} 个工具…",
+      "callingTools_other": "正在调用 {{count}} 个工具…",
+      "checkingAnswers": "正在检查结果…",
+      "reasoning": "正在推理…",
+      "reasonedFor": "推理了 {{duration}}",
+      "workedFor": "处理了 {{duration}}",
+      "steps_one": "{{count}} 个步骤",
+      "steps_other": "{{count}} 个步骤"
+    },
+    "waitingForAnswer": "等待回答"
   },
   "integrations": {
     "title": "集成",
@@ -4265,7 +4394,6 @@
     "approval": {
       "headers": {
         "default": "发送到 {{destination}}",
-        "slackPost": "发布到 {{destination}}",
         "email": "发送邮件给 {{destination}}",
         "issue": "在 {{destination}} 中创建问题",
         "comment": "评论 {{destination}}"
@@ -4273,8 +4401,6 @@
       "identity": "以 {{account}} 身份",
       "identityWithWorkspace": "以 {{account}}（{{workspace}}）身份",
       "send": "发送",
-      "edit": "编辑",
-      "doneEditing": "编辑完成",
       "cancel": "取消",
       "titleLabel": "标题",
       "bodyLabel": "消息",
@@ -4300,6 +4426,10 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息，未发送任何内容。请重试。",
         "dm_failed": "无法打开与 {{destination}} 的私信，未发送任何内容。",
         "restricted": "{{destination}} 对您是只读或受限的。",
+        "thread_mismatch": "该话题位于与 {{destination}} 不同的对话中，未发送任何内容。",
+        "invalid_thread": "这不是指向 Slack 消息的链接，未发送任何内容。",
+        "thread_closed": "Slack 不允许在该话题中回复，未发送任何内容。",
+        "thread_only": "{{destination}} 只接受话题中的回复，未发送任何内容。",
         "generic": "出了点问题，未发送任何内容。",
         "github": {
           "reconnect_needed": "需要在设置中重新连接 GitHub。",
@@ -4360,7 +4490,6 @@
         }
       },
       "email": {
-        "from": "发件人：{{account}}",
         "toLabel": "收件人",
         "ccLabel": "抄送",
         "subjectLabel": "主题",
@@ -4373,7 +4502,8 @@
         "tooManyRecipients": "一封邮件最多可发送给 {{max}} 个地址（收件人和抄送合计）。",
         "subjectTooLong": "主题不能超过 {{max}} 个字符。",
         "bodyTooLong": "邮件正文过长，无法通过 Gmail 发送。请缩短后再发送。",
-        "unknown": "无法确认是否已发送，请检查“已发送”文件夹。"
+        "unknown": "无法确认是否已发送，请检查“已发送”文件夹。",
+        "fromLabel": "发件人"
       },
       "github": {
         "notes": {
@@ -4417,7 +4547,22 @@
         "notes": {
           "targetTitle": "关于“{{title}}”"
         }
-      }
+      },
+      "sentEarlier": "你之前已在此对话中尝试过。再次发送前，请先确认是否已完成。",
+      "slack": {
+        "channelLabel": "频道",
+        "asLabel": "身份",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "在 {{started, datetime(dateStyle: medium; timeStyle: short)}} 开始的话题中回复"
+        },
+        "sentOutsideThread": "已作为新消息发送到 {{destination}}，而不是在话题中。"
+      },
+      "sentLabel": "已发送",
+      "identityChanged": "现在将以 {{account}} 身份发送。按“发送”即可发送。",
+      "connectToSend": "连接 {{name}} 以发送此内容",
+      "edit": "编辑",
+      "doneEditing": "编辑完成"
     },
     "policyOff": "您的组织已关闭连接器。",
     "email": {
@@ -4466,7 +4611,8 @@
         "connectedBody": "您可以关闭此标签页并返回 OpenWhispr。",
         "failedTitle": "Slack 未连接",
         "failedBody": "请返回 OpenWhispr 重试。"
-      }
+      },
+      "pickDestination": "你指的是哪个“{{destination}}”？"
     },
     "github": {
       "title": "GitHub",
@@ -4642,6 +4788,10 @@
         "credential_save_failed": "无法在此电脑上保存 Slack 登录信息。未发送任何内容。",
         "dm_failed": "无法打开私信。未发送任何内容。",
         "restricted": "该频道为只读或受限。",
+        "thread_mismatch": "该话题位于另一个对话中。未发送任何内容。",
+        "invalid_thread": "不是指向 Slack 消息的链接。",
+        "thread_closed": "Slack 不允许在该话题中回复。",
+        "thread_only": "该频道只接受话题中的回复。",
         "generic": "操作未成功。",
         "github": {
           "reconnect_needed": "需要重新连接 GitHub。",
@@ -4706,7 +4856,8 @@
       },
       "gmailDraftLimit": "每次请求最多只能准备 {{max}} 封邮件。",
       "queryResults": "找到的结果：{{total}}",
-      "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。"
+      "cardLimit": "每次请求最多只能准备 {{max}} 张卡片。",
+      "alreadySent": "已在此请求中完成"
     },
     "beta": "测试版",
     "upsell": "连接器包含在付费方案中。升级后，助手即可在您的工具中执行操作。",

@@ -21,7 +21,10 @@ function personCandidate(user) {
     id: user.id,
     kind: "user",
     label,
-    hint: `${label} (@${displayName || user.name})`,
+    // The username: display names needn't be unique.
+    hint: `${label} (@${user.name})`,
+    // The username, unique in a workspace: "@handle" finds exactly this person.
+    handle: user.name,
     names: [...new Set([displayName, realName, user.name].filter(Boolean))],
   };
 }
@@ -78,19 +81,25 @@ function createSlackDirectory({ api, now = Date.now }) {
     );
   }
 
-  async function personByEmail(token, email) {
-    const result = await api.call("users.lookupByEmail", { email }, { token });
+  // One person, looked up exactly; Slack not knowing them is no match.
+  async function lookUpPerson(method, params, notFound, token) {
+    const result = await api.call(method, params, { token });
     if (result.ok) {
       return {
         ok: true,
         candidate: isPerson(result.data.user) ? personCandidate(result.data.user) : null,
       };
     }
-    if (result.errorCode === "users_not_found") return { ok: true, candidate: null };
+    if (result.errorCode === notFound) return { ok: true, candidate: null };
     return { ok: false, errorCode: result.errorCode };
   }
 
-  return { channels, people, personByEmail };
+  const personByEmail = (token, email) =>
+    lookUpPerson("users.lookupByEmail", { email }, "users_not_found", token);
+  const personById = (token, id) =>
+    lookUpPerson("users.info", { user: id }, "user_not_found", token);
+
+  return { channels, people, personByEmail, personById };
 }
 
 module.exports = { createSlackDirectory };

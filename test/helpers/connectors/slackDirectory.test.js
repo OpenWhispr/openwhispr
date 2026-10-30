@@ -63,13 +63,14 @@ test("people skip bots, deleted users and Slackbot, and carry a handle hint", as
 
   assert.deepEqual(
     people.items.map((person) => person.id),
-    ["U0CHAD", "U0GABE", "U0GABRIEL"]
+    ["U0CHAD", "U0GABE001", "U0GABRIEL"]
   );
   assert.deepEqual(people.items[1], {
-    id: "U0GABE",
+    id: "U0GABE001",
     kind: "user",
     label: "Gabe Smith",
     hint: "Gabe Smith (@gabe)",
+    handle: "gabe",
     names: ["gabe", "Gabe Smith"],
   });
 });
@@ -102,7 +103,7 @@ test("an email finds a person; an unknown email is no match, not an error", asyn
   const found = await setup({ "users.lookupByEmail": [ok(FIXTURES.lookupGabe)] });
   assert.equal(
     (await found.directory.personByEmail("t", "gabe@example.com")).candidate.id,
-    "U0GABE"
+    "U0GABE001"
   );
   assert.deepEqual(found.slack.calls[0].params, { email: "gabe@example.com" });
 
@@ -111,6 +112,22 @@ test("an email finds a person; an unknown email is no match, not an error", asyn
     ok: true,
     candidate: null,
   });
+});
+
+test("an id finds that person; an unknown id is no match, not an error", async () => {
+  const found = await setup({ "users.info": [ok(FIXTURES.lookupGabe)] });
+  assert.equal((await found.directory.personById("t", "U0GABE001")).candidate.label, "Gabe Smith");
+  assert.deepEqual(found.slack.calls[0].params, { user: "U0GABE001" });
+
+  const missing = await setup({ "users.info": [slackError("user_not_found")] });
+  assert.deepEqual(await missing.directory.personById("t", "U0NOPE001"), {
+    ok: true,
+    candidate: null,
+  });
+  const bot = await setup({
+    "users.info": [ok({ ok: true, user: { id: "B0HELPER", name: "helper", is_bot: true } })],
+  });
+  assert.equal((await bot.directory.personById("t", "B0HELPER")).candidate, null);
 });
 
 test("a new login never reads the old login's cache", async () => {

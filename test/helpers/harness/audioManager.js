@@ -52,7 +52,11 @@ async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockMod
     // Prototype-only instance: the constructor wires up media devices the
     // tests don't need.
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), overrides),
+      Object.assign(
+        Object.create(AudioManager.prototype),
+        { preparedMicCapture: { active: false } },
+        overrides
+      ),
   };
 }
 

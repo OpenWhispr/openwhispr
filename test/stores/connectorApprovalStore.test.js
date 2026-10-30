@@ -29,19 +29,7 @@ function fakeElectron(commitImpl) {
 }
 
 function context(toolCallId, controller = new AbortController(), messageId = "m1") {
-  let requested = 0;
-  return {
-    controller,
-    requestedCount: () => requested,
-    value: {
-      messageId,
-      toolCallId,
-      signal: controller.signal,
-      onApprovalRequested: () => {
-        requested += 1;
-      },
-    },
-  };
+  return { controller, value: { messageId, toolCallId, signal: controller.signal } };
 }
 
 const keyOf = (store, toolCallId, messageId = "m1") => store.approvalKey(messageId, toolCallId);
@@ -52,7 +40,7 @@ async function freshStore() {
   return store;
 }
 
-test("a request shows a pending card and tells the surface", async (t) => {
+test("a request shows a pending card", async (t) => {
   const electron = fakeElectron();
   installBrowserGlobals(t, { window: { electronAPI: electron.api } });
   const store = await freshStore();
@@ -64,7 +52,6 @@ test("a request shows a pending card and tells the surface", async (t) => {
     store.useConnectorApprovalStore.getState().entries[keyOf(store, "call-1")].state,
     "pending"
   );
-  assert.equal(ctx.requestedCount(), 1);
   // Settle it so the 10-minute expiry timer doesn't keep the test process alive.
   store.cancelApproval(keyOf(store, "call-1"));
 });
@@ -554,6 +541,8 @@ test("a failed or unknown Send still reports what the user changed on the card",
   const failed = request("call-29");
   store.updateApprovalDraft(key("call-29"), { fields: { cc: [], subject: "Q3 (final)" } });
   await store.approveAction(key("call-29"));
+  // A failed card waits for Retry; Cancel reports the failure.
+  store.cancelApproval(key("call-29"));
   assert.deepEqual(await failed, {
     ...reply,
     final: { ...EMAIL_FIELDS, cc: [], subject: "Q3 (final)" },
@@ -561,6 +550,7 @@ test("a failed or unknown Send still reports what the user changed on the card",
 
   const unedited = request("call-2a");
   await store.approveAction(key("call-2a"));
+  store.cancelApproval(key("call-2a"));
   assert.deepEqual(await unedited, reply, "nothing changed, nothing reported");
 
   // A card without fields reports its edited text the same way.
@@ -596,4 +586,559 @@ test("a malformed commit result settles an email card as unknown, never sent", a
       "unknown"
     );
   }
+});
+
+// A card whose Send can fail, lose its login and be prepared again. `commits`
+// replies in order (the last repeats); `prepares` likewise for each re-prepare.
+let rebindCards = 0;
+async function rebindCard(t, { commits, prepares = [], status = "ready", connect } = {}) {
+  // Settles anything left waiting, so its expiry timer doesn't hold the
+  // process; registered first, so it runs while the window still exists.
+  let settleLeftover = () => {};
+  t.after(() => settleLeftover());
+  const calls = { commit: [], cancel: [], prepare: 0, connect: [], cancelConnect: [] };
+  let commitIndex = 0;
+  let prepareIndex = 0;
+  const statuses = {
+    slack: { id: "slack", connected: true, configured: true, needsReconnect: status !== "ready" },
+  };
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        connectorCommit: async (actionId, edits) => {
+          calls.commit.push({ actionId, edits });
+          const reply = commits[Math.min(commitIndex, commits.length - 1)];
+          commitIndex += 1;
+          return typeof reply === "function" ? reply() : reply;
+        },
+        connectorCancel: async (actionId, reason) => {
+          calls.cancel.push({ actionId, reason });
+          return { cancelled: true };
+        },
+        connectorConnect: async (target) => {
+          calls.connect.push(target);
+          const result = connect
+            ? await connect()
+            : { status: "connected", accountLabel: "chad", workspaceLabel: "Acme" };
+          if (result?.status === "connected") {
+            statuses.slack = { ...statuses.slack, connected: true, needsReconnect: false };
+          }
+          return result;
+        },
+        connectorCancelConnect: async (target) => calls.cancelConnect.push(target),
+        connectorStatus: async () => Object.values(statuses),
+      },
+    },
+  });
+  const statusStore = await import("../../src/stores/connectorStatusStore.ts");
+  statusStore.useConnectorStatusStore.setState({ statuses: { ...statuses }, loaded: true });
+  const store = await freshStore();
+  const toolCallId = `call-rb-${(rebindCards += 1)}`;
+  const ctx = context(toolCallId);
+  const reprepare = async () => {
+    calls.prepare += 1;
+    const reply = prepares[Math.min(prepareIndex, prepares.length - 1)];
+    prepareIndex += 1;
+    return typeof reply === "function" ? reply() : reply;
+  };
+  const outcome = store.requestApproval(
+    ctx.value,
+    { actionId: "a-old", connectorId: "slack", preview: PREVIEW },
+    reprepare
+  );
+  const key = keyOf(store, toolCallId);
+  const entry = () => store.useConnectorApprovalStore.getState().entries[key];
+  settleLeftover = () => store.cancelApproval(key);
+  // The user disconnects the service in Settings while the card waits.
+  const disconnect = () => {
+    statuses.slack = { ...statuses.slack, connected: false };
+    statusStore.useConnectorStatusStore.setState({ statuses: { ...statuses } });
+  };
+  // Main flags the login after a commit Slack refused for it.
+  const flagReconnect = () => {
+    statuses.slack = { ...statuses.slack, needsReconnect: true };
+    statusStore.useConnectorStatusStore.setState({ statuses: { ...statuses } });
+  };
+  return {
+    store,
+    ctx,
+    // Awaited, it fails within seconds (never waiting out the card's expiry)
+    // when the card doesn't settle.
+    get outcome() {
+      return settledWithin(outcome, () => store.cancelApproval(key));
+    },
+    key,
+    entry,
+    calls,
+    disconnect,
+    flagReconnect,
+  };
+}
+
+async function settledWithin(outcome, giveUp, ms = 5000) {
+  let timer;
+  const timedOut = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      giveUp();
+      reject(new Error(`the card didn't settle within ${ms} ms`));
+    }, ms);
+  });
+  try {
+    return await Promise.race([outcome, timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const READY = (actionId, preview = PREVIEW) => ({ status: "ready", actionId, preview });
+const FAILED = { state: "failed", errorCode: "rate_limited", message: "Slack is busy." };
+const POSTED = { state: "sent", url: "https://slack.test/p/9" };
+
+test("a failed send keeps the draft for Retry, which prepares a fresh card for Send", async (t) => {
+  const card = await rebindCard(t, { commits: [FAILED, POSTED], prepares: [READY("a-new")] });
+  card.store.updateApprovalDraft(card.key, { body: "Hello team!" });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().state, "failed");
+  assert.equal(card.entry().awaitingRetry, true);
+  assert.equal(card.entry().errorCode, "rate_limited");
+
+  // Editable again while it waits for Retry.
+  card.store.updateApprovalDraft(card.key, { body: "Hello team!!" });
+  await card.store.retryApproval(card.key);
+  assert.equal(card.calls.commit.length, 1);
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, { ...POSTED, finalText: "Hello team!!" });
+  assert.equal(card.calls.prepare, 1);
+  assert.deepEqual(card.calls.commit, [
+    { actionId: "a-old", edits: { body: "Hello team!" } },
+    { actionId: "a-new", edits: { body: "Hello team!!" } },
+  ]);
+  assert.equal(card.entry().state, "sent");
+  assert.equal(card.entry().awaitingRetry, undefined);
+});
+
+test("Cancel after a failure tells the model it failed, with the user's edits", async (t) => {
+  const card = await rebindCard(t, { commits: [FAILED] });
+  await card.store.approveAction(card.key);
+  card.store.updateApprovalDraft(card.key, { body: "Edited after the failure" });
+  card.store.cancelApproval(card.key);
+  assert.deepEqual(await card.outcome, { ...FAILED, finalText: "Edited after the failure" });
+  assert.equal(card.entry().state, "cancelled");
+  assert.equal(card.calls.prepare, 0);
+});
+
+test("the turn ending while a failed card waits reports the failure", async (t) => {
+  const card = await rebindCard(t, { commits: [FAILED] });
+  await card.store.approveAction(card.key);
+  card.ctx.controller.abort();
+  assert.deepEqual(await card.outcome, FAILED);
+  assert.equal(card.entry().state, "failed");
+  assert.equal(card.entry().awaitingRetry, undefined, "no Retry once nothing waits");
+});
+
+test("an unconfirmed send settles with no Retry", async (t) => {
+  const card = await rebindCard(t, { commits: [{ state: "unknown" }] });
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, { state: "unknown" });
+  assert.equal(card.entry().awaitingRetry, undefined);
+  await card.store.retryApproval(card.key);
+  assert.equal(card.calls.commit.length, 1);
+});
+
+for (const reason of ["not_found", "connection_changed"]) {
+  test(`a send whose login was replaced (${reason}) prepares a fresh card for Send`, async (t) => {
+    const card = await rebindCard(t, {
+      commits: [{ state: "not_sent", reason }, POSTED],
+      prepares: [READY("a-new")],
+    });
+    await card.store.approveAction(card.key);
+    assert.equal(card.calls.commit.length, 1);
+    await card.store.approveAction(card.key);
+    assert.deepEqual(await card.outcome, POSTED);
+    assert.deepEqual(
+      card.calls.commit.map((call) => call.actionId),
+      ["a-old", "a-new"]
+    );
+  });
+}
+
+test("each lost login prepares a fresh card that waits for another Send", async (t) => {
+  const card = await rebindCard(t, {
+    commits: [{ state: "not_sent", reason: "not_found" }],
+    prepares: [READY("a-new")],
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.calls.commit.length, 1, "a new action requires another Send");
+  await card.store.approveAction(card.key);
+  assert.equal(card.calls.commit.length, 2);
+  assert.equal(card.entry().state, "pending");
+  assert.equal(card.entry().reconnect, undefined);
+});
+
+for (const [ending, end, outcome] of [
+  [
+    "X then Cancel",
+    (card) => {
+      card.store.dismissReconnect(card.key);
+      card.store.cancelApproval(card.key);
+    },
+    { state: "cancelled" },
+  ],
+  [
+    "the turn ending",
+    (card) => card.ctx.controller.abort(),
+    { state: "not_sent", reason: "conversation_ended" },
+  ],
+]) {
+  test(`giving up on the connect a Send asked for (${ending}) reports the user's edits`, async (t) => {
+    const card = await rebindCard(t, {
+      commits: [{ state: "failed", errorCode: "reconnect_needed", message: "Reconnect." }],
+    });
+    card.store.updateApprovalDraft(card.key, { body: "Edited before the reconnect" });
+    await card.store.approveAction(card.key);
+    assert.equal(card.entry().reconnect, "prompt");
+    end(card);
+    assert.deepEqual(await card.outcome, { ...outcome, finalText: "Edited before the reconnect" });
+  });
+}
+
+for (const reason of ["not_pending", "expired", "account_changed"]) {
+  test(`${reason} never prepares again`, async (t) => {
+    const card = await rebindCard(t, { commits: [{ state: "not_sent", reason }] });
+    await card.store.approveAction(card.key);
+    assert.deepEqual(await card.outcome, { state: "not_sent", reason });
+    assert.equal(card.calls.prepare, 0);
+  });
+}
+
+test("Send while the service needs a reconnect asks first; Yes connects and waits for fresh Send", async (t) => {
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new")],
+  });
+  card.store.updateApprovalDraft(card.key, { body: "Edited before connecting" });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().reconnect, "prompt");
+  assert.equal(card.calls.commit.length, 0, "nothing goes out before the connect");
+
+  await card.store.connectToSend(card.key);
+  assert.deepEqual(card.calls.connect, ["slack"]);
+  assert.equal(card.entry().state, "pending");
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, { ...POSTED, finalText: "Edited before connecting" });
+  assert.deepEqual(card.calls.commit, [
+    { actionId: "a-new", edits: { body: "Edited before connecting" } },
+  ]);
+  assert.deepEqual(card.calls.cancel, [{ actionId: "a-old", reason: "cancelled_by_user" }]);
+});
+
+test("Send does nothing while the card asks to connect", async (t) => {
+  const card = await rebindCard(t, { status: "needsReconnect", commits: [POSTED] });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().reconnect, "prompt");
+  // Connected elsewhere, but the card still shows its prompt: only Yes or X moves on.
+  const statusStore = await import("../../src/stores/connectorStatusStore.ts");
+  statusStore.useConnectorStatusStore.setState({
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.calls.commit.length, 0);
+  assert.equal(card.entry().reconnect, "prompt");
+});
+
+test("Yes on a card whose service got connected meanwhile prepares without another sign-in", async (t) => {
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new")],
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().reconnect, "prompt");
+  // Another card's connect (or Settings) connected the service.
+  const statusStore = await import("../../src/stores/connectorStatusStore.ts");
+  statusStore.useConnectorStatusStore.setState({
+    statuses: { slack: { id: "slack", connected: true, configured: true, needsReconnect: false } },
+  });
+  await card.store.connectToSend(card.key);
+  assert.deepEqual(card.calls.connect, [], "no second sign-in");
+  assert.equal(card.entry().state, "pending");
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.equal(card.calls.commit.length, 1);
+});
+
+test("a commit that finds the login lapsed asks to connect, never sending twice", async (t) => {
+  let card = null;
+  card = await rebindCard(t, {
+    commits: [
+      () => {
+        card.flagReconnect();
+        return { state: "failed", errorCode: "reconnect_needed", message: "Reconnect." };
+      },
+      POSTED,
+    ],
+    prepares: [READY("a-new")],
+  });
+  await card.store.approveAction(card.key);
+  assert.equal(card.entry().state, "pending");
+  assert.equal(card.entry().reconnect, "prompt");
+  assert.equal(card.calls.prepare, 0, "a lapsed login is never prepared again on its own");
+  await card.store.connectToSend(card.key);
+  assert.deepEqual(card.calls.connect, ["slack"], "the real connect");
+  assert.equal(card.entry().state, "pending");
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.equal(card.calls.commit.length, 2);
+});
+
+test("after a reconnect as someone else, the card waits for another Send", async (t) => {
+  const elsewhere = { ...PREVIEW, accountLabel: "chad-work", workspaceLabel: "Other" };
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new", elsewhere)],
+  });
+  await card.store.approveAction(card.key);
+  await card.store.connectToSend(card.key);
+  assert.equal(card.entry().state, "pending");
+  assert.equal(card.entry().notice, "identity_changed");
+  assert.equal(card.entry().preview.accountLabel, "chad-work");
+  assert.equal(card.calls.commit.length, 0);
+
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.deepEqual(
+    card.calls.commit.map((call) => call.actionId),
+    ["a-new"]
+  );
+});
+
+test("X on the connect prompt goes back to the draft; a connect cancelled midway too", async (t) => {
+  let finishConnect;
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    connect: () => new Promise((resolve) => (finishConnect = resolve)),
+  });
+  await card.store.approveAction(card.key);
+  card.store.dismissReconnect(card.key);
+  assert.equal(card.entry().reconnect, undefined);
+  assert.equal(card.entry().state, "pending");
+
+  await card.store.approveAction(card.key);
+  const connecting = card.store.connectToSend(card.key);
+  assert.equal(card.entry().reconnect, "connecting");
+  while (!finishConnect) await new Promise((resolve) => setImmediate(resolve));
+  card.store.dismissReconnect(card.key);
+  assert.deepEqual(card.calls.cancelConnect, ["slack"]);
+  finishConnect({ status: "connected" });
+  await connecting;
+  assert.equal(card.entry().reconnect, undefined);
+  assert.equal(card.calls.prepare, 0);
+  assert.equal(card.calls.commit.length, 0);
+});
+
+test("a card withdrawn while it prepares again cancels the new action", async (t) => {
+  let finishPrepare;
+  const card = await rebindCard(t, {
+    commits: [FAILED],
+    prepares: [() => new Promise((resolve) => (finishPrepare = resolve))],
+  });
+  await card.store.approveAction(card.key);
+  const retrying = card.store.retryApproval(card.key);
+  card.ctx.controller.abort();
+  finishPrepare(READY("a-new"));
+  await retrying;
+  assert.equal(card.calls.commit.length, 1);
+  assert.deepEqual(card.calls.cancel.at(-1), { actionId: "a-new", reason: "conversation_ended" });
+});
+
+test("Retry with the service disconnected asks to connect, then waits for Send", async (t) => {
+  const card = await rebindCard(t, { commits: [FAILED, POSTED], prepares: [READY("a-new")] });
+  await card.store.approveAction(card.key);
+  card.disconnect();
+  await card.store.retryApproval(card.key);
+  assert.deepEqual([card.entry().state, card.entry().reconnect], ["pending", "prompt"]);
+  assert.equal(card.calls.prepare, 0, "nothing is prepared on a login that isn't there");
+
+  await card.store.connectToSend(card.key);
+  assert.equal(card.entry().state, "pending");
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.deepEqual(
+    card.calls.commit.map((call) => call.actionId),
+    ["a-old", "a-new"]
+  );
+});
+
+test("a prepare that finds the service not connected asks to connect", async (t) => {
+  const card = await rebindCard(t, {
+    commits: [FAILED],
+    prepares: [{ status: "unavailable", reason: "not_connected" }],
+  });
+  await card.store.approveAction(card.key);
+  await card.store.retryApproval(card.key);
+  assert.deepEqual([card.entry().state, card.entry().reconnect], ["pending", "prompt"]);
+  assert.equal(card.entry().awaitingRetry, undefined);
+});
+
+test("a prepare that needs the user to say where hands the model that question", async (t) => {
+  const question = {
+    status: "needs_clarification",
+    message: "#launch is archived.",
+    candidates: ["#launch-2"],
+  };
+  const card = await rebindCard(t, { commits: [FAILED], prepares: [question] });
+  card.store.updateApprovalDraft(card.key, { body: "Launch moved to Friday" });
+  await card.store.approveAction(card.key);
+  await card.store.retryApproval(card.key);
+  assert.equal(card.entry().state, "not_sent", "settled, not left waiting for Retry");
+  assert.deepEqual(await card.outcome, {
+    state: "not_sent",
+    reason: "needs_clarification",
+    clarification: question,
+    finalText: "Launch moved to Friday",
+  });
+  assert.equal(card.calls.commit.length, 1);
+});
+
+test("a turn stopped while Send runs prepares nothing new", async (t) => {
+  let stop = () => {};
+  const card = await rebindCard(t, {
+    commits: [
+      () => {
+        stop();
+        return { state: "not_sent", reason: "not_found" };
+      },
+    ],
+    prepares: [READY("a-new")],
+  });
+  stop = () => card.ctx.controller.abort();
+  await card.store.approveAction(card.key);
+  assert.equal(card.calls.prepare, 0);
+  assert.deepEqual(await card.outcome, { state: "not_sent", reason: "conversation_ended" });
+});
+
+test("a reconnect that changes only the destination waits, and the model hears the new one", async (t) => {
+  const elsewhere = { ...PREVIEW, destinationLabel: "#random" };
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new", elsewhere)],
+  });
+  await card.store.approveAction(card.key);
+  await card.store.connectToSend(card.key);
+  assert.equal(card.entry().notice, "identity_changed");
+  assert.equal(card.calls.commit.length, 0);
+
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, { ...POSTED, destinationLabel: "#random" });
+});
+
+test("a turn that ends while the card connects sends nothing", async (t) => {
+  let finishConnect;
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new")],
+    connect: () => new Promise((resolve) => (finishConnect = resolve)),
+  });
+  await card.store.approveAction(card.key);
+  const connecting = card.store.connectToSend(card.key);
+  while (!finishConnect) await new Promise((resolve) => setImmediate(resolve));
+  card.ctx.controller.abort();
+  assert.deepEqual(card.calls.cancelConnect, ["slack"]);
+  finishConnect({ status: "connected" });
+  await connecting;
+  assert.deepEqual(await card.outcome, { state: "not_sent", reason: "conversation_ended" });
+  assert.equal(card.calls.prepare, 0);
+  assert.equal(card.calls.commit.length, 0);
+});
+
+test("only the latest connect's result counts", async (t) => {
+  const pending = [];
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("a-new")],
+    connect: () => new Promise((resolve) => pending.push(resolve)),
+  });
+  await card.store.approveAction(card.key);
+  const first = card.store.connectToSend(card.key);
+  while (pending.length < 1) await new Promise((resolve) => setImmediate(resolve));
+  // X, then Send and Yes again before the first connect has answered.
+  card.store.dismissReconnect(card.key);
+  await card.store.approveAction(card.key);
+  const second = card.store.connectToSend(card.key);
+  while (pending.length < 2) await new Promise((resolve) => setImmediate(resolve));
+
+  pending[0]({ status: "failed", errorCode: "oauth_cancelled" });
+  await first;
+  assert.equal(card.entry().reconnect, "connecting", "the second connect still runs");
+  pending[1]({ status: "connected" });
+  await second;
+  assert.equal(card.calls.commit.length, 0);
+  await card.store.approveAction(card.key);
+  assert.deepEqual(await card.outcome, POSTED);
+  assert.equal(card.calls.commit.length, 1);
+});
+
+test("a connect the app refuses says why, as the Settings row does", async (t) => {
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    connect: async () => ({ status: "unavailable", reason: "signed_out" }),
+  });
+  await card.store.approveAction(card.key);
+  await card.store.connectToSend(card.key);
+  assert.deepEqual([card.entry().reconnect, card.entry().connectError], ["prompt", "signed_out"]);
+});
+
+for (const [ending, end, state] of [
+  ["Cancel", (card) => card.store.cancelApproval(card.key), "cancelled"],
+  ["the turn ending", (card) => card.ctx.controller.abort(), "failed"],
+]) {
+  test(`after Retry asked to connect, ${ending} still reports the failure with the edits`, async (t) => {
+    const card = await rebindCard(t, { commits: [FAILED], prepares: [READY("a-new")] });
+    await card.store.approveAction(card.key);
+    card.store.updateApprovalDraft(card.key, { body: "Edited after the failure" });
+    card.disconnect();
+    await card.store.retryApproval(card.key);
+    assert.equal(card.entry().reconnect, "prompt");
+    card.store.dismissReconnect(card.key);
+    end(card);
+    assert.deepEqual(await card.outcome, { ...FAILED, finalText: "Edited after the failure" });
+    assert.equal(card.entry().state, state);
+  });
+}
+
+test("once prepared again, the card no longer reports the old failure", async (t) => {
+  const elsewhere = { ...PREVIEW, accountLabel: "chad-work" };
+  const card = await rebindCard(t, { commits: [FAILED], prepares: [READY("a-new", elsewhere)] });
+  await card.store.approveAction(card.key);
+  await card.store.retryApproval(card.key);
+  assert.equal(card.entry().notice, "identity_changed");
+  card.store.cancelApproval(card.key);
+  assert.deepEqual(await card.outcome, { state: "cancelled" });
+});
+
+test("identical display labels after reconnect cannot authorize a newly prepared action", async (t) => {
+  const card = await rebindCard(t, {
+    status: "needsReconnect",
+    commits: [POSTED],
+    prepares: [READY("other-account-action", { ...PREVIEW })],
+  });
+  await card.store.approveAction(card.key);
+  await card.store.connectToSend(card.key);
+  assert.deepEqual(
+    card.calls.commit,
+    [],
+    "nonunique labels cannot prove sender or destination identity"
+  );
+  assert.equal(card.entry().actionId, "other-account-action");
+  assert.equal(card.entry().state, "pending");
+  await card.store.approveAction(card.key);
+  assert.equal((await card.outcome).state, "sent");
+  assert.equal(card.calls.commit[0].actionId, "other-account-action");
 });

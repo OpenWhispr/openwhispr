@@ -1855,7 +1855,7 @@
       },
       "examplesTitle": "Примеры",
       "helper": "Выберите что-то короткое и естественное для произношения",
-      "howItWorksDescription": "Когда вы говорите «Привет, {{agentName}}» и затем даёте инструкцию, выделенный текст безопасно заменяется результатом. Если автовставка включена и фокус находится в редактируемом поле, ответ вставляется в позицию курсора; иначе он открывается в плавающей панели ассистента.",
+      "howItWorksDescription": "Когда вы говорите «Привет, {{agentName}}» и затем даёте инструкцию, выделенный текст безопасно заменяется результатом. Остальные запросы открываются в окне ассистента.",
       "howItWorksTitle": "Как это работает",
       "instructionMode": "Инструкция",
       "placeholder": "например, Джарвис, Нова, Атлас...",
@@ -2019,7 +2019,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Горячая клавиша голосового помощника",
-        "description": "Скажите команду — помощник использует ваши заметки, календарь и веб-инструменты. Ответ вставляется в редактируемое поле с фокусом, заменяет выделенный текст или открывается в плавающей панели."
+        "description": "Скажите запрос — ассистент ответит в своём окне, используя ваши заметки, календарь и веб-инструменты. Текст, выделенный заранее, передаётся вместе с ним как контекст."
       },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",
@@ -3999,7 +3999,13 @@
       "todos": "Перечисли мои последние задачи",
       "meeting": "Подготовь меня к следующей встрече",
       "sharedNotes": "Выдели мои общие заметки"
-    }
+    },
+    "fork": "Ответвить",
+    "forked": "Ответвлённый чат",
+    "forkedFrom": "Ответвлено от «{{title}}»",
+    "forkFailed": "Не удалось ответвить чат",
+    "sendNotStarted": "Этот чат занят. Сообщение не отправлено. Повторите попытку после завершения текущего запроса.",
+    "openFailed": "Этот чат больше недоступен."
   },
   "support": {
     "documentation": "Документация",
@@ -4082,7 +4088,6 @@
       "hotkeyToSpeak": "{{hotkey}} для записи",
       "recording": "Запись...",
       "processing": "Обработка...",
-      "clickToSpeak": "Нажмите для записи",
       "waitingForMicrophone": "Ожидание микрофона…"
     },
     "buttons": {
@@ -4094,7 +4099,6 @@
       "startListening": "Начать запись",
       "hideForNow": "Скрыть",
       "askAssistant": "Спросить помощника",
-      "busyRecording": "Сначала завершите текущую запись",
       "startMeetingRecording": "Начать запись встречи"
     }
   },
@@ -4197,30 +4201,159 @@
       "update_skillName": "Обновить навык",
       "search_openwhispr_helpStatus": "Поиск в справке OpenWhispr...",
       "read_openwhispr_helpStatus": "Чтение справки OpenWhispr...",
-      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr..."
+      "get_openwhispr_contextStatus": "Чтение настроек OpenWhispr...",
+      "ask_userName": "Вопрос",
+      "ask_userStatus": "Задаю вопрос...",
+      "request_connectionName": "Подключение",
+      "request_connectionStatus": "Запрашиваю подключение...",
+      "request_accessName": "Доступ",
+      "request_accessStatus": "Запрашиваю доступ...",
+      "look_at_screenName": "Посмотреть на экран",
+      "look_at_screenStatus": "Смотрю на ваш экран...",
+      "look_at_screenSuccess": "Экран прочитан.",
+      "look_at_screenFailed": "Не удалось прочитать экран.",
+      "request_api_keyName": "Ключ API",
+      "request_api_keyStatus": "Запрашиваю ключ API...",
+      "open_settingsName": "Настройки",
+      "open_settingsStatus": "Направляю в настройки..."
+    },
+    "turn": {
+      "reasoning": "Рассуждение",
+      "stopped": "Остановлено",
+      "stepLimit": "Приостановлено: достигнут предел шагов.",
+      "continue": "Продолжить",
+      "continueMessage": "Продолжай",
+      "failed": "Не удалось получить этот ответ.",
+      "unbackedClaim": "Не выполнено: то, что по словам этого ответа сделано, на самом деле не запускалось."
+    },
+    "interactions": {
+      "notNow": "Не сейчас",
+      "cancel": "Отмена",
+      "questions": {
+        "recommended": "{{label}} (рекомендуется)",
+        "submit": "Отправить",
+        "placeholder": "Введите ответ…",
+        "previous": "Предыдущий вопрос",
+        "next": "Следующий вопрос",
+        "position": "{{current}}/{{total}}",
+        "continue": "Продолжить",
+        "typedAnswer": "Ваш ответ: {{answer}}"
+      },
+      "connection": {
+        "title": "Подключить {{name}}",
+        "connect": "Подключить {{name}}",
+        "connecting": "Завершите подключение в браузере…",
+        "failed": "Не удалось подключиться. Попробуйте ещё раз.",
+        "permissionDenied": "Доступ к календарю запрещён. Разрешите его в Системных настройках и попробуйте снова.",
+        "calendarTitle": "Подключить календарь",
+        "yes": "Да",
+        "reasons": {
+          "gmail": "Я смогу отправить письмо из вашего Gmail.",
+          "slack": "Я смогу опубликовать сообщение в Slack за вас.",
+          "linear": "Я смогу находить и создавать задачи в Linear за вас.",
+          "github": "Я смогу находить и создавать issues в GitHub за вас.",
+          "calendar": "Я смогу проверить, когда вы свободны, и предложить время."
+        }
+      },
+      "access": {
+        "screen": "Разрешить доступ к экрану?",
+        "allow": "Разрешить",
+        "capturing": "Снимок…"
+      },
+      "apiKey": {
+        "title": "Добавьте ключ API {{provider}}",
+        "placeholder": "Вставьте или введите здесь",
+        "save": "Сохранить",
+        "label": "Ключ API {{provider}}",
+        "saved": "Ключ {{provider}} сохранён"
+      },
+      "settings": {
+        "done": "Готово",
+        "technicalDetails": "Технические подробности",
+        "checking": "Проверка…"
+      },
+      "status": {
+        "answered": "Ответ получен",
+        "connected": "{{name}} подключён",
+        "granted": "Экран предоставлен",
+        "declined": "Не разрешено",
+        "saved": "Ключ API сохранён",
+        "done": "Возврат из настроек",
+        "cancelled": "Отклонено",
+        "notAnswered": "Без ответа",
+        "invalid": "Не удалось показать вопрос"
+      },
+      "followUp": {
+        "connected": "Я подключил {{name}}.",
+        "granted": "Я разрешил доступ к экрану.",
+        "saved": "Я сохранил ключ API {{provider}}.",
+        "done": "Я закончил в настройках."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Выберите текст для редактирования с помощью",
-      "selectedContext": "Выбранный текст добавлен",
-      "removeSelectedContext": "Удалить выбранный текст",
-      "newConversation": "Новый разговор",
-      "copyToClipboard": "Копировать в буфер обмена",
-      "suggestions": {
-        "summarizeNotes": "Подведи итог моих последних заметок",
-        "calendar": "Что у меня в календаре?",
-        "draft": "Помоги мне составить текст"
-      }
+  "agentWindow": {
+    "title": "Ассистент",
+    "actions": {
+      "expand": "Развернуть",
+      "collapse": "Свернуть",
+      "speak": "Говорить",
+      "type": "Печатать",
+      "stop": "Остановить",
+      "close": "Закрыть",
+      "regenerate": "Сгенерировать заново",
+      "readAloud": "Прочитать вслух",
+      "stopReading": "Остановить чтение"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Вызов",
-        "calling": "Запуск",
-        "using": "Работа"
-      },
-      "toolFallback": "Инструмент"
-    }
+    "notices": {
+      "nothingHeard": "Ничего не расслышал",
+      "transcriptionFailed": "Не удалось расшифровать",
+      "micUnavailable": "Не удалось открыть микрофон",
+      "regenerateFailed": "Не удалось сгенерировать ответ заново",
+      "dictationActive": "Микрофон занят диктовкой"
+    },
+    "composer": {
+      "placeholder": "Продиктуйте или введите вопрос…",
+      "followUpPlaceholder": "Задайте уточняющий вопрос…",
+      "answerPlaceholder": "Ответьте здесь…",
+      "cardPlaceholder": "Ответьте в карточке выше…"
+    },
+    "empty": {
+      "title": "Чем могу помочь?",
+      "description": "Введите запрос ниже."
+    },
+    "selectedContext": {
+      "title": "Выбранный контекст",
+      "remove": "Убрать выбранный контекст",
+      "fromAnswer": "Из ответа: «{{text}}»",
+      "fromOtherApp": "Из другого приложения: «{{text}}»"
+    },
+    "selectionHint": "Выделите текст, чтобы уточнить или ответвить",
+    "selectionToolbar": "Выделенный текст",
+    "followUp": "Уточнить",
+    "forkFromHere": "Ответвить отсюда",
+    "chats": {
+      "title": "Чаты",
+      "switch": "Сменить чат",
+      "new": "Новый чат",
+      "empty": "Чатов пока нет",
+      "untitled": "Чат без названия",
+      "fork": "Ответвление"
+    },
+    "progress": {
+      "callingTools_one": "Вызываю {{count}} инструмент…",
+      "callingTools_few": "Вызываю {{count}} инструмента…",
+      "callingTools_many": "Вызываю {{count}} инструментов…",
+      "callingTools_other": "Вызываю {{count}} инструмента…",
+      "checkingAnswers": "Проверяю ответы…",
+      "reasoning": "Рассуждаю…",
+      "reasonedFor": "Рассуждал {{duration}}",
+      "workedFor": "Работал {{duration}}",
+      "steps_one": "{{count}} шаг",
+      "steps_few": "{{count}} шага",
+      "steps_many": "{{count}} шагов",
+      "steps_other": "{{count}} шага"
+    },
+    "waitingForAnswer": "Ожидание ответа"
   },
   "integrations": {
     "title": "Интеграции",
@@ -4343,7 +4476,6 @@
     "approval": {
       "headers": {
         "default": "Отправить в {{destination}}",
-        "slackPost": "Опубликовать в {{destination}}",
         "email": "Письмо для {{destination}}",
         "issue": "Создать задачу в {{destination}}",
         "comment": "Комментарий к {{destination}}"
@@ -4351,8 +4483,6 @@
       "identity": "От имени {{account}}",
       "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
       "send": "Отправить",
-      "edit": "Изменить",
-      "doneEditing": "Готово",
       "cancel": "Отмена",
       "titleLabel": "Заголовок",
       "bodyLabel": "Сообщение",
@@ -4378,6 +4508,10 @@
         "credential_save_failed": "Не удалось сохранить вход в Slack на этом компьютере. Ничего не отправлено. Попробуйте снова.",
         "dm_failed": "Не удалось открыть личные сообщения с {{destination}}. Ничего не отправлено.",
         "restricted": "{{destination}} доступен вам только для чтения или ограничен.",
+        "thread_mismatch": "Эта ветка находится в другой беседе, а не в {{destination}}. Ничего не отправлено.",
+        "invalid_thread": "Это не ссылка на сообщение в Slack. Ничего не отправлено.",
+        "thread_closed": "Slack не разрешает отвечать в этой ветке. Ничего не отправлено.",
+        "thread_only": "В {{destination}} можно только отвечать в ветках. Ничего не отправлено.",
         "generic": "Что-то пошло не так. Ничего не отправлено.",
         "github": {
           "reconnect_needed": "GitHub нужно переподключить в настройках.",
@@ -4438,7 +4572,6 @@
         }
       },
       "email": {
-        "from": "От {{account}}",
         "toLabel": "Кому",
         "ccLabel": "Копия",
         "subjectLabel": "Тема",
@@ -4451,7 +4584,8 @@
         "tooManyRecipients": "Письмо можно отправить не более чем на {{max}} адресов в полях «Кому» и «Копия» вместе.",
         "subjectTooLong": "Тема должна быть не длиннее {{max}} символов.",
         "bodyTooLong": "Сообщение слишком длинное для Gmail. Сократите его, чтобы отправить.",
-        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные»."
+        "unknown": "Не удалось подтвердить отправку. Проверьте папку «Отправленные».",
+        "fromLabel": "От"
       },
       "github": {
         "notes": {
@@ -4495,7 +4629,22 @@
         "notes": {
           "targetTitle": "К «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Вы уже пытались сделать это в этом чате. Перед повторной отправкой проверьте, получилось ли это.",
+      "slack": {
+        "channelLabel": "Канал",
+        "asLabel": "От имени",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Ответ в ветке, начатой {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Отправлено в {{destination}} новым сообщением, а не в ветку."
+      },
+      "sentLabel": "Отправлено",
+      "identityChanged": "Теперь будет отправлено от имени {{account}}. Нажмите «Отправить», чтобы отправить.",
+      "connectToSend": "Подключите {{name}}, чтобы отправить это",
+      "edit": "Изменить",
+      "doneEditing": "Готово"
     },
     "policyOff": "Ваша организация отключила коннекторы.",
     "email": {
@@ -4544,7 +4693,8 @@
         "connectedBody": "Вы можете закрыть эту вкладку и вернуться в OpenWhispr.",
         "failedTitle": "Slack не был подключён",
         "failedBody": "Вернитесь в OpenWhispr, чтобы попробовать снова."
-      }
+      },
+      "pickDestination": "Какой «{{destination}}» вы имели в виду?"
     },
     "github": {
       "title": "GitHub",
@@ -4720,6 +4870,10 @@
         "credential_save_failed": "Не удалось сохранить вход в Slack на этом компьютере. Ничего не отправлено.",
         "dm_failed": "Не удалось открыть личные сообщения. Ничего не отправлено.",
         "restricted": "Этот канал только для чтения или ограничен.",
+        "thread_mismatch": "Эта ветка находится в другой беседе. Ничего не отправлено.",
+        "invalid_thread": "Это не ссылка на сообщение в Slack.",
+        "thread_closed": "Slack не разрешает отвечать в этой ветке.",
+        "thread_only": "В этом канале можно только отвечать в ветках.",
         "generic": "Не получилось.",
         "github": {
           "reconnect_needed": "GitHub нужно переподключить.",
@@ -4784,7 +4938,8 @@
       },
       "gmailDraftLimit": "Лимит писем на один запрос: {{max}}.",
       "queryResults": "Найдено результатов: {{total}}",
-      "cardLimit": "Лимит карточек на один запрос: {{max}}."
+      "cardLimit": "Лимит карточек на один запрос: {{max}}.",
+      "alreadySent": "Уже сделано для этого запроса"
     },
     "beta": "Бета",
     "upsell": "Коннекторы входят в платные тарифы. Перейдите на платный тариф, чтобы ассистент работал в ваших инструментах.",
