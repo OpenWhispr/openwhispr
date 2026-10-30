@@ -33,7 +33,7 @@ function extractText(data) {
 }
 
 async function transcribeWithGemini(
-  { audioBuffer, model, contentType, language, keyterms, apiKey },
+  { audioBuffer, model, contentType, language, keyterms, apiKey, signal },
   fetchImpl
 ) {
   if (!apiKey?.trim()) {
@@ -78,6 +78,7 @@ async function transcribeWithGemini(
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(requestBody),
+    ...(signal ? { signal } : {}),
   });
 
   if (!response.ok) {

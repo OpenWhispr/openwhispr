@@ -18,6 +18,7 @@ import {
   Link2,
   Monitor,
   Settings,
+  SkillStack,
 } from "../icons";
 
 export const toolIcons: Record<string, typeof Search> = {
@@ -47,4 +48,7 @@ export const toolIcons: Record<string, typeof Search> = {
   look_at_screen: Monitor,
   request_api_key: KeyRound,
   open_settings: Settings,
+  load_skill: SkillStack,
+  propose_skill: SkillStack,
+  update_skill: SkillStack,
 };

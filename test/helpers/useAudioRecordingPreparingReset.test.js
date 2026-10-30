@@ -19,6 +19,10 @@ function arbitration() {
       if (["./dictationLifecycle", "./ipcSender"].includes(request))
         return require(path.join(sourceRoot, "src/helpers", request));
       if (request === "url") return require(request);
+      if (request === "./dragManager")
+        return class {
+          async stopWindowDrag() {}
+        };
       return { NOTIFICATION_WINDOW_CONFIG: { width: 400, height: 100 } };
     };
     loaded._compile(fs.readFileSync(filename, "utf8"), filename);

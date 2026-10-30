@@ -354,3 +354,20 @@ test("a fork of a reply left waiting on a question shows that reply until the fo
   const answered = { toolCalls: [{ id: "c1", interaction: { state: "settled" } }] };
   assert.deepEqual(shownMessages(["m1", answered], origin), []);
 });
+
+test("a skill proposal waits above the assistant pill and stops waiting after its Save", async () => {
+  const { findPendingCard } = await load();
+  const messages = [
+    {
+      id: "m1",
+      toolCalls: [{ id: "c1", name: "propose_skill", arguments: "{}", status: "executing" }],
+    },
+  ];
+  const skillApprovals = { "m1::c1": { state: "pending" } };
+  assert.equal(findPendingCard(messages, {}, {}, { skillApprovals }).id, "m1::c1:skill");
+  assert.equal(
+    findPendingCard(messages, {}, {}, { skillApprovals: { "m1::c1": { state: "saved" } } }),
+    null
+  );
+  assert.equal(findPendingCard([], {}, {}, { skillApprovals }), null);
+});

@@ -188,7 +188,9 @@ export function useVoiceDraft({
       const saved = await window.electronAPI.saveTempAudio(buffer);
       tempPath = saved.path;
       if (!current()) return;
-      const result = await transcribeFile(tempPath, buildConfigRef.current(), false);
+      const result = await transcribeFile(tempPath, buildConfigRef.current(), false, {
+        purpose: "dictation",
+      });
       const text = result.text?.trim();
       if (!current()) return;
       if (!result.success) {

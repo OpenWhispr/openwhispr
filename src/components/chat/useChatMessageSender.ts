@@ -102,6 +102,7 @@ export function useChatMessageSender({
           await streaming.sendToAI(text, [...previousMessages, userMessage], {
             ...options,
             conversationId: convId,
+            persistAssistantMessage: persistence.saveAssistantMessage,
           });
         } catch (error) {
           if (isCurrent()) throw error;

@@ -1,11 +1,13 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const {
+  ENTERPRISE_TRANSCRIPTION_SCOPE,
   resolveManagedEnterpriseScope,
   validateManagedEnterpriseEnvelope,
   managedScopesForConfig,
 } = require("./enterpriseManagedConfig.mjs");
 const { AuthContextError } = require("./cloudApiRequest");
+const { CLIENT_CAPABILITIES } = require("./policyRequestHeaders");
 
 const CONFIG_CACHE_VERSION = 1;
 const CONFIG_REFRESH_MS = 5 * 60 * 1000;
@@ -103,7 +105,24 @@ function requiresEnforcedManagedAccess(config) {
   );
 }
 
-function responseError(code, error, identity = null, enforcementRequired, enforcedScopes) {
+// Enforcement the evicted config carried, so callers keep failing closed per
+// scope and audio operation; an Enterprise-plan downgrade clears it.
+function recordPriorEnforcement(error, prior) {
+  const downgraded = error?.code === "ENTERPRISE_REQUIRED";
+  const summary = managedScopesForConfig(prior);
+  error.enforcementRequired = downgraded ? false : requiresEnforcedManagedAccess(prior);
+  error.enforcedScopes = downgraded ? [] : summary.enforced;
+  error.enforcedAudioOperations = downgraded ? [] : summary.enforcedAudioOperations;
+}
+
+function responseError(
+  code,
+  error,
+  identity = null,
+  enforcementRequired,
+  enforcedScopes,
+  enforcedAudioOperations
+) {
   return {
     success: false,
     status: "error",
@@ -114,6 +133,7 @@ function responseError(code, error, identity = null, enforcementRequired, enforc
     error,
     ...(typeof enforcementRequired === "boolean" ? { enforcementRequired } : {}),
     ...(Array.isArray(enforcedScopes) ? { enforcedScopes } : {}),
+    ...(Array.isArray(enforcedAudioOperations) ? { enforcedAudioOperations } : {}),
   };
 }
 
@@ -122,6 +142,7 @@ function createEnterpriseIdentityManager({
   getApiUrl,
   getAppVersion,
   proxyFetch,
+  enterpriseFetch,
   tokenStore,
   logger,
   broadcast,
@@ -147,7 +168,13 @@ function createEnterpriseIdentityManager({
     }
   }
 
-  function evictIdentity(identity, code, enforcementRequired = false, enforcedScopes = []) {
+  function evictIdentity(
+    identity,
+    code,
+    enforcementRequired = false,
+    enforcedScopes = [],
+    enforcedAudioOperations = []
+  ) {
     configs.delete(identity.cacheKey);
     configRequests.delete(identity.cacheKey);
     clearIdentityCredentials(identity);
@@ -160,6 +187,7 @@ function createEnterpriseIdentityManager({
       code,
       enforcementRequired,
       enforcedScopes,
+      enforcedAudioOperations,
     });
   }
 
@@ -188,7 +216,9 @@ function createEnterpriseIdentityManager({
     }
     const credentialHash = crypto
       .createHash("sha256")
-      .update(JSON.stringify(Object.entries(authHeaders).sort(([a], [b]) => a.localeCompare(b))))
+      .update(
+        JSON.stringify(Object.entries(authHeaders).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      )
       .digest("hex");
     const apiOrigin = new URL(apiUrl).origin;
     const cacheKey = `${apiOrigin}\n${credentialHash}\n${accountId}\n${workspaceId}`;
@@ -218,6 +248,8 @@ function createEnterpriseIdentityManager({
     return {
       ...identity.authHeaders,
       "x-openwhispr-version": getAppVersion(),
+      // The server serves gateway and realtime records only to builds that advertise the audio client.
+      "x-openwhispr-capabilities": CLIENT_CAPABILITIES,
       ...(json ? { "Content-Type": "application/json" } : {}),
     };
   }
@@ -225,7 +257,7 @@ function createEnterpriseIdentityManager({
   // The deadline covers the body as well as the headers: a server that sends
   // headers and then stalls would otherwise hang the shared config and
   // credential requests that every later caller joins.
-  async function fetchWithTimeout(url, init, read) {
+  async function fetchWithTimeout(url, init, read, network, certificateBundles, identity) {
     const controller = new AbortController();
     const aborted = new Promise((_, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), {
@@ -235,7 +267,16 @@ function createEnterpriseIdentityManager({
     const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       return await Promise.race([
-        proxyFetch(url, { ...init, signal: controller.signal }).then(read),
+        (network && enterpriseFetch
+          ? enterpriseFetch(
+              url,
+              { ...init, signal: controller.signal },
+              network,
+              certificateBundles,
+              { accountId: identity.accountId, workspaceId: identity.workspaceId }
+            )
+          : proxyFetch(url, { ...init, signal: controller.signal })
+        ).then(read),
         aborted,
       ]);
     } finally {
@@ -330,15 +371,13 @@ function createEnterpriseIdentityManager({
       .catch((error) => {
         if (isAuthorizationError(error) || error?.code === "MANAGED_CONFIG_INVALID") {
           const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-          error.enforcementRequired =
-            error?.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-          error.enforcedScopes =
-            error?.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
+          recordPriorEnforcement(error, prior);
           evictIdentity(
             identity,
             error.code || "MANAGED_CONFIG_FAILED",
             error.enforcementRequired,
-            error.enforcedScopes
+            error.enforcedScopes,
+            error.enforcedAudioOperations
           );
           throw error;
         }
@@ -379,7 +418,8 @@ function createEnterpriseIdentityManager({
         error.message,
         identity,
         error.enforcementRequired,
-        error.enforcedScopes
+        error.enforcedScopes,
+        error.enforcedAudioOperations
       );
     }
   }
@@ -417,11 +457,14 @@ function createEnterpriseIdentityManager({
       const error = responseError || cause;
       if (isAuthorizationError(error)) {
         const prior = configs.get(identity.cacheKey)?.config || cachedConfig(cachePath, identity);
-        error.enforcementRequired =
-          error.code === "ENTERPRISE_REQUIRED" ? false : requiresEnforcedManagedAccess(prior);
-        error.enforcedScopes =
-          error.code === "ENTERPRISE_REQUIRED" ? [] : managedScopesForConfig(prior).enforced;
-        evictIdentity(identity, error.code, error.enforcementRequired, error.enforcedScopes);
+        recordPriorEnforcement(error, prior);
+        evictIdentity(
+          identity,
+          error.code,
+          error.enforcementRequired,
+          error.enforcedScopes,
+          error.enforcedAudioOperations
+        );
       }
       throw error;
     });
@@ -466,7 +509,20 @@ function createEnterpriseIdentityManager({
 
   function managedProviderFunctions(identity, resolution) {
     const record = resolution.record;
-    const key = credentialKey(identity, resolution.generation, record.provider, record.version);
+    const tokenScope =
+      resolution.operation === "realtime"
+        ? (record.config.realtime?.tokenScope ??
+          (record.config.realtime?.protocol === "openai-transcription-ga"
+            ? "https://ai.azure.com/.default"
+            : AZURE_SCOPE))
+        : AZURE_SCOPE;
+    // The audio network profile governs transcription traffic only; text scopes keep the default path.
+    const audioNetwork =
+      resolution.inferenceScope === ENTERPRISE_TRANSCRIPTION_SCOPE
+        ? record.config.network
+        : undefined;
+    const key = `${credentialKey(identity, resolution.generation, record.provider, record.version)}\n${tokenScope}${audioNetwork ? "\naudio-network" : ""}`;
+    if (record.provider === "openai-compatible") return {};
     if (record.provider === "bedrock") {
       return {
         credentialProvider: () =>
@@ -513,7 +569,7 @@ function createEnterpriseIdentityManager({
           const body = new URLSearchParams({
             client_id: record.config.clientId,
             grant_type: "client_credentials",
-            scope: AZURE_SCOPE,
+            scope: tokenScope,
             client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
             client_assertion: assertion,
           });
@@ -535,7 +591,10 @@ function createEnterpriseIdentityManager({
                 });
               }
               return response.json();
-            }
+            },
+            audioNetwork,
+            resolution.certificateBundles,
+            identity
           );
           assertIdentityCurrent(identity);
           if (typeof token?.access_token !== "string" || !Number.isFinite(token?.expires_in)) {
@@ -557,24 +616,33 @@ function createEnterpriseIdentityManager({
     const resolution = resolveManagedEnterpriseScope(
       config,
       request.inferenceScope,
-      request.setupMode
+      request.setupMode,
+      request.operation
     );
     if (resolution.kind === "error") {
-      throw Object.assign(new Error(resolution.message), { code: resolution.code });
+      throw Object.assign(new Error(resolution.message), {
+        code: resolution.code,
+        messageKey: resolution.messageKey,
+      });
     }
     if (resolution.kind === "manual") return { managed: false, identity, config };
     return {
       managed: true,
       identity,
       provider: resolution.provider,
+      mode: resolution.mode,
+      allowManualSetup: resolution.allowManualSetup,
       model: resolution.model,
       config: resolution.record.config,
+      certificateBundles: config.certificateBundles,
       version: resolution.record.version,
       generation: config.generation,
       ...managedProviderFunctions(identity, {
         ...resolution,
         generation: config.generation,
         inferenceScope: request.inferenceScope,
+        operation: request.operation,
+        certificateBundles: config.certificateBundles,
       }),
     };
   }

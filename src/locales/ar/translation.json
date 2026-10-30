@@ -47,6 +47,9 @@
         "managedTranscriptionUnavailable": "التفريغ المُدار غير متاح حاليًا. أعد المحاولة بعد لحظات.",
         "managedRouteInvalid": "تعذر بدء التفريغ المُدار بسبب عدم تطابق في الإعدادات. أعد المحاولة أو اتصل بالمسؤول.",
         "managedAuthRejected": "رُفضت بيانات اعتماد التفريغ المُدار الخاصة بمؤسستك. اتصل بالمسؤول.",
+        "managedRequestRejected": "رفضت خدمة التفريغ في مؤسستك هذا الصوت (HTTP {{status}}). أعد المحاولة أو اتصل بالمسؤول.",
+        "managedResponseMalformed": "أرسلت خدمة التفريغ في مؤسستك ردًا تعذّر على OpenWhispr قراءته. أعد المحاولة أو اتصل بالمسؤول.",
+        "managedChunkTooLarge": "تعذّر تقسيم هذا الصوت إلى أجزاء صغيرة بما يكفي لخدمة التفريغ في مؤسستك. اتصل بالمسؤول.",
         "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
         "providerKeyMissing": "لم يتم تعيين مفتاح API لمزود التفريغ الخاص بك. أضفه في الإعدادات ← تحويل الكلام إلى نص (Speech to Text).",
         "cleanupTruncated": "نفدت مساحة الإخراج لدى نموذج الذكاء الاصطناعي قبل أن يُكمل تنقيح إملائك.",
@@ -232,6 +235,8 @@
   "models": {
     "learnMore": "اعرف المزيد",
     "noneAvailable": "لا توجد نماذج متاحة",
+    "legacy": "قديم",
+    "legacyHint": "لم يعد متاحًا. بعد التبديل إلى نموذج آخر لن يظهر مرة أخرى.",
     "descriptions": {
       "cohere": {
         "cohere_transcribe_03_2026": "أدق نموذج محلي للتعرف على الكلام (متوسط معدل خطأ الكلمة 5.42%، 14 لغة). بدون اكتشاف تلقائي للغة"
@@ -241,7 +246,8 @@
         "parakeet_unified_en_0_6b": "تعرف على الكلام باللغة الإنجليزية فقط بدقة رائدة (5.91% متوسط معدل خطأ الكلمة)",
         "nemotron_speech_streaming_en_0_6b": "تعرف على الكلام المتدفق باللغة الإنجليزية من NVIDIA Nemotron",
         "nemotron_3_5_asr_streaming_0_6b": "تعرف على الكلام المتدفق متعدد اللغات من NVIDIA Nemotron مع اكتشاف تلقائي للغة (15 لغة)",
-        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات"
+        "orukeet": "نسخة مضبوطة من Parakeet للتعرف على الكلام متعدد اللغات",
+        "parakeet_tdt_110m_en": "تعرف خفيف على الكلام الإنجليزي مع علامات الترقيم للأجهزة محدودة القدرات"
       },
       "diarization": {
         "segmentation": "اكتشاف حدود الكلام للتعرف على المتحدثين",
@@ -253,7 +259,9 @@
         "small": "جودة أفضل، أبطأ",
         "medium": "جودة عالية",
         "large": "أفضل جودة، الأبطأ",
-        "turbo": "سريع بجودة جيدة"
+        "turbo": "سريع بجودة جيدة",
+        "large_q5": "Large بثلث حجم التنزيل",
+        "turbo_q5": "Turbo بثلث حجم التنزيل"
       },
       "transcription": {
         "openai_gpt_transcribe": "الأحدث والأكثر دقة في التفريغ",
@@ -271,7 +279,10 @@
         "deepgram_nova_3": "نموذج Deepgram الأكثر دقة في الوقت الفعلي",
         "assemblyai_universal_streaming_english": "نصوص مفرَّغة ثابتة في الوقت الفعلي، الإنجليزية",
         "assemblyai_universal_streaming_multilingual": "نصوص مفرَّغة ثابتة في الوقت الفعلي، متعددة اللغات",
-        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة"
+        "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
+        "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
+        "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -279,7 +290,6 @@
         "openai_gpt_5_nano": "فائق السرعة، زمن انتقال منخفض",
         "openai_gpt_4_1": "أساس قوي، سياق 1 مليون",
         "openai_gpt_4_1_mini": "نموذج GPT-4.1 أصغر",
-        "openai_gpt_4_1_nano": "GPT-4.1 بأقل زمن انتقال",
         "anthropic_claude_fable_5_1": "نموذج Anthropic الأكثر قدرة، فئة Mythos",
         "anthropic_claude_fable_5": "الرائد السابق من فئة Mythos",
         "anthropic_claude_opus_5_5": "أحدث نموذج Opus للاستنتاج المعقد، سياق 1 مليون",
@@ -289,7 +299,7 @@
         "anthropic_claude_sonnet_4_6": "أداء متوازن",
         "anthropic_claude_sonnet_4_5": "جيل Sonnet السابق",
         "anthropic_claude_haiku_4_5": "سريع بذكاء يقترب من مستوى النماذج الرائدة",
-        "gemini_gemini_3_5_flash": "أحدث نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_5_flash": "نموذج Gemini سريع وعالي القدرة",
         "gemini_gemini_3_5_flash_lite": "نموذج 3.5 الأسرع والأكثر فعالية من حيث التكلفة",
         "gemini_gemini_3_1_pro_preview": "نموذج رائد من الجيل التالي للاستنتاج المعقد",
         "gemini_gemini_3_1_flash_lite": "أداء من الدرجة الأولى بتكلفة منخفضة",
@@ -317,18 +327,29 @@
         "corti_corti_s1": "النموذج السريري الأكثر قدرة مع الاستنتاج",
         "corti_corti_s1_mini_instant": "نموذج رعاية صحية مدمج، الأسرع والأقل تكلفة",
         "corti_corti_s1_mini": "نموذج سريري مدمج مع استنتاج بنصف السعر",
-        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M"
+        "tinfoil_glm_5_3": "نموذج خاص للهندسة البرمجية بقدرات وكيلية في بيئات معزولة وآمنة، سياق 1M",
+        "openai_gpt_6_1_sol": "قدرة قريبة من Astra للمحادثة والمهام الوكيلة بتكلفة أقل",
+        "openai_gpt_6_luna": "GPT-6 الأسرع والأقل تكلفة",
+        "gemini_gemini_3_6_flash": "نموذج Gemini سريع وعالي القدرة",
+        "gemini_gemini_3_8_flash": "نموذج Flash الأكثر قدرة",
+        "gemini_gemini_4_argon": "نموذج الاستنتاج الرائد من Google",
+        "tinfoil_kimi_k3": "نموذج Moonshot الرائد الخاص مع استنتاج أصلي ورؤية، سياق 256K",
+        "tinfoil_deepseek_v4_1_flash": "نموذج DeepSeek خاص وسريع مع استنتاج اختياري، سياق 1M"
       },
       "enterprise": {
         "bedrock_claude_fable_5": "نموذج Claude الأكثر قدرة. الأفضل لأصعب مهام المساعد.",
-        "bedrock_claude_haiku_4_5": "سريع ورخيص. خيار افتراضي رائع لتنظيف النص.",
-        "bedrock_claude_sonnet_5": "نموذج موثوق متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_4_5": "إصدار Haiku السابق. سريع ورخيص لتنظيف النص.",
+        "bedrock_claude_sonnet_5": "إصدار Sonnet السابق. سريع وقادر لمهام المساعد.",
         "bedrock_claude_opus_4_8": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
         "bedrock_gpt_oss_120b": "نموذج OpenAI مفتوح الوزن. استنتاج قوي بتكلفة منخفضة.",
         "bedrock_deepseek_v3_2": "نموذج رائد مفتوح الوزن. قيمة رائعة لمهام المساعد.",
         "bedrock_qwen3_next_80b": "نموذج متناثر مفتوح الوزن. سريع ومتعدد اللغات.",
-        "vertex_gemini_2_5_flash": "نموذج متعدد الوسائط سريع عبر Vertex",
-        "vertex_gemini_2_5_pro": "استنتاج متقدم عبر Vertex"
+        "bedrock_claude_sonnet_5_5": "نموذج متوازن للاستخدام اليومي. أفضل خيار افتراضي لمهام المساعد.",
+        "bedrock_claude_haiku_5_5": "أسرع نموذج Claude. خيار افتراضي رائع لتنظيف النص.",
+        "bedrock_claude_opus_5_5": "أقصى درجات الذكاء. الأفضل لمهام المساعد المعقدة.",
+        "vertex_gemini_3_8_flash": "نموذج Flash الأكثر قدرة عبر Vertex",
+        "vertex_gemini_3_5_flash_lite": "النموذج الأسرع والأقل تكلفة عبر Vertex",
+        "vertex_gemini_4_argon": "نموذج الاستنتاج الرائد من Google عبر Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "نموذج هجين قوي",
@@ -365,7 +386,14 @@
         "liquidai_lfm2_5_8b_a1b_q4_k_m": "نموذج MoE من Liquid AI، جودة عالية مع معلمات نشطة 1.5B فقط",
         "liquidai_lfm2_2_6b_q4_k_m": "نموذج LFM2 متوازن لتنظيف بجودة أعلى",
         "liquidai_lfm2_5_350m_q8_0": "نموذج خفيف للغاية للتنظيف السريع للإملاء",
-        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة"
+        "liquidai_lfm2_5_230m_q8_0": "نموذج صغير جدًا، تنظيف فوري على الأجهزة المتواضعة",
+        "qwen_qwen3_5_0_8b_q4_k_m": "نموذج Qwen3.5 صغير جدًا لأسرع تنظيف",
+        "qwen_qwen3_8_27b_q4_k_m": "نموذج Qwen الأكثر قدرة للأجهزة بذاكرة 32 GB",
+        "qwen_qwen3_6_35b_a3b_q4_k_m": "نموذج مزيج خبراء سريع، 3B معاملات نشطة",
+        "mistral_ministral_3_14b_instruct_2512_q4_k_m": "نموذج Mistral بحجم 14B مع استخدام الأدوات، سياق 256K",
+        "mistral_ministral_3_8b_instruct_2512_q4_k_m": "نموذج سريع بلا مرحلة تفكير للتنظيف والأدوات",
+        "mistral_ministral_3_3b_instruct_2512_q4_k_m": "صغير وسريع لتنظيف الإملاء",
+        "gemma_gemma_4_12b_it_qat_q4_0": "إصدار QAT الرسمي من Google، الأنسب للأجهزة بذاكرة 16 GB"
       }
     },
     "errors": {
@@ -519,6 +547,9 @@
     "tinfoil": {
       "modelRetired": "قام Tinfoil بإيقاف {{from}}. تم التبديل إلى {{to}}.",
       "refreshingModels": "جاري تحديث النماذج..."
+    },
+    "openai": {
+      "modelRetired": "قامت OpenAI بإيقاف {{from}}. تم التبديل إلى {{to}}."
     },
     "corti": {
       "euOnly": "نماذج Corti متوفرة فقط في منطقة الاتحاد الأوروبي."
@@ -752,6 +783,7 @@
       },
       "sections": {
         "connectors": "الموصلات",
+        "skills": "المهارات",
         "calendars": "التقويمات",
         "api": "مفاتيح API",
         "mcp": "خادم MCP",
@@ -934,7 +966,9 @@
       },
       "sentLabel": "تم الإرسال",
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
-      "connectToSend": "اربط {{name}} لإرسال هذا"
+      "connectToSend": "اربط {{name}} لإرسال هذا",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {
@@ -1235,6 +1269,247 @@
     "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
     "locked": "متاح ضمن الخطط المدفوعة"
   },
+  "skills": {
+    "pane": {
+      "description": "علّم المساعد طرق عملك مرة واحدة، وسيستخدمها كلما كانت مناسبة.",
+      "search": "البحث في المهارات",
+      "manage": "إدارة المهارات",
+      "add": "إضافة",
+      "addMenu": {
+        "createWithAssistant": "إنشاء مع المساعد",
+        "create": "إنشاء مهارة",
+        "upload": "رفع مهارة"
+      },
+      "installed": "المثبّتة",
+      "recommended": "الموصى بها",
+      "seeOne": "عرض {{first}}",
+      "seeTwo": "عرض {{first}} و{{second}}",
+      "seeMore_zero": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_one": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_two": "عرض {{first}} و{{second}} و{{count}} مهارتين أخريين",
+      "seeMore_few": "عرض {{first}} و{{second}} و{{count}} مهارات أخرى",
+      "seeMore_many": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "seeMore_other": "عرض {{first}} و{{second}} و{{count}} مهارة أخرى",
+      "noMatches": "لا توجد مهارات مثبّتة تطابق \"{{query}}\".",
+      "stateOn": "مفعّلة",
+      "stateOff": "متوقفة",
+      "stateNeedsFix": "تحتاج إلى إصلاح",
+      "off": "متوقفة",
+      "needsFix": "تحتاج إلى إصلاح",
+      "cardLabel": "{{name}}، {{state}}. فتح التفاصيل",
+      "addRecommended": "إضافة {{name}}",
+      "empty": {
+        "title": "لا توجد مهارات بعد",
+        "description": "أنشئ مهارة مع المساعد، أو ارفع مهارة لديك بالفعل.",
+        "descriptionNoAssistant": "ارفع مهارة لديك بالفعل، أو أنشئ مهارتك الخاصة."
+      }
+    },
+    "breadcrumb": {
+      "label": "مسار التنقل",
+      "root": "المهارات"
+    },
+    "detail": {
+      "skillLabel": "مهارة",
+      "toggle": "تفعيل {{name}} أو إيقافها",
+      "more": "مزيد من الخيارات لـ {{name}}",
+      "files": "الملفات",
+      "copyFile": "نسخ {{path}}",
+      "neverRun": "لا يشغّل OpenWhispr النصوص البرمجية أبدًا",
+      "uninstall": "إلغاء التثبيت",
+      "uninstallConfirm": "هل تريد إلغاء تثبيت {{name}}؟ ستُزال من هذا الكمبيوتر.",
+      "problem": "لا يمكن استخدام هذه المهارة حتى يتم إصلاحها: {{reason}}",
+      "tryNow": "جرّبها الآن"
+    },
+    "menu": {
+      "copyMarkdown": "نسخ Markdown",
+      "uninstall": "إلغاء التثبيت"
+    },
+    "toasts": {
+      "added": "تمت إضافة {{name}}",
+      "created": "تم إنشاء {{name}}",
+      "uploaded_zero": "تم رفع {{count}} مهارة",
+      "uploaded_one": "تم رفع {{count}} مهارة",
+      "uploaded_two": "تم رفع {{count}} مهارتين",
+      "uploaded_few": "تم رفع {{count}} مهارات",
+      "uploaded_many": "تم رفع {{count}} مهارة",
+      "uploaded_other": "تم رفع {{count}} مهارة",
+      "uninstalled": "تم إلغاء تثبيت {{name}}",
+      "removedFromComputer": "تمت إزالتها من هذا الكمبيوتر.",
+      "copiedMarkdown": "تم نسخ Markdown",
+      "copyFailed": "تعذّر النسخ",
+      "revealFailed": "تعذّر العثور على مجلد المهارة",
+      "writeFailed": "تعذّر حفظ المهارة",
+      "writeFailedNoSpace": "القرص ممتلئ.",
+      "writeFailedPermission": "لا يستطيع OpenWhispr الكتابة في مجلد المهارات الخاص به.",
+      "loadFailed": "تعذّرت قراءة مهاراتك"
+    },
+    "manage": {
+      "title": "إدارة المهارات",
+      "description": "فعّل المهارات أو أوقفها، أو أزل ما لا تستخدمه منها. تُحفظ كل مهارة على هذا الكمبيوتر.",
+      "noMatches": "لا توجد مهارات تطابق \"{{query}}\".",
+      "none": "لا توجد مهارات بعد."
+    },
+    "upload": {
+      "title": "رفع مهارة",
+      "description": "أضف مهارات أنشأتها في مكان آخر، مثل Claude أو Codex.",
+      "crumb": "رفع مهارة",
+      "drop": "اسحب ملفات المهارات إلى هنا، أو تصفّح",
+      "dropActive": "أفلت للإضافة",
+      "several": "يمكنك إضافة عدة مهارات دفعة واحدة.",
+      "ruleMd": "تحتاج ملفات ‎.md إلى اسم ووصف في أعلاها",
+      "ruleZip": "تحتاج ملفات ‎.zip و‎.skill إلى ملف SKILL.md بداخلها",
+      "fileCount_zero": "{{count}} ملف",
+      "fileCount_one": "{{count}} ملف",
+      "fileCount_two": "{{count}} ملفان",
+      "fileCount_few": "{{count}} ملفات",
+      "fileCount_many": "{{count}} ملفًا",
+      "fileCount_other": "{{count}} ملف",
+      "ready": "جاهزة",
+      "duplicate": "لديك هذه المهارة بالفعل",
+      "replace": "استبدال",
+      "willReplace": "ستحل محل مهارتك الحالية",
+      "willReplaceCopy": "سيُستخدم بدلًا من الملف الآخر",
+      "alsoInUpload": "ملف آخر في عملية الرفع هذه يحتوي على المهارة نفسها",
+      "skipped": "تم التخطي",
+      "undo": "تراجع",
+      "chooseFile": "اختر ملفًا للمتابعة.",
+      "submit": "رفع",
+      "submitCount_zero": "رفع {{count}} مهارة",
+      "submitCount_one": "رفع {{count}} مهارة",
+      "submitCount_two": "رفع {{count}} مهارتين",
+      "submitCount_few": "رفع {{count}} مهارات",
+      "submitCount_many": "رفع {{count}} مهارة",
+      "submitCount_other": "رفع {{count}} مهارة"
+    },
+    "create": {
+      "title": "إنشاء مهارة",
+      "description": "اكتبها بنفسك. يستخدمها المساعد كلما توافق طلبٌ مع الوصف.",
+      "crumb": "إنشاء مهارة",
+      "name": "الاسم",
+      "namePlaceholder": "تقرير الحالة الأسبوعي",
+      "nameMissing": "أضف اسمًا.",
+      "descriptionLabel": "الوصف",
+      "descriptionPlaceholder": "ما الذي تفعله ومتى تُستخدم. مثال: تكتب تحديثي الأسبوعي من ملاحظات هذا الأسبوع. استخدمها عندما أطلب تحديثًا أسبوعيًا.",
+      "descriptionHint": "يقرأ المساعد هذا ليقرر متى يستخدم المهارة.",
+      "descriptionMissing": "أضف وصفًا ليعرف المساعد متى يستخدمها.",
+      "instructions": "التعليمات",
+      "instructionsPlaceholder": "## متى تُستخدم\nعندما أطلب تحديثي الأسبوعي.\n\n## الخطوات\n1. اقرأ ملاحظات هذا الأسبوع.\n2. صنّفها إلى إنجازات وعوائق والأسبوع القادم.\n\n## صيغة الإخراج\nثلاث قوائم قصيرة.",
+      "instructionsMissing": "أضف التعليمات.",
+      "addFile": "إضافة ملف",
+      "filesTooLarge": "يمكن أن يصل الحجم الإجمالي لملفات المهارة إلى 25 ميغابايت كحد أقصى.",
+      "removeFile": "إزالة {{path}}",
+      "submit": "إنشاء",
+      "unsaved": "لديك تغييرات غير محفوظة",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل",
+      "draftWithAssistant": "صياغة مع المساعد"
+    },
+    "problems": {
+      "missingName": "تحتاج إلى اسم في الأعلى",
+      "missingDescription": "تحتاج إلى وصف في الأعلى",
+      "frontmatterMissing": "تحتاج إلى اسم ووصف في الأعلى",
+      "frontmatterInvalid": "تتعذر قراءة التفاصيل في الأعلى",
+      "frontmatterNotMapping": "التفاصيل في الأعلى ليست بالصيغة المتوقعة",
+      "nameFormat": "يمكن أن يحتوي الاسم على أحرف إنجليزية صغيرة وأرقام وشرطات مفردة فقط",
+      "nameTooLong": "الاسم أطول من 64 حرفًا",
+      "descriptionTooLong": "يتجاوز الوصف الحد الأقصى لعدد الأحرف ({{max}})",
+      "descriptionAngleBrackets": "لا يمكن أن يحتوي الوصف على < أو >",
+      "noSkillFile": "لا يوجد ملف SKILL.md بداخله",
+      "multipleSkillFiles": "يوجد أكثر من ملف SKILL.md بداخله",
+      "skillFileTooDeep": "يجب أن يكون SKILL.md في المستوى الأعلى، أو داخل مجلد واحد",
+      "unsafePath": "يحتوي على اسم ملف أو مسار غير مسموح به",
+      "symlink": "يحتوي على رابط إلى ملف آخر، وهذا غير مسموح به",
+      "tooLarge": "حجمه أكبر من 25 ميغابايت",
+      "tooManyFiles": "يحتوي على أكثر من 500 ملف",
+      "unsupportedFile": "يمكن إضافة ملفات ‎.md و‎.zip و‎.skill فقط",
+      "unreadableArchive": "يتعذر فتح هذا الملف",
+      "nameMismatch": "الاسم داخل SKILL.md لا يطابق اسم مجلده",
+      "unreadable": "تتعذر قراءة ملفات المهارة",
+      "skillFileNotUtf8": "يجب حفظ SKILL.md كنص بترميز UTF-8",
+      "placeholder": "استبدل العنصر النائب [TODO: …‎] أولًا",
+      "nameTaken": "لديك بالفعل مهارة باسم {{name}}"
+    },
+    "warnings": {
+      "folderRenamed": "ستتم إعادة تسمية المجلد ليطابق اسم المهارة",
+      "reservedWord": "لا يمكن رفع الأسماء التي تحتوي على \"claude\" أو \"anthropic\" إلى Claude",
+      "longBody": "تتجاوز التعليمات 500 سطر، وقد يؤدي ذلك إلى إبطاء المساعد",
+      "longDescription": "يتجاوز الوصف 300 حرف؛ الأوصاف الأقصر تُختار بدقة أكبر",
+      "unknownKeys": "توجد تفاصيل إضافية في الأعلى يحتفظ بها OpenWhispr لكنه لا يستخدمها"
+    },
+    "recommended": {
+      "action-items-to-linear": {
+        "title": "المهام إلى Linear",
+        "description": "تستخرج المهام من الاجتماع وتُعدّ لها مسودات في Linear لأوافق عليها. استخدمها بعد الاجتماع عندما أطلب المهام."
+      },
+      "meeting-summary-to-slack": {
+        "title": "ملخص الاجتماع إلى Slack",
+        "description": "تكتب ملخصًا قصيرًا للاجتماع وتُعدّ مسودة له لقناة في Slack. استخدمها عندما أطلب مشاركة ملخص الاجتماع."
+      },
+      "one-on-one-prep": {
+        "title": "التحضير لاجتماع فردي",
+        "description": "تجمع ما تغيّر منذ آخر اجتماع فردي لي مع شخص ما. استخدمها عندما أطلب التحضير لاجتماع فردي."
+      },
+      "meeting-decisions": {
+        "title": "قرارات الاجتماعات",
+        "description": "تجد القرارات في ملاحظات اجتماعاتي، مع تاريخ كل قرار واجتماعه. استخدمها عندما أسأل عمّا قررناه."
+      }
+    },
+    "chat": {
+      "chipRemove": "إزالة {{name}} من هذه المحادثة",
+      "placeholderWith": "اسأل عن أي شيء — تستخدم هذه المحادثة {{name}}",
+      "usingSkill": "يتم استخدام المهارة · {{name}}",
+      "usingSkillFailed": "تعذّر استخدام المهارة · {{name}}",
+      "creatorName": "منشئ المهارات",
+      "creatorOpening": "ما الذي تفعله مرارًا وتكرارًا؟ احكِ لي عن آخر مرة، أو اختر ملاحظة لتبدأ منها.",
+      "draftPrompt": "ساعدني في إكمال هذه المهارة.\nالاسم: {{name}}\nالوصف: {{description}}",
+      "draftInstructions": "التعليمات حتى الآن:\n{{instructions}}",
+      "draftFiles": "الملفات التي أضفتها: {{files}}",
+      "noneYet": "(لا شيء بعد)"
+    },
+    "approval": {
+      "createHeader": "إنشاء مهارة",
+      "newSkill": "مهارة جديدة",
+      "replacesExisting": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها.",
+      "replacesExistingTurnsOn": "لديك هذه المهارة بالفعل. الحفظ سيحدّثها ويفعّلها.",
+      "nameLabel": "اسم المهارة",
+      "descriptionLabel": "متى تُستخدم",
+      "seeFull": "عرض المهارة كاملة",
+      "save": "حفظ المهارة",
+      "saving": "جاري الحفظ…",
+      "saved": "تم الحفظ",
+      "openSkill": "فتح المهارة",
+      "skippedCreate": "تم التخطي. لم يُحفظ أي شيء.",
+      "updated": "تم التحديث",
+      "undo": "تراجع",
+      "undone": "تم التراجع. عادت المهارة كما كانت.",
+      "undoStale": "تعذّر التراجع. تغيّرت المهارة منذ ذلك الحين.",
+      "outdated": "لم يُحفظ. تغيّرت المهارة بعد إنشاء هذه البطاقة.",
+      "unchangedLines_zero": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_one": "⋯ {{count}} سطر دون تغيير",
+      "unchangedLines_two": "⋯ {{count}} سطران دون تغيير",
+      "unchangedLines_few": "⋯ {{count}} أسطر دون تغيير",
+      "unchangedLines_many": "⋯ {{count}} سطرًا دون تغيير",
+      "unchangedLines_other": "⋯ {{count}} سطر دون تغيير",
+      "undoFailed": "تعذّر التراجع. حاول مرة أخرى.",
+      "failed": "تعذّر حفظ المهارة.",
+      "notSaved": "لم يُحفظ أي شيء.",
+      "updateHeader": "تحديث المهارة",
+      "removes": "سيُزال:",
+      "learnedFrom": "مستفادة من: {{title}} · {{date}}",
+      "today": "اليوم",
+      "seeChanges": "عرض التغييرات بالتفصيل",
+      "added": "أُضيف:",
+      "removed": "أُزيل:",
+      "update": "تحديث المهارة",
+      "skippedUpdate": "تم التخطي. لم تتغير المهارة."
+    },
+    "code": {
+      "paste": "لصق في التطبيق",
+      "pasteNote": "يلصق دون الضغط على Enter، لتختار أنت متى تشغّله.",
+      "pasted": "تم اللصق",
+      "pasteFailed": "تعذّر اللصق. النص موجود في الحافظة."
+    }
+  },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",
     "common": {
@@ -1401,8 +1676,6 @@
     "clearTitle": "مسح القاموس؟",
     "clearDescription": "سيؤدي هذا إلى إزالة جميع الكلمات من قاموسك المخصص. لا يمكن التراجع عن هذا الإجراء.",
     "addWord": "إضافة كلمة",
-    "addPlaceholder": "أضف كلمات مفصولة بفواصل — OpenWhispr، Supabase، John Snow، ARR",
-    "removeWord": "إزالة {{word}}",
     "clearAll": "مسح الكل",
     "add": "إضافة",
     "importWords": "استيراد كلمات",
@@ -1414,8 +1687,6 @@
     "wordsReady_few": "{{count}} كلمات جاهزة",
     "wordsReady_many": "{{count}} كلمةً جاهزة",
     "wordsReady_other": "{{count}} كلمة جاهزة",
-    "import": "استيراد",
-    "yourDictionary": "قاموسك",
     "exportDictionary": "تصدير القاموس",
     "exportFailed": "فشل التصدير",
     "editWord": "تعديل {{word}}",
@@ -1450,7 +1721,223 @@
     "emptyDescription": "أضف الكلمات التي يجب أن يكتبها {{agentName}} بشكل صحيح دائمًا: الأسماء، الأدوات، الاختصارات.",
     "addFirstWord": "أضف كلمتك الأولى",
     "agentDefault": "تمت الإضافة افتراضيًا",
-    "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة."
+    "promptLimitNotice": "عدد أحرف قاموسك: {{chars}}. لا تقرأ نماذج Groq وWhisper سوى بضع مئات من الأحرف الأخيرة منه، لذا تعمل القوائم الأقصر بشكل أفضل معها. أما النماذج الأخرى فتحصل على القائمة كاملة.",
+    "shared": {
+      "allWords": "كل الكلمات",
+      "personal": "شخصية",
+      "group": "مشتركة",
+      "allShared": "الكل",
+      "everyoneAt": "الجميع في {{workspace}}",
+      "hidden": "مخفية",
+      "add": {
+        "placeholder": "أضف كلمات مفصولة بفواصل",
+        "to": "إلى {{list}}",
+        "chooseList": "اختر القائمة التي تريد الإضافة إليها",
+        "hiddenForYou": "مخفية عنك في {{list}}",
+        "notAdded_zero": "لم تتم إضافة {{count}} كلمة: {{words}}",
+        "notAdded_one": "لم تتم إضافة كلمة واحدة ({{count}}): {{words}}",
+        "notAdded_two": "لم تتم إضافة كلمتين ({{count}}): {{words}}",
+        "notAdded_few": "لم تتم إضافة {{count}} كلمات: {{words}}",
+        "notAdded_many": "لم تتم إضافة {{count}} كلمةً: {{words}}",
+        "notAdded_other": "لم تتم إضافة {{count}} كلمة: {{words}}"
+      },
+      "alreadyIn": "موجودة بالفعل في {{list}}",
+      "importTo": "استيراد إلى {{list}}",
+      "actions": {
+        "share": "مشاركة",
+        "edit": "تعديل",
+        "delete": "حذف",
+        "hide": "إخفاء عني",
+        "deleteForEveryone": "حذف للجميع",
+        "unhide": "إظهار",
+        "shareWord": "مشاركة {{word}}",
+        "deleteWord": "حذف {{word}}",
+        "hideWord": "إخفاء {{word}} عني",
+        "deleteForEveryoneWord": "حذف {{word}} للجميع",
+        "unhideWord": "إظهار {{word}}"
+      },
+      "attribution": {
+        "you": "أنت",
+        "former": "عضو سابق"
+      },
+      "toolbar": {
+        "search": "بحث",
+        "searchPlaceholder": "ابحث في هذه القائمة",
+        "closeSearch": "إغلاق البحث",
+        "sort": "ترتيب",
+        "sync": "مزامنة الآن",
+        "syncedAgo": "تمت المزامنة قبل {{time}}",
+        "syncedJustNow": "تمت المزامنة للتو",
+        "notSynced": "لم تتم المزامنة بعد"
+      },
+      "sort": {
+        "az": "أ–ي",
+        "za": "ي–أ",
+        "newest": "الأحدث أولًا",
+        "oldest": "الأقدم أولًا"
+      },
+      "memberCount_zero": "{{count}} عضو",
+      "memberCount_one": "عضو واحد ({{count}})",
+      "memberCount_two": "عضوان ({{count}})",
+      "memberCount_few": "{{count}} أعضاء",
+      "memberCount_many": "{{count}} عضوًا",
+      "memberCount_other": "{{count}} عضو",
+      "emptyList": "لا توجد كلمات في {{list}} بعد",
+      "allHiddenList": "جميع الكلمات في {{list}} مخفية عنك",
+      "noMatches": "لا توجد كلمات تطابق «{{query}}»",
+      "deletedForEveryone": "تم حذف «{{word}}» للجميع",
+      "undo": "تراجع",
+      "errors": {
+        "generic": "تعذّر تحديث {{list}}. حاول مرة أخرى.",
+        "listFull": "{{list}} ممتلئة",
+        "planRequired": "تتطلب القواميس المشتركة خطة Business، لذا لم يتم تغيير {{list}}",
+        "ssoRequired": "سجّل الدخول باستخدام SSO الخاص بشركتك لتغيير {{list}}",
+        "notMember": "لم يعد بإمكانك الوصول إلى {{list}}",
+        "invalid": "لا تقبل {{list}} إلا مصطلحات قصيرة: حتى 64 حرفًا و6 كلمات، من دون فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` |",
+        "recentlyDeleted": "تم حذف هذه الكلمة للتو من {{list}}. أضفها مجددًا بدلًا من ذلك."
+      },
+      "deleteOneTitle": "هل تريد حذف «{{word}}»؟",
+      "deleteDescription": "ينطبق ذلك على الجميع في {{list}}.",
+      "deleteManyTitle_zero": "هل تريد حذف {{count}} كلمة؟",
+      "deleteManyTitle_one": "هل تريد حذف كلمة واحدة ({{count}})؟",
+      "deleteManyTitle_two": "هل تريد حذف كلمتين ({{count}})؟",
+      "deleteManyTitle_few": "هل تريد حذف {{count}} كلمات؟",
+      "deleteManyTitle_many": "هل تريد حذف {{count}} كلمةً؟",
+      "deleteManyTitle_other": "هل تريد حذف {{count}} كلمة؟",
+      "deletedManyForEveryone_zero": "تم حذف {{count}} كلمة للجميع",
+      "deletedManyForEveryone_one": "تم حذف كلمة واحدة ({{count}}) للجميع",
+      "deletedManyForEveryone_two": "تم حذف كلمتين ({{count}}) للجميع",
+      "deletedManyForEveryone_few": "تم حذف {{count}} كلمات للجميع",
+      "deletedManyForEveryone_many": "تم حذف {{count}} كلمةً للجميع",
+      "deletedManyForEveryone_other": "تم حذف {{count}} كلمة للجميع",
+      "deletedPersonalMany_zero": "تم حذف {{count}} كلمة",
+      "deletedPersonalMany_one": "تم حذف كلمة واحدة ({{count}})",
+      "deletedPersonalMany_two": "تم حذف كلمتين ({{count}})",
+      "deletedPersonalMany_few": "تم حذف {{count}} كلمات",
+      "deletedPersonalMany_many": "تم حذف {{count}} كلمةً",
+      "deletedPersonalMany_other": "تم حذف {{count}} كلمة",
+      "selection": {
+        "count_zero": "المحدد: {{count}}",
+        "count_one": "المحدد: {{count}}",
+        "count_two": "المحدد: {{count}}",
+        "count_few": "المحدد: {{count}}",
+        "count_many": "المحدد: {{count}}",
+        "count_other": "المحدد: {{count}}",
+        "selectAll": "تحديد الكل ({{total}})",
+        "shareWith": "مشاركة مع…",
+        "clear": "إلغاء التحديد",
+        "selectWord": "تحديد {{word}}",
+        "label": "الكلمات المحددة"
+      },
+      "share": {
+        "titleOne": "مشاركة \"{{word}}\" مع",
+        "titleMany_zero": "مشاركة {{count}} كلمة مع",
+        "titleMany_one": "مشاركة كلمة واحدة ({{count}}) مع",
+        "titleMany_two": "مشاركة كلمتين ({{count}}) مع",
+        "titleMany_few": "مشاركة {{count}} كلمات مع",
+        "titleMany_many": "مشاركة {{count}} كلمةً مع",
+        "titleMany_other": "مشاركة {{count}} كلمة مع",
+        "alreadyShared": "تمت مشاركتها",
+        "movesOutOne": "يزيلها من القائمة الشخصية",
+        "movesOutMany": "يزيلها من القائمة الشخصية",
+        "partial_zero": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_one": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_two": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_few": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_many": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "partial_other": "الكلمات التي تمت مشاركتها: {{moved}} من أصل {{total}}. الكلمات التي لم تتم مشاركتها: {{count}}.",
+        "reasons": {
+          "personalChanged": "تغيّرت كلمة على جهاز آخر. حاول مرة أخرى.",
+          "network": "تحقق من اتصالك وحاول مرة أخرى.",
+          "aListFull": "إحدى القوائم ممتلئة"
+        }
+      },
+      "locked": {
+        "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
+        "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
+        "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
+        "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_one": "تم إيقاف كلمة مشتركة واحدة ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_two": "تم إيقاف كلمتين مشتركتين ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامهما في الإملاء مجددًا.",
+        "paused_few": "تم إيقاف {{count}} كلمات مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_many": "تم إيقاف {{count}} كلمةً مشتركةً في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "paused_other": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "workspaceTitle": "الجميع في مساحة العمل الخاصة بك",
+        "workspaceDescription": "كلمات للشركة بأكملها",
+        "spaceTitle": "قائمة لكل مساحة",
+        "spaceDescription": "كلمات يحتاجها فريق واحد فقط",
+        "wordCount_zero": "{{count}} كلمة",
+        "wordCount_one": "كلمة واحدة ({{count}})",
+        "wordCount_two": "كلمتان ({{count}})",
+        "wordCount_few": "{{count}} كلمات",
+        "wordCount_many": "{{count}} كلمةً",
+        "wordCount_other": "{{count}} كلمة",
+        "lockLabel": "متاح ضمن خطة Business",
+        "ssoRequired": "تتطلب {{workspace}} تسجيل الدخول عبر SSO الخاص بالشركة. سجّل الخروج ثم سجّل الدخول باستخدام SSO لاستخدام كلماتها المشتركة.",
+        "noAccess": "لم يعد بإمكانك الوصول إلى الكلمات المشتركة في {{workspace}}. تواصل مع أحد المسؤولين إذا كنت تعتقد أن هذا خطأ.",
+        "pausedMember_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_one": "تم إيقاف كلمة مشتركة واحدة ({{count}}) في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_two": "تم إيقاف كلمتين مشتركتين ({{count}}) في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامهما في الإملاء مجددًا.",
+        "pausedMember_few": "تم إيقاف {{count}} كلمات مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_many": "تم إيقاف {{count}} كلمةً مشتركةً في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا.",
+        "pausedMember_other": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. اطلب من أحد المسؤولين أو المالك الترقية إلى Business لاستخدامها في الإملاء مجددًا."
+      },
+      "empty": {
+        "body": "أضف المصطلحات التي يستخدمها هذا الفريق، أو شارك بعضها من قائمتك الشخصية. سيحصل عليها الجميع في {{list}} ({{count}}).",
+        "import": "استيراد قائمة",
+        "shareFromPersonal": "مشاركة من القائمة الشخصية"
+      },
+      "arrival": {
+        "title_zero": "كلمات الفريق المُضافة: {{count}}",
+        "title_one": "كلمات الفريق المُضافة: {{count}}",
+        "title_two": "كلمات الفريق المُضافة: {{count}}",
+        "title_few": "كلمات الفريق المُضافة: {{count}}",
+        "title_many": "كلمات الفريق المُضافة: {{count}}",
+        "title_other": "كلمات الفريق المُضافة: {{count}}",
+        "description": "تُطبَّق الكلمات المشتركة في {{workspace}} الآن على الإملاء وملاحظات الاجتماعات لديك.",
+        "descriptionNoWorkspace": "تُطبَّق الكلمات المشتركة لفريقك الآن على الإملاء وملاحظات الاجتماعات لديك.",
+        "viewWords": "عرض الكلمات"
+      },
+      "lockedEntry": "مقفلة",
+      "notTermLike": "لا تقبل القوائم المشتركة إلا مصطلحات قصيرة: حتى 64 حرفًا و6 كلمات، من دون فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` | أو أحرف مخفية",
+      "notUsed": "غير مستخدمة في الإملاء",
+      "notUsedTooltip": "لا يستخدم الإملاء الكلمات المشتركة التي تزيد على 64 حرفًا أو 6 كلمات، أو التي تحتوي على فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` | أو أحرف مخفية",
+      "badgeMore": "{{list}} +{{extra}}",
+      "skipped_zero": "تم استبعاد {{count}} كلمة: {{words}}",
+      "skipped_one": "تم استبعاد كلمة واحدة ({{count}}): {{words}}",
+      "skipped_two": "تم استبعاد كلمتين ({{count}}): {{words}}",
+      "skipped_few": "تم استبعاد {{count}} كلمات: {{words}}",
+      "skipped_many": "تم استبعاد {{count}} كلمةً: {{words}}",
+      "skipped_other": "تم استبعاد {{count}} كلمة: {{words}}",
+      "partial": {
+        "add_zero": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_one": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_two": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_few": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_many": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "add_other": "الكلمات التي أُضيفت إلى {{list}}: {{applied}} من أصل {{total}}. الكلمات التي لم تُضف: {{count}}.",
+        "hide_zero": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_one": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_two": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_few": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_many": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "hide_other": "الكلمات التي أُخفيت لك: {{applied}} من أصل {{total}}. الكلمات التي لم تُخفَ: {{count}}.",
+        "unhide_zero": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_one": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_two": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_few": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_many": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "unhide_other": "الكلمات التي أُعيد إظهارها: {{applied}} من أصل {{total}}. الكلمات التي لا تزال مخفية: {{count}}.",
+        "delete_zero": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_one": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_two": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_few": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_many": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}.",
+        "delete_other": "الكلمات التي حُذفت للجميع: {{applied}} من أصل {{total}}. الكلمات التي لم تُحذف: {{count}}."
+      },
+      "hiddenWord": "تم إخفاء \"{{word}}\" لك",
+      "stillIn": "لا تزال \"{{word}}\" في {{list}}"
+    }
   },
   "promptStudio": {
     "common": {
@@ -1790,6 +2277,9 @@
       "get_noteStatus": "جاري قراءة الملاحظة...",
       "create_noteStatus": "جاري إنشاء الملاحظة...",
       "update_noteStatus": "جاري تحديث الملاحظة...",
+      "load_skillStatus": "جاري تحميل المهارة…",
+      "propose_skillStatus": "جاري تجهيز المهارة…",
+      "update_skillStatus": "جاري تجهيز التغيير…",
       "copiedToClipboard": "تم النسخ إلى حافظتك",
       "openNote": "فتح الملاحظة",
       "unknownTool": "أداة غير معروفة: {{name}}",
@@ -1797,6 +2287,9 @@
       "search_openwhispr_helpName": "البحث في مساعدة OpenWhispr",
       "read_openwhispr_helpName": "قراءة مساعدة OpenWhispr",
       "get_openwhispr_contextName": "قراءة إعدادات OpenWhispr",
+      "load_skillName": "تحميل مهارة",
+      "propose_skillName": "اقتراح مهارة",
+      "update_skillName": "تحديث المهارة",
       "search_openwhispr_helpStatus": "جاري البحث في مساعدة OpenWhispr...",
       "read_openwhispr_helpStatus": "جاري قراءة مساعدة OpenWhispr...",
       "get_openwhispr_contextStatus": "جاري قراءة إعدادات OpenWhispr...",
@@ -2129,7 +2622,6 @@
       "personal": "شخصي",
       "privateTooltip": "أنت فقط من يمكنه رؤية مساحتك الشخصية",
       "newSpace": "مساحة فريق جديدة",
-      "newSpaceInWorkspace": "مساحة فريق جديدة في {{workspace}}",
       "createTitle": "إنشاء مساحة فريق",
       "createDescription": "منطقة مشتركة داخل مساحة عمل للأشخاص والمجموعات الذين تضيفهم.",
       "nameAndIconLabel": "الاسم والأيقونة",
@@ -2472,7 +2964,8 @@
       "urlYoutubeBlocked": "يحظر YouTube التنزيلات من شبكتك مؤقتًا. حاول مرة أخرى بعد قليل.",
       "customEndpointInvalid": "نقطة نهاية التفريغ المخصصة غير مهيأة أو غير صالحة. قم بتحديثها في الإعدادات.",
       "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
-      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين."
+      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين.",
+      "disabledByOrg": "تم تعطيل رفع الملفات الصوتية بواسطة مؤسستك."
     },
     "meeting": {
       "title": "ملاحظات الاجتماع",
@@ -2499,7 +2992,11 @@
       "systemAudioQuiet": {
         "title": "خفت صوت الاجتماع",
         "description": "لم يُسمع أي شخص منذ بضع دقائق. إذا كانت المكالمة لا تزال جارية، فتحقق من جهاز إخراج الصوت."
-      }
+      },
+      "recordingDisabledByOrg": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
+      "stoppedAccountChanged": "توقف التسجيل لأنك سجّلت الخروج أو بدّلت الحساب.",
+      "stoppedPolicyUnresolved": "توقف التسجيل لأنه تعذّر التحقق من إعدادات مؤسستك.",
+      "stoppedWorkspaceChanged": "توقف التسجيل لأنك بدّلت مساحة العمل."
     },
     "meetingPill": {
       "returnToNote": "العودة إلى التسجيل",
@@ -2690,6 +3187,7 @@
     },
     "speaker": {
       "you": "أنت",
+      "noteTaker": "كاتب الملاحظات",
       "them": "الطرف الآخر",
       "unknown": "متحدث غير معروف",
       "label": "المتحدث {{n}}",
@@ -3190,6 +3688,7 @@
         "description": "تحقق من اتصالك وحاول مرة أخرى.",
         "retry": "إعادة المحاولة"
       },
+      "staleList": "تعذر الوصول إلى OpenWhispr. يتم عرض مساحات العمل كما كانت في آخر مرة كنت متصلاً فيها.",
       "tab": {
         "general": "عام",
         "members": "الأعضاء",
@@ -4496,6 +4995,7 @@
     "logout": "تسجيل الخروج",
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
+    "managedConfigAmbiguous": "إعداد مؤسستك المُدار غير متسق. اتصل بالمسؤول.",
     "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول.",
     "resizePanel": "تغيير حجم اللوحة"
   },
@@ -5146,6 +5646,7 @@
     },
     "start": "تدوين الملاحظات",
     "join": "انضمام وتفريغ صوتي",
+    "joinOnly": "الانضمام إلى الاجتماع",
     "folders": {
       "choose": "اختيار مجلد الاجتماع",
       "search": "البحث عن مجلدات",
@@ -5178,7 +5679,9 @@
         "CREATE_FAILED": "تعذر الإكمال. حاول مجددًا.",
         "LINKED_NOTE_CHANGED": "راجع الموقع، ثم انضم مجددًا.",
         "NOTE_UNAVAILABLE": "هذه الملاحظة غير متاحة. أعد المحاولة دون إنشاء بديل.",
-        "START_FAILED": "تعذر الإكمال. حاول مجددًا."
+        "START_FAILED": "تعذر الإكمال. حاول مجددًا.",
+        "POLICY_MEETING_RECORDING_DISABLED": "تم تعطيل تسجيل الاجتماعات بواسطة مؤسستك.",
+        "POLICY_UNRESOLVABLE": "لم يتم تحميل إعدادات مؤسستك بعد. حاول مرة أخرى بعد قليل."
       }
     }
   },
@@ -5359,5 +5862,51 @@
     "permissionDenied": "مرفوض",
     "permissionRestricted": "مقيّد",
     "permissionNotDetermined": "لم يُطلب"
+  },
+  "enterprise": {
+    "audio": {
+      "title": "إعداد صوت المؤسسة",
+      "description": "اضبط بيانات الاعتماد على هذا الجهاز واختبر اتصال الصوت الخاص بمؤسستك.",
+      "provider": "مزود الصوت",
+      "gateway": "بوابة الصوت",
+      "provisioned": "تم إعداد بيانات الاعتماد",
+      "credentialMissing": "بيانات الاعتماد مطلوبة",
+      "proxyCredentialFormat": "للوكيل، أدخل JSON يحتوي على username وpassword. للصوت، أدخل مفتاح API.",
+      "probeConsent": "أسمح باختبارات صوتية قصيرة قد تترتب عليها رسوم لدى المزود.",
+      "testBatch": "اختبار نسخ ملف صوتي",
+      "testRealtime": "اختبار اتصال الاجتماع",
+      "testPassed": "نجح اختبار الاتصال وأُبلغ المسؤول بالنتيجة.",
+      "testFailed": "فشل اختبار الاتصال.",
+      "setupFailed": "فشل الإعداد. تحقق من تسجيل الدخول والصلاحيات والشبكة.",
+      "saved": "حُفظت بيانات الاعتماد على هذا الجهاز.",
+      "operationUnavailable": "لم تضبط مؤسستك هذه العملية الصوتية.",
+      "certificateUnavailable": "حزمة شهادات المؤسسة غير متاحة.",
+      "partialUpload": "فشلت {{count}} مقاطع صوتية؛ النسخ غير مكتمل.",
+      "importBootstrap": "استيراد إعداد المؤسسة",
+      "importedBootstrap": "تم استيراد بيانات الاعتماد.",
+      "bootstrapNotFound": "لم يُعثر على ملف الإعداد.",
+      "checks": {
+        "authRejected": "رفض موفّر الصوت بيانات اعتماد هذا الجهاز. تحقق من المفتاح المُعدّ أو إعداد الهوية.",
+        "tlsFailed": "تعذّر التحقق من الاتصال الآمن. تحقق من شهادات مؤسستك.",
+        "proxyFailed": "فشل الاتصال عبر الوكيل الخاص بمؤسستك. تحقق من إعدادات الوكيل وبيانات اعتماده.",
+        "timeout": "لم يستجب موفّر الصوت في الوقت المحدد. تحقق من الشبكة أو الشبكة الافتراضية الخاصة (VPN).",
+        "credentialMissing": "لم يتم إعداد بيانات اعتماد يحتاجها هذا الاتصال على هذا الجهاز.",
+        "configChanged": "غيّرت مؤسستك إعداد الصوت هذا. أعد فتح الإعداد وحاول مرة أخرى.",
+        "protocolFailed": "ردّ موفّر الصوت بتنسيق لا يدعمه OpenWhispr. تحقق من النشر والبروتوكول.",
+        "networkFailed": "تعذّر الوصول إلى موفّر الصوت. تحقق من الشبكة والشبكة الافتراضية الخاصة (VPN) وخادم DNS.",
+        "secureStorageUnavailable": "لا يتوفر على هذا الجهاز تخزين آمن لبيانات الاعتماد. على Linux، ثبّت سلسلة مفاتيح (مثل GNOME Keyring أو KWallet) وافتح قفلها، ثم حاول مرة أخرى."
+      },
+      "errors": {
+        "ssoRequired": "تتطلب مؤسستك تسجيل الدخول الموحّد (SSO) الخاص بالشركة. سجّل الدخول عبر SSO وحاول مرة أخرى.",
+        "enterpriseRequired": "يتطلب الصوت المؤسسي خطة Enterprise نشطة لمساحة العمل هذه.",
+        "signInRequired": "انتهت صلاحية جلستك. سجّل الدخول مرة أخرى وأعد المحاولة.",
+        "accessDenied": "لا يمكن لحسابك إعداد الصوت لمساحة العمل هذه. تأكد من أنك عضو فيها وأنك في مساحة العمل الصحيحة.",
+        "rateLimited": "طلبات اختبار كثيرة جدًا. انتظر بضع دقائق وحاول مرة أخرى."
+      },
+      "bootstrapNotProtected": "يجب أن يكون ملف التهيئة مملوكًا لك وقابلًا للقراءة لك وحدك. اطلب من قسم تقنية المعلومات إعادة تسليمه.",
+      "bootstrapUnreadable": "لا يستطيع OpenWhispr قراءة ملف التهيئة. اطلب من قسم تقنية المعلومات جعله قابلًا للقراءة لحسابك.",
+      "bootstrapMismatch": "ملف التهيئة لا يطابق حسابك أو مساحة العمل هذه أو بيانات الاعتماد المُعدّة لها.",
+      "testLinkOtherWorkspace": "رابط الاختبار هذا لمساحة عمل أخرى. انتقل إلى مساحة العمل تلك وافتح الرابط مرة أخرى."
+    }
   }
 }

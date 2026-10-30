@@ -1042,3 +1042,29 @@ test("a long request kept with its send is cut at 500 characters", async () => {
   );
   assert.equal(history[0].content, `${LEDGER_NOTE}\n\n${"é".repeat(500)}…`);
 });
+test("a skill card's outcome is named, never the skill's text or title", async () => {
+  const { toolTrace } = await load();
+  const card = (name, status) =>
+    call(name, "{}", {
+      metadata: {
+        status,
+        kind: name === "update_skill" ? "update" : "create",
+        name: "weekly-recap",
+        title: "Weekly recap",
+        message: "Saved the weekly-recap skill.",
+      },
+    });
+
+  assert.equal(
+    toolTrace([
+      card("propose_skill", "saved"),
+      card("update_skill", "skipped"),
+      card("update_skill", "changed"),
+      card("propose_skill", "not_saved"),
+      card("propose_skill", "failed"),
+    ]),
+    "[Tools used: propose_skill (saved), update_skill (skipped by the user), " +
+      "update_skill (not saved, the skill had changed), propose_skill (not saved), " +
+      "propose_skill (failed)]"
+  );
+});

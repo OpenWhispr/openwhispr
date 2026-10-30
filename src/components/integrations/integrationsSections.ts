@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
-import { Calendar, Key, Link2, Network, Terminal } from "../icons";
+import { Calendar, Key, Link2, Network, SkillStack, Terminal } from "../icons";
 
-export type IntegrationsSection = "connectors" | "calendars" | "api" | "mcp" | "cli";
+export type IntegrationsSection = "connectors" | "skills" | "calendars" | "api" | "mcp" | "cli";
 
 export const DEFAULT_INTEGRATIONS_SECTION: IntegrationsSection = "calendars";
 
@@ -10,7 +10,7 @@ export const INTEGRATIONS_SECTION_GROUPS: ReadonlyArray<{
   sections: readonly IntegrationsSection[];
 }> = [
   { id: "meetings", sections: ["calendars"] },
-  { id: "assistant", sections: ["connectors"] },
+  { id: "assistant", sections: ["connectors", "skills"] },
   { id: "developer", sections: ["api", "mcp", "cli"] },
 ];
 
@@ -19,6 +19,7 @@ export const INTEGRATIONS_SECTION_ICONS: Record<
   ComponentType<{ size?: number; className?: string }>
 > = {
   connectors: Link2,
+  skills: SkillStack,
   calendars: Calendar,
   api: Key,
   mcp: Network,
@@ -48,6 +49,8 @@ export function sectionMeta(
       return connectors.ready > 0 ? { kind: "count", value: connectors.ready } : null;
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;
+    case "skills":
+      return null;
     case "api":
     case "mcp":
       return isPaid ? null : { kind: "badge", badge: "pro" };

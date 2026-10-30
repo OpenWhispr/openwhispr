@@ -6,6 +6,7 @@ import type { AgentConversationWithMessages, AgentMessageRow } from "../../types
 import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { connectsFirst } from "./historyMessages";
 import logger from "../../utils/logger";
+import { withoutSkillCardDrafts } from "./skillCardRecord";
 
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
@@ -325,7 +326,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const metadata =
         toolCalls?.length || details.turn
           ? {
-              ...(toolCalls?.length ? { toolCalls } : {}),
+              ...(toolCalls?.length ? { toolCalls: withoutSkillCardDrafts(toolCalls) } : {}),
               ...(details.turn ? { turn: details.turn } : {}),
             }
           : undefined;

@@ -97,6 +97,19 @@ test("only owners and admins of the current workspace can invite from it", async
   assert.equal(stateFor("member").canInvite, false);
 });
 
+test("inviting follows the server's manage_members capability over the role", async () => {
+  const { resolveWorkspaceSwitcher } = await load();
+  const stateFor = (role, manageMembers) =>
+    resolveWorkspaceSwitcher({
+      ...base,
+      workspaces: [{ ...workspace("acme", role), capabilities: { manage_members: manageMembers } }],
+      activeWorkspaceId: "acme",
+    });
+
+  assert.equal(stateFor("admin", false).canInvite, false);
+  assert.equal(stateFor("member", true).canInvite, true);
+});
+
 test("with none chosen, an entitled Enterprise workspace becomes active, else the first", async () => {
   const { defaultActiveWorkspaceId } = await load();
   const pro = { id: "beta", plan: "pro", status: "active" };

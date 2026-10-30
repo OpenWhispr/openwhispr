@@ -496,6 +496,7 @@ export default function ReasoningModelSelector({
         descriptionKey: model.descriptionKey,
         specUrl: model.hfRepo ? `https://huggingface.co/${model.hfRepo}` : undefined,
         recommended: model.recommended,
+        legacy: model.legacy,
       })),
     }));
   }, []);

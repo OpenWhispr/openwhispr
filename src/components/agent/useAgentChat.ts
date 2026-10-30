@@ -21,11 +21,28 @@ export function useAgentChat({
   onRegenerateFailed: () => void;
 }) {
   const persistence = useChatPersistence();
+  const [pickedSkill, setPickedSkill] = useState<{ name: string; displayName: string } | null>(
+    null
+  );
+  const [skillPickOff, setSkillPickOff] = useState(false);
+  const removePickedSkill = useCallback(() => {
+    setPickedSkill(null);
+    setSkillPickOff(true);
+  }, []);
+  const skillSendOptions = useCallback(
+    (): SendToAIOptions => ({
+      attachedSkill: pickedSkill ? { name: pickedSkill.name } : undefined,
+      allowSkillPick: !skillPickOff,
+      onSkillPicked: setPickedSkill,
+    }),
+    [pickedSkill, skillPickOff]
+  );
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
     inferenceScope: "dictationAgent",
     allowConnectors: true,
     allowInteractions: true,
+    skillsEnabled: true,
     onStreamComplete: persistence.saveAssistantMessage,
     claimConversation: persistence.claimConversation,
     onTurnCheckpoint: persistence.saveAssistantMessage,
@@ -45,7 +62,12 @@ export function useAgentChat({
     onSendingChange: setSubmissionInFlight,
   });
   // An answer to a card left from an earlier turn goes on as a message of the app's.
-  useInterruptedInteractions(persistence, sendMessage);
+  const sendWithSkill = useCallback(
+    (text: string, options?: SendToAIOptions) =>
+      sendMessage(text, { ...options, ...skillSendOptions() }),
+    [sendMessage, skillSendOptions]
+  );
+  useInterruptedInteractions(persistence, sendWithSkill);
 
   // Read through a ref, so these stay the same while a reply streams.
   const messagesRef = useRef(persistence.messages);
@@ -73,15 +95,17 @@ export function useAgentChat({
           conversationTitle(text)
         );
       }
-      return sendMessage(text, options);
+      return sendWithSkill(text, options);
     },
-    [conversationId, forkOrigin, sendMessage]
+    [conversationId, forkOrigin, sendWithSkill]
   );
 
   const switchChat = useCallback(
     (id: number, beforeOpen?: () => void) =>
       loadConversation(id, () => {
         cancelStream();
+        setPickedSkill(null);
+        setSkillPickOff(false);
         beforeOpen?.();
       }),
     [cancelStream, loadConversation]
@@ -90,6 +114,8 @@ export function useAgentChat({
   const newChat = useCallback(() => {
     cancelStream();
     handleNewChat();
+    setPickedSkill(null);
+    setSkillPickOff(false);
   }, [cancelStream, handleNewChat]);
 
   const fork = useCallback(
@@ -133,6 +159,7 @@ export function useAgentChat({
       };
       try {
         await sendToAI(request.content, messages.slice(0, index), {
+          ...skillSendOptions(),
           conversationId,
           replaceMessage: messages[index],
           onReplaceFailed: reportFailure,
@@ -143,11 +170,13 @@ export function useAgentChat({
         if (regenerationRef.current === regeneration) regenerationRef.current = null;
       }
     },
-    [conversationId, getSessionVersion, onRegenerateFailed, sendToAI]
+    [conversationId, getSessionVersion, onRegenerateFailed, sendToAI, skillSendOptions]
   );
 
   return {
     messages: persistence.messages,
+    pickedSkill,
+    removePickedSkill,
     conversationId,
     forkOrigin,
     agentState: streaming.agentState,

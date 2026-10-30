@@ -17,7 +17,7 @@ import { TrackingPermissionStep } from './TrackingPermissionStep';
 const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
   { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
   { icon: 'arrow.triangle.2.circlepath', mdIcon: 'RefreshCw', label: 'Sync notes across devices' },
-  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and note chat' },
+  { icon: 'sparkles', mdIcon: 'Sparkles', label: 'AI cleanup, actions, and chat' },
 ];
 
 // A cold launch that resumes on this step arrives before the SDK's configure

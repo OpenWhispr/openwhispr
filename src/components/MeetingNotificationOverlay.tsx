@@ -445,7 +445,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
             busy={busy}
             dismissLabel={t("meetingNotification.folders.dismiss")}
             picker={
-              data ? (
+              data && presentation.action !== "open" ? (
                 <button
                   type="button"
                   className={`meeting-folder-trigger feedback-${feedback}`}

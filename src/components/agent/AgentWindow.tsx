@@ -21,6 +21,7 @@ import {
 } from "../../stores/connectorApprovalStore";
 import { editSelectedText } from "../../services/editSelectedText";
 import type { ToneAppCategory } from "../../config/toneStyle";
+import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 import { INTERACTION_TOOL_NAMES } from "../../services/tools/interactionTools";
 import type { ChatImageAttachment, Message } from "../chat/types";
 import { unsentForkContext, type AgentSelectionContext } from "../../utils/agentSelectionContext";
@@ -48,6 +49,7 @@ import { AgentComposer } from "./AgentComposer";
 import { AgentModal, type AgentModalGlow } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
 import { ToolCallCard } from "../chat/ChatMessage";
+import { SkillChip } from "../chat/SkillChip";
 import { SelectedContextBlock } from "./AgentContext";
 
 // How long a spoken request waits for the press-time selection and screenshot.
@@ -186,14 +188,16 @@ export default function AgentWindow() {
   // The card the turn waits on: above the pill when it arrives while compact.
   const interactions = useAgentInteractionStore((store) => store.entries);
   const approvals = useConnectorApprovalStore((store) => store.entries);
+  const skillApprovals = useSkillApprovalStore((store) => store.entries);
   const pendingCard = useMemo(
-    () => findPendingCard(shown, interactions, approvals),
-    [approvals, interactions, shown]
+    () => findPendingCard(shown, interactions, approvals, { skillApprovals }),
+    [approvals, interactions, shown, skillApprovals]
   );
   // What the composer answers: a restored question too, though nothing waits on it.
   const answerableCard = useMemo(
-    () => findPendingCard(shown, interactions, approvals, { includeRestored: true }),
-    [approvals, interactions, shown]
+    () =>
+      findPendingCard(shown, interactions, approvals, { includeRestored: true, skillApprovals }),
+    [approvals, interactions, shown, skillApprovals]
   );
   // A card waiting on the user or sending carries the turn: the pill reads as
   // at rest. Stop stays only beside a card with no dismiss control of its own
@@ -1046,9 +1050,16 @@ export default function AgentWindow() {
           (card?.interaction !== "apiKey" || state.draft.trim() !== "")
         }
         header={
-          !inModal && state.selectedContext ? (
-            <div className="pb-2">{pendingContext(true)}</div>
-          ) : null
+          <>
+            {chat.pickedSkill && (
+              <div className="pb-2">
+                <SkillChip name={chat.pickedSkill.displayName} onRemove={chat.removePickedSkill} />
+              </div>
+            )}
+            {!inModal && state.selectedContext ? (
+              <div className="pb-2">{pendingContext(true)}</div>
+            ) : null}
+          </>
         }
         className={inModal ? "min-h-21" : "agent-panel h-[145px] w-[510px]"}
       />

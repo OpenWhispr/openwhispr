@@ -44,10 +44,12 @@ const TRACE_ARGUMENT: Record<string, string> = {
   find_contact: "name",
   create_note: "title",
   slack_send_message: "destination",
+  load_skill: "name",
 };
 
-// A connector action's status (its saved result), as the model reads it. Without
-// it, a follow-up turn can't tell an issue was already created and files it again.
+// A connector action's or skill card's status (its saved result), as the model reads
+// it. Without it, a follow-up turn can't tell an issue was already created, or a skill
+// already saved, and does it again.
 const ACTION_OUTCOME: Record<string, string> = {
   sent: "sent",
   draft_opened: "draft opened",
@@ -58,6 +60,10 @@ const ACTION_OUTCOME: Record<string, string> = {
   unavailable: "unavailable",
   needs_clarification: "needed details",
   already_sent: "already done earlier, not repeated",
+  saved: "saved",
+  skipped: "skipped by the user",
+  changed: "not saved, the skill had changed",
+  not_saved: "not saved",
 };
 const OUTCOME_URL_MAX_CHARS = 200;
 

@@ -53,6 +53,14 @@ export const RETIRED_CLOUD_MODELS = {
       "kimi-k2-6": "kimi-k3",
     },
   },
+  // OpenAI shut down gpt-4.1-nano on 2026-10-23. GPT-6 Luna is its fastest,
+  // lowest-cost successor.
+  openai: {
+    migratedKey: "_retiredOpenAIModelsMigrated",
+    models: {
+      "gpt-4.1-nano": "gpt-6-luna",
+    },
+  },
 } satisfies Record<string, RetiredProviderModels>;
 
 export type RetiredModelProvider = keyof typeof RETIRED_CLOUD_MODELS;

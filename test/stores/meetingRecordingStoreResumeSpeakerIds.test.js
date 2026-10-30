@@ -215,3 +215,33 @@ test("renaming a speaker during a resumed recording touches only that session's 
   assert.equal(segmentWithText(store, "still me").speakerName, "Bob");
   await store.stopRecording();
 });
+
+test("recording into a teammate's note preserves the new recorder across save and generation", async (t) => {
+  const { api, state } = createElectronAPI();
+  const writes = [];
+  api.updateNote = async (_id, patch) => {
+    writes.push(patch);
+    return { success: true };
+  };
+  const store = await loadStore(t, api);
+  const seed = [
+    { id: "old", source: "mic", speaker: "you", text: "Alice's earlier words", timestamp: 1 },
+  ];
+  await store.startRecording({ ...START_ARGS, seedSegments: seed, recorderName: "Bob Viewer" });
+  state.segmentCallback({
+    text: "Bob's new words",
+    source: "mic",
+    type: "final",
+    timestamp: Date.now(),
+  });
+  await store.stopRecording();
+  const { parseTranscriptSegments } = await import("../../src/utils/parseTranscriptSegments.ts");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  const segments = parseTranscriptSegments(writes.at(-1).transcript);
+  assert.equal(segments[0].recorderName, undefined);
+  assert.equal(segments[1].recorderName, "Bob Viewer");
+  assert.equal(
+    buildLlmTranscript(segments, {}, "Alice Owner", (key) => key),
+    "Alice Owner: Alice's earlier words\nBob Viewer: Bob's new words"
+  );
+});

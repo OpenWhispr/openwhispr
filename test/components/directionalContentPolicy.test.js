@@ -18,7 +18,18 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[\s\S]*?\{item\.text\}/],
     ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{rawText\}/],
     ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{transcript\.text\}/],
-    ["src/components/DictionaryView.tsx", /<span\s+dir="auto"[^>]*>\s*\{word\}/],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.word\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.otherLists > 0[\s\S]*?: row\.badge\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryListPicker.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{entry\.label\}/,
+    ],
     ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.trigger\}/],
     ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.replacement\}/],
     [
@@ -26,10 +37,6 @@ test("dynamic prose and identity values keep their own direction", () => {
       /<span\s+dir="auto"[^>]*>\s*\{displayName\}\s*<\/span>/,
     ],
     ["src/components/notes/SpacesTree.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}\s*<\/span>/],
-    [
-      "src/components/notes/SpacesTree.tsx",
-      /<span\s+dir="auto"[^>]*\s+title=\{workspace\.name\}[\s\S]*?\{workspace\.name\}/,
-    ],
     ["src/components/EmailVerificationStep.tsx", /<span\s+dir="ltr"[^>]*>\s*\{email\}/],
     [
       "src/components/SettingsModal.tsx",
@@ -109,6 +116,15 @@ test("technical output values remain LTR inside an Arabic document", () => {
       /<span\s+dir="ltr"[\s\S]*?\{info\?\.name \?\? modelId\}/,
     ],
     ["src/components/TranscriptionModelPicker.tsx", /<p\s+dir="ltr"[^>]*>\s*\{gpuFailReason\}/],
+    [
+      "src/components/skills/UploadSkillsScreen.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{row\.preview\.fileName\}/,
+    ],
+    ["src/components/skills/SkillDetailDialog.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.path\}/],
+    [
+      "src/components/skills/CreateSkillScreen.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/,
+    ],
   ];
 
   for (const [file, pattern] of expectations) {
@@ -191,7 +207,7 @@ test("user-authored names and previews detect direction at their display boundar
     ["src/components/notes/MeetingTranscriptChat.tsx", /<span\s+dir="auto"[^>]*>\s*\{text\}/],
     [
       "src/components/notes/MeetingTranscriptChat.tsx",
-      /<span\s+dir="auto"[^>]*>\s*\{segment\.suggestedName\}/,
+      /<span\s+dir="auto"[^>]*>\s*\{isYouSpeakerName\(segment\.suggestedName![^}]*\?\s*recorderLabel\s*:\s*segment\.suggestedName\}/,
     ],
     [
       "src/components/notes/MeetingTranscriptChat.tsx",
@@ -213,6 +229,25 @@ test("user-authored names and previews detect direction at their display boundar
       "src/components/notes/NoteEditor.tsx",
       /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
     ],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<DialogDescription\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
+    ],
+    ["src/components/chat/SkillChip.tsx", /<span\s+dir="auto"[^>]*>\s*\{name\}/],
   ];
 
   for (const [file, pattern] of expectations) {

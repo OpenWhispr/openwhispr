@@ -205,7 +205,7 @@ function convertToWav(inputPath, outputPath, options = {}) {
 // Mono 16 kHz MP3 with any video stream dropped: the same shape as the cloud
 // chunks, accepted by every provider, and small enough for their upload caps.
 function convertToMp3(inputPath, outputPath, options = {}) {
-  const { audioBitrate = "64k", signal } = options;
+  const { audioBitrate = "64k", minimumDurationSeconds, signal } = options;
 
   debugLogger.debug("Re-encoding audio to MP3 with FFmpeg", {
     input: inputPath,
@@ -218,6 +218,7 @@ function convertToMp3(inputPath, outputPath, options = {}) {
       "-i",
       inputPath,
       "-vn",
+      ...(minimumDurationSeconds ? ["-af", `apad=whole_dur=${minimumDurationSeconds}`] : []),
       "-c:a",
       "libmp3lame",
       "-b:a",

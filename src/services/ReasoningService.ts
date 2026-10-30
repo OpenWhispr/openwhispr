@@ -992,7 +992,7 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    const needsGeminiThinkingSuppressed = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
       // The effort value is a family fact: gpt-oss has no "none" (#1611).
       ...(needsGroqDisableThinking
@@ -1003,8 +1003,16 @@ class ReasoningService extends BaseReasoningService {
             },
           }
         : {}),
-      ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+      ...(needsGeminiThinkingSuppressed
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel:
+                  getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
+                includeThoughts: false,
+              },
+            },
+          }
         : {}),
       ...(reasoningEffort && provider === "groq" ? { groq: { reasoningEffort } } : {}),
       ...(reasoningEffort && provider === "gemini"
