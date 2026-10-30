@@ -256,8 +256,8 @@ export default function AndroidHome() {
             {item.cleanupWarning ? (
               <Text accessibilityRole="alert">{item.cleanupWarning}</Text>
             ) : null}
-            <View style={styles.row}>
-              <Text style={styles.caption}>
+            <View style={[styles.row, { flexWrap: 'wrap' }]}>
+              <Text style={[styles.caption, { flexShrink: 1 }]}>
                 {new Date(item.createdAt).toLocaleDateString()} ·{' '}
                 {t(
                   item.provider === 'local' ? 'local' : item.provider === 'byok' ? 'byok' : 'cloud',
