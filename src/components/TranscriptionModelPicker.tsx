@@ -16,7 +16,9 @@ import {
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
+  QUALCOMM_MODEL_INFO,
   isSherpaLocalProvider,
+  isQualcommLocalProvider,
 } from "../models/ModelRegistry";
 import {
   MODEL_PICKER_COLORS,
@@ -57,7 +59,7 @@ import {
 import { getCachedPlatform } from "../utils/platform";
 import { pickWhisperGpuBackend } from "../utils/whisperGpuPack";
 import logger from "../utils/logger";
-import type { ParakeetCheckResult } from "../types/electron";
+import type { ParakeetCheckResult, QualcommRuntimeStatus } from "../types/electron";
 
 interface LocalModel {
   model: string;
@@ -482,13 +484,19 @@ export default function TranscriptionModelPicker({
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
+  const [qualcommModels, setQualcommModels] = useState<LocalModel[]>([]);
   const [parakeetCapability, setParakeetCapability] = useState<ParakeetCheckResult | null>(null);
+  const [qualcommCapability, setQualcommCapability] = useState<ParakeetCheckResult | null>(null);
+  const [qualcommRuntime, setQualcommRuntime] = useState<QualcommRuntimeStatus | null>(null);
+  const [qualcommRuntimeBusy, setQualcommRuntimeBusy] = useState(false);
+  const [qualcommRuntimePhase, setQualcommRuntimePhase] = useState<string | null>(null);
   const [browsedCloudProvider, setBrowsedCloudProvider] = useState<string | null>(null);
   const [internalLocalProvider, setInternalLocalProvider] = useState(
     getSelectedASROrganization(selectedLocalProvider, selectedLocalModel)
   );
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
+  const hasLoadedQualcommRef = useRef(false);
   const [gpuBackend, setGpuBackend] = useState<"cuda" | "vulkan" | null>(null);
   const [gpuDownloaded, setGpuDownloaded] = useState(false);
   const [gpuDownloading, setGpuDownloading] = useState(false);
@@ -536,6 +544,22 @@ export default function TranscriptionModelPicker({
         logger.error("Failed to check Parakeet compatibility", { error }, "models");
       });
 
+    window.electronAPI
+      ?.checkQualcommInstallation?.()
+      .then((capability) => {
+        if (!cancelled) setQualcommCapability(capability);
+      })
+      .catch((error) => {
+        logger.error("Failed to check Qualcomm NPU compatibility", { error }, "models");
+      });
+
+    window.electronAPI
+      ?.getQualcommRuntimeStatus?.()
+      .then((status) => {
+        if (!cancelled) setQualcommRuntime(status);
+      })
+      .catch(() => {});
+
     return () => {
       cancelled = true;
     };
@@ -552,10 +576,19 @@ export default function TranscriptionModelPicker({
     if (isSherpaLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
   }, [internalLocalProvider, onLocalProviderSelect, parakeetCapability, selectedLocalProvider]);
 
+  useEffect(() => {
+    if (qualcommCapability?.supported !== false) return;
+
+    if (isQualcommLocalProvider(internalLocalProvider)) setInternalLocalProvider("whisper");
+    if (isQualcommLocalProvider(selectedLocalProvider)) onLocalProviderSelect?.("whisper");
+  }, [internalLocalProvider, onLocalProviderSelect, qualcommCapability, selectedLocalProvider]);
+
   const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const qualcommModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
   const loadParakeetModelsRef = useRef<(() => Promise<void>) | null>(null);
+  const loadQualcommModelsRef = useRef<(() => Promise<void>) | null>(null);
   const selectedLocalModelRef = useRef(selectedLocalModel);
   const onLocalModelSelectRef = useRef(onLocalModelSelect);
 
@@ -594,20 +627,28 @@ export default function TranscriptionModelPicker({
   }, [availableCloudProviders, policyState, streamingOnly, t]);
   const localProviderTabs = useMemo(
     () =>
-      LOCAL_PROVIDER_TABS.map((provider) =>
-        usesParakeetManager(provider.id) && parakeetCapability?.supported === false
-          ? {
-              ...provider,
-              disabled: true,
-              disabledLabel: parakeetCapability.minimumMacOSVersion
-                ? t("transcription.parakeet.requiresMacOS", {
-                    version: parakeetCapability.minimumMacOSVersion,
-                  })
-                : t("transcription.parakeet.unavailable"),
-            }
-          : provider
-      ),
-    [parakeetCapability, t]
+      LOCAL_PROVIDER_TABS.map((provider) => {
+        if (usesParakeetManager(provider.id) && parakeetCapability?.supported === false) {
+          return {
+            ...provider,
+            disabled: true,
+            disabledLabel: parakeetCapability.minimumMacOSVersion
+              ? t("transcription.parakeet.requiresMacOS", {
+                  version: parakeetCapability.minimumMacOSVersion,
+                })
+              : t("transcription.parakeet.unavailable"),
+          };
+        }
+        if (provider.id === "qualcomm" && qualcommCapability?.supported === false) {
+          return {
+            ...provider,
+            disabled: true,
+            disabledLabel: t("transcription.qualcomm.unavailable"),
+          };
+        }
+        return provider;
+      }),
+    [parakeetCapability, qualcommCapability, t]
   );
 
   useEffect(() => {
@@ -665,6 +706,24 @@ export default function TranscriptionModelPicker({
 
     const queuedLoad = parakeetModelsLoadQueueRef.current.then(load);
     parakeetModelsLoadQueueRef.current = queuedLoad;
+    return queuedLoad;
+  }, []);
+
+  const loadQualcommModels = useCallback(() => {
+    const load = async () => {
+      try {
+        const result = await window.electronAPI?.listQualcommModels();
+        if (result?.success) {
+          setQualcommModels(result.models);
+        }
+      } catch (error) {
+        logger.error("Failed to load Qualcomm NPU models", { error }, "models");
+        setQualcommModels([]);
+      }
+    };
+
+    const queuedLoad = qualcommModelsLoadQueueRef.current.then(load);
+    qualcommModelsLoadQueueRef.current = queuedLoad;
     return queuedLoad;
   }, []);
 
@@ -744,6 +803,9 @@ export default function TranscriptionModelPicker({
     loadParakeetModelsRef.current = loadParakeetModels;
   }, [loadParakeetModels]);
   useEffect(() => {
+    loadQualcommModelsRef.current = loadQualcommModels;
+  }, [loadQualcommModels]);
+  useEffect(() => {
     if (!effectiveLocal) return;
 
     if (internalLocalProvider === "whisper" && !hasLoadedRef.current) {
@@ -752,6 +814,9 @@ export default function TranscriptionModelPicker({
     } else if (usesParakeetManager(internalLocalProvider) && !hasLoadedParakeetRef.current) {
       hasLoadedParakeetRef.current = true;
       loadParakeetModelsRef.current?.();
+    } else if (isQualcommLocalProvider(internalLocalProvider) && !hasLoadedQualcommRef.current) {
+      hasLoadedQualcommRef.current = true;
+      loadQualcommModelsRef.current?.();
     }
   }, [effectiveLocal, internalLocalProvider]);
 
@@ -760,16 +825,18 @@ export default function TranscriptionModelPicker({
 
     hasLoadedRef.current = false;
     hasLoadedParakeetRef.current = false;
+    hasLoadedQualcommRef.current = false;
   }, [effectiveLocal]);
 
   useEffect(() => {
     const handleModelsCleared = () => {
       loadLocalModels();
       loadParakeetModels();
+      loadQualcommModels();
     };
     window.addEventListener("openwhispr-models-cleared", handleModelsCleared);
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
-  }, [loadLocalModels, loadParakeetModels]);
+  }, [loadLocalModels, loadParakeetModels, loadQualcommModels]);
 
   const readGpuStatus = useCallback(async () => {
     try {
@@ -958,6 +1025,18 @@ export default function TranscriptionModelPicker({
     onDownloadComplete: loadParakeetModels,
   });
 
+  const {
+    downloads: qualcommDownloads,
+    downloadModel: downloadQualcommModel,
+    deleteModel: deleteQualcommModel,
+    isDownloadingModel: isDownloadingQualcommModel,
+    cancelDownload: cancelQualcommDownload,
+    isCancellingModel: isCancellingQualcommModel,
+  } = useModelDownload({
+    modelType: "qualcomm",
+    onDownloadComplete: loadQualcommModels,
+  });
+
   const handleModeChange = useCallback(
     (isLocal: boolean) => {
       onModeChange(isLocal);
@@ -1015,6 +1094,15 @@ export default function TranscriptionModelPicker({
       setInternalLocalProvider(organization);
       onLocalProviderSelect?.(provider);
       onLocalModelSelect(modelId, provider);
+    },
+    [onLocalModelSelect, onLocalProviderSelect]
+  );
+
+  const handleQualcommModelSelect = useCallback(
+    (modelId: string) => {
+      setInternalLocalProvider("qualcomm");
+      onLocalProviderSelect?.("qualcomm");
+      onLocalModelSelect(modelId, "qualcomm");
     },
     [onLocalModelSelect, onLocalProviderSelect]
   );
@@ -1228,6 +1316,7 @@ export default function TranscriptionModelPicker({
     const activeDownloads = [
       ...Object.values(whisperDownloads),
       ...Object.values(parakeetDownloads),
+      ...Object.values(qualcommDownloads),
     ];
     if (activeDownloads.length === 0) return null;
 
@@ -1237,7 +1326,9 @@ export default function TranscriptionModelPicker({
           const modelInfo =
             status.modelType === "whisper"
               ? WHISPER_MODEL_INFO[status.modelId]
-              : PARAKEET_MODEL_INFO[status.modelId];
+              : status.modelType === "qualcomm"
+                ? QUALCOMM_MODEL_INFO[status.modelId]
+                : PARAKEET_MODEL_INFO[status.modelId];
           return (
             <DownloadProgressBar
               key={`${status.modelType}:${status.modelId}`}
@@ -1253,7 +1344,7 @@ export default function TranscriptionModelPicker({
         })}
       </div>
     );
-  }, [effectiveLocal, whisperDownloads, parakeetDownloads]);
+  }, [effectiveLocal, whisperDownloads, parakeetDownloads, qualcommDownloads]);
 
   const renderLocalModels = () => {
     const modelsToRender =
@@ -1329,6 +1420,51 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
+  const handleQualcommDelete = useCallback(
+    (modelId: string) => {
+      showConfirmDialog({
+        title: t("transcription.deleteModel.title"),
+        description: t("transcription.deleteModel.description"),
+        onConfirm: async () => {
+          await deleteQualcommModel(modelId, async () => {
+            const result = await window.electronAPI?.listQualcommModels();
+            if (result?.success) {
+              setQualcommModels(result.models);
+            }
+          });
+        },
+        variant: "destructive",
+      });
+    },
+    [showConfirmDialog, deleteQualcommModel, t]
+  );
+
+  const handleQualcommRuntimeInstall = useCallback(async () => {
+    if (qualcommRuntimeBusy) return;
+    setQualcommRuntimeBusy(true);
+    setQualcommRuntimePhase(t("transcription.qualcomm.runtime.preparing"));
+    const dispose = window.electronAPI?.onQualcommRuntimeProgress?.((data) => {
+      if (data?.phase) setQualcommRuntimePhase(data.message || data.phase);
+    });
+    try {
+      const result = await window.electronAPI?.installQualcommRuntime();
+      if (result?.success) {
+        const status = await window.electronAPI?.getQualcommRuntimeStatus();
+        setQualcommRuntime(status ?? null);
+      } else if (result && !result.success) {
+        setQualcommRuntime((prev) =>
+          prev ? { ...prev, status: "error", error: result.error ?? null } : prev
+        );
+      }
+    } catch (error) {
+      logger.error("Qualcomm NPU runtime install failed", { error }, "models");
+    } finally {
+      dispose?.();
+      setQualcommRuntimeBusy(false);
+      setQualcommRuntimePhase(null);
+    }
+  }, [qualcommRuntimeBusy, t]);
+
   // Organization tabs share the sherpa-onnx inventory and installation backend.
   const renderParakeetModels = () => {
     const modelsToRender = (
@@ -1385,6 +1521,96 @@ export default function TranscriptionModelPicker({
             />
           );
         })}
+      </div>
+    );
+  };
+
+  const renderQualcommModels = () => {
+    const runtimeReady = qualcommRuntime?.ready;
+    const runtimeStatus =
+      qualcommRuntime?.status === "installing" || qualcommRuntimeBusy
+        ? "installing"
+        : qualcommRuntime?.status;
+
+    return (
+      <div className="space-y-2">
+        {!runtimeReady && (
+          <div className="rounded-md border p-2.5 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-xs font-medium">{t("transcription.qualcomm.runtime.title")}</p>
+                <p className="text-xs text-muted-foreground break-words">
+                  {runtimeStatus === "error"
+                    ? (qualcommRuntime?.error ?? t("transcription.qualcomm.runtime.failed"))
+                    : runtimeStatus === "installing"
+                      ? (qualcommRuntimePhase ?? t("transcription.qualcomm.runtime.installing"))
+                      : t("transcription.qualcomm.runtime.description")}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="default"
+                className="h-6 px-2.5 text-xs shrink-0"
+                disabled={runtimeStatus === "installing"}
+                onClick={handleQualcommRuntimeInstall}
+              >
+                {runtimeStatus === "installing"
+                  ? t("transcription.qualcomm.runtime.installing")
+                  : t("transcription.qualcomm.runtime.install")}
+              </Button>
+            </div>
+          </div>
+        )}
+        <div className="space-y-0.5">
+          {(qualcommModels.length === 0
+            ? Object.entries(QUALCOMM_MODEL_INFO).map(([modelId, info]) => ({
+                model: modelId,
+                downloaded: false,
+                size_mb: info.sizeMb,
+              }))
+            : qualcommModels
+          ).map((model) => {
+            const modelId = model.model;
+            const info = QUALCOMM_MODEL_INFO[modelId] ?? {
+              name: modelId,
+              description: t("transcription.fallback.whisperModelDescription"),
+              size: t("common.unknown"),
+              recommended: false,
+              modelCardUrl: undefined,
+            };
+
+            return (
+              <LocalModelCard
+                key={modelId}
+                modelId={modelId}
+                name={info.name}
+                description={info.description}
+                size={info.size}
+                actualSizeMb={model.size_mb}
+                isSelected={modelId === selectedLocalModel}
+                isDownloaded={model.downloaded ?? false}
+                isDownloading={isDownloadingQualcommModel(modelId)}
+                isCancelling={isCancellingQualcommModel(modelId)}
+                isInstalling={qualcommDownloads[modelId]?.phase === "installing"}
+                recommended={info.recommended}
+                provider="qualcomm"
+                modelCardUrl={info.modelCardUrl}
+                onSelect={() => handleQualcommModelSelect(modelId)}
+                onDelete={() => handleQualcommDelete(modelId)}
+                onDownload={() =>
+                  downloadQualcommModel(modelId, (downloadedId) => {
+                    setQualcommModels((prev) =>
+                      prev.map((m) => (m.model === downloadedId ? { ...m, downloaded: true } : m))
+                    );
+                    handleQualcommModelSelect(downloadedId);
+                  })
+                }
+                onCancel={() => cancelQualcommDownload(modelId)}
+                styles={styles}
+              />
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -1703,6 +1929,7 @@ export default function TranscriptionModelPicker({
           <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
             {usesParakeetManager(internalLocalProvider) && renderParakeetModels()}
+            {isQualcommLocalProvider(internalLocalProvider) && renderQualcommModels()}
           </div>
         </>
       )}

@@ -293,6 +293,18 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
+### Qualcomm NPU Integration (Whisper via QNN)
+
+- **qualcommWhisper.js**: Model management for Qualcomm's NPU-optimized Whisper exports (Hugging Face `qualcomm/Whisper-*` repos)
+  - Windows on Snapdragon (ARM64) only — `qualcommCapability.js` gates on `platform === "win32" && arch === "arm64"` (x64 Windows under emulation cannot reach the NPU; code `QUALCOMM_UNSUPPORTED_PLATFORM_CODE`)
+  - Models are AI Hub `precompiled_qnn_onnx` exports: `encoder.onnx`/`decoder.onnx` EPContext wrappers over precompiled QNN context binaries (`encoder.bin`/`decoder.bin`), compiled per chipset. The download flow resolves the zip URL at runtime from the repo's `release_assets.json` (chipset preference: `qualcomm-snapdragon-x-elite`, then `qualcomm-snapdragon-x2-elite`) and extracts it into `~/.cache/openwhispr/qualcomm-models/<model>/`
+  - Tokenizer/config files (`config.json`, `vocab.json`, `merges.txt`, …) are fetched from the matching `openai/whisper-<size>` repo into the model dir, so decode runs fully offline
+  - Inference runs in a **Python sidecar** (`resources/qualcomm/whisper_npu_sidecar.py`, adapted from Qualcomm AI Hub Apps `whisper_windows_py`): a persistent stdin/stdout JSON-lines process holding QNN sessions for the encoder and greedy KV-cache decoder loop. The QNN execution provider is NOT available in `onnxruntime-node` (the Node binding never registers a `qnn` backend), so the runtime is the PyPI `onnxruntime-qnn` plugin EP
+  - **qualcommRuntime.js** manages the runtime: detects a native ARM64 Python ≥3.11 (PATH, `py`, `%LOCALAPPDATA%\Programs\Python\*`), creates a venv under `~/.cache/openwhispr/qualcomm-runtime/`, and pins `onnxruntime-qnn==2.7.0`, `numpy`, `transformers` into it. Status surfaces via `get-qualcomm-runtime-status` / `install-qualcomm-runtime` IPC; the picker shows an install banner on the Qualcomm tab until `runtime-ready.json` exists
+  - The sidecar layout code is written against live session metadata (attention-mask width → decode length, self-cache shapes → zero caches), not hardcoded sizes, so any Whisper variant export loads; per-request ffmpeg conversion to 16 kHz mono WAV happens in `qualcommWhisper._ensureWavFile` (rawWav taps skip it)
+  - Provider id `"qualcomm"`; models in the registry's `qualcommModels` section (`whisper-tiny` … `whisper-large-v3-turbo-quantized`); no streaming runtime — the offline buffered-chunk preview path serves it
+  - Pre-warm on startup when `LOCAL_TRANSCRIPTION_PROVIDER=qualcomm` (`QUALCOMM_MODEL` env); sidecar restarts when the selected model changes
+
 ### Local Semantic Search (Qdrant + MiniLM)
 
 Offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Its resources are lazy (#2143): Qdrant and the embedding model start on the first semantic search (or the first vector write while the index is active), the embedding model downloads on that first activation if missing, and everything is released after 5 minutes idle. While asleep, keyword FTS5 serves searches and note changes are journaled in SQLite.

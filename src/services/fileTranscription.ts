@@ -46,6 +46,7 @@ export interface FileTranscriptionConfig {
   whisperModel: string;
   parakeetModel: string;
   cohereModel: string;
+  qualcommModel: string;
   isOpenWhisprCloud: boolean;
   getApiKey: () => string;
   cloudTranscriptionProvider: string;
@@ -162,7 +163,9 @@ export async function transcribeFile(
           ? cfg.parakeetModel
           : provider === "cohere"
             ? cfg.cohereModel
-            : cfg.whisperModel,
+            : provider === "qualcomm"
+              ? cfg.qualcommModel
+              : cfg.whisperModel,
       // Only Cohere consumes it (no auto-detect); passing it to whisper would
       // override its auto language detection.
       ...(provider === "cohere" && cfg.language ? { language: cfg.language } : {}),

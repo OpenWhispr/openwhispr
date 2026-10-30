@@ -36,6 +36,8 @@ export function UploadTranscriptionPanel() {
     setUploadParakeetModel,
     uploadCohereModel,
     setUploadCohereModel,
+    uploadQualcommModel,
+    setUploadQualcommModel,
     uploadCloudTranscriptionProvider,
     setUploadCloudTranscriptionProvider,
     uploadCloudTranscriptionModel,
@@ -131,6 +133,8 @@ export function UploadTranscriptionPanel() {
         setUploadParakeetModel(modelId);
       } else if (provider === "cohere") {
         setUploadCohereModel(modelId);
+      } else if (provider === "qualcomm") {
+        setUploadQualcommModel(modelId);
       } else {
         setUploadWhisperModel(modelId);
       }
@@ -139,6 +143,7 @@ export function UploadTranscriptionPanel() {
       uploadLocalTranscriptionProvider,
       setUploadParakeetModel,
       setUploadCohereModel,
+      setUploadQualcommModel,
       setUploadWhisperModel,
     ]
   );
@@ -155,7 +160,9 @@ export function UploadTranscriptionPanel() {
           ? uploadParakeetModel
           : uploadLocalTranscriptionProvider === "cohere"
             ? uploadCohereModel
-            : uploadWhisperModel
+            : uploadLocalTranscriptionProvider === "qualcomm"
+              ? uploadQualcommModel
+              : uploadWhisperModel
       }
       onLocalModelSelect={handleLocalTranscriptionModelSelect}
       selectedLocalProvider={uploadLocalTranscriptionProvider}

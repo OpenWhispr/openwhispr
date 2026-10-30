@@ -32,7 +32,7 @@ export interface DownloadProgress {
   eta?: number;
 }
 
-export type ModelType = "whisper" | "llm" | "parakeet";
+export type ModelType = "whisper" | "llm" | "parakeet" | "qualcomm";
 
 interface UseModelDownloadOptions {
   modelType: ModelType;
@@ -275,7 +275,11 @@ export function useModelDownload({
           ? window.electronAPI?.onParakeetDownloadProgress((_event, data) =>
               handleNativeProgress(data)
             )
-          : window.electronAPI?.onModelDownloadProgress(handleLLMProgress);
+          : modelType === "qualcomm"
+            ? window.electronAPI?.onQualcommDownloadProgress((_event, data) =>
+                handleNativeProgress(data)
+              )
+            : window.electronAPI?.onModelDownloadProgress(handleLLMProgress);
     return () => dispose?.();
   }, [handleLLMProgress, handleNativeProgress, modelType]);
 
@@ -332,7 +336,9 @@ export function useModelDownload({
             ? await window.electronAPI?.downloadWhisperModel(modelId)
             : modelType === "parakeet"
               ? await window.electronAPI?.downloadParakeetModel(modelId)
-              : await window.electronAPI?.modelDownload?.(modelId);
+              : modelType === "qualcomm"
+                ? await window.electronAPI?.downloadQualcommModel(modelId)
+                : await window.electronAPI?.modelDownload?.(modelId);
 
         if (result?.success) {
           notifyLocalModelsChanged();
@@ -430,6 +436,16 @@ export function useModelDownload({
               }),
             });
           }
+        } else if (modelType === "qualcomm") {
+          const result = await window.electronAPI?.deleteQualcommModel(modelId);
+          if (result?.success) {
+            toast({
+              title: t("hooks.modelDownload.modelDeleted.title"),
+              description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
+                sizeMb: result.freed_mb,
+              }),
+            });
+          }
         } else {
           // model-delete reports failure by resolving, not throwing — leaving the
           // model on disk, so the scopes pointing at it must stay untouched.
@@ -467,7 +483,9 @@ export function useModelDownload({
             ? await window.electronAPI?.cancelWhisperDownload()
             : modelType === "parakeet"
               ? await window.electronAPI?.cancelParakeetDownload()
-              : await window.electronAPI?.modelCancelDownload?.(targetModel);
+              : modelType === "qualcomm"
+                ? await window.electronAPI?.cancelQualcommDownload()
+                : await window.electronAPI?.modelCancelDownload?.(targetModel);
         if (result?.success) {
           toast({
             title: t("hooks.modelDownload.downloadCancelled.title"),

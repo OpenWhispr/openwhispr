@@ -533,6 +533,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
   parakeetServerStop: () => ipcRenderer.invoke("parakeet-server-stop"),
   parakeetServerStatus: () => ipcRenderer.invoke("parakeet-server-status"),
 
+  // Qualcomm NPU (QNN) functions
+  transcribeLocalQualcomm: (audioBlob, options) =>
+    ipcRenderer.invoke("transcribe-local-qualcomm", audioBlob, options),
+  checkQualcommInstallation: () => ipcRenderer.invoke("check-qualcomm-installation"),
+  getQualcommRuntimeStatus: () => ipcRenderer.invoke("get-qualcomm-runtime-status"),
+  installQualcommRuntime: () => ipcRenderer.invoke("install-qualcomm-runtime"),
+  cancelQualcommRuntimeInstall: () => ipcRenderer.invoke("cancel-qualcomm-runtime-install"),
+  onQualcommRuntimeProgress: registerListener("qualcomm-runtime-progress"),
+  downloadQualcommModel: (modelName) => ipcRenderer.invoke("download-qualcomm-model", modelName),
+  onQualcommDownloadProgress: registerListener("qualcomm-download-progress"),
+  checkQualcommModelStatus: (modelName) =>
+    ipcRenderer.invoke("check-qualcomm-model-status", modelName),
+  listQualcommModels: () => ipcRenderer.invoke("list-qualcomm-models"),
+  deleteQualcommModel: (modelName) => ipcRenderer.invoke("delete-qualcomm-model", modelName),
+  deleteAllQualcommModels: () => ipcRenderer.invoke("delete-all-qualcomm-models"),
+  cancelQualcommDownload: () => ipcRenderer.invoke("cancel-qualcomm-download"),
+  getQualcommDiagnostics: () => ipcRenderer.invoke("get-qualcomm-diagnostics"),
+
+  // Qualcomm sidecar functions (faster repeated transcriptions)
+  qualcommServerStart: (modelName) => ipcRenderer.invoke("qualcomm-server-start", modelName),
+  qualcommServerStop: () => ipcRenderer.invoke("qualcomm-server-stop"),
+  qualcommServerStatus: () => ipcRenderer.invoke("qualcomm-server-status"),
+
   // Diarization (speaker identification) functions
   downloadDiarizationModels: () => ipcRenderer.invoke("download-diarization-models"),
   getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),

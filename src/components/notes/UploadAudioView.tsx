@@ -51,6 +51,7 @@ import {
   getParakeetModelInfo,
   getTranscriptionProviders,
   isSherpaLocalProvider,
+  QUALCOMM_MODEL_INFO,
   enterpriseProviderName,
 } from "../../models/ModelRegistry";
 import {
@@ -293,6 +294,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     localTranscriptionProvider,
     parakeetModel,
     cohereModel,
+    qualcommModel,
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
@@ -511,6 +513,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
         return getParakeetModelInfo(parakeetModel)?.name ?? parakeetModel;
+      if (localTranscriptionProvider === "qualcomm")
+        return QUALCOMM_MODEL_INFO[qualcommModel]?.name ?? qualcommModel;
       if (localTranscriptionProvider === "cohere") return `Cohere · ${cohereModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
     }
@@ -532,6 +536,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     whisperModel,
     parakeetModel,
     cohereModel,
+    qualcommModel,
     isOpenWhisprCloud,
     getApiKey: () => getTranscriptionApiKey(cloudTranscriptionProvider, apiKeys),
     cloudTranscriptionProvider: cloudTranscriptionProvider as string,

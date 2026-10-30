@@ -9,7 +9,9 @@ const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
+const { QUALCOMM_UNSUPPORTED_PLATFORM_CODE } = require("./qualcommCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
+const { isQualcommLocalProvider } = require("./qualcommModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -679,6 +681,7 @@ class IPCHandlers {
     this.clipboardManager = managers.clipboardManager;
     this.whisperManager = managers.whisperManager;
     this.parakeetManager = managers.parakeetManager;
+    this.qualcommManager = managers.qualcommManager;
     this.diarizationManager = managers.diarizationManager;
     this.windowManager = managers.windowManager;
     this.updateManager = managers.updateManager;
@@ -1091,6 +1094,9 @@ class IPCHandlers {
   // already have passed resolveAllowedAudioPath (or approveAudioPath).
   async transcribeLocalFile(filePath, options = {}) {
     const audioBuffer = fs.readFileSync(filePath);
+    if (isQualcommLocalProvider(options.provider)) {
+      return this.qualcommManager.transcribeLocalQualcomm(audioBuffer, options);
+    }
     if (isSherpaLocalProvider(options.provider)) {
       return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
     }
@@ -1108,6 +1114,7 @@ class IPCHandlers {
     return listLocalTranscriptionModels({
       whisperManager: this.whisperManager,
       parakeetManager: this.parakeetManager,
+      qualcommManager: this.qualcommManager,
     });
   }
 
@@ -4291,6 +4298,183 @@ class IPCHandlers {
       return this.parakeetManager.getServerStatus();
     });
 
+    // ---- Qualcomm NPU (QNN) local transcription ----
+    ipcMain.handle("transcribe-local-qualcomm", async (_event, audioBlob, options = {}) => {
+      debugLogger.log("transcribe-local-qualcomm called", {
+        audioBlobType: typeof audioBlob,
+        audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
+        options,
+      });
+
+      try {
+        const result = await this.qualcommManager.transcribeLocalQualcomm(audioBlob, options);
+
+        debugLogger.log("Qualcomm result", {
+          success: result.success,
+          hasText: !!result.text,
+          message: result.message,
+          error: result.error,
+        });
+
+        return result;
+      } catch (error) {
+        debugLogger.error("Local Qualcomm transcription error", error);
+        const errorMessage = error.message || "Unknown error";
+
+        if (error.code === QUALCOMM_UNSUPPORTED_PLATFORM_CODE) {
+          return {
+            success: false,
+            error: error.code,
+            message: errorMessage,
+          };
+        }
+        if (error.code === "QUALCOMM_RUNTIME_MISSING") {
+          return {
+            success: false,
+            error: error.code,
+            message: errorMessage,
+          };
+        }
+        if (errorMessage.includes("model") && errorMessage.includes("not downloaded")) {
+          return {
+            success: false,
+            error: "model_not_found",
+            message: errorMessage,
+          };
+        }
+
+        throw error;
+      }
+    });
+
+    ipcMain.handle("check-qualcomm-installation", async () => {
+      return this.qualcommManager.checkInstallation();
+    });
+
+    ipcMain.handle("get-qualcomm-runtime-status", async () => {
+      return this.qualcommManager.getRuntimeStatus();
+    });
+
+    ipcMain.handle("install-qualcomm-runtime", async (event) => {
+      try {
+        return await this.qualcommManager.installRuntime((progressData) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send("qualcomm-runtime-progress", progressData);
+          }
+        });
+      } catch (error) {
+        return { success: false, error: error.message, code: error.code || "RUNTIME_INSTALL_FAILED" };
+      }
+    });
+
+    ipcMain.handle("cancel-qualcomm-runtime-install", async () => {
+      return this.qualcommManager.cancelRuntimeInstall();
+    });
+
+    ipcMain.handle("download-qualcomm-model", async (event, modelName) => {
+      const hadActiveDownload = this.localModelDownloadStatus.has("qualcomm", modelName);
+      this.localModelDownloadStatus.start("qualcomm", modelName);
+      try {
+        const result = await this.qualcommManager.downloadQualcommModel(
+          modelName,
+          (progressData) => {
+            const status = this._updateNativeModelDownloadStatus(
+              "qualcomm",
+              modelName,
+              progressData
+            );
+            this.windowManager.sendToControlPanel("qualcomm-download-progress", {
+              ...progressData,
+              sequence: status?.sequence,
+            });
+          }
+        );
+        const status = this.localModelDownloadStatus.has("qualcomm", modelName)
+          ? this.localModelDownloadStatus.finish("qualcomm", modelName)
+          : null;
+        if (status) {
+          this.windowManager.sendToControlPanel("qualcomm-download-progress", {
+            type: "complete",
+            model: modelName,
+            percentage: 100,
+            sequence: status.sequence,
+          });
+        }
+        return result;
+      } catch (error) {
+        const status = hadActiveDownload
+          ? null
+          : this.localModelDownloadStatus.finish("qualcomm", modelName);
+        if (!hadActiveDownload && error.code !== "DOWNLOAD_IN_PROGRESS") {
+          this.windowManager.sendToControlPanel("qualcomm-download-progress", {
+            type: "error",
+            model: modelName,
+            error: error.message,
+            code: error.code || "DOWNLOAD_FAILED",
+            sequence: status?.sequence,
+          });
+        }
+        return {
+          success: false,
+          error: error.message,
+          code: error.code || "DOWNLOAD_FAILED",
+        };
+      }
+    });
+
+    ipcMain.handle("check-qualcomm-model-status", async (_event, modelName) => {
+      return this.qualcommManager.checkModelStatus(modelName);
+    });
+
+    ipcMain.handle("list-qualcomm-models", async () => {
+      return this.qualcommManager.listQualcommModels();
+    });
+
+    ipcMain.handle("delete-qualcomm-model", async (_event, modelName) => {
+      return this.qualcommManager.deleteQualcommModel(modelName);
+    });
+
+    ipcMain.handle("delete-all-qualcomm-models", async () => {
+      return this.qualcommManager.deleteAllQualcommModels();
+    });
+
+    ipcMain.handle("cancel-qualcomm-download", async () => {
+      return this.qualcommManager.cancelDownload();
+    });
+
+    ipcMain.handle("get-qualcomm-diagnostics", async () => {
+      return this.qualcommManager.getDiagnostics();
+    });
+
+    ipcMain.handle("qualcomm-server-start", async (event, modelName) => {
+      // Pre-warms the sidecar for dictation; same env persistence contract as
+      // the parakeet server start (a failed start must not wedge pre-warm).
+      try {
+        await this.qualcommManager._ensureSidecar(modelName);
+        process.env.LOCAL_TRANSCRIPTION_PROVIDER = "qualcomm";
+        process.env.QUALCOMM_MODEL = modelName;
+        await this.environmentManager.saveAllKeysToEnvFile();
+        return { success: true };
+      } catch (error) {
+        return { success: false, reason: error.message };
+      }
+    });
+
+    ipcMain.handle("qualcomm-server-stop", async () => {
+      await this.qualcommManager.stop();
+      delete process.env.LOCAL_TRANSCRIPTION_PROVIDER;
+      delete process.env.QUALCOMM_MODEL;
+      await this.environmentManager.saveAllKeysToEnvFile();
+      return { success: true };
+    });
+
+    ipcMain.handle("qualcomm-server-status", async () => {
+      return {
+        running: !!this.qualcommManager.sidecar?.ready,
+        model: this.qualcommManager.sidecar?.model || null,
+      };
+    });
+
     // Diarization model management
     ipcMain.handle("download-diarization-models", async (event) => {
       try {
@@ -5858,29 +6042,62 @@ class IPCHandlers {
         // Local mode with model selected - set provider and model for pre-warming
         setVars.LOCAL_TRANSCRIPTION_PROVIDER = prefs.localTranscriptionProvider;
         if (prefs.language) setVars.DICTATION_LANGUAGE = prefs.language;
-        if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
-          setVars.PARAKEET_MODEL = prefs.model;
-          clearVars.push("LOCAL_WHISPER_MODEL");
+        if (isQualcommLocalProvider(prefs.localTranscriptionProvider)) {
+          setVars.QUALCOMM_MODEL = prefs.model;
+          clearVars.push("LOCAL_WHISPER_MODEL", "PARAKEET_MODEL");
           this.whisperManager.stopServer().catch((err) => {
             debugLogger.error("Failed to stop whisper-server on provider switch", {
               error: err.message,
             });
           });
-        } else {
-          setVars.LOCAL_WHISPER_MODEL = prefs.model;
-          clearVars.push("PARAKEET_MODEL");
           this.parakeetManager.stopServer().catch((err) => {
             debugLogger.error("Failed to stop parakeet-server on provider switch", {
+              error: err.message,
+            });
+          });
+        } else if (isSherpaLocalProvider(prefs.localTranscriptionProvider)) {
+          setVars.PARAKEET_MODEL = prefs.model;
+          clearVars.push("LOCAL_WHISPER_MODEL", "QUALCOMM_MODEL");
+          this.whisperManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop whisper-server on provider switch", {
+              error: err.message,
+            });
+          });
+          this.qualcommManager?.stop().catch((err) => {
+            debugLogger.error("Failed to stop Qualcomm sidecar on provider switch", {
+              error: err.message,
+            });
+          });
+        } else {
+          setVars.LOCAL_WHISPER_MODEL = prefs.model;
+          clearVars.push("PARAKEET_MODEL", "QUALCOMM_MODEL");
+          this.parakeetManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop parakeet-server on provider switch", {
+              error: err.message,
+            });
+          });
+          this.qualcommManager?.stop().catch((err) => {
+            debugLogger.error("Failed to stop Qualcomm sidecar on provider switch", {
               error: err.message,
             });
           });
         }
       } else if (prefs.useLocalWhisper) {
         // Local mode enabled but no model selected - clear pre-warming vars
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        clearVars.push(
+          "LOCAL_TRANSCRIPTION_PROVIDER",
+          "PARAKEET_MODEL",
+          "LOCAL_WHISPER_MODEL",
+          "QUALCOMM_MODEL"
+        );
       } else {
         // Cloud mode - stop local servers to free RAM
-        clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        clearVars.push(
+          "LOCAL_TRANSCRIPTION_PROVIDER",
+          "PARAKEET_MODEL",
+          "LOCAL_WHISPER_MODEL",
+          "QUALCOMM_MODEL"
+        );
         this.whisperManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop whisper-server on cloud switch", {
             error: err.message,
@@ -5888,6 +6105,11 @@ class IPCHandlers {
         });
         this.parakeetManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop parakeet-server on cloud switch", {
+            error: err.message,
+          });
+        });
+        this.qualcommManager?.stop().catch((err) => {
+          debugLogger.error("Failed to stop Qualcomm sidecar on cloud switch", {
             error: err.message,
           });
         });
@@ -7590,7 +7812,14 @@ class IPCHandlers {
             model: route.model,
           };
         } else if (route.transport === "local") {
-          if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
+          if (isQualcommLocalProvider(settings.localTranscriptionProvider)) {
+            const model =
+              settings.qualcommModel || process.env.QUALCOMM_MODEL || "whisper-tiny";
+            result = await this.qualcommManager.transcribeLocalQualcomm(buffer, {
+              model,
+              language,
+            });
+          } else if (isSherpaLocalProvider(settings.localTranscriptionProvider)) {
             const model =
               (settings.localTranscriptionProvider === "cohere"
                 ? settings.cohereModel
@@ -9268,12 +9497,12 @@ class IPCHandlers {
 
       try {
         let result;
-        if (isSherpaLocalProvider(meetingLocalProvider)) {
-          result = await this.parakeetManager.transcribeLocalParakeet(wav, {
+        if (isQualcommLocalProvider(meetingLocalProvider)) {
+          result = await this.qualcommManager.transcribeLocalQualcomm(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
           });
-        } else {
+        } else if (isSherpaLocalProvider(meetingLocalProvider)) {
           const vadOptions = this._resolveWhisperVadOptions("meeting");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
@@ -9585,12 +9814,12 @@ class IPCHandlers {
         const wav = pcm16ToWav(pcm);
 
         let result;
-        if (isSherpaLocalProvider(provider)) {
-          result = await this.parakeetManager.transcribeLocalParakeet(wav, {
+        if (isQualcommLocalProvider(provider)) {
+          result = await this.qualcommManager.transcribeLocalQualcomm(wav, {
             model,
             language,
           });
-        } else {
+        } else if (isSherpaLocalProvider(provider)) {
           const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model,

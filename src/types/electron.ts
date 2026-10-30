@@ -63,7 +63,25 @@ import type { SharedHintWords } from "../utils/sharedDictionaryHints";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
-export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
+export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere" | "qualcomm";
+
+export interface QualcommRuntimeStatus {
+  status: "unknown" | "not_installed" | "installing" | "ready" | "error";
+  error?: string | null;
+  runtimeDir: string;
+  pythonPath?: string | null;
+  ready: boolean;
+  packages: string[];
+}
+
+export interface QualcommTranscriptionResult {
+  success: boolean;
+  text?: string;
+  error?: string;
+  code?: string;
+  message?: string;
+  warning?: string;
+}
 
 export interface MainWindowInputRegion {
   viewportWidth: number;
@@ -1181,7 +1199,7 @@ export interface WhisperDownloadProgressData {
 }
 
 export interface LocalModelDownloadStatus {
-  modelType: "whisper" | "parakeet" | "llm";
+  modelType: "whisper" | "parakeet" | "llm" | "qualcomm";
   modelId: string;
   phase: "downloading" | "installing";
   progress: number;
@@ -2232,6 +2250,56 @@ declare global {
         } & PolicyFailureMetadata
       >;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
+
+      // Qualcomm NPU operations (Whisper via the QNN execution provider)
+      transcribeLocalQualcomm: (
+        audioBlob: ArrayBuffer,
+        options?: { model?: string; language?: string }
+      ) => Promise<QualcommTranscriptionResult>;
+      checkQualcommInstallation: () => Promise<{
+        installed: boolean;
+        working: boolean;
+        supported: boolean;
+        code?: string;
+        message?: string;
+        scriptPath?: string;
+        runtime?: QualcommRuntimeStatus;
+      }>;
+      getQualcommRuntimeStatus: () => Promise<QualcommRuntimeStatus>;
+      installQualcommRuntime: () => Promise<{
+        success: boolean;
+        runtimeDir?: string;
+        error?: string;
+        code?: string;
+      }>;
+      cancelQualcommRuntimeInstall: () => Promise<{ success: boolean; error?: string }>;
+      onQualcommRuntimeProgress: (
+        callback: (data: { phase: string; message?: string }) => void
+      ) => () => void;
+      downloadQualcommModel: (modelName: string) => Promise<ParakeetModelResult>;
+      onQualcommDownloadProgress: (
+        callback: (event: any, data: ParakeetDownloadProgressData) => void
+      ) => () => void;
+      checkQualcommModelStatus: (modelName: string) => Promise<ParakeetModelResult>;
+      listQualcommModels: () => Promise<ParakeetModelsListResult>;
+      deleteQualcommModel: (modelName: string) => Promise<ParakeetModelDeleteResult>;
+      deleteAllQualcommModels: () => Promise<{
+        success: boolean;
+        deleted_count?: number;
+        freed_bytes?: number;
+        freed_mb?: number;
+        error?: string;
+      }>;
+      cancelQualcommDownload: () => Promise<
+        {
+          success: boolean;
+          message?: string;
+        } & PolicyFailureMetadata
+      >;
+      getQualcommDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
+      qualcommServerStart: (modelName: string) => Promise<{ success: boolean; reason?: string }>;
+      qualcommServerStop: () => Promise<{ success: boolean }>;
+      qualcommServerStatus: () => Promise<{ running: boolean; model?: string | null }>;
 
       // Local AI model management
       modelGetAll: () => Promise<LocalLLMModelStatus[]>;

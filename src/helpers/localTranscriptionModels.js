@@ -5,10 +5,19 @@ const { getModelType } = require("./parakeetModelInfo");
 // disk and whether it is the one the app is set to use. The "default" comes
 // from the .env values the renderer persists for server pre-warming, which is
 // the only copy of that setting the main process has.
-function listLocalTranscriptionModels({ whisperManager, parakeetManager, env = process.env }) {
+function listLocalTranscriptionModels({
+  whisperManager,
+  parakeetManager,
+  qualcommManager,
+  env = process.env,
+}) {
   const configuredProvider = env.LOCAL_TRANSCRIPTION_PROVIDER || "";
   const configuredModel =
-    configuredProvider === "whisper" ? env.LOCAL_WHISPER_MODEL || "" : env.PARAKEET_MODEL || "";
+    configuredProvider === "whisper"
+      ? env.LOCAL_WHISPER_MODEL || ""
+      : configuredProvider === "qualcomm"
+        ? env.QUALCOMM_MODEL || ""
+        : env.PARAKEET_MODEL || "";
   const isDefault = (provider, model) =>
     provider === configuredProvider && model === configuredModel;
 
@@ -27,7 +36,15 @@ function listLocalTranscriptionModels({ whisperManager, parakeetManager, env = p
       default: isDefault(provider, model),
     };
   });
-  return [...whisper, ...sherpa];
+  const qualcomm = qualcommManager
+    ? Object.keys(modelRegistryData.qualcommModels).map((model) => ({
+        provider: "qualcomm",
+        model,
+        downloaded: qualcommManager.isModelDownloaded(model),
+        default: isDefault("qualcomm", model),
+      }))
+    : [];
+  return [...whisper, ...sherpa, ...qualcomm];
 }
 
 module.exports = { listLocalTranscriptionModels };
