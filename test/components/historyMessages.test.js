@@ -383,6 +383,43 @@ test("a question nobody answered is noted as still open, and a dismissal as one"
   );
 });
 
+for (const status of ["sent", "unknown"]) {
+  test(`a Slack picker preserves the final ${status} outcome in text and parts history`, async () => {
+    const { toolTrace, toHistoryMessages } = await load();
+    const url = "https://example.slack.com/archives/C123456789/p1234567890000000";
+    const picked = call(
+      "slack_send_message",
+      { destination: "#general", text: "Private draft" },
+      {
+        interaction: {
+          payload: QUESTION,
+          state: "settled",
+          result: { status: "answered", answers: { channel: "general", tone: "casual" } },
+        },
+        metadata: { status, url, finalText: "Edited private draft" },
+      }
+    );
+    const outcome = status === "sent" ? `sent: ${url}` : "may have been sent";
+    assert.equal(toolTrace([picked]), `[Tools used: slack_send_message ("#general") (${outcome})]`);
+    const history = toHistoryMessages([user("Post it"), assistant("", [picked])], {
+      toolHistory: "parts",
+    });
+    assert.deepEqual(
+      history.slice(1),
+      pair(
+        picked.id,
+        picked.name,
+        { destination: "#general" },
+        {
+          status: status === "sent" ? "sent" : "may have been sent",
+          ...(status === "sent" ? { link: url } : {}),
+        }
+      )
+    );
+    assert.doesNotMatch(JSON.stringify(history), /Private draft|Edited private draft|answered/);
+  });
+}
+
 test("a saved API key is traced as saved", async () => {
   const { toHistoryMessages } = await load();
   const saved = call(

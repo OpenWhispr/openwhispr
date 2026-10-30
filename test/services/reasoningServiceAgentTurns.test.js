@@ -444,7 +444,7 @@ test("a cloud answer at the step cap that claims an unbacked action is flagged, 
   );
 });
 
-test("a provider failure streamed as a plain object keeps its message", async (t) => {
+test("a provider failure streamed as a plain object uses safe text and redacted diagnostics", async (t) => {
   const { reasoningService } = await loadReasoningService(t, {
     electronAPI: { getGroqKey: async () => "gsk_test" },
   });
@@ -453,7 +453,7 @@ test("a provider failure streamed as a plain object keeps its message", async (t
       new Response(
         `data: ${JSON.stringify({
           error: {
-            message: "Failed to call a function. Please adjust your prompt.",
+            message: "Failed to call a function. Bearer sk-fixture-secret123",
             type: "invalid_request_error",
             code: "tool_use_failed",
           },
@@ -471,9 +471,15 @@ test("a provider failure streamed as a plain object keeps its message", async (t
       )
     ),
     (error) => {
-      const text = JSON.stringify({ message: error.message, details: error.technicalDetails });
-      assert.match(text, /Failed to call a function/);
-      assert.doesNotMatch(text, /object Object/);
+      assert.equal(error.messageKey, "providerErrors.unknown");
+      assert.doesNotMatch(error.message, /Failed to call a function|sk-fixture-secret123/);
+      assert.match(error.technicalDetails.underlyingError, /Failed to call a function/);
+      assert.match(error.technicalDetails.underlyingError, /\[redacted\]/);
+      assert.doesNotMatch(
+        error.technicalDetails.underlyingError,
+        /sk-fixture-secret123|object Object/
+      );
+      assert.equal(error.cause.type, "invalid_request_error");
       return true;
     }
   );

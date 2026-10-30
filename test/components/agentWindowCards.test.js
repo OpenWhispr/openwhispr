@@ -677,6 +677,43 @@ test("the composer keeps Stop beside a card with no dismiss control, and never b
   assert.ok(!view.button("Stop"), "and while it sends");
 });
 
+test("historical and regenerated carried sends cannot hide Stop for a new turn", async (t) => {
+  const view = await mountWindow(t);
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await view.settle();
+  await view.chat({ busy: true, messages: [user, reply([{ ...slackCall, startedAt: 10 }])] });
+  await view.askApproval("c5");
+  await sendCard(view, "c5");
+  assert.ok(!view.button("Stop"), "the current send carries its turn");
+
+  const historical = {
+    ...reply([{ ...slackCall, startedAt: 10 }], "Sending."),
+    isStreaming: false,
+  };
+  await view.chat({
+    busy: true,
+    messages: [
+      user,
+      historical,
+      { ...user, id: "u2", content: "Another task" },
+      { ...reply([], "Working."), id: "a2" },
+    ],
+  });
+  assert.ok(view.button("Stop"), "an older reply's send leaves the new turn stoppable");
+
+  await view.chat({
+    busy: true,
+    messages: [
+      user,
+      {
+        ...reply([{ ...slackCall, startedAt: 10 }], "Trying again."),
+        turn: { startedAt: 100, status: "running" },
+      },
+    ],
+  });
+  assert.ok(view.button("Stop"), "a regenerated reply's carried send is from its old turn");
+});
+
 test("an answer card that waits or sends leaves the pill at rest, in the modal and minimized", async (t) => {
   const view = await mountWindow(t);
   await React.act(async () => view.main.handlers.hotkey({ external: false }));
@@ -1512,6 +1549,7 @@ test("a changed native selection keeps the replacement available without an ungu
   assert.equal(calls.length, 1);
   assert.deepEqual(globalThis.__chat.sent, []);
   assert.equal(view.host.querySelector("textarea").value, "Rewritten");
+  await view.waitForLayout("typing");
 });
 
 test("closing during a selection edit aborts it and cannot replace text later", async (t) => {

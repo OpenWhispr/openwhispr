@@ -129,7 +129,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
   } else if (running && executing.length === 1) {
     icon = <ToolMark name={executing[0].name} />;
     label = toolCallStepText(executing[0], t);
-  } else if (running && !message.content) {
+  } else if (running && (carded.size > 0 || !message.content)) {
     const failedStep = carded.size > 0 && steps.filter(stepFailed).at(-1);
     if (failedStep) {
       icon = <ToolMark name={failedStep.name} />;

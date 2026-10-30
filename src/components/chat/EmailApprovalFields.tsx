@@ -95,7 +95,10 @@ function EmailFieldsEditor({
           }}
         />
       </HeaderRow>
-      {toText.includes("<") && <ResolvedAddresses addresses={fields.to} />}
+      {(toText.includes("<") ||
+        fields.to.some((address) => recipientLabel(address) !== address)) && (
+        <ResolvedAddresses addresses={fields.to} />
+      )}
       {showCc && (
         <HeaderRow label={t("connectors.approval.email.ccLabel")}>
           <input
@@ -113,7 +116,11 @@ function EmailFieldsEditor({
           />
         </HeaderRow>
       )}
-      {showCc && ccText.includes("<") && <ResolvedAddresses addresses={fields.cc} />}
+      {showCc &&
+        (ccText.includes("<") ||
+          fields.cc.some((address) => recipientLabel(address) !== address)) && (
+          <ResolvedAddresses addresses={fields.cc} />
+        )}
       <HeaderRow label={t("connectors.approval.email.subjectLabel")}>
         <input
           aria-label={t("connectors.approval.email.subjectLabel")}

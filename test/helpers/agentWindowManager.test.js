@@ -578,6 +578,27 @@ test("Linux sends no retry once the keyboard is handed back, and one when it is 
   assert.deepEqual(win.helperCalls, ["focus", "focus", "focus"], "two requests, one retry");
 });
 
+test("Linux does not retry after focus succeeded and the user switched away", async () => {
+  const { manager, win } = await openedManager({ platform: "linux" });
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  win.focused = true;
+  win.listeners.get("focus")?.();
+  win.focused = false;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(win.helperCalls, ["focus"], "a successful request cannot take focus back");
+});
+
+test("Linux layout changes while already focused cannot schedule a focus-stealing retry", async () => {
+  const { manager, win } = await openedManager({ platform: "linux" });
+  manager.setLayout(fromAgent(win), { layout: "typing", focus: true });
+  win.focused = true;
+  win.listeners.get("focus")?.();
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: true });
+  win.focused = false;
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.deepEqual(win.helperCalls, ["focus"], "the focused window needed no new request");
+});
+
 test("Linux: a second request while focused leaves one retry, from the latest request", async () => {
   const { manager, win } = await openedManager({ platform: "linux" });
   manager.setLayout(fromAgent(win), { layout: "typing", focus: true });

@@ -110,7 +110,7 @@ async function mountRow(t) {
   root = createRoot(container);
   const key = (id) => approvals.approvalKey("a", id);
   // The reply's steps, with the answer cards and question cards on screen.
-  const show = async (steps, { cards = {}, questions = {} } = {}) => {
+  const show = async (steps, { cards = {}, questions = {}, content = "" } = {}) => {
     approvals.useConnectorApprovalStore.setState({
       entries: Object.fromEntries(
         Object.entries(cards).map(([id, entry]) => [key(id), { key: key(id), ...entry }])
@@ -127,7 +127,7 @@ async function mountRow(t) {
     const message = {
       id: "a",
       role: "assistant",
-      content: "",
+      content,
       isStreaming: true,
       turn: { startedAt: 100, status: "running" },
       toolCalls: steps,
@@ -188,5 +188,34 @@ test("above a waiting card, a step that failed still shows, so it's seen before 
   assert.match(
     await show(reported, { cards: { c1: { state: "pending" } } }),
     /That didn't work on GitHub\./
+  );
+});
+
+test("a reply preamble keeps failed steps visible above a pending card", async (t) => {
+  const show = await mountRow(t);
+  for (const status of ["error", "completed"]) {
+    const steps = [
+      {
+        ...call("g1", "github_search_issues", status),
+        result: "Fixture search failed.",
+        ...(status === "completed" ? { metadata: { status: "failed" } } : {}),
+      },
+      call("c1", "slack_send_message", "executing"),
+    ];
+    assert.match(
+      await show(steps, {
+        content: "I will check and then send it.",
+        cards: { c1: { state: "pending" } },
+      }),
+      /Fixture search failed\./
+    );
+  }
+  assert.equal(
+    await show([call("c1", "slack_send_message", "executing")], {
+      content: "I will send it.",
+      cards: { c1: { state: "pending" } },
+    }),
+    "",
+    "the card still describes its own wait"
   );
 });

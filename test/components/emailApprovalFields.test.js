@@ -13,7 +13,15 @@ const FIELDS = {
 };
 
 async function loadFields(t) {
-  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-email-fields-test-" });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-email-fields-test-",
+    noExternal: ["react-i18next"],
+    mockModules: {
+      "react-i18next": `export const useTranslation = () => ({
+        t: (key, values) => values ? key + JSON.stringify(values) : key,
+      });`,
+    },
+  });
   return vite.ssrLoadModule("/components/chat/EmailApprovalFields.tsx");
 }
 
@@ -79,6 +87,27 @@ test("outside edit mode a non-ASCII domain also shows its punycode form", async 
 test("in edit mode To and Cc show the raw address, not its punycode form", async (t) => {
   const { container } = await mountEditor(t, { ...FIELDS, to: ["a@müller.de"], cc: [] });
   assert.equal(field(container, "toLabel").value, "a@müller.de");
+});
+
+test("pending bare IDN recipients disclose punycode in To and Cc while edits stay raw", async (t) => {
+  const { container, patches } = await mountEditor(t, {
+    ...FIELDS,
+    to: ["a@аррӏе.com"],
+    cc: ["b@müller.de"],
+  });
+  assert.equal(field(container, "toLabel").value, "a@аррӏе.com");
+  assert.equal(field(container, "ccLabel").value, "b@müller.de");
+  assert.match(container.textContent, /xn--80ak6aa92e\.com/);
+  assert.match(container.textContent, /xn--mller-kva\.de/);
+
+  await React.act(async () => type(field(container, "toLabel"), "a@müller.de"));
+  assert.deepEqual(patches.at(-1), { to: ["a@müller.de"] });
+  assert.doesNotMatch(container.textContent, /xn--80ak6aa92e\.com/);
+  assert.match(container.textContent, /xn--mller-kva\.de/);
+  await React.act(async () => type(field(container, "ccLabel"), "b@example.test"));
+  assert.deepEqual(patches.at(-1), { cc: ["b@example.test"] });
+  await React.act(async () => type(field(container, "toLabel"), "a@example.test"));
+  assert.doesNotMatch(container.textContent, /xn--/);
 });
 
 async function mountEditor(t, initial = FIELDS, { showCc = true } = {}) {

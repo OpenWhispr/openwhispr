@@ -221,8 +221,10 @@ function splitByOffered(
   return { asParts, noted: calls.filter((call) => !asParts.includes(call)) };
 }
 
-// A tool that asked to connect its service first is recorded by what it then did.
+// A tool that asked for a connection or destination is recorded by what it then did.
 function askedUser(call: ToolCallInfo): InteractionRecord | null {
+  const data = call.metadata && !Array.isArray(call.metadata) ? call.metadata : null;
+  if (typeof data?.status === "string" && Object.hasOwn(ACTION_OUTCOME, data.status)) return null;
   return call.interaction && !connectsFirst(call) ? call.interaction : null;
 }
 

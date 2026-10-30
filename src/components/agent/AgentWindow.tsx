@@ -204,10 +204,16 @@ export default function AgentWindow() {
   // (a question, key or settings card); any other card ends the wait itself.
   const cardSending = useMemo(
     () =>
-      shown.some((message) =>
-        message.toolCalls?.some(
-          (call) => approvals[approvalKey(message.id, call.id)]?.state === "committing"
-        )
+      shown.some(
+        (message) =>
+          message.isStreaming &&
+          message.toolCalls?.some(
+            (call) =>
+              (message.turn?.startedAt == null ||
+                call.startedAt == null ||
+                call.startedAt >= message.turn.startedAt) &&
+              approvals[approvalKey(message.id, call.id)]?.state === "committing"
+          )
       ),
     [approvals, shown]
   );

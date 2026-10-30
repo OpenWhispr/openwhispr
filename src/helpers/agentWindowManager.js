@@ -253,6 +253,9 @@ class AgentWindowManager {
       if (!win.isDestroyed()) win.destroy();
     });
     if (this.platform === "linux") {
+      win.on("focus", () => {
+        if (this.window === win) clearTimeout(this.linuxFocusRetry);
+      });
       // A click never focuses an override-redirect window; while the user is
       // typing, a click back into the composer has to take focus again.
       win.webContents.on("input-event", (_event, input) => {
@@ -425,10 +428,11 @@ class AgentWindowManager {
       if (this.platform === "win32") {
         win.focus();
       } else {
+        clearTimeout(this.linuxFocusRetry);
+        if (win.isFocused()) return;
         this._focusLinux();
         // Chromium can miss the focus of a window that has only just become
         // focusable (a card resizing the window in the same moment): once more.
-        clearTimeout(this.linuxFocusRetry);
         this.linuxFocusRetry = setTimeout(() => {
           if (this.keyboardFocus && this.window === win && win.isVisible() && !win.isFocused()) {
             this._focusLinux();

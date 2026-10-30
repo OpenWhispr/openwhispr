@@ -147,6 +147,7 @@ async function mountLiveList(t) {
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-message-list-" });
   const { AgentMessageList } = await vite.ssrLoadModule("/components/agent/AgentMessages.tsx");
   const { useAgentInteractionStore } = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const { useSkillApprovalStore } = await vite.ssrLoadModule("/stores/skillApprovalStore.ts");
   const { createRoot } = require("react-dom/client");
   const host = happyWindow.document.createElement("div");
   happyWindow.document.body.append(host);
@@ -171,7 +172,64 @@ async function mountLiveList(t) {
     );
   const setInteractions = (entries) =>
     React.act(async () => useAgentInteractionStore.setState({ entries }));
-  return { host, render, setInteractions };
+  const setSkills = (entries) => React.act(async () => useSkillApprovalStore.setState({ entries }));
+  return { host, render, setInteractions, setSkills };
+}
+
+for (const [name, kind] of [
+  ["propose_skill", "create"],
+  ["update_skill", "update"],
+]) {
+  test(`the modal shows a pending ${name} card and its saved receipt`, async (t) => {
+    const { host, render, setSkills } = await mountLiveList(t);
+    const draft = {
+      title: "Follow up",
+      description: "Draft follow-ups.",
+      instructions: "Be brief.",
+      files: [],
+    };
+    const call = { id: "skill", name, arguments: "{}", status: "executing" };
+    const entry = {
+      key: "m2::skill",
+      messageId: "m2",
+      toolCallId: "skill",
+      kind,
+      name: "follow-up",
+      state: "pending",
+      draft,
+      original: draft,
+      checkedTitle: draft.title,
+      displayName: draft.title,
+      intent: "Keep follow-ups brief.",
+      removals: [],
+      learnedFrom: null,
+      current: { description: "Draft follow-ups.", instructions: "Write a follow-up.", files: {} },
+    };
+    const answer = (step) => ({ ...message("m2", "assistant", ""), toolCalls: [step] });
+    await render([MESSAGES[0], answer(call)]);
+    assert.equal(host.querySelector("[data-approval-card]"), null);
+    await setSkills({ [entry.key]: entry });
+    assert.ok(host.querySelector('[data-approval-card="m2::skill"]'));
+    const buttons = [...host.querySelectorAll("button")].map((button) => button.textContent);
+    assert.ok(buttons.includes(`skills.approval.${kind === "create" ? "save" : "update"}`));
+    assert.ok(buttons.includes("common.skip"));
+
+    await setSkills({});
+    await render([
+      MESSAGES[0],
+      answer({
+        ...call,
+        status: "completed",
+        metadata: { status: "saved", kind, name: entry.name, title: draft.title, versionId: "v1" },
+      }),
+    ]);
+    assert.ok(host.querySelector('[data-skill-card-record="follow-up"][data-state="saved"]'));
+    assert.ok(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent === "skills.approval.undo"
+      )
+    );
+  });
 }
 
 const QUESTION = {

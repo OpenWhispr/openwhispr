@@ -1176,7 +1176,7 @@ class ReasoningService extends BaseReasoningService {
             finishFilteredText();
             if (!abortSignal.aborted) {
               const cause = (chunk as { error?: unknown }).error;
-              throw cause instanceof Error ? cause : new Error(streamErrorMessage(cause));
+              throw cause ?? new Error("Stream failed");
             }
           } else if (chunk.type === "finish") {
             const trailing = finishFilteredText();
@@ -1228,12 +1228,20 @@ class ReasoningService extends BaseReasoningService {
         // alongside LAN (config.lanUrl) — both are the user's own server.
         // OpenRouter is a cloud provider and keeps its own display name.
         const isSelfHosted = mode === "self-hosted" || provider === "custom";
-        const classified = asProviderError(error, {
+        const errorContext = {
           provider: getProviderDisplayName(provider),
           selfHosted: isSelfHosted,
           model,
           surface: "llm",
-        });
+        };
+        let classified = asProviderError(error, errorContext);
+        if (!classified?.messageKey) {
+          classified = providerError(PROVIDER_ERROR_CODES.ERROR, {
+            ...errorContext,
+            technicalDetails: { underlyingError: redactProviderBody(streamErrorMessage(error)) },
+          });
+          classified.cause = error;
+        }
         // The classified details already hold the status and the redacted body.
         const details = classified.technicalDetails;
         logger.warn(
