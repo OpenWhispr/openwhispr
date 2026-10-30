@@ -6835,8 +6835,8 @@ class IPCHandlers {
         logger: debugLogger,
       });
       this.metaActivation.start();
-      // The monotonic clock the activation stamps run on stops or drifts
-      // across sleep, so take server time again on wake.
+      // Take server time again on wake, so a machine that slept through the
+      // hourly re-sync refreshes before stamping new dictation.
       powerMonitor.on("resume", () => void this.metaActivation?.resync());
     } catch {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.

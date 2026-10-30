@@ -1,7 +1,8 @@
 const { randomUUID } = require("node:crypto");
 
-// performance.now() drifts from wall time (Windows runs ahead by seconds a day)
-// and, on macOS, stops during sleep, so the server time is fetched again hourly.
+// performance.now() is not corrected by network time sync and drifts from
+// server time (on Windows it ran 30 s ahead within 1-7 days of uptime), so the
+// server time is fetched again hourly.
 const ANCHOR_TTL_MS = 60 * 60_000;
 
 // A small dedicated queue. It never reads transcription/Insights tables and
