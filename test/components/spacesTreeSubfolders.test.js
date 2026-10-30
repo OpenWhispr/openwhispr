@@ -94,7 +94,7 @@ const NOTE_STORE = `
   export const createFolder = record("createFolder");
   export const renameFolder = async () => ({ success: true });
   export const deleteFolder = async () => ({ success: true });
-  export const moveFolderToSpace = async () => ({ success: true });
+  export const moveFolderToSpace = record("moveFolderToSpace");
   export const setFolderParent = record("setFolderParent");
 `;
 
@@ -331,15 +331,32 @@ test("deleting a parent folder counts its subfolders and all their notes", async
   );
 });
 
+test("deleting a parent folder counts its subfolders even when no notes are in them", async (t) => {
+  const rows = await mountTree(t, { ...WITH_SUBFOLDERS, counts: {} });
+
+  await focus(rowTitled(rows, "Work"));
+  await keyDown("Backspace");
+
+  assert.equal(
+    globalThis.__confirmDialogs.at(-1).description,
+    'This will permanently delete "Work", including 1 subfolder and 0 notes. This cannot be undone.'
+  );
+});
+
 test("only a top-level folder offers New subfolder, and only one without subfolders can move into a folder", async (t) => {
-  const rows = await mountTree(t, WITH_SUBFOLDERS);
+  const rows = await mountTree(t, {
+    folders: [...WITH_SUBFOLDERS.folders, folder(13, 1, "Ideas")],
+    counts: { ...WITH_SUBFOLDERS.counts, 13: 1 },
+  });
 
   const work = menuLabels(rowTitled(rows, "Work"));
   const q1 = menuLabels(rowTitled(rows, "Q1"));
+  const ideas = menuLabels(rowTitled(rows, "Ideas"));
   assert.ok(work.includes("New subfolder"));
   assert.ok(!work.includes("Move to folder"));
   assert.ok(!q1.includes("New subfolder"));
   assert.ok(q1.includes("Move to folder"));
+  assert.ok(ideas.includes("Move to folder"));
 });
 
 test("Move to folder offers Top level and the space's top-level folders, the current parent ticked", async (t) => {
@@ -391,5 +408,26 @@ test("moving a subfolder to the top level can be undone", async (t) => {
   assert.deepEqual(globalThis.__calls, [
     ["setFolderParent", 12, null],
     ["setFolderParent", 12, 11],
+  ]);
+});
+
+test("a parent moved to another space can be undone, a subfolder moved on its own can't", async (t) => {
+  const rows = await mountTree(t, WITH_SUBFOLDERS);
+  const moveToEngineering = async (title) => {
+    await click(menuItem(rowTitled(rows, title), "Engineering"));
+    await React.act(async () => globalThis.__confirmDialogs.at(-1).onConfirm());
+  };
+
+  await moveToEngineering("Work");
+  const moved = globalThis.__toasts.at(-1);
+  await React.act(async () => moved.action.props.onClick());
+  await moveToEngineering("Q1");
+
+  assert.equal(moved.title, "Moved \u201cWork\u201d to Engineering");
+  assert.equal(globalThis.__toasts.length, 1);
+  assert.deepEqual(globalThis.__calls, [
+    ["moveFolderToSpace", 11, 2],
+    ["moveFolderToSpace", 11, 1],
+    ["moveFolderToSpace", 12, 2],
   ]);
 });

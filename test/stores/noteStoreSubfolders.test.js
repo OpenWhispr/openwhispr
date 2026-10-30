@@ -1,6 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHookDom,
+} = require("../lib/rendererTestHarness");
 
 const folder = (id, name, parent_folder_id = null, is_default = 0) => ({
   id,
@@ -178,4 +184,22 @@ test("moving a parent to another space refreshes its subfolder's loaded notes", 
   assert.equal(store.getNoteFromStore(111).space_id, 2);
   assert.equal(store.getNoteFromStore(112).space_id, 2);
   assert.equal(store.getNoteFromStore(101).space_id, 1);
+});
+
+test("moving a parent to another space takes an open subfolder's view along", async (t) => {
+  const { store } = await loadStore(t);
+  store.setActiveContext(1, 12);
+  // The open container's space is only readable through the store's hook.
+  let context;
+  function ActiveContext() {
+    context = store.useActiveContext();
+    return null;
+  }
+  const root = createRoot(installHookDom(t));
+  await React.act(async () => root.render(React.createElement(ActiveContext)));
+
+  await React.act(() => store.moveFolderToSpace(11, 2));
+  await React.act(async () => root.unmount());
+
+  assert.deepEqual(context, { spaceId: 2, folderId: 12 });
 });
