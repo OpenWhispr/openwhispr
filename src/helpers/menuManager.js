@@ -83,6 +83,8 @@ class MenuManager {
             { type: "separator" },
             { role: "resetZoom" },
             { role: "zoomIn" },
+            // The role's own accelerator is Ctrl/Cmd+Plus (Shift+=); also accept plain Ctrl/Cmd+=
+            { role: "zoomIn", accelerator: "CommandOrControl+=", visible: false },
             { role: "zoomOut" },
             { type: "separator" },
             { role: "togglefullscreen" },
@@ -152,6 +154,8 @@ class MenuManager {
             { type: "separator" },
             { role: "resetZoom" },
             { role: "zoomIn" },
+            // The role's own accelerator is Ctrl/Cmd+Plus (Shift+=); also accept plain Ctrl/Cmd+=
+            { role: "zoomIn", accelerator: "CommandOrControl+=", visible: false },
             { role: "zoomOut" },
             { type: "separator" },
             { role: "togglefullscreen" },
