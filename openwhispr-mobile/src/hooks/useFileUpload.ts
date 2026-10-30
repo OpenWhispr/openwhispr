@@ -1,3 +1,8 @@
+import {
+  captureTranscriptScope,
+  isTranscriptScopeCurrent,
+  observeTranscriptScope,
+} from '@/lib/transcriptScope';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -120,15 +125,20 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       cancel();
     };
   }, [cancel]);
+  useEffect(() => observeTranscriptScope(cancel), [cancel]);
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
 
   const pickAndTranscribeFile = async (route?: TranscriptionJobRoute) => {
     if (busy.current || !mounted.current || options.isCurrent?.() === false) return;
     busy.current = true;
+    const historyScope = captureTranscriptScope();
     const jobGeneration = ++generation.current;
     const isCurrent = () =>
-      mounted.current && generation.current === jobGeneration && options.isCurrent?.() !== false;
+      mounted.current &&
+      generation.current === jobGeneration &&
+      isTranscriptScopeCurrent(historyScope) &&
+      options.isCurrent?.() !== false;
     const assertCurrent = () => {
       if (!isCurrent()) throw Object.assign(new Error('Upload cancelled'), { name: 'AbortError' });
     };

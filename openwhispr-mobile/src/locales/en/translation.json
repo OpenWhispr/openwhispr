@@ -1,5 +1,8 @@
 {
   "android": {
+    "olderDeviceHistory": "Older device history",
+    "olderDeviceHistoryBody": "These recordings were saved before account separation. Their owner was not recorded, so they remain in this read-only device archive. You can select and copy the text. New recordings stay with the account that created them.",
+    "olderDeviceHistoryAudio": "Audio from older recordings cannot be retried because their account is unknown.",
     "home": "Home",
     "notes": "Notes",
     "chat": "Chat",

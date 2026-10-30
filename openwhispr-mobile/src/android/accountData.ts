@@ -208,6 +208,9 @@ export async function eraseAccountData(userId: string): Promise<void> {
         connection.execSync(`DELETE FROM "${table.name.replace(/"/g, '""')}"`);
     });
     await Promise.all(audio.map((uri) => FileSystem.deleteAsync(uri, { idempotent: true })));
+    const { StorageService } =
+      require('@/services/storage/StorageService') as typeof import('@/services/storage/StorageService');
+    await StorageService.eraseTranscriptOwner(`history:${account.audioNamespace || 'original'}`);
     const latest = readManifest();
     const erased = latest.accounts.find((entry) => entry.owner === account.owner);
     if (!erased) throw new Error('Deleted account ownership is unavailable.');
@@ -246,6 +249,8 @@ export function prepareAccountData(user: User): void {
     const { useChatStore } =
       require('@/store/useChatStore') as typeof import('@/store/useChatStore');
     useChatStore.getState().reset();
+    const { useBubbleResult } = require('./bubbleResult') as typeof import('./bubbleResult');
+    useBubbleResult.getState().dismiss();
     const { useSharedDictionaryStore } =
       require('@/store/useSharedDictionaryStore') as typeof import('@/store/useSharedDictionaryStore');
     // Invalidate pending loads before changing databases, including failed switches.

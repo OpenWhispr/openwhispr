@@ -1,3 +1,7 @@
+const mockUnassignedHistory = jest.fn(async () => []);
+jest.mock('@/services/storage/StorageService', () => ({
+  StorageService: { getUnassignedTranscripts: () => mockUnassignedHistory() },
+}));
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
@@ -37,19 +41,29 @@ jest.mock('@/store/useAuthStore', () => ({ useAuthStore: () => mockUser }));
 jest.mock('@/store/useUsageStore', () => ({ useUsageStore: () => null }));
 jest.mock('@/store/useTranscriptStore', () => ({
   useTranscriptStore: Object.assign(
-    () => [
-      { id: 'done', text: 'Hello there.', status: 'completed', createdAt: 1, provider: 'local' },
-      { id: 'legacy', text: 'One more dictation.', createdAt: 2, provider: 'local' },
-      {
-        id: 'failed',
-        text: 'Unfinished raw audio',
-        status: 'failed',
-        createdAt: 3,
-        provider: 'local',
-        errorMessage: 'Unreadable audio',
-        audioUrl: 'file:///invalid.wav',
-      },
-    ],
+    (select: any) =>
+      select({
+        error: null,
+        transcripts: [
+          {
+            id: 'done',
+            text: 'Hello there.',
+            status: 'completed',
+            createdAt: 1,
+            provider: 'local',
+          },
+          { id: 'legacy', text: 'One more dictation.', createdAt: 2, provider: 'local' },
+          {
+            id: 'failed',
+            text: 'Unfinished raw audio',
+            status: 'failed',
+            createdAt: 3,
+            provider: 'local',
+            errorMessage: 'Unreadable audio',
+            audioUrl: 'file:///invalid.wav',
+          },
+        ],
+      }),
     { getState: () => ({ retryTranscript: mockRetryTranscript }) },
   ),
 }));
@@ -60,7 +74,11 @@ jest.mock('@/android/ui', () => {
   return {
     Page: View,
     Card: View,
-    Row: () => null,
+    Row: ({ title, onPress }: any) => (
+      <Pressable onPress={onPress}>
+        <Text>{title}</Text>
+      </Pressable>
+    ),
     styles: {},
     Button: ({ label, ...props }: { label: string }) => (
       <Pressable {...props}>
@@ -191,4 +209,18 @@ describe('history retry controls', () => {
     await act(async () => view.rerender(<AndroidHome />));
     expect(signal?.aborted).toBe(true);
   });
+});
+
+it('shows older history only after explicitly opening the signed-out archive', async () => {
+  mockUnassignedHistory.mockResolvedValueOnce([
+    { id: 'old', text: 'Unassigned text', createdAt: 1 },
+  ] as never);
+  const view = render(<AndroidHome />);
+  expect(screen.queryByText('Unassigned text')).toBeNull();
+  await act(async () => fireEvent.press(screen.getByText('olderDeviceHistory')));
+  expect(screen.getByText('Unassigned text')).toBeTruthy();
+  mockUser = { id: 'b' };
+  view.rerender(<AndroidHome />);
+  expect(screen.queryByText('Unassigned text')).toBeNull();
+  expect(screen.queryByText('olderDeviceHistory')).toBeNull();
 });

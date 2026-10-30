@@ -1,3 +1,9 @@
+let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
+jest.mock('@/lib/transcriptScope', () => ({
+  captureTranscriptScope: () => mockHistoryScope,
+  isTranscriptScopeCurrent: (scope: unknown) => scope === mockHistoryScope,
+  observeTranscriptScope: () => () => {},
+}));
 jest.mock('../insights', () => ({
   insightsScope: () => 'device',
   recordInsight: jest.fn(),
@@ -52,6 +58,7 @@ const result = {
   transcription: { provider: 'local' },
 };
 beforeEach(() => {
+  mockHistoryScope = null;
   jest.clearAllMocks();
   config.androidHistoryDays = -1;
   delete config.androidStyleContext;
@@ -166,4 +173,27 @@ it('checks local cleanup weights even when speech uses cloud', async () => {
   const job = createAndroidJob();
   job.route.provider = 'cloud';
   await expect(ensureAndroidModels(job)).rejects.toThrow('text model');
+});
+
+it('discards a dictation that completes after the account changed and returned', async () => {
+  mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 1 };
+  const job = createAndroidJob();
+  jest.mocked(transcribeAndCleanup).mockImplementation(async () => {
+    mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 3 };
+    return result as never;
+  });
+  await expect(
+    processAndroidAudio(audio, job, new AbortController().signal, jest.fn()),
+  ).rejects.toThrow('cancelled');
+  expect(history.addTranscript).not.toHaveBeenCalled();
+});
+
+it('does not expire the next account history when a retention load finishes late', async () => {
+  config.androidHistoryDays = 7;
+  history.loadTranscripts.mockImplementationOnce(async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    history.transcripts = [{ id: 'b-old', createdAt: 1 }];
+  });
+  await applyHistoryRetention();
+  expect(history.deleteTranscript).not.toHaveBeenCalled();
 });

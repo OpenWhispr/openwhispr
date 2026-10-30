@@ -72,7 +72,13 @@ export default function AndroidRoot() {
     if (fonts || fontError) SplashScreen.hideAsync().catch(() => undefined);
   }, [fonts, fontError]);
   useEffect(() => {
-    if (ready && !accountError && !accountBlocked) startMeetingRecoveryOnce();
+    if (ready && !accountError && !accountBlocked) {
+      startMeetingRecoveryOnce();
+      useTranscriptStore
+        .getState()
+        .loadTranscripts()
+        .catch(() => undefined);
+    }
   }, [ready, accountRevision, accountError, accountBlocked]);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

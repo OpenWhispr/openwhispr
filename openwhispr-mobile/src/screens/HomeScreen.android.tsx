@@ -1,3 +1,5 @@
+import { StorageService } from '@/services/storage/StorageService';
+import type { Transcript } from '@/types';
 import { AppState } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,11 +28,13 @@ export default function AndroidHome() {
   useAppInit();
   const { t } = useTranslation();
   const [practice, setPractice] = useState(false);
+  const [archive, setArchive] = useState<Transcript[] | null>(null);
   const pending = useBubbleResult();
   const insights = useInsights();
   const syncInsights = useConfigStore((s) => s.config?.insightsSyncEnabled === true);
   const historyEnabled = useConfigStore((s) => s.config?.androidHistoryDays !== 0);
   const history = useTranscriptStore((s) => s.transcripts);
+  const historyError = useTranscriptStore((s) => s.error);
   const user = useAuthStore((s) => s.user);
   const usage = useUsageStore((s) => s.usage);
   const { register } = useSuperwallGate();
@@ -98,7 +102,10 @@ export default function AndroidHome() {
       setWorking(false);
     }
   };
-  useEffect(() => () => retryController.current?.abort(), [user?.id]);
+  useEffect(() => {
+    setArchive(null);
+    return () => retryController.current?.abort();
+  }, [user?.id]);
   useEffect(() => {
     applyHistoryRetention().catch(() => undefined);
   }, []);
@@ -217,7 +224,22 @@ export default function AndroidHome() {
           void upload();
         }}
       />
-      {!history.length && (
+      {historyError && (
+        <Card>
+          <Text accessibilityRole="alert">{historyError}</Text>
+          <Button
+            secondary
+            label={t('retry')}
+            onPress={() => {
+              useTranscriptStore
+                .getState()
+                .loadTranscripts()
+                .catch(() => undefined);
+            }}
+          />
+        </Card>
+      )}
+      {!history.length && !historyError && (
         <Card>
           <Text style={styles.heading}>{t('emptyHistory')}</Text>
           <Text style={styles.body}>{t('emptyHistoryBody')}</Text>
@@ -262,6 +284,46 @@ export default function AndroidHome() {
             </View>
           </Card>
         ))}
+      {!user && (
+        <Row
+          title={t('olderDeviceHistory')}
+          onPress={() => {
+            StorageService.getUnassignedTranscripts()
+              .then(setArchive)
+              .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+          }}
+        />
+      )}
+      <Modal
+        visible={!user && archive !== null}
+        animationType="slide"
+        onRequestClose={() => setArchive(null)}
+      >
+        <SafeAreaView style={styles.page}>
+          <Page
+            title={t('olderDeviceHistory')}
+            showAccount={false}
+            footer={<Button secondary label={t('close')} onPress={() => setArchive(null)} />}
+          >
+            <Text style={styles.body}>{t('olderDeviceHistoryBody')}</Text>
+            {!archive?.length && <Text>{t('emptyHistory')}</Text>}
+            {!user &&
+              archive?.map((item) => (
+                <Card key={item.id}>
+                  <Text style={styles.caption}>
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                  <Text selectable>
+                    {item.text || item.errorMessage || t('olderDeviceHistoryAudio')}
+                  </Text>
+                  {item.audioUrl && (
+                    <Text style={styles.caption}>{t('olderDeviceHistoryAudio')}</Text>
+                  )}
+                </Card>
+              ))}
+          </Page>
+        </SafeAreaView>
+      </Modal>
       <Modal visible={practice} animationType="slide" onRequestClose={() => setPractice(false)}>
         <SafeAreaView style={styles.page}>
           <Page

@@ -7,6 +7,12 @@ import { meetingAudioDirectory } from './meetingAudioStorage';
 // under storage pressure — that just looks like an early expiry, and retry already
 // handles a missing file gracefully.
 const TRANSCRIPT_AUDIO_DIR = `${FileSystem.cacheDirectory ?? ''}transcript-audio/`;
+// Copies are protected before they exist, until a durable row owns them or they are deleted.
+const activeCopies = new Set<string>();
+
+export function releaseTranscriptAudio(uri?: string | null): void {
+  if (uri) activeCopies.delete(uri);
+}
 
 const MIME_EXTENSION: Record<string, string> = {
   'audio/aac': 'aac',
@@ -93,7 +99,13 @@ export async function retainTranscriptAudio(
   const fileName = `${sanitizePathPart(input.transcriptId)}.${extension}`;
   const destinationUri = `${TRANSCRIPT_AUDIO_DIR}${fileName}`;
 
-  await FileSystem.copyAsync({ from: sourceUri, to: destinationUri });
+  activeCopies.add(destinationUri);
+  try {
+    await FileSystem.copyAsync({ from: sourceUri, to: destinationUri });
+  } catch (error) {
+    activeCopies.delete(destinationUri);
+    throw error;
+  }
   // The source is a transient capture/cache file that is no longer needed once
   // the audio lives in managed storage. Drop it so a retained copy never leaves
   // a duplicate behind (best-effort: a lost race just leaves a purgeable file).
@@ -109,6 +121,7 @@ export async function transcriptAudioExists(uri: string): Promise<boolean> {
 export async function deleteManagedTranscriptAudio(uri?: string | null): Promise<void> {
   if (!isManagedTranscriptAudioUri(uri)) return;
   await FileSystem.deleteAsync(uri as string, { idempotent: true });
+  releaseTranscriptAudio(uri);
 }
 
 // Failed rows keep their audio so they can be retried; after this window the
@@ -119,11 +132,14 @@ export const RETAINED_AUDIO_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
 // Deletes every managed audio file not referenced by a surviving transcript.
 // This reclaims both expired audio (whose row's uri was already cleared) and
 // orphans left by a capture that was interrupted before its row was written.
-// Safe to run at startup only, when no capture is in flight.
-export async function garbageCollectTranscriptAudio(keepUris: Iterable<string>): Promise<void> {
+// Account reloads also run this, so invalidate stale sweeps and refresh durable references.
+export async function garbageCollectTranscriptAudio(
+  keepUris: Iterable<string>,
+  guard?: { isCurrent: () => boolean; currentKeepUris: () => Iterable<string> },
+): Promise<void> {
   if (!FileSystem.cacheDirectory) return;
   const dirInfo = await FileSystem.getInfoAsync(TRANSCRIPT_AUDIO_DIR);
-  if (!dirInfo.exists) return;
+  if (!dirInfo.exists || guard?.isCurrent() === false) return;
 
   const keep = new Set<string>();
   for (const uri of keepUris) {
@@ -131,10 +147,15 @@ export async function garbageCollectTranscriptAudio(keepUris: Iterable<string>):
   }
 
   const files = await FileSystem.readDirectoryAsync(TRANSCRIPT_AUDIO_DIR);
+  if (guard?.isCurrent() === false) return;
+  // Synchronous read after the last filesystem await: a row saved while listing
+  // must be protected even if its active-copy lease has already been released.
+  if (guard) for (const uri of guard.currentKeepUris()) keep.add(uri);
   await Promise.all(
     files.map((name) => {
       const uri = `${TRANSCRIPT_AUDIO_DIR}${name}`;
-      if (keep.has(uri)) return Promise.resolve();
+      if (guard?.isCurrent() === false || keep.has(uri) || activeCopies.has(uri))
+        return Promise.resolve();
       return FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
     }),
   );

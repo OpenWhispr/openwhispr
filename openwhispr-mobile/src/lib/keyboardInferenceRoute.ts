@@ -140,6 +140,7 @@ export function clearKeyboardProviderRecovery(jobId: string): void {
 }
 
 export interface ProviderRecoveryJob {
+  historyOwner?: string;
   jobId: string;
   audioUri?: string;
   route?: TranscriptionJobRoute;
@@ -170,6 +171,11 @@ export function listPendingProviderRecoveryJobs(): ProviderRecoveryJob[] {
       const raw =
         AppGroupStorage.getItem(`keyboard_provider_result.${jobId}`) ??
         AppGroupStorage.getItem(`keyboard_upload_route.${jobId}`);
+      const originalRoute = AppGroupStorage.getItem(`keyboard_upload_route.${jobId}`);
+      const historyOwner = originalRoute
+        ? (JSON.parse(originalRoute) as Record<string, unknown>).historyOwner
+        : undefined;
+      if (typeof historyOwner === 'string') job.historyOwner = historyOwner;
       const context = raw ? (JSON.parse(raw) as Record<string, unknown>).requestContext : undefined;
       job.requestContext =
         context === 'keyboard' || context === 'recording' || context === 'file'

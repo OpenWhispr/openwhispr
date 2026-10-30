@@ -1,3 +1,10 @@
+let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
+jest.mock('@/lib/transcriptScope', () => ({
+  captureTranscriptScope: () => mockHistoryScope,
+  isTranscriptScopeCurrent: (scope: unknown) => scope === mockHistoryScope,
+  observeTranscriptScope: () => () => {},
+}));
+const mockAllTranscriptAudio = jest.fn(() => [] as string[]);
 import { Platform } from 'react-native';
 const mockListPendingProviderRecoveryJobs = jest.fn((): unknown[] => []);
 const mockClearKeyboardProviderRecovery = jest.fn();
@@ -35,6 +42,7 @@ jest.mock('@/services/storage/StorageService', () => ({
     getTranscripts: mockGetTranscripts,
     saveTranscripts: mockSaveTranscripts,
     clearTranscripts: mockClearTranscripts,
+    getAllTranscriptAudio: mockAllTranscriptAudio,
   },
 }));
 
@@ -49,6 +57,7 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
 jest.mock('@/lib/transcriptAudio', () => ({
   __esModule: true,
   retainTranscriptAudio: mockRetainTranscriptAudio,
+  releaseTranscriptAudio: jest.fn(),
   transcriptAudioExists: mockTranscriptAudioExists,
   deleteManagedTranscriptAudio: mockDeleteManagedTranscriptAudio,
   garbageCollectTranscriptAudio: mockGarbageCollectTranscriptAudio,
@@ -105,6 +114,8 @@ const failedTranscript = (overrides: Partial<Transcript> = {}): Transcript => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockHistoryScope = null;
+  mockAllTranscriptAudio.mockReturnValue([]);
   mockListPendingProviderRecoveryJobs.mockReturnValue([]);
   mockAppGroupGetItem.mockReturnValue(null);
   mockProcessingModeState.activeMode = 'cloud';
@@ -1083,7 +1094,7 @@ describe('cancelling a history retry', () => {
     });
     const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
     await ready;
-    expect(mockTranscribeAndCleanup.mock.calls[0][0].signal).toBe(controller.signal);
+    expect(mockTranscribeAndCleanup.mock.calls[0][0].signal.aborted).toBe(false);
     controller.abort();
     await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
     expect(useTranscriptStore.getState().transcripts).toEqual([original]);
@@ -1104,5 +1115,66 @@ describe('cancelling a history retry', () => {
     expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
     expect(useTranscriptStore.getState().transcripts).toEqual([original]);
     expect(mockAudioToolsCleanup).toHaveBeenCalledWith(['file://tmp/cancelled.wav']);
+  });
+});
+
+describe('account history boundaries', () => {
+  it('discards an A retry completing after A → B → A, preserving its saved audio', async () => {
+    mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 1 };
+    useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+    mockTranscribeAndCleanup.mockImplementation(async () => {
+      mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 3 };
+      return {
+        text: 'late result',
+        originalText: 'late result',
+        transcription: { provider: 'cloud' },
+      };
+    });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+  });
+
+  it('protects other owners and unassigned audio during history collection', async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    mockAllTranscriptAudio.mockReturnValue([
+      'file://docs/transcript-audio/a.wav',
+      'file://docs/transcript-audio/unassigned.wav',
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'file://docs/transcript-audio/a.wav',
+        'file://docs/transcript-audio/unassigned.wav',
+      ]),
+      expect.objectContaining({
+        isCurrent: expect.any(Function),
+        currentKeepUris: expect.any(Function),
+      }),
+    );
+  });
+
+  it('leaves foreign and unassigned provider recovery jobs untouched', async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 'a-job',
+        historyOwner: 'history:a',
+        route: { provider: 'byok' },
+        result: { text: 'private A' },
+        requestContext: 'file',
+      },
+      {
+        jobId: 'old-job',
+        route: { provider: 'byok' },
+        result: { text: 'unknown owner' },
+        requestContext: 'file',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(useTranscriptStore.getState().transcripts).toEqual([]);
+    expect(mockClearKeyboardProviderRecovery).not.toHaveBeenCalled();
   });
 });

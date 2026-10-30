@@ -1,3 +1,12 @@
+jest.mock('../../../modules/background-uploader/src', () => ({
+  BackgroundUploader: { listProviderRecoveryJobIds: () => [], clearProviderRecovery: () => false },
+}));
+jest.mock('../../../modules/app-group-storage/src', () => ({
+  AppGroupStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+}));
+jest.mock('../../../modules/audio-tools/src', () => ({ AudioTools: {} }));
+jest.mock('@/lib/transcribeAndCleanup', () => ({ transcribeAndCleanup: jest.fn() }));
+jest.mock('@/lib/appsflyer', () => ({ logTranscriptionCompleted: jest.fn() }));
 import Database from 'better-sqlite3';
 import type { Folder } from '@/data/types';
 
@@ -151,6 +160,46 @@ it("does not sweep another account's meeting recordings after restoring a differ
     'file:///docs/meeting-81.wav',
     expect.anything(),
   );
+});
+
+it('keeps upload history separate through A, Local and B and clears only the active owner', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  const row = (id: string) => ({
+    id,
+    text: `${id} private transcript`,
+    createdAt: 100,
+    updatedAt: 100,
+    duration: 2,
+    provider: 'local',
+    status: 'completed',
+  });
+  await useAuthStore.getState().initialize();
+  await StorageService.saveTranscripts([row('a')]);
+  await useAuthStore.getState().signOut();
+  expect(await StorageService.getTranscripts()).toEqual([]);
+  await StorageService.saveTranscripts([row('local')]);
+  await useAuthStore.getState().signIn('account-b', 'synthetic');
+  expect(await StorageService.getTranscripts()).toEqual([]);
+  await StorageService.saveTranscripts([row('b')]);
+  await StorageService.clearTranscripts();
+  await useAuthStore.getState().signOut();
+  expect(await StorageService.getTranscripts()).toEqual([row('local')]);
+  await useAuthStore.getState().signIn('account-a', 'synthetic');
+  expect(await StorageService.getTranscripts()).toEqual([row('a')]);
+});
+
+it('preserves unowned history without assigning it to the account restored during upgrade', async () => {
+  require('@/db/migrate').runMigrations();
+  const legacy = JSON.stringify([{ id: 'legacy', text: 'Keep the original bytes' }]);
+  localStorage.setItem('@openwhispr:transcripts', legacy);
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  await useAuthStore.getState().initialize();
+  expect(await StorageService.getTranscripts()).toEqual([]);
+  await StorageService.clearTranscripts();
+  expect(localStorage.getItem('@openwhispr:transcripts')).toBe(legacy);
 });
 
 it('keeps the original local collection separate from both signed-in accounts', async () => {
@@ -697,4 +746,85 @@ it('clears shared hints even when switching the account database fails', async (
   expect(useAccountData.getState().blocked).toBe(true);
   expect(useSharedDictionaryStore.getState().hints).toEqual({ space: [], workspace: [] });
   expect(useSharedDictionaryStore.getState().summary).toBeNull();
+});
+
+it('clears visible history before a switch and discards a delayed previous-account load', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { useTranscriptStore } = require('@/store/useTranscriptStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  await useAuthStore.getState().initialize();
+  await useTranscriptStore
+    .getState()
+    .addTranscript({ id: 'a-visible', text: 'A only', provider: 'local' });
+  const rows = useTranscriptStore.getState().transcripts;
+  let release!: (rows: unknown[]) => void;
+  const read = jest.spyOn(StorageService, 'getTranscripts');
+  read.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const oldLoad = useTranscriptStore.getState().loadTranscripts();
+  await Promise.resolve();
+  await useAuthStore.getState().signOut();
+  expect(useTranscriptStore.getState().transcripts).toEqual([]);
+  const localLoad = useTranscriptStore.getState().loadTranscripts();
+  release(rows);
+  await Promise.all([oldLoad, localLoad]);
+  expect(useTranscriptStore.getState().transcripts).toEqual([]);
+  read.mockRestore();
+  await useAuthStore.getState().signIn('account-a', 'synthetic');
+  await useTranscriptStore.getState().loadTranscripts();
+  expect(useTranscriptStore.getState().transcripts).toEqual(rows);
+});
+
+it('keeps unassigned history accessible only through the signed-out device archive', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  const rows = [{ id: 'unassigned', text: 'Preserved text' }];
+  localStorage.setItem('@openwhispr:transcripts', JSON.stringify(rows));
+  await useAuthStore.getState().initialize();
+  await expect(StorageService.getUnassignedTranscripts()).rejects.toThrow('Sign out');
+  await useAuthStore.getState().signOut();
+  expect(await StorageService.getTranscripts()).toEqual([]);
+  expect(await StorageService.getUnassignedTranscripts()).toEqual(rows);
+});
+
+it('erases the deleted account history without erasing Local, B or unassigned history', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  await useAuthStore.getState().initialize();
+  await StorageService.saveTranscripts([{ id: 'a', text: 'A' }]);
+  const aKey = StorageService.transcriptOwner();
+  await useAuthStore.getState().signOut();
+  await StorageService.saveTranscripts([{ id: 'local', text: 'Local' }]);
+  const localKey = StorageService.transcriptOwner();
+  await useAuthStore.getState().signIn('account-b', 'synthetic');
+  await StorageService.saveTranscripts([{ id: 'b', text: 'B' }]);
+  const bKey = StorageService.transcriptOwner();
+  localStorage.setItem('@openwhispr:transcripts', '[{"id":"legacy"}]');
+  await useAuthStore.getState().signIn('account-a', 'synthetic');
+  await useAuthStore.getState().deleteAccount();
+  expect(await StorageService.getTranscripts(aKey)).toEqual([]);
+  expect(await StorageService.getTranscripts(bKey)).toEqual([{ id: 'b', text: 'B' }]);
+  expect(await StorageService.getTranscripts(localKey)).toEqual([{ id: 'local', text: 'Local' }]);
+  expect(localStorage.getItem('@openwhispr:transcripts')).toBe('[{"id":"legacy"}]');
+});
+
+it('keeps anonymous history with its collection when that account is linked', async () => {
+  require('@/db/migrate').runMigrations();
+  const { useAuthStore } = require('@/store/useAuthStore');
+  const { StorageService } = require('@/services/storage/StorageService');
+  mockSessionUser = { id: 'anon', email: '', isAnonymous: true };
+  await useAuthStore.getState().initialize();
+  const rows = [{ id: 'anonymous-owned', text: 'My anonymous recording' }];
+  await StorageService.saveTranscripts(rows);
+  await useAuthStore.getState().signIn('linked-account', 'synthetic');
+  expect(await StorageService.getTranscripts()).toEqual(rows);
+  await useAuthStore.getState().signOut();
+  expect(await StorageService.getTranscripts()).toEqual([]);
 });

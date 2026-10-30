@@ -1,3 +1,8 @@
+import {
+  captureTranscriptScope,
+  isTranscriptScopeCurrent,
+  observeTranscriptScope,
+} from '@/lib/transcriptScope';
 import type { BackgroundUploader as BackgroundUploaderType } from '../../../modules/background-uploader/src';
 
 // The native transport's timeout is idle-based; whisper decodes of a 25 MB file
@@ -83,6 +88,11 @@ export async function requestProviderFileNative(input: {
   recoveryAudioUri?: string;
   signal?: AbortSignal;
 }): Promise<Response> {
+  const scope = captureTranscriptScope();
+  const routeSnapshot =
+    input.routeSnapshot && scope
+      ? JSON.stringify({ ...JSON.parse(input.routeSnapshot), historyOwner: scope.key })
+      : input.routeSnapshot;
   const id = requestId();
   const uploader = backgroundUploader();
   const abort = (): void => uploader.cancelProviderRequest(id);
@@ -90,6 +100,7 @@ export async function requestProviderFileNative(input: {
     throw abortError();
   }
   input.signal?.addEventListener('abort', abort, { once: true });
+  const stopObserving = observeTranscriptScope(abort);
   try {
     const result = await uploader.requestProvider({
       requestId: id,
@@ -101,13 +112,14 @@ export async function requestProviderFileNative(input: {
       fileMimeType: input.fileMimeType,
       fileName: input.fileName,
       parameters: input.parameters,
-      routeSnapshot: input.routeSnapshot,
+      routeSnapshot,
       recoveryAudioUri: input.recoveryAudioUri,
       timeoutSeconds: PROVIDER_REQUEST_TIMEOUT_SECONDS,
     });
-    if (input.signal?.aborted) throw abortError();
+    if (input.signal?.aborted || !isTranscriptScopeCurrent(scope)) throw abortError();
     return nativeResponse(result);
   } finally {
+    stopObserving();
     input.signal?.removeEventListener('abort', abort);
   }
 }

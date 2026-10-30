@@ -1,3 +1,9 @@
+let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
+jest.mock('@/lib/transcriptScope', () => ({
+  captureTranscriptScope: () => mockHistoryScope,
+  isTranscriptScopeCurrent: (scope: unknown) => scope === mockHistoryScope,
+  observeTranscriptScope: () => () => {},
+}));
 import { act, renderHook } from '@testing-library/react-native';
 
 const mockGetDocumentAsync = jest.fn();
@@ -82,6 +88,7 @@ async function upload(): Promise<{ error?: Error; onError: jest.Mock }> {
 }
 
 beforeEach(() => {
+  mockHistoryScope = null;
   jest.clearAllMocks();
   mockSnapshotTranscriptionJob.mockReturnValue(byokRoute);
   mockGetInfoAsync.mockResolvedValue({ exists: true, size: 1 * MB });
@@ -253,4 +260,25 @@ describe('provider uploads that the provider would reject', () => {
       expect.anything(),
     );
   });
+});
+
+it('discards a picker result from the previous account before uploading', async () => {
+  mockSnapshotTranscriptionJob.mockReturnValue(byokRoute);
+  mockGetDocumentAsync.mockImplementationOnce(async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    return {
+      canceled: false,
+      assets: [
+        { uri: 'file://app-cache/old.wav', name: 'old.wav', mimeType: 'audio/wav', size: 10 },
+      ],
+    };
+  });
+  const { result } = renderHook(() => useFileUpload());
+  await act(async () => {
+    await result.current.pickAndTranscribeFile();
+  });
+  expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+  expect(mockAddTranscript).not.toHaveBeenCalled();
+  expect(mockAddFailedTranscript).not.toHaveBeenCalled();
+  expect(mockDeleteAsync).toHaveBeenCalledWith('file://app-cache/old.wav', { idempotent: true });
 });

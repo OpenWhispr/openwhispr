@@ -1,3 +1,4 @@
+import { observeTranscriptScope } from '@/lib/transcriptScope';
 import i18n from './strings';
 import { useBubbleResult } from './bubbleResult';
 import { useEffect } from 'react';
@@ -38,6 +39,11 @@ export function useBubblePipeline() {
     let job: AndroidJob | null = null;
     let jobError = '';
     let controller: AbortController | null = null;
+    const stopObserving = observeTranscriptScope(() => {
+      controller?.abort();
+      job = null;
+      useBubbleResult.getState().dismiss();
+    });
     const start = dictationEvents.addListener('onStart', ({ selection, mode }) => {
       controller?.abort();
       controller = new AbortController();
@@ -97,6 +103,7 @@ export function useBubblePipeline() {
       router.navigate('/(tabs)/(record)'),
     );
     return () => {
+      stopObserving();
       controller?.abort();
       start.remove();
       recording.remove();
