@@ -1,14 +1,20 @@
 const { randomUUID } = require("node:crypto");
 
+// performance.now() drifts from wall time (Windows runs ahead by seconds a day)
+// and, on macOS, stops during sleep, so the server time is fetched again hourly.
+const ANCHOR_TTL_MS = 60 * 60_000;
+
 // A small dedicated queue. It never reads transcription/Insights tables and
 // never stores text, audio, model names, titles or application context.
 class MetaActivation {
-  constructor({ db, getScope, request, monotonicNow = () => performance.now() }) {
+  constructor({ db, getScope, request, monotonicNow = () => performance.now(), logger = null }) {
     this.db = db;
     this.getScope = getScope;
     this.request = request;
     this.monotonicNow = monotonicNow;
+    this.logger = logger;
     this.anchor = null;
+    this.rejectedStreams = new Set();
     this.running = null;
     this.failedCaptures = new Set();
     this.db.exec(`
@@ -53,6 +59,21 @@ class MetaActivation {
     return this.anchor.serverTime + (this.monotonicNow() - this.anchor.monotonicTime);
   }
 
+  // A stale anchor still stamps captures (a null clock would be a coverage gap);
+  // only the next pass re-registers to refresh it.
+  anchorFresh(scope) {
+    return (
+      this.clock(scope) !== null &&
+      !this.anchor.stale &&
+      this.monotonicNow() - this.anchor.monotonicTime < ANCHOR_TTL_MS
+    );
+  }
+
+  resync() {
+    if (this.anchor) this.anchor.stale = true;
+    return this.flush();
+  }
+
   begin() {
     const scope = this.getScope();
     let stream = this.current(scope);
@@ -77,14 +98,19 @@ class MetaActivation {
     const id = randomUUID();
     this.db
       .prepare("INSERT INTO captures(id,stream_id,generation,started_at) VALUES(?,?,?,?)")
-      .run(id, stream.id, scope.authGeneration, new Date(Math.ceil(time)).toISOString());
+      .run(
+        id,
+        stream.id,
+        scope.authGeneration,
+        new Date(afterWatermark(time, stream)).toISOString()
+      );
     return id;
   }
 
   stopCapture(id) {
     const row = this.db
       .prepare(
-        "SELECT c.*,s.account_id FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
+        "SELECT c.*,s.account_id,s.complete_through FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
       )
       .get(id);
     if (!row || row.occurred_at) return;
@@ -101,7 +127,10 @@ class MetaActivation {
     }
     this.db
       .prepare("UPDATE captures SET occurred_at=? WHERE id=?")
-      .run(new Date(Math.max(Math.ceil(time), Date.parse(row.started_at) + 1)).toISOString(), id);
+      .run(
+        new Date(Math.max(afterWatermark(time, row), Date.parse(row.started_at) + 1)).toISOString(),
+        id
+      );
   }
 
   finish(id, wordCount) {
@@ -204,11 +233,22 @@ class MetaActivation {
       assertCurrent();
       if (!result?.success) {
         if (result?.status === 403 && !stream.registered_at) this.unpermittedStream = stream.id;
+        // The server refuses a watermark it reads as future or backdated; a
+        // drifted clock is the likely cause, so the next pass re-registers.
+        if (result?.status === 409) {
+          if (this.anchor) this.anchor.stale = true;
+          if (!this.rejectedStreams.has(stream.id)) {
+            this.rejectedStreams.add(stream.id);
+            this.logger?.warn("Activation batch rejected; re-syncing clock", {
+              status: result.status,
+            });
+          }
+        }
         throw new Error("Activation sync unavailable");
       }
       return result.data;
     };
-    if (this.clock(scope) === null || stream.state === "new") {
+    if (!this.anchorFresh(scope) || stream.state === "new") {
       const response = await post("/api/activation/device", {
         accountId: scope.accountId,
         deviceId: stream.id,
@@ -227,10 +267,16 @@ class MetaActivation {
         this.db.prepare("UPDATE streams SET state='closed' WHERE id=?").run(stream.id);
         return;
       }
+      const serverTime = Date.parse(response.serverTime);
+      const drift = this.clock(scope);
+      if (drift !== null && Math.abs(drift - serverTime) >= 1000)
+        this.logger?.debug("Activation clock re-synced", {
+          driftMs: Math.round(drift - serverTime),
+        });
       this.anchor = {
         accountId: scope.accountId,
         generation: scope.authGeneration,
-        serverTime: Date.parse(response.serverTime),
+        serverTime,
         monotonicTime: this.monotonicNow(),
       };
       this.db
@@ -243,6 +289,8 @@ class MetaActivation {
           stream.id
         );
       stream = this.current(scope);
+      if (Number.isSafeInteger(response.device.last_seq))
+        this.restampUnsent(stream, response.device, this.clock(scope));
     }
     const pending = this.db
       .prepare("SELECT * FROM captures WHERE stream_id=? ORDER BY seq")
@@ -287,6 +335,29 @@ class MetaActivation {
           "UPDATE streams SET complete_through=?,state=CASE WHEN ? AND state='closing' THEN 'closed' ELSE state END WHERE id=?"
         )
         .run(completeThrough, stream.state === "closing" ? 1 : 0, stream.id);
+    })();
+  }
+
+  // Captures stamped by a clock that ran ahead would hold the watermark in the
+  // future. The server stored nothing past its last_seq, so those stamps can
+  // move back to the corrected time, still after the acknowledged watermark.
+  restampUnsent(stream, device, time) {
+    const now = Math.ceil(time);
+    const floor =
+      Math.max(Date.parse(stream.complete_through) || 0, Date.parse(device.complete_through) || 0) +
+      1;
+    const rows = this.db
+      .prepare("SELECT * FROM captures WHERE stream_id=? AND (seq IS NULL OR seq>?)")
+      .all(stream.id, device.last_seq);
+    const update = this.db.prepare("UPDATE captures SET started_at=?,occurred_at=? WHERE id=?");
+    this.db.transaction(() => {
+      for (const row of rows) {
+        const startedAt = Math.min(Date.parse(row.started_at), now);
+        const occurredAt = row.occurred_at
+          ? new Date(Math.max(Math.min(Date.parse(row.occurred_at), now), floor)).toISOString()
+          : null;
+        update.run(new Date(startedAt).toISOString(), occurredAt, row.id);
+      }
     })();
   }
 
@@ -346,6 +417,12 @@ class MetaActivation {
     clearInterval(this.timer);
     await this.close();
   }
+}
+
+// The server refuses a contribution at or before the stream's acknowledged
+// watermark, which a re-sync can move the clock behind.
+function afterWatermark(time, stream) {
+  return Math.max(Math.ceil(time), (Date.parse(stream.complete_through) || 0) + 1);
 }
 
 module.exports = { MetaActivation };
