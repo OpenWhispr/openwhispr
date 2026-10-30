@@ -958,7 +958,9 @@
       },
       "sentLabel": "تم الإرسال",
       "identityChanged": "سيُرسل الآن بصفتك {{account}}. اضغط إرسال لإرساله.",
-      "connectToSend": "اربط {{name}} لإرسال هذا"
+      "connectToSend": "اربط {{name}} لإرسال هذا",
+      "edit": "تعديل",
+      "doneEditing": "تم التعديل"
     },
     "policyOff": "أوقفت مؤسستك تشغيل الموصلات.",
     "email": {

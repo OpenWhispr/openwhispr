@@ -4717,7 +4717,9 @@
       },
       "sentLabel": "Sent",
       "identityChanged": "Now sending as {{account}}. Press Send to send it.",
-      "connectToSend": "Connect {{name}} to send this"
+      "connectToSend": "Connect {{name}} to send this",
+      "edit": "Edit",
+      "doneEditing": "Done editing"
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {

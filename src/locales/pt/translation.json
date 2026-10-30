@@ -4563,7 +4563,9 @@
       },
       "sentLabel": "Enviado",
       "identityChanged": "Agora será enviado como {{account}}. Pressione Enviar para enviar.",
-      "connectToSend": "Conecte o {{name}} para enviar isto"
+      "connectToSend": "Conecte o {{name}} para enviar isto",
+      "edit": "Editar",
+      "doneEditing": "Edição concluída"
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
