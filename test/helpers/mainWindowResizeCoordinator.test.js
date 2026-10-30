@@ -11,7 +11,7 @@ test("voice window resizes are serialized and obsolete pending heights are dropp
   const coordinator = createMainWindowResizeCoordinator({
     resizeMainWindow: async (key) => ({
       success: true,
-      bounds: { x: 0, y: 0, width: key === "ASSISTANT" ? 466 : 96, height: 96 },
+      bounds: { x: 0, y: 0, width: key === "DICTATION_ERROR" ? 466 : 96, height: 96 },
     }),
     resizeAssistantWindowToContent: async (height) => {
       calls.push(height);
@@ -96,7 +96,7 @@ test("dispose flushes the queued resize and refuses later requests without invok
   first.resolve();
   assert.equal((await active).success, true, "the in-flight resize still completes");
 
-  const late = await coordinator.resizeMainWindow("ASSISTANT");
+  const late = await coordinator.resizeMainWindow("DICTATION_ERROR");
   assert.equal(late.success, false);
   assert.equal(late.superseded, true);
   assert.deepEqual(invoked, ["BASE"], "no new native resize may run after dispose");
@@ -114,8 +114,8 @@ test("a duplicate settled footprint does not ask Electron to resize again", asyn
     waitForBounds: async () => {},
   });
 
-  await coordinator.resizeMainWindow("ASSISTANT");
-  await coordinator.resizeMainWindow("ASSISTANT");
+  await coordinator.resizeMainWindow("DICTATION_ERROR");
+  await coordinator.resizeMainWindow("DICTATION_ERROR");
   assert.equal(calls, 1);
 });
 

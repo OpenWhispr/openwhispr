@@ -124,14 +124,11 @@ export function useEmbeddedChat({
   // A meeting note's chat drafts follow-ups to its attendees, so it offers
   // the connector tools (still subject to plan, sign-in and policy).
   const streaming = useChatStreaming({
-    messages: persistence.messages,
     setMessages: persistence.setMessages,
     openNote,
     allowConnectors: true,
     noteMeeting,
-    onStreamComplete: (_id, content, toolCalls) => {
-      persistence.saveAssistantMessage(content, toolCalls);
-    },
+    onStreamComplete: persistence.saveAssistantMessage,
   });
 
   const fetchNoteConversations = useCallback(async () => {

@@ -417,8 +417,9 @@ for (const withContent of [true, false]) {
     );
     assert.equal(harness.getCommittedMessages()[0].content, content);
     assert.equal(harness.getAgentState(), "tool-executing");
+    // The fake clock stands at 1000 throughout.
     assert.deepEqual(harness.getCommittedMessages()[0].toolCalls, [
-      { ...call, status: "executing" },
+      { ...call, status: "executing", startedAt: 1000 },
     ]);
 
     await harness.emit({
@@ -428,7 +429,16 @@ for (const withContent of [true, false]) {
       displayText: "Found one note",
       metadata,
     });
-    const toolCalls = [{ ...call, status: "completed", result: "Found one note", metadata }];
+    const toolCalls = [
+      {
+        ...call,
+        status: "completed",
+        startedAt: 1000,
+        finishedAt: 1000,
+        result: "Found one note",
+        metadata,
+      },
+    ];
     assert.deepEqual(harness.getCommittedMessages()[0].toolCalls, toolCalls);
     assert.equal(harness.getAgentState(), "streaming");
     if (withContent) await harness.emit({ type: "content", text: "Found it." });
@@ -445,26 +455,3 @@ for (const withContent of [true, false]) {
     await assertNoLateWrites(harness);
   });
 }
-
-test("plainTextResponse appends the plain-text instruction to the system prompt", async (t) => {
-  const requestBodies = [];
-  const originalFetch = globalThis.fetch;
-  t.after(() => {
-    globalThis.fetch = originalFetch;
-  });
-  globalThis.fetch = async (_url, init) => {
-    requestBodies.push(String(init?.body));
-    return new Response(sseEvent({ content: "ok" }, "stop") + "data: [DONE]\n\n", {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
-  };
-  const harness = await renderChatStreaming(t);
-
-  await harness.captured.sendToAI("draft a reply", [], { plainTextResponse: true });
-  await harness.captured.sendToAI("draft a reply", []);
-
-  assert.equal(requestBodies.length, 2);
-  assert.match(requestBodies[0], /OUTPUT FORMAT:/);
-  assert.doesNotMatch(requestBodies[1], /OUTPUT FORMAT:/);
-});

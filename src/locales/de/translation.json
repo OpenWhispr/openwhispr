@@ -2146,7 +2146,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Bei aktiviertem automatischen Einfügen landet die Antwort am Cursor eines fokussierten beschreibbaren Textfelds; andernfalls öffnet sie sich im schwebenden Assistenten-Panel.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wird markierter Text sicher durch das Ergebnis ersetzt. Andere Anfragen öffnen sich im Assistentenfenster.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -2310,7 +2310,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Sprachassistent-Hotkey",
-        "description": "Sprechen Sie einen Befehl und der Assistent nutzt Ihre Notizen, Ihren Kalender und Web-Tools. Die Antwort wird am fokussierten beschreibbaren Cursor eingefügt, ersetzt markierten Text oder öffnet sich im schwebenden Panel."
+        "description": "Sprechen Sie eine Anfrage und der Assistent antwortet in seinem eigenen Fenster, mit Ihren Notizen, Ihrem Kalender und Web-Tools. Vorher markierter Text geht als Kontext mit."
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -3158,7 +3158,11 @@
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
-    }
+    },
+    "fork": "Abzweigen",
+    "forked": "Abgezweigter Chat",
+    "forkedFrom": "Abgezweigt von „{{title}}“",
+    "forkFailed": "Chat konnte nicht abgezweigt werden"
   },
   "referral": {
     "title": "Empfehlen und Belohnungen erhalten",
@@ -4176,7 +4180,6 @@
       "hotkeyToSpeak": "{{hotkey}} zum Sprechen",
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
-      "clickToSpeak": "Klicken zum Sprechen",
       "waitingForMicrophone": "Warte auf Mikrofon…"
     },
     "buttons": {
@@ -4188,7 +4191,6 @@
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden",
       "askAssistant": "Assistent fragen",
-      "busyRecording": "Beende zuerst die laufende Aufnahme",
       "startMeetingRecording": "Meeting-Aufnahme starten"
     }
   },
@@ -4291,29 +4293,129 @@
       "update_skillName": "Skill aktualisieren",
       "search_openwhispr_helpStatus": "OpenWhispr-Hilfe wird durchsucht...",
       "read_openwhispr_helpStatus": "OpenWhispr-Hilfe wird gelesen...",
-      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen..."
+      "get_openwhispr_contextStatus": "OpenWhispr-Einstellungen werden gelesen...",
+      "ask_userName": "Frage",
+      "ask_userStatus": "Frage dich...",
+      "request_connectionName": "Verbindung",
+      "request_connectionStatus": "Bitte um Verbindung...",
+      "request_accessName": "Zugriff",
+      "request_accessStatus": "Bitte um Zugriff...",
+      "request_api_keyName": "API-Schlüssel",
+      "request_api_keyStatus": "Bitte um einen API-Schlüssel...",
+      "open_settingsName": "Einstellungen",
+      "open_settingsStatus": "Verweise auf die Einstellungen..."
+    },
+    "turn": {
+      "reasoning": "Gedankengang",
+      "stopped": "Angehalten",
+      "stepLimit": "Nach der maximalen Anzahl von Schritten pausiert.",
+      "continue": "Fortfahren",
+      "continueMessage": "Mach weiter",
+      "failed": "Diese Antwort ist fehlgeschlagen."
+    },
+    "interactions": {
+      "notNow": "Nicht jetzt",
+      "cancel": "Abbrechen",
+      "questions": {
+        "recommended": "Empfohlen",
+        "submit": "Absenden",
+        "placeholder": "Antwort eingeben…"
+      },
+      "connection": {
+        "title": "{{name}} verbinden",
+        "connect": "{{name}} verbinden",
+        "connecting": "Schließe die Verbindung im Browser ab…",
+        "failed": "Verbindung fehlgeschlagen. Versuche es erneut.",
+        "permissionDenied": "Der Kalenderzugriff wurde verweigert. Erlaube ihn in den Systemeinstellungen und versuche es erneut.",
+        "calendarTitle": "Kalender verbinden"
+      },
+      "access": {
+        "screen": "Zugriff auf deinen Bildschirm erlauben?",
+        "allow": "Erlauben"
+      },
+      "apiKey": {
+        "title": "Deinen {{provider}}-API-Schlüssel hinzufügen",
+        "placeholder": "API-Schlüssel",
+        "save": "Speichern"
+      },
+      "settings": {
+        "done": "Fertig",
+        "technicalDetails": "Technische Details"
+      },
+      "status": {
+        "answered": "Beantwortet",
+        "connected": "{{name}} verbunden",
+        "granted": "Bildschirm geteilt",
+        "declined": "Nicht erlaubt",
+        "saved": "API-Schlüssel gespeichert",
+        "done": "Zurück aus den Einstellungen",
+        "cancelled": "Verworfen",
+        "notAnswered": "Nicht beantwortet",
+        "invalid": "Die Frage konnte nicht angezeigt werden"
+      },
+      "followUp": {
+        "connected": "Ich habe {{name}} verbunden.",
+        "granted": "Ich habe den Zugriff auf meinen Bildschirm erlaubt.",
+        "saved": "Ich habe meinen {{provider}}-API-Schlüssel gespeichert.",
+        "done": "Ich bin in den Einstellungen fertig."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Text zum Bearbeiten auswählen mit",
-      "selectedContext": "Ausgewählter Text hinzugefügt",
-      "removeSelectedContext": "Ausgewählten Text entfernen",
-      "newConversation": "Neue Unterhaltung",
-      "copyToClipboard": "In die Zwischenablage kopieren",
-      "suggestions": {
-        "summarizeNotes": "Meine letzten Notizen zusammenfassen",
-        "calendar": "Was steht in meinem Kalender?",
-        "draft": "Hilf mir, etwas zu entwerfen"
-      }
+  "agentWindow": {
+    "title": "Assistent",
+    "actions": {
+      "expand": "Erweitern",
+      "collapse": "Minimieren",
+      "speak": "Sprechen",
+      "type": "Tippen",
+      "stop": "Stopp",
+      "close": "Schließen",
+      "regenerate": "Neu generieren",
+      "readAloud": "Vorlesen",
+      "stopReading": "Vorlesen beenden"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Aufruf",
-        "calling": "Abruf",
-        "using": "Nutzung"
-      },
-      "toolFallback": "Werkzeug"
+    "notices": {
+      "nothingHeard": "Nichts verstanden",
+      "transcriptionFailed": "Transkription fehlgeschlagen",
+      "micUnavailable": "Mikrofon nicht verfügbar",
+      "regenerateFailed": "Antwort konnte nicht neu generiert werden",
+      "dictationActive": "Das Diktat nutzt das Mikrofon"
+    },
+    "composer": {
+      "placeholder": "Frage diktieren oder eintippen…",
+      "followUpPlaceholder": "Rückfrage stellen…"
+    },
+    "empty": {
+      "title": "Wobei kann ich helfen?",
+      "description": "Gib deine Anfrage unten ein."
+    },
+    "selectedContext": {
+      "title": "Ausgewählter Kontext",
+      "remove": "Ausgewählten Kontext entfernen",
+      "fromAnswer": "Aus der Antwort: „{{text}}“",
+      "fromOtherApp": "Aus einer anderen App: „{{text}}“"
+    },
+    "selectionHint": "Text auswählen, um nachzufragen oder abzuzweigen",
+    "selectionToolbar": "Ausgewählter Text",
+    "followUp": "Nachfragen",
+    "forkFromHere": "Hier abzweigen",
+    "chats": {
+      "title": "Chats",
+      "switch": "Chat wechseln",
+      "new": "Neuer Chat",
+      "empty": "Noch keine Chats",
+      "untitled": "Unbenannter Chat",
+      "fork": "Abgezweigt"
+    },
+    "progress": {
+      "callingTools_one": "Rufe {{count}} Tool auf…",
+      "callingTools_other": "Rufe {{count}} Tools auf…",
+      "checkingAnswers": "Prüfe die Antworten…",
+      "reasoning": "Denkt nach…",
+      "reasonedFor": "{{duration}} nachgedacht",
+      "workedFor": "{{duration}} gearbeitet",
+      "steps_one": "{{count}} Schritt",
+      "steps_other": "{{count}} Schritte"
     }
   },
   "integrations": {
@@ -4589,7 +4691,8 @@
         "notes": {
           "targetTitle": "Zu „{{title}}“"
         }
-      }
+      },
+      "sentEarlier": "Du hast das bereits früher in diesem Chat gesendet."
     },
     "policyOff": "Konnektoren wurden von deiner Organisation deaktiviert.",
     "email": {
@@ -4878,7 +4981,8 @@
       },
       "gmailDraftLimit": "Pro Anfrage können nur {{max}} E-Mails vorbereitet werden.",
       "queryResults": "Gefundene Ergebnisse: {{total}}",
-      "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden."
+      "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden.",
+      "alreadySent": "Für diese Anfrage bereits erledigt"
     },
     "beta": "Beta",
     "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",

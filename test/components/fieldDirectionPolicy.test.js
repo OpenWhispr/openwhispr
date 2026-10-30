@@ -67,6 +67,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
+  // A typed answer in any script; an API key, always LTR.
+  "src/components/chat/InteractionCard.tsx": ["auto", "ltr"],
   "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
   "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
   "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
@@ -98,8 +100,12 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
+  // The question card's radio and checkbox options hold no text.
+  "src/components/chat/InteractionCard.tsx": ["inherit"],
   // To, Cc, Subject, Body: people's names and prose in any script.
   "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
   // Title and description, or a comment: prose in any script.

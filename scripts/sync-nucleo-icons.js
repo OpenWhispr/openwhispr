@@ -94,12 +94,15 @@ export {
   CopyRounded,
   EyeOff,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
   List,
   ListChecks,
   ListEnd,
   ListOrdered,
+  Maximize,
+  Minimize,
   Quote,
   SkillStack,
   Square,
@@ -107,6 +110,8 @@ export {
   SquareSparkle,
   Strikethrough,
   Table,
+  TextSelect,
+  Volume,
 } from "./primitives";
 
 ${exportLines.join("\n")}

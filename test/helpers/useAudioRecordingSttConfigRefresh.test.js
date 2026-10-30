@@ -26,7 +26,6 @@ export default class FakeAudioManager {
   shouldUseStreaming() { return false; }
   prepareMicCapture() {}
   setVoiceAgentRequested() {}
-  setAssistantSelectionContext() {}
   setTranslationRequested() {}
   async startRecording() { globalThis.__sttRefreshStarts.push(globalThis.__sttRefreshFetches); return true; }
   cleanup() {}

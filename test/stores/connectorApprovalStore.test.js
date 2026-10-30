@@ -29,19 +29,7 @@ function fakeElectron(commitImpl) {
 }
 
 function context(toolCallId, controller = new AbortController(), messageId = "m1") {
-  let requested = 0;
-  return {
-    controller,
-    requestedCount: () => requested,
-    value: {
-      messageId,
-      toolCallId,
-      signal: controller.signal,
-      onApprovalRequested: () => {
-        requested += 1;
-      },
-    },
-  };
+  return { controller, value: { messageId, toolCallId, signal: controller.signal } };
 }
 
 const keyOf = (store, toolCallId, messageId = "m1") => store.approvalKey(messageId, toolCallId);
@@ -52,7 +40,7 @@ async function freshStore() {
   return store;
 }
 
-test("a request shows a pending card and tells the surface", async (t) => {
+test("a request shows a pending card", async (t) => {
   const electron = fakeElectron();
   installBrowserGlobals(t, { window: { electronAPI: electron.api } });
   const store = await freshStore();
@@ -64,7 +52,6 @@ test("a request shows a pending card and tells the surface", async (t) => {
     store.useConnectorApprovalStore.getState().entries[keyOf(store, "call-1")].state,
     "pending"
   );
-  assert.equal(ctx.requestedCount(), 1);
   // Settle it so the 10-minute expiry timer doesn't keep the test process alive.
   store.cancelApproval(keyOf(store, "call-1"));
 });

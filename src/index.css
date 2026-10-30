@@ -1,6 +1,8 @@
 @import "tailwindcss";
-/* Dictation window feature styles (voice pill, assistant/live-transcript panels). */
+/* Dictation window feature styles (voice pill, live transcript panel). */
 @import "./styles/dictation-panel.css";
+/* The assistant's own window (pill, composer, modal). */
+@import "./styles/agent-window.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

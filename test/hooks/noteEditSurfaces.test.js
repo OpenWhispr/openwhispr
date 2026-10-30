@@ -36,7 +36,7 @@ const noop = () => {};
 // Mounts both real entry points, their persistence/sender/streaming hooks and note
 // tools. Only the provider transport and Electron IPC are fake. Scripted tool
 // choices verify execution and request contracts, not a live model's judgment.
-for (const surface of ["note chat", "assistant panel"]) {
+for (const surface of ["note chat", "agent window"]) {
   for (const priorEmail of [false, true]) {
     for (const provider of ["cloud", "byok"]) {
       test(`${surface}, ${provider}, ${priorEmail ? "after email" : "fresh"}: edit the summary without opening email`, async (t) => {
@@ -166,11 +166,13 @@ for (const surface of ["note chat", "assistant panel"]) {
             )
         );
         let chat;
-        let settled = false;
+        let agentChat;
         const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-        const { AssistantPanel } = await vite.ssrLoadModule(
-          "/components/dictation/AssistantPanel.tsx"
-        );
+        const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+        function AgentHarness() {
+          agentChat = useAgentChat({ onResponseContent: noop });
+          return null;
+        }
         function NoteHarness() {
           chat = useEmbeddedChat({
             noteId: 7,
@@ -184,49 +186,14 @@ for (const surface of ["note chat", "assistant panel"]) {
         }
         root = createRoot(container);
         await React.act(async () =>
-          root.render(
-            surface === "note chat"
-              ? React.createElement(NoteHarness)
-              : React.createElement(AssistantPanel, {
-                  pendingCommand: {
-                    id: 1,
-                    text: REQUEST,
-                    attachment: null,
-                    selectedContext: null,
-                    delivery: null,
-                  },
-                  initialConversationId: priorEmail ? 1 : null,
-                  onCommandConsumed: noop,
-                  onCommandDiscarded: noop,
-                  onCommandSettled: () => {
-                    settled = true;
-                  },
-                  onConversationIdChange: noop,
-                  onClose: noop,
-                  onBusyChange: noop,
-                  onResponseReadyChange: noop,
-                  onResponseContent: noop,
-                  onConversationReset: noop,
-                  onSelectionContextChange: noop,
-                  skillChoice: { picked: null, pickOff: false },
-                  onSkillChoiceChange: noop,
-                  voiceState: "idle",
-                  thinking: false,
-                  open: true,
-                  footerPhase: "actions",
-                  horizontalDirection: "left",
-                })
-          )
+          root.render(React.createElement(surface === "note chat" ? NoteHarness : AgentHarness))
         );
         if (surface === "note chat") {
           if (priorEmail) await React.act(async () => chat.switchConversation(1));
           await React.act(async () => chat.sendMessage(REQUEST));
         } else {
-          for (let i = 0; !settled && i < 100; i++)
-            await React.act(async () => {
-              await new Promise((resolve) => setTimeout(resolve, 10));
-            });
-          assert.equal(settled, true);
+          if (priorEmail) await React.act(async () => agentChat.switchChat(1));
+          await React.act(async () => agentChat.send(REQUEST));
         }
         assert.equal(stored.enhanced_content, EDITED);
         assert.equal(stored.title, "Renamed workshop");

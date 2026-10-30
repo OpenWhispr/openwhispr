@@ -44,3 +44,21 @@ test("only the explicit panel=true query selects the control panel", async (t) =
   globalThis.window.location.search = "?panel=trueish";
   assert.equal(isControlPanelWindow(), false);
 });
+
+test("the agent window is neither the control panel nor the dictation panel", async (t) => {
+  const originalWindow = globalThis.window;
+  t.after(() => {
+    globalThis.window = originalWindow;
+  });
+  globalThis.window = { location: { pathname: "/", search: "?agent=true" } };
+
+  const { isAgentWindow, isControlPanelWindow, isDictationPanelWindow } = await load();
+
+  assert.equal(isAgentWindow(), true);
+  assert.equal(isControlPanelWindow(), false);
+  assert.equal(isDictationPanelWindow(), false);
+
+  globalThis.window.location.search = "?agent=trueish";
+  assert.equal(isAgentWindow(), false);
+  assert.equal(isDictationPanelWindow(), true);
+});

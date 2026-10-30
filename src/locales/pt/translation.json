@@ -1830,7 +1830,7 @@
       },
       "examplesTitle": "Exemplos",
       "helper": "Escolha algo curto e natural de se dizer em voz alta",
-      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Com a colagem automática ativada, a resposta é colada no cursor de um campo editável em foco; caso contrário, abre no painel flutuante do assistente.",
+      "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, o texto destacado é substituído com segurança pelo resultado. Os outros pedidos abrem na janela do assistente.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
@@ -1994,7 +1994,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atalho do assistente de voz",
-        "description": "Diga um comando e o assistente usa suas notas, calendário e ferramentas web. A resposta é colada em um cursor editável em foco, substitui o texto selecionado ou abre no painel flutuante."
+        "description": "Diga um pedido e o assistente responde na própria janela, usando suas notas, calendário e ferramentas web. O texto que você destacar antes vai junto como contexto."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
@@ -3939,7 +3939,11 @@
       "todos": "Liste minhas tarefas recentes",
       "meeting": "Prepare-me para minha próxima reunião",
       "sharedNotes": "Destaque minhas notas compartilhadas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Conversa bifurcada",
+    "forkedFrom": "Bifurcada de \"{{title}}\"",
+    "forkFailed": "Não foi possível bifurcar esta conversa"
   },
   "support": {
     "documentation": "Documentação",
@@ -4022,7 +4026,6 @@
       "hotkeyToSpeak": "{{hotkey}} para falar",
       "recording": "Gravando...",
       "processing": "Processando...",
-      "clickToSpeak": "Clique para falar",
       "waitingForMicrophone": "Aguardando microfone…"
     },
     "buttons": {
@@ -4034,7 +4037,6 @@
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora",
       "askAssistant": "Perguntar ao assistente",
-      "busyRecording": "Termine primeiro a gravação atual",
       "startMeetingRecording": "Iniciar gravação da reunião"
     }
   },
@@ -4137,29 +4139,129 @@
       "update_skillName": "Atualizar habilidade",
       "search_openwhispr_helpStatus": "Pesquisando na ajuda do OpenWhispr...",
       "read_openwhispr_helpStatus": "Lendo a ajuda do OpenWhispr...",
-      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr..."
+      "get_openwhispr_contextStatus": "Lendo as configurações do OpenWhispr...",
+      "ask_userName": "Pergunta",
+      "ask_userStatus": "Perguntando a você...",
+      "request_connectionName": "Conexão",
+      "request_connectionStatus": "Pedindo para conectar...",
+      "request_accessName": "Acesso",
+      "request_accessStatus": "Pedindo acesso...",
+      "request_api_keyName": "Chave de API",
+      "request_api_keyStatus": "Pedindo uma chave de API...",
+      "open_settingsName": "Configurações",
+      "open_settingsStatus": "Indicando as configurações..."
+    },
+    "turn": {
+      "reasoning": "Raciocínio",
+      "stopped": "Interrompido",
+      "stepLimit": "Pausado após o número máximo de etapas.",
+      "continue": "Continuar",
+      "continueMessage": "Continue",
+      "failed": "Esta resposta falhou."
+    },
+    "interactions": {
+      "notNow": "Agora não",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "Recomendado",
+        "submit": "Enviar",
+        "placeholder": "Digite sua resposta…"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Conclua a conexão no navegador…",
+        "failed": "Não foi possível conectar. Tente novamente.",
+        "permissionDenied": "O acesso ao calendário foi negado. Permita-o nos Ajustes do Sistema e tente novamente.",
+        "calendarTitle": "Conectar um calendário"
+      },
+      "access": {
+        "screen": "Permitir acesso à sua tela?",
+        "allow": "Permitir"
+      },
+      "apiKey": {
+        "title": "Adicione sua chave de API do {{provider}}",
+        "placeholder": "Chave de API",
+        "save": "Salvar"
+      },
+      "settings": {
+        "done": "Concluído",
+        "technicalDetails": "Detalhes técnicos"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Tela compartilhada",
+        "declined": "Não permitido",
+        "saved": "Chave de API salva",
+        "done": "De volta das configurações",
+        "cancelled": "Dispensado",
+        "notAnswered": "Sem resposta",
+        "invalid": "Não foi possível mostrar a pergunta"
+      },
+      "followUp": {
+        "connected": "Conectei o {{name}}.",
+        "granted": "Permiti o acesso à minha tela.",
+        "saved": "Salvei minha chave de API do {{provider}}.",
+        "done": "Terminei nas configurações."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Selecione o texto para editar com",
-      "selectedContext": "Texto selecionado adicionado",
-      "removeSelectedContext": "Remover texto selecionado",
-      "newConversation": "Nova conversa",
-      "copyToClipboard": "Copiar para a área de transferência",
-      "suggestions": {
-        "summarizeNotes": "Resuma minhas notas recentes",
-        "calendar": "O que está no meu calendário?",
-        "draft": "Ajude-me a redigir algo"
-      }
+  "agentWindow": {
+    "title": "Assistente",
+    "actions": {
+      "expand": "Expandir",
+      "collapse": "Minimizar",
+      "speak": "Falar",
+      "type": "Digitar",
+      "stop": "Parar",
+      "close": "Fechar",
+      "regenerate": "Gerar novamente",
+      "readAloud": "Ler em voz alta",
+      "stopReading": "Parar leitura"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocando",
-        "calling": "Chamando",
-        "using": "Usando"
-      },
-      "toolFallback": "Ferramenta"
+    "notices": {
+      "nothingHeard": "Não entendi",
+      "transcriptionFailed": "Não foi possível transcrever",
+      "micUnavailable": "Não foi possível abrir o microfone",
+      "regenerateFailed": "Não foi possível gerar a resposta novamente",
+      "dictationActive": "O ditado está usando o microfone"
+    },
+    "composer": {
+      "placeholder": "Dite ou digite sua pergunta…",
+      "followUpPlaceholder": "Faça uma pergunta de acompanhamento…"
+    },
+    "empty": {
+      "title": "Como posso ajudar?",
+      "description": "Digite seu pedido abaixo."
+    },
+    "selectedContext": {
+      "title": "Contexto selecionado",
+      "remove": "Remover o contexto selecionado",
+      "fromAnswer": "Da resposta: \"{{text}}\"",
+      "fromOtherApp": "De outro app: \"{{text}}\""
+    },
+    "selectionHint": "Selecione um texto para perguntar ou bifurcar",
+    "selectionToolbar": "Texto selecionado",
+    "followUp": "Perguntar",
+    "forkFromHere": "Bifurcar daqui",
+    "chats": {
+      "title": "Chats",
+      "switch": "Trocar de chat",
+      "new": "Novo chat",
+      "empty": "Nenhum chat ainda",
+      "untitled": "Chat sem título",
+      "fork": "Bifurcado"
+    },
+    "progress": {
+      "callingTools_one": "Chamando {{count}} ferramenta…",
+      "callingTools_other": "Chamando {{count}} ferramentas…",
+      "checkingAnswers": "Verificando as respostas…",
+      "reasoning": "Raciocinando…",
+      "reasonedFor": "Raciocinou por {{duration}}",
+      "workedFor": "Trabalhou por {{duration}}",
+      "steps_one": "{{count}} etapa",
+      "steps_other": "{{count}} etapas"
     }
   },
   "integrations": {
@@ -4435,7 +4537,8 @@
         "notes": {
           "targetTitle": "Em \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "Você já enviou isto antes nesta conversa."
     },
     "policyOff": "Sua organização desativou os conectores.",
     "email": {
@@ -4724,7 +4827,8 @@
       },
       "gmailDraftLimit": "Só é possível preparar {{max}} e-mails por solicitação.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação."
+      "cardLimit": "Só é possível preparar {{max}} cartões por solicitação.",
+      "alreadySent": "Já feito para este pedido"
     },
     "beta": "Beta",
     "upsell": "Os conectores estão incluídos nos planos pagos. Faça upgrade para o assistente trabalhar nas suas ferramentas.",
