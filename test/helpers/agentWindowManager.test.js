@@ -76,6 +76,12 @@ class FakeBrowserWindow {
   getBounds() {
     return this.bounds;
   }
+  getPosition() {
+    return [this.bounds.x, this.bounds.y];
+  }
+  setPosition(x, y) {
+    this.bounds = { ...this.bounds, x, y };
+  }
   setBounds(bounds) {
     this.bounds = bounds;
     this.calls.push(["setBounds", bounds]);
@@ -108,7 +114,7 @@ Module._load = function loadWithStubs(request, parent, isMain) {
       },
     };
   }
-  if (request === "./debugLogger") return { warn() {}, debug() {} };
+  if (request === "./debugLogger") return { warn() {}, debug() {}, info() {} };
   if (request === "./plasmaWorkAreas") {
     return {
       plasmaWorkAreas: {
@@ -173,6 +179,120 @@ async function openedManager({ platform = "darwin", windowManager = createWindow
 }
 
 const fromAgent = (win) => ({ sender: win.webContents, senderFrame: win.webContents.mainFrame });
+
+for (const platform of ["darwin", "win32", "linux"]) {
+  test(`a dragged dock keeps dictation clearance on drag and reopen on ${platform}`, async (t) => {
+    cursor = { x: 720, y: 400 };
+    let dictationVisible = false;
+    const { manager, win } = await openedManager({
+      platform,
+      windowManager: createWindowManager({
+        _panelStartPosition: "center",
+        mainWindow: {
+          isDestroyed: () => false,
+          isVisible: () => dictationVisible,
+          getBounds: () => ({ x: 616, y: 776, width: 208, height: 120 }),
+        },
+      }),
+    });
+    t.after(() => manager.dragManager.cleanup());
+    manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+    manager.setDragging(fromAgent(win), true);
+    cursor = { x: 720, y: 9000 };
+    manager.dragManager.updateWindowPosition();
+    manager.setDragging(fromAgent(win), false);
+    assert.equal(manager.anchor.bottom, 896);
+
+    dictationVisible = true;
+    manager.hide(fromAgent(win));
+    cursor = { x: 720, y: 400 };
+    manager.handleHotkey();
+    await new Promise((resolve) => setImmediate(resolve));
+    const ceiling = platform === "win32" ? 768 : 836;
+    assert.equal(win.bounds.y + win.bounds.height, ceiling, "restored dock clears dictation");
+    manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+    manager.setDragging(fromAgent(win), true);
+    cursor = { x: 720, y: 9000 };
+    manager.dragManager.updateWindowPosition();
+    manager.setDragging(fromAgent(win), false);
+    manager.setLayout(fromAgent(win), { layout: "pill", focus: false });
+    assert.equal(win.bounds.y + win.bounds.height, ceiling, "dragged dock clears dictation");
+  });
+
+  test(`a dragged modal keeps its dock across layouts and reopening on ${platform}`, async (t) => {
+    cursor = { x: 720, y: 400 };
+    const { manager, win } = await openedManager({ platform });
+    t.after(() => manager.dragManager.cleanup());
+    manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+    manager.setDragging(fromAgent(win), true);
+    cursor = { x: 620, y: 264 };
+    manager.dragManager.updateWindowPosition();
+    manager.setDragging(fromAgent(win), false);
+    assert.deepEqual(manager.anchor, { centerX: 620, bottom: 760 });
+    assert.equal(win.bounds.y + win.bounds.height, 760);
+
+    manager.setLayout(fromAgent(win), { layout: "typing", focus: false });
+    assert.equal(win.bounds.x + win.bounds.width / 2, 620);
+    assert.equal(win.bounds.y + win.bounds.height, 760);
+    manager.hide(fromAgent(win));
+    manager.handleHotkey();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(win.bounds.x + win.bounds.width / 2, 620);
+    assert.equal(win.bounds.y + win.bounds.height, 760);
+
+    manager.hide(fromAgent(win));
+    cursor = { x: 2000, y: 500 };
+    manager.handleHotkey();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(win.bounds.x + win.bounds.width / 2, 2400, "another display uses its own dock");
+    manager.hide(fromAgent(win));
+    cursor = { x: 620, y: 264 };
+    manager.handleHotkey();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(win.bounds.x + win.bounds.width / 2, 620);
+  });
+}
+
+test("dragging stays in the lower centered region and stops when the modal leaves", async (t) => {
+  cursor = { x: 720, y: 400 };
+  const { manager, win } = await openedManager();
+  t.after(() => manager.dragManager.cleanup());
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  manager.setDragging(fromAgent(win), true);
+  cursor = { x: -4000, y: -4000 };
+  manager.dragManager.updateWindowPosition();
+  assert.ok(manager.anchor.bottom - AGENT_LAYOUT_SIZES.pill.height >= 900 * 0.6);
+  for (const layout of ["modal", "typing", "pill"]) {
+    manager.setLayout(fromAgent(win), { layout, focus: false });
+    assert.ok(win.bounds.x >= 1440 * 0.06 - 1);
+    assert.ok(win.bounds.y >= 0);
+  }
+  assert.equal(manager.dragManager.isDragActive(), false);
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  manager.setDragging(fromAgent(win), true);
+  cursor = { x: 9000, y: 9000 };
+  manager.dragManager.updateWindowPosition();
+  assert.ok(win.bounds.x + win.bounds.width <= 1440 * 0.94 + 1);
+  assert.ok(win.bounds.y + win.bounds.height <= 896);
+  manager.hide(fromAgent(win));
+  assert.equal(manager.dragManager.isDragActive(), false);
+});
+
+test("other windows and subframes cannot start or stop an assistant drag", async (t) => {
+  cursor = { x: 720, y: 400 };
+  const { manager, win } = await openedManager();
+  t.after(() => manager.dragManager.cleanup());
+  manager.setLayout(fromAgent(win), { layout: "modal", focus: false });
+  for (const event of [{}, { sender: win.webContents, senderFrame: {} }]) {
+    manager.setDragging(event, true);
+    assert.equal(manager.dragManager.isDragActive(), false);
+  }
+  manager.setDragging(fromAgent(win), true);
+  manager.setDragging({}, false);
+  assert.equal(manager.dragManager.isDragActive(), true);
+  manager._forget();
+  assert.equal(manager.dragManager.isDragActive(), false);
+});
 
 test("the hotkey loads ?agent=true and shows the pill at the bottom center of the display", async () => {
   cursor = { x: 100, y: 100 };

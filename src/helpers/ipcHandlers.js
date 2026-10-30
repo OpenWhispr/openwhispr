@@ -1599,6 +1599,9 @@ class IPCHandlers {
 
     // The agent window's own channels; each checks that it is the sender.
     ipcMain.on("agent-window-ready", (event) => this.windowManager.agentWindow?.markReady(event));
+    ipcMain.on("agent-window-drag", (event, dragging) =>
+      this.windowManager.agentWindow?.setDragging(event, dragging)
+    );
     ipcMain.handle(
       "agent-window-set-layout",
       (event, request) => this.windowManager.agentWindow?.setLayout(event, request) ?? false

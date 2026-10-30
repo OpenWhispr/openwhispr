@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, GitFork, Minimize, Plus } from "../icons";
 import { cn } from "../lib/utils";
@@ -113,13 +113,49 @@ export function AgentModal({
   footer,
 }: AgentModalProps) {
   const { t } = useTranslation();
+  const drag = useRef<{ x: number; y: number; started: boolean } | null>(null);
+  const stopDragging = useCallback(() => {
+    if (drag.current?.started) window.electronAPI?.agentWindowSetDragging?.(false);
+    drag.current = null;
+  }, []);
+  useEffect(() => {
+    window.addEventListener("blur", stopDragging);
+    return () => {
+      stopDragging();
+      window.removeEventListener("blur", stopDragging);
+    };
+  }, [stopDragging]);
   return (
     <div className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
       <div
         data-glow={glow}
         className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
       />
-      <header className="relative grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-3">
+      <header
+        className="relative grid h-14 shrink-0 cursor-grab grid-cols-[1fr_auto_1fr] items-center px-3 select-none active:cursor-grabbing"
+        onPointerDown={(event) => {
+          const target = event.target as Element;
+          if (
+            event.button !== 0 ||
+            !event.currentTarget.contains(target) ||
+            target.closest("button")
+          )
+            return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          drag.current = { x: event.clientX, y: event.clientY, started: false };
+        }}
+        onPointerMove={(event) => {
+          const origin = drag.current;
+          if (!origin || origin.started) return;
+          if (event.buttons === 0) return stopDragging();
+          if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) < 3) return;
+          origin.started = true;
+          window.electronAPI?.agentWindowSetDragging?.(true);
+        }}
+        onPointerUp={stopDragging}
+        onLostPointerCapture={stopDragging}
+      >
         <div className="flex h-7.5 items-center gap-0.5 justify-self-start rounded-full border border-border bg-surface-1 px-1">
           <button
             type="button"

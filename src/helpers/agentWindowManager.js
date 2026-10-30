@@ -1,5 +1,6 @@
 const { BrowserWindow, Menu, screen } = require("electron");
 const debugLogger = require("./debugLogger");
+const DragManager = require("./dragManager");
 const { isFromWindow } = require("./ipcSender");
 const { createLinuxWindowInputRegion } = require("./linuxWindowInputRegion");
 const { plasmaWorkAreas } = require("./plasmaWorkAreas");
@@ -7,6 +8,7 @@ const { AGENT_WINDOW_CONFIG, WindowPositionUtil } = require("./windowConfig");
 const {
   AGENT_LAYOUT_SIZES,
   computeAgentAnchor,
+  clampAgentAnchor,
   computeAgentWindowBounds,
 } = require("./agentWindowPlacement");
 
@@ -39,6 +41,19 @@ class AgentWindowManager {
     this.wide = false;
     this.anchor = null;
     this.displayId = null;
+    this.savedAnchors = new Map();
+    this.dragManager = new DragManager({
+      constrainBounds: (bounds) => {
+        const display = this._windowDisplay();
+        this.anchor = clampAgentAnchor(
+          { centerX: bounds.x + bounds.width / 2, bottom: bounds.y + bounds.height },
+          display.workArea || display.bounds,
+          this._defaultAnchor(display).bottom
+        );
+        this.savedAnchors.set(display.id, this.anchor);
+        return this._bounds(display);
+      },
+    });
     this.voiceState = "idle";
     this.voiceAttempt = null;
     this.keyboardFocus = false;
@@ -132,6 +147,7 @@ class AgentWindowManager {
     const standalone = request.layout === "standalone";
     if (standalone && !Number.isFinite(request.contentHeight)) return false;
     const focus = request.focus === true;
+    if (request.layout !== this.layout) void this.dragManager.stopWindowDrag();
     // A card that only changed height must not take the keyboard back from
     // the app the user went to.
     const refocus = request.layout !== this.layout || focus !== this.keyboardFocus;
@@ -147,6 +163,15 @@ class AgentWindowManager {
     if (!isFromWindow(event, this.window)) return false;
     this._hide();
     return true;
+  }
+
+  setDragging(event, dragging) {
+    if (!isFromWindow(event, this.window)) return;
+    if (dragging === false) {
+      void this.dragManager.stopWindowDrag();
+    } else if (dragging === true && this.window.isVisible() && this.layout === "modal") {
+      void this.dragManager.startWindowDrag(this.window);
+    }
   }
 
   // False refuses a recording while dictation owns the microphone.
@@ -256,6 +281,7 @@ class AgentWindowManager {
 
   // The window is gone (crash, failed load): nothing it held may block dictation.
   _forget() {
+    void this.dragManager.stopWindowDrag();
     this.window = null;
     this.ready = false;
     this.pending = null;
@@ -296,6 +322,7 @@ class AgentWindowManager {
   _hide() {
     const win = this.window;
     if (!win) return;
+    void this.dragManager.stopWindowDrag();
     this.showGeneration += 1;
     // Hidden before the keyboard is released: hiding hands focus back by
     // itself, and a release first could raise another window (the dictation
@@ -310,14 +337,21 @@ class AgentWindowManager {
 
   _place(display) {
     this.displayId = display.id;
-    this.anchor = computeAgentAnchor({
+    const workArea = display.workArea || display.bounds;
+    const saved = this.savedAnchors.get(display.id);
+    const defaultAnchor = this._defaultAnchor(display);
+    this.anchor = saved ? clampAgentAnchor(saved, workArea, defaultAnchor.bottom) : defaultAnchor;
+    this._applyBounds();
+  }
+
+  _defaultAnchor(display) {
+    return computeAgentAnchor({
       workArea: display.workArea || display.bounds,
       dictationBounds: this._centerDockedDictationBounds(display),
       // Windows sends every click in the dictation window to it; elsewhere its
       // transparent area lets clicks through.
       wholeDictationWindowTakesClicks: this.platform === "win32",
     });
-    this._applyBounds();
   }
 
   // The dictation pill shares the bottom center only when docked there; the
@@ -353,14 +387,18 @@ class AgentWindowManager {
     const win = this.window;
     if (!win || !this.anchor) return;
     const display = this._windowDisplay();
-    const bounds = computeAgentWindowBounds({
+    const bounds = this._bounds(display);
+    if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds);
+  }
+
+  _bounds(display) {
+    return computeAgentWindowBounds({
       anchor: this.anchor,
       layout: this.layout,
       workArea: display.workArea || display.bounds,
       contentHeight: this.contentHeight,
       wide: this.wide,
     });
-    if (!sameBounds(win.getBounds(), bounds)) win.setBounds(bounds);
   }
 
   // Displays changed: re-anchor on the window's display.

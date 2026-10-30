@@ -1416,6 +1416,7 @@ declare global {
         wide?: boolean;
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
+      agentWindowSetDragging?: (dragging: boolean) => void;
       /** False refuses a recording while dictation is using the microphone. */
       agentWindowSetVoiceState?: (state: AgentVoiceState, attempt: string) => Promise<boolean>;
       openAgentWindow?: () => Promise<boolean>;

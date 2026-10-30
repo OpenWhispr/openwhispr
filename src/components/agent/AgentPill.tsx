@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, Maximize, Mic, Square, X, type IconComponent } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
-import { BrandMarkIcon } from "../dictation/BrandMarkIcon";
 import { PillWaveform } from "../dictation/PillWaveform";
 import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
 
@@ -33,7 +32,7 @@ interface AgentPillProps {
   className?: string;
 }
 
-/** The agent's pill: the logo and what it is doing, then its controls. */
+/** The agent's pill: what it is doing, then its controls. */
 export function AgentPill({
   controls,
   recording,
@@ -55,7 +54,6 @@ export function AgentPill({
         className
       )}
     >
-      <BrandMarkIcon size={16} className="shrink-0 text-primary" />
       {notice ? (
         <span className="ms-2.5 max-w-30 truncate text-xs text-foreground/80" title={notice}>
           {notice}
@@ -76,8 +74,7 @@ export function AgentPill({
         <PillWaveform
           getLevel={readLevel}
           active={recording}
-          bars={4}
-          className="ms-2 h-6 text-foreground"
+          className="h-6 shrink-0 text-foreground"
         />
       ) : null}
       {!controls.thinking && (

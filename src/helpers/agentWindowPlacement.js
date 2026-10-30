@@ -74,6 +74,32 @@ function computeAgentAnchor({
   return { centerX, bottom };
 }
 
+// Keep the dock in the lower 40%, with room for every layout to open upward
+// and a small inset from the sides, as in the assistant's placement spec.
+function clampAgentAnchor(
+  anchor,
+  workArea,
+  maxBottom = workArea.y + workArea.height - BOTTOM_MARGIN
+) {
+  const halfWidth = Math.min(AGENT_LAYOUT_SIZES.typing.width / 2, workArea.width * 0.44);
+  const sideInset = workArea.width * 0.06 + halfWidth;
+  const minBottom = Math.min(
+    maxBottom,
+    workArea.y +
+      Math.max(
+        workArea.height * 0.6 + AGENT_LAYOUT_SIZES.pill.height,
+        AGENT_LAYOUT_SIZES.modal.height
+      )
+  );
+  return {
+    centerX: Math.max(
+      workArea.x + sideInset,
+      Math.min(anchor.centerX, workArea.x + workArea.width - sideInset)
+    ),
+    bottom: Math.max(minBottom, Math.min(anchor.bottom, maxBottom)),
+  };
+}
+
 /**
  * The window's bounds for a layout, kept inside the work area: a modal too
  * tall for it shrinks. A standalone card brings its measured height; a wide
@@ -104,5 +130,6 @@ module.exports = {
   AGENT_LAYOUT_SIZES,
   WAITING_PILL_SIZE,
   computeAgentAnchor,
+  clampAgentAnchor,
   computeAgentWindowBounds,
 };
