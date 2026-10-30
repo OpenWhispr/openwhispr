@@ -264,6 +264,42 @@ test("a pulled space move takes the subfolder's directory out of its old parent'
   );
 });
 
+test("moving a parent out of a team keeps its subfolder's directory inside the parent's", async (t) => {
+  const ctx = setup(t);
+  if (!ctx) return;
+  const { db, basePath } = ctx;
+
+  const team = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES (?, 'team', ?, 1)"
+    )
+    .run("team-moved-out", "Growth");
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team.lastInsertRowid, "test-account");
+  const parent = (await handlers.get("db-create-folder")(null, "Client A", team.lastInsertRowid))
+    .folder;
+  const child = (
+    await handlers.get("db-create-folder")(null, "Q1", team.lastInsertRowid, parent.id)
+  ).folder;
+  const note = db.saveNote("Plan", "Body", "personal", null, null, child.id).note;
+  markdownMirror.writeNote(note, ["Client A", "Q1"]);
+  await settle();
+
+  const moved = await handlers.get("db-move-folder-to-space")(
+    null,
+    parent.id,
+    db.getPrivateSpaceId()
+  );
+  await settle();
+  assert.ok(moved.success);
+  assert.equal(db.getFolders().find((f) => f.id === child.id).parent_folder_id, parent.id);
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Client A", "Q1", `${note.id}-plan.md`)
+  );
+});
+
 test("a subfolder's directory survives while another space's folder shares its path", async (t) => {
   const ctx = setup(t);
   if (!ctx) return;

@@ -2704,9 +2704,6 @@ class IPCHandlers {
           setImmediate(() => {
             broadcastToWindows("folder-synced", result.folder);
             this._mirrorMoveFolder(previousMirrorFolder, id);
-            for (const child of result.unnestedFolders ?? []) {
-              this._mirrorMoveFolder([previousMirrorFolder, child.name], child.id);
-            }
           });
         }
       }

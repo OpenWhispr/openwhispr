@@ -4812,22 +4812,11 @@ class DatabaseManager {
       if (!space) return { success: false, error: "Space not found" };
       if (folder.space_id === spaceId) return { success: true, folder, notes: [] };
       const folderScope = this._accountScopeCondition("folders");
-      // D6: cloud-backed rows leaving a team must keep pushing their scope
-      // retraction even in the backup-off team-only pass (left_team).
-      const oldKind = this.db
-        .prepare("SELECT kind FROM spaces WHERE id = ?")
-        .get(folder.space_id)?.kind;
-      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       // Subfolders move with their parent; a subfolder moved on its own
-      // becomes a top-level folder in the target space. Leaving a team, they
-      // stay behind top-level instead: the server keeps a teammate's subfolder
-      // in the team, and desktop can't tell whose a subfolder is. They aren't
-      // pushed: the server un-nests them once the move lands, and after a
-      // denied move the next pull re-nests them.
+      // becomes a top-level folder in the target space.
       const children = this.getSubfolders(id);
-      const carried = leftTeam ? [] : children;
-      const folderIds = [id, ...carried.map((child) => child.id)];
-      const names = [folder.name, ...carried.map((child) => child.name)];
+      const folderIds = [id, ...children.map((child) => child.id)];
+      const names = [folder.name, ...children.map((child) => child.name)];
       const placeholders = (values) => values.map(() => "?").join(", ");
       const existing = this.db
         .prepare(
@@ -4837,16 +4826,15 @@ class DatabaseManager {
         )
         .get(...names, spaceId, ...folderScope.params);
       if (existing) return { success: false, error: "A folder with that name already exists" };
+      // D6: cloud-backed rows leaving a team must keep pushing their scope
+      // retraction even in the backup-off team-only pass (left_team).
+      const oldKind = this.db
+        .prepare("SELECT kind FROM spaces WHERE id = ?")
+        .get(folder.space_id)?.kind;
+      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       const nextAccountId = this._accountIdForSpace(spaceId);
       const inFolders = `IN (${placeholders(folderIds)})`;
       const notes = this.db.transaction(() => {
-        if (leftTeam) {
-          this.db
-            .prepare(
-              "UPDATE folders SET parent_folder_id = NULL WHERE parent_folder_id = ? AND deleted_at IS NULL"
-            )
-            .run(id);
-        }
         this.db
           .prepare(
             `UPDATE folders SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'),
@@ -4868,7 +4856,7 @@ class DatabaseManager {
           .all(...folderIds);
       })();
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
-      return { success: true, folder: updated, notes, unnestedFolders: leftTeam ? children : [] };
+      return { success: true, folder: updated, notes };
     } catch (error) {
       debugLogger.error("Error moving folder to space", { error: error.message }, "spaces");
       throw error;
@@ -8500,8 +8488,11 @@ class DatabaseManager {
           for (let n = 2; taken.get(name, privateSpaceId, id); n++) {
             name = `${folder.name} (${n})`;
           }
-          // Its subfolders stay in the team, top-level, as the server leaves
-          // them (and as ON DELETE SET NULL does when the folder is deleted).
+          // Its subfolders go top-level where they are (as ON DELETE SET NULL
+          // leaves them when the folder is deleted): in the team after a
+          // revocation, as the server leaves them, or in the private space
+          // after a denied move carried them there, where their own denied
+          // push forks them too.
           this.db
             .prepare(
               "UPDATE folders SET parent_folder_id = NULL WHERE parent_folder_id = ? AND deleted_at IS NULL"

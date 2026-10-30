@@ -2059,15 +2059,16 @@ test("moveFolderToSpace moves a parent with its subfolders; a subfolder alone go
 
   const sibling = db.createFolder("Q2", team.id, parent.id).folder;
   db.markFolderSynced(sibling.id, "cloud-q2");
+  const budget = db.saveNote("Budget", "body", "personal", null, null, sibling.id).note;
+  db.markNoteSynced(budget.id, "cloud-budget");
   const leaving = db.moveFolderToSpace(parent.id, db.getPrivateSpaceId());
   assert.ok(leaving.success);
-  assert.deepEqual(
-    leaving.unnestedFolders.map((f) => f.id),
-    [sibling.id]
-  );
-  const stayed = db.getFolders(team.id).find((f) => f.id === sibling.id);
-  assert.equal(stayed.parent_folder_id, null, "leaving a team, subfolders stay behind top-level");
-  assert.equal(stayed.sync_status, "synced", "the server un-nests them when the move lands");
+  assert.ok(leaving.notes.some((n) => n.id === budget.id));
+  const carried = db.getFolders(db.getPrivateSpaceId()).find((f) => f.id === sibling.id);
+  assert.equal(carried.parent_folder_id, parent.id, "leaving a team, subfolders stay nested");
+  assert.equal(carried.left_team, 1, "a carried subfolder owes its retraction too");
+  assert.equal(db.getNote(budget.id).space_id, db.getPrivateSpaceId());
+  assert.equal(db.getNote(budget.id).left_team, 1);
   assert.ok(taken);
 });
 
