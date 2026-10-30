@@ -28,12 +28,29 @@ const withReasoning =
     return fetch(input, init);
   };
 
+// Same pattern for GenieX (the Snapdragon NPU runtime): its thinking switch
+// (`enable_think`) is a top-level body field the AI SDK can't emit, and it
+// ignores llama.cpp's chat_template_kwargs dialect — a thinking model would
+// spend the reply budget in reasoning_content and chat would show nothing.
+const withEnableThink =
+  (value: unknown): typeof fetch =>
+  (input, init) => {
+    if (typeof init?.body === "string") {
+      try {
+        const body = JSON.parse(init.body);
+        body.enable_think = value;
+        init = { ...init, body: JSON.stringify(body) };
+      } catch {}
+    }
+    return fetch(input, init);
+  };
+
 export async function getAIModel(
   provider: string,
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean; reasoningEffort?: string }
+  opts?: { disableThinking?: boolean; reasoningEffort?: string; enableThink?: boolean }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -78,7 +95,13 @@ export async function getAIModel(
       }).chat(model);
     }
     case "local":
-      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
+      return createOpenAI({
+        apiKey: apiKey || "no-key",
+        baseURL,
+        // GenieX (NPU) models need enable_think on every request; the AI SDK
+        // can't emit it, so it is injected at the fetch boundary.
+        ...(opts?.enableThink ? { fetch: withEnableThink(false) } : {}),
+      }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }

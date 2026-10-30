@@ -1,6 +1,7 @@
 import {
   resolveInferenceProvider,
   getCloudModel,
+  getLocalModel,
   getOpenAiApiConfig,
   getProviderDisplayName,
   isEnterpriseProvider,
@@ -935,6 +936,10 @@ class ReasoningService extends BaseReasoningService {
       : await getAIModel(aiProvider, servedModelId, apiKey, baseURL, {
           disableThinking: openrouterDisableThinking,
           reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+          // GenieX (NPU) ignores the llama.cpp suppression dialects and has no
+          // server-side default on v0.7.0 — the SDK transport must send
+          // enable_think itself or thinking models answer with nothing.
+          enableThink: isLocalProvider && getLocalModel(model)?.runtime === "geniex",
         });
 
     if (abortController.signal.aborted) {
