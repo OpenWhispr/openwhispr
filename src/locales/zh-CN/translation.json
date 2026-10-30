@@ -7,6 +7,7 @@
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
       "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
+      "byKeyboardLayout": "按键盘布局",
       "chineseScriptLabel": "中文书写（听写）",
       "chineseScriptDescription": "检测到中文时，将听写的转录结果转换为简体或繁体。口语听起来一样；Whisper 只会输出一种字形。",
       "chineseScriptAsTranscribed": "保持转录原样",
@@ -5538,6 +5539,12 @@
       "bootstrapUnreadable": "OpenWhispr 无法读取引导文件。请让 IT 部门为您的账号开放读取权限。",
       "bootstrapMismatch": "引导文件与您的账号、此工作区或其配置的凭据不匹配。",
       "testLinkOtherWorkspace": "此测试链接对应的是其他工作区。请切换到该工作区，然后重新打开链接。"
+    }
+  },
+  "dictation": {
+    "layoutLanguage": {
+      "undetected": "无法检测键盘布局——已自动检测语言。",
+      "unsupported": "布局“{{layout}}”与受支持的语言不匹配——已自动检测语言。如果您经常使用该布局听写，请在设置中选择 Auto Detect。"
     }
   }
 }

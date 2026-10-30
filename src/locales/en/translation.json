@@ -7,6 +7,7 @@
       "uiDescription": "Choose the language used throughout OpenWhispr's interface",
       "transcriptionLabel": "Transcription language",
       "transcriptionDescription": "Choose the language you speak for more accurate transcription",
+      "byKeyboardLayout": "By keyboard layout",
       "chineseScriptLabel": "Chinese script (dictation)",
       "chineseScriptDescription": "When Chinese is detected, convert dictated transcripts to Simplified or Traditional characters. Spoken Chinese is the same either way; Whisper only returns one script.",
       "chineseScriptAsTranscribed": "Keep as transcribed",
@@ -5538,6 +5539,12 @@
       "bootstrapUnreadable": "OpenWhispr can't read the bootstrap file. Ask IT to make it readable by your account.",
       "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
       "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
+    }
+  },
+  "dictation": {
+    "layoutLanguage": {
+      "undetected": "Couldn't detect the keyboard layout — the language was detected automatically.",
+      "unsupported": "Layout “{{layout}}” doesn't match a supported language — the language was detected automatically. If you often dictate in it, choose Auto Detect in Settings."
     }
   }
 }

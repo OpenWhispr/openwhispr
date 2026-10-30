@@ -5850,7 +5850,16 @@ class IPCHandlers {
       return this.environmentManager.saveAllKeysToEnvFile();
     });
 
+    // Resolved at dictation start; the capture itself is taken in windowManager on the hotkey press.
+    ipcMain.handle("get-dictation-layout-language", async () => {
+      const probe = this.windowManager?.getLayoutProbe?.();
+      return probe ? probe.getLastCapture() : { ok: false, reason: "unsupported-platform" };
+    });
+
     ipcMain.handle("sync-startup-preferences", async (event, prefs) => {
+      // Whether hotkey presses should capture the foreground window's keyboard layout.
+      this.windowManager?.setLayoutCaptureEnabled?.(prefs.keyboardLayoutLanguage === true);
+
       const setVars = {};
       const clearVars = [];
 
@@ -7502,7 +7511,8 @@ class IPCHandlers {
         let result;
         const preferredLanguage = settings?.preferredLanguage;
         const language =
-          preferredLanguage && preferredLanguage !== "auto"
+          // "keyboard" is KEYBOARD_LAYOUT_LANGUAGE (src/utils/keyboardLayoutLanguage.ts): auto outside live dictation.
+          preferredLanguage && preferredLanguage !== "auto" && preferredLanguage !== "keyboard"
             ? preferredLanguage.split("-")[0]
             : undefined;
         const { resolveTranscriptionRoute } = await import("./transcriptionRoute.ts");

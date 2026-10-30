@@ -7,6 +7,7 @@
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
       "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "byKeyboardLayout": "Según la distribución del teclado",
       "chineseScriptLabel": "Escritura china (dictado)",
       "chineseScriptDescription": "Cuando se detecte chino, convierte las transcripciones dictadas a caracteres simplificados o tradicionales. El chino hablado suena igual; Whisper solo devuelve una escritura.",
       "chineseScriptAsTranscribed": "Mantener como se transcribió",
@@ -5556,6 +5557,12 @@
       "bootstrapUnreadable": "OpenWhispr no puede leer el archivo de arranque. Pide a TI que tu cuenta pueda leerlo.",
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
       "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
+    }
+  },
+  "dictation": {
+    "layoutLanguage": {
+      "undetected": "No se pudo detectar la distribución del teclado: el idioma se detectó automáticamente.",
+      "unsupported": "La distribución «{{layout}}» no corresponde a un idioma compatible: el idioma se detectó automáticamente. Si dictas a menudo en ella, elige Auto Detect en Ajustes."
     }
   }
 }

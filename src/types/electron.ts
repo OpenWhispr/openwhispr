@@ -78,6 +78,10 @@ export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcr
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
+// Result of asking the Windows key listener for the foreground window's keyboard layout.
+export type LayoutProbeResult =
+  { ok: true; klid: string; iso: string; layoutName: string } | { ok: false; reason: string };
+
 /** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
 export interface LocalServerPrefs {
   useCleanupModel: boolean;
@@ -2111,10 +2115,12 @@ declare global {
           localTranscriptionProvider: LocalTranscriptionProvider;
           model?: string;
           language?: string;
+          keyboardLayoutLanguage?: boolean;
           keepLocalModelLoaded: boolean;
           policySettled: boolean;
         }
       ) => Promise<void>;
+      getDictationLayoutLanguage: () => Promise<LayoutProbeResult>;
 
       // Clipboard operations
       checkAccessibilityPermission: (silent?: boolean) => Promise<boolean>;

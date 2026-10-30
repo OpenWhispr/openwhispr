@@ -7,6 +7,7 @@
       "uiDescription": "Wählen Sie die Sprache für die OpenWhispr-Oberfläche",
       "transcriptionLabel": "Transkriptionssprache",
       "transcriptionDescription": "Wählen Sie die Sprache, die Sie sprechen, für genauere Transkription",
+      "byKeyboardLayout": "Nach Tastaturlayout",
       "chineseScriptLabel": "Chinesische Schrift (Diktat)",
       "chineseScriptDescription": "Wenn Chinesisch erkannt wird, diktierte Transkripte in vereinfachte oder traditionelle Zeichen umwandeln. Gesprochenes Chinesisch klingt gleich; Whisper liefert nur eine Schrift.",
       "chineseScriptAsTranscribed": "Wie transkribiert belassen",
@@ -5538,6 +5539,12 @@
       "bootstrapUnreadable": "OpenWhispr kann die Bootstrap-Datei nicht lesen. Bitten Sie die IT, sie für Ihr Konto lesbar zu machen.",
       "bootstrapMismatch": "Die Bootstrap-Datei passt nicht zu Ihrem Konto, diesem Workspace oder seinen konfigurierten Zugangsdaten.",
       "testLinkOtherWorkspace": "Dieser Testlink gilt für einen anderen Workspace. Wechseln Sie zu diesem Workspace und öffnen Sie den Link erneut."
+    }
+  },
+  "dictation": {
+    "layoutLanguage": {
+      "undetected": "Das Tastaturlayout konnte nicht erkannt werden – die Sprache wurde automatisch erkannt.",
+      "unsupported": "Das Layout „{{layout}}“ entspricht keiner unterstützten Sprache – die Sprache wurde automatisch erkannt. Wenn Sie häufig darin diktieren, wählen Sie in den Einstellungen „Auto Detect“."
     }
   }
 }

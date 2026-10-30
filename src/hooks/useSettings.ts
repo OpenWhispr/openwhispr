@@ -23,6 +23,7 @@ import {
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "./usePolicy";
+import { isKeyboardLayoutLanguage } from "../utils/keyboardLayoutLanguage";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -256,6 +257,7 @@ function useSettingsInternal() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.syncStartupPreferences) return;
 
+    const layoutLanguage = isKeyboardLayoutLanguage(preferredLanguage);
     const model =
       localTranscriptionProvider === "nvidia"
         ? parakeetModel
@@ -267,7 +269,9 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        language: preferredLanguage || undefined,
+        // Prewarm has no dictation to read a layout from, so keyboard mode prewarms as auto.
+        language: layoutLanguage ? "auto" : preferredLanguage || undefined,
+        keyboardLayoutLanguage: layoutLanguage,
         ...localServerPrefs,
         keepLocalModelLoaded,
         policySettled,

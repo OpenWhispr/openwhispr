@@ -1000,6 +1000,16 @@ export const useAudioRecording = (toast, options = {}) => {
           variant: "destructive",
         });
       },
+      onLayoutLanguageNotice: (notice) => {
+        // "By keyboard layout" fell back to auto-detection; the dictation itself went through.
+        toast({
+          title:
+            notice.kind === "unsupported"
+              ? t("dictation.layoutLanguage.unsupported", { layout: notice.layoutName })
+              : t("dictation.layoutLanguage.undetected"),
+          variant: "default",
+        });
+      },
     });
 
     // Keep overlay content protection in sync with the screen-context setting

@@ -7,7 +7,12 @@ import logger from "../utils/logger";
 import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
-import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import {
+  getBaseLanguageCode,
+  getLanguageLabel,
+  resolveLayoutLanguage,
+} from "../utils/languageSupport";
+import { isKeyboardLayoutLanguage } from "../utils/keyboardLayoutLanguage";
 import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
@@ -43,7 +48,7 @@ import {
   resolveAnalyticsMode,
 } from "./analytics";
 import {
-  getSettings,
+  getSettings as getStoreSettings,
   useSettingsStore,
   getEffectiveCleanupModel,
   isCloudCleanupMode,
@@ -189,6 +194,20 @@ import {
   hasOrukeetExperiment,
   ORUKEET_EXPERIMENT_CONFIG_TTL_MS,
 } from "./dictationStreamingRouting";
+
+// Language of the dictation in flight when Transcription Language is "By keyboard
+// layout"; fixed once at record start and kept until the next start, so toggle-stop
+// and slow transcriptions still read the layout the dictation began with.
+let dictationLayoutLanguage = null;
+
+// Every settings read in this file goes through here, so the "keyboard" setting
+// value resolves to this dictation's layout language (or auto outside a dictation)
+// instead of reaching an STT request, prompt or wake-word check as a language code.
+function getSettings() {
+  const settings = getStoreSettings();
+  if (!isKeyboardLayoutLanguage(settings.preferredLanguage)) return settings;
+  return { ...settings, preferredLanguage: dictationLayoutLanguage ?? "auto" };
+}
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 // A server-side rollout change (a provider switched on or rolled back) must
@@ -918,7 +937,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Cleanup runs before the translate step, so it still works in the STT language.
+  // "By keyboard layout" only hints STT: a cleanup prompt told the language is "ru"
+  // must write its whole output in Russian, so it translates English or Ukrainian speech.
   getCleanupLanguage(settings) {
+    if (
+      !this.translationRequested &&
+      isKeyboardLayoutLanguage(getStoreSettings().preferredLanguage)
+    ) {
+      return "auto";
+    }
     return resolveCleanupLanguage(this.getEffectiveSttLanguage(settings));
   }
 
@@ -982,6 +1009,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     onPartialTranscript,
     onStreamingCommit,
     onTranslationFallback,
+    // Optional, like onNoAudio: surfaces why "By keyboard layout" used auto-detect.
+    onLayoutLanguageNotice = undefined,
   }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
@@ -990,6 +1019,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onPartialTranscript = onPartialTranscript;
     this.onStreamingCommit = onStreamingCommit;
     this.onTranslationFallback = onTranslationFallback;
+    this.onLayoutLanguageNotice = onLayoutLanguageNotice;
+  }
+
+  // Fixes the language of the dictation that is starting. Taken from the capture
+  // windowManager made on the hotkey press (before the overlay took focus) and
+  // read exactly once; a failure never blocks the recording, it only means auto.
+  async _resolveDictationLayoutLanguage() {
+    dictationLayoutLanguage = null;
+    if (!isKeyboardLayoutLanguage(getStoreSettings().preferredLanguage)) return;
+    // Translation transcribes in its own source language; the layout is irrelevant.
+    if (this.translationRequested) return;
+
+    let probe;
+    try {
+      probe = await window.electronAPI?.getDictationLayoutLanguage?.();
+    } catch (error) {
+      logger.warn("Keyboard layout lookup failed", { error: error.message }, "audio");
+    }
+    const { language, notice } = resolveLayoutLanguage(
+      probe ?? { ok: false, reason: "unavailable" }
+    );
+    dictationLayoutLanguage = language;
+    logger.debug("Dictation language from keyboard layout", { language, probe }, "audio");
+    if (notice) {
+      logger.debug(
+        "Layout language notice",
+        { notice, hasHandler: typeof this.onLayoutLanguageNotice === "function" },
+        "audio"
+      );
+      this.onLayoutLanguageNotice?.(notice);
+    }
   }
 
   // Fail-open: translation degraded/failed but raw text is still pasted. Surface why.
@@ -1579,7 +1639,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return stream;
   }
 
-  async startRecording(forceDefaultMic = false) {
+  // keepLayoutLanguage: an internal retry/fallback of a start already in progress keeps
+  // the language fixed for it instead of reading (and announcing) the layout again.
+  async startRecording(forceDefaultMic = false, { keepLayoutLanguage = false } = {}) {
     let prepared = null;
     let preparedAdopted = false;
     let freshTap = null;
@@ -1598,6 +1660,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       ) {
         return false;
       }
+
+      if (!keepLayoutLanguage) await this._resolveDictationLayoutLanguage();
 
       const activationGeneration = this._activationCaptureGeneration ?? 0;
       if (
@@ -1772,7 +1836,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
         logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
         this.cachedMicDeviceId = null;
-        return this.startRecording(true);
+        return this.startRecording(true, { keepLayoutLanguage: true });
       }
 
       let errorTitle = "Recording Error";
@@ -5242,7 +5306,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return route === "language_unsupported" ? route : undefined;
   }
 
-  async startStreamingRecording(forceDefaultMic = false) {
+  async startStreamingRecording(forceDefaultMic = false, { keepLayoutLanguage = false } = {}) {
     let acquiredStream = null;
     let usedPreparedCapture = false;
     let sessionId = null;
@@ -5265,6 +5329,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.stopRequestedDuringStreamingStart = false;
+      if (!keepLayoutLanguage) await this._resolveDictationLayoutLanguage();
       const activationGeneration = this._activationCaptureGeneration ?? 0;
       if (
         !(await this._beginActivationCapture()) ||
@@ -5539,7 +5604,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         await this.cleanupStreaming();
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
         logger.debug("Streaming unavailable, falling back to regular recording", {}, "streaming");
-        return this.startRecording();
+        return this.startRecording(false, { keepLayoutLanguage: true });
       }
 
       if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
@@ -5598,7 +5663,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.isRecording = false;
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-        return this.startStreamingRecording(true);
+        return this.startStreamingRecording(true, { keepLayoutLanguage: true });
       }
 
       logger.error(

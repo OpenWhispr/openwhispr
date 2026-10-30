@@ -100,6 +100,8 @@ import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
+import languageRegistry from "../config/languageRegistry.json";
+import { KEYBOARD_LAYOUT_LANGUAGE } from "../utils/keyboardLayoutLanguage";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
@@ -1557,6 +1559,25 @@ export default function SettingsPage({
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  // "By keyboard layout" reads the foreground window's layout, which only the
+  // Windows key listener can do; it is offered here and nowhere else a language is picked.
+  const transcriptionLanguageOptions =
+    platform === "win32"
+      ? languageRegistry.languages.flatMap(({ code, label, flag }) => {
+          const option = { value: code, label, flag };
+          return code === "auto"
+            ? [
+                option,
+                {
+                  value: KEYBOARD_LAYOUT_LANGUAGE,
+                  label: t("settings.language.byKeyboardLayout"),
+                  flag: "⌨️",
+                },
+              ]
+            : [option];
+        })
+      : undefined;
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
@@ -3304,6 +3325,7 @@ export default function SettingsPage({
                   >
                     <LanguageSelector
                       value={preferredLanguage}
+                      options={transcriptionLanguageOptions}
                       onChange={(value) =>
                         updateTranscriptionSettings({ preferredLanguage: value })
                       }

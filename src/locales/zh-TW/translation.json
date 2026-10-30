@@ -7,6 +7,7 @@
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
       "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
+      "byKeyboardLayout": "依鍵盤配置",
       "chineseScriptLabel": "中文書寫（語音輸入）",
       "chineseScriptDescription": "偵測到中文時，將語音輸入的轉錄結果轉換為簡體或繁體。口語聽起來一樣；Whisper 只會輸出一種字形。",
       "chineseScriptAsTranscribed": "保持轉錄原樣",
@@ -5538,6 +5539,12 @@
       "bootstrapUnreadable": "OpenWhispr 無法讀取引導檔案。請 IT 部門讓您的帳號可以讀取。",
       "bootstrapMismatch": "引導檔案與您的帳號、此工作區或其設定的憑證不符。",
       "testLinkOtherWorkspace": "此測試連結對應的是其他工作區。請切換到該工作區，然後重新開啟連結。"
+    }
+  },
+  "dictation": {
+    "layoutLanguage": {
+      "undetected": "無法偵測鍵盤配置——已自動偵測語言。",
+      "unsupported": "配置「{{layout}}」與支援的語言不符——已自動偵測語言。若您經常使用該配置聽寫，請在設定中選擇 Auto Detect。"
     }
   }
 }
