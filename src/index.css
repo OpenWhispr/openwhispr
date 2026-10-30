@@ -1124,16 +1124,6 @@ a:hover {
   filter: invert(1);
 }
 
-/* Toast — opaque dark HUD surface, same in light & dark mode */
-.toast-surface {
-  background: oklch(0.15 0.006 260);
-  border: 1px solid oklch(0.25 0.006 260);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.04),
-    0 8px 24px -4px oklch(0 0 0 / 0.5),
-    0 2px 8px -2px oklch(0 0 0 / 0.3);
-}
-
 /* Enter from the physical outer edge of the direction-aware toast stack. */
 .toast-enter {
   --toast-enter-x: 1rem;
@@ -1159,15 +1149,6 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
   .toast-enter {
     animation: none;
-  }
-}
-
-@keyframes toast-progress {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
   }
 }
 
