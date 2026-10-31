@@ -1,0 +1,127 @@
+{
+  "$description": "Colors collection from the OpenWhispr UI Kit Figma library (the source of truth; the product files consume it as a library). Values are the variable's Light and Dark mode values; {name} is an alias to another token. Regenerate src/styles/theme-tokens.css with `node scripts/generate-theme-tokens.js` after editing.",
+  "source": {
+    "fileKey": "Xka1lcxnlbvq9ne8k0gZd0",
+    "fileName": "OpenWhispr UI Kit",
+    "collectionId": "VariableCollectionId:73:2",
+    "readAt": "2026-10-14"
+  },
+  "tokens": {
+    "accent/solid": {
+      "light": "#6c50e9",
+      "dark": "#6c50e9"
+    },
+    "accent/text": {
+      "light": "#5236c9",
+      "dark": "#b4a8ff"
+    },
+    "amber/border": {
+      "light": "#fde68a",
+      "dark": "#60390b"
+    },
+    "amber/solid": {
+      "light": "#d97706",
+      "dark": "#d97706"
+    },
+    "amber/surface": {
+      "light": "#fffbeb",
+      "dark": "#271c0e"
+    },
+    "amber/text": {
+      "light": "#92400e",
+      "dark": "#fbbf24"
+    },
+    "border/default": {
+      "light": "#e3e3e3",
+      "dark": "#303030"
+    },
+    "border/focus": {
+      "light": "{brand/solid}",
+      "dark": "{brand/solid}"
+    },
+    "border/hover": {
+      "light": "#d4d4d4",
+      "dark": "#3d3d3d"
+    },
+    "brand/border": {
+      "light": "#dae5fd",
+      "dark": "#233968"
+    },
+    "brand/solid": {
+      "light": "#4577e9",
+      "dark": "#4577e9"
+    },
+    "brand/surface": {
+      "light": "#f2f6ff",
+      "dark": "#151c2a"
+    },
+    "brand/text": {
+      "light": "#2e58b1",
+      "dark": "#9cbeff"
+    },
+    "green/border": {
+      "light": "#d5ecd9",
+      "dark": "#0e4721"
+    },
+    "green/solid": {
+      "light": "#049041",
+      "dark": "#049041"
+    },
+    "green/surface": {
+      "light": "#f0f9f2",
+      "dark": "#122015"
+    },
+    "green/text": {
+      "light": "#007132",
+      "dark": "#89d298"
+    },
+    "red/border": {
+      "light": "#fcddd9",
+      "dark": "#612623"
+    },
+    "red/solid": {
+      "light": "#de3b3d",
+      "dark": "#de3b3d"
+    },
+    "red/surface": {
+      "light": "#fff3f2",
+      "dark": "#281715"
+    },
+    "red/text": {
+      "light": "#a12f2f",
+      "dark": "#fda19a"
+    },
+    "state/hover": {
+      "light": "#0000000d",
+      "dark": "#ffffff0f"
+    },
+    "surface/primary": {
+      "light": "#ffffff",
+      "dark": "#0f0f0f"
+    },
+    "surface/secondary": {
+      "light": "#f7f7f7",
+      "dark": "#1a1a1a"
+    },
+    "surface/tertiary": {
+      "light": "#e6e6e6",
+      "dark": "#262626"
+    },
+    "text/on-solid": {
+      "light": "#ffffff",
+      "dark": "#ffffff"
+    },
+    "text/primary": {
+      "light": "#000000",
+      "dark": "#ffffff"
+    },
+    "text/secondary": {
+      "light": "#656565",
+      "dark": "#a3a3a3"
+    },
+    "text/tertiary": {
+      "light": "#969393",
+      "dark": "#868686"
+    }
+  }
+}
