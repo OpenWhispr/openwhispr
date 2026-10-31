@@ -148,6 +148,8 @@ export async function downloadAndroidModel(
         );
         const response = await job.download.downloadAsync().catch((error: unknown) => {
           if (job.cancelled) throw new Error(i18n.t('downloadCancelled'));
+          if (error instanceof Error && /\bENOSPC\b|no space left on device/i.test(error.message))
+            throw new Error(i18n.t('downloadStorage'));
           if (
             error instanceof Error &&
             /connection abort|connection reset|failed to connect|unable to resolve host|network is unreachable|network request failed|sockettimeout|timed out/i.test(

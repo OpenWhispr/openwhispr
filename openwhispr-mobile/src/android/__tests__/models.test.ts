@@ -227,48 +227,90 @@ it('localizes an interrupted model download in Arabic', async () => {
   );
 });
 
-it('keeps explicit cancellation separate from a resulting connection abort', async () => {
-  let rejectTransfer!: (error: Error) => void;
-  const transfer = new Promise<never>((_, reject) => {
-    rejectTransfer = reject;
-  });
-  let started!: () => void;
-  const downloadStarted = new Promise<void>((resolve) => {
-    started = resolve;
-  });
+it.each(['Software caused connection abort', 'write failed: ENOSPC (No space left on device)'])(
+  'keeps explicit cancellation separate from %s',
+  async (message) => {
+    let rejectTransfer!: (error: Error) => void;
+    const transfer = new Promise<never>((_, reject) => {
+      rejectTransfer = reject;
+    });
+    let started!: () => void;
+    const downloadStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: false,
+      isDirectory: false,
+      uri: modelPath(id),
+    });
+    jest.mocked(FileSystem.createDownloadResumable).mockReturnValueOnce({
+      downloadAsync: jest.fn(() => {
+        started();
+        return transfer;
+      }),
+      pauseAsync: jest.fn(async () => undefined),
+    } as never);
+
+    const downloading = downloadAndroidModel(id);
+    const outcome = downloading.catch((error: Error) => error);
+    await downloadStarted;
+    await cancelAndroidDownload(id);
+    rejectTransfer(new Error(message));
+    expect(await outcome).toEqual(expect.objectContaining({ message: 'Download cancelled.' }));
+    expect(useModelDownloads.getState().progress[id]).toBeUndefined();
+    expect(FileSystem.moveAsync).not.toHaveBeenCalled();
+  },
+);
+
+it.each([
+  [
+    'en',
+    'write failed: ENOSPC (No space left on device)',
+    'Free some storage before downloading this model.',
+  ],
+  [
+    'ar',
+    'write failed: ENOSPC (No space left on device)',
+    'أفرغ بعض مساحة التخزين قبل تنزيل هذا النموذج.',
+  ],
+  ['en', 'No space left on device', 'Free some storage before downloading this model.'],
+])(
+  'explains exhausted storage in %s and permits a clean retry',
+  async (language, message, expected) => {
+    await i18n.changeLanguage(language);
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: false,
+      isDirectory: false,
+      uri: modelPath(id),
+    });
+    jest.mocked(FileSystem.createDownloadResumable).mockReturnValueOnce({
+      downloadAsync: jest.fn().mockRejectedValue(new Error(message)),
+    } as never);
+    await expect(downloadAndroidModel(id)).rejects.toThrow(expected);
+    expect(useModelDownloads.getState().progress[id]).toBeUndefined();
+    expect(FileSystem.moveAsync).not.toHaveBeenCalled();
+    expect(FileSystem.deleteAsync).toHaveBeenCalledWith(`${modelPath(id)}.part`, {
+      idempotent: true,
+    });
+    jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
+      exists: false,
+      isDirectory: false,
+      uri: modelPath(id),
+    });
+    await expect(downloadAndroidModel(id)).resolves.toBeUndefined();
+    await expect(modelReady(id)).resolves.toBe(true);
+  },
+);
+
+it('preserves an unrelated filesystem error rather than claiming storage is exhausted', async () => {
+  const error = new Error('Permission denied');
   jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
     exists: false,
     isDirectory: false,
     uri: modelPath(id),
   });
   jest.mocked(FileSystem.createDownloadResumable).mockReturnValueOnce({
-    downloadAsync: jest.fn(() => {
-      started();
-      return transfer;
-    }),
-    pauseAsync: jest.fn(async () => undefined),
+    downloadAsync: jest.fn().mockRejectedValue(error),
   } as never);
-
-  const downloading = downloadAndroidModel(id);
-  const outcome = downloading.catch((error: Error) => error);
-  await downloadStarted;
-  await cancelAndroidDownload(id);
-  rejectTransfer(new Error('Software caused connection abort'));
-  expect(await outcome).toEqual(expect.objectContaining({ message: 'Download cancelled.' }));
-  expect(useModelDownloads.getState().progress[id]).toBeUndefined();
-  expect(FileSystem.moveAsync).not.toHaveBeenCalled();
-});
-
-it('does not mislabel a local storage failure as a connection interruption', async () => {
-  const storageError = new Error('ENOSPC: No space left on device');
-  jest.mocked(FileSystem.getInfoAsync).mockResolvedValueOnce({
-    exists: false,
-    isDirectory: false,
-    uri: modelPath(id),
-  });
-  jest.mocked(FileSystem.createDownloadResumable).mockReturnValueOnce({
-    downloadAsync: jest.fn().mockRejectedValue(storageError),
-  } as never);
-  await expect(downloadAndroidModel(id)).rejects.toBe(storageError);
-  expect(useModelDownloads.getState().progress[id]).toBeUndefined();
+  await expect(downloadAndroidModel(id)).rejects.toBe(error);
 });
