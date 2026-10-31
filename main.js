@@ -317,6 +317,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
+const { prewarmLocalCleanup } = require("./src/helpers/localCleanupPrewarm");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
 const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
@@ -1542,6 +1543,17 @@ async function startApp() {
       });
     });
   }
+
+  // The idle timeout frees the cleanup model between dictations; reload it as
+  // each dictation starts so the load overlaps speech, not the paste.
+  windowManager.onDictationStart = () => {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    prewarmLocalCleanup(modelManager).catch((err) => {
+      debugLogger.debug("llama-server dictation pre-warm error (non-fatal)", {
+        error: err.message,
+      });
+    });
+  };
 
   // Auto-download diarization models if binary is available
   if (

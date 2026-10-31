@@ -1094,3 +1094,17 @@ test("a queued or undelivered navigation keeps its note session pending", async 
   assert.equal(manager.isMeetingNoteNavigationPending("other"), false);
   manager._meetingNavigationOperation = null;
 });
+
+test("onDictationStart fires once per recording", () => {
+  const manager = createNormalWindowManager();
+  let starts = 0;
+  manager.onDictationStart = () => starts++;
+
+  manager.setDictationLifecycleState("preparing");
+  manager.setDictationLifecycleState("recording");
+  manager.setDictationLifecycleState("processing");
+  manager.setDictationLifecycleState("idle");
+  manager.setDictationLifecycleState("preparing");
+
+  assert.equal(starts, 2);
+});

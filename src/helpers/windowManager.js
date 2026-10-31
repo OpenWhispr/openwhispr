@@ -84,6 +84,8 @@ class WindowManager {
     this.onOnboardingDemoTeardown = null;
     // Set by main.js so the tray's listen item rebuilds with dictation state.
     this.onDictationStateChanged = null;
+    // Set by main.js: called as a dictation leaves idle, to pre-warm its models.
+    this.onDictationStart = null;
     // Set by IPCHandlers: the org-policy refusal of meeting recording, or null.
     this.getMeetingRecordingRefusal = () => null;
     // Set by IPCHandlers: the same refusal, fetching the policy if it hasn't loaded.
@@ -1044,6 +1046,7 @@ class WindowManager {
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
     if (nextState === this._dictationLifecycleState) return true;
 
+    if (this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE) this.onDictationStart?.();
     this._dictationLifecycleState = nextState;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
