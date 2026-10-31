@@ -1,6 +1,6 @@
 /**
  * Service-level tests for the leg-swap transport: reconnect keeps the mic alive,
- * rotation hard-cuts seamlessly, and a terminal give-up preserves the transcript.
+ * rotation drains retiring legs, and a terminal give-up preserves the transcript.
  * The WebSocket is injected (a controllable fake); the native mic module, the API
  * client, and expo-network are mocked; timers are faked so the backoff budget and
  * rotation clock elapse deterministically.
@@ -373,7 +373,11 @@ describe('startRealtimeMeetingWs — rotation', () => {
 
     leg2.open();
     await flushMicro();
+    expect(leg1.closed).toBe(false);
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
     expect(leg1.didCommit()).toBe(true);
+    leg1.emit({ type: 'error', error: { code: 'input_audio_buffer_commit_empty' } });
+    await flushMicro();
     expect(leg1.closed).toBe(true);
 
     // Same raw id "a" recycled by the fresh leg must not overwrite leg one.
@@ -402,7 +406,10 @@ describe('startRealtimeMeetingWs — rotation', () => {
     leg2.open();
     await flushMicro();
 
-    // The still-live old leg is retired (committed + closed) — no leaked socket.
+    // The retiring leg closes only after the ordered final commit completes.
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'error', error: { code: 'input_audio_buffer_commit_empty' } });
+    await flushMicro();
     expect(leg1.didCommit()).toBe(true);
     expect(leg1.closed).toBe(true);
     expect(callbacks.onReconnected).toHaveBeenCalledTimes(1);
@@ -463,5 +470,149 @@ describe('startRealtimeMeetingWs — bounded outage buffer', () => {
     const bytes = leg2.appendedBytes();
     expect(bytes).toBeGreaterThan(0);
     expect(bytes).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe('meeting final transcript drain', () => {
+  it('finishes a healthy rotation only after both legs drain independently', async () => {
+    const { session, leg1 } = await boot();
+    leg1.emit({ type: 'input_audio_buffer.speech_started', item_id: 'old', audio_start_ms: 10 });
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    expect(leg1.closed).toBe(false);
+
+    const done = jest.fn();
+    const finishing = session.finish!().then(done);
+    await flushMicro();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'old' });
+    leg1.emit(completed('old', 'Before rotation'));
+    await flushMicro();
+    expect(leg1.closed).toBe(true);
+    expect(done).not.toHaveBeenCalled();
+    expect(leg2.didCommit()).toBe(false);
+
+    leg2.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg2.emit({ type: 'input_audio_buffer.committed', item_id: 'new' });
+    await flushMicro();
+    expect(done).not.toHaveBeenCalled();
+    leg2.emit(completed('new', 'After rotation'));
+    await finishing;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Before rotation',
+      'After rotation',
+    ]);
+  });
+
+  it('orders overlapping leg results by recording order even without VAD timestamps', async () => {
+    const onUtterances = jest.fn();
+    const { session, leg1 } = await boot({ onUtterances });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'first' });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'second' });
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    leg2.emit(completed('new', 'New leg'));
+    leg1.emit(completed('second', 'Old leg second'));
+    leg1.emit(completed('first', 'Old leg first'));
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Old leg first',
+      'Old leg second',
+      'New leg',
+    ]);
+    expect(onUtterances).toHaveBeenLastCalledWith(session.utterances());
+    session.stop();
+    await flushMicro();
+    expect(leg1.closed).toBe(true);
+    expect(leg2.closed).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the active final transcript when the retiring leg times out', async () => {
+    const { session, leg1 } = await boot();
+    leg1.emit(completed('kept', 'Captured before rotation'));
+    await advanceToRotation();
+    const leg2 = lastLeg();
+    leg2.open();
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(15001);
+    expect(leg1.closed).toBe(true);
+    const finishing = session.finish!();
+    const check = expect(finishing).rejects.toThrow(/incomplete|interrupted/i);
+    await flushMicro();
+    expect(leg2.closed).toBe(false);
+    leg2.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg2.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    leg2.emit(completed('last', 'Captured after rotation'));
+    await check;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Captured before rotation',
+      'Captured after rotation',
+    ]);
+  });
+
+  it('waits past an earlier VAD commit for the final explicit commit and transcript', async () => {
+    const { session, leg1 } = await boot();
+    const done = jest.fn();
+    const finishing = session.finish!().then(done);
+    await flushMicro();
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'earlier' });
+    leg1.emit(completed('earlier', 'Earlier sentence'));
+    expect(done).not.toHaveBeenCalled();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    expect(leg1.didCommit()).toBe(true);
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    await flushMicro();
+    expect(done).not.toHaveBeenCalled();
+    leg1.emit(completed('last', 'Final sentence'));
+    await finishing;
+    expect(session.utterances().map((part) => part.text)).toEqual([
+      'Earlier sentence',
+      'Final sentence',
+    ]);
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('rejects failed final transcription instead of completing with missing speech', async () => {
+    const { session, leg1 } = await boot();
+    const finishing = session.finish!();
+    const check = expect(finishing).rejects.toThrow('could not be transcribed');
+    await flushMicro();
+    leg1.emit({ type: 'transcription_session.updated', session: { turn_detection: null } });
+    leg1.emit({ type: 'input_audio_buffer.committed', item_id: 'last' });
+    leg1.emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'last' });
+    await check;
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('shares one finish promise and reports a timeout without promising a saved file', async () => {
+    const { session, leg1 } = await boot();
+    const first = session.finish!();
+    expect(session.finish!()).toBe(first);
+    const check = expect(first).rejects.toThrow('Final transcript timed out.');
+    await jest.advanceTimersByTimeAsync(15001);
+    await check;
+    expect(leg1.closed).toBe(true);
+  });
+
+  it('never starts the microphone after cancellation during token fetch', async () => {
+    let resolve!: (value: unknown) => void;
+    (api.post as jest.Mock).mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const controller = new AbortController();
+    const pending = startRealtimeMeetingWs({ signal: controller.signal }, {}, { wsFactory });
+    const check = expect(pending).rejects.toThrow('cancelled');
+    controller.abort();
+    resolve({ clientSecret: 'late' });
+    await check;
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
   });
 });

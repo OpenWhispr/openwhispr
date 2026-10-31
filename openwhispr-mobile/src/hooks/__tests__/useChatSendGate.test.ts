@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 
 type MockConfig = { inference?: { noteChat?: { mode?: string } }; noteChatEnabled?: boolean };
@@ -6,13 +7,24 @@ type MockUser = { id: string; isAnonymous: boolean } | null;
 
 let mockConfig: MockConfig | null = null;
 let mockUser: MockUser = null;
+let mockSessionCookie = 'session-a';
+let mockActiveMode = 'local';
 
 jest.mock('@/store/useConfigStore', () => ({
-  useConfigStore: (selector: (state: { config: MockConfig | null }) => unknown) =>
-    selector({ config: mockConfig }),
+  useConfigStore: Object.assign(
+    (selector: (state: { config: MockConfig | null }) => unknown) =>
+      selector({ config: mockConfig }),
+    { getState: () => ({ config: mockConfig }) },
+  ),
 }));
 jest.mock('@/store/useAuthStore', () => ({
-  useAuthStore: (selector: (state: { user: MockUser }) => unknown) => selector({ user: mockUser }),
+  useAuthStore: Object.assign(
+    (selector: (state: { user: MockUser }) => unknown) => selector({ user: mockUser }),
+    { getState: () => ({ user: mockUser, sessionCookie: mockSessionCookie }) },
+  ),
+}));
+jest.mock('@/store/useProcessingModeStore', () => ({
+  useProcessingModeStore: { getState: () => ({ activeMode: mockActiveMode }) },
 }));
 
 const mockRegister = jest.fn();
@@ -35,6 +47,9 @@ import { useChatSendGate } from '../useChatSendGate';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Platform.OS = 'ios';
+  mockSessionCookie = 'session-a';
+  mockActiveMode = 'local';
   mockConfig = { inference: { noteChat: { mode: 'openwhispr' } } };
   mockUser = { id: 'u', isAnonymous: false };
   // Mirrors the real provider: the feature runs once the paywall lets the user through.
@@ -116,5 +131,35 @@ describe('useChatSendGate', () => {
     mockConfig = { noteChatEnabled: false };
     rerender({});
     expect(result.current.chatEnabled).toBe(false);
+  });
+
+  it.each(['account', 'session', 'mode', 'route', 'disabled'])(
+    'drops Android consent after the %s changes',
+    (change) => {
+      Platform.OS = 'android';
+      mockConfirmCloudOnce.mockImplementation(() => {});
+      const run = jest.fn();
+      const { result } = renderHook(() => useChatSendGate());
+      result.current.gate(run, { consentMessage: 'Send this?', source: 'chat_tab' });
+      if (change === 'account') mockUser = { id: 'b', isAnonymous: false };
+      if (change === 'session') mockSessionCookie = 'session-b';
+      if (change === 'mode') mockActiveMode = 'cloud';
+      if (change === 'route') mockConfig = { inference: { noteChat: { mode: 'providers' } } };
+      if (change === 'disabled') mockConfig = { ...mockConfig, noteChatEnabled: false };
+      mockConfirmCloudOnce.mock.calls[0][1]();
+      expect(mockRegister).not.toHaveBeenCalled();
+      expect(run).not.toHaveBeenCalled();
+    },
+  );
+
+  it('drops a delayed Android paywall callback after the account changes', () => {
+    Platform.OS = 'android';
+    mockRegister.mockResolvedValue(true);
+    const run = jest.fn();
+    const { result } = renderHook(() => useChatSendGate());
+    result.current.gate(run, { consentMessage: null, source: 'chat_tab' });
+    mockUser = { id: 'b', isAnonymous: false };
+    mockRegister.mock.calls[0][0].feature();
+    expect(run).not.toHaveBeenCalled();
   });
 });

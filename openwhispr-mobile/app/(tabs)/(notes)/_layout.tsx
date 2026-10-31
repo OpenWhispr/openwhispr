@@ -7,6 +7,7 @@ export default function NotesLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="notes" options={{ headerShown: false }} />
       <Stack.Screen name="[id]" options={customHeaderStackOptions} />
+      <Stack.Screen name="import-audio" options={{ headerShown: false }} />
       <Stack.Screen name="actions" options={{ title: 'Actions', headerLargeTitle: false }} />
       <Stack.Screen
         name="meeting-record"

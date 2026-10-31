@@ -1,5 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { iosColor } from '@/config/colors';
@@ -35,9 +36,11 @@ export function AddSnippetSheet({
   onSubmit,
   onDelete,
 }: Props) {
+  const { copy } = useAndroidCopy();
   const [trigger, setTrigger] = useState('');
   const [replacement, setReplacement] = useState('');
   const triggerRef = useRef<TextInput>(null);
+  const replacementRef = useRef<TextInput>(null);
   const isEditing = !!initial;
 
   useEffect(() => {
@@ -57,9 +60,11 @@ export function AddSnippetSheet({
     trimmedTrigger.length > 0 && trimmedReplacement.length > 0 && !isDuplicate && !isTooLong;
 
   const error = isDuplicate
-    ? 'A snippet with that trigger already exists.'
+    ? copy('library.duplicateTrigger', 'A snippet with that trigger already exists.')
     : isTooLong
-      ? `Triggers are limited to ${TRIGGER_MAX_LENGTH} characters.`
+      ? copy('library.triggerLimit', `Triggers are limited to ${TRIGGER_MAX_LENGTH} characters.`, {
+          count: TRIGGER_MAX_LENGTH,
+        })
       : null;
 
   const handleSubmit = () => {
@@ -69,33 +74,67 @@ export function AddSnippetSheet({
     onClose();
   };
 
+  const handleClose = () => {
+    if (trigger === (initial?.trigger ?? '') && replacement === (initial?.replacement ?? '')) {
+      onClose();
+      return;
+    }
+    confirmDestructive(
+      copy('library.discardTitle', 'Discard changes?'),
+      copy('library.discardBody', 'Your snippet changes have not been saved.'),
+      onClose,
+      {
+        destructiveLabel: copy('library.discard', 'Discard'),
+        cancelLabel: copy('cancel', 'Cancel'),
+      },
+    );
+    return false;
+  };
+
   // Edit mode only: confirm before deleting so a tap can't remove a snippet by mistake.
   const destructiveAction =
     isEditing && onDelete
       ? {
-          label: 'Delete Snippet',
+          label: copy('library.deleteSnippet', 'Delete Snippet'),
           onPress: () =>
-            confirmDestructive('Delete snippet?', `"${initial?.trigger}" will be deleted.`, () => {
-              safeHaptics('warning');
-              onDelete();
-              onClose();
-            }),
+            confirmDestructive(
+              copy('library.deleteSnippet', 'Delete snippet?'),
+              copy('library.deleteNamed', `"${initial?.trigger}" will be deleted.`, {
+                name: initial?.trigger,
+              }),
+              () => {
+                safeHaptics('warning');
+                onDelete();
+                onClose();
+              },
+              {
+                cancelLabel: copy('cancel', 'Cancel'),
+                destructiveLabel: copy('deleteAction', 'Delete'),
+              },
+            ),
         }
       : undefined;
 
   return (
     <FormSheet
       visible={visible}
-      onClose={onClose}
-      title={isEditing ? 'Edit snippet' : 'Add snippet'}
-      subtitle="A spoken trigger expands to its replacement text in your dictation."
-      submitLabel={isEditing ? 'Save' : 'Add'}
+      onClose={handleClose}
+      title={
+        isEditing
+          ? copy('library.editSnippet', 'Edit snippet')
+          : copy('library.addSnippet', 'Add snippet')
+      }
+      subtitle={copy(
+        'library.snippetDescription',
+        'A spoken trigger expands to its replacement text in your dictation.',
+      )}
+      submitLabel={isEditing ? copy('save', 'Save') : copy('library.add', 'Add')}
       canSubmit={canSubmit}
       onSubmit={handleSubmit}
       destructiveAction={destructiveAction}
     >
       <Text className="mb-1.5 text-[12px] font-medium uppercase tracking-wider text-secondaryLabel">
-        Trigger
+        {copy('library.trigger', 'Trigger')}
       </Text>
       <View
         style={{ borderCurve: 'continuous' }}
@@ -105,10 +144,15 @@ export function AddSnippetSheet({
           ref={triggerRef}
           value={trigger}
           onChangeText={setTrigger}
-          placeholder="e.g. signoff"
+          placeholder={copy('library.triggerExample', 'e.g. signoff')}
+          accessibilityLabel={copy('library.trigger', 'Trigger')}
           placeholderTextColor={PLACEHOLDER_COLOR}
           maxLength={TRIGGER_MAX_LENGTH}
           returnKeyType="next"
+          submitBehavior={Platform.OS === 'android' ? 'submit' : undefined}
+          onSubmitEditing={
+            Platform.OS === 'android' ? () => replacementRef.current?.focus() : undefined
+          }
           autoCorrect={false}
           autoCapitalize="none"
           style={styles.input}
@@ -116,16 +160,18 @@ export function AddSnippetSheet({
       </View>
 
       <Text className="mb-1.5 mt-4 text-[12px] font-medium uppercase tracking-wider text-secondaryLabel">
-        Replacement
+        {copy('library.replacement', 'Replacement')}
       </Text>
       <View
         style={{ borderCurve: 'continuous' }}
         className="rounded-xl bg-tertiarySystemFill px-3.5 py-3"
       >
         <TextInput
+          ref={replacementRef}
           value={replacement}
           onChangeText={setReplacement}
-          placeholder="e.g. Best regards, Alex"
+          placeholder={copy('library.replacementExample', 'e.g. Best regards, Alex')}
+          accessibilityLabel={copy('library.replacement', 'Replacement')}
           placeholderTextColor={PLACEHOLDER_COLOR}
           multiline
           style={[styles.input, styles.multiline]}

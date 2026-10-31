@@ -375,7 +375,7 @@ describe('cancelRecording', () => {
     );
     const { result } = await startHook();
 
-    let stopping: Promise<void> = Promise.resolve();
+    let stopping: Promise<boolean | void> = Promise.resolve();
     await act(async () => {
       stopping = result.current.stopRecording();
       await result.current.cancelRecording();
@@ -462,7 +462,7 @@ describe('cancelRecording', () => {
     });
     mockRecorder.isRecording = true;
 
-    let stopping: Promise<void> = Promise.resolve();
+    let stopping: Promise<boolean | void> = Promise.resolve();
     await act(async () => {
       stopping = hook.result.current.stopRecording();
       await Promise.resolve();

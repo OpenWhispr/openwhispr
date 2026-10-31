@@ -1,9 +1,9 @@
-const { platformColor } = require('nativewind/theme');
+const { platformColor, platformSelect } = require('nativewind/theme');
 
 const BRAND = '#007AFF';
 
 const ios = (iosName, androidFallback, web = androidFallback) =>
-  platformColor(iosName, androidFallback, web);
+  platformSelect({ ios: platformColor(iosName), android: androidFallback, default: web });
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -15,8 +15,8 @@ module.exports = {
         brand: BRAND,
 
         label: ios('label', '#000000', '#000000'),
-        secondaryLabel: ios('secondaryLabel', '#3C3C434D', '#3C3C434D'),
-        tertiaryLabel: ios('tertiaryLabel', '#3C3C434D', '#3C3C434D'),
+        secondaryLabel: ios('secondaryLabel', '#69666F', '#3C3C434D'),
+        tertiaryLabel: ios('tertiaryLabel', '#737078', '#3C3C434D'),
         quaternaryLabel: ios('quaternaryLabel', '#3C3C432E', '#3C3C432E'),
 
         systemBackground: '#F8F6F5',

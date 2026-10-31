@@ -18,7 +18,7 @@ export interface DiarizationResult {
 }
 
 /**
- * Engine-agnostic diarizer. The concrete adapter (FluidAudio now; SpeakerKit later)
+ * Engine-agnostic diarizer. The platform adapter (FluidAudio on iOS, Sherpa on Android)
  * must satisfy this so the service + merge stay engine-independent.
  */
 export interface Diarizer {
@@ -26,7 +26,7 @@ export interface Diarizer {
   /** True if the on-device model weights are already downloaded (no network needed to diarize). */
   isModelDownloaded(): Promise<boolean>;
   /**
-   * Download the ~100 MB model weights with EXPLICIT user consent (mirrors the local whisper model).
+   * Download the platform's model weights with explicit user consent.
    * Call this behind a download prompt before diarize(); no-op if already present.
    */
   downloadModel(onProgress?: (fraction: number) => void): Promise<void>;
@@ -38,6 +38,8 @@ export interface Diarizer {
    * @param numberOfSpeakers exact speaker-count hint; omit/0 = auto-detect. Exact-or-auto only.
    */
   diarize(wavUri: string, numberOfSpeakers?: number): Promise<DiarizationResult>;
+  /** Invalidate pending work without releasing an engine during native inference. */
+  cancel?(): void;
 }
 
 export const TRANSCRIPTION_STATUSES = [

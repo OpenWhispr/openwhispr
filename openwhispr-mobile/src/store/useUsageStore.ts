@@ -1,5 +1,7 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import { fetchUsage, type UsageInfo } from '@/data/remote/usageApi';
+import { ApiError } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 
 const CACHE_TTL_MS = 60_000;
@@ -16,6 +18,7 @@ interface UsageStore {
   loadedAt: number;
   ownerKey: string | null;
   activeRequestId: number;
+  sessionRejected: boolean;
   isBillingSessionActive: boolean;
   load: (force?: boolean) => Promise<UsageLoadResult>;
   beginBillingSession: () => void;
@@ -37,18 +40,19 @@ export const useUsageStore = create<UsageStore>((set, get) => ({
   loadedAt: 0,
   ownerKey: null,
   activeRequestId: 0,
+  sessionRejected: false,
   isBillingSessionActive: false,
 
   load: async (force = false) => {
     const ownerKey = getUsageOwnerKey();
     if (!ownerKey) {
-      set({ usage: null, isLoading: false, loadedAt: 0, ownerKey: null });
+      set({ usage: null, isLoading: false, loadedAt: 0, ownerKey: null, sessionRejected: false });
       return { status: 'skipped', reason: 'unauthenticated', usage: null };
     }
 
     const current = get();
     if (current.ownerKey && current.ownerKey !== ownerKey) {
-      set({ usage: null, loadedAt: 0, ownerKey });
+      set({ usage: null, loadedAt: 0, ownerKey, sessionRejected: false });
     }
 
     const { loadedAt, isLoading, usage } = get();
@@ -68,10 +72,23 @@ export const useUsageStore = create<UsageStore>((set, get) => ({
         return { status: 'stale', usage: get().usage };
       }
 
-      set({ usage: freshUsage, isLoading: false, loadedAt: freshLoadedAt, ownerKey });
+      set({
+        usage: freshUsage,
+        isLoading: false,
+        loadedAt: freshLoadedAt,
+        ownerKey,
+        sessionRejected: false,
+      });
       return { status: 'loaded', usage: freshUsage, loadedAt: freshLoadedAt };
     } catch (error) {
-      if (getUsageOwnerKey() === ownerKey && get().activeRequestId === requestId) {
+      if (getUsageOwnerKey() !== ownerKey || get().activeRequestId !== requestId) {
+        return { status: 'stale', usage: get().usage };
+      }
+      if (Platform.OS === 'android' && error instanceof ApiError && error.status === 401) {
+        // A rejected session cannot keep advertising cached cloud access. Keep
+        // the local account open so reauthentication does not hide its work.
+        set({ usage: null, loadedAt: 0, isLoading: false, sessionRejected: true });
+      } else {
         set({ isLoading: false });
       }
       return { status: 'failed', error, usage: get().usage };
@@ -90,6 +107,7 @@ export const useUsageStore = create<UsageStore>((set, get) => ({
       loadedAt: 0,
       ownerKey: null,
       activeRequestId: requestId,
+      sessionRejected: false,
       isBillingSessionActive: false,
     });
   },

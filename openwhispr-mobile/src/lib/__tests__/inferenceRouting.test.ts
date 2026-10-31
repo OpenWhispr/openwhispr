@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 const mockGetPolicy = jest.fn();
 jest.mock('@/services/providers/ProviderPolicy', () => ({
   getProviderPolicy: (): Promise<unknown> => mockGetPolicy(),
@@ -317,5 +318,52 @@ it('sends an On-Device upload outside Local Mode to the provider saved for clean
     scope: 'cleanup',
     providerId: 'openai',
     modelId: 'gpt-5-mini',
+  });
+});
+
+describe('Android Local Mode keeps the existing privacy boundary', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockProcessing.activeMode = 'private';
+    mockUser = { id: 'signed-in', isAnonymous: false };
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+
+  it.each([undefined, { mode: 'openwhispr' }, { mode: 'providers', providerId: 'openai' }])(
+    'keeps uploads local with saved choice %j even for a signed-in account',
+    (upload) => {
+      mockState.config = { defaultMode: 'private', inference: { upload } };
+      expect(snapshotTranscriptionJob('upload').provider).toBe('local');
+    },
+  );
+  it.each([undefined, { mode: 'openwhispr' }])(
+    'does not opt local transcripts into Cloud cleanup for %j',
+    (cleanup) => {
+      mockState.config = { defaultMode: 'private', inference: { cleanup } };
+      expect(snapshotTranscriptionJob('dictation').cleanupRoute).toEqual({
+        mode: 'local',
+        scope: 'cleanup',
+      });
+    },
+  );
+  it('preserves the explicit transcript-only BYOK cleanup choice', () => {
+    mockState.config = {
+      defaultMode: 'private',
+      inference: {
+        cleanup: {
+          mode: 'providers',
+          providerId: 'openai',
+          modelId: 'gpt-4.1-mini',
+          credentialRef: 'provider.openai',
+        },
+      },
+    };
+    expect(snapshotTranscriptionJob('dictation')).toMatchObject({
+      provider: 'local',
+      cleanupRoute: { mode: 'providers', providerId: 'openai' },
+    });
   });
 });

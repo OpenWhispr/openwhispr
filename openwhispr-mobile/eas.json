@@ -30,6 +30,30 @@
         "image": "macos-tahoe-26.5-xcode-26.6",
         "resourceClass": "medium"
       }
+    },
+    "android-billing-test": {
+      "extends": "android-play-test",
+      "channel": "android-billing-test",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://openwhispr-koe24ced3-openwhispr.vercel.app"
+      }
+    },
+    "android-play-test": {
+      "distribution": "store",
+      "environment": "preview",
+      "channel": "android-play-test",
+      "credentialsSource": "remote",
+      "autoIncrement": true,
+      "node": "24.20.0",
+      "env": {
+        "OPENWHISPR_APP_ENV": "production",
+        "BRAND_FONTS_REQUIRED": "1"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a --max-workers=2 --no-parallel",
+        "resourceClass": "large"
+      }
     }
   },
   "submit": {

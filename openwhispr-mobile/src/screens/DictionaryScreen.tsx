@@ -1,5 +1,9 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Pressable, ScrollView, StyleSheet, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { AccountButton } from '@/android/ui';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { TabScreenHeader } from '@/components/ui/TabScreenHeader';
@@ -10,10 +14,12 @@ import { AddWordsSheet } from '@/components/features/AddWordsSheet';
 import { SnippetsView } from '@/components/features/SnippetsView';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
 import { useDictionaryStore, type DictionaryEntry } from '@/store/useDictionaryStore';
+import { formatLibraryTime } from '@/android/libraryTime';
 import { safeHaptics, formatRelativeTime } from '@/lib/utils';
 import { useSharedDictionaryStore } from '@/store/useSharedDictionaryStore';
 import { sharedWordKey } from '@/lib/sharedDictionaryHints';
 import { iosColor } from '@/config/colors';
+import { confirmDestructive } from '@/lib/alerts';
 
 type Filter = 'all' | 'manual' | 'learned';
 type Mode = 'words' | 'snippets';
@@ -22,10 +28,17 @@ const PURPLE = iosColor('systemPurple');
 const LINK = iosColor('link');
 const RECENT_LIMIT = 5;
 
-function sourceLabel(entry: DictionaryEntry): string {
-  const name = entry.source === 'manual' ? 'Manual' : 'Learned';
+function sourceLabel(
+  entry: DictionaryEntry,
+  copy: ReturnType<typeof useAndroidCopy>['copy'],
+  language: string,
+): string {
+  const name =
+    entry.source === 'manual'
+      ? copy('library.manual', 'Manual')
+      : copy('library.learned', 'Learned');
   if (!entry.addedAt) return name;
-  return `${name} · ${formatRelativeTime(entry.addedAt, 'long')}`;
+  return `${name} · ${Platform.OS === 'android' ? formatLibraryTime(entry.addedAt, language) : formatRelativeTime(entry.addedAt, 'long')}`;
 }
 
 function alphabetize(entries: DictionaryEntry[]): { title: string; data: DictionaryEntry[] }[] {
@@ -43,22 +56,46 @@ function alphabetize(entries: DictionaryEntry[]): { title: string; data: Diction
 }
 
 function DictionaryRow({ entry, onDelete }: { entry: DictionaryEntry; onDelete: () => void }) {
+  const { copy, language } = useAndroidCopy();
   const dotColor = entry.source === 'manual' ? LINK : PURPLE;
   // A word moved into a shared list whose only copy the member hid: it shows here, but doesn't
   // apply (dictationHints leaves it out), so say so.
   const hiddenForYou = useSharedDictionaryStore(
     (s) => !!entry.sharedAt && s.hiddenOnlyKeys.has(sharedWordKey(entry.word)),
   );
+  const label = hiddenForYou
+    ? `${sourceLabel(entry, copy, language)} · ${copy('library.hiddenForYou', 'Hidden for you')}`
+    : sourceLabel(entry, copy, language);
   return (
     <SwipeableCard onDelete={onDelete} inset>
-      <View className="flex-row items-center gap-3 bg-secondarySystemGroupedBackground px-4 py-2.5">
+      <View
+        accessible
+        accessibilityLabel={`${entry.word}, ${label}`}
+        accessibilityActions={[{ name: 'delete', label: copy('deleteAction', 'Delete') }]}
+        onAccessibilityAction={({ nativeEvent }) => {
+          if (nativeEvent.actionName === 'delete')
+            confirmDestructive(
+              copy('library.deleteWord', 'Delete word?'),
+              copy('library.deleteNamed', `"${entry.word}" will be deleted.`, { name: entry.word }),
+              onDelete,
+              {
+                cancelLabel: copy('cancel', 'Cancel'),
+                destructiveLabel: copy('deleteAction', 'Delete'),
+              },
+            );
+        }}
+        className="flex-row items-center gap-3 bg-secondarySystemGroupedBackground px-4 py-2.5"
+      >
         <View style={{ backgroundColor: dotColor }} className="h-1.5 w-1.5 shrink-0 rounded-full" />
         <View className="min-w-0 flex-1">
           <Text className="text-[15px] text-label" numberOfLines={1}>
             {entry.word}
           </Text>
-          <Text className="text-[12px] text-tertiaryLabel" numberOfLines={1}>
-            {hiddenForYou ? `${sourceLabel(entry)} · Hidden for you` : sourceLabel(entry)}
+          <Text
+            className="text-[12px] text-tertiaryLabel"
+            numberOfLines={Platform.OS === 'android' ? undefined : 1}
+          >
+            {label}
           </Text>
         </View>
       </View>
@@ -187,6 +224,7 @@ function SharedDictionaryLine({ moved, className }: { moved: string[]; className
 }
 
 function EmptyState({ onAdd, moved }: { onAdd: () => void; moved: string[] }) {
+  const { copy } = useAndroidCopy();
   return (
     <View className="flex-1 items-center px-8 pt-12">
       <View
@@ -200,9 +238,14 @@ function EmptyState({ onAdd, moved }: { onAdd: () => void; moved: string[] }) {
           color="secondaryLabel"
         />
       </View>
-      <Text className="mb-2 text-[17px] font-semibold text-label">Custom Dictionary</Text>
+      <Text className="mb-2 text-[17px] font-semibold text-label">
+        {copy('library.customDictionary', 'Custom Dictionary')}
+      </Text>
       <Text className="mb-6 text-center text-[14px] leading-5 text-secondaryLabel">
-        Add words, names, or terms the transcription model should recognize.
+        {copy(
+          'library.dictionaryDescription',
+          'Add words, names, or terms the transcription model should recognize.',
+        )}
       </Text>
       <Pressable
         onPress={onAdd}
@@ -213,7 +256,9 @@ function EmptyState({ onAdd, moved }: { onAdd: () => void; moved: string[] }) {
         className="flex-row items-center gap-2 rounded-xl bg-link px-4 py-2.5"
       >
         <SystemIcon name="plus" mdName="Plus" size={15} color="#fff" />
-        <Text className="text-[15px] font-semibold text-white">Add your first word</Text>
+        <Text className="text-[15px] font-semibold text-white">
+          {copy('library.firstWord', 'Add your first word')}
+        </Text>
       </Pressable>
       <SharedDictionaryLine moved={moved} className="mt-6 text-center" />
     </View>
@@ -221,6 +266,20 @@ function EmptyState({ onAdd, moved }: { onAdd: () => void; moved: string[] }) {
 }
 
 function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
+  const { t } = useTranslation();
+  if (Platform.OS === 'android')
+    return (
+      <View style={{ marginHorizontal: 20, marginTop: 16, marginBottom: 8 }}>
+        <SegmentedControl
+          value={mode}
+          onChange={onChange}
+          options={[
+            { value: 'words', label: t('dictionaryWords') },
+            { value: 'snippets', label: t('dictionarySnippets') },
+          ]}
+        />
+      </View>
+    );
   const segments: { key: Mode; label: string }[] = [
     { key: 'words', label: 'Words' },
     { key: 'snippets', label: 'Snippets' },
@@ -256,6 +315,7 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
 }
 
 export default function DictionaryScreen() {
+  const { copy } = useAndroidCopy();
   const allEntries = useDictionaryStore((s) => s.entries);
   const sharedWordsLower = useSharedDictionaryStore((s) => s.sharedWordsLower);
   const isLoaded = useDictionaryStore((s) => s.isLoaded);
@@ -332,7 +392,10 @@ export default function DictionaryScreen() {
 
   return (
     <View className="flex-1 bg-systemBackground">
-      <TabScreenHeader title="Dictionary" />
+      <TabScreenHeader
+        title={copy('dictionary', 'Dictionary')}
+        right={Platform.OS === 'android' ? <AccountButton /> : undefined}
+      />
 
       <ModeToggle mode={mode} onChange={setMode} />
 
@@ -353,8 +416,8 @@ export default function DictionaryScreen() {
                 <SearchField
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search dictionary"
-                  accessibilityLabel="Search dictionary"
+                  placeholder={copy('library.searchDictionary', 'Search dictionary')}
+                  accessibilityLabel={copy('library.searchDictionary', 'Search dictionary')}
                 />
               </View>
 
@@ -371,19 +434,19 @@ export default function DictionaryScreen() {
                 className="mb-1"
               >
                 <FilterChip
-                  label="All"
+                  label={copy('library.all', 'All')}
                   count={counts.all}
                   active={filter === 'all'}
                   onPress={() => setFilter('all')}
                 />
                 <FilterChip
-                  label="Manual"
+                  label={copy('library.manual', 'Manual')}
                   count={counts.manual}
                   active={filter === 'manual'}
                   onPress={() => setFilter('manual')}
                 />
                 <FilterChip
-                  label="Learned"
+                  label={copy('library.learned', 'Learned')}
                   count={counts.learned}
                   active={filter === 'learned'}
                   onPress={() => setFilter('learned')}
@@ -393,7 +456,11 @@ export default function DictionaryScreen() {
               {hasNoResults ? (
                 <View className="items-center px-8 pt-12">
                   <Text className="text-[14px] text-tertiaryLabel">
-                    {query ? `No words match "${query.trim()}".` : 'No words in this filter.'}
+                    {query
+                      ? copy('library.noWords', `No words match "${query.trim()}".`, {
+                          query: query.trim(),
+                        })
+                      : copy('library.noFilterWords', 'No words in this filter.')}
                   </Text>
                 </View>
               ) : query ? (
@@ -406,7 +473,10 @@ export default function DictionaryScreen() {
                 <>
                   {recentEntries.length > 0 && (
                     <>
-                      <SectionHeader title="Recently Added" count={recentEntries.length} />
+                      <SectionHeader
+                        title={copy('library.recentlyAdded', 'Recently Added')}
+                        count={recentEntries.length}
+                      />
                       <SectionCard>
                         <EntryList entries={recentEntries} onDelete={handleDelete} />
                       </SectionCard>
@@ -429,7 +499,7 @@ export default function DictionaryScreen() {
             icon="plus"
             mdIcon="Plus"
             onPress={() => setSheetOpen(true)}
-            accessibilityLabel="Add words"
+            accessibilityLabel={copy('library.addWords', 'Add words')}
           />
 
           <AddWordsSheet

@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr · Insérer votre texte</string>
+  <string name="ow_insertion_description">L’accessibilité permet à OpenWhispr de lire le champ sélectionné lorsque vous dictez et d’y insérer le résultat. Aucun message n’est envoyé et aucun champ de mot de passe n’est lu.</string>
+  <string name="ow_bubble_ready">OpenWhispr est prêt</string>
+  <string name="ow_bubble_recording">OpenWhispr · Écoute…</string>
+  <string name="ow_bubble_notice">Touchez pour ouvrir. Désactivez le bouton flottant dans Compte.</string>
+  <string name="ow_bubble_channel">Afficher la bulle flottante</string>
+  <string name="ow_audio_unreadable">Ce fichier audio est illisible. Essayez un fichier WAV, MP3 ou M4A valide.</string>
+  <string name="ow_meeting_notice">L’audio de la réunion est en cours d’enregistrement.</string>
+  <string name="ow_meeting_stop">Arrêter</string>
+  <string name="ow_meeting_stopped">Enregistrement arrêté. Votre audio est enregistré.</string>
+</resources>

@@ -7,6 +7,7 @@ type ApiClientModule = typeof import('../apiClient');
 interface LoadOptions {
   expoConfig?: { version?: string } | null;
   sessionCookie?: string | null;
+  platform?: 'android' | 'ios';
 }
 
 function loadApiClient(options: LoadOptions = {}): {
@@ -14,6 +15,7 @@ function loadApiClient(options: LoadOptions = {}): {
   mockFetch: jest.Mock;
 } {
   jest.resetModules();
+  jest.doMock('react-native', () => ({ Platform: { OS: options.platform ?? 'ios' } }));
   const mockFetch = jest.fn();
   jest.doMock('expo/fetch', () => ({
     __esModule: true,
@@ -44,10 +46,50 @@ function okResponse(status: number, body: unknown = {}): unknown {
 }
 
 afterEach(() => {
+  jest.dontMock('react-native');
   jest.dontMock('expo/fetch');
   jest.dontMock('expo-constants');
   jest.dontMock('@/store/useAuthStore');
   jest.resetModules();
+});
+
+describe('native session isolation', () => {
+  it.each([
+    ['current account', 'openwhispr.session_token=current-account', true],
+    ['signed out', null, true],
+    ['public request', 'openwhispr.session_token=current-account', false],
+  ] as const)(
+    'excludes Android ambient cookies for %s',
+    async (_, sessionCookie, authenticated) => {
+      const { apiClient, mockFetch } = loadApiClient({ platform: 'android', sessionCookie });
+      mockFetch.mockResolvedValue(okResponse(200));
+
+      await apiClient.apiRequest('/api/usage', { authenticated });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      // Expo defaults to include; Android's native jar can then replace an explicit Cookie.
+      expect(init.credentials).toBe('omit');
+      expect((init.headers as Record<string, string>).Cookie).toBe(
+        authenticated && sessionCookie ? sessionCookie : undefined,
+      );
+    },
+  );
+
+  it('preserves the existing iOS transport options and explicit session', async () => {
+    const { apiClient, mockFetch } = loadApiClient({
+      platform: 'ios',
+      sessionCookie: 'openwhispr.session_token=current-account',
+    });
+    mockFetch.mockResolvedValue(okResponse(200));
+
+    await apiClient.apiRequest('/api/usage');
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init).not.toHaveProperty('credentials');
+    expect((init.headers as Record<string, string>).Cookie).toBe(
+      'openwhispr.session_token=current-account',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

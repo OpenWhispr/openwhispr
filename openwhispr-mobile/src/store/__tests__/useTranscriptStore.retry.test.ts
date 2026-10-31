@@ -1,3 +1,11 @@
+let mockHistoryScope: { owner: string; key: string; revision: number } | null = null;
+jest.mock('@/lib/transcriptScope', () => ({
+  captureTranscriptScope: () => mockHistoryScope,
+  isTranscriptScopeCurrent: (scope: unknown) => scope === mockHistoryScope,
+  observeTranscriptScope: () => () => {},
+}));
+const mockAllTranscriptAudio = jest.fn(() => [] as string[]);
+import { Platform } from 'react-native';
 const mockListPendingProviderRecoveryJobs = jest.fn((): unknown[] => []);
 const mockClearKeyboardProviderRecovery = jest.fn();
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
@@ -34,6 +42,7 @@ jest.mock('@/services/storage/StorageService', () => ({
     getTranscripts: mockGetTranscripts,
     saveTranscripts: mockSaveTranscripts,
     clearTranscripts: mockClearTranscripts,
+    getAllTranscriptAudio: mockAllTranscriptAudio,
   },
 }));
 
@@ -48,6 +57,7 @@ jest.mock('@/lib/transcriptionLanguage', () => ({
 jest.mock('@/lib/transcriptAudio', () => ({
   __esModule: true,
   retainTranscriptAudio: mockRetainTranscriptAudio,
+  releaseTranscriptAudio: jest.fn(),
   transcriptAudioExists: mockTranscriptAudioExists,
   deleteManagedTranscriptAudio: mockDeleteManagedTranscriptAudio,
   garbageCollectTranscriptAudio: mockGarbageCollectTranscriptAudio,
@@ -104,6 +114,8 @@ const failedTranscript = (overrides: Partial<Transcript> = {}): Transcript => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockHistoryScope = null;
+  mockAllTranscriptAudio.mockReturnValue([]);
   mockListPendingProviderRecoveryJobs.mockReturnValue([]);
   mockAppGroupGetItem.mockReturnValue(null);
   mockProcessingModeState.activeMode = 'cloud';
@@ -988,5 +1000,181 @@ describe('retry destination in Bring Your Own Key mode', () => {
     expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'cloud', inferenceRoute: undefined }),
     );
+  });
+});
+
+describe('Android Local Mode retry privacy', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockProcessingModeState.activeMode = 'private';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('refuses a previously selected remote upload route before reading or uploading audio', async () => {
+    useTranscriptStore.setState({
+      transcripts: [
+        failedTranscript({
+          provider: 'byok',
+          requestContext: 'file',
+          inferenceRoute: {
+            mode: 'providers',
+            scope: 'upload',
+            providerId: 'groq',
+            modelId: 'whisper-large-v3-turbo',
+            endpoint: 'https://api.groq.com/openai/v1',
+            credentialRef: 'provider.groq',
+          },
+        }),
+      ],
+    });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
+      'Turn off Local Mode',
+    );
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+    expect(mockTranscodeToWav).not.toHaveBeenCalled();
+  });
+});
+
+describe('cancelling a history retry', () => {
+  it('keeps the failed row and retained audio when a cancelled provider returns late', async () => {
+    const original = failedTranscript({ audioFileName: 'clip.wav', audioMimeType: 'audio/wav' });
+    mockIsWavAudioFile.mockReturnValue(true);
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    let finish!: (value: unknown) => void;
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mockTranscribeAndCleanup.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    });
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await ready;
+    controller.abort();
+    finish({
+      text: 'Discard this late result',
+      originalText: 'late',
+      transcription: { text: 'late', duration: 3, provider: 'cloud' },
+    });
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(useTranscriptStore.getState().isLoading).toBe(false);
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
+
+    await useTranscriptStore.getState().retryTranscript('t1');
+    expect(useTranscriptStore.getState().transcripts[0]).toMatchObject({
+      status: 'completed',
+      text: 'clean transcript',
+    });
+  });
+
+  it('passes cancellation to the active transport and preserves audio on abort', async () => {
+    const original = failedTranscript();
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    mockTranscribeAndCleanup.mockImplementationOnce((request) => {
+      started();
+      return new Promise((_, reject) => {
+        request.signal?.addEventListener('abort', () =>
+          reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
+        );
+      });
+    });
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await ready;
+    expect(mockTranscribeAndCleanup.mock.calls[0][0].signal.aborted).toBe(false);
+    controller.abort();
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+  });
+
+  it('does not send audio when cancellation happens during format conversion', async () => {
+    const original = failedTranscript();
+    useTranscriptStore.setState({ transcripts: [original] });
+    const controller = new AbortController();
+    mockTranscodeToWav.mockImplementationOnce(async () => {
+      controller.abort();
+      return { uri: 'file://tmp/cancelled.wav', durationMs: 3000 };
+    });
+    mockProcessingModeState.activeMode = 'private';
+    const retry = useTranscriptStore.getState().retryTranscript('t1', controller.signal);
+    await expect(retry).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mockTranscribeAndCleanup).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().transcripts).toEqual([original]);
+    expect(mockAudioToolsCleanup).toHaveBeenCalledWith(['file://tmp/cancelled.wav']);
+  });
+});
+
+describe('account history boundaries', () => {
+  it('discards an A retry completing after A → B → A, preserving its saved audio', async () => {
+    mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 1 };
+    useTranscriptStore.setState({ transcripts: [failedTranscript()] });
+    mockTranscribeAndCleanup.mockImplementation(async () => {
+      mockHistoryScope = { owner: 'account:a', key: 'history:a', revision: 3 };
+      return {
+        text: 'late result',
+        originalText: 'late result',
+        transcription: { provider: 'cloud' },
+      };
+    });
+    await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(mockSaveTranscripts).not.toHaveBeenCalled();
+    expect(mockDeleteManagedTranscriptAudio).not.toHaveBeenCalled();
+  });
+
+  it('protects other owners and unassigned audio during history collection', async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    mockAllTranscriptAudio.mockReturnValue([
+      'file://docs/transcript-audio/a.wav',
+      'file://docs/transcript-audio/unassigned.wav',
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(mockGarbageCollectTranscriptAudio).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'file://docs/transcript-audio/a.wav',
+        'file://docs/transcript-audio/unassigned.wav',
+      ]),
+      expect.objectContaining({
+        isCurrent: expect.any(Function),
+        currentKeepUris: expect.any(Function),
+      }),
+    );
+  });
+
+  it('leaves foreign and unassigned provider recovery jobs untouched', async () => {
+    mockHistoryScope = { owner: 'account:b', key: 'history:b', revision: 2 };
+    mockListPendingProviderRecoveryJobs.mockReturnValue([
+      {
+        jobId: 'a-job',
+        historyOwner: 'history:a',
+        route: { provider: 'byok' },
+        result: { text: 'private A' },
+        requestContext: 'file',
+      },
+      {
+        jobId: 'old-job',
+        route: { provider: 'byok' },
+        result: { text: 'unknown owner' },
+        requestContext: 'file',
+      },
+    ]);
+    await useTranscriptStore.getState().loadTranscripts();
+    expect(useTranscriptStore.getState().transcripts).toEqual([]);
+    expect(mockClearKeyboardProviderRecovery).not.toHaveBeenCalled();
   });
 });

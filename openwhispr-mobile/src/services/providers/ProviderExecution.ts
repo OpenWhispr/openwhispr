@@ -1,5 +1,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import { createProviderCredentialScope } from './ProviderCredentialScope';
+import { ProviderExecutionError } from './ProviderExecutionError';
+export { ProviderExecutionError } from './ProviderExecutionError';
 import {
   buildApiUrl,
   getModelListBaseCandidates,
@@ -100,24 +103,6 @@ export interface ProviderConnectionResult {
   scope: ProviderRoute['scope'];
   /** The base that answered; a bare custom server origin may resolve to its /v1 API. */
   endpoint: string;
-}
-
-export class ProviderExecutionError extends Error {
-  public readonly code: string;
-  public readonly status?: number;
-  public readonly retryable: boolean;
-
-  public constructor(
-    code: string,
-    message: string,
-    options: { status?: number; retryable?: boolean } = {},
-  ) {
-    super(message);
-    this.name = 'ProviderExecutionError';
-    this.code = code;
-    this.status = options.status;
-    this.retryable = options.retryable ?? false;
-  }
 }
 
 function errorForStatus(providerId: string, status: number): ProviderExecutionError {
@@ -289,7 +274,11 @@ function normalizeTransportFailure(error: unknown, providerId: string): Error {
   if (nativeCode === 'PROVIDER_CANCELLED') return abortError();
   if (nativeCode === 'PROVIDER_AUDIO_TOO_LARGE') return audioTooLargeError();
   if (typeof nativeCode === 'string' && FINAL_NATIVE_FAILURES[nativeCode]) {
-    return new ProviderExecutionError(nativeCode, FINAL_NATIVE_FAILURES[nativeCode]);
+    const message =
+      nativeCode === 'PROVIDER_CERTIFICATE_UNTRUSTED' && Platform.OS === 'android'
+        ? "Couldn't connect securely to this server. Check that its certificate is valid and trusted by Android."
+        : FINAL_NATIVE_FAILURES[nativeCode];
+    return new ProviderExecutionError(nativeCode, message);
   }
   if (nativeCode === 'PROVIDER_LOCAL_NETWORK_ERROR') {
     return new ProviderExecutionError(

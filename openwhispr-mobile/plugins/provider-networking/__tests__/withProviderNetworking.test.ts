@@ -2,6 +2,7 @@ export {};
 
 jest.mock('expo/config-plugins', () => ({
   withInfoPlist: (config: unknown, action: (value: unknown) => unknown) => action(config),
+  withAndroidManifest: (config: unknown) => config,
 }));
 const withProviderNetworking = require('../withProviderNetworking');
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, Dimensions } from 'react-native';
+import { View, StyleSheet, Pressable, Dimensions, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -11,6 +11,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Trash2, FolderInput } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import { iosColor } from '@/config/colors';
 
 /** Slides the row back to rest; call it when the user backs out of a delete. */
@@ -44,6 +45,7 @@ export function SwipeableCard({
   inset = false,
   cardBackground,
 }: SwipeableCardProps) {
+  const { t } = useTranslation();
   const revealWidth = onMove ? ACTION_WIDTH * 2 : ACTION_WIDTH;
   const snapThreshold = -revealWidth * 0.5;
 
@@ -100,6 +102,17 @@ export function SwipeableCard({
   };
 
   const handleDeletePress = () => {
+    if (Platform.OS === 'android') {
+      // The caller may ask for confirmation or fail to delete. Keep the row in
+      // place until its data is actually removed; Cancel must not leave a hole.
+      translateX.value = withTiming(0, {
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+      });
+      setIsRevealed(false);
+      requestDelete();
+      return;
+    }
     translateX.value = withTiming(
       -SCREEN_WIDTH,
       { duration: 250, easing: Easing.in(Easing.cubic) },
@@ -156,12 +169,22 @@ export function SwipeableCard({
   return (
     <View style={[styles.container, inset && styles.containerInset]}>
       {/* Action icons revealed under the row */}
-      <Animated.View style={[styles.actionsContainer, { width: revealWidth }, revealStyle]}>
+      <Animated.View
+        collapsable={false}
+        accessibilityElementsHidden={!isRevealed}
+        importantForAccessibility={isRevealed ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={isRevealed ? 'auto' : 'none'}
+        style={[styles.actionsContainer, { width: revealWidth }, revealStyle]}
+      >
         {onMove && (
           <Pressable
-            onPress={handleMovePress}
+            accessible={isRevealed}
+            focusable={isRevealed}
             accessibilityRole="button"
-            accessibilityLabel="Move"
+            accessibilityLabel={t('android:moveAction', { defaultValue: 'Move' })}
+            accessibilityElementsHidden={!isRevealed}
+            importantForAccessibility={isRevealed ? 'yes' : 'no-hide-descendants'}
+            onPress={handleMovePress}
             onPressIn={pressIn(moveScale)}
             onPressOut={pressOut(moveScale)}
             style={styles.action}
@@ -173,9 +196,13 @@ export function SwipeableCard({
           </Pressable>
         )}
         <Pressable
-          onPress={handleDeletePress}
+          accessible={isRevealed}
+          focusable={isRevealed}
           accessibilityRole="button"
-          accessibilityLabel="Delete"
+          accessibilityLabel={t('android:deleteAction', { defaultValue: 'Delete' })}
+          accessibilityElementsHidden={!isRevealed}
+          importantForAccessibility={isRevealed ? 'yes' : 'no-hide-descendants'}
+          onPress={handleDeletePress}
           onPressIn={pressIn(deleteScale)}
           onPressOut={pressOut(deleteScale)}
           style={styles.action}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type React from 'react';
-import { TextInput, View } from 'react-native';
+import { Platform, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Text } from '@/components/ui/Text';
@@ -31,6 +31,7 @@ interface CloudMeetingRecordingProps {
   utterances: RealtimeUtterance[];
   partialText: string;
   onStop: () => void;
+  stopLabel?: string;
 }
 
 /**
@@ -49,6 +50,7 @@ export function CloudMeetingRecording({
   utterances,
   partialText,
   onStop,
+  stopLabel = 'Stop',
 }: CloudMeetingRecordingProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   // The meeting-record route uses a transparent (glass) header, so content renders
@@ -58,7 +60,11 @@ export function CloudMeetingRecording({
   const keyboardHeight = useKeyboardHeight();
   // The view fills the screen, so the keyboard covers the home-indicator inset too.
   const footerBottomPadding =
-    keyboardHeight > 0 ? keyboardHeight + 12 : Math.max(insets.bottom + 16, 24);
+    keyboardHeight > 0
+      ? Platform.OS === 'android'
+        ? 12
+        : keyboardHeight + 12
+      : Math.max(insets.bottom + 16, 24);
 
   return (
     <View className="flex-1 bg-systemBackground" style={{ paddingTop: headerHeight }}>
@@ -114,13 +120,17 @@ export function CloudMeetingRecording({
             />
           </View>
         ) : (
-          <LiveTranscriptList utterances={utterances} partialText={partialText} />
+          <LiveTranscriptList
+            utterances={utterances}
+            partialText={partialText}
+            active={status !== 'error'}
+          />
         )}
       </View>
 
       <View className="px-4 pt-2" style={{ paddingBottom: footerBottomPadding }}>
         <Button testID="meeting-stop" variant="destructive" size="lg" onPress={onStop}>
-          Stop
+          {stopLabel}
         </Button>
       </View>
     </View>

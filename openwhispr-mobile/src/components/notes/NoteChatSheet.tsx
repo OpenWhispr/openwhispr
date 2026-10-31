@@ -1,7 +1,9 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useRef } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   TextInput,
@@ -52,6 +54,7 @@ export function NoteChatSheet({
   onClose,
 }: NoteChatSheetProps) {
   const insets = useSafeAreaInsets();
+  const { copy } = useAndroidCopy();
   const { height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const keyboardHeight = useKeyboardHeight(visible);
@@ -61,9 +64,17 @@ export function NoteChatSheet({
   // immediately, so they step aside once the user starts typing rather than discard the draft.
   const showSuggestions = !hasMessages && !draft.trim() && suggestions.length > 0;
   const canUseSuggestion = canSend && !isProcessing;
-  const sheetHeight = Math.min(windowHeight * 0.82, windowHeight - insets.top - 8);
+  const isAndroid = Platform.OS === 'android';
+  const sheetHeight = Math.min(
+    isAndroid && keyboardHeight > 0 ? windowHeight : windowHeight * 0.82,
+    windowHeight - insets.top - 8,
+  );
   const bottomPad =
-    keyboardHeight > 0 ? keyboardHeight + INPUT_KEYBOARD_GAP : Math.max(insets.bottom, 14);
+    keyboardHeight > 0
+      ? // Android reports IME height minus system-bar insets; this edge-to-edge modal
+        // must reserve the navigation area too, or the keyboard clips the composer.
+        keyboardHeight + (isAndroid ? insets.bottom : 0) + INPUT_KEYBOARD_GAP
+      : Math.max(insets.bottom, 14);
 
   return (
     <Modal
@@ -75,7 +86,7 @@ export function NoteChatSheet({
     >
       <View className="flex-1 justify-end">
         <Pressable
-          accessibilityLabel="Dismiss note chat"
+          accessibilityLabel={copy('noteChat.dismiss', 'Dismiss note chat')}
           onPress={onClose}
           className="absolute inset-0 bg-black/40"
         />
@@ -91,11 +102,16 @@ export function NoteChatSheet({
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-1 pr-3">
               <Text accessibilityRole="header" className="text-[19px] font-bold text-label">
-                Ask about this note
+                {copy('editor.askNote', 'Ask about this note')}
               </Text>
-              <Text className="mt-1 text-[13px] text-secondaryLabel">
-                Answers use only this note. This chat is temporary and won't be saved.
-              </Text>
+              {!isAndroid ? (
+                <Text className="mt-1 text-[13px] text-secondaryLabel">
+                  {copy(
+                    'noteChat.privacy',
+                    "Answers use only this note. This chat is temporary and won't be saved.",
+                  )}
+                </Text>
+              ) : null}
             </View>
             {hasMessages ? (
               <Pressable
@@ -103,12 +119,18 @@ export function NoteChatSheet({
                 disabled={isProcessing}
                 className="mr-2 px-2 py-1"
                 accessibilityRole="button"
-                accessibilityLabel="Clear chat"
+                accessibilityLabel={copy('noteChat.clearChat', 'Clear chat')}
               >
-                <Text className="text-[14px] font-medium text-link">Clear</Text>
+                <Text className="text-[14px] font-medium text-link">
+                  {copy('noteChat.clear', 'Clear')}
+                </Text>
               </Pressable>
             ) : null}
-            <GlassIconButton onPress={onClose} accessibilityLabel="Close chat" size={30}>
+            <GlassIconButton
+              onPress={onClose}
+              accessibilityLabel={copy('noteChat.closeChat', 'Close chat')}
+              size={30}
+            >
               <SystemIcon name="xmark" mdName="X" size={13} color="secondaryLabel" />
             </GlassIconButton>
           </View>
@@ -116,11 +138,21 @@ export function NoteChatSheet({
           {/* With the keyboard up the sheet is short, so an empty thread must not squeeze the chips. */}
           <ScrollView
             ref={scrollRef}
-            className={`flex-1 ${hasMessages ? 'min-h-[220px]' : ''}`}
+            className={`flex-1 ${hasMessages && !isAndroid ? 'min-h-[220px]' : ''}`}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            onContentSizeChange={() => {
+              if (hasMessages) scrollRef.current?.scrollToEnd({ animated: true });
+            }}
           >
+            {isAndroid ? (
+              <Text className="mb-3 text-[13px] text-secondaryLabel">
+                {copy(
+                  'noteChat.privacy',
+                  "Answers use only this note. This chat is temporary and won't be saved.",
+                )}
+              </Text>
+            ) : null}
             {hasMessages ? (
               <View className="gap-3 pb-3">
                 {messages.map((message) => {
@@ -148,7 +180,9 @@ export function NoteChatSheet({
                   >
                     <View className="flex-row items-center gap-2">
                       <ActivityIndicator size="small" color={BRAND} />
-                      <Text className="text-[14px] text-secondaryLabel">Thinking...</Text>
+                      <Text className="text-[14px] text-secondaryLabel">
+                        {copy('noteChat.thinking', 'Thinking...')}
+                      </Text>
                     </View>
                   </View>
                 ) : null}
@@ -164,9 +198,11 @@ export function NoteChatSheet({
                 disabled={isProcessing}
                 className="mt-1 self-start py-1"
                 accessibilityRole="button"
-                accessibilityLabel="Retry chat question"
+                accessibilityLabel={copy('noteChat.retryQuestion', 'Retry chat question')}
               >
-                <Text className="text-[13px] font-semibold text-link">Retry</Text>
+                <Text className="text-[13px] font-semibold text-link">
+                  {copy('noteChat.retryAction', 'Retry')}
+                </Text>
               </Pressable>
             </View>
           ) : null}
@@ -186,12 +222,20 @@ export function NoteChatSheet({
                   onPress={() => onSuggestion(suggestion.prompt)}
                   disabled={!canUseSuggestion}
                   accessibilityRole="button"
-                  accessibilityLabel={suggestion.label}
-                  accessibilityHint="Sends this question"
+                  accessibilityLabel={
+                    suggestion.labelKey
+                      ? copy(suggestion.labelKey, suggestion.label)
+                      : suggestion.label
+                  }
+                  accessibilityHint={copy('noteChat.sendsQuestion', 'Sends this question')}
                   className="rounded-full bg-tertiarySystemFill px-4 py-2.5 active:opacity-70 disabled:opacity-50"
                   style={{ borderCurve: 'continuous' }}
                 >
-                  <Text className="text-[15px] font-medium text-label">{suggestion.label}</Text>
+                  <Text className="text-[15px] font-medium text-label">
+                    {suggestion.labelKey
+                      ? copy(suggestion.labelKey, suggestion.label)
+                      : suggestion.label}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
@@ -201,7 +245,11 @@ export function NoteChatSheet({
             <TextInput
               value={draft}
               onChangeText={onDraftChange}
-              placeholder={canSend ? 'Ask a question...' : 'No note content to ask about'}
+              placeholder={
+                canSend
+                  ? copy('noteChat.questionPlaceholder', 'Ask a question...')
+                  : copy('noteChat.noContent', 'No note content to ask about')
+              }
               placeholderTextColor="rgba(60,60,67,0.35)"
               multiline
               editable={canSend && !isProcessing}
@@ -212,8 +260,8 @@ export function NoteChatSheet({
               onPress={onSend}
               disabled={!canSubmit}
               accessibilityRole="button"
-              accessibilityLabel="Send question"
-              className={`h-9 w-9 items-center justify-center rounded-full ${
+              accessibilityLabel={copy('noteChat.sendQuestion', 'Send question')}
+              className={`${Platform.OS === 'android' ? 'h-12 w-12' : 'h-9 w-9'} items-center justify-center rounded-full ${
                 canSubmit ? 'bg-brand' : 'bg-tertiarySystemFill'
               }`}
             >

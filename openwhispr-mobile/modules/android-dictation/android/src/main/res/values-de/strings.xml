@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr · Deinen Text einfügen</string>
+  <string name="ow_insertion_description">Die Bedienungshilfe erlaubt OpenWhispr, beim Diktieren das ausgewählte Feld zu lesen und das Ergebnis einzufügen. Sie sendet keine Nachrichten und liest keine Passwortfelder.</string>
+  <string name="ow_bubble_ready">OpenWhispr ist bereit</string>
+  <string name="ow_bubble_recording">OpenWhispr · Höre zu…</string>
+  <string name="ow_bubble_notice">Zum Öffnen tippen. Die schwebende Schaltfläche lässt sich im Konto ausschalten.</string>
+  <string name="ow_bubble_channel">Schwebende Blase anzeigen</string>
+  <string name="ow_audio_unreadable">Diese Audiodatei konnte nicht gelesen werden. Versuche eine gültige WAV-, MP3- oder M4A-Datei.</string>
+  <string name="ow_meeting_notice">Besprechungsaudio wird aufgenommen.</string>
+  <string name="ow_meeting_stop">Stoppen</string>
+  <string name="ow_meeting_stopped">Aufnahme beendet. Dein Audio wurde gespeichert.</string>
+</resources>

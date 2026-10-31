@@ -1,0 +1,12 @@
+<resources>
+  <string name="ow_insertion_label">OpenWhispr · إدراج النص</string>
+  <string name="ow_insertion_description">تتيح إمكانية الوصول لـ OpenWhispr قراءة الحقل النشط عند الإملاء وإدراج النتيجة. لا يرسل رسائل ولا يقرأ حقول كلمات المرور.</string>
+  <string name="ow_bubble_ready">OpenWhispr جاهز</string>
+  <string name="ow_bubble_recording">OpenWhispr · جاري الاستماع...</string>
+  <string name="ow_bubble_notice">اضغط للفتح. يمكنك تعطيل الزر العائم من الحساب.</string>
+  <string name="ow_bubble_channel">إظهار الزر العائم</string>
+  <string name="ow_audio_unreadable">تعذّرت قراءة هذا الملف الصوتي. جرّب ملف WAV أو MP3 أو M4A صالحًا.</string>
+  <string name="ow_meeting_notice">جارٍ تسجيل صوت الاجتماع.</string>
+  <string name="ow_meeting_stop">إيقاف</string>
+  <string name="ow_meeting_stopped">توقف التسجيل. تم حفظ الصوت.</string>
+</resources>

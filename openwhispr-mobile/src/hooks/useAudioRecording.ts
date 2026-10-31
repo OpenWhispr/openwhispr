@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
@@ -79,6 +79,10 @@ const mimeTypeFromFileName = (fileName?: string): string | undefined => {
 };
 
 export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
+  const [isStarting, setIsStarting] = useState(false);
+  const generation = useRef(0);
+  const starting = useRef(false);
+  const stopping = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentText, setCurrentText] = useState('');
@@ -98,6 +102,13 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const recorderOptions = getDefaultRecorderOptions();
   const audioRecorder = useAudioRecorder(recorderOptions);
   const isSupported = isExpoAudioAvailable() && !!audioRecorder;
+  useEffect(
+    () => () => {
+      generation.current += 1;
+    },
+    [],
+  );
+
   const allowsBackgroundRecording = options.allowsBackgroundRecording === true;
   const saveToHistory = options.saveToHistory !== false;
   const cleanup = options.cleanup !== false;
@@ -106,7 +117,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   const ensureAudioSupport = () => {
     if (!isSupported || !expoAudio || !audioRecorder) {
       const error = new Error(
-        'Audio recording is unavailable in Expo Go. Build and run a development client (e.g. `expo run:ios`) to test recording features.',
+        'Audio recording is unavailable in this build. Install the full app to record.',
       );
       if (__DEV__) {
         console.warn('[audio] Attempted to use recording without native module support.');
@@ -117,6 +128,15 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   const startRecording = async () => {
+    const cancelledError = () =>
+      Object.assign(new Error('Recording cancelled'), { name: 'AbortError' });
+    if (starting.current || stopping.current || stoppingRef.current || isRecording || isProcessing)
+      throw cancelledError();
+    starting.current = true;
+    setIsStarting(true);
+    const run = ++generation.current;
+    const cancelled = () => run !== generation.current;
+    let prepared = false;
     try {
       const { expoAudio: audioModule, audioRecorder: recorder } = ensureAudioSupport();
 
@@ -125,10 +145,12 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       // already false here, the upcoming request call is guaranteed to
       // return silently with no native UI.
       const priorStatus = await audioModule.AudioModule.getRecordingPermissionsAsync();
+      if (cancelled()) throw cancelledError();
       const nativePromptShown = !priorStatus.granted && priorStatus.canAskAgain;
 
       const { granted, canAskAgain } =
         await audioModule.AudioModule.requestRecordingPermissionsAsync();
+      if (cancelled()) throw cancelledError();
       if (!granted) {
         throw new MicPermissionError('Microphone permission not granted', {
           canAskAgain,
@@ -139,6 +161,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       if (Platform.OS === 'android' && allowsBackgroundRecording) {
         const notificationPermission =
           await audioModule.AudioModule.requestNotificationPermissionsAsync();
+        if (cancelled()) throw cancelledError();
         if (!notificationPermission.granted) {
           throw new Error(
             'Notification permission is required to keep recording in the background.',
@@ -159,6 +182,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         console.warn('[audio] Failed to set audio mode:', audioModeError);
       }
 
+      if (cancelled()) throw cancelledError();
       // Release any stale state from a previous recording attempt.
       if (recorder.isRecording) {
         try {
@@ -170,12 +194,19 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         ? snapshotTranscriptionJob('dictation')
         : { ...snapshotTranscriptionJob('dictation', []), cleanupUnavailable: CLEANUP_OFF };
       await recorder.prepareToRecordAsync(recorderOptions);
+      prepared = true;
+      if (cancelled()) throw cancelledError();
       await recorder.record();
+      if (cancelled()) {
+        await recorder.stop();
+        throw cancelledError();
+      }
       openRef.current = true;
 
       setIsRecording(true);
       setCurrentText('');
     } catch (error) {
+      if (cancelled()) throw error;
       // Permission denial is a normal user state — surfaced by onError as a
       // friendly alert. Skip console.error so dev LogBox doesn't show a red toast.
       if (!isMicPermissionError(error)) {
@@ -185,17 +216,28 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         options.onError?.(error);
       }
       throw error;
+    } finally {
+      if (cancelled() && prepared) {
+        try {
+          if (audioRecorder.isRecording) await audioRecorder.stop();
+          if (audioRecorder.uri)
+            await FileSystem.deleteAsync(audioRecorder.uri, { idempotent: true });
+        } catch {
+          // Expo releases the native recorder when its screen unmounts.
+        }
+      }
+      starting.current = false;
+      if (!cancelled()) setIsStarting(false);
     }
   };
 
   const stopRecording = async () => {
+    if (stopping.current || stoppingRef.current || !isRecording) return false;
+    stopping.current = true;
+    setIsProcessing(true);
     let sourceUriToDiscard: string | null = null;
     try {
       const { audioRecorder: recorder } = ensureAudioSupport();
-
-      if (!isRecording || stoppingRef.current) {
-        return;
-      }
 
       stoppingRef.current = true;
       try {
@@ -222,9 +264,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
       if (fileInfo) {
         if (!fileInfo.exists) {
-          throw new Error(
-            'Recording file was not created. Audio recording may not work in the iOS Simulator. Please try on a physical device.',
-          );
+          throw new Error('Recording file was not created. Please try recording again.');
         }
         if (fileInfo.size === 0) {
           throw new Error(
@@ -244,6 +284,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       const transcriptionProvider = jobRouteRef.current.provider;
       try {
         await finalizeRecording(retained, transcriptionProvider, clientTranscriptionId);
+        return true;
       } catch (transcribeError) {
         if (isCancelled()) {
           await discardRetainedAudio(retained);
@@ -297,6 +338,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       options.onError?.(error as Error);
       throw error;
     } finally {
+      stopping.current = false;
       // Retention normally removes the source. An ephemeral question must also lose it when
       // validation or copying fails before managed audio can take ownership.
       if (sourceUriToDiscard) {
@@ -468,6 +510,8 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   // stop already claimed is left to it, file and processing state alike. The claim is held until
   // the recording is gone, so a send landing meanwhile can't stop it again and read the deleted file.
   const cancelRecording = async (): Promise<void> => {
+    generation.current += 1;
+    setIsStarting(false);
     if (stoppingRef.current) return;
     if (!audioRecorder || (!audioRecorder.isRecording && !openRef.current)) {
       setIsRecording(false);
@@ -498,7 +542,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
 
   // Meeting-specific: stops recording and returns the raw URI without running the dictation finalize path.
   const stopRecordingRaw = async (): Promise<string | null> => {
-    if (!audioRecorder.isRecording) return null;
+    if (!audioRecorder.isRecording || stoppingRef.current || stopping.current) return null;
     stoppingRef.current = true;
     try {
       await audioRecorder.stop();
@@ -512,6 +556,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
   };
 
   return {
+    isStarting,
     isRecording,
     isProcessing,
     currentText,

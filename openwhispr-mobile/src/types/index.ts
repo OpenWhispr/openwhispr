@@ -8,15 +8,26 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
+export type AndroidStyleContext = 'personal' | 'work' | 'email' | 'notes';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
+  androidTextModel?: 'qwen-small' | 'qwen-balanced';
+  androidSpeechModel?: 'parakeet-v3' | 'moonshine-tiny' | 'moonshine-small';
+  androidHistoryDays?: number;
+  insightsSyncEnabled?: boolean;
+  androidBubbleSize?: number;
+  androidTranslationTarget?: { code: string; label: string };
+  androidStyleContext?: AndroidStyleContext;
+  androidStyleTones?: Partial<Record<AndroidStyleContext, KeyboardTone>>;
   inference?: Partial<Record<InferenceScope, InferenceSelection>>;
   rememberedInference?: Partial<Record<InferenceScope, Record<string, InferenceSelection>>>;
   // Workflows set automatically, by Local Mode holding them on this iPhone or a dictation change
   // keeping them where they ran, as opposed to ones the user chose on their own page; a dictation
   // change keeps these and only onboarding releases them.
   pinnedInference?: MobileInferenceScope[];
+  // Android Local Mode returns to the previous provider and its automatic workflow selections.
+  privateModeReturn?: { pinned: Partial<Record<MobileInferenceScope, InferenceSelection>> };
   // Set once a config follows Local Mode's OpenWhispr Cloud defaults for uploads and cleanup. New
   // installs start with it; older configs get it from localModeUpgradeConfig at launch.
   localModeUpgraded?: boolean;
@@ -57,6 +68,10 @@ export interface UserConfig {
 
 export function inferenceToProcessingMode(mode: InferenceMode): ProcessingMode {
   return mode === 'local' ? 'private' : mode === 'providers' ? 'providers' : 'cloud';
+}
+
+export function processingToInferenceMode(mode: ProcessingMode): InferenceMode {
+  return mode === 'private' ? 'local' : mode === 'providers' ? 'providers' : 'openwhispr';
 }
 
 export interface TextInferenceSnapshot {
@@ -175,7 +190,8 @@ export type LocalReasoningErrorCode =
   | 'APPLE_LLM_FAILED'
   | 'APPLE_LLM_CANCELLED'
   | 'LOCAL_CONTEXT_LIMIT'
-  | 'LOCAL_REASONING_UNAVAILABLE';
+  | 'LOCAL_REASONING_UNAVAILABLE'
+  | 'LOCAL_REASONING_FAILED';
 
 export interface MeetingActionItem {
   text: string;
@@ -195,6 +211,7 @@ export interface StructuredMeetingNotes {
 export type AudioPurpose = 'dictation' | 'meeting' | 'upload';
 
 export interface TranscriptionRequest extends CleanupInferenceSnapshot {
+  signal?: AbortSignal;
   inferenceRoute?: Extract<InferenceRoute, { mode: 'providers' }>;
   audioUri: string;
   provider: TranscriptionProvider;

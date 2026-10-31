@@ -1,0 +1,4 @@
+{
+  "platforms": ["android"],
+  "android": { "modules": ["com.openwhispr.dictation.AndroidDictationModule"] }
+}

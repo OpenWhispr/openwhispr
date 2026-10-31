@@ -1,3 +1,6 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { useTranslation } from 'react-i18next';
+import { NoteRecordingControls } from '@/android/NoteRecordingControls';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -8,12 +11,13 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { isMicPermissionError, showMicPermissionAlert } from '@/lib/permissions';
-import { type Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useActionsStore } from '@/store/useActionsStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -40,6 +44,7 @@ import { NoteShareSheet } from '@/components/notes/NoteShareSheet';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ConflictBanner } from '@/components/notes/ConflictBanner';
 import { VoiceSetupBanner } from '@/components/notes/VoiceSetupBanner';
+import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
 import { ThatsMeSheet } from '@/components/notes/ThatsMeSheet';
 import { shouldOfferVoiceSetup, voiceSetupCandidates } from '@/lib/notes/voiceSetupPrompt';
 import { SpeakerProfileOwnerAlreadyExistsError } from '@/data/local/notesRepository';
@@ -61,6 +66,7 @@ import { SpeakerRenameSheet } from '@/components/notes/SpeakerRenameSheet';
 import { SpeakerMergeSheet } from '@/components/notes/SpeakerMergeSheet';
 import { VoiceprintSuggestionSheet } from '@/components/notes/VoiceprintSuggestionSheet';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { ProviderExecutionError } from '@/services/providers/ProviderExecutionError';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GradientGlassSurface } from '@/components/ui/GradientGlassSurface';
 import { Glass } from '@/components/ui/Glass';
@@ -89,6 +95,7 @@ import {
 } from '@/lib/localReasoning';
 import { ChatEmptyAnswerError, toChatErrorMessage } from '@/lib/chat/chatErrorMessage';
 import { providerDisplayName } from '@/lib/mobileProviders';
+import { getProviderErrorCopyKey } from '@/lib/providerErrorCopy';
 import { promptLocalReasoningFallback } from '@/lib/localReasoningFallback';
 import { confirmCloudOnce, confirmDestructive } from '@/lib/alerts';
 import { randomUUID } from '@/lib/uuid';
@@ -131,11 +138,9 @@ const transcriptStatusText = (status: string): string => {
   }
 };
 
-/** Where the editor sits: the screens it opens are pushed onto the same tab's stack. */
+/** Keep navigation within the tab that opened the note. */
 export interface NoteEditorStack {
-  /** Where Back goes when there is nothing to go back to. */
   root: Href;
-  /** The prefix of the stack's actions and voice-enrollment routes. */
   routePrefix: string;
 }
 
@@ -149,6 +154,13 @@ export default function NoteEditorScreen({
 }: {
   stack?: NoteEditorStack;
 }): React.JSX.Element {
+  const { t } = useTranslation('android');
+  const { copy, language } = useAndroidCopy();
+  // Async failures use the currently displayed language without replacing the running operation.
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
+  const { width, fontScale } = useWindowDimensions();
+  const stackBodyTabs = Platform.OS === 'android' && width / fontScale < 240;
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = parseInt(id ?? '', 10);
   const router = useRouter();
@@ -190,6 +202,7 @@ export default function NoteEditorScreen({
     [getConflictedNote, noteId, note?.conflictServerNote],
   );
   const user = useAuthStore((s) => s.user);
+  const sessionCookie = useAuthStore((s) => s.sessionCookie);
   const activeMode = useProcessingModeStore((s) => s.activeMode);
   const { register: registerSuperwallGate } = useSuperwallGate();
   const { handleUsageLimitReached, isRecoveringUsageLimit } = useUsageLimitRecovery();
@@ -197,6 +210,70 @@ export default function NoteEditorScreen({
   const notesMode = useConfigStore((s) => s.config?.inference?.notes?.mode);
   const notesProviderId = useConfigStore((s) => s.config?.inference?.notes?.providerId);
   const { chatEnabled, gate: gateChatSend } = useChatSendGate();
+  // Consent belongs to this editor, account, note and processing selection. Native alerts,
+  // model readiness and the paywall may finish after any of those have changed.
+  const aiRoutingKey = useConfigStore((s) => JSON.stringify(s.config?.inference));
+  const aiContext = useMemo(
+    () => ({
+      noteId,
+      clientNoteId: note?.clientNoteId,
+      remoteId: note?.remoteId,
+      isPrivate: note?.isPrivate,
+      accountId: user?.id,
+      sessionCookie,
+      activeMode,
+      aiRoutingKey,
+    }),
+    [
+      noteId,
+      note?.clientNoteId,
+      note?.remoteId,
+      note?.isPrivate,
+      user?.id,
+      sessionCookie,
+      activeMode,
+      aiRoutingKey,
+    ],
+  );
+  const aiContextRef = useRef(aiContext);
+  aiContextRef.current = aiContext;
+  const editorActive = useRef(true);
+  const editorGeneration = useRef(0);
+  const captureAIContext = useCallback(() => {
+    const context = aiContextRef.current;
+    const generation = editorGeneration.current;
+    const auth = useAuthStore.getState();
+    const accountId = auth.user?.id;
+    const cookie = auth.sessionCookie;
+    const mode = useProcessingModeStore.getState().activeMode;
+    const routingKey = JSON.stringify(useConfigStore.getState().config?.inference);
+    return (): boolean => {
+      if (Platform.OS !== 'android') return true;
+      const currentAuth = useAuthStore.getState();
+      const currentNote = getNoteById(context.noteId);
+      return (
+        editorActive.current &&
+        generation === editorGeneration.current &&
+        context === aiContextRef.current &&
+        !!currentNote &&
+        !currentNote.deletedAt &&
+        currentNote.clientNoteId === context.clientNoteId &&
+        currentNote.remoteId === context.remoteId &&
+        currentNote.isPrivate === context.isPrivate &&
+        currentAuth.user?.id === accountId &&
+        currentAuth.sessionCookie === cookie &&
+        useProcessingModeStore.getState().activeMode === mode &&
+        JSON.stringify(useConfigStore.getState().config?.inference) === routingKey
+      );
+    };
+  }, [getNoteById]);
+  useEffect(() => {
+    editorActive.current = true;
+    return () => {
+      editorActive.current = false;
+      editorGeneration.current += 1;
+    };
+  }, []);
   const providerNotes = notesMode === 'providers';
   const addLearnedWords = useDictionaryStore((s) => s.addLearnedWords);
 
@@ -229,7 +306,7 @@ export default function NoteEditorScreen({
   const [shareVisible, setShareVisible] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatOverNoteMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
-  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | { generic: true } | null>(null);
   const [chatLastQuestion, setChatLastQuestion] = useState('');
   const [isChatProcessing, setIsChatProcessing] = useState(false);
   const [isRetryingTranscript, setIsRetryingTranscript] = useState(false);
@@ -253,6 +330,7 @@ export default function NoteEditorScreen({
   const autoLearnEnabledRef = useRef(autoLearnEnabled);
   autoLearnEnabledRef.current = autoLearnEnabled;
   const chatAbortRef = useRef<AbortController | null>(null);
+  const chatConsentGeneration = useRef(0);
 
   useEffect(() => {
     initializeActions();
@@ -352,14 +430,16 @@ export default function NoteEditorScreen({
       }),
     [meetingSpeakerEmbeddings, note, speakers, transcriptSegments, voiceProfiles],
   );
-  const showVoiceSetupBanner = shouldOfferVoiceSetup({
-    isOnDeviceMeeting:
-      note?.noteType === 'meeting' && isManagedMeetingAudioUri(note.id, note.sourceFile),
-    transcriptStatus,
-    hasOwnerProfile: voiceProfiles.some((profile) => profile.isOwner === 1),
-    dismissed: voiceSetupDismissed,
-    candidateCount: voiceCandidates.length,
-  });
+  const showVoiceSetupBanner =
+    supportsVoiceEnrollment() &&
+    shouldOfferVoiceSetup({
+      isOnDeviceMeeting:
+        note?.noteType === 'meeting' && isManagedMeetingAudioUri(note.id, note.sourceFile),
+      transcriptStatus,
+      hasOwnerProfile: voiceProfiles.some((profile) => profile.isOwner === 1),
+      dismissed: voiceSetupDismissed,
+      candidateCount: voiceCandidates.length,
+    });
   // The banner and That's me need your profiles, and a meeting opened straight from
   // recording never passes a screen that loads them.
   useEffect(() => {
@@ -414,7 +494,10 @@ export default function NoteEditorScreen({
       }),
     [calendarParticipants, note?.ownerUserId, user?.email, user?.id],
   );
-  const attendeeLabel = formatAttendeeChipLabel(attendees);
+  const attendeeLabel = formatAttendeeChipLabel(attendees, {
+    you: copy('noteDetails.you', 'You'),
+    guest: copy('noteDetails.guest', 'Guest'),
+  });
   const meetingNotesContext = useMemo(
     () =>
       note?.calendarEventId
@@ -475,8 +558,7 @@ export default function NoteEditorScreen({
   );
   const shouldShowTranscriptStatus =
     isAudioTranscript && !hasTranscriptSegments && isTranscriptInProgress;
-  const shouldShowTranscriptFailed =
-    isAudioTranscript && !hasTranscriptSegments && transcriptStatus === 'failed';
+  const shouldShowTranscriptFailed = isAudioTranscript && transcriptStatus === 'failed';
   const shouldRenderPlainEditor =
     !isAudioTranscript ||
     (!hasTranscriptSegments && (transcriptStatus === 'idle' || transcriptStatus === 'done'));
@@ -498,7 +580,8 @@ export default function NoteEditorScreen({
   );
   // A private note asks before any AI leaves this iPhone. Local Mode asks too for note chat; note
   // formatting follows its own selection there.
-  const formattingRequiresCloudConfirmation = note?.isPrivate === 1;
+  const formattingRequiresCloudConfirmation =
+    note?.isPrivate === 1 || (Platform.OS === 'android' && activeMode === 'private');
   const chatRequiresCloudConfirmation =
     formattingRequiresCloudConfirmation || activeMode === 'private';
 
@@ -517,11 +600,17 @@ export default function NoteEditorScreen({
         if (error instanceof SpeakerProfileOwnerAlreadyExistsError) {
           // A profile this screen didn't know about: reloading hides the banner.
           loadVoiceProfiles();
-          Alert.alert(...VOICE_ALREADY_TAUGHT_ALERT);
+          Alert.alert(
+            copyRef.current('editorFeedback.voiceAlreadyTitle', VOICE_ALREADY_TAUGHT_ALERT[0]),
+            copyRef.current('editorFeedback.voiceAlreadyBody', VOICE_ALREADY_TAUGHT_ALERT[1]),
+          );
         } else {
           Alert.alert(
-            "Couldn't save your voice",
-            'Read a short script instead to teach OpenWhispr your voice.',
+            copyRef.current('editorFeedback.voiceSaveTitle', "Couldn't save your voice"),
+            copyRef.current(
+              'editorFeedback.voiceSaveBody',
+              'Read a short script instead to teach OpenWhispr your voice.',
+            ),
           );
         }
         return false;
@@ -704,13 +793,41 @@ export default function NoteEditorScreen({
 
   const handleEnhanceError = useCallback((message: string, error: unknown) => {
     if (handleAccountRequiredError(error, 'AI actions', { cloudOnly: true })) return;
-    Alert.alert('Action failed', message);
+    const title = copyRef.current('editorFeedback.actionFailed', 'Action failed');
+    const body =
+      error instanceof Error
+        ? message
+        : copyRef.current('editorFeedback.enhancementFailed', 'Enhancement failed');
+    if (Platform.OS === 'android') {
+      Alert.alert(
+        title,
+        error instanceof ProviderExecutionError
+          ? copyRef.current(
+              getProviderErrorCopyKey(error) ?? 'editorFeedback.enhancementFailed',
+              'Enhancement failed',
+              { status: error.status },
+            )
+          : body,
+        [{ text: copyRef.current('close', 'Close') }],
+      );
+      return;
+    }
+    Alert.alert(title, body);
   }, []);
 
-  const { state: processingState, runAction } = useActionProcessing({
+  const {
+    state: processingState,
+    runAction,
+    cancel: cancelAction,
+  } = useActionProcessing({
     onSuccess: handleEnhanceSuccess,
     onError: handleEnhanceError,
   });
+
+  useEffect(() => {
+    // Android consent ends with this note, owner or processing selection.
+    if (Platform.OS === 'android') return cancelAction;
+  }, [aiContext, cancelAction]);
 
   const handleDictationComplete = useCallback(
     (text: string) => {
@@ -746,17 +863,35 @@ export default function NoteEditorScreen({
       }
       return;
     }
-    Alert.alert('Dictation failed', error.message);
+    Alert.alert(
+      copyRef.current('editorFeedback.dictationFailed', 'Dictation failed'),
+      error.message,
+    );
   }, []);
 
-  const { isRecording, isProcessing, currentText, startRecording, stopRecording } =
-    useAudioRecording({
-      onComplete: handleDictationComplete,
-      onError: handleDictationError,
-      // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
-      onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
-      onUsageLimitReached: handleUsageLimitReached,
-    });
+  useFocusEffect(
+    useCallback(() => {
+      editorActive.current = true;
+      return () => {
+        editorActive.current = false;
+        editorGeneration.current += 1;
+      };
+    }, []),
+  );
+  const {
+    isStarting,
+    isRecording,
+    isProcessing,
+    currentText,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  } = useAudioRecording({
+    onComplete: handleDictationComplete,
+    onError: handleDictationError,
+    onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
+    onUsageLimitReached: handleUsageLimitReached,
+  });
 
   const handleDictate = useCallback(async () => {
     safeHaptics('medium');
@@ -775,12 +910,12 @@ export default function NoteEditorScreen({
           params: { source: 'note_editor' },
           requiresAccount: false,
           feature: () => {
-            startRecording().catch(() => {});
+            if (editorActive.current) startRecording().catch(() => {});
           },
         });
         return;
       }
-      await startRecording();
+      if (editorActive.current) await startRecording();
     } catch {
       // Hook's onError → handleDictationError already surfaced this to the user.
     }
@@ -802,7 +937,15 @@ export default function NoteEditorScreen({
           }),
         },
         format,
-      ).catch(() => Alert.alert('Export failed', 'Could not export this note. Please try again.'));
+      ).catch(() =>
+        Alert.alert(
+          copyRef.current('editorFeedback.exportFailed', 'Export failed'),
+          copyRef.current(
+            'editorFeedback.exportNoteFailed',
+            'Could not export this note. Please try again.',
+          ),
+        ),
+      );
     },
     [bodyTabInput, flushEnhancedSave, getNoteById, noteId, transcriptBlocks, viewMode],
   );
@@ -819,7 +962,10 @@ export default function NoteEditorScreen({
     if (!generatedContent?.trim()) return;
     safeHaptics('light');
     Clipboard.setStringAsync(generatedContent).catch(() => {
-      Alert.alert('Copy failed', 'Could not copy the generated notes.');
+      Alert.alert(
+        copyRef.current('editorFeedback.copyFailed', 'Copy failed'),
+        copyRef.current('editorFeedback.copyNotesFailed', 'Could not copy the generated notes.'),
+      );
     });
   }, [flushEnhancedSave, getNoteById, noteId]);
 
@@ -833,14 +979,25 @@ export default function NoteEditorScreen({
         },
         format,
       ).catch(() =>
-        Alert.alert('Export failed', 'Could not export this transcript. Please try again.'),
+        Alert.alert(
+          copyRef.current('editorFeedback.exportFailed', 'Export failed'),
+          copyRef.current(
+            'editorFeedback.exportTranscriptFailed',
+            'Could not export this transcript. Please try again.',
+          ),
+        ),
       );
     },
     [transcriptBlocks],
   );
 
   const runSelectedAction = useCallback(
-    (action: Parameters<typeof runAction>[0], routing?: ReasoningRoutingOptions) => {
+    (
+      action: Parameters<typeof runAction>[0],
+      routing: ReasoningRoutingOptions | undefined,
+      isCurrent: () => boolean,
+    ) => {
+      if (!isCurrent()) return;
       if (processingState === 'processing') return;
       // Save a queued edit now: it must not land on top of the new notes later, and it must
       // survive an action that fails.
@@ -853,6 +1010,9 @@ export default function NoteEditorScreen({
       runAction(action, inputText, {
         inputKind: usesSegmentTranscriptRef.current ? 'meeting-transcript' : 'plain-note',
         dictionaryTiers: buildDictationHintTiers(false),
+        isCurrent,
+        shouldGenerateTitle: () =>
+          Platform.OS !== 'android' || isRegenerableNoteTitle(titleRef.current),
         routing: {
           isPrivateNote: note?.isPrivate === 1,
           ...routing,
@@ -863,18 +1023,23 @@ export default function NoteEditorScreen({
   );
 
   const runActionWithRouting = useCallback(
-    async (action: Parameters<typeof runAction>[0]) => {
+    async (action: Parameters<typeof runAction>[0], isCurrent: () => boolean) => {
+      if (!isCurrent()) return;
+      const run = (routing: ReasoningRoutingOptions): void => {
+        if (isCurrent()) runSelectedAction(action, routing, isCurrent);
+      };
       const routing = { isPrivateNote: note?.isPrivate === 1 };
       // On-Device never leaves this phone: no account, paywall, or fallback to another service.
       if (notesMode === 'local') {
         const readiness = await getLocalReasoningReadiness();
+        if (!isCurrent()) return;
         if (readiness.status === 'ready') {
-          runSelectedAction(action, routing);
+          run(routing);
           return;
         }
         Alert.alert(
-          'Local AI unavailable',
-          `${getLocalReasoningUnavailableMessage(readiness)} Note Formatting is set to On-Device, so this note stays on your iPhone.`,
+          copyRef.current('editorFeedback.localUnavailable', 'Local AI unavailable'),
+          `${Platform.OS === 'android' ? copyRef.current('editorFeedback.downloadLocal', 'Download a local text model in Account → Models to use on-device AI.') : getLocalReasoningUnavailableMessage(readiness)} ${copyRef.current('editorFeedback.localNoteStays', 'Note Formatting is set to On-Device, so this note stays on your phone.')}`,
         );
         return;
       }
@@ -885,17 +1050,18 @@ export default function NoteEditorScreen({
 
       if (localRequired) {
         if (await shouldUseLocalReasoning(routing)) {
-          runSelectedAction(action, routing);
+          run(routing);
           return;
         }
 
         const readiness = await getLocalReasoningReadiness();
-        const runElsewhereOnce = (): void =>
-          runSelectedAction(action, { ...routing, allowCloudFallback: true });
+        if (!isCurrent()) return;
+        const runElsewhereOnce = (): void => run({ ...routing, allowCloudFallback: true });
         promptLocalReasoningFallback({
+          copy: copyRef.current,
           readiness,
           signedIn: !!user,
-          onEnableLocal: () => runSelectedAction(action, routing),
+          onEnableLocal: () => run(routing),
           onUseCloudOnce: user || providerNotes ? runElsewhereOnce : undefined,
           destinationName: providerNotes ? providerDisplayName(notesProviderId ?? '') : undefined,
         });
@@ -903,7 +1069,7 @@ export default function NoteEditorScreen({
       }
 
       if (providerNotes) {
-        runSelectedAction(action, routing);
+        run(routing);
         return;
       }
 
@@ -913,18 +1079,28 @@ export default function NoteEditorScreen({
       }
 
       const gateAndRun = (actionRouting: ReasoningRoutingOptions) => {
+        if (!isCurrent()) return;
         registerSuperwallGate({
           placement: SUPERWALL_PLACEMENTS.aiActionRun,
           params: { actionName: action.name },
           requiresAccount: false,
-          feature: () => runSelectedAction(action, actionRouting),
+          feature: () => run(actionRouting),
         }).catch(() => {});
       };
 
       if (formattingRequiresCloudConfirmation) {
         confirmCloudOnce(
-          `${action.name} sends this note to cloud AI for this request. Your note privacy and sync settings will not change.`,
+          copyRef.current(
+            'editorFeedback.cloudActionBody',
+            `${action.name} sends this note to cloud AI for this request. Your note privacy and sync settings will not change.`,
+            { action: action.name },
+          ),
           () => gateAndRun({ ...routing, allowCloudFallback: true }),
+          {
+            title: copyRef.current('editorFeedback.cloudTitle', 'Use cloud AI?'),
+            cancel: copyRef.current('cancel', 'Cancel'),
+            confirm: copyRef.current('editorFeedback.cloudOnce', 'Use Cloud Once'),
+          },
         );
         return;
       }
@@ -945,29 +1121,48 @@ export default function NoteEditorScreen({
 
   const handleRunAction = useCallback(
     (action: Parameters<typeof runAction>[0]) => {
+      const isCurrent = captureAIContext();
       // Decide from the notes on screen: an edit typed since the last save counts too.
       flushEnhancedSave();
       if (!getNoteById(noteId)?.enhancedContent?.trim()) {
-        runActionWithRouting(action).catch(() => {});
+        runActionWithRouting(action, isCurrent).catch(() => {});
         return;
       }
       confirmDestructive(
-        'Replace enhanced notes?',
-        'Running this action replaces the current enhanced notes, including any edits.',
-        () => runActionWithRouting(action),
-        { destructiveLabel: 'Replace' },
+        copyRef.current('editorFeedback.replaceTitle', 'Replace enhanced notes?'),
+        copyRef.current(
+          'editorFeedback.replaceBody',
+          'Running this action replaces the current enhanced notes, including any edits.',
+        ),
+        () => runActionWithRouting(action, isCurrent),
+        {
+          destructiveLabel: copyRef.current('editorFeedback.replaceAction', 'Replace'),
+          cancelLabel: copyRef.current('cancel', 'Cancel'),
+        },
       );
     },
-    [flushEnhancedSave, getNoteById, noteId, runActionWithRouting],
+    [captureAIContext, flushEnhancedSave, getNoteById, noteId, runActionWithRouting],
   );
 
   const startChatRequest = useCallback(
-    async (question: string, appendUserMessage: boolean, allowRemoteContent = false) => {
+    async (
+      question: string,
+      appendUserMessage: boolean,
+      allowRemoteContent: boolean,
+      isCurrent: () => boolean,
+    ) => {
+      if (!isCurrent()) return;
       const trimmedQuestion = question.trim();
       const context = chatContextRef.current.trim();
       if (!trimmedQuestion || chatAbortRef.current) return;
       if (!context) {
-        Alert.alert('Nothing to ask about', 'Add note content or finish the transcript first.');
+        Alert.alert(
+          copyRef.current('editorFeedback.nothingTitle', 'Nothing to ask about'),
+          copyRef.current(
+            'editorFeedback.nothingBody',
+            'Add note content or finish the transcript first.',
+          ),
+        );
         return;
       }
 
@@ -1012,6 +1207,7 @@ export default function NoteEditorScreen({
           // still fits wherever it did before they were added.
           if (
             controller.signal.aborted ||
+            !isCurrent() ||
             !isLocalContextLimitError(error) ||
             !sourceContext ||
             sourceContext === context
@@ -1020,7 +1216,7 @@ export default function NoteEditorScreen({
           }
           response = await askAbout(sourceContext);
         }
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || !isCurrent()) return;
         if (!response.text.trim()) throw new ChatEmptyAnswerError();
         setChatMessages((current) => [
           ...current,
@@ -1032,15 +1228,13 @@ export default function NoteEditorScreen({
           },
         ]);
       } catch (error) {
-        if (controller.signal.aborted) return;
-        // An on-device error's text comes from the native layer, so it gets the same worded copy as
-        // the Chat tab, and so does an empty answer.
+        if (controller.signal.aborted || !isCurrent()) return;
         setChatError(
           error instanceof LocalReasoningError || error instanceof ChatEmptyAnswerError
             ? toChatErrorMessage(error, { surface: 'noteChat' })
             : error instanceof Error
               ? error.message
-              : 'Chat failed',
+              : { generic: true },
         );
       } finally {
         if (chatAbortRef.current === controller) {
@@ -1054,24 +1248,46 @@ export default function NoteEditorScreen({
 
   const runChatWithCloudConfirmation = useCallback(
     (question: string, appendUserMessage: boolean) => {
+      const contextIsCurrent = captureAIContext();
+      const generation = chatConsentGeneration.current;
+      const isCurrent = (): boolean =>
+        contextIsCurrent() &&
+        (Platform.OS !== 'android' || generation === chatConsentGeneration.current);
       gateChatSend(
-        (allowCloudFallback) => {
-          startChatRequest(question, appendUserMessage, allowCloudFallback).catch(() => {});
+        (allowRemoteContent) => {
+          startChatRequest(question, appendUserMessage, allowRemoteContent, isCurrent).catch(
+            () => {},
+          );
         },
         {
           consentMessage: chatRequiresCloudConfirmation
-            ? 'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.'
+            ? copyRef.current(
+                'editorFeedback.cloudChatBody',
+                'Chat sends this note context to your selected AI service for this request. Your note privacy and sync settings will not change.',
+              )
             : null,
           source: 'note_chat',
+          isCurrent,
+          consentLabels: {
+            title: copyRef.current('editorFeedback.cloudTitle', 'Use cloud AI?'),
+            cancel: copyRef.current('cancel', 'Cancel'),
+            confirm: copyRef.current('editorFeedback.cloudOnce', 'Use Cloud Once'),
+          },
         },
       );
     },
-    [chatRequiresCloudConfirmation, gateChatSend, startChatRequest],
+    [captureAIContext, chatRequiresCloudConfirmation, gateChatSend, startChatRequest],
   );
 
   const handleAskNote = useCallback(() => {
     if (!chatContextRef.current.trim()) {
-      Alert.alert('Nothing to ask about', 'Add note content or finish the transcript first.');
+      Alert.alert(
+        copyRef.current('editorFeedback.nothingTitle', 'Nothing to ask about'),
+        copyRef.current(
+          'editorFeedback.nothingBody',
+          'Add note content or finish the transcript first.',
+        ),
+      );
       return;
     }
     setChatVisible(true);
@@ -1096,6 +1312,7 @@ export default function NoteEditorScreen({
 
   const handleClearChat = useCallback(() => {
     if (isChatProcessing) return;
+    chatConsentGeneration.current += 1;
     setChatMessages([]);
     setChatDraft('');
     setChatError(null);
@@ -1103,6 +1320,7 @@ export default function NoteEditorScreen({
   }, [isChatProcessing]);
 
   const handleCloseChat = useCallback(() => {
+    chatConsentGeneration.current += 1;
     if (chatAbortRef.current) {
       chatAbortRef.current.abort();
       chatAbortRef.current = null;
@@ -1116,12 +1334,17 @@ export default function NoteEditorScreen({
   }, [router, stack.routePrefix]);
 
   const handleDelete = useCallback(() => {
-    confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-      safeHaptics('warning');
-      deleteNote(noteId);
-      if (router.canGoBack()) router.back();
-    });
-  }, [deleteNote, noteId, router]);
+    confirmDestructive(
+      copy('library.deleteNote', 'Delete Note'),
+      copy('library.deleteNoteBody', 'This note will be deleted permanently.'),
+      () => {
+        safeHaptics('warning');
+        deleteNote(noteId);
+        if (router.canGoBack()) router.back();
+      },
+      { cancelLabel: copy('cancel', 'Cancel'), destructiveLabel: copy('deleteAction', 'Delete') },
+    );
+  }, [copy, deleteNote, noteId, router]);
 
   const handleRetryTranscript = useCallback(async () => {
     if (!note || isRetryingTranscript) return;
@@ -1131,34 +1354,39 @@ export default function NoteEditorScreen({
       await retryMeetingTranscription(note.id);
     } catch (error) {
       Alert.alert(
-        'Retry failed',
-        error instanceof Error ? error.message : 'Could not retry this transcription.',
+        copy('editor.retryFailed', 'Retry failed'),
+        error instanceof Error
+          ? error.message
+          : copy('editor.retryBody', 'Could not retry this transcription.'),
       );
     } finally {
       setIsRetryingTranscript(false);
     }
-  }, [isRetryingTranscript, note, retryMeetingTranscription]);
+  }, [copy, isRetryingTranscript, note, retryMeetingTranscription]);
 
-  const handleSpeakerPress = useCallback((block: TranscriptBlock) => {
-    if (block.speakerId == null) return;
-    setActiveSpeakerId(block.speakerId);
-    safeHaptics('selection');
-    if (block.speakerStatus === 'suggested') {
-      setSuggestionSheetVisible(true);
-      return;
-    }
-    Alert.alert(block.speakerName, undefined, [
-      {
-        text: 'Rename',
-        onPress: () => setRenameSheetVisible(true),
-      },
-      {
-        text: 'Merge',
-        onPress: () => setMergeSheetVisible(true),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, []);
+  const handleSpeakerPress = useCallback(
+    (block: TranscriptBlock) => {
+      if (block.speakerId == null) return;
+      setActiveSpeakerId(block.speakerId);
+      safeHaptics('selection');
+      if (block.speakerStatus === 'suggested') {
+        setSuggestionSheetVisible(true);
+        return;
+      }
+      Alert.alert(block.speakerName, undefined, [
+        {
+          text: copy('speakerControls.renameAction', 'Rename'),
+          onPress: () => setRenameSheetVisible(true),
+        },
+        {
+          text: copy('speakerControls.mergeAction', 'Merge'),
+          onPress: () => setMergeSheetVisible(true),
+        },
+        { text: copy('cancel', 'Cancel'), style: 'cancel' },
+      ]);
+    },
+    [copy],
+  );
 
   const handleConfirmSuggestion = useCallback(() => {
     if (activeSpeakerId == null) return;
@@ -1217,7 +1445,9 @@ export default function NoteEditorScreen({
       <View className="flex-1 bg-systemBackground">
         <TabScreenHeader title="" left={<GlassBackButton fallbackRoute={stack.root} />} />
         <View className="flex-1 items-center justify-center">
-          <Text className="text-tertiaryLabel">Note not found</Text>
+          <Text className="text-tertiaryLabel">
+            {copy('editorFeedback.noteNotFound', 'Note not found')}
+          </Text>
         </View>
       </View>
     );
@@ -1276,7 +1506,14 @@ export default function NoteEditorScreen({
   );
 
   return (
-    <View className="flex-1 bg-systemBackground">
+    <KeyboardAvoidingView
+      className="bg-systemBackground"
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'android' ? 'padding' : undefined}
+      // Android's hide event reports the visible window (excluding system bars).
+      // Ignore that residual inset once the keyboard is hidden.
+      enabled={Platform.OS === 'android' && keyboardHeight > 0}
+    >
       {shareVisible ? (
         <NoteShareSheet
           noteId={noteId}
@@ -1289,7 +1526,7 @@ export default function NoteEditorScreen({
         />
       ) : null}
       <TabScreenHeader
-        title={title || 'Untitled'}
+        title={title || copy('library.untitled', 'Untitled')}
         left={<GlassBackButton fallbackRoute={stack.root} />}
         right={
           <NoteActionsMenu
@@ -1297,7 +1534,9 @@ export default function NoteEditorScreen({
             actions={actions}
             hasContent={!contentEmpty}
             isRecording={isRecording}
-            processing={isEnhancingHeader}
+            processing={
+              isEnhancingHeader || (Platform.OS === 'android' && (isStarting || isProcessing))
+            }
             onRunAction={handleRunAction}
             onManageActions={handleManageActions}
             onAskNote={chatEnabled && !showAskPill ? handleAskNote : undefined}
@@ -1311,7 +1550,7 @@ export default function NoteEditorScreen({
       />
       <KeyboardAvoidingView
         className="flex-1 bg-systemBackground"
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
         <ScrollView
@@ -1332,7 +1571,7 @@ export default function NoteEditorScreen({
           <TextInput
             value={title}
             onChangeText={handleTitleChange}
-            placeholder="Title"
+            placeholder={copy('editor.title', 'Title')}
             placeholderTextColor="rgba(0,0,0,0.2)"
             multiline
             className="mb-3 text-3xl font-bold leading-9 text-label"
@@ -1343,6 +1582,13 @@ export default function NoteEditorScreen({
             dateLabel={formatNoteMetaDate(
               noteTakenAt(note?.createdAt, note?.cloudUpdatedAt ?? note?.updatedAt),
               new Date(),
+              Platform.OS === 'android'
+                ? {
+                    language,
+                    today: copy('library.today', 'Today'),
+                    yesterday: copy('library.yesterday', 'Yesterday'),
+                  }
+                : undefined,
             )}
             attendeeLabel={attendeeLabel}
             folderLabel={folderName}
@@ -1367,7 +1613,9 @@ export default function NoteEditorScreen({
 
           {bodyTabs.length > 1 ? (
             <View
-              className="mb-4 flex-row bg-tertiarySystemFill p-0.5"
+              className={
+                'mb-4 bg-tertiarySystemFill p-0.5 ' + (stackBodyTabs ? 'flex-col' : 'flex-row')
+              }
               style={{ borderRadius: 12, borderCurve: 'continuous' }}
             >
               {bodyTabs.map((tab) => {
@@ -1377,23 +1625,40 @@ export default function NoteEditorScreen({
                     key={tab}
                     testID={`note-tab-${tab}`}
                     accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
+                    accessibilityState={{
+                      selected: active,
+                      disabled:
+                        Platform.OS === 'android' && (isStarting || isRecording || isProcessing),
+                    }}
+                    disabled={
+                      Platform.OS === 'android' && (isStarting || isRecording || isProcessing)
+                    }
                     onPress={() => {
                       safeHaptics('selection');
                       setViewMode(tab);
                     }}
                     className={
-                      'flex-1 flex-row items-center justify-center gap-1 py-1.5 ' +
+                      'flex-row items-center justify-center gap-1 py-1.5 ' +
+                      (stackBodyTabs ? '' : 'flex-1 ') +
+                      (Platform.OS === 'android' ? 'min-h-12 px-2 ' : '') +
                       (active ? 'bg-brand' : 'bg-transparent')
                     }
                     style={{ borderRadius: 10, borderCurve: 'continuous' }}
                   >
                     <Text
                       className={
-                        'text-[13px] font-medium ' + (active ? 'text-white' : 'text-secondaryLabel')
+                        'text-[13px] font-medium ' +
+                        (Platform.OS === 'android' ? 'min-w-0 shrink text-center ' : '') +
+                        (active ? 'text-white' : 'text-secondaryLabel')
                       }
                     >
-                      {getNoteBodyTabLabel(tab, bodyTabInput)}
+                      {copy(
+                        tab === 'transcript' ||
+                          (tab === 'notes' && bodyTabInput.contentIsTranscript)
+                          ? 'importTranscript'
+                          : `editor.${tab === 'enhanced' ? 'enhanced' : 'myNotes'}`,
+                        getNoteBodyTabLabel(tab, bodyTabInput),
+                      )}
                     </Text>
                     {tab === 'enhanced' && isStale ? (
                       <View
@@ -1425,7 +1690,10 @@ export default function NoteEditorScreen({
               <>
                 {transcriptStatus === 'recording' ? (
                   <Text className="mb-2 text-[13px] text-secondaryLabel">
-                    You can edit these notes once the recording stops.
+                    {copy(
+                      'editor.recordingNotes',
+                      'You can edit these notes once the recording stops.',
+                    )}
                   </Text>
                 ) : null}
                 <TextInput
@@ -1434,7 +1702,11 @@ export default function NoteEditorScreen({
                   onChangeText={handleContentChange}
                   selection={selection}
                   onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-                  placeholder={hasTypedMeetingNotes ? 'Add your own notes…' : 'Type or dictate…'}
+                  placeholder={
+                    hasTypedMeetingNotes
+                      ? copy('editor.addNotes', 'Add your own notes…')
+                      : copy('editor.typeOrDictate', 'Type or dictate…')
+                  }
                   placeholderTextColor="rgba(0,0,0,0.2)"
                   multiline
                   // The recording screen still writes these notes until the recording stops.
@@ -1448,20 +1720,34 @@ export default function NoteEditorScreen({
               <View className="min-h-[180px] flex-row items-center gap-3">
                 <ActivityIndicator size="small" color={BRAND} />
                 <Text className="text-[15px] text-secondaryLabel">
-                  {transcriptStatusText(transcriptStatus)}
+                  {copy(
+                    `editor.${transcriptStatus === 'recording' ? 'recording' : transcriptStatus === 'transcribing' ? 'transcribing' : transcriptStatus === 'diarizing' ? 'diarizing' : 'preparing'}`,
+                    transcriptStatusText(transcriptStatus),
+                  )}
                 </Text>
               </View>
             ) : shouldShowTranscriptFailed ? (
               <View className="min-h-[180px] justify-center">
-                <Text className="text-[15px] font-medium text-label">Transcript failed</Text>
+                <Text className="text-[15px] font-medium text-label">
+                  {hasTranscriptSegments
+                    ? t('meetingTranscriptIncomplete', { defaultValue: 'Transcript incomplete' })
+                    : copy('editor.transcriptFailed', 'Transcript failed')}
+                </Text>
                 <Text className="mt-1 text-[14px] leading-5 text-secondaryLabel">
-                  Audio processing did not finish for this note.
+                  {copy(
+                    'editor.processingUnfinished',
+                    'Audio processing did not finish for this note.',
+                  )}
                 </Text>
                 {note && isManagedMeetingAudioUri(note.id, note.sourceFile) ? (
                   <Pressable
                     onPress={handleRetryTranscript}
                     disabled={isRetryingTranscript}
-                    className="mt-4 h-11 flex-row items-center justify-center rounded-full bg-brand px-5 active:opacity-85 disabled:opacity-50"
+                    className={
+                      Platform.OS === 'android'
+                        ? 'mt-4 min-h-12 flex-row items-center justify-center rounded-full bg-brand px-5 py-3 active:opacity-85 disabled:opacity-50'
+                        : 'mt-4 h-11 flex-row items-center justify-center rounded-full bg-brand px-5 active:opacity-85 disabled:opacity-50'
+                    }
                   >
                     {isRetryingTranscript ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1474,16 +1760,27 @@ export default function NoteEditorScreen({
                           color="#FFFFFF"
                         />
                         <Text className="ml-2 text-[14px] font-semibold text-white">
-                          Retry transcription
+                          {copy('editor.retryTranscript', 'Retry transcription')}
                         </Text>
                       </>
                     )}
                   </Pressable>
                 ) : (
                   <Text className="mt-3 text-[13px] leading-5 text-tertiaryLabel">
-                    The original audio is no longer available, so this transcript cannot be retried.
+                    {copy(
+                      'editor.audioUnavailable',
+                      'The original audio is no longer available, so this transcript cannot be retried.',
+                    )}
                   </Text>
                 )}
+                {hasTranscriptSegments ? (
+                  <SpeakerTranscript
+                    blocks={transcriptBlocks}
+                    selectedSpeakerId={activeSpeakerId}
+                    selectable
+                    onSpeakerPress={handleSpeakerPress}
+                  />
+                ) : null}
               </View>
             ) : (
               <SpeakerTranscript
@@ -1500,13 +1797,28 @@ export default function NoteEditorScreen({
                 style={{ borderRadius: 12 }}
               >
                 <ActivityIndicator size="large" color={BRAND} />
-                <Text className="mt-2 text-sm text-secondaryLabel">Enhancing...</Text>
+                <Text className="mt-2 text-sm text-secondaryLabel">
+                  {copy('editor.enhancing', 'Enhancing...')}
+                </Text>
               </View>
             ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      {shouldRenderPlainEditor ? (
+      {Platform.OS === 'android' &&
+      (shouldRenderPlainEditor || isStarting || isRecording || isProcessing) ? (
+        <NoteRecordingControls
+          isStarting={isStarting}
+          isRecording={isRecording}
+          isProcessing={isProcessing}
+          disabled={isEnhancing || isRecoveringUsageLimit}
+          keyboardVisible={keyboardHeight > 0}
+          onStart={handleDictate}
+          onStop={() => stopRecording().catch(() => false)}
+          onDiscard={cancelRecording}
+          onFlush={flushDraft}
+        />
+      ) : shouldRenderPlainEditor ? (
         <Pressable
           onPress={handleDictate}
           disabled={isProcessing || isEnhancing || isRecoveringUsageLimit}
@@ -1553,8 +1865,8 @@ export default function NoteEditorScreen({
           }}
           testID="note-ask-pill"
           accessibilityRole="button"
-          accessibilityLabel="Ask anything"
-          accessibilityHint="Opens a chat about this note"
+          accessibilityLabel={copy('noteChat.askAnything', 'Ask anything')}
+          accessibilityHint={copy('noteChat.opensChat', 'Opens a chat about this note')}
           style={{
             position: 'absolute',
             left: 20,
@@ -1574,7 +1886,9 @@ export default function NoteEditorScreen({
                 size={17}
                 color="secondaryLabel"
               />
-              <Text className="text-[17px] font-medium text-label">Ask anything</Text>
+              <Text className="text-[17px] font-medium text-label">
+                {copy('noteChat.askAnything', 'Ask anything')}
+              </Text>
             </View>
           </Glass.Interactive>
         </Pressable>
@@ -1584,7 +1898,13 @@ export default function NoteEditorScreen({
         messages={chatMessages}
         draft={chatDraft}
         isProcessing={isChatProcessing}
-        error={chatError}
+        error={
+          typeof chatError === 'string'
+            ? chatError
+            : chatError
+              ? copy('editorFeedback.chatFailed', 'Chat failed')
+              : null
+        }
         canSend={!!chatContextText.trim()}
         suggestions={chatSuggestions}
         onDraftChange={setChatDraft}
@@ -1621,7 +1941,7 @@ export default function NoteEditorScreen({
         onClose={() => setVoiceSetupVisible(false)}
         onDismissed={handleVoiceSetupDismissed}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

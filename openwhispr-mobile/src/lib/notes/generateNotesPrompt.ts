@@ -1,5 +1,6 @@
 import { sharedDictionaryHint } from '@/lib/sharedDictionaryHints';
 import type { Action } from '@/data';
+import { DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT } from './desktopDefaultNotesPrompt';
 
 export type GenerateNotesInputKind = 'plain-note' | 'meeting-transcript';
 
@@ -8,6 +9,8 @@ export interface BuildActionSystemPromptInput {
   inputKind: GenerateNotesInputKind;
   isDefaultGenerateNotesAction: boolean;
   customDictionary?: string[];
+  outputFormat?: 'markdown' | 'json';
+  desktopDefaultNotes?: boolean;
   // Teammates' words, quoted as data after the personal list.
   sharedDictionary?: string[];
 }
@@ -22,6 +25,15 @@ FORMAT RULES (strict):
 
 Instructions: `;
 
+const MEETING_CONTENT_RULES = `CONTENT RULES:
+- Preserve important quotes or specific commitments verbatim when they carry meaning.
+- Remove filler, small talk, false starts, and repeated or redundant content.
+- Where speakers refer to the same topic across multiple turns, consolidate it into a coherent point rather than listing every utterance.
+- If the user included manual notes alongside the transcript, integrate them; they represent the user's emphasis on what matters most.
+- Never output "Unknown speaker" or any equivalent placeholder, and never invent a speaker identity or action owner.
+- Use calendar participants only to interpret explicit speaker references or action ownership when supported by the transcript/manual notes. Do not infer ownership from the attendee list alone. Do not list attendees just because they were provided.
+- Keep the tone professional and concise. Bias toward brevity.`;
+
 const MEETING_SYSTEM_PROMPT = `You are a professional meeting notes assistant. You will receive a meeting transcript. Each transcript line includes a timestamp and the spoken words; when speaker labeling is available, it also includes a visible speaker name. Speaker names may be confirmed names, tentative names, or distinct generic labels such as "Speaker 1". Lines without a speaker name are unlabeled.
 
 Your job is to produce clean, actionable meeting notes in markdown. Follow these rules:
@@ -35,14 +47,7 @@ FORMAT RULES (strict):
 - Omit any section that has no content.
 - Under Action Items, use checkboxes (\`- [ ]\`). Attribute an item only when a visible speaker name or distinct speaker label clearly owns it. Keep clear actions from unlabeled lines, but do not assign them an owner.
 
-CONTENT RULES:
-- Preserve important quotes or specific commitments verbatim when they carry meaning.
-- Remove filler, small talk, false starts, and repeated or redundant content.
-- Where speakers refer to the same topic across multiple turns, consolidate it into a coherent point rather than listing every utterance.
-- If the user included manual notes alongside the transcript, integrate them; they represent the user's emphasis on what matters most.
-- Never output "Unknown speaker" or any equivalent placeholder, and never invent a speaker identity or action owner.
-- Use calendar participants only to interpret explicit speaker references or action ownership when supported by the transcript/manual notes. Do not infer ownership from the attendee list alone. Do not list attendees just because they were provided.
-- Keep the tone professional and concise. Bias toward brevity.
+${MEETING_CONTENT_RULES}
 
 Instructions: `;
 
@@ -74,13 +79,21 @@ const appendCustomDictionarySuffix = (prompt: string, words: string[] | undefine
 };
 
 export const buildActionSystemPrompt = (input: BuildActionSystemPromptInput): string => {
+  const usesDesktopDefaultNotes =
+    input.desktopDefaultNotes &&
+    input.inputKind === 'plain-note' &&
+    input.isDefaultGenerateNotesAction;
   const basePrompt =
     input.inputKind === 'meeting-transcript' && input.isDefaultGenerateNotesAction
-      ? MEETING_SYSTEM_PROMPT
+      ? input.outputFormat === 'json'
+        ? `You are a professional meeting notes assistant. Transcript lines contain timestamps, spoken words and optional speaker labels. Produce concise structured meeting notes.\n\n${MEETING_CONTENT_RULES}\n\nInstructions: `
+        : MEETING_SYSTEM_PROMPT
       : BASE_SYSTEM_PROMPT;
 
   const prompt = appendCustomDictionarySuffix(
-    `${basePrompt}${input.actionPrompt}`,
+    usesDesktopDefaultNotes
+      ? DESKTOP_DEFAULT_NOTE_SYSTEM_PROMPT
+      : `${basePrompt}${input.actionPrompt}`,
     input.customDictionary,
   );
   const shared = normalizedDictionaryWords(input.sharedDictionary);

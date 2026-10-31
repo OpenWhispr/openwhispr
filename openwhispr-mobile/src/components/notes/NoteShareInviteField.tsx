@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
-import { TextInput, View, type TextStyle } from 'react-native';
+import { Platform, TextInput, View, type TextStyle } from 'react-native';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { Text } from '@/components/ui/Text';
 import { searchNoteAccessPrincipals } from '@/data/remote/noteSharingApi';
 import type {
@@ -13,7 +14,7 @@ import { isValidEmail } from '@/lib/utils';
 import { isGroupPrincipal } from '@/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
 import { NOTES_ROW_CONTENT_INSET } from './tokens';
-import { PRINCIPAL_LABEL, PrincipalAvatar, RowIcon } from './NoteSharePrincipal';
+import { usePrincipalLabels, PrincipalAvatar, RowIcon } from './NoteSharePrincipal';
 
 const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
 const INPUT_STYLE: TextStyle = { fontFamily: AppFont.regular };
@@ -42,6 +43,8 @@ export function NoteShareInviteField({
   busy,
   onAddPrincipal,
 }: NoteShareInviteFieldProps) {
+  const { copy } = useAndroidCopy();
+  const labels = usePrincipalLabels();
   const [suggestions, setSuggestions] = useState<AccessPrincipalSuggestion[]>([]);
   const [searchError, setSearchError] = useState(false);
   const searchable = Boolean(remoteId && access?.can_manage_access && onAddPrincipal);
@@ -90,7 +93,9 @@ export function NoteShareInviteField({
     isValidEmail(query) &&
     !existingEmails.has(typedEmail) &&
     !available.some((principal) => principal.email?.toLowerCase() === typedEmail);
-  const placeholder = searchable ? 'Add people or emails' : 'Invite by email';
+  const placeholder = searchable
+    ? copy('noteAccess.addPeople', 'Add people or emails')
+    : copy('noteAccess.inviteEmail', 'Invite by email');
 
   const rows = [
     <GroupedList.Row
@@ -99,9 +104,17 @@ export function NoteShareInviteField({
     >
       <TextInput
         accessibilityLabel={placeholder}
-        className="py-1 text-[15px] text-label"
+        className={
+          Platform.OS === 'android'
+            ? 'min-h-[48px] py-1 text-[15px] text-label'
+            : 'py-1 text-[15px] text-label'
+        }
         style={INPUT_STYLE}
-        placeholder={placeholder}
+        placeholder={
+          searchable
+            ? copy('noteAccess.searchPlaceholder', 'Add people or emails')
+            : copy('noteAccess.email', 'Invite by email')
+        }
         placeholderTextColor={PLACEHOLDER_COLOR}
         autoCapitalize="none"
         autoCorrect={false}
@@ -115,7 +128,9 @@ export function NoteShareInviteField({
         onSubmitEditing={onInvite}
       />
       {searchError && (
-        <Text className="pt-1 text-[12px] text-systemRed">Search unavailable. Try again.</Text>
+        <Text className="pt-1 text-[12px] text-systemRed">
+          {copy('noteAccess.searchError', 'Search unavailable. Try again.')}
+        </Text>
       )}
     </GroupedList.Row>,
   ];
@@ -126,40 +141,45 @@ export function NoteShareInviteField({
         onPress={onInvite}
         disabled={busy}
         accessibilityRole="button"
-        accessibilityLabel={`Invite ${query}`}
+        accessibilityLabel={copy('noteAccess.invite', `Invite ${query}`, { email: query })}
         leadingIconSlot={<RowIcon name="envelope" mdName="Mail" />}
       >
         <Text
-          numberOfLines={1}
+          numberOfLines={Platform.OS === 'android' ? undefined : 1}
           className={busy ? 'text-[15px] text-tertiaryLabel' : 'text-[15px] text-link'}
         >
-          Invite {query}
+          {copy('noteAccess.invite', `Invite ${query}`, { email: query })}
         </Text>
-        <Text className="text-[12px] text-secondaryLabel">Sends an email invitation</Text>
+        <Text className="text-[12px] text-secondaryLabel">
+          {copy('noteAccess.sendsEmail', 'Sends an email invitation')}
+        </Text>
       </GroupedList.Row>,
     );
   }
   for (const principal of available) {
-    const name = principal.name || principal.email || PRINCIPAL_LABEL[principal.type];
+    const name = principal.name || principal.email || labels[principal.type];
     rows.push(
       <GroupedList.Row
         key={`${principal.type}:${principal.id ?? principal.email}`}
         onPress={() => onAddPrincipal?.(principal)}
         disabled={busy}
         accessibilityRole="button"
-        accessibilityLabel={`Grant access to ${name}`}
+        accessibilityLabel={copy('noteAccess.grantAccess', `Grant access to ${name}`, { name })}
         leadingIconSlot={
           <PrincipalAvatar type={principal.type} name={principal.name} email={principal.email} />
         }
       >
         <Text
-          numberOfLines={1}
+          numberOfLines={Platform.OS === 'android' ? undefined : 1}
           className={busy ? 'text-[15px] text-tertiaryLabel' : 'text-[15px] text-label'}
         >
           {name}
         </Text>
-        <Text numberOfLines={1} className="text-[12px] text-secondaryLabel">
-          {principal.name && principal.email ? principal.email : PRINCIPAL_LABEL[principal.type]}
+        <Text
+          numberOfLines={Platform.OS === 'android' ? undefined : 1}
+          className="text-[12px] text-secondaryLabel"
+        >
+          {principal.name && principal.email ? principal.email : labels[principal.type]}
         </Text>
       </GroupedList.Row>,
     );

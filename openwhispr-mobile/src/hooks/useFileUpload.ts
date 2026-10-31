@@ -1,4 +1,10 @@
-import { useState } from 'react';
+import {
+  captureTranscriptScope,
+  isTranscriptScopeCurrent,
+  observeTranscriptScope,
+} from '@/lib/transcriptScope';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioTools } from '../../modules/audio-tools/src';
@@ -7,7 +13,11 @@ import {
   isLocalModelMissingError,
 } from '../services/transcription/TranscriptionService';
 import { createTranscriptId, useTranscriptStore } from '../store/useTranscriptStore';
-import { snapshotTextInference, snapshotTranscriptionJob } from '../lib/inferenceRouting';
+import {
+  snapshotTextInference,
+  snapshotTranscriptionJob,
+  type TranscriptionJobRoute,
+} from '../lib/inferenceRouting';
 import { transcribeAndCleanup } from '../lib/transcribeAndCleanup';
 import { getPreferredTranscriptionLanguage } from '../lib/transcriptionLanguage';
 import { toFriendlyTranscriptionErrorMessage } from '../lib/transcriptionErrors';
@@ -19,7 +29,11 @@ import { MAX_FILE_SIZE } from '../config/constants';
 import type { TranscriptionProvider } from '../types';
 
 export interface UseFileUploadOptions {
-  onComplete?: (text: string) => void;
+  onComplete?: (text: string, fileName: string) => void;
+  /** Notes imports save into their pinned destination instead of dictation history. */
+  saveToHistory?: boolean;
+  /** Rechecked after async work and before processing or writing any result. */
+  isCurrent?: () => boolean;
   onError?: (error: Error) => void;
   // Private mode but the on-device model is unavailable. We never upload
   // silently — the caller prompts, and may invoke retryWithCloud to transcribe
@@ -72,24 +86,63 @@ async function assertProviderAcceptsFile(
   }
 }
 
-// The native module rejects unreadable/unsupported audio with these codes;
-// surface a clear instruction instead of the raw AVFoundation error.
 const toFriendlyUploadError = (error: unknown): Error => {
-  const code = (error as { code?: string })?.code;
-  if (code === 'AUDIO_TRANSCODE_ERROR' || code === 'AUDIO_CHUNK_ERROR') {
-    return new Error("Couldn't read this audio file. Please try a WAV, MP3, or M4A file.");
-  }
-  return error instanceof Error ? error : new Error(String(error));
+  const message = toFriendlyTranscriptionErrorMessage(error);
+  return error instanceof Error && message === error.message ? error : new Error(message);
 };
 
 export function useFileUpload(options: UseFileUploadOptions = {}) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentText, setCurrentText] = useState('');
+  const [stage, setStage] = useState<'transcribing' | 'cleaning'>('transcribing');
+  const active = useRef<{ controller: AbortController; provider: TranscriptionProvider } | null>(
+    null,
+  );
+  const mounted = useRef(true);
+  const generation = useRef(0);
+  const busy = useRef(false);
+  const cancel = useCallback(() => {
+    generation.current += 1;
+    const job = active.current;
+    job?.controller.abort();
+    if (job?.provider === 'local') {
+      import('../services/transcription/LocalTranscriptionService')
+        .then(({ LocalTranscriptionService }) => {
+          if (active.current === job) return LocalTranscriptionService.cancelTranscription();
+        })
+        .catch(() => undefined);
+    }
+  }, []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancel();
+    };
+  }, [cancel]);
+  useEffect(() => observeTranscriptScope(cancel), [cancel]);
   const addTranscript = useTranscriptStore((state) => state.addTranscript);
   const addFailedTranscript = useTranscriptStore((state) => state.addFailedTranscript);
 
-  const pickAndTranscribeFile = async () => {
+  const pickAndTranscribeFile = async (route?: TranscriptionJobRoute) => {
+    if (busy.current || !mounted.current || options.isCurrent?.() === false) return;
+    busy.current = true;
+    const historyScope = captureTranscriptScope();
+    const jobGeneration = ++generation.current;
+    const isCurrent = () =>
+      mounted.current &&
+      generation.current === jobGeneration &&
+      isTranscriptScopeCurrent(historyScope) &&
+      options.isCurrent?.() !== false;
+    const assertCurrent = () => {
+      if (!isCurrent()) throw Object.assign(new Error('Upload cancelled'), { name: 'AbortError' });
+    };
+    setIsProcessing(true);
+    let pickerCacheUri: string | undefined;
     try {
+      // Freeze the choice before the system picker or any other async interaction.
+      let jobRoute = route ?? snapshotTranscriptionJob('upload');
+      const transcriptionProvider = jobRoute.provider;
       const allowedMimeTypes = new Set([
         'audio/wav',
         'audio/x-wav',
@@ -109,13 +162,22 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         type: '*/*',
         copyToCacheDirectory: true,
       });
+      // A late picker result still owns an app-cache copy. Never delete the
+      // external source document; the retained retry copy has its own lifecycle.
+      const pickedUri = result.canceled ? undefined : result.assets[0]?.uri;
+      if (
+        pickedUri &&
+        FileSystem.cacheDirectory &&
+        pickedUri.startsWith(FileSystem.cacheDirectory)
+      ) {
+        pickerCacheUri = pickedUri;
+      }
+      assertCurrent();
 
       if (result.canceled) {
         return;
       }
 
-      let jobRoute = snapshotTranscriptionJob('upload');
-      const transcriptionProvider = jobRoute.provider;
       const file = result.assets[0];
 
       const extension = file.name?.includes('.')
@@ -143,16 +205,22 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       if (transcriptionProvider === 'byok') {
         await assertProviderAcceptsFile(file, extension);
       }
+      assertCurrent();
 
-      // On-device Opus decoding isn't supported yet; the cloud transcriber
-      // decodes Opus, so route private-mode Opus uploads there instead.
-      if (transcriptionProvider === 'local' && isOggOpus(file.name, file.mimeType, file.uri)) {
+      // iOS's decoder cannot read Opus. Android uses MediaCodec in its local
+      // transcription adapter and must not inherit this iPhone-only restriction.
+      if (
+        Platform.OS !== 'android' &&
+        transcriptionProvider === 'local' &&
+        isOggOpus(file.name, file.mimeType, file.uri)
+      ) {
         throw new Error(
           "Opus audio can't be transcribed on this iPhone yet. Set Uploads to OpenWhispr Cloud in Account → AI Models, then try again.",
         );
       }
 
       setCurrentText('');
+      setStage('transcribing');
       const transcriptId = createTranscriptId();
       const clientTranscriptionId = `file-${randomUUID()}`;
       const retainedAudioUrl = await retainTranscriptAudio(file.uri, {
@@ -162,7 +230,12 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       });
 
       const addFailedUpload = async (provider: TranscriptionProvider, error: unknown) => {
-        if (isNoSpeechError(error)) {
+        if (
+          !isCurrent() ||
+          options.saveToHistory === false ||
+          isNoSpeechError(error) ||
+          (error as Error)?.name === 'AbortError'
+        ) {
           await deleteManagedTranscriptAudio(retainedAudioUrl);
           return;
         }
@@ -187,17 +260,21 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         }
       };
 
-      // whisper.rn only reads 16kHz mono WAV, so compressed uploads must be
-      // transcoded before local transcription. Cloud sends the original file.
+      // iOS local engines need 16kHz mono WAV. Android converts at its local
+      // transcription boundary; hosted routes send the original file.
       const runTranscription = async (provider: TranscriptionProvider) => {
+        const controller = new AbortController();
+        active.current = { controller, provider };
         let audioUri = retainedAudioUrl;
         const tempUris: string[] = [];
         try {
+          assertCurrent();
           if (provider === 'local' && AudioTools.isAvailable()) {
             const transcoded = await AudioTools.transcodeToWav(retainedAudioUrl);
             audioUri = transcoded.uri;
             tempUris.push(transcoded.uri);
           }
+          assertCurrent();
 
           const processedResult = await transcribeAndCleanup(
             {
@@ -216,41 +293,64 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
               clientTranscriptionId,
             },
             {
-              onRawTranscript: (text) => setCurrentText(text),
+              signal: controller.signal,
+              shouldCancel: () => controller.signal.aborted || !isCurrent(),
+              onRawTranscript: (text) => {
+                if (isCurrent()) setCurrentText(text);
+              },
+              onStage: (next) => {
+                if (isCurrent()) setStage(next);
+              },
             },
           );
+          assertCurrent();
+          if (controller.signal.aborted) {
+            const cancelled = new Error('Upload cancelled');
+            cancelled.name = 'AbortError';
+            throw cancelled;
+          }
           const finalText = processedResult.text;
 
-          await addTranscript({
-            id: transcriptId,
-            text: finalText,
-            originalText: processedResult.originalText,
-            audioUrl: retainedAudioUrl,
-            audioFileName: file.name,
-            audioMimeType: file.mimeType,
-            duration: processedResult.transcription.duration,
-            provider: processedResult.transcription.provider,
-            inferenceRoute: processedResult.transcription.inferenceRoute,
-            cleanupRoute: processedResult.transcription.cleanupRoute,
-            cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
-            cleanupWarning: processedResult.transcription.cleanupWarning,
-            requestContext: 'file',
-            jobId: transcriptId,
-          });
+          if (options.saveToHistory !== false)
+            await addTranscript({
+              id: transcriptId,
+              text: finalText,
+              originalText: processedResult.originalText,
+              audioUrl: retainedAudioUrl,
+              audioFileName: file.name,
+              audioMimeType: file.mimeType,
+              duration: processedResult.transcription.duration,
+              provider: processedResult.transcription.provider,
+              inferenceRoute: processedResult.transcription.inferenceRoute,
+              cleanupRoute: processedResult.transcription.cleanupRoute,
+              cleanupUnavailable: processedResult.transcription.cleanupUnavailable,
+              cleanupWarning: processedResult.transcription.cleanupWarning,
+              requestContext: 'file',
+              jobId: transcriptId,
+            });
 
+          assertCurrent();
           setCurrentText(finalText);
-          options.onComplete?.(finalText);
+          options.onComplete?.(finalText, file.name);
+          if (options.saveToHistory === false) await deleteManagedTranscriptAudio(retainedAudioUrl);
+        } catch (error) {
+          if (controller.signal.aborted && error instanceof Error) error.name = 'AbortError';
+          throw error;
         } finally {
+          if (active.current?.controller === controller) active.current = null;
           await AudioTools.cleanup(tempUris);
         }
       };
 
       const retryWithCloud = async () => {
+        if (!isCurrent() || active.current) return;
+        busy.current = true;
         setIsProcessing(true);
         try {
           jobRoute = { provider: 'cloud', ...snapshotTextInference('cloud') };
           await runTranscription('cloud');
         } catch (retryError) {
+          if ((retryError as Error)?.name === 'AbortError') return;
           if (isUsageLimitError(retryError) && options.onUsageLimitReached) {
             await options.onUsageLimitReached(retryError, retryWithCloud);
             return;
@@ -258,7 +358,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
           addFailedUpload('cloud', retryError).catch(() => undefined);
           options.onError?.(toFriendlyUploadError(retryError));
         } finally {
-          setIsProcessing(false);
+          busy.current = false;
+          if (mounted.current) setIsProcessing(false);
         }
       };
 
@@ -266,6 +367,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
       try {
         await runTranscription(transcriptionProvider);
       } catch (error) {
+        if (!isCurrent()) {
+          await deleteManagedTranscriptAudio(retainedAudioUrl);
+          return;
+        }
         // Private mode with no on-device model. Don't upload silently — let the
         // caller prompt, then transcribe the picked file in the cloud if approved.
         if (
@@ -288,17 +393,23 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
         throw error;
       }
     } catch (error) {
+      if (!isCurrent() || (error as Error)?.name === 'AbortError') return;
       const friendly = toFriendlyUploadError(error);
       options.onError?.(friendly);
       throw friendly;
     } finally {
-      setIsProcessing(false);
+      if (pickerCacheUri)
+        await FileSystem.deleteAsync(pickerCacheUri, { idempotent: true }).catch(() => undefined);
+      busy.current = active.current !== null;
+      if (mounted.current) setIsProcessing(busy.current);
     }
   };
 
   return {
     isProcessing,
     currentText,
+    stage,
+    cancel,
     pickAndTranscribeFile,
   };
 }

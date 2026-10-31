@@ -600,6 +600,123 @@ describe('AppsFlyer lifecycle', () => {
     );
   });
 
+  it('retries a rejected opt-out when the unchanged policy is applied again', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    const optedOut: MockConfigState = {
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    };
+
+    setConfigState(optedOut);
+    await flushPromises();
+    appsFlyer.logAppsFlyerEvent('event_after_opt_out');
+    setConfigState(optedOut);
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }], [{ shouldStop: true }]]);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+
+    setConfigState(optedOut);
+    await flushPromises();
+    expect(mockStop).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a rejected Android opt-out on the next foreground session without starting it', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    await loadStartedAppsFlyer();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await flushPromises();
+    mockSessionReadyListener?.();
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([[{ shouldStop: true }], [{ shouldStop: true }]]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockGetTrackingAuthorizationStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds an Android foreground session and events until a failed resume is retried', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer();
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await flushPromises();
+    mockStop.mockRejectedValueOnce(new Error('native bridge unavailable'));
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+      isLoading: false,
+    });
+    await flushPromises();
+
+    const resume = deferred<void>();
+    mockStop.mockReturnValueOnce(resume.promise);
+    mockSessionReadyListener?.();
+    appsFlyer.logAppsFlyerEvent('event_after_resume');
+    await flushPromises();
+
+    expect(mockStop.mock.calls).toEqual([
+      [{ shouldStop: true }],
+      [{ shouldStop: false }],
+      [{ shouldStop: false }],
+    ]);
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+
+    resume.resolve();
+    await flushPromises();
+
+    expect(mockStart).toHaveBeenCalledTimes(2);
+    expect(mockLogEvent).toHaveBeenCalledWith({
+      eventName: 'event_after_resume',
+      eventValues: {},
+    });
+  });
+
+  it('does not restart or send events after opt-out supersedes a pending resume', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('notSupported');
+    const appsFlyer = await loadStartedAppsFlyer();
+    const optedOut: MockConfigState = {
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    };
+    setConfigState(optedOut);
+    await flushPromises();
+
+    const resume = deferred<void>();
+    mockStop.mockReturnValueOnce(resume.promise);
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: true },
+      isLoading: false,
+    });
+    appsFlyer.logAppsFlyerEvent('event_during_resume');
+    mockSessionReadyListener?.();
+    await flushPromises();
+    expect(mockStart).toHaveBeenCalledTimes(1);
+
+    setConfigState(optedOut);
+    setConfigState(optedOut);
+    resume.resolve();
+    await flushPromises();
+    setConfigState(optedOut);
+    await flushPromises();
+
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+    expect(mockStop.mock.calls).toEqual([
+      [{ shouldStop: true }],
+      [{ shouldStop: false }],
+      [{ shouldStop: true }],
+    ]);
+  });
+
   it('pauses collection while refreshing ATT for an initialized SDK', async () => {
     const appsFlyer = await loadStartedAppsFlyer();
     mockStop.mockClear();

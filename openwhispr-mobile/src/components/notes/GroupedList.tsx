@@ -1,5 +1,5 @@
 import React, { Children, isValidElement, ReactNode } from 'react';
-import { View, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet, type PressableProps } from 'react-native';
 import {
   NOTES_GROUP_RADIUS,
   NOTES_ROW_CONTENT_INSET,
@@ -17,7 +17,10 @@ type GroupedListProps = {
   children: ReactNode;
 };
 
-type GroupedListRowProps = {
+type GroupedListRowProps = Pick<
+  PressableProps,
+  'accessibilityActions' | 'onAccessibilityAction'
+> & {
   leadingIconSlot?: ReactNode;
   contentInsetLeft?: number;
   onPress?: () => void;
@@ -37,6 +40,8 @@ function Row({
   disabled,
   accessibilityLabel,
   accessibilityRole,
+  accessibilityActions,
+  onAccessibilityAction,
   testID,
   children,
 }: GroupedListRowProps) {
@@ -49,6 +54,8 @@ function Row({
       disabled={disabled}
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       accessibilityState={disabled === undefined ? undefined : { disabled }}
       testID={testID}
       className="flex-row items-center active:bg-tertiarySystemFill"

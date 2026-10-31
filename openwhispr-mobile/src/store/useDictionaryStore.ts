@@ -187,12 +187,12 @@ export const useDictionaryStore = create<DictionaryStore>((set) => ({
   entries: [],
   isLoaded: false,
 
-  load: async () => {
+  load: () => {
     set({ entries: readAllActiveEntries(), isLoaded: true });
+    return Promise.resolve();
   },
 
-  // In-memory reset for sign-out; SQLite rows are wiped separately by
-  // notesRepository.wipeAllSyncableData on account switch.
+  // Clear the visible collection before loading another account's database.
   reset: () => {
     set({ entries: [], isLoaded: false });
   },

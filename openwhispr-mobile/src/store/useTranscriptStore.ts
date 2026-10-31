@@ -1,3 +1,10 @@
+import {
+  captureTranscriptScope,
+  isTranscriptScopeCurrent,
+  observeTranscriptScope,
+} from '@/lib/transcriptScope';
+import { abortError } from '@/services/providers/NativeProviderTransport';
+import { Platform } from 'react-native';
 import { isProviderJobActive } from '@/lib/providerJobActivity';
 import { AppGroupStorage } from '../../modules/app-group-storage/src';
 import { create } from 'zustand';
@@ -15,6 +22,7 @@ import {
   isManagedTranscriptAudioUri,
   isWavAudioFile,
   retainTranscriptAudio,
+  releaseTranscriptAudio,
   RETAINED_AUDIO_MAX_AGE_MS,
   transcriptAudioExists,
 } from '@/lib/transcriptAudio';
@@ -53,10 +61,11 @@ interface TranscriptState {
   isLoaded: boolean;
   error: string | null;
 
+  reset: () => void;
   loadTranscripts: () => Promise<void>;
   addTranscript: (transcript: AddTranscriptInput) => Promise<void>;
   addFailedTranscript: (transcript: FailedTranscriptInput) => Promise<void>;
-  retryTranscript: (id: string) => Promise<Transcript>;
+  retryTranscript: (id: string, signal?: AbortSignal) => Promise<Transcript>;
   updateTranscript: (id: string, updates: Partial<Transcript>) => Promise<void>;
   deleteTranscript: (id: string) => Promise<void>;
   setCurrentTranscript: (transcript: Transcript | null) => void;
@@ -98,23 +107,53 @@ function exclusive<T>(operation: () => Promise<T>): Promise<T> {
   return run;
 }
 
-export const useTranscriptStore = create<TranscriptState>((set, get) => {
-  const ensureLoaded = async (): Promise<void> => {
+export const useTranscriptStore = create<TranscriptState>((baseSet, baseGet) => {
+  let generation = 0;
+  let observing = false;
+  const context = () => {
+    if (!observing) {
+      observing = true;
+      observeTranscriptScope(() => baseGet().reset());
+    }
+    const scope = captureTranscriptScope();
+    const epoch = generation;
+    const current = () => epoch === generation && isTranscriptScopeCurrent(scope);
+    const assertCurrent = () => {
+      if (!current()) throw abortError('The account changed. Please try again.');
+    };
+    return {
+      owner: scope?.key ?? null,
+      isCurrent: current,
+      assertCurrent,
+      get: () => {
+        assertCurrent();
+        return baseGet();
+      },
+      set: (value: Partial<TranscriptState>) => {
+        if (current()) baseSet(value);
+      },
+    };
+  };
+  const ensureLoaded = async (access: ReturnType<typeof context>): Promise<void> => {
+    const { get } = access;
     if (!get().isLoaded) await get().loadTranscripts();
     if (!get().isLoaded) throw new Error('Transcript history is unavailable. Try again.');
   };
 
-  const readHistory = async (): Promise<void> => {
+  const readHistory = async (access: ReturnType<typeof context>): Promise<void> => {
+    const { set, owner, assertCurrent } = access;
+    assertCurrent();
     set({ isLoading: true, error: null });
     try {
       const now = Date.now();
-      const loaded = (await StorageService.getTranscripts()).map(normalizeTranscript);
+      const loaded = (await StorageService.getTranscripts(owner)).map(normalizeTranscript);
       const pendingJobs = listPendingProviderRecoveryJobs();
       const activeKeyboardJobId = AppGroupStorage.getItem('keyboard_recording_job_id');
       const recoveredJobIds: string[] = [];
       for (const job of pendingJobs) {
         // The keyboard handoff owns insertion and cleanup for its active job.
         if (
+          (owner !== null && job.historyOwner !== owner) ||
           job.jobId === activeKeyboardJobId ||
           isProviderJobActive(job.jobId) ||
           job.error ||
@@ -183,10 +222,12 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         }
         return transcript;
       });
+      assertCurrent();
       if (mutated) {
-        await StorageService.saveTranscripts(transcripts);
+        await StorageService.saveTranscripts(transcripts, owner);
       }
       set({ transcripts, isLoading: false, isLoaded: true });
+      assertCurrent();
       for (const jobId of recoveredJobIds) clearKeyboardProviderRecovery(jobId);
 
       // Reclaim every managed file no surviving row still points at — expired
@@ -194,6 +235,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       const keepUris = transcripts
         .map((transcript) => transcript.audioUrl)
         .filter((uri): uri is string => isManagedTranscriptAudioUri(uri));
+      if (owner !== null) keepUris.push(...StorageService.getAllTranscriptAudio());
       for (const job of pendingJobs) {
         if (!recoveredJobIds.includes(job.jobId) && isManagedTranscriptAudioUri(job.audioUri)) {
           keepUris.push(job.audioUri!);
@@ -208,7 +250,15 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         !keepUris.includes(pendingAudio)
       )
         keepUris.push(pendingAudio);
-      await garbageCollectTranscriptAudio(keepUris).catch((error) => {
+      assertCurrent();
+      const collect =
+        owner === null
+          ? garbageCollectTranscriptAudio(keepUris)
+          : garbageCollectTranscriptAudio(keepUris, {
+              isCurrent: access.isCurrent,
+              currentKeepUris: () => StorageService.getAllTranscriptAudio(),
+            });
+      await collect.catch((error) => {
         if (__DEV__) {
           console.warn('[transcripts] audio garbage collection failed:', error);
         }
@@ -225,15 +275,32 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
     isLoaded: false,
     error: null,
 
-    loadTranscripts: () => {
-      inFlightLoad ??= exclusive(readHistory).finally(() => {
-        inFlightLoad = null;
+    reset: () => {
+      generation += 1;
+      inFlightLoad = null;
+      baseSet({
+        transcripts: [],
+        currentTranscript: null,
+        isLoading: false,
+        isLoaded: false,
+        error: null,
       });
-      return inFlightLoad;
+    },
+    loadTranscripts: () => {
+      if (inFlightLoad) return inFlightLoad;
+      const access = context();
+      const loading = exclusive(() => readHistory(access)).finally(() => {
+        if (inFlightLoad === loading) inFlightLoad = null;
+      });
+      inFlightLoad = loading;
+      return loading;
     },
 
     addTranscript: async (transcript) => {
-      await ensureLoaded();
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
+      await ensureLoaded(access);
+      assertCurrent();
       const id = transcript.id ?? createTranscriptId();
       const now = Date.now();
       const newTranscript: Transcript = {
@@ -255,7 +322,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             ...get().transcripts.filter((existing) => existing.id !== newTranscript.id),
             newTranscript,
           ];
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           set({ transcripts, isLoading: false });
         });
         if (newTranscript.jobId) clearKeyboardProviderRecovery(newTranscript.jobId);
@@ -280,7 +347,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
     },
 
     addFailedTranscript: async (transcript) => {
-      await ensureLoaded();
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
+      await ensureLoaded(access);
+      assertCurrent();
       return exclusive(async () => {
         const id = transcript.id ?? createTranscriptId();
         const now = Date.now();
@@ -294,6 +364,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           throw new Error('Audio file not found');
         }
 
+        assertCurrent();
         const failedTranscript: Transcript = {
           id,
           text: '',
@@ -321,8 +392,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
             ...get().transcripts.filter((existing) => existing.id !== id),
             failedTranscript,
           ];
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           set({ transcripts, isLoading: false });
+          releaseTranscriptAudio(audioUrl);
           if (failedTranscript.jobId) clearKeyboardProviderRecovery(failedTranscript.jobId);
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
@@ -331,13 +403,26 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       });
     },
 
-    retryTranscript: async (id) => {
-      await ensureLoaded();
+    retryTranscript: async (id, externalSignal) => {
+      const controller = new AbortController();
+      const signal = controller.signal;
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
+      const assertActive = () => {
+        assertCurrent();
+        if (signal.aborted || externalSignal?.aborted) throw abortError('Transcription cancelled.');
+      };
+      assertActive();
+      await ensureLoaded(access);
+      assertCurrent();
+      assertActive();
       const current = get().transcripts.find((t) => t.id === id);
       if (!current) throw new Error('Transcript not found');
       if (!current.audioUrl) throw new Error('Audio file not found');
 
-      if (!(await transcriptAudioExists(current.audioUrl))) {
+      const audioExists = await transcriptAudioExists(current.audioUrl);
+      assertActive();
+      if (!audioExists) {
         const message = 'Audio file not found';
         await get().updateTranscript(id, {
           status: 'failed',
@@ -366,9 +451,13 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       const inferenceRoute = rerouted ? rerouted.inferenceRoute : current.inferenceRoute;
       const textRoutes =
         rerouted ?? (provider === current.provider ? current : snapshotTextInference(provider));
-      if (provider !== 'local' && activeMode === 'private' && scope === 'dictation') {
+      if (
+        provider !== 'local' &&
+        activeMode === 'private' &&
+        (Platform.OS === 'android' || scope === 'dictation')
+      ) {
         throw new Error(
-          'This recording used a remote provider. Change Dictation from On-Device in Account → AI Models to retry its original route.',
+          `This recording used a remote provider. ${Platform.OS === 'android' ? 'Turn off Local Mode' : 'Change Dictation from On-Device'} in Account → AI Models to retry its original route.`,
         );
       }
       const retryCount = (current.retryCount ?? 0) + 1;
@@ -377,6 +466,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
       let audioUri = current.audioUrl;
       let fileName = current.audioFileName;
       let mimeType = current.audioMimeType;
+      const abort = () => controller.abort();
+      externalSignal?.addEventListener('abort', abort, { once: true });
+      const stopObserving = observeTranscriptScope(abort);
 
       set({ isLoading: true, error: null });
       try {
@@ -388,7 +480,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           tempUris.push(transcoded.uri);
         }
 
+        assertActive();
         const processed = await transcribeAndCleanup({
+          signal,
           audioUri,
           provider,
           inferenceRoute,
@@ -412,6 +506,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           keyboardTone: current.requestContext === 'keyboard' ? current.keyboardTone : undefined,
         });
 
+        assertActive();
         const updated: Transcript = {
           ...current,
           text: processed.text,
@@ -430,8 +525,9 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           updatedAt: Date.now(),
         };
         await exclusive(async () => {
+          assertActive();
           const transcripts = get().transcripts.map((t) => (t.id === id ? updated : t));
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           set({ transcripts, isLoading: false });
         });
         if (updated.text.trim()) {
@@ -449,6 +545,10 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         });
         return updated;
       } catch (error) {
+        if (signal?.aborted || (error as Error)?.name === 'AbortError') {
+          set({ isLoading: false });
+          throw abortError('Transcription cancelled.');
+        }
         const updated: Transcript = {
           ...current,
           // A rerouted Cloud or On-Device recording keeps its own route, so the next
@@ -467,12 +567,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           updatedAt: Date.now(),
         };
         await exclusive(async () => {
+          assertActive();
           const transcripts = get().transcripts.map((t) => (t.id === id ? updated : t));
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           set({ transcripts, isLoading: false });
         });
         throw error;
       } finally {
+        stopObserving();
+        externalSignal?.removeEventListener('abort', abort);
+        set({ isLoading: false });
         // The row keeps its own audio and result, so the retry's recovery entry is
         // never needed once the retry settles.
         clearKeyboardProviderRecovery(retryJobId);
@@ -485,14 +589,17 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
     },
 
     updateTranscript: async (id, updates) => {
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
       set({ isLoading: true, error: null });
       try {
-        await ensureLoaded();
+        await ensureLoaded(access);
+        assertCurrent();
         await exclusive(async () => {
           const transcripts = get().transcripts.map((t) =>
             t.id === id ? { ...t, ...updates, updatedAt: Date.now() } : t,
           );
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           set({ transcripts, isLoading: false });
         });
       } catch (error) {
@@ -501,13 +608,16 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
     },
 
     deleteTranscript: async (id) => {
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
       set({ isLoading: true, error: null });
       try {
-        await ensureLoaded();
+        await ensureLoaded(access);
+        assertCurrent();
         await exclusive(async () => {
           const target = get().transcripts.find((t) => t.id === id);
           const transcripts = get().transcripts.filter((t) => t.id !== id);
-          await StorageService.saveTranscripts(transcripts);
+          await StorageService.saveTranscripts(transcripts, owner);
           await deleteManagedTranscriptAudio(target?.audioUrl);
           set({ transcripts, isLoading: false });
         });
@@ -517,16 +627,19 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
     },
 
     setCurrentTranscript: (transcript) => {
-      set({ currentTranscript: transcript });
+      context().set({ currentTranscript: transcript });
     },
 
     clearTranscripts: async () => {
+      const access = context();
+      const { get, set, owner, assertCurrent } = access;
       set({ isLoading: true, error: null });
       try {
-        await ensureLoaded();
+        await ensureLoaded(access);
+        assertCurrent();
         await exclusive(async () => {
           const current = get().transcripts;
-          await StorageService.clearTranscripts();
+          await StorageService.clearTranscripts(owner);
           await Promise.all(current.map((t) => deleteManagedTranscriptAudio(t.audioUrl)));
           set({ transcripts: [], isLoading: false });
         });

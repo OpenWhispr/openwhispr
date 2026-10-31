@@ -4,11 +4,15 @@
 // transitively — mock all three so the import chain resolves in tests.
 type ReferralApiModule = typeof import('../referralApi');
 
-function loadReferralApi(version: string | undefined): {
+function loadReferralApi(
+  version: string | undefined,
+  platform: 'ios' | 'android' = 'ios',
+): {
   referralApi: ReferralApiModule;
   mockFetch: jest.Mock;
 } {
   jest.resetModules();
+  jest.doMock('react-native', () => ({ Platform: { OS: platform } }));
   const mockFetch = jest.fn();
   jest.doMock('expo/fetch', () => ({
     __esModule: true,
@@ -27,11 +31,33 @@ function loadReferralApi(version: string | undefined): {
 }
 
 afterEach(() => {
+  jest.dontMock('react-native');
   jest.dontMock('expo/fetch');
   jest.dontMock('expo-constants');
   jest.dontMock('@/store/useAuthStore');
   jest.resetModules();
 });
+
+it.each(['android', 'ios'] as const)(
+  'keeps referral session headers authoritative on %s',
+  async (platform) => {
+    const { referralApi, mockFetch } = loadReferralApi('1.2.4', platform);
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ invites: [] }) });
+    const cookie = 'openwhispr.session_token=current-account';
+    await referralApi.fetchReferralStats(cookie);
+    await referralApi.fetchReferralInvites(null);
+    await referralApi.sendReferralInvite('synthetic@example.invalid', cookie);
+
+    for (const [, init] of mockFetch.mock.calls) {
+      expect(init.credentials).toBe(platform === 'android' ? 'omit' : undefined);
+    }
+    expect(mockFetch.mock.calls.map(([, init]) => init.headers.Cookie)).toEqual([
+      cookie,
+      undefined,
+      cookie,
+    ]);
+  },
+);
 
 describe('referralApi client version header', () => {
   it('sends x-openwhispr-version on the stats request when the app version is known', async () => {

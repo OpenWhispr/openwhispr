@@ -31,8 +31,8 @@ jest.mock('@/lib/cleanupTranscript', () => ({ CLEANUP_TIMEOUT_MS: 30000 }));
 jest.mock('../../../../modules/background-uploader/src', () => ({
   BackgroundUploader: { isAvailable: () => true, upload: jest.fn() },
 }));
-jest.mock('../../../../modules/audio-tools/src', () => ({
-  AudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
+jest.mock('../cloudAudio', () => ({
+  CloudAudioTools: { isAvailable: () => true, splitToChunks: jest.fn(), cleanup: jest.fn() },
 }));
 jest.mock('../../../../modules/app-group-storage/src', () => ({
   AppGroupStorage: { setItem: jest.fn() },
@@ -87,6 +87,38 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockHints.mockReturnValue([]);
   mockResolvedProviderRoute = mockProviderRoute;
+});
+
+test('cancels BYOK transcription through its existing provider execution scope', async () => {
+  const controller = new AbortController();
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finish!: () => void;
+  const held = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  mockTranscribeWithProvider.mockImplementationOnce(async (input) => {
+    started();
+    await held;
+    if (input.signal?.aborted) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    return { text: 'late provider text', duration: 1 };
+  });
+  const request = {
+    audioUri: 'file:///cancel.wav',
+    provider: 'byok' as const,
+    inferenceRoute: mockProviderRoute,
+    signal: controller.signal,
+  };
+  const pending = TranscriptionService.transcribe(request).then(
+    (value) => ({ value }),
+    (error: Error) => ({ error }),
+  );
+  await ready;
+  controller.abort();
+  finish();
+  expect(await pending).toMatchObject({ error: { name: 'AbortError' } });
 });
 
 test('BYOK returns provider metadata without an OpenWhispr session or upload', async (): Promise<void> => {

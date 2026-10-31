@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { isAccountRequiredError } from '@/lib/accountRequiredError';
@@ -5,6 +6,24 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import type { AuthUser } from '@/lib/authClient';
 import type { ProcessingMode } from '@/types';
+import { androidCopy } from '@/lib/androidCopy';
+
+const ANDROID_FEATURE_KEYS: Record<string, string> = {
+  'cloud transcription': 'workflowAlerts.cloudTranscription',
+  'cloud AI': 'editorFeedback.cloudAI',
+  'cloud cleanup': 'workflowAlerts.cloudCleanup',
+  'AI actions': 'workflowAlerts.aiActions',
+  'AI chat': 'workflowAlerts.aiChat',
+  'audio import': 'importAudio',
+  dictation: 'workflowSettings.dictation',
+  referrals: 'referrals',
+};
+
+function androidFeature(feature: string): string {
+  const key = ANDROID_FEATURE_KEYS[feature];
+  // Callers can also supply an already localized feature name.
+  return key ? androidCopy(key, feature) : feature;
+}
 
 // Deliberately `!user`, not requiresRealAccount: cloud transcription is exactly
 // what an anonymous onboarding session exists to do, and the API leaves
@@ -37,15 +56,30 @@ export function canRunCloudMeeting(user: AuthUser | null, mode: ProcessingMode):
 export function getCloudAccountRequiredMessage(feature: string, anonymous = false): string {
   const action = `${anonymous ? 'Create an account' : 'Sign in'} to use ${feature} with cloud processing`;
   // Already in Private Mode, which is what turning it off asks Cloud for, so don't offer it back.
-  return useProcessingModeStore.getState().activeMode === 'private'
+  const privateMode = useProcessingModeStore.getState().activeMode === 'private';
+  const fallback = privateMode
     ? `${action}.`
-    : `${action}, or set Dictation to On-Device in Account → AI Models.`;
+    : `${action}, or ${Platform.OS === 'android' ? 'turn on Local Mode' : 'set Dictation to On-Device'} in Account → AI Models.`;
+  return androidCopy(
+    `workflowAlerts.${anonymous ? 'createCloud' : 'signInCloud'}${privateMode ? '' : 'OrLocal'}`,
+    fallback,
+    {
+      feature: androidFeature(feature),
+      localMode: androidCopy('privateMode', 'Local Mode'),
+      account: androidCopy('account', 'Account'),
+      models: androidCopy('models', 'Models & processing'),
+    },
+  );
 }
 
 // For features with no local model (AI actions, AI chat): Private Mode is not
 // an alternative, so don't suggest it as one.
 export function getCloudOnlyAccountRequiredMessage(feature: string, anonymous = false): string {
-  return `${anonymous ? 'Create an account' : 'Sign in'} to use ${feature}. This feature always uses cloud AI, even in Local Mode.`;
+  return androidCopy(
+    `workflowAlerts.${anonymous ? 'createCloudOnly' : 'signInCloudOnly'}`,
+    `${anonymous ? 'Create an account' : 'Sign in'} to use ${feature}. This feature always uses cloud AI, even in Local Mode.`,
+    { feature: androidFeature(feature), localMode: androidCopy('privateMode', 'Local Mode') },
+  );
 }
 
 export function showAccountRequiredAlert(feature: string, options?: { cloudOnly?: boolean }): void {
@@ -56,12 +90,21 @@ export function showAccountRequiredAlert(feature: string, options?: { cloudOnly?
   const message = options?.cloudOnly
     ? getCloudOnlyAccountRequiredMessage(feature, anonymous)
     : getCloudAccountRequiredMessage(feature, anonymous);
-  Alert.alert(anonymous ? 'Create an account' : 'Sign in required', message, [
-    { text: 'Cancel', style: 'cancel' },
+  Alert.alert(
     anonymous
-      ? { text: 'Create Account', onPress: () => router.push('/auth') }
-      : { text: 'Account', onPress: () => router.push('/(account)') },
-  ]);
+      ? androidCopy('workflowAlerts.createAccount', 'Create an account')
+      : androidCopy('workflowAlerts.signInRequired', 'Sign in required'),
+    message,
+    [
+      { text: androidCopy('cancel', 'Cancel'), style: 'cancel' },
+      anonymous
+        ? {
+            text: androidCopy('workflowAlerts.createAccountAction', 'Create Account'),
+            onPress: () => router.push('/auth'),
+          }
+        : { text: androidCopy('account', 'Account'), onPress: () => router.push('/(account)') },
+    ],
+  );
 }
 
 /**

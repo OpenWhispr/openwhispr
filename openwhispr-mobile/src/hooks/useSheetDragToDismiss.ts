@@ -26,7 +26,7 @@ export function shouldDismissSheetDrag(translationY: number, velocityY: number):
  */
 export function useSheetDragToDismiss(
   visible: boolean,
-  onClose: () => void,
+  onClose: () => void | boolean,
 ): {
   dragGesture: ReturnType<typeof Gesture.Pan>;
   sheetStyle: ReturnType<typeof useAnimatedStyle>;
@@ -37,6 +37,12 @@ export function useSheetDragToDismiss(
     if (visible) translateY.value = 0;
   }, [visible, translateY]);
 
+  const requestClose = () => {
+    // A dirty form can ask for confirmation instead of dismissing. Restore it
+    // behind the alert so cancelling the confirmation preserves the editor.
+    if (onClose() === false) translateY.value = withSpring(0, { damping: 20, stiffness: 220 });
+  };
+
   const dragGesture = Gesture.Pan()
     .activeOffsetY(10)
     .onUpdate((event) => {
@@ -45,7 +51,7 @@ export function useSheetDragToDismiss(
     .onEnd((event) => {
       if (shouldDismissSheetDrag(event.translationY, event.velocityY)) {
         translateY.value = withTiming(SCREEN_HEIGHT, { duration: 200 }, () => {
-          runOnJS(onClose)();
+          runOnJS(requestClose)();
         });
       } else {
         translateY.value = withSpring(0, { damping: 20, stiffness: 220 });

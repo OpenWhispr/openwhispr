@@ -1,5 +1,8 @@
+import { MenuView } from '@react-native-menu/menu';
+import { useTranslation } from 'react-i18next';
+import { palette } from '@/android/ui';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useIsFocused } from '@react-navigation/native';
 import Animated, {
@@ -53,6 +56,7 @@ export function Fab({
   actions,
   onActionPress,
 }: FabProps) {
+  const { t } = useTranslation('android');
   const isFocused = useIsFocused();
   const hasMenu = (actions?.length ?? 0) > 0;
   const [open, setOpen] = useState(false);
@@ -86,6 +90,38 @@ export function Fab({
 
   if (!isFocused) {
     return null;
+  }
+
+  if (Platform.OS === 'android' && hasMenu) {
+    return (
+      <View style={{ position: 'absolute', right: 20, bottom: BOTTOM }}>
+        <MenuView
+          onPressAction={({ nativeEvent }) => handleActionPress(nativeEvent.event)}
+          actions={actions!.map((action) => ({ id: action.id, title: action.label }))}
+          shouldOpenOnLongPress={false}
+        >
+          <View
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={t('newAction')}
+            style={{
+              minHeight: 52,
+              paddingHorizontal: 20,
+              borderRadius: 18,
+              backgroundColor: palette.blue,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <SystemIcon name="plus" mdName="Plus" size={22} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '600' }}>
+              {t('newAction')}
+            </Text>
+          </View>
+        </MenuView>
+      </View>
+    );
   }
 
   return (
@@ -145,6 +181,7 @@ export function Fab({
       >
         <GradientGlassSurface shape="circle" />
         <Pressable
+          cssInterop={false}
           onPress={handleFabPress}
           accessibilityRole="button"
           accessibilityLabel={hasMenu && open ? 'Close menu' : accessibilityLabel}
@@ -172,8 +209,9 @@ function BrandDiscMark({ icon, mdIcon }: { icon: string; mdIcon: LucideIconName 
     return <SystemIcon name={icon} mdName={mdIcon} size={24} color="#FFF" />;
   }
 
+  // Android hover must reach the labelled button through the decorative mark.
   return (
-    <View pointerEvents="none" style={styles.plusMark}>
+    <View pointerEvents={Platform.OS === 'android' ? 'auto' : 'none'} style={styles.plusMark}>
       <View style={[styles.plusStroke, styles.plusHorizontal]} />
       <View style={[styles.plusStroke, styles.plusVertical]} />
     </View>
@@ -216,6 +254,7 @@ function MiniAction({ action, index, progress, onPress }: MiniActionProps) {
       ]}
     >
       <Pressable
+        cssInterop={false}
         onPress={onPress}
         hitSlop={4}
         accessibilityRole="button"

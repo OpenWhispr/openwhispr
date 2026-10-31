@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Redirect } from 'expo-router';
 
 // Anchors the app to Home on every fresh launch. Without a concrete root index,
@@ -6,5 +7,8 @@ import { Redirect } from 'expo-router';
 // the moment onboarding finishes would land on the Account screen. This redirect
 // gives "/" a deterministic owner that sends users into the Record/home tab.
 export default function Index() {
+  if (Platform.OS === 'android' && localStorage.getItem('android-onboarding-done') !== 'true') {
+    return <Redirect href="/android-setup" />;
+  }
   return <Redirect href="/(tabs)/(record)" />;
 }

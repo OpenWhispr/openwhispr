@@ -4,7 +4,13 @@ import * as Clipboard from 'expo-clipboard';
 import * as WebBrowser from 'expo-web-browser';
 import { notesRepository, type Note } from '@/data';
 import { ApiError } from '@/lib/apiClient';
-import { getErrorMessage, isValidEmail } from '@/lib/utils';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import {
+  NoteSharingError,
+  noteSharingFeedback,
+  type NoteSharingFeedbackCode,
+} from '@/lib/notes/noteSharingFeedback';
+import { isValidEmail } from '@/lib/utils';
 import type { AuthUser } from '@/lib/authClient';
 import { getNoteShareViewerBaseUrl } from '@/config/noteSharing';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -27,11 +33,7 @@ import {
   removeNoteShareToken,
 } from '@/lib/notes/noteShareTokens';
 import { canChangeGrant, isGroupPrincipal, isScopeGrant } from '@/lib/notes/noteShareAccess';
-import {
-  NOTE_PRIVATE_ERROR,
-  NOTE_UNAVAILABLE_ERROR,
-  ensureNoteSynced,
-} from '@/sync/ensureNoteSynced';
+import { ensureNoteSynced } from '@/sync/ensureNoteSynced';
 import { requestSync } from '@/sync/syncEngine';
 
 export interface NoteSharingController {
@@ -41,6 +43,8 @@ export interface NoteSharingController {
   /** The running operation is still waiting for the note upload, so abandoning it changes nothing. */
   cancellable: boolean;
   error: string | null;
+  /** Stable app-owned identity; provider text has no local code. */
+  errorCode: NoteSharingFeedbackCode | null;
   message: string | null;
   /** Invited sharing links to the invitation page; other modes need the full link stored here. */
   hasLink: boolean;
@@ -82,27 +86,28 @@ interface RunOptions {
   allowPrivate?: boolean;
 }
 
-export const INVALID_EMAIL_ERROR = 'Enter a valid email address.';
+export const INVALID_EMAIL_ERROR = noteSharingFeedback.invalidEmail;
 
-const GENERIC_ERROR = 'Unable to update sharing. Please try again.';
+const GENERIC_ERROR = new NoteSharingError('generic');
 
-const ERROR_MESSAGES: Record<string, string> = {
-  POLICY_SHARING_BLOCKED: 'Sharing is restricted by your organization.',
-  POLICY_UNRESOLVABLE: 'Sharing is restricted by your organization.',
-  note_access_denied: 'You do not have permission to manage sharing for this note.',
-  SSO_REQUIRED: 'Sign in with your company SSO to manage sharing.',
-  space_archived: 'This note is in an archived space.',
-  email_verification_required: 'Verify your email before inviting people.',
-  invitations_per_day_exceeded: 'You have reached today’s invitation limit. Try again tomorrow.',
-  resend_cooldown: 'Please wait a minute before resending.',
+const ERROR_MESSAGES: Record<string, NoteSharingFeedbackCode> = {
+  POLICY_SHARING_BLOCKED: 'policy',
+  POLICY_UNRESOLVABLE: 'policy',
+  note_access_denied: 'denied',
+  SSO_REQUIRED: 'sso',
+  space_archived: 'archived',
+  email_verification_required: 'verifyEmail',
+  invitations_per_day_exceeded: 'dailyLimit',
+  resend_cooldown: 'cooldown',
 };
 
-function sharingError(error: unknown): string {
+function sharingError(error: unknown): string | NoteSharingError {
+  if (error instanceof NoteSharingError) return error;
   if (error instanceof ApiError) {
     const known = error.code ? ERROR_MESSAGES[error.code] : undefined;
-    if (known) return known;
-    if (error.status === 401) return 'Your session has expired. Sign in again to manage sharing.';
-    if (error.status === 409) return 'Sharing settings changed. Refresh and try again.';
+    if (known) return new NoteSharingError(known);
+    if (error.status === 401) return new NoteSharingError('sessionExpired');
+    if (error.status === 409) return new NoteSharingError('settingsChanged');
     // Validation messages (an invalid email, a personal domain) are written for people; a bare
     // status from a response without a body is not.
     if ((error.status === 400 || error.status === 426) && !error.message.startsWith('HTTP '))
@@ -111,8 +116,8 @@ function sharingError(error: unknown): string {
   }
   // expo/fetch rejects with a FetchError (not exported) when the request never reaches the server.
   if (error instanceof Error && error.message.startsWith('fetch failed'))
-    return 'Can’t reach OpenWhispr. Check your connection and try again.';
-  return getErrorMessage(error, GENERIC_ERROR);
+    return new NoteSharingError('connection');
+  return error instanceof Error ? error.message : GENERIC_ERROR;
 }
 
 function sameSettings(left: ShareSettings, right: ShareSettings): boolean {
@@ -148,6 +153,7 @@ function loadToken(
 }
 
 export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSharingController {
+  const { copy } = useAndroidCopy();
   const user = useAuthStore((s) => s.user);
   const cookie = useAuthStore((s) => s.sessionCookie);
   const notes = useNotesStore((s) => s.notes);
@@ -164,8 +170,8 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
   );
   const [busy, setBusy] = useState(false);
   const [cancellable, setCancellable] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | NoteSharingError | null>(null);
+  const [message, setMessage] = useState<string | NoteSharingError | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [sharingMode, setSharingMode] = useState<ExternalSharingMode | null>(null);
   const operation = useRef<AbortController | null>(null);
@@ -207,7 +213,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
         controller.abort();
         if (loadRequest.current === controller) {
           setLoading(false);
-          if (!silent) setError('Sharing settings timed out. Check your connection and retry.');
+          if (!silent) setError(new NoteSharingError('loadTimeout'));
         }
       }, 30_000);
       controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
@@ -311,7 +317,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
       if (operation.current === controller) {
         setState(null);
         setBusy(false);
-        setError('Sharing timed out. Refresh settings to check whether the change completed.');
+        setError(new NoteSharingError('operationTimeout'));
       }
     }, 60_000);
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
@@ -336,12 +342,11 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
         current?.clientNoteId !== original?.clientNoteId ||
         (original?.remoteId && current?.remoteId !== original.remoteId)
       ) {
-        throw new Error('Sharing cancelled because the account or note changed.');
+        throw new NoteSharingError('contextChanged');
       }
-      if (!auth.user || auth.user.isAnonymous)
-        throw new Error('Sign in to an account to share notes.');
-      if (!current || current.deletedAt) throw new Error(NOTE_UNAVAILABLE_ERROR);
-      if (current.isPrivate === 1 && !allowPrivate) throw new Error(NOTE_PRIVATE_ERROR);
+      if (!auth.user || auth.user.isAnonymous) throw new NoteSharingError('signIn');
+      if (!current || current.deletedAt) throw new NoteSharingError('noteUnavailable');
+      if (current.isPrivate === 1 && !allowPrivate) throw new NoteSharingError('notePrivate');
     };
     try {
       check();
@@ -354,7 +359,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
         setCancellable(false);
         check();
       }
-      if (!remoteId || !user) throw new Error('Sync this note before sharing.');
+      if (!remoteId || !user) throw new NoteSharingError('syncFirst');
       const current = await api.getNoteShareState(remoteId, { signal: controller.signal });
       check();
       setState(current);
@@ -366,9 +371,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
           if (!(failure instanceof ApiError) || failure.status >= 500) {
             setState(null);
             setHasToken(false);
-            throw new Error(
-              'The sharing change could not be confirmed. Refresh settings before trying again.',
-            );
+            throw new NoteSharingError('unconfirmed');
           }
           // A refused change can still leave sharing different from what the sheet shows: a row
           // removed elsewhere answers 404, and older servers lift a paused note before the daily
@@ -413,10 +416,8 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
       setMessage(null);
       // Removing or demoting your own access leaves nothing this account may load.
       if (failure instanceof ApiError && (failure.status === 403 || failure.status === 404))
-        throw new Error('Sharing changed. You can no longer manage sharing for this note.');
-      throw new Error(
-        'Sharing changed, but the updated settings could not be loaded. Refresh to continue.',
-      );
+        throw new NoteSharingError('accessLost');
+      throw new NoteSharingError('reloadFailed');
     }
     setState(current);
     requestSync('manual');
@@ -459,7 +460,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
             ? !sameSettings(context.current.share, shown)
             : context.current.share.visibility !== 'private'
         )
-          throw new Error('Sharing settings changed. Review them and try again.');
+          throw new NoteSharingError('reviewSettings');
         const result = await context.mutate(() =>
           api.setNoteShareVisibility(context.remoteId, visibility, domainAllowlist, {
             signal: context.signal,
@@ -496,9 +497,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
           invitationLink(result.share) ?? buildNoteShareUrl(result.raw_token),
         );
         context.check();
-        setMessage(
-          'New link copied. The previous link, including links in invitation emails, no longer works.',
-        );
+        setMessage(new NoteSharingError('linkReplaced'));
       },
       { publish: true },
     );
@@ -550,10 +549,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
     const token = await loadToken(context.userId, context.remoteId, context.current);
     context.check();
     setHasToken(Boolean(token));
-    if (!token)
-      throw new Error(
-        'The link is unavailable on this device. Choose Replace link to create a new one.',
-      );
+    if (!token) throw new NoteSharingError('linkUnavailable');
     return buildNoteShareUrl(token);
   };
 
@@ -563,7 +559,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
       if (destination === 'copy') {
         await Clipboard.setStringAsync(url);
         context.check();
-        setMessage('Link copied.');
+        setMessage(new NoteSharingError('linkCopied'));
       } else if (destination === 'open') {
         context.release();
         await WebBrowser.openBrowserAsync(url);
@@ -575,7 +571,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
     const email = input.trim().toLowerCase();
     if (!isValidEmail(email)) {
       setMessage(null);
-      setError(INVALID_EMAIL_ERROR);
+      setError(new NoteSharingError('invalidEmail'));
       return false;
     }
     return run(
@@ -588,7 +584,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
             (invite) => !invite.revoked_at && invite.email.toLowerCase() === email,
           )
         ) {
-          throw new Error('This person already has access or an invitation.');
+          throw new NoteSharingError('alreadyInvited');
         }
         await grantWithFullLink(context, () =>
           api.createNoteAccessGrant(
@@ -598,7 +594,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
           ),
         );
         context.check();
-        setMessage('Access granted.');
+        setMessage(new NoteSharingError('accessGranted'));
         const updated = await adopt(context);
         if (
           updated.invitations.some(
@@ -606,9 +602,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
               invite.email.toLowerCase() === email && !invite.revoked_at && !invite.last_emailed_at,
           )
         ) {
-          setMessage(
-            'Access granted, but the invitation email was not sent. Use Resend to try again.',
-          );
+          setMessage(new NoteSharingError('emailNotSent'));
         }
       },
       { publish: true },
@@ -622,7 +616,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
           isGroupPrincipal(principal.type) &&
           !context.current.access.can_manage_inherited_access
         ) {
-          throw new Error('You do not have permission to manage group access.');
+          throw new NoteSharingError('groupDenied');
         }
         await grantWithFullLink(context, () =>
           api.createNoteAccessGrant(
@@ -637,7 +631,7 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
         );
         context.check();
         await adopt(context);
-        setMessage('Access granted.');
+        setMessage(new NoteSharingError('accessGranted'));
       },
       { publish: true },
     );
@@ -648,11 +642,10 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
   ): Promise<void> => {
     await run(async (context) => {
       const fresh = context.current.access.grants.find((item) => item.id === grant.id);
-      if (!fresh) throw new Error('Access changed. Refresh and try again.');
+      if (!fresh) throw new NoteSharingError('accessChanged');
       if (!canChangeGrant(context.current.access, fresh)) {
-        if (isScopeGrant(fresh))
-          throw new Error('Inherited access is managed in its team or space.');
-        throw new Error('You do not have permission to change inherited access.');
+        if (isScopeGrant(fresh)) throw new NoteSharingError('inheritedManaged');
+        throw new NoteSharingError('inheritedDenied');
       }
       if (permission)
         await context.mutate(() =>
@@ -682,11 +675,11 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
         } catch (failure) {
           context.check();
           if (failure instanceof ApiError && failure.status === 502)
-            throw new Error('The invitation email could not be sent. Try again later.');
+            throw new NoteSharingError('sendFailed');
           throw failure;
         }
         context.check();
-        setMessage('Invitation sent.');
+        setMessage(new NoteSharingError('invitationSent'));
       } else
         await context.mutate(() =>
           api.revokeNoteInvitation(context.remoteId, invitation.id, { signal: context.signal }),
@@ -701,8 +694,15 @@ export function useNoteSharing(noteId: number, onFlushDraft: () => void): NoteSh
     loading,
     busy,
     cancellable,
-    error,
-    message,
+    error:
+      error instanceof NoteSharingError
+        ? copy(`noteSharingFeedback.${error.code}`, error.message)
+        : error,
+    errorCode: error instanceof NoteSharingError ? error.code : null,
+    message:
+      message instanceof NoteSharingError
+        ? copy(`noteSharingFeedback.${message.code}`, message.message)
+        : message,
     hasLink: hasToken || Boolean(state && invitationLink(state.share)),
     sharingMode,
     note,

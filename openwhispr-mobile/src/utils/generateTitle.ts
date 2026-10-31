@@ -24,6 +24,7 @@ export function deriveLocalTitle(text: string): string {
 export async function generateNoteTitle(
   text: string,
   routing?: ReasoningRoutingOptions,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!text.trim()) return '';
 
@@ -36,6 +37,7 @@ export async function generateNoteTitle(
       systemPrompt: TITLE_SYSTEM_PROMPT,
       temperature: 0.3,
       routing,
+      signal,
     });
     const cleaned = result.text.trim().replace(/^["']|["']$/g, '');
     return cleaned.length > 0 && cleaned.length < MAX_TITLE_CHARS ? cleaned : '';

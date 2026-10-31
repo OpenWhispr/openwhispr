@@ -1,6 +1,27 @@
 import React from 'react';
-import { Alert, AppState, Keyboard, ScrollView } from 'react-native';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { createInstance } from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import en from '@/locales/en/translation.json';
+import ar from '@/locales/ar/translation.json';
+import { Alert, AppState, Keyboard, ScrollView, Platform } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import {
+  act,
+  fireEvent,
+  render as renderScreen,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
+
+function render(element: React.ReactElement) {
+  return renderScreen(element, {
+    wrapper: ({ children }) => (
+      <SafeAreaInsetsContext.Provider value={{ top: 24, right: 0, bottom: 24, left: 0 }}>
+        {children}
+      </SafeAreaInsetsContext.Provider>
+    ),
+  });
+}
 
 const mockUpdateConfig = jest.fn().mockResolvedValue(undefined);
 const mockSetActiveMode = jest.fn();
@@ -145,6 +166,17 @@ function selectedMode(): string | undefined {
     return row?.props.accessibilityState.selected;
   });
 }
+
+const workflowI18n = createInstance();
+beforeAll(async () => {
+  await workflowI18n.use(initReactI18next).init({
+    lng: 'en',
+    fallbackLng: 'en',
+    defaultNS: 'android',
+    resources: { en, ar },
+    interpolation: { escapeValue: false },
+  });
+});
 
 beforeEach(() => {
   mockLocalReasoningReady = false;
@@ -313,15 +345,16 @@ it('restores a provider model saved in an earlier settings session', async () =>
   expect(screen.getByText('Whisper')).toBeTruthy();
 });
 
-it('offers Cloud and On-Device on Android, without Bring Your Own Key', () => {
+it('offers Cloud, On-Device and Bring Your Own Key on Android', async () => {
   const platform = require('react-native').Platform;
   const original = platform.OS;
   platform.OS = 'android';
   try {
     render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
     expect(screen.getByText('OpenWhispr Cloud')).toBeTruthy();
     expect(screen.getByText('On-Device')).toBeTruthy();
-    expect(screen.queryByText('Bring Your Own Key')).toBeNull();
+    expect(screen.getByText('Bring Your Own Key')).toBeTruthy();
   } finally {
     platform.OS = original;
   }
@@ -407,6 +440,45 @@ it('closes the keyboard when a key is pasted, but not while typing', () => {
   expect(dismiss).not.toHaveBeenCalled();
   fireEvent.changeText(input, 'sk-pasted-provider-key');
   expect(dismiss).toHaveBeenCalledTimes(1);
+});
+
+it('keeps Android key input active when rapid typing arrives in batches', async () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'android';
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+  mockScope = 'notes';
+  mockConfig = {
+    inference: {
+      notes: {
+        mode: 'providers',
+        providerId: 'custom',
+        endpoint: 'http://10.0.2.2:18329',
+        modelId: 'ow-byok-local-test',
+        credentialRef: 'custom.http://10.0.2.2:18329',
+      },
+    },
+  };
+  try {
+    render(<WorkflowSettingsScreen />);
+    await screen.findByText('Saved');
+    const input = screen.getByLabelText('API key');
+    fireEvent.changeText(input, 'fix');
+    expect(dismiss).not.toHaveBeenCalled();
+    fireEvent.changeText(input, 'fixture333b');
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('API key').props.value).toBe('fixture333b');
+    expect(screen.getByLabelText('Model ID').props.value).toBe('ow-byok-local-test');
+    fireEvent.press(screen.getByText('Save'));
+    await waitFor(() =>
+      expect(mockSetCredential).toHaveBeenCalledWith('custom.http://10.0.2.2:18329', {
+        apiKey: 'fixture333b',
+      }),
+    );
+    expect(dismiss).toHaveBeenCalledTimes(1);
+  } finally {
+    Platform.OS = originalOS;
+  }
 });
 
 it('checks a provider from Local Mode, since a check sends no user content', async () => {
@@ -910,6 +982,106 @@ it('keeps Save disabled until something changes', async () => {
   expect(mockUpdateConfig).not.toHaveBeenCalled();
 });
 
+describe('Android custom server with a removed key', () => {
+  const endpoint = 'http://10.0.2.2:18329';
+  const credentialRef = `custom.${endpoint}`;
+  const originalPlatform = Platform.OS;
+
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockScope = 'notes';
+    mockConfig = {
+      inference: {
+        notes: {
+          mode: 'providers',
+          providerId: 'custom',
+          endpoint,
+          modelId: 'ow-byok-local-test',
+          credentialRef,
+        },
+      },
+    };
+  });
+
+  afterEach(() => {
+    Platform.OS = originalPlatform;
+  });
+
+  it('lets the user explicitly save without the removed key, without changing another field', async () => {
+    mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+    const alert = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation((_title, _message, buttons) =>
+        buttons?.find((button) => button.style === 'destructive')?.onPress?.(),
+      );
+    try {
+      render(<WorkflowSettingsScreen />);
+      fireEvent.press(await screen.findByText('Remove Key'));
+      await screen.findByText('Server key removed.');
+      expect(mockRemoveCredential).toHaveBeenCalledWith(credentialRef);
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+      expect(screen.getByText('Save')).toBeEnabled();
+      mockCredentialStatus.mockResolvedValue({ isConfigured: false });
+      fireEvent.press(screen.getByText('Save'));
+      await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+      expect(mockUpdateConfig.mock.calls[0][0].inference.notes).toEqual({
+        mode: 'providers',
+        providerId: 'custom',
+        endpoint,
+        modelId: 'ow-byok-local-test',
+      });
+      expect(mockSetCredential).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('waits for the key lookup before offering an anonymous save after reopening', async () => {
+    let finishLookup!: (value: { isConfigured: boolean }) => void;
+    mockCredentialStatus.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLookup = resolve;
+      }),
+    );
+    render(<WorkflowSettingsScreen />);
+    await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+    expect(screen.getByText('Save')).toBeDisabled();
+    await act(async () => finishLookup({ isConfigured: false }));
+    expect(screen.getByText('Save')).toBeEnabled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unchanged server with a saved key disabled', async () => {
+    mockCredentialStatus.mockResolvedValue({ isConfigured: true });
+    render(<WorkflowSettingsScreen />);
+    await screen.findByText('Saved');
+    expect(screen.getByText('Save')).toBeDisabled();
+  });
+
+  it.each(['ios', 'named provider', 'already anonymous'])(
+    'does not enable the removed-key action for %s',
+    async (control) => {
+      if (control === 'ios') Platform.OS = 'ios';
+      mockConfig = {
+        inference: {
+          notes: {
+            mode: 'providers',
+            providerId: control === 'named provider' ? 'openai' : 'custom',
+            endpoint: control === 'named provider' ? undefined : endpoint,
+            modelId: 'ow-byok-local-test',
+            credentialRef: control === 'already anonymous' ? undefined : credentialRef,
+          },
+        },
+      };
+      mockCredentialStatus.mockResolvedValue({ isConfigured: false });
+      render(<WorkflowSettingsScreen />);
+      await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
+      expect(screen.getByText('Save')).toBeDisabled();
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    },
+  );
+});
+
 it('shows a saved key as saved, until a replacement is typed', async () => {
   mockCredentialStatus.mockResolvedValue({ isConfigured: true });
   render(<WorkflowSettingsScreen />);
@@ -1256,7 +1428,7 @@ it('restores the provider saved last when switching back to Bring Your Own Key',
   await waitFor(() => expect(mockCredentialStatus).toHaveBeenCalled());
 });
 
-it('keeps the focused field and Save above the keyboard', async () => {
+it('enables iOS keyboard insets and retains handled taps in the provider form', async () => {
   render(<WorkflowSettingsScreen />);
   const scroll = screen.UNSAFE_getByType(ScrollView);
   expect(scroll.props.automaticallyAdjustKeyboardInsets).toBe(true);
@@ -1527,6 +1699,267 @@ describe('an iPhone that cannot run Apple Intelligence', () => {
     ).toBeTruthy();
     expect(selectedMode()).toBeUndefined();
     expect(screen.queryByText('Runs on Apple Intelligence on this iPhone.')).not.toBeOnTheScreen();
+  });
+});
+
+it('describes Android local cleanup and provider keys without Apple controls or iPhone wording', async () => {
+  const platform = require('react-native').Platform;
+  const original = platform.OS;
+  platform.OS = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' } } };
+  try {
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.getByText('Runs on your downloaded text model on this phone.')).toBeTruthy();
+    expect(screen.queryByText(/Apple Intelligence|iPhone/)).toBeNull();
+    fireEvent.press(screen.getByText('Choose or download models'));
+    expect(mockPush).toHaveBeenCalledWith('/(account)/ai-models');
+    await act(async () => enableProviders());
+    expect(screen.getByText(/Stays on this phone/)).toBeTruthy();
+    expect(screen.queryByText(/Apple Intelligence|iPhone/)).toBeNull();
+  } finally {
+    platform.OS = original;
+  }
+});
+
+describe('Android Local Mode workflow controls', () => {
+  const originalOS = Platform.OS;
+  beforeEach(() => {
+    Platform.OS = 'android';
+    mockActiveMode = 'private';
+  });
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+  it('keeps the voice assistant disabled while Local Mode is on', async () => {
+    mockScope = 'agent';
+    mockConfig = {
+      defaultMode: 'private',
+      dictationAgentEnabled: true,
+      inference: { agent: { mode: 'openwhispr' } },
+    };
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.getByLabelText('Voice Assistant').props.enabled).toBe(false);
+    expect(screen.getByLabelText('Voice Assistant').props.on).toBe(false);
+    expect(screen.getByText(/Off while Local Mode is on\./)).toBeTruthy();
+  });
+  it.each(['upload', 'cleanup'])('does not offer Cloud for %s while Local Mode is on', (scope) => {
+    mockScope = scope;
+    mockConfig = { defaultMode: 'private', inference: { [scope]: { mode: 'openwhispr' } } };
+    render(<WorkflowSettingsScreen />);
+    expect(selectedMode()).toBe('On-Device');
+    fireEvent.press(screen.getByText('OpenWhispr Cloud'));
+    expect(mockSwitchMode).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+});
+
+it('shows Android model download guidance without an Apple download status', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  mockScope = 'cleanup';
+  mockConfig = { inference: { cleanup: { mode: 'local' } } };
+  mockLocalReadiness.mockResolvedValue({ status: 'modelNotReady', tokenCounting: false });
+  try {
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.queryByText(/Apple Intelligence|iPhone|iOS Settings/)).toBeNull();
+    expect(
+      screen.getByText('Download a local text model in Account → Models to use on-device AI.'),
+    ).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+  }
+});
+
+it('localizes Android provider controls without changing an unsaved endpoint, model or key', async () => {
+  const originalOS = Platform.OS;
+  Platform.OS = 'android';
+  mockScope = 'notes';
+  mockConfig = {
+    inference: {
+      notes: {
+        mode: 'providers',
+        providerId: 'custom',
+        endpoint: 'https://provider.example/v1',
+        modelId: 'model-1',
+      },
+    },
+  };
+  try {
+    await workflowI18n.changeLanguage('ar');
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    expect(screen.getByText('الاتصال')).toBeTruthy();
+    expect(screen.getByText('التحقق من الاتصال')).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('عنوان URL للخادم'), 'https://second.example/v1');
+    fireEvent.changeText(screen.getByLabelText('معرّف النموذج'), 'custom-model-2');
+    fireEvent.changeText(screen.getByLabelText('مفتاح API'), 'synthetic-provider-key');
+    expect(mockSetCredential).not.toHaveBeenCalled();
+    await act(async () => {
+      await workflowI18n.changeLanguage('en');
+    });
+    expect(screen.getByLabelText('Server URL').props.value).toBe('https://second.example/v1');
+    expect(screen.getByLabelText('Model ID').props.value).toBe('custom-model-2');
+    expect(screen.getByLabelText('API key').props.value).toBe('synthetic-provider-key');
+    fireEvent.press(screen.getByText('Save'));
+    await waitFor(() => expect(mockUpdateConfig).toHaveBeenCalled());
+    expect(mockUpdateConfig.mock.calls[0][0]).toMatchObject({
+      inference: { notes: { endpoint: 'https://second.example/v1', modelId: 'custom-model-2' } },
+    });
+    expect(JSON.stringify(mockUpdateConfig.mock.calls)).not.toContain('synthetic-provider-key');
+  } finally {
+    Platform.OS = originalOS;
+    await act(async () => {
+      await workflowI18n.changeLanguage('en');
+    });
+  }
+});
+
+describe('Arabic workflow guidance and diagnostics', () => {
+  const originalOS = Platform.OS;
+  beforeEach(async () => {
+    Platform.OS = 'android';
+    await workflowI18n.changeLanguage('ar');
+    mockScope = 'notes';
+    mockConfig = {
+      inference: {
+        notes: {
+          mode: 'providers',
+          providerId: 'custom',
+          endpoint: 'https://provider.example/v1',
+          modelId: 'model-1',
+        },
+      },
+    };
+  });
+  afterEach(async () => {
+    Platform.OS = originalOS;
+    await act(async () => {
+      await workflowI18n.changeLanguage('en');
+    });
+  });
+
+  it('explains invalid endpoint input in Arabic before writing a credential', async () => {
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    fireEvent.changeText(screen.getByLabelText('عنوان URL للخادم'), 'http://public.example/v1');
+    fireEvent.changeText(screen.getByLabelText('مفتاح API'), 'synthetic-key');
+    fireEvent.press(screen.getByText('حفظ'));
+    expect(await screen.findByTestId('toast-error')).toHaveTextContent(
+      'استخدم HTTPS، أو HTTP لخادم على شبكة خاصة.',
+    );
+    expect(mockSetCredential).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('keeps Local Mode restrictions intact while translating their explanation', async () => {
+    mockScope = 'upload';
+    mockActiveMode = 'private';
+    mockConfig = { defaultMode: 'private', inference: { upload: { mode: 'openwhispr' } } };
+    // This mixed-platform suite loads the module on iOS. Supply the Android-only note
+    // that a native Android bundle creates when it first imports aiWorkflows.
+    const { ON_DEVICE_MODE_NOTES } = require('@/lib/aiWorkflows');
+    const originalNote = ON_DEVICE_MODE_NOTES.upload;
+    ON_DEVICE_MODE_NOTES.upload = 'Local Mode keeps uploads on this phone.';
+    try {
+      render(<WorkflowSettingsScreen />);
+      await act(async () => undefined);
+      expect(screen.getByText(/يبقي الوضع المحلي الملفات المرفوعة على هذا الهاتف/)).toBeTruthy();
+      expect(
+        screen.getAllByText('متوقف أثناء تشغيل الوضع المحلي. أوقفه من النماذج والمعالجة.'),
+      ).toHaveLength(2);
+      fireEvent.press(screen.getByText('OpenWhispr Cloud'));
+      expect(mockSwitchMode).not.toHaveBeenCalled();
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    } finally {
+      if (originalNote === undefined) delete ON_DEVICE_MODE_NOTES.upload;
+      else ON_DEVICE_MODE_NOTES.upload = originalNote;
+    }
+  });
+
+  it('translates a provider rejection without displaying raw failure details or saving the key', async () => {
+    const { ProviderExecutionError } = require('@/services/providers/ProviderExecution');
+    mockTestConnection.mockRejectedValueOnce(
+      Object.assign(new ProviderExecutionError('synthetic-private-detail'), {
+        code: 'INVALID_CREDENTIAL',
+      }),
+    );
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    fireEvent.changeText(screen.getByLabelText('مفتاح API'), 'synthetic-unsaved-key');
+    fireEvent.press(screen.getByText('التحقق من الاتصال'));
+    expect(await screen.findByTestId('toast-error')).toHaveTextContent(
+      'رفض موفّر الخدمة المفتاح. تحقّق منه وحاول مجددًا.',
+    );
+    expect(screen.queryByText('synthetic-private-detail')).toBeNull();
+    expect(screen.getByLabelText('مفتاح API').props.value).toBe('synthetic-unsaved-key');
+    expect(mockSetCredential).not.toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['PROVIDER_REQUEST_FAILED', 418, 'رفض الموفّر الطلب (418).'],
+    [
+      'PROVIDER_REQUEST_FAILED',
+      undefined,
+      'تعذّر فحص هذا الموفّر. تحقّق من نقطة الاتصال والاتصال بالشبكة، ثم حاول مجددًا.',
+    ],
+    [
+      'UNRECOGNIZED_FAILURE',
+      undefined,
+      'تعذّر فحص هذا الموفّر. تحقّق من نقطة الاتصال والاتصال بالشبكة، ثم حاول مجددًا.',
+    ],
+  ])('safely explains %s with status %s', async (code, status, message) => {
+    const { ProviderExecutionError } = require('@/services/providers/ProviderExecution');
+    mockTestConnection.mockRejectedValueOnce(
+      Object.assign(new ProviderExecutionError('synthetic-private-detail'), { code, status }),
+    );
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    fireEvent.press(screen.getByText('التحقق من الاتصال'));
+    expect(await screen.findByTestId('toast-error')).toHaveTextContent(message as string);
+    expect(screen.queryByText(/synthetic-private-detail|undefined/)).toBeNull();
+  });
+
+  it('retains iOS provider diagnostics while the selected app language is Arabic', async () => {
+    Platform.OS = 'ios';
+    const { ProviderExecutionError } = require('@/services/providers/ProviderExecution');
+    mockTestConnection.mockRejectedValueOnce(
+      Object.assign(new ProviderExecutionError('Original iOS diagnostic'), {
+        code: 'INVALID_CREDENTIAL',
+      }),
+    );
+    render(<WorkflowSettingsScreen />);
+    await act(async () => undefined);
+    fireEvent.press(screen.getByText('Check Connection'));
+    expect(await screen.findByTestId('toast-error')).toHaveTextContent('Original iOS diagnostic');
+  });
+
+  it('localizes both discard actions and only leaves after the destructive action', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      render(<WorkflowSettingsScreen />);
+      await act(async () => undefined);
+      fireEvent.changeText(screen.getByLabelText('مفتاح API'), 'synthetic-unsaved-key');
+      const [prevent, onPreventRemove] = mockPreventRemove.mock.calls.at(-1);
+      expect(prevent).toBe(true);
+      onPreventRemove({ data: { action: { type: 'GO_BACK' } } });
+      expect(alert.mock.calls[0][0]).toBe('تجاهل التغييرات غير المحفوظة؟');
+      const buttons = alert.mock.calls[0][2] ?? [];
+      expect(buttons.map((button) => button.text)).toEqual(['إلغاء', 'تجاهل']);
+      buttons.find((button) => button.style === 'cancel')?.onPress?.();
+      expect(mockDispatch).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('مفتاح API').props.value).toBe('synthetic-unsaved-key');
+      buttons.find((button) => button.style === 'destructive')?.onPress?.();
+      expect(mockDispatch).toHaveBeenCalledWith({ type: 'GO_BACK' });
+      expect(mockSetCredential).not.toHaveBeenCalled();
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
   });
 });
 

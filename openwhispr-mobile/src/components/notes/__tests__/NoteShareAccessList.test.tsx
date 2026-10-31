@@ -1,9 +1,12 @@
-import { Alert, type AlertButton } from 'react-native';
+import { MenuView, type MenuAction } from '@react-native-menu/menu';
+import { Alert, Platform, type AlertButton } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import type { NoteAccessState, NoteShareInvitation } from '@/data/remote/noteSharingTypes';
 import { NoteShareAccessList } from '../NoteShareAccessList';
 
-jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
+jest.mock('@react-native-menu/menu', () => ({
+  MenuView: jest.fn(require('./menuViewMock').MenuView),
+}));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 
@@ -382,4 +385,119 @@ it('gives a person without a name the initial of their email', () => {
   );
   expect(screen.getByText('S')).toBeTruthy();
   expect(screen.getByText('sam@example.com')).toBeTruthy();
+});
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const resources =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      const value =
+        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
+        options.defaultValue ??
+        key;
+      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+    },
+  }),
+}));
+
+it('localizes Android access changes without changing identities or bypassing confirmation', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    const update = jest.fn(),
+      remove = jest.fn(),
+      revoke = jest.fn();
+    const props = {
+      access,
+      invitations: [invitation],
+      busy: false,
+      onUpdateGrant: update,
+      onRemoveGrant: remove,
+      onRevokeInvitation: revoke,
+      onResendInvitation: jest.fn(),
+    };
+    const view = render(<NoteShareAccessList {...props} />);
+    mockLanguage = 'ar';
+    view.rerender(<NoteShareAccessList {...props} />);
+    expect(view.getByLabelText('تغيير وصول Person').props.accessibilityValue).toEqual({
+      text: 'مشاهد',
+    });
+    expect(view.getByText('person@example.com')).toBeTruthy();
+    fireEvent.press(view.getByTestId('menu-grant-1:editor'));
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'جعل Person محررًا؟',
+      'يمكن للمحررين تعديل هذه الملاحظة وإدارة من تتم مشاركتها معه.',
+      expect.any(Array),
+    );
+    confirmAlert('إلغاء');
+    expect(update).not.toHaveBeenCalled();
+    fireEvent.press(view.getByTestId('menu-grant-1:editor'));
+    confirmAlert('تعيين كمحرر');
+    expect(update).toHaveBeenCalledWith(access.grants[0], 'editor');
+    fireEvent.press(view.getByTestId('menu-grant-1:remove'));
+    confirmAlert('إلغاء');
+    expect(remove).not.toHaveBeenCalled();
+    fireEvent.press(view.getByTestId('menu-grant-1:remove'));
+    confirmAlert('إزالة');
+    expect(remove).toHaveBeenCalledWith(access.grants[0]);
+    fireEvent.press(view.getByTestId('menu-invitation:inv-1:revoke'));
+    confirmAlert('إلغاء');
+    expect(revoke).not.toHaveBeenCalled();
+    fireEvent.press(view.getByTestId('menu-invitation:inv-1:revoke'));
+    confirmAlert('سحب الدعوة');
+    expect(revoke).toHaveBeenCalledWith(invitation);
+    view.rerender(
+      <NoteShareAccessList
+        {...props}
+        paused
+        access={{ ...access, grants: [...access.grants, scopeGrant] }}
+      />,
+    );
+    expect(view.getByText('موروث من مساحة الفريق')).toBeTruthy();
+    expect(view.getByText('person@example.com · متوقف مؤقتًا')).toBeTruthy();
+    expect(view.queryByTestId('menu-invitation:inv-1:resend')).toBeNull();
+    expect(view.queryByTestId('menu-scope:space:1:remove')).toBeNull();
+    view.rerender(<NoteShareAccessList {...props} canInvite={false} />);
+    expect(view.queryByTestId('menu-grant-1:editor')).toBeNull();
+    expect(view.queryByTestId('menu-invitation:inv-1:resend')).toBeNull();
+    Platform.OS = 'ios';
+    view.rerender(<NoteShareAccessList {...props} />);
+    expect(view.getByLabelText('Change access for Person')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
+});
+
+it('exposes named Android role actions directly while preserving their permission and busy state', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    render(
+      <NoteShareAccessList
+        access={access}
+        invitations={[]}
+        busy
+        onUpdateGrant={jest.fn()}
+        onRemoveGrant={jest.fn()}
+        onRevokeInvitation={jest.fn()}
+        onResendInvitation={jest.fn()}
+      />,
+    );
+    const actions = (MenuView as unknown as jest.Mock).mock.lastCall[0].actions as MenuAction[];
+    expect(actions.slice(0, 2).map((action) => action.id)).toEqual([
+      'grant-1:editor',
+      'grant-1:viewer',
+    ]);
+    expect(actions.every((action) => Boolean(action.title) && !action.subactions)).toBe(true);
+    expect(actions[0].attributes?.disabled).toBe(true);
+    expect(actions[1].state).toBe('on');
+  } finally {
+    Platform.OS = original;
+  }
 });

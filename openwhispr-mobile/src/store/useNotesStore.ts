@@ -1,5 +1,6 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { notesRepository, spacesRepository } from '@/data';
 import type { Note, Folder, NoteUpdate, Space } from '@/data';
@@ -111,6 +112,13 @@ const loadLocalTranscriptionService = () => {
     require('@/services/transcription/LocalTranscriptionService') as typeof import('@/services/transcription/LocalTranscriptionService');
   return localTranscriptionModule.LocalTranscriptionService;
 };
+
+const createAndroidMeetingContext = (noteId: number, signal?: AbortSignal) =>
+  Platform.OS === 'android'
+    ? (
+        require('@/android/localMeetingContext') as typeof import('@/android/localMeetingContext')
+      ).createLocalMeetingContext(noteId, signal)
+    : undefined;
 /* eslint-enable @typescript-eslint/no-var-requires */
 
 const reloadVoiceProfiles = (): Pick<NotesStore, 'voiceProfiles'> => ({
@@ -140,16 +148,28 @@ let diarizerModelDownload: Promise<void> | null = null;
 
 // Diarizing with the model missing downloads it natively, into the folder a download
 // already running is writing, so it waits for that download first.
-const diarizerAfterModelDownload = (diarizer: Diarizer): Diarizer => ({
+const diarizerAfterModelDownload = (
+  diarizer: Diarizer,
+  checkpoint: () => void = () => {},
+): Diarizer => ({
   ...diarizer,
   diarize: async (wavUri, numberOfSpeakers) => {
     await diarizerModelDownload?.catch(() => undefined);
+    checkpoint();
     return diarizer.diarize(wavUri, numberOfSpeakers);
   },
 });
 
 const DEFAULT_FOLDER_ID = 1;
 const MEETINGS_FOLDER_NAME = 'meetings';
+
+const currentPrivateFolderId = (): number | null => {
+  const folders = notesRepository.getPrivateFolders();
+  return (folders.find((folder) => folder.isDefault) ?? folders[0])?.id ?? null;
+};
+
+const currentFolderId = (id: number): number | null =>
+  notesRepository.getFolders().some((folder) => folder.id === id) ? id : currentPrivateFolderId();
 
 export type CreateMeetingNoteContext = {
   expectedSpeakerCount?: number;
@@ -219,10 +239,16 @@ const canUseCloudForMeetingNote = (note: Note | null | undefined): note is Note 
   )
     return false;
   // Local Mode's meetings are private notes; note formatting follows its own selection otherwise.
+  if (Platform.OS === 'android' && useProcessingModeStore.getState().activeMode === 'private')
+    return false;
   return !!note && !note.deletedAt && note.noteType === 'meeting' && note.isPrivate !== 1;
 };
 
-const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
+const autoGenerateMeetingNotes = async (
+  noteId: number,
+  checkpoint: () => void = () => {},
+): Promise<void> => {
+  checkpoint();
   const note = notesRepository.getNoteById(noteId);
   if (!note || note.deletedAt || note.noteType !== 'meeting') return;
   // Generated notes the user already has (edited, or from an action they ran) are never replaced
@@ -263,6 +289,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
     notesMode === 'local'
       ? (await getLocalReasoningReadiness()).status === 'ready'
       : (notesMode !== 'providers' || !canUseCloud) && (await shouldUseLocalReasoning(routing));
+  checkpoint();
   const systemPrompt = buildActionSystemPrompt({
     actionPrompt: action.prompt,
     inputKind: 'meeting-transcript',
@@ -270,6 +297,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   });
 
   const writeGeneratedText = (generatedText: string) => {
+    checkpoint();
     // The user may have run an action or written notes while these were generated.
     if (!generatedText.trim() || notesRepository.getNoteById(noteId)?.enhancedContent?.trim()) {
       return;
@@ -282,6 +310,7 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   };
 
   const generateCloudOnce = async () => {
+    checkpoint();
     const result = await ReasoningService.processText({
       inferenceScope: 'notes',
       text: generationInput,
@@ -300,6 +329,9 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   };
 
   if (!canUseCloud && !canUseLocal) {
+    // Keep the transcript recoverable. Android's explicit model/settings action
+    // can start a fresh job; do not retain callbacks beyond this job's ownership.
+    if (Platform.OS === 'android') return;
     if (isLocalReasoningRequired(routing)) {
       const readiness = await getLocalReasoningReadiness();
       const signedIn = !!useAuthStore.getState().user;
@@ -328,7 +360,10 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
   }
 
   const generatedText = canUseLocal
-    ? await generateLocalMeetingNotes(noteId, { actionPrompt: action.prompt })
+    ? await generateLocalMeetingNotes(noteId, {
+        actionPrompt: action.prompt,
+        ...(Platform.OS === 'android' ? { checkpoint } : {}),
+      })
     : (
         await ReasoningService.processText({
           inferenceScope: 'notes',
@@ -347,7 +382,11 @@ const autoGenerateMeetingNotes = async (noteId: number): Promise<void> => {
 
 // Shared finalization tail for both meeting paths (local runMeetingPipeline and cloud
 // finalizeCloudMeeting): auto-title from the transcript, then the AI summary/cleanup pass.
-const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
+const finalizeMeetingNoteContent = async (
+  noteId: number,
+  checkpoint: () => void = () => {},
+): Promise<void> => {
+  checkpoint();
   const currentNote = notesRepository.getNoteById(noteId);
   if (!currentNote || currentNote.deletedAt || currentNote.noteType !== 'meeting') return;
 
@@ -374,6 +413,7 @@ const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
           require('@/utils/generateTitle') as typeof import('@/utils/generateTitle');
         const routing = { isPrivateNote: currentNote.isPrivate === 1 };
         const canUseLocalTitle = await shouldUseLocalReasoning(routing);
+        checkpoint();
         const generatedTitle =
           canUseCloud || canUseLocalTitle
             ? await generateNoteTitle(transcriptText, {
@@ -382,11 +422,14 @@ const finalizeMeetingNoteContent = async (noteId: number): Promise<void> => {
               })
             : '';
         const title = generatedTitle || (!canUseCloud ? deriveLocalTitle(transcriptText) : '');
+        checkpoint();
         if (title) notesRepository.updateNote(noteId, { title });
       }
     }
   }
-  await autoGenerateMeetingNotes(noteId).catch((error) => {
+  checkpoint();
+  await autoGenerateMeetingNotes(noteId, checkpoint).catch((error) => {
+    checkpoint();
     Sentry.captureException(error, { tags: { feature: 'meeting-auto-notes' } });
   });
 };
@@ -417,6 +460,7 @@ interface NotesStore {
 
   initialize: () => void;
   getNoteById: (id: number) => Note | null;
+  reset: () => void;
   loadFolders: () => void;
   loadSpaces: () => void;
   loadNotes: (folderId?: number) => void;
@@ -449,12 +493,14 @@ interface NotesStore {
     noteId: number,
     wavUri: string,
     expectedSpeakerCount?: number,
+    options?: { signal?: AbortSignal },
   ) => Promise<void>;
   retryMeetingTranscription: (noteId: number) => Promise<void>;
   finalizeCloudMeeting: (
     noteId: number,
     utterances: RealtimeUtterance[],
     elapsedSeconds: number,
+    options?: { incomplete?: boolean },
   ) => Promise<void>;
   isDiarizerAvailable: () => Promise<boolean>;
   isDiarizerModelReady: () => Promise<boolean>;
@@ -505,6 +551,24 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   searchQuery: '',
   isSearching: false,
   transcriptRevision: 0,
+
+  reset: () =>
+    set({
+      folders: [],
+      spaceFolders: [],
+      folderCounts: {},
+      notes: [],
+      spaces: [],
+      voiceProfiles: [],
+      meetingSpeakerEmbeddingsByNoteId: {},
+      activeNoteId: null,
+      activeFolderId: null,
+      activeSpaceId: null,
+      isInitialized: false,
+      searchQuery: '',
+      isSearching: false,
+      transcriptRevision: 0,
+    }),
 
   initialize: () => {
     const folders = notesRepository.getPrivateFolders();
@@ -564,21 +628,29 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   setActiveNoteId: (id) => set({ activeNoteId: id }),
 
   setActiveFolderId: (id) => {
+    const targetId = id == null ? null : currentFolderId(id);
+    if (get().isInitialized && get().activeFolderId === targetId && get().activeSpaceId == null)
+      return;
     set({
-      activeFolderId: id,
+      activeFolderId: targetId,
       activeSpaceId: null,
       activeNoteId: null,
       searchQuery: '',
       isSearching: false,
     });
-    if (id != null) {
-      set({ notes: notesRepository.getNotesByFolder(id) });
+    if (targetId != null) {
+      set({ notes: notesRepository.getNotesByFolder(targetId) });
     } else {
       set({ notes: notesRepository.getAllNotes() });
     }
   },
 
   setActiveSpaceId: (id) => {
+    if (id != null && !spacesRepository.listSpaces().some((space) => space.id === id)) {
+      get().setActiveFolderId(currentPrivateFolderId());
+      return;
+    }
+    if (get().isInitialized && get().activeSpaceId === id && get().activeFolderId == null) return;
     set({
       activeSpaceId: id,
       activeFolderId: null,
@@ -605,13 +677,25 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   createNote: (title = 'Untitled', content = '', folderId) => {
-    const { activeFolderId, activeSpaceId } = get();
+    let { activeFolderId, activeSpaceId } = get();
+    const requestedFolderId = folderId ?? activeFolderId;
+    if (folderId == null && activeSpaceId != null) {
+      get().setActiveSpaceId(activeSpaceId);
+      ({ activeFolderId, activeSpaceId } = get());
+    } else {
+      const targetId =
+        requestedFolderId == null ? currentPrivateFolderId() : currentFolderId(requestedFolderId);
+      if (targetId !== requestedFolderId) get().setActiveFolderId(targetId);
+      folderId = targetId ?? undefined;
+      activeFolderId = targetId;
+      activeSpaceId = null;
+    }
     // Browsing a space (mutually exclusive with browsing a folder): the note
     // belongs to that space, not to the personal default folder.
     const note =
       folderId == null && activeSpaceId != null
         ? notesRepository.createNote(title, content, undefined, activeSpaceId)
-        : notesRepository.createNote(title, content, folderId ?? activeFolderId ?? 1);
+        : notesRepository.createNote(title, content, folderId ?? activeFolderId ?? undefined);
 
     if (useProcessingModeStore.getState().activeMode === 'private') {
       notesRepository.setNotePrivacy(note.id, true);
@@ -761,10 +845,13 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     get().loadNotes();
   },
 
-  runMeetingPipeline: async (noteId, wavUri, expectedSpeakerCount) => {
+  runMeetingPipeline: async (noteId, wavUri, expectedSpeakerCount, options) => {
     const { processMeeting, getDiarizer, LocalTranscriptionService } = loadMeetingPipelineDeps();
-    notesRepository.updateNoteMeta(noteId, { sourceFile: wavUri });
+    const context = createAndroidMeetingContext(noteId, options?.signal);
+    const checkpoint = () => context?.checkpoint();
     try {
+      checkpoint();
+      notesRepository.updateNoteMeta(noteId, { sourceFile: wavUri });
       const result = await processMeeting(
         // The facade picks the engine + best downloaded model from the user's language
         // selection, same routing as the dictation path.
@@ -774,11 +861,14 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
             LocalTranscriptionService.transcribe(uri, {
               language: opts.language,
               wordTimestamps: opts.wordTimestamps,
+              ...(context ? { signal: context.signal } : {}),
             }),
-          diarizer: diarizerAfterModelDownload(getDiarizer()),
+          diarizer: diarizerAfterModelDownload(getDiarizer(), checkpoint),
           repo: notesRepository,
+          ...(context ? { checkpoint } : {}),
         },
       );
+      checkpoint();
       if (notesRepository.getSegments(noteId).some((segment) => segment.text.trim())) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'local' });
       }
@@ -791,8 +881,20 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       if (identifyMeetingSpeakers(noteId, result.speakerEmbeddingsByLabel)) {
         set((state) => ({ transcriptRevision: state.transcriptRevision + 1 }));
       }
-      await finalizeMeetingNoteContent(noteId);
+      await finalizeMeetingNoteContent(noteId, checkpoint);
+      checkpoint();
+    } catch (error) {
+      if (
+        context?.ownsNote() &&
+        ['recording', 'transcribing', 'diarizing'].includes(
+          notesRepository.getTranscriptionStatus(noteId),
+        )
+      ) {
+        notesRepository.setTranscriptionStatus(noteId, 'failed');
+      }
+      throw error;
     } finally {
+      context?.dispose();
       get().loadNotes();
     }
   },
@@ -805,23 +907,88 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     if (!note.sourceFile || !isManagedMeetingAudioUri(noteId, note.sourceFile)) {
       throw new Error('Original audio is no longer available for this note.');
     }
+    if (Platform.OS === 'android') {
+      const user = useAuthStore.getState().user;
+      if (note.isPrivate || useProcessingModeStore.getState().activeMode === 'private') {
+        await get().runMeetingPipeline(
+          noteId,
+          note.sourceFile,
+          note.expectedSpeakerCount ?? undefined,
+        );
+        return;
+      }
+      if (!user || user.isAnonymous) throw new Error('Sign in to retry this meeting with Cloud.');
+      const context = createAndroidMeetingContext(noteId);
+      try {
+        context?.checkpoint();
+        get().transitionStatus(noteId, 'transcribing');
+        const { TranscriptionService } =
+          require('@/services/transcription/TranscriptionService') as typeof import('@/services/transcription/TranscriptionService');
+        const result = await TranscriptionService.transcribe({
+          audioUri: note.sourceFile,
+          provider: 'cloud',
+          requestContext: 'file',
+          purpose: 'meeting',
+          signal: context?.signal,
+          fileName: `meeting-${noteId}.wav`,
+          mimeType: 'audio/wav',
+          language: getPreferredTranscriptionLanguage(),
+        });
+        context?.checkpoint();
+        if (!result.text.trim()) throw new Error('No speech found in the recording.');
+        await get().finalizeCloudMeeting(
+          noteId,
+          [
+            {
+              itemId: `recovered-${noteId}`,
+              text: result.text,
+              startMs: 0,
+              endMs: Math.max(0, result.duration * 1000),
+            },
+          ],
+          result.duration,
+        );
+      } catch (error) {
+        if (
+          context?.ownsSavedNote() &&
+          notesRepository.getTranscriptionStatus(noteId) === 'transcribing'
+        )
+          get().transitionStatus(noteId, 'failed');
+        throw error;
+      } finally {
+        context?.dispose();
+      }
+      return;
+    }
     await get().runMeetingPipeline(noteId, note.sourceFile, note.expectedSpeakerCount ?? undefined);
   },
 
-  finalizeCloudMeeting: async (noteId, utterances, elapsedSeconds) => {
+  finalizeCloudMeeting: async (noteId, utterances, elapsedSeconds, options) => {
+    const context = createAndroidMeetingContext(noteId);
+    const checkpoint = () => context?.checkpoint();
     try {
-      get().transitionStatus(noteId, 'transcribing'); // recording -> transcribing
+      checkpoint();
+      if (notesRepository.getTranscriptionStatus(noteId) !== 'transcribing')
+        get().transitionStatus(noteId, 'transcribing');
       const segments = mapUtterancesToSegments(utterances, elapsedSeconds).map((segment) => ({
         ...segment,
         noteId,
       }));
       notesRepository.replaceSegments(noteId, segments);
+      const hasRecognizedWords = segments.some((segment) => segment.text?.trim());
+      // Android retains the recording for explicit retry. A clean socket close
+      // without recognized words must not hide that recovery behind a done state.
+      if (options?.incomplete || (Platform.OS === 'android' && !hasRecognizedWords)) {
+        get().transitionStatus(noteId, 'failed');
+        return;
+      }
       get().transitionStatus(noteId, 'done'); // transcribing -> done (cloud skips diarizing)
-      if (segments.some((segment) => segment.text?.trim())) {
+      if (hasRecognizedWords) {
         logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
       }
-      await finalizeMeetingNoteContent(noteId);
+      await finalizeMeetingNoteContent(noteId, checkpoint);
     } finally {
+      context?.dispose();
       get().loadNotes();
     }
   },
@@ -834,6 +1001,11 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   // True only if the local ASR model the meeting path would route to is actually downloaded.
   isLocalAsrModelReady: async () => {
+    if (Platform.OS === 'android') {
+      const { selectedSpeechModel } =
+        require('@/android/speechSelection') as typeof import('@/android/speechSelection');
+      if (selectedSpeechModel() !== 'parakeet-v3') return false;
+    }
     const LocalTranscriptionService = loadLocalTranscriptionService();
     if (!LocalTranscriptionService.isAvailable()) return false;
     return LocalTranscriptionService.isReadyForLanguage();

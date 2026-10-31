@@ -9,6 +9,16 @@ describe('toFriendlyTranscriptionErrorMessage', () => {
     );
   });
 
+  it.each([
+    'Unable to resolve host "preview.example.test": No address associated with hostname',
+    'java.net.UnknownHostException: preview.example.test',
+    'Failed to connect to preview.example.test/192.0.2.1:443',
+  ])('replaces Android connection details with recovery guidance: %s', (message) => {
+    expect(toFriendlyTranscriptionErrorMessage(new Error(message))).toBe(
+      'No internet connection. Check your connection and try again.',
+    );
+  });
+
   it('maps a timed-out request to a timeout message', () => {
     expect(
       toFriendlyTranscriptionErrorMessage(

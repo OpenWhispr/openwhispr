@@ -1,6 +1,10 @@
 import { fetchUsage, type UsageInfo } from '@/data/remote/usageApi';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { ApiError } from '@/lib/apiClient';
+import { Platform } from 'react-native';
+
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 jest.mock('@/data/remote/usageApi', () => ({
   fetchUsage: jest.fn(),
@@ -79,7 +83,9 @@ function setSignedInUser(id: string, sessionCookie: string): void {
 }
 
 describe('useUsageStore', () => {
+  const originalPlatform = Platform.OS;
   beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
     mockFetchUsage.mockReset();
     useUsageStore.getState().reset();
     useAuthStore.setState({
@@ -89,6 +95,9 @@ describe('useUsageStore', () => {
       isInitialized: true,
       isLoading: false,
     });
+  });
+  afterAll(() => {
+    Object.defineProperty(Platform, 'OS', { value: originalPlatform, configurable: true });
   });
 
   it('loads usage and stamps loadedAt', async () => {
@@ -178,6 +187,123 @@ describe('useUsageStore', () => {
     await expect(useUsageStore.getState().load(true)).resolves.toMatchObject({ status: 'failed' });
     expect(useUsageStore.getState().usage).toMatchObject({ wordsRemaining: 500 });
     expect(useUsageStore.getState().isLoading).toBe(false);
+  });
+
+  it('discards a rejected Android allowance without changing the local account', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockResolvedValueOnce(usage({ plan: 'pro', isSubscribed: true }));
+    await useUsageStore.getState().load(true);
+    const account = useAuthStore.getState();
+    mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
+
+    await expect(useUsageStore.getState().load(true)).resolves.toMatchObject({
+      status: 'failed',
+      usage: null,
+    });
+    expect(useUsageStore.getState()).toMatchObject({
+      usage: null,
+      loadedAt: 0,
+      sessionRejected: true,
+      isLoading: false,
+    });
+    expect(useAuthStore.getState()).toEqual(account);
+  });
+
+  it.each([
+    { name: 'offline', error: new Error('offline') },
+    { name: 'server failure', error: new ApiError('unavailable', 503) },
+    { name: 'policy refusal', error: new ApiError('policy', 403) },
+  ])('retains cached access without demanding sign-in for $name', async ({ error }) => {
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockResolvedValueOnce(usage({ wordsRemaining: 500 }));
+    await useUsageStore.getState().load(true);
+    mockFetchUsage.mockRejectedValueOnce(error);
+    await useUsageStore.getState().load(true);
+
+    expect(useUsageStore.getState()).toMatchObject({
+      usage: { wordsRemaining: 500 },
+      sessionRejected: false,
+    });
+  });
+
+  it('does not reject a replacement session when the old request fails late', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    const oldRequest = deferred<UsageInfo>();
+    mockFetchUsage.mockReturnValueOnce(oldRequest.promise);
+    const oldLoad = useUsageStore.getState().load(true);
+    setSignedInUser('user-a', 'cookie-a-new');
+    mockFetchUsage.mockResolvedValueOnce(usage({ wordsRemaining: 1800 }));
+    await useUsageStore.getState().load(true);
+
+    oldRequest.reject(new ApiError('Invalid session', 401));
+    await expect(oldLoad).resolves.toMatchObject({ status: 'stale' });
+    expect(useUsageStore.getState()).toMatchObject({
+      usage: { wordsRemaining: 1800 },
+      sessionRejected: false,
+    });
+  });
+
+  it('does not let an older rejected request replace a newer successful refresh', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    const oldRequest = deferred<UsageInfo>();
+    mockFetchUsage.mockReturnValueOnce(oldRequest.promise);
+    const oldLoad = useUsageStore.getState().load(true);
+    mockFetchUsage.mockResolvedValueOnce(usage({ wordsRemaining: 1800 }));
+    await useUsageStore.getState().load(true);
+
+    oldRequest.reject(new ApiError('Invalid session', 401));
+    await expect(oldLoad).resolves.toMatchObject({ status: 'stale' });
+    expect(useUsageStore.getState()).toMatchObject({
+      usage: { wordsRemaining: 1800 },
+      sessionRejected: false,
+    });
+  });
+
+  it('clears session rejection after a successful refresh', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
+    await useUsageStore.getState().load(true);
+    expect(useUsageStore.getState().sessionRejected).toBe(true);
+
+    mockFetchUsage.mockResolvedValueOnce(usage());
+    await expect(useUsageStore.getState().load()).resolves.toMatchObject({ status: 'loaded' });
+    expect(useUsageStore.getState().sessionRejected).toBe(false);
+  });
+
+  it('does not carry another account rejection into an offline sign-in', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
+    await useUsageStore.getState().load(true);
+    expect(useUsageStore.getState().sessionRejected).toBe(true);
+
+    setSignedInUser('user-b', 'cookie-b');
+    mockFetchUsage.mockRejectedValueOnce(new Error('offline'));
+    await useUsageStore.getState().load(true);
+    expect(useUsageStore.getState()).toMatchObject({ usage: null, sessionRejected: false });
+  });
+
+  it('clears a rejected session on sign-out reset', async () => {
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
+    await useUsageStore.getState().load(true);
+    expect(useUsageStore.getState().sessionRejected).toBe(true);
+
+    useUsageStore.getState().reset();
+    expect(useUsageStore.getState()).toMatchObject({ usage: null, sessionRejected: false });
+  });
+
+  it('preserves iOS cached-usage behavior when a request is rejected', async () => {
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    setSignedInUser('user-a', 'cookie-a');
+    mockFetchUsage.mockResolvedValueOnce(usage({ wordsRemaining: 500 }));
+    await useUsageStore.getState().load(true);
+    mockFetchUsage.mockRejectedValueOnce(new ApiError('Invalid session', 401));
+    await useUsageStore.getState().load(true);
+
+    expect(useUsageStore.getState()).toMatchObject({
+      usage: { wordsRemaining: 500 },
+      sessionRejected: false,
+    });
   });
 
   it('tracks the billing session and clears it on reset', () => {

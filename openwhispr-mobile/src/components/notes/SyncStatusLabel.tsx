@@ -1,5 +1,7 @@
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
+import { formatLibraryTime } from '@/android/libraryTime';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Platform } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSyncStore } from '@/sync/useSyncStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -22,20 +24,29 @@ function describe(
   lastError: Error | null,
   paidPlanRequired: boolean,
   policyBlocked: boolean,
+  copy: ReturnType<typeof useAndroidCopy>['copy'],
+  language: string,
 ): string {
-  if (paidPlanRequired) return 'Cloud sync requires Pro — tap to upgrade';
-  if (policyBlocked) return 'Cloud backup is turned off by your organization.';
-  if (!cloudBackupEnabled) return 'Syncing paused. Re-enable in Settings.';
-  if (status === 'running') return 'Syncing…';
+  if (paidPlanRequired)
+    return copy('library.syncUpgrade', 'Cloud sync requires Pro — tap to upgrade');
+  if (policyBlocked) return copy('syncPolicy', 'Cloud backup is turned off by your organization.');
+  if (!cloudBackupEnabled)
+    return copy('library.syncPaused', 'Syncing paused. Re-enable in Settings.');
+  if (status === 'running') return copy('library.syncing', 'Syncing…');
   if (status === 'error') {
-    const msg = lastError?.message ?? 'unknown error';
-    return `Sync failed: ${msg} — tap to retry`;
+    const msg = lastError?.message ?? copy('library.unknownError', 'unknown error');
+    return copy('library.syncFailed', `Sync failed: ${msg} — tap to retry`, { error: msg });
   }
-  if (!lastSyncAt) return 'Not synced yet';
-  return `Synced ${formatRelativeTime(lastSyncAt, 'long').toLowerCase()}`;
+  if (!lastSyncAt) return copy('library.syncNever', 'Not synced yet');
+  const time =
+    Platform.OS === 'android'
+      ? formatLibraryTime(lastSyncAt, language)
+      : formatRelativeTime(lastSyncAt, 'long').toLowerCase();
+  return copy('library.synced', `Synced ${time}`, { time });
 }
 
 export function SyncStatusLabel() {
+  const { copy, language } = useAndroidCopy();
   const user = useAuthStore((s) => s.user);
   const isGuest = useAuthStore((s) => s.isGuest);
   const cloudBackupEnabled = useConfigStore((s) => s.config?.cloudBackupEnabled ?? true);
@@ -63,11 +74,16 @@ export function SyncStatusLabel() {
   // have changed) — not on every render of this component. Must run before the early return
   // below (Rules of Hooks): a signed-out user renders null and never reaches this component's
   // JSX anyway, so the wasted read on that path is a non-issue.
-  const conflictLabel = useMemo(
-    () => describeConflictCount(notesRepository.listConflictedNotes().length),
+  const conflictCount = useMemo(
+    () => notesRepository.listConflictedNotes().length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tick, status],
   );
+
+  const conflictLabel =
+    conflictCount > 0
+      ? copy('library.reviewCount', describeConflictCount(conflictCount)!, { count: conflictCount })
+      : null;
 
   if (!user || isGuest) return null;
 
@@ -85,6 +101,8 @@ export function SyncStatusLabel() {
     lastError,
     paidPlanRequired,
     policyBlocked,
+    copy,
+    language,
   );
 
   return (
@@ -115,9 +133,20 @@ export function SyncStatusLabel() {
       }}
       accessibilityRole="button"
       accessibilityState={!canPress ? { disabled: true } : undefined}
-      accessibilityLabel={`Sync status. ${label}${canTapToSync ? '. Tap to sync now.' : ''}${
-        isGated ? '. Tap to upgrade.' : ''
-      }${conflictLabel ? `. ${conflictLabel}.` : ''}`}
+      accessibilityLabel={
+        Platform.OS === 'android'
+          ? [
+              copy('syncStatus', `Sync status: ${label}`, { status: label }),
+              canTapToSync ? copy('library.syncTap', 'Tap to sync now.') : '',
+              isGated ? copy('library.upgradeTap', 'Tap to upgrade.') : '',
+              conflictLabel,
+            ]
+              .filter(Boolean)
+              .join(' ')
+          : `Sync status. ${label}${canTapToSync ? '. Tap to sync now.' : ''}${
+              isGated ? '. Tap to upgrade.' : ''
+            }${conflictLabel ? `. ${conflictLabel}.` : ''}`
+      }
       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
     >
       <View className="flex-row items-center gap-1.5 pb-2">
@@ -147,13 +176,13 @@ export function SyncStatusLabel() {
         )}
         {isGated && <SystemIcon name="lock.fill" mdName="Lock" size={12} color="tertiaryLabel" />}
         <Text
-          numberOfLines={2}
+          numberOfLines={Platform.OS === 'android' ? undefined : 2}
           className={'flex-1 text-[13px] ' + (isError ? 'text-systemRed' : 'text-tertiaryLabel')}
         >
           {label}
         </Text>
         {conflictLabel && (
-          <Text className="text-[13px] font-medium text-systemOrange">{conflictLabel}</Text>
+          <Text className="shrink text-[13px] font-medium text-systemOrange">{conflictLabel}</Text>
         )}
       </View>
     </Pressable>

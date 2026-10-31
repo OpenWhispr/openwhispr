@@ -1,12 +1,15 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import { render } from '@testing-library/react-native';
-import { SuperwallProvider } from 'expo-superwall';
+import { CustomPurchaseControllerProvider, SuperwallProvider } from 'expo-superwall';
 import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSuperwallProvider';
 
 jest.mock(
   'expo-superwall',
   () => ({
+    CustomPurchaseControllerProvider: jest.fn(
+      ({ children }: { children: React.ReactNode }) => children,
+    ),
     SuperwallProvider: jest.fn(({ children }: { children: React.ReactNode }) => children),
   }),
   { virtual: true },
@@ -19,6 +22,10 @@ jest.mock('@/components/superwall/SuperwallEntitlementBridge', () => ({
 jest.mock('@/components/superwall/SuperwallGateProvider', () => ({
   DisabledSuperwallGateProvider: ({ children }: { children: React.ReactNode }) => children,
   EnabledSuperwallGateProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+jest.mock('@/android/billing', () => ({
+  androidPurchaseController: { onPurchase: jest.fn(), onPurchaseRestore: jest.fn() },
 }));
 
 jest.mock('@/lib/sentry', () => ({
@@ -40,7 +47,8 @@ describe('OpenWhisprSuperwallProvider', () => {
     delete process.env.EXPO_PUBLIC_SUPERWALL_ANDROID_API_KEY;
   });
 
-  it('never enters Superwall test mode so purchases always go through StoreKit', () => {
+  it('preserves the default iOS purchase owner', () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     render(
       <OpenWhisprSuperwallProvider>
         <></>
@@ -49,6 +57,7 @@ describe('OpenWhisprSuperwallProvider', () => {
 
     const providerProps = jest.mocked(SuperwallProvider).mock.calls[0]?.[0];
     expect(providerProps?.options?.testModeBehavior).toBe('never');
+    expect(CustomPurchaseControllerProvider).not.toHaveBeenCalled();
   });
 
   it('never enters Superwall test mode on Android either', () => {
@@ -62,5 +71,6 @@ describe('OpenWhisprSuperwallProvider', () => {
 
     const providerProps = jest.mocked(SuperwallProvider).mock.calls[0]?.[0];
     expect(providerProps?.options?.testModeBehavior).toBe('never');
+    expect(CustomPurchaseControllerProvider).toHaveBeenCalled();
   });
 });

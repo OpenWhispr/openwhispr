@@ -18,6 +18,8 @@ import type { NewSegment, NewSpeaker, Speaker } from '@/data/types';
 export const DEFAULT_MIN_SEGMENT_MS = 1500;
 
 export interface DiarizationDeps {
+  /** Throws when the owning account/mode/job is no longer current. */
+  checkpoint?: () => void;
   transcribe: (
     audioUri: string,
     opts: { wordTimestamps: boolean; modelName?: string; language?: string },
@@ -50,6 +52,8 @@ export const processMeeting = async (
   input: ProcessMeetingInput,
   deps: DiarizationDeps,
 ): Promise<ProcessMeetingResult> => {
+  const checkpoint = deps.checkpoint ?? (() => {});
+  checkpoint();
   const { noteId, wavUri } = input;
   const countHint = input.expectedSpeakerCount ?? 0;
   const minSegmentMs = input.minSegmentMs ?? DEFAULT_MIN_SEGMENT_MS;
@@ -58,6 +62,7 @@ export const processMeeting = async (
   // every transition so an illegal jump throws.
   let current: TranscriptionStatus = deps.repo.getTranscriptionStatus(noteId);
   const advance = (next: TranscriptionStatus): void => {
+    checkpoint();
     assertTransition(current, next);
     deps.repo.setTranscriptionStatus(noteId, next);
     current = next;
@@ -70,6 +75,7 @@ export const processMeeting = async (
       modelName: input.modelName,
       language: input.language,
     });
+    checkpoint();
     const words = whisperSegmentsToWords(transcription.segments ?? []);
     if (words.length === 0) {
       // Guard: no word timestamps means we cannot build a speaker-labelled transcript.
@@ -81,6 +87,7 @@ export const processMeeting = async (
 
     advance('diarizing');
     const diarization = await deps.diarizer.diarize(wavUri, countHint);
+    checkpoint();
     const turns = diarizationToTurns(diarization);
     const speakerEmbeddingsByLabel = Object.fromEntries(
       Object.entries(diarization.embeddings).map(([id, embedding]) => [
@@ -122,6 +129,8 @@ export const processMeeting = async (
     advance('done');
     return { speakerEmbeddingsByLabel };
   } catch (error) {
+    // A changed account may now expose another database. Never mark its row failed.
+    checkpoint();
     // Record failure directly (not via advance): failure must always be recordable regardless of
     // intermediate state, and must not mask the original error by re-running assertTransition.
     deps.repo.setTranscriptionStatus(noteId, 'failed');

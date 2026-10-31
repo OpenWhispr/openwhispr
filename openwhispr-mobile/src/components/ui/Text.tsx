@@ -1,5 +1,5 @@
 import { createContext, forwardRef, useContext } from 'react';
-import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import { cssInterop } from 'nativewind';
 import { displayFontFamily, fontFamilyForWeight } from '@/lib/fonts';
 
@@ -21,7 +21,11 @@ const BaseText = forwardRef<RNText, TextProps>(function BaseText({ style, ...pro
 
   return (
     <ParentFontContext.Provider value={fontFamily}>
-      <RNText ref={ref} style={[{ fontFamily }, style]} {...props} />
+      <RNText
+        ref={ref}
+        style={[{ fontFamily }, Platform.OS === 'android' && { textAlign: 'left' }, style]}
+        {...props}
+      />
     </ParentFontContext.Provider>
   );
 });

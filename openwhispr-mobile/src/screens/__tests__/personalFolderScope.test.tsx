@@ -1,3 +1,4 @@
+jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 // Fix round 2, Finding 3: every personal folder surface — the FoldersScreen
 // browsing list (which is also the rename/delete surface) and the move-note
 // picker — must show private-space folders only. A team folder offered as a

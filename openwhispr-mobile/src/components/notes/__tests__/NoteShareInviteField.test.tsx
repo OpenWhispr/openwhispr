@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Platform } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type {
   AccessPrincipalSuggestion,
@@ -196,4 +197,74 @@ it('still offers groups when an existing grant has no email', async () => {
   );
   await settleSearch();
   await waitFor(() => expect(screen.getByText('Engineering')).toBeTruthy());
+});
+
+let mockLanguage = 'en';
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { resolvedLanguage: mockLanguage },
+    t: (key: string, options: Record<string, unknown> = {}) => {
+      const resources =
+        mockLanguage === 'ar'
+          ? require('@/locales/ar/translation.json').android
+          : require('@/locales/en/translation.json').android;
+      const value =
+        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
+        options.defaultValue ??
+        key;
+      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
+    },
+  }),
+}));
+
+it('preserves the exact Android address across language changes and keeps busy invitations disabled', () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    const onInvite = jest.fn();
+    const view = render(<Harness onInvite={onInvite} />);
+    fireEvent.changeText(view.getByLabelText('Invite by email'), '  Casey+Review@example.com  ');
+    mockLanguage = 'ar';
+    view.rerender(<Harness onInvite={onInvite} busy />);
+    const input = view.getByLabelText('الدعوة بالبريد الإلكتروني');
+    expect(input.props.value).toBe('  Casey+Review@example.com  ');
+    fireEvent.press(view.getByLabelText('دعوة Casey+Review@example.com'));
+    expect(onInvite).not.toHaveBeenCalled();
+    view.rerender(<Harness onInvite={onInvite} />);
+    fireEvent.press(view.getByLabelText('دعوة Casey+Review@example.com'));
+    expect(onInvite).toHaveBeenCalledTimes(1);
+    expect(view.getByLabelText('الدعوة بالبريد الإلكتروني').props.value).toBe(
+      '  Casey+Review@example.com  ',
+    );
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
+});
+
+it('localizes Android search feedback without restarting the query or changing the selected principal', async () => {
+  const original = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    mockSearch.mockResolvedValue({ suggestions: [jamie, engineering] });
+    const add = jest.fn();
+    const view = render(<Harness remoteId="remote-1" onAddPrincipal={add} />);
+    fireEvent.changeText(view.getByLabelText('Add people or emails'), 'jam');
+    await settleSearch();
+    mockLanguage = 'ar';
+    view.rerender(<Harness remoteId="remote-1" onAddPrincipal={add} />);
+    await settleSearch();
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+    expect(view.getByText('Jamie')).toBeTruthy();
+    expect(view.queryByText('Engineering')).toBeNull();
+    fireEvent.press(view.getByLabelText('منح الوصول إلى Jamie'));
+    expect(add).toHaveBeenCalledWith(jamie);
+    mockSearch.mockRejectedValue(new Error('offline'));
+    fireEvent.changeText(view.getByLabelText('إضافة أشخاص أو عناوين بريد'), 'other');
+    await settleSearch();
+    expect(view.getByText('البحث غير متاح. حاول مجددًا.')).toBeTruthy();
+  } finally {
+    Platform.OS = original;
+    mockLanguage = 'en';
+  }
 });

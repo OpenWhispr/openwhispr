@@ -1,9 +1,11 @@
+import { noteShareMenuActions } from './noteShareMenuActions';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   View,
@@ -15,7 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
-import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/hooks/useNoteSharing';
+import { useNoteSharing } from '@/hooks/useNoteSharing';
+import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { confirmDestructive } from '@/lib/alerts';
@@ -50,13 +53,6 @@ const VISIBILITY_REACH: Record<ShareVisibility, number> = {
   link: 3,
 };
 
-const VISIBILITY_LABEL: Record<ShareVisibility, string> = {
-  private: 'Only you',
-  link: 'Anyone with the link',
-  domain: 'Your organization',
-  invited: 'Invited people',
-};
-
 const VISIBILITY_ICON: Record<ShareVisibility, [sfName: string, mdName: LucideIconName]> = {
   private: ['lock', 'Lock'],
   link: ['globe', 'Globe'],
@@ -73,16 +69,23 @@ function describeAccess(
   visibility: ShareVisibility | undefined,
   domains: string[],
   isTeamNote: boolean,
+  copy: ReturnType<typeof useAndroidCopy>['copy'],
 ): string {
   switch (visibility) {
     case 'link':
-      return 'Anyone with the link can view';
+      return copy('noteSharing.linkDetail', 'Anyone with the link can view');
     case 'domain':
-      return `Anyone at ${domains.join(', ')} with the link can view`;
+      return copy(
+        'noteSharing.domainDetail',
+        `Anyone at ${domains.join(', ')} with the link can view`,
+        { domains: domains.join(', ') },
+      );
     case 'invited':
-      return 'Only people you add can open it';
+      return copy('noteSharing.invitedDetail', 'Only people you add can open it');
     default:
-      return isTeamNote ? 'Not shared outside this space' : 'Not shared with anyone';
+      return isTeamNote
+        ? copy('noteSharing.teamPrivateDetail', 'Not shared outside this space')
+        : copy('noteSharing.privateDetail', 'Not shared with anyone');
   }
 }
 
@@ -120,7 +123,15 @@ function LoadingRow({ label }: { label: string }) {
     <GroupedList.Row>
       <View className="flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-[15px] text-secondaryLabel">{label}</Text>
+        <Text
+          className={
+            Platform.OS === 'android'
+              ? 'min-w-0 flex-1 text-[15px] text-secondaryLabel'
+              : 'text-[15px] text-secondaryLabel'
+          }
+        >
+          {label}
+        </Text>
       </View>
     </GroupedList.Row>
   );
@@ -140,6 +151,13 @@ function SectionFooter({ children }: { children: ReactNode }) {
 }
 
 export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: NoteShareSheetProps) {
+  const { copy } = useAndroidCopy();
+  const visibilityLabel: Record<ShareVisibility, string> = {
+    private: copy('noteSharing.onlyYou', 'Only you'),
+    link: copy('noteSharing.anyoneLink', 'Anyone with the link'),
+    domain: copy('noteSharing.organization', 'Your organization'),
+    invited: copy('noteSharing.invited', 'Invited people'),
+  };
   const sharing = useNoteSharing(noteId, onFlushDraft);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -151,7 +169,10 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   const subscriptionRequired = useSyncStore((state) => state.subscriptionRequired);
   const { register: registerSuperwallGate } = useSuperwallGate();
   const [email, setEmail] = useState('');
-  const [privacyError, setPrivacyError] = useState<string | null>(null);
+  const [privacyFailed, setPrivacyFailed] = useState(false);
+  const privacyError = privacyFailed
+    ? copy('noteSharing.enableFailed', 'Unable to enable cloud sync. Try again.')
+    : null;
   const businessDomain = emailDomain(sharing.user?.email ?? '');
   const domainEligible = Boolean(businessDomain && !isPersonalEmailDomain(businessDomain));
   const note = sharing.note;
@@ -211,10 +232,16 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
     if (sharing.busy || !canManage || target === visibility) return;
     if (target === 'private') {
       confirmDestructive(
-        'Disable external sharing?',
-        'Links stop working, and people you added and invited lose access. Sharing again creates a new link and restores people you added; resend invitations so their emailed links work. Access through a team space or workspace is unaffected.',
+        copy('noteSharing.disableTitle', 'Disable external sharing?'),
+        copy(
+          'noteSharing.disableBody',
+          'Links stop working, and people you added and invited lose access. Sharing again creates a new link and restores people you added; resend invitations so their emailed links work. Access through a team space or workspace is unaffected.',
+        ),
         () => sharing.setVisibility('private'),
-        { destructiveLabel: 'Disable external sharing' },
+        {
+          cancelLabel: copy('cancel', 'Cancel'),
+          destructiveLabel: copy('noteSharing.disable', 'Disable external sharing'),
+        },
       );
       return;
     }
@@ -232,31 +259,51 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
     }
     // The existing token survives the switch, so links already sent reach the wider audience.
     Alert.alert(
-      target === 'link' ? 'Make this note public?' : `Share with ${businessDomain}?`,
       target === 'link'
-        ? 'Anyone with the link will be able to view this note, including anyone you already sent a link to.'
-        : `Anyone signed in with an ${businessDomain} email will be able to view this note with its link.`,
+        ? copy('noteSharing.publicTitle', 'Make this note public?')
+        : copy('noteSharing.domainTitle', `Share with ${businessDomain}?`, {
+            domain: businessDomain,
+          }),
+      target === 'link'
+        ? copy(
+            'noteSharing.publicBody',
+            'Anyone with the link will be able to view this note, including anyone you already sent a link to.',
+          )
+        : copy(
+            'noteSharing.domainBody',
+            `Anyone signed in with an ${businessDomain} email will be able to view this note with its link.`,
+            { domain: businessDomain },
+          ),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: target === 'link' ? 'Make public' : 'Share', onPress: apply },
+        { text: copy('cancel', 'Cancel'), style: 'cancel' },
+        {
+          text:
+            target === 'link'
+              ? copy('noteSharing.makePublic', 'Make public')
+              : copy('noteSharing.share', 'Share'),
+          onPress: apply,
+        },
       ],
     );
   };
 
   const enableCloudSync = (): void => {
     Alert.alert(
-      'Enable cloud sync?',
-      'This note will be uploaded to your account. Sharing will still require a separate action.',
+      copy('noteSharing.enableTitle', 'Enable cloud sync?'),
+      copy(
+        'noteSharing.enableBody',
+        'This note will be uploaded to your account. Sharing will still require a separate action.',
+      ),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: copy('cancel', 'Cancel'), style: 'cancel' },
         {
-          text: 'Enable cloud sync',
+          text: copy('noteSharing.enable', 'Enable cloud sync'),
           onPress: async () => {
-            setPrivacyError(null);
+            setPrivacyFailed(false);
             try {
               await setNotePrivacy(noteId, false);
             } catch {
-              setPrivacyError('Unable to enable cloud sync. Try again.');
+              setPrivacyFailed(true);
             }
           },
         },
@@ -266,10 +313,16 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
 
   const replaceLink = (): void => {
     confirmDestructive(
-      'Replace link?',
-      'The previous link will stop working, including links already sent in invitation emails. Share the new link with anyone who still needs access.',
+      copy('noteSharing.replaceTitle', 'Replace link?'),
+      copy(
+        'noteSharing.replaceBody',
+        'The previous link will stop working, including links already sent in invitation emails. Share the new link with anyone who still needs access.',
+      ),
       () => sharing.replaceLink(),
-      { destructiveLabel: 'Replace link' },
+      {
+        cancelLabel: copy('cancel', 'Cancel'),
+        destructiveLabel: copy('noteSharing.replace', 'Replace link'),
+      },
     );
   };
 
@@ -279,11 +332,14 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
       return;
     }
     Alert.alert(
-      'Turn sharing back on?',
-      'Adding someone turns external sharing back on, so people you added or invited before get their access back.',
+      copy('noteSharing.resumeTitle', 'Turn sharing back on?'),
+      copy(
+        'noteSharing.resumeBody',
+        'Adding someone turns external sharing back on, so people you added or invited before get their access back.',
+      ),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Turn on sharing', onPress: add },
+        { text: copy('cancel', 'Cancel'), style: 'cancel' },
+        { text: copy('noteSharing.resume', 'Turn on sharing'), onPress: add },
       ],
     );
   };
@@ -325,7 +381,10 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
         displayInline: true,
         subactions: choices.map((target) => ({
           id: `${VISIBILITY_ACTION_PREFIX}${target}`,
-          title: target === 'invited' ? 'Invited people only' : VISIBILITY_LABEL[target],
+          title:
+            target === 'invited'
+              ? copy('noteSharing.invitedOnly', 'Invited people only')
+              : visibilityLabel[target],
           subtitle: target === 'domain' ? businessDomain : undefined,
           image: VISIBILITY_ICON[target][0],
           imageColor: menuIconColor,
@@ -339,7 +398,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   if (linkManaged && !backupOff) {
     linkActions.push({
       id: REPLACE_LINK_ID,
-      title: 'Replace link',
+      title: copy('noteSharing.replace', 'Replace link'),
       image: 'arrow.triangle.2.circlepath',
       imageColor: menuIconColor,
       attributes: { disabled: sharing.busy },
@@ -348,7 +407,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   if (shared && canManage) {
     linkActions.push({
       id: DISABLE_SHARING_ID,
-      title: 'Disable external sharing',
+      title: copy('noteSharing.disable', 'Disable external sharing'),
       image: 'lock',
       imageColor: '#FF3B30',
       attributes: { destructive: true, disabled: sharing.busy },
@@ -367,11 +426,11 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
 
   const accessTitle =
     shared || !isTeamNote
-      ? VISIBILITY_LABEL[visibility ?? 'private']
-      : 'Everyone in this team space';
+      ? visibilityLabel[visibility ?? 'private']
+      : copy('noteSharing.teamEveryone', 'Everyone in this team space');
   const accessDetail = pausedAccess
-    ? 'External sharing is off'
-    : describeAccess(visibility, sharing.state?.share.domain_allowlist ?? [], isTeamNote);
+    ? copy('noteSharing.paused', 'External sharing is off')
+    : describeAccess(visibility, sharing.state?.share.domain_allowlist ?? [], isTeamNote, copy);
   const [accessIcon, accessMdIcon] = VISIBILITY_ICON[shared && visibility ? visibility : 'private'];
   const accessRowContent = (
     <View className="flex-row items-center gap-3 px-4 py-3">
@@ -393,22 +452,29 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   const accessRow =
     accessMenu.length > 0 ? (
       <MenuView
-        actions={accessMenu}
+        actions={noteShareMenuActions(accessMenu)}
         onPressAction={({ nativeEvent }) => pressAccessMenu(nativeEvent.event)}
         shouldOpenOnLongPress={false}
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="General access"
+          accessibilityLabel={copy('noteSharing.general', 'General access')}
           accessibilityValue={{ text: `${accessTitle}. ${accessDetail}` }}
-          accessibilityHint="Changes who can open this note"
+          accessibilityHint={copy('noteSharing.generalHint', 'Changes who can open this note')}
           className="active:bg-tertiarySystemFill"
         >
           {accessRowContent}
         </Pressable>
       </MenuView>
     ) : (
-      <View accessible accessibilityLabel={`General access: ${accessTitle}. ${accessDetail}`}>
+      <View
+        accessible
+        accessibilityLabel={copy(
+          'noteSharing.generalLabel',
+          `General access: ${accessTitle}. ${accessDetail}`,
+          { title: accessTitle, detail: accessDetail },
+        )}
+      >
         {accessRowContent}
       </View>
     );
@@ -420,21 +486,21 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
         disabled={sharing.busy}
         actions={[
           {
-            label: 'Copy link',
+            label: copy('noteSharing.copyLink', 'Copy link'),
             icon: 'doc.on.doc',
             mdIcon: 'Copy',
             onPress: () => sharing.copyLink(),
           },
           {
-            label: 'Share',
-            accessibilityLabel: 'Share link',
+            label: copy('noteSharing.share', 'Share'),
+            accessibilityLabel: copy('noteSharing.shareLink', 'Share link'),
             icon: 'square.and.arrow.up',
             mdIcon: 'Share',
             onPress: () => sharing.shareLink(),
           },
           {
-            label: 'Open',
-            accessibilityLabel: 'Open in browser',
+            label: copy('noteSharing.open', 'Open'),
+            accessibilityLabel: copy('noteSharing.openBrowser', 'Open in browser'),
             icon: 'safari',
             mdIcon: 'Compass',
             onPress: () => sharing.openLink(),
@@ -446,8 +512,11 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
     accessStrip = (
       <Text className="px-4 py-3 text-[13px] text-secondaryLabel">
         {backupOff
-          ? 'The full link isn’t saved on this device.'
-          : 'The full link isn’t saved on this device. Replace it to get a new one.'}
+          ? copy('noteSharing.missingLink', 'The full link isn’t saved on this device.')
+          : copy(
+              'noteSharing.missingLinkReplace',
+              'The full link isn’t saved on this device. Replace it to get a new one.',
+            )}
       </Text>
     );
   } else if (!shared && canManage && !backupOff && allowed('link')) {
@@ -456,7 +525,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
         disabled={sharing.busy}
         actions={[
           {
-            label: 'Create link',
+            label: copy('noteSharing.createLink', 'Create link'),
             icon: 'link',
             mdIcon: 'Link',
             onPress: () => changeVisibility('link'),
@@ -476,12 +545,15 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
           </Text>
           <View className="flex-row flex-wrap gap-x-6">
             {managed && editsNeedPro && (
-              <ShareTextButton label="Upgrade to Pro" onPress={upgrade} />
+              <ShareTextButton
+                label={copy('noteSharing.upgrade', 'Upgrade to Pro')}
+                onPress={upgrade}
+              />
             )}
             {managed && note?.remoteId && (
               <ShareTextButton
-                label="Refresh"
-                accessibilityLabel="Refresh sharing settings"
+                label={copy('noteSharing.refresh', 'Refresh')}
+                accessibilityLabel={copy('noteSharing.refreshLabel', 'Refresh sharing settings')}
                 disabled={sharing.busy}
                 onPress={() => sharing.refresh()}
               />
@@ -507,7 +579,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
       value={email}
       onChangeText={(value) => {
         setEmail(value);
-        if (sharing.error === INVALID_EMAIL_ERROR) sharing.dismissError();
+        if (sharing.errorCode === 'invalidEmail') sharing.dismissError();
       }}
       onInvite={invite}
       remoteId={note?.remoteId ?? undefined}
@@ -524,12 +596,25 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   return (
     <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
       <View className="flex-1 bg-systemBackground">
-        <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
-            Share note
+        <View
+          className="flex-row items-center justify-between px-6 pb-4 pt-8"
+          style={Platform.OS === 'android' ? { paddingTop: insets.top + 20 } : undefined}
+        >
+          <Text
+            accessibilityRole="header"
+            className={
+              Platform.OS === 'android'
+                ? 'min-w-0 flex-1 text-[22px] font-bold text-label'
+                : 'text-[22px] font-bold text-label'
+            }
+          >
+            {copy('noteSharing.title', 'Share note')}
           </Text>
           {closable && (
-            <GlassIconButton onPress={close} accessibilityLabel="Close share sheet">
+            <GlassIconButton
+              onPress={close}
+              accessibilityLabel={copy('noteSharing.close', 'Close share sheet')}
+            >
               <SystemIcon name="xmark" mdName="X" size={15} color="secondaryLabel" />
             </GlassIconButton>
           )}
@@ -542,15 +627,25 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
           {sharing.busy && (
             <View className="flex-row items-center gap-2 px-1" accessibilityRole="alert">
               <ActivityIndicator size="small" />
-              <Text className="text-[13px] text-secondaryLabel">Updating sharing…</Text>
+              <Text
+                className={
+                  Platform.OS === 'android'
+                    ? 'min-w-0 flex-1 text-[13px] text-secondaryLabel'
+                    : 'text-[13px] text-secondaryLabel'
+                }
+              >
+                {copy('noteSharing.updating', 'Updating sharing…')}
+              </Text>
             </View>
           )}
           {signedOut ? (
             <GroupedList dividerInset={16}>
-              <MessageRow>Sign in to share this note online.</MessageRow>
+              <MessageRow>
+                {copy('noteSharing.signInBody', 'Sign in to share this note online.')}
+              </MessageRow>
               <ShareActionRow
-                label="Sign in"
-                accessibilityLabel="Sign in to share"
+                label={copy('signIn', 'Sign in')}
+                accessibilityLabel={copy('noteSharing.signInLabel', 'Sign in to share')}
                 onPress={() => {
                   onClose();
                   router.push('/auth');
@@ -561,28 +656,37 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
             <GroupedList dividerInset={16}>
               <MessageRow>
                 {backupOff
-                  ? 'Cloud backup is off. Turn it on in Privacy & Data to share personal notes.'
-                  : 'Enable cloud sync for this note before sharing.'}
+                  ? copy(
+                      'noteSharing.backupOffBody',
+                      'Cloud backup is off. Turn it on in Privacy & Data to share personal notes.',
+                    )
+                  : copy(
+                      'noteSharing.enableFirst',
+                      'Enable cloud sync for this note before sharing.',
+                    )}
               </MessageRow>
               {note?.remoteId && !sharing.loading && (
                 <MessageRow>
                   {shared
-                    ? 'A previous link may still be active.'
-                    : 'Removal of a previous cloud copy may still be pending.'}
+                    ? copy('noteSharing.oldLink', 'A previous link may still be active.')
+                    : copy(
+                        'noteSharing.oldCopy',
+                        'Removal of a previous cloud copy may still be pending.',
+                      )}
                 </MessageRow>
               )}
               {sharing.loading && note?.remoteId && (
-                <LoadingRow label="Checking previous sharing…" />
+                <LoadingRow label={copy('noteSharing.checking', 'Checking previous sharing…')} />
               )}
               {sharing.error && note?.remoteId && (
                 <MessageRow tone="error">{sharing.error}</MessageRow>
               )}
               {sharing.error && note?.remoteId && (
-                <ShareActionRow label="Retry" onPress={() => sharing.refresh()} />
+                <ShareActionRow label={copy('retry', 'Retry')} onPress={() => sharing.refresh()} />
               )}
               {canDisablePrevious && (
                 <ShareActionRow
-                  label="Disable previous link"
+                  label={copy('noteSharing.disablePrevious', 'Disable previous link')}
                   destructive
                   disabled={sharing.busy || sharing.loading}
                   onPress={() => changeVisibility('private')}
@@ -590,14 +694,17 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
               )}
               {backupOff ? (
                 <ShareActionRow
-                  label="Open privacy settings"
+                  label={copy('noteSharing.privacySettings', 'Open privacy settings')}
                   disabled={sharing.busy}
                   onPress={openPrivacySettings}
                 />
               ) : (
                 <ShareActionRow
-                  label="Enable cloud sync"
-                  accessibilityLabel="Enable cloud sync for this note"
+                  label={copy('noteSharing.enable', 'Enable cloud sync')}
+                  accessibilityLabel={copy(
+                    'noteSharing.enableLabel',
+                    'Enable cloud sync for this note',
+                  )}
                   disabled={sharing.busy}
                   onPress={enableCloudSync}
                 />
@@ -606,49 +713,74 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
           ) : upgradeRequired ? (
             <GroupedList dividerInset={16}>
               <MessageRow>
-                Sharing uploads this note to your cloud account, which requires Pro.
+                {copy(
+                  'noteSharing.upgradeBody',
+                  'Sharing uploads this note to your cloud account, which requires Pro.',
+                )}
               </MessageRow>
-              <ShareActionRow label="Upgrade to Pro" onPress={upgrade} />
+              <ShareActionRow
+                label={copy('noteSharing.upgrade', 'Upgrade to Pro')}
+                onPress={upgrade}
+              />
             </GroupedList>
           ) : sharing.loading ? (
             <View className="flex-row items-center gap-3 px-1 py-3">
               <ActivityIndicator />
-              <Text className="text-secondaryLabel">Loading sharing settings…</Text>
+              <Text
+                className={
+                  Platform.OS === 'android'
+                    ? 'min-w-0 flex-1 text-secondaryLabel'
+                    : 'text-secondaryLabel'
+                }
+              >
+                {copy('noteSharing.loading', 'Loading sharing settings…')}
+              </Text>
             </View>
           ) : unknown ? (
             <GroupedList dividerInset={16}>
-              <MessageRow>{sharing.error || 'Sharing settings are unavailable.'}</MessageRow>
-              <ShareActionRow label="Retry" onPress={() => sharing.refresh()} />
+              <MessageRow>
+                {sharing.error ||
+                  copy('noteSharing.unavailable', 'Sharing settings are unavailable.')}
+              </MessageRow>
+              <ShareActionRow label={copy('retry', 'Retry')} onPress={() => sharing.refresh()} />
             </GroupedList>
           ) : (
             <>
               {backupOff && (
                 <GroupedList dividerInset={16}>
                   <MessageRow>
-                    Cloud backup is off. Turn it on in Privacy & Data to change who this note is
-                    shared with.
+                    {copy(
+                      'noteSharing.backupOffManage',
+                      'Cloud backup is off. Turn it on in Privacy & Data to change who this note is shared with.',
+                    )}
                   </MessageRow>
                   <ShareActionRow
-                    label="Open privacy settings"
+                    label={copy('noteSharing.privacySettings', 'Open privacy settings')}
                     disabled={sharing.busy}
                     onPress={openPrivacySettings}
                   />
                 </GroupedList>
               )}
               <View className="gap-2">
-                <SectionLabel>General access</SectionLabel>
+                <SectionLabel>{copy('noteSharing.general', 'General access')}</SectionLabel>
                 <GroupedList dividerInset={0}>
                   {accessRow}
                   {accessStrip}
                 </GroupedList>
                 {canManage && !backupOff && sharing.sharingMode === 'domain_only' && (
                   <SectionFooter>
-                    Your organization only allows sharing within your company domain.
+                    {copy(
+                      'noteSharing.domainPolicy',
+                      'Your organization only allows sharing within your company domain.',
+                    )}
                   </SectionFooter>
                 )}
                 {canManage && !backupOff && sharing.sharingMode === 'disabled' && (
                   <SectionFooter>
-                    Your organization does not allow sharing notes outside it.
+                    {copy(
+                      'noteSharing.disabledPolicy',
+                      'Your organization does not allow sharing notes outside it.',
+                    )}
                   </SectionFooter>
                 )}
               </View>
@@ -670,7 +802,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
               ) : (
                 inviteField && (
                   <View className="gap-2">
-                    <SectionLabel>Invite people</SectionLabel>
+                    <SectionLabel>{copy('noteSharing.invitePeople', 'Invite people')}</SectionLabel>
                     <GroupedList>{inviteField}</GroupedList>
                   </View>
                 )
@@ -679,12 +811,12 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
           )}
           {!managed && feedback}
           <View className="gap-2">
-            <SectionLabel>Export</SectionLabel>
+            <SectionLabel>{copy('noteSharing.export', 'Export')}</SectionLabel>
             <GroupedList>
               <GroupedList.Row
                 onPress={() => onExport('md')}
                 accessibilityRole="button"
-                accessibilityLabel="Export Markdown"
+                accessibilityLabel={copy('noteSharing.exportMarkdown', 'Export Markdown')}
                 leadingIconSlot={<RowIcon name="doc.richtext" mdName="FileCode" />}
               >
                 <Text className="text-[15px] text-label">Markdown</Text>
@@ -692,10 +824,12 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
               <GroupedList.Row
                 onPress={() => onExport('txt')}
                 accessibilityRole="button"
-                accessibilityLabel="Export Plain Text"
+                accessibilityLabel={copy('noteSharing.exportText', 'Export Plain Text')}
                 leadingIconSlot={<RowIcon name="doc.plaintext" mdName="FileText" />}
               >
-                <Text className="text-[15px] text-label">Plain text</Text>
+                <Text className="text-[15px] text-label">
+                  {copy('noteSharing.plainText', 'Plain text')}
+                </Text>
               </GroupedList.Row>
             </GroupedList>
           </View>
