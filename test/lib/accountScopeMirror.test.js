@@ -81,7 +81,7 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
   let stop = () => {};
   t.after(() => stop());
   const events = windowEvents();
-  const calls = { policy: [], config: [] };
+  const calls = { policy: [], config: [], clears: [] };
   let onScopeChanged = null;
   const electronAPI = {
     getAppVersion: async () => ({ version: "1.10.0" }),
@@ -114,7 +114,9 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
         config: azureSttRequired,
       };
     },
-    clearManagedEnterpriseIdentity: async () => {},
+    clearManagedEnterpriseIdentity: async (options) => {
+      calls.clears.push(options);
+    },
   };
   const { storage } = installBrowserGlobals(t, {
     initialStorage: activeWorkspaceId ? { activeWorkspaceId } : {},
@@ -198,10 +200,40 @@ test("a scope validated after boot arrives by broadcast and the workspace by sto
   // No active workspace is known yet, so nothing can be managed.
   assert.equal(managed.isManagedTranscriptionActive(), false);
   assert.deepEqual(calls.config, []);
+  // The boot read found no scope, then the account arrived without a workspace.
+  assert.deepEqual(calls.clears, [
+    undefined,
+    { next: { accountId: "account-a", workspaceId: null } },
+  ]);
 
   setActiveWorkspace("workspace-a");
   await waitFor(() => managed.isManagedTranscriptionActive(), "managed transcription");
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
+});
+
+test("the mirror names the scope it moves to, and nothing when the scope is gone", async (t) => {
+  const { managed, calls, broadcast, setActiveWorkspace } = await boot(t, {
+    scope: { accountId: "account-a", authGeneration: 1 },
+    activeWorkspaceId: "workspace-a",
+  });
+  await waitFor(() => managed.isManagedTranscriptionActive(), "managed transcription");
+  const moves = [{ next: { accountId: "account-a", workspaceId: "workspace-a" } }];
+  assert.deepEqual(calls.clears, moves);
+
+  // A rotation names the same scope, so main keeps an enterprise meeting running.
+  broadcast({ accountId: "account-a", authGeneration: 2 });
+  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-a" } });
+  assert.deepEqual(calls.clears, moves);
+
+  setActiveWorkspace("workspace-b");
+  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-b" } });
+  assert.deepEqual(calls.clears, moves);
+
+  // An unresolved scope (a window booting mid-rotation, or a sign-out) names
+  // nothing: main ends the work when it learns the account changed.
+  broadcast(null);
+  moves.push(undefined);
+  assert.deepEqual(calls.clears, moves);
 });
 
 test("a broadcast that lands while the boot read is in flight is not overwritten by it", async (t) => {
@@ -221,9 +253,11 @@ test("stopping the mirror detaches both the broadcast and the storage listener",
   const { stop, events, listeningForBroadcasts } = await boot(t, {
     activeWorkspaceId: "workspace-a",
   });
-  assert.equal(events.count("storage"), 1);
+  // The workspace store keeps its own window-lifetime listener; only the
+  // mirror's comes and goes.
+  const storageListeners = events.count("storage");
   assert.equal(listeningForBroadcasts(), true);
   stop();
-  assert.equal(events.count("storage"), 0);
+  assert.equal(events.count("storage"), storageListeners - 1);
   assert.equal(listeningForBroadcasts(), false);
 });

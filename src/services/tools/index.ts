@@ -15,6 +15,12 @@ import {
   registerConnectorTools,
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
+import {
+  createLoadSkillTool,
+  createProposeSkillTool,
+  createUpdateSkillTool,
+  type SkillToolDeps,
+} from "./skillTools";
 import type { ContainerScope } from "../../types/chat";
 
 export { ToolRegistry } from "./ToolRegistry";
@@ -35,6 +41,8 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
+  /** The user's skills; load_skill is offered once one is usable. */
+  skills?: SkillToolDeps;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -67,6 +75,20 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+
+  if (settings.skills) {
+    const hasSkills = settings.skills.usable.length > 0;
+    if (hasSkills) {
+      registry.register(createLoadSkillTool(settings.skills));
+      registry.register(createUpdateSkillTool(settings.skills.usable));
+    }
+    // A skill card writes only on this computer, so it needs no sign-in, plan or connector.
+    // Someone with no skills makes their first through the skill creator, so every other
+    // request leaves the tool out.
+    if (hasSkills || settings.skills.creatorAttached) {
+      registry.register(createProposeSkillTool());
+    }
+  }
 
   return registry;
 }

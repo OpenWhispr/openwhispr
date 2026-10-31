@@ -1,5 +1,5 @@
 import type { Workspace } from "../types/electron";
-import { canManageWorkspace } from "./spacePermissions.ts";
+import { workspaceCan } from "./capabilities.ts";
 import { isEnterpriseWorkspaceEntitled } from "../components/onboarding/flow.ts";
 
 export type WorkspaceSwitcherState =
@@ -42,5 +42,5 @@ export function resolveWorkspaceSwitcher({
     return error && activeWorkspaceId ? { kind: "error" } : { kind: "personal" };
   }
   const current = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
-  return { kind: "workspace", current, canInvite: canManageWorkspace(current.role) };
+  return { kind: "workspace", current, canInvite: workspaceCan(current, "manage_members") };
 }

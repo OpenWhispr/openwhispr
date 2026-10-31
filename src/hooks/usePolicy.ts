@@ -7,6 +7,7 @@ import {
   getTranscriptionSelection,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
+  isAudioFeatureAllowed,
   reconcilePolicyModeSelection,
   type PolicyDecisionSnapshot,
   type TranscriptionPolicyContext,
@@ -30,7 +31,9 @@ export function useTranscriptionContextAllowed(context: TranscriptionPolicyConte
       getTranscriptionSelection(selectPolicyEffectiveSettings(settings, snapshot), context)
     )
   );
-  return isTranscriptionSelectionAllowed(snapshot, selection);
+  return (
+    isAudioFeatureAllowed(snapshot, context) && isTranscriptionSelectionAllowed(snapshot, selection)
+  );
 }
 
 interface PolicyModeOptions<T> {

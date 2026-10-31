@@ -66,6 +66,8 @@ interface ToolExecutionResult {
   data: string;
   displayText: string;
   metadata?: ToolMetadata;
+  /** The tool ran but didn't do what was asked; displayText says why. */
+  failed?: boolean;
 }
 
 const BYOK_STREAM_PROVIDERS = [
@@ -97,6 +99,7 @@ export type AgentStreamChunk =
       toolName: string;
       displayText: string;
       metadata?: ToolMetadata;
+      failed?: boolean;
     }
   | { type: "done"; finishReason?: string };
 
@@ -940,7 +943,7 @@ class ReasoningService extends BaseReasoningService {
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
-    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    const needsGeminiThinkingSuppressed = provider === "gemini" && userSuppressesThinking;
     const providerOptions = {
       // The effort value is a family fact: gpt-oss has no "none" (#1611).
       ...(needsGroqDisableThinking
@@ -951,8 +954,16 @@ class ReasoningService extends BaseReasoningService {
             },
           }
         : {}),
-      ...(needsGeminiMinimalThinking
-        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+      ...(needsGeminiThinkingSuppressed
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingLevel:
+                  getModelFamilyConstraints(model)?.reasoningEffort?.suppressValue ?? "minimal",
+                includeThoughts: false,
+              },
+            },
+          }
         : {}),
       ...(reasoningEffort && provider === "groq" ? { groq: { reasoningEffort } } : {}),
       ...(reasoningEffort && provider === "gemini"
@@ -1046,6 +1057,7 @@ class ReasoningService extends BaseReasoningService {
             toolName: chunk.toolName,
             displayText,
             ...(metadata ? { metadata } : {}),
+            ...(isToolFailure ? { failed: true } : {}),
           };
         } else if (chunk.type === "tool-error") {
           // A call the SDK rejected (unknown tool, invalid input) never ran; without
@@ -1056,6 +1068,7 @@ class ReasoningService extends BaseReasoningService {
             callId: chunk.toolCallId,
             toolName: chunk.toolName,
             displayText: `Error: ${cause instanceof Error ? cause.message : String(cause)}`,
+            failed: true,
           };
         } else if (chunk.type === "abort") {
           canFlushFilteredText = false;
@@ -1329,7 +1342,7 @@ class ReasoningService extends BaseReasoningService {
           toolResult = await config.executeToolCall(call.name, call.arguments, call.id);
         } catch (error) {
           const errMsg = `Error: ${(error as Error).message}`;
-          toolResult = { data: errMsg, displayText: errMsg };
+          toolResult = { data: errMsg, displayText: errMsg, failed: true };
         }
         if (operationWasCancelled()) return;
         yield {
@@ -1338,6 +1351,7 @@ class ReasoningService extends BaseReasoningService {
           toolName: call.name,
           displayText: toolResult.displayText,
           ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
+          ...(toolResult.failed ? { failed: true } : {}),
         };
 
         currentMessages = [

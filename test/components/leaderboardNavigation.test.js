@@ -109,6 +109,9 @@ test("leaderboard access is plan agnostic and invitation led", () => {
   assert.ok(section.includes("resolveLeaderboardScopeKey"));
   assert.ok(section.includes('t("insights.leaderboard.chooseBoard")'));
   assert.ok(section.includes('selectedScope?.state === "invite"'));
+  // Invites follow the workspace's capabilities, not the scope's role name.
+  assert.ok(section.includes('workspaceCan(workspace, "manage_members")'));
+  assert.equal(/role === "(owner|admin)"/.test(section), false);
   assert.ok(section.includes("<LeaderboardJoinPreview"));
   assert.equal(section.includes("<LeaderboardSyncRow"), false);
   assert.equal(section.includes("activationDescription"), false);

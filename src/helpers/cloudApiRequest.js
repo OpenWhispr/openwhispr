@@ -144,7 +144,10 @@ function createCloudApiRequestHandler({
           error: message,
           status: response.status,
           code: data?.code,
-          details: data?.data,
+          // Shared dictionary 409s put their conflicts beside `code`, not under `data`.
+          details:
+            data?.data ??
+            (data?.conflicts !== undefined ? { conflicts: data.conflicts } : undefined),
           minAppVersion: data?.minAppVersion ?? data?.data?.minAppVersion,
         };
       }

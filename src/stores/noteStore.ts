@@ -14,6 +14,12 @@ import {
   removeNoteConflictId,
 } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
+import {
+  decideNoteWorkspaceScope,
+  spacesInWorkspaceScope,
+  type NoteWorkspaceScopeReason,
+} from "../lib/workspaceSelection";
+import { useWorkspaceStore } from "./workspaceStore";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
@@ -101,6 +107,98 @@ useNoteStore.subscribe((state) => {
   if (state.activeNoteId === syncedActiveNoteId) return;
   syncedActiveNoteId = state.activeNoteId;
   syncService.setNoteOpen(state.activeNoteId != null);
+});
+
+// Keeps the open note and container inside the active workspace (rules in
+// decideNoteWorkspaceScope). Leaving a hidden note takes two writes, and the
+// first would read as navigating back into the workspace just left, so
+// reconciling pauses while they apply.
+let applyingWorkspaceScope = false;
+// A note or container the user opened before it loaded (a teamspace created a
+// moment ago, a note whose folder isn't read yet): its first load still counts
+// as the user's navigation, so it may switch workspace then. A workspace
+// switch cancels that.
+let awaitingOpenedNoteId: number | null = null;
+let awaitingOpenedContext: ActiveContext | null = null;
+function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
+  if (applyingWorkspaceScope) return;
+  const state = useNoteStore.getState();
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const spaceById = (id: number): SpaceItem | null =>
+    state.spaces.find((space) => space.id === id) ?? null;
+  const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
+  const noteSpace = activeNote ? spaceById(activeNote.space_id) : null;
+  const contextSpace = state.activeContext ? spaceById(state.activeContext.spaceId) : null;
+  let reason = trigger;
+  if (noteSpace && awaitingOpenedNoteId === state.activeNoteId) {
+    awaitingOpenedNoteId = null;
+    reason = "navigated";
+  }
+  if (contextSpace && awaitingOpenedContext === state.activeContext) {
+    awaitingOpenedContext = null;
+    reason = "navigated";
+  }
+  const decision = decideNoteWorkspaceScope({
+    reason,
+    activeWorkspaceId,
+    workspaces,
+    contextSpace,
+    noteSpace,
+  });
+  if (decision.kind === "none") return;
+  if (decision.kind === "enterWorkspace") {
+    // The switch reconciles again, closing whatever the old workspace left open.
+    useWorkspaceStore.getState().setActiveWorkspaceId(decision.workspaceId);
+    return;
+  }
+  applyingWorkspaceScope = true;
+  try {
+    if (decision.clearNote) setActiveNoteId(null);
+    const context =
+      decision.context === "note" && activeNote
+        ? { spaceId: activeNote.space_id, folderId: activeNote.folder_id ?? null }
+        : decision.context === "default"
+          ? defaultContext(state.spaces, state.folders)
+          : null;
+    if (context) {
+      setActiveContext(context.spaceId, context.folderId);
+      revealContainer(context.spaceId, context.folderId);
+    }
+  } finally {
+    applyingWorkspaceScope = false;
+  }
+}
+
+useNoteStore.subscribe((state, previous) => {
+  // What reconciling itself opens is never the user's navigation.
+  if (state.activeNoteId !== previous.activeNoteId) {
+    awaitingOpenedNoteId = applyingWorkspaceScope ? null : state.activeNoteId;
+  }
+  if (state.activeContext !== previous.activeContext) {
+    awaitingOpenedContext = applyingWorkspaceScope ? null : state.activeContext;
+  }
+  if (
+    state.activeContext !== previous.activeContext ||
+    state.activeNoteId !== previous.activeNoteId
+  ) {
+    reconcileWorkspaceScope("navigated");
+  } else if (
+    state.spaces !== previous.spaces ||
+    state.notesByContainer !== previous.notesByContainer
+  ) {
+    reconcileWorkspaceScope("dataChanged");
+  }
+});
+useWorkspaceStore.subscribe((state, previous) => {
+  if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
+    awaitingOpenedNoteId = null;
+    awaitingOpenedContext = null;
+    reconcileWorkspaceScope("workspaceSwitched");
+  } else if (state.workspaces !== previous.workspaces) {
+    // A workspace that just arrived (an accepted invitation) can claim the
+    // space the user already opened.
+    reconcileWorkspaceScope("navigated");
+  }
 });
 
 let hasBoundIpcListeners = false;
@@ -471,6 +569,18 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   void ensureContainerLoaded(key);
 }
 
+// Where the notes view lands with nothing else to show: Personal's default
+// folder, which every workspace shows.
+function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces);
+  const privateSpace = visible.find((s) => s.kind === "private") ?? visible[0];
+  if (!privateSpace) return null;
+  const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
+  const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
+  return { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+}
+
 /**
  * Loads spaces, folders and counts, resolves the initial active context
  * (honoring a pending folder preset or a prior activeContext, e.g. navigating
@@ -496,16 +606,13 @@ export async function initializeNotesTree(): Promise<void> {
       (preset.folderId == null || folders.some((f) => f.id === preset.folderId))
         ? preset
         : null;
-    const privateSpace = spaces.find((s) => s.kind === "private") ?? spaces[0];
     let context: ActiveContext | null = null;
     if (presetFolder) {
       context = { spaceId: presetFolder.space_id, folderId: presetFolder.id };
     } else if (presetContext) {
       context = presetContext;
-    } else if (privateSpace) {
-      const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
-      const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
-      context = { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+    } else {
+      context = defaultContext(spaces, folders);
     }
     if (!context) return;
 

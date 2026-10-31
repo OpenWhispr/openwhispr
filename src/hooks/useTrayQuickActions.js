@@ -7,7 +7,8 @@ import { resolveTrayAssistantAction } from "../helpers/trayActionPolicy";
  * The pill's command menu hides the item when policy or a live recording rules it
  * out; the tray always shows it, so this either opens the panel or explains
  * itself through `refuse`. The tray's other two entries need no renderer: listen
- * goes straight to the dictation start, and a meeting starts in the main process.
+ * goes straight to the dictation start, and a meeting starts in the main process
+ * (which only sends back a refusal to explain).
  */
 export function useTrayQuickActions({
   agentAllowed,
