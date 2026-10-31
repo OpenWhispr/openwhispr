@@ -44,6 +44,10 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  // The iOS keyboard's typo autocorrection on space. Default on.
+  keyboardAutocorrectionEnabled?: boolean;
+  // Language codes it corrects (src/lib/keyboardAutocorrection.ts); default German and English.
+  keyboardAutocorrectionLanguages?: string[];
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
