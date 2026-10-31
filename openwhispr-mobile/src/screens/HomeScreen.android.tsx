@@ -40,6 +40,7 @@ export default function AndroidHome() {
   const usage = useUsageStore((s) => s.usage);
   const { register } = useSuperwallGate();
   const action = useRef(false);
+  const navigationRevision = useRef(0);
   const retryController = useRef<AbortController | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
@@ -48,13 +49,14 @@ export default function AndroidHome() {
   });
   const upload = async () => {
     if (action.current) return;
+    const startedOnVisit = navigationRevision.current;
     const provider = getTranscriptionProvider('upload');
     if (provider === 'cloud' && accountRequiredForCloud(user)) {
       showAccountRequiredAlert(t('upload'));
       return;
     }
     const begin = async () => {
-      if (action.current) return;
+      if (action.current || startedOnVisit !== navigationRevision.current) return;
       action.current = true;
       setWorking(true);
       try {
@@ -113,8 +115,12 @@ export default function AndroidHome() {
   useFocusEffect(
     useCallback(() => {
       void refreshInsights();
-      return () => retryController.current?.abort();
-    }, [user?.id, syncInsights, historyEnabled]),
+      return () => {
+        navigationRevision.current += 1;
+        cancel();
+        retryController.current?.abort();
+      };
+    }, [cancel, user?.id, syncInsights, historyEnabled]),
   );
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
