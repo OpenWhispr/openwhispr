@@ -35,7 +35,7 @@
       "extends": "android-play-test",
       "channel": "android-billing-test",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://openwhispr-koe24ced3-openwhispr.vercel.app"
+        "EXPO_PUBLIC_API_URL": "https://openwhispr-jorido7jq-openwhispr.vercel.app"
       }
     },
     "android-play-test": {
