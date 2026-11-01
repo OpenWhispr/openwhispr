@@ -1,3 +1,4 @@
+import { isCloudBackupEnabled } from '@/lib/cloudBackup';
 import { NoteSharingError, noteSharingFeedback } from '@/lib/notes/noteSharingFeedback';
 import * as Network from 'expo-network';
 import { notesRepository, type Note } from '@/data';
@@ -74,7 +75,7 @@ export async function ensureNoteSynced(
           (original.remoteId && note.remoteId !== original.remoteId)
         )
           throw new NoteSharingError('noteChanged');
-        if (!isTeamNote && useConfigStore.getState().config?.cloudBackupEnabled === false) {
+        if (!isTeamNote && !isCloudBackupEnabled(useConfigStore.getState().config)) {
           throw new NoteSharingError('backupDisabled');
         }
         // Acknowledgement is repository state: a push clears pendingSync only when the server

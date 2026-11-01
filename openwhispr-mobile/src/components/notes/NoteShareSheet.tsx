@@ -1,3 +1,4 @@
+import { isCloudBackupEnabled } from '@/lib/cloudBackup';
 import { noteShareMenuActions } from './noteShareMenuActions';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -162,7 +163,7 @@ export function NoteShareSheet({ noteId, onClose, onFlushDraft, onExport }: Note
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const cloudBackupEnabled = useConfigStore((state) => state.config?.cloudBackupEnabled ?? true);
+  const cloudBackupEnabled = useConfigStore((state) => isCloudBackupEnabled(state.config));
   const setNotePrivacy = useNotesStore((state) => state.setNotePrivacy);
   const spaces = useNotesStore((state) => state.spaces);
   const usage = useUsageStore((state) => state.usage);

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { Folder, Note } from '@/data';
 
 jest.mock('@/store/useAuthStore', () => ({
@@ -333,4 +334,18 @@ it('resolves an already acknowledged note without waiting for another pass', asy
   note = { ...note, remoteId: 'remote', pendingSync: 0 };
   await expect(ensureNoteSynced(1, { signal: controller.signal })).resolves.toBe('remote');
   expect(requestSync).not.toHaveBeenCalled();
+});
+
+it('requires Android backup opt-in before sharing a personal note already on the server', async () => {
+  const originalPlatform = Platform.OS;
+  Platform.OS = 'android';
+  try {
+    note = { ...note, remoteId: 'remote', pendingSync: 0 };
+    useConfigStore.setState({ config: { defaultMode: 'cloud' } });
+    await expect(ensureNoteSynced(1, { signal: controller.signal })).rejects.toThrow(
+      /Privacy & Data/,
+    );
+  } finally {
+    Platform.OS = originalPlatform;
+  }
 });

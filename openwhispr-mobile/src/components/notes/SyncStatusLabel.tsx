@@ -1,3 +1,4 @@
+import { isCloudBackupEnabled } from '@/lib/cloudBackup';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { formatLibraryTime } from '@/android/libraryTime';
 import { useEffect, useMemo, useState } from 'react';
@@ -49,7 +50,7 @@ export function SyncStatusLabel() {
   const { copy, language } = useAndroidCopy();
   const user = useAuthStore((s) => s.user);
   const isGuest = useAuthStore((s) => s.isGuest);
-  const cloudBackupEnabled = useConfigStore((s) => s.config?.cloudBackupEnabled ?? true);
+  const cloudBackupEnabled = useConfigStore((s) => isCloudBackupEnabled(s.config));
   const { status, lastSyncAt, lastError, subscriptionRequired, policyBlocked } = useSyncStore();
   const usage = useUsageStore((s) => s.usage);
   const loadUsage = useUsageStore((s) => s.load);

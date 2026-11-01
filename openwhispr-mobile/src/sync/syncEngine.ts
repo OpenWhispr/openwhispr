@@ -1,3 +1,4 @@
+import { isCloudBackupEnabled } from '@/lib/cloudBackup';
 import { clearPrivateNoteDeletionQueue, pushPrivateNoteDeletes } from './privateNoteDeletion';
 import { createSyncContext } from './createSyncContext';
 import { SyncCancelledError, SyncStalledError, type SyncCheckpoint } from './syncContext';
@@ -305,7 +306,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
     return new Promise((resolve) => pendingTriggerWaiters.push(resolve));
   }
 
-  const cloudBackupEnabled = useConfigStore.getState().config?.cloudBackupEnabled ?? true;
+  const cloudBackupEnabled = isCloudBackupEnabled(useConfigStore.getState().config);
 
   // Foreground triggers fire on every AppState→active transition, which can
   // be noisy (window focus, sim re-focus). Skip if we synced very recently.
@@ -421,7 +422,7 @@ async function runSyncNow(reason: SyncReason): Promise<void> {
       // that started while it was on would keep pushing notes/dictionary after the
       // user opted out. Pulls above are harmless downloads; pushes must stop the
       // instant the opt-out lands.
-      if (!(useConfigStore.getState().config?.cloudBackupEnabled ?? true)) {
+      if (!isCloudBackupEnabled(useConfigStore.getState().config)) {
         useSyncStore.getState().set({
           status: 'idle',
           lastError: null,
