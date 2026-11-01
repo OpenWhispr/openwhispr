@@ -722,8 +722,12 @@
     },
     "loading": "Загрузка...",
     "gpu": {
-      "bannerTitle": "Доступно ускорение GPU",
-      "bannerDescription": "Включите ускорение GPU для повышения производительности.",
+      "bannerTitle": "Доступно ускорение GPU для транскрипции и локального ИИ",
+      "bannerDescription": "Включите в настройках пакеты GPU для локальной транскрипции Whisper и обработки локальным ИИ.",
+      "transcriptionTitle": "Доступно ускорение GPU для транскрипции",
+      "transcriptionDescription": "Ускорьте локальную транскрипцию Whisper с помощью GPU.",
+      "intelligenceTitle": "Доступно ускорение GPU для локального ИИ",
+      "intelligenceDescription": "Ускорьте обработку локальным ИИ с помощью отдельного пакета GPU, независимого от транскрипции Whisper.",
       "enableButton": "Включить GPU",
       "dismissButton": "Не сейчас"
     },

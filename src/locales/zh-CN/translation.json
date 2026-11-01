@@ -722,8 +722,12 @@
     },
     "loading": "加载中...",
     "gpu": {
-      "bannerTitle": "GPU 加速可用",
-      "bannerDescription": "启用 GPU 加速以获得更快的性能。",
+      "bannerTitle": "转写和本地 AI 可使用 GPU 加速",
+      "bannerDescription": "在设置中为本地 Whisper 转写和本地 AI 处理启用 GPU 加速包。",
+      "transcriptionTitle": "转写可使用 GPU 加速",
+      "transcriptionDescription": "使用 GPU 加速本地 Whisper 转写。",
+      "intelligenceTitle": "本地 AI 可使用 GPU 加速",
+      "intelligenceDescription": "使用独立于 Whisper 转写的 GPU 包，加速本地 AI 处理。",
       "enableButton": "启用 GPU",
       "dismissButton": "暂不启用"
     },

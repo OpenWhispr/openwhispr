@@ -722,8 +722,12 @@
     },
     "loading": "Loading...",
     "gpu": {
-      "bannerTitle": "GPU acceleration available",
-      "bannerDescription": "Enable GPU acceleration for faster performance.",
+      "bannerTitle": "GPU acceleration available for transcription and local AI",
+      "bannerDescription": "Enable GPU packs for local Whisper transcription and local AI processing in Settings.",
+      "transcriptionTitle": "GPU acceleration available for transcription",
+      "transcriptionDescription": "Speed up local Whisper transcription with GPU acceleration.",
+      "intelligenceTitle": "GPU acceleration available for local AI",
+      "intelligenceDescription": "Speed up local AI processing with a separate GPU pack from Whisper transcription.",
       "enableButton": "Enable GPU",
       "dismissButton": "Not now"
     },

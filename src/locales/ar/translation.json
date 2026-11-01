@@ -662,8 +662,12 @@
     },
     "loading": "جاري التحميل...",
     "gpu": {
-      "bannerTitle": "تسريع وحدة معالجة الرسومات (GPU) متاح",
-      "bannerDescription": "قم بتمكين تسريع وحدة معالجة الرسومات للحصول على أداء أسرع.",
+      "bannerTitle": "تسريع GPU متاح للتفريغ والذكاء الاصطناعي المحلي",
+      "bannerDescription": "فعّل حزم GPU للتفريغ المحلي باستخدام Whisper ومعالجة الذكاء الاصطناعي المحلي من الإعدادات.",
+      "transcriptionTitle": "تسريع GPU متاح للتفريغ",
+      "transcriptionDescription": "سرّع التفريغ المحلي باستخدام Whisper عبر تسريع GPU.",
+      "intelligenceTitle": "تسريع GPU متاح للذكاء الاصطناعي المحلي",
+      "intelligenceDescription": "سرّع معالجة الذكاء الاصطناعي المحلي بحزمة GPU منفصلة عن حزمة التفريغ باستخدام Whisper.",
       "enableButton": "تمكين وحدة معالجة الرسومات (GPU)",
       "dismissButton": "ليس الآن"
     },

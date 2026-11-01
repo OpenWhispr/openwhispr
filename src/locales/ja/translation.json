@@ -722,8 +722,12 @@
     },
     "loading": "読み込み中...",
     "gpu": {
-      "bannerTitle": "GPU アクセラレーションが利用可能",
-      "bannerDescription": "GPU アクセラレーションを有効にしてパフォーマンスを向上させましょう。",
+      "bannerTitle": "文字起こしとローカルAIでGPUアクセラレーションを利用可能",
+      "bannerDescription": "設定でローカルWhisperの文字起こしとローカルAI処理用のGPUパックを有効にしてください。",
+      "transcriptionTitle": "文字起こしでGPUアクセラレーションを利用可能",
+      "transcriptionDescription": "GPUアクセラレーションでローカルWhisperの文字起こしを高速化できます。",
+      "intelligenceTitle": "ローカルAIでGPUアクセラレーションを利用可能",
+      "intelligenceDescription": "Whisperの文字起こしとは別のGPUパックで、ローカルAI処理を高速化できます。",
       "enableButton": "GPU を有効化",
       "dismissButton": "後で"
     },
