@@ -18,6 +18,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
 const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
+const { verifyLinuxSqliteBaseline } = require("./verify-linux-sqlite");
 const {
   WINDOWS_ONNXRUNTIME_PRIVATE_NAME,
   WINDOWS_ONNXRUNTIME_UPSTREAM_NAME,
@@ -319,6 +320,13 @@ exports.default = async function (context) {
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
   verifyUnpackedBinaries(context);
+  if (
+    context.electronPlatformName === "linux" &&
+    Arch[context.arch] === "x64" &&
+    process.env.OPENWHISPR_VERIFY_SQLITE_BASELINE === "1"
+  ) {
+    verifyLinuxSqliteBaseline(context.appOutDir, `${context.packager.executableName}-app`);
+  }
   registerMacResourceBinariesForSigning(context);
 };
 
