@@ -1789,6 +1789,13 @@ describe('Android private meeting recovery ownership', () => {
 describe('Android Cloud meeting ownership', () => {
   const originalPlatform = Platform.OS;
   beforeEach(() => {
+    const savedState = new Map<string, string>();
+    (notesRepository.getSyncState as jest.Mock).mockImplementation(
+      (key: string) => savedState.get(key) ?? null,
+    );
+    (notesRepository.setSyncState as jest.Mock).mockImplementation((key: string, value: string) => {
+      savedState.set(key, value);
+    });
     Platform.OS = 'android';
     mockAuthState.user = signedInUser;
     (notesRepository.getNoteById as jest.Mock).mockReturnValue({
@@ -1809,6 +1816,33 @@ describe('Android Cloud meeting ownership', () => {
     Platform.OS = originalPlatform;
     mockAuthListeners.clear();
     mockModeListeners.clear();
+  });
+
+  it('reuses a persisted usage identity when a saved Cloud meeting fails and is retried', async () => {
+    const failure = new Error('Connection lost after processing the first chunk');
+    mockCloudTranscribe.mockRejectedValueOnce(failure).mockRejectedValueOnce(failure);
+
+    await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(failure);
+    await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(failure);
+
+    const firstId = mockCloudTranscribe.mock.calls[0][0].clientTranscriptionId;
+    expect(firstId).toEqual(expect.any(String));
+    expect(firstId).not.toBe('');
+    expect(mockCloudTranscribe.mock.calls[1][0].clientTranscriptionId).toBe(firstId);
+    expect(notesRepository.setSyncState).toHaveBeenCalledWith(expect.any(String), firstId);
+    expect(notesRepository.getTranscriptionStatus(7)).toBe('failed');
+  });
+
+  it('does not upload if its retry identity cannot be saved', async () => {
+    const storageFailure = new Error('Database is full');
+    (notesRepository.setSyncState as jest.Mock).mockImplementationOnce(() => {
+      throw storageFailure;
+    });
+    await expect(useNotesStore.getState().retryMeetingTranscription(7)).rejects.toBe(
+      storageFailure,
+    );
+    expect(mockCloudTranscribe).not.toHaveBeenCalled();
+    expect(notesRepository.getTranscriptionStatus(7)).toBe('failed');
   });
 
   it('declares meeting purpose on a recovered Cloud recording and preserves a policy refusal', async () => {

@@ -32,6 +32,7 @@ import {
 } from '@/lib/notes/generateNotesPrompt';
 import { buildMeetingNotesInput } from '@/lib/notes/meetingNotesInput';
 import { mapUtterancesToSegments } from '@/lib/notes/cloudMeetingSegments';
+import { getMeetingTranscriptionId } from '@/lib/notes/meetingTranscriptionId';
 import { DEFAULT_MEETING_TITLE } from '@/lib/notes/meetingConstants';
 import { generateLocalMeetingNotes } from '@/lib/notes/localMeetingNotes';
 import {
@@ -929,6 +930,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
           provider: 'cloud',
           requestContext: 'file',
           purpose: 'meeting',
+          clientTranscriptionId: getMeetingTranscriptionId(notesRepository, noteId),
           signal: context?.signal,
           fileName: `meeting-${noteId}.wav`,
           mimeType: 'audio/wav',

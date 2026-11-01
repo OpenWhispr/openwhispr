@@ -1,4 +1,5 @@
 import { isManagedMeetingAudioUri } from '@/lib/transcriptAudio';
+import { meetingTranscriptionIdKey } from '@/lib/notes/meetingTranscriptionId';
 import {
   eq,
   ne,
@@ -657,6 +658,7 @@ export class LocalNotesRepository implements NotesRepository {
   // meeting WAV must be removed explicitly on EVERY delete path (soft delete, hard delete,
   // remote-delete apply, and full wipe) — otherwise they orphan in the DB and on disk.
   private deleteNoteChildrenAndAudio(id: number): void {
+    this.clearSyncState(meetingTranscriptionIdKey(id));
     const row = this.database
       .select({ sourceFile: notes.sourceFile })
       .from(notes)
