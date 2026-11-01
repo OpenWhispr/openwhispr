@@ -101,6 +101,19 @@ beforeEach(() => {
 });
 
 describe('provider uploads that the provider would reject', () => {
+  it('retains the initial Cloud usage ID when an upload reports a lost response', async () => {
+    mockSnapshotTranscriptionJob.mockReturnValue({ provider: 'cloud' });
+    pick({ name: 'partial.wav', mimeType: 'audio/wav', size: 8 * MB });
+    mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('Response lost'));
+    await upload();
+
+    const request = mockTranscribeAndCleanup.mock.calls[0][0];
+    expect(request.clientTranscriptionId).toMatch(/^file-.+/);
+    expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ clientTranscriptionId: request.clientTranscriptionId }),
+    );
+  });
+
   it('pins the processing route before the picker opens', async () => {
     mockGetDocumentAsync.mockImplementationOnce(async () => {
       expect(mockSnapshotTranscriptionJob).toHaveBeenCalledTimes(1);

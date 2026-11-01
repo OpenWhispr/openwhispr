@@ -103,6 +103,17 @@ beforeEach(() => {
   mockRecorder.isRecording = false;
 });
 
+it('retains the recording request usage ID in failed history', async () => {
+  mockTranscribe.mockRejectedValueOnce(new Error('Response lost'));
+  await recordAndStop({});
+
+  const request = mockTranscribe.mock.calls[0][0];
+  expect(request.clientTranscriptionId).toMatch(/^recording-.+/);
+  expect(mockAddFailedTranscript).toHaveBeenCalledWith(
+    expect.objectContaining({ clientTranscriptionId: request.clientTranscriptionId }),
+  );
+});
+
 it('does not write transcript history when saveToHistory is false', async () => {
   mockTranscribe.mockResolvedValue(transcribed('What is on my calendar?'));
   const onComplete = jest.fn();

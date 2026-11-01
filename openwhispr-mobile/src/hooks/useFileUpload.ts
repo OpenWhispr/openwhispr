@@ -251,6 +251,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}) {
             cleanupUnavailable: jobRoute.cleanupUnavailable,
             requestContext: 'file',
             jobId: transcriptId,
+            clientTranscriptionId,
             errorMessage: toFriendlyTranscriptionErrorMessage(error),
           });
         } catch (failedRowError) {

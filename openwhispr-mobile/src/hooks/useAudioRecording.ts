@@ -303,7 +303,12 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           options.onLocalModelMissing
         ) {
           if (saveToHistory) {
-            await addFailedRecording(retained, transcriptionProvider, transcribeError);
+            await addFailedRecording(
+              retained,
+              transcriptionProvider,
+              transcribeError,
+              clientTranscriptionId,
+            );
           }
           options.onLocalModelMissing(
             () => {
@@ -317,7 +322,12 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         // reuse it, then hand the billing/retry decision to the caller.
         if (isUsageLimitError(transcribeError) && options.onUsageLimitReached) {
           if (saveToHistory) {
-            await addFailedRecording(retained, transcriptionProvider, transcribeError);
+            await addFailedRecording(
+              retained,
+              transcriptionProvider,
+              transcribeError,
+              clientTranscriptionId,
+            );
           }
           await options.onUsageLimitReached(transcribeError, () =>
             retryWithCloud(retained, clientTranscriptionId),
@@ -327,7 +337,12 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
           return;
         }
         if (saveToHistory) {
-          await addFailedRecording(retained, transcriptionProvider, transcribeError);
+          await addFailedRecording(
+            retained,
+            transcriptionProvider,
+            transcribeError,
+            clientTranscriptionId,
+          );
         } else {
           await discardRetainedAudio(retained);
         }
@@ -371,6 +386,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
     retained: RetainedRecordingAudio,
     provider: TranscriptionProvider,
     error: unknown,
+    clientTranscriptionId: string,
   ) => {
     try {
       await addFailedTranscript({
@@ -384,6 +400,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
         cleanupUnavailable: jobRouteRef.current.cleanupUnavailable,
         requestContext: 'recording',
         jobId: retained.id,
+        clientTranscriptionId,
         errorMessage: toFriendlyTranscriptionErrorMessage(error),
       });
     } catch (failedRowError) {
@@ -496,7 +513,7 @@ export function useAudioRecording(options: UseAudioRecordingOptions = {}) {
       if (!saveToHistory) {
         await discardRetainedAudio(retained);
       } else if (!isNoSpeechError(error)) {
-        await addFailedRecording(retained, 'cloud', error);
+        await addFailedRecording(retained, 'cloud', error, clientTranscriptionId);
       }
       options.onError?.(
         isNoSpeechError(error) ? new Error(NO_SPEECH_ERROR_MESSAGE) : (error as Error),

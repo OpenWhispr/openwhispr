@@ -152,6 +152,63 @@ beforeEach(() => {
 });
 
 describe('useTranscriptStore retry support', () => {
+  it('preserves the original Cloud usage identity through failed-history storage and reload', async () => {
+    const input = {
+      id: 'upload-usage',
+      audioUrl: 'file://tmp/source.wav',
+      provider: 'cloud' as const,
+      jobId: 'upload-job',
+      clientTranscriptionId: 'file-original-usage',
+      errorMessage: 'Response lost after a chunk completed',
+    };
+    await useTranscriptStore.getState().addFailedTranscript(input);
+    const saved = JSON.parse(JSON.stringify(mockSaveTranscripts.mock.calls.at(-1)?.[0]));
+    mockGetTranscripts.mockResolvedValueOnce(saved);
+    useTranscriptStore.getState().reset();
+    await useTranscriptStore.getState().loadTranscripts();
+    await useTranscriptStore.getState().retryTranscript('upload-usage');
+
+    expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ clientTranscriptionId: 'file-original-usage' }),
+    );
+  });
+
+  it.each([
+    { jobId: 'job-1', clientTranscriptionId: 'file-original', usageId: 'file-original' },
+    { jobId: 'job-1', clientTranscriptionId: undefined, usageId: 'job-1' },
+    { jobId: undefined, clientTranscriptionId: undefined, usageId: 't1' },
+  ])(
+    'keeps Cloud usage identity $usageId stable across failed retries',
+    async ({ jobId, clientTranscriptionId, usageId }) => {
+      const now = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+      try {
+        useTranscriptStore.setState({
+          transcripts: [failedTranscript({ jobId, clientTranscriptionId, updatedAt: now })],
+        });
+        mockTranscribeAndCleanup.mockRejectedValueOnce(new Error('Response lost'));
+        await expect(useTranscriptStore.getState().retryTranscript('t1')).rejects.toThrow(
+          'Response lost',
+        );
+        const saved = JSON.parse(JSON.stringify(mockSaveTranscripts.mock.calls.at(-1)?.[0]));
+        mockGetTranscripts.mockResolvedValueOnce(saved);
+        useTranscriptStore.getState().reset();
+        await useTranscriptStore.getState().loadTranscripts();
+        clock.mockReturnValue(now + 1000);
+        await useTranscriptStore.getState().retryTranscript('t1');
+
+        const requests = mockTranscribeAndCleanup.mock.calls.map(([request]) => request);
+        expect(requests.map((request) => request.clientTranscriptionId ?? request.jobId)).toEqual([
+          usageId,
+          usageId,
+        ]);
+        expect(requests[0].jobId).not.toBe(requests[1].jobId);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
   it('adds a failed transcript with retained audio metadata', async () => {
     await useTranscriptStore.getState().addFailedTranscript({
       id: 't1',

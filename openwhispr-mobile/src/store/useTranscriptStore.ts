@@ -49,6 +49,7 @@ export type FailedTranscriptInput = {
   requestContext?: Transcript['requestContext'];
   keyboardTone?: KeyboardTone;
   jobId?: string;
+  clientTranscriptionId?: string;
   errorMessage: string;
 };
 
@@ -383,6 +384,7 @@ export const useTranscriptStore = create<TranscriptState>((baseSet, baseGet) => 
           requestContext: transcript.requestContext,
           keyboardTone: transcript.keyboardTone,
           jobId: transcript.jobId,
+          clientTranscriptionId: transcript.clientTranscriptionId,
           retryCount: 0,
         };
 
@@ -500,6 +502,8 @@ export const useTranscriptStore = create<TranscriptState>((baseSet, baseGet) => 
           fileName,
           mimeType,
           jobId: retryJobId,
+          // Attempts need distinct recovery jobs, but Cloud usage belongs to the recording.
+          clientTranscriptionId: current.clientTranscriptionId ?? current.jobId ?? id,
           requestContext: current.requestContext ?? 'recording',
           // History holds dictations and uploads only; meetings are notes.
           purpose: scope,

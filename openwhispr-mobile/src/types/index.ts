@@ -107,6 +107,7 @@ export interface Transcript extends CleanupInferenceSnapshot {
   requestContext?: 'keyboard' | 'recording' | 'file';
   keyboardTone?: KeyboardTone;
   jobId?: string;
+  clientTranscriptionId?: string;
   retryCount?: number;
 }
 
