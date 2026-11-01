@@ -65,7 +65,8 @@ jobs:
   build-linux:
     needs: quality
     if: needs.quality.outputs.build == 'true'
-    runs-on: ubuntu-latest
+    # Keep the packaged CPU checks on the verified Ubuntu 24.04 runtime.
+    runs-on: ubuntu-24.04
     env:
       # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
       CFLAGS: "-march=x86-64 -mtune=generic -mno-avx -mno-avx2"
