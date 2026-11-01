@@ -303,6 +303,14 @@ const uploadWithRetry = async (
 // transcribe endpoint and only need the raw text back (no fused cleanup or
 // server-timing parsing — those are single-shot concerns).
 const parseChunkTranscriptionText = (response: { status: number; body: string }): string => {
+  // A quiet section must not discard speech from the rest of an Android recording.
+  if (
+    Platform.OS === 'android' &&
+    response.status === 422 &&
+    parseJsonBody(response.body).code === 'NO_SPEECH_DETECTED'
+  ) {
+    return '';
+  }
   if (response.status === 401) {
     throw new Error('Session expired. Please sign in again.');
   }
@@ -868,7 +876,9 @@ export class TranscriptionService {
       const workerCount = Math.min(CLOUD_CHUNK_CONCURRENCY, chunkUris.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
       if (firstError !== null) throw firstError;
-      return { text: stitchChunkTexts(texts), duration: durationMs / 1000, provider: 'cloud' };
+      const text = stitchChunkTexts(texts);
+      if (Platform.OS === 'android' && !text) throw new Error('No speech detected');
+      return { text, duration: durationMs / 1000, provider: 'cloud' };
     } finally {
       await AudioTools.cleanup(chunkUris);
     }

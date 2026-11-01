@@ -167,3 +167,81 @@ it('keeps small supported Android uploads inline', async () => {
   ).resolves.toBe(false);
   expect(native!.prepareCloudAudio).not.toHaveBeenCalled();
 });
+
+it.each([0, 1, 2])(
+  'retains speech around a silent Android chunk at index %s',
+  async (silentIndex) => {
+    const chunks = ['file:///first.wav', 'file:///middle.wav', 'file:///last.wav'];
+    jest.mocked(native!.splitCloudAudio).mockResolvedValueOnce({ chunks, durationMs: 361000 });
+    jest.mocked(FileSystem.uploadAsync).mockImplementation(async (_url, uri) => {
+      const index = chunks.indexOf(uri);
+      return {
+        status: index === silentIndex ? 422 : 200,
+        headers: {},
+        mimeType: null,
+        body: JSON.stringify(
+          index === silentIndex
+            ? { error: 'No speech detected in audio', code: 'NO_SPEECH_DETECTED' }
+            : { text: `Section ${index}.` },
+        ),
+      };
+    });
+    const result = await TranscriptionService.transcribe({
+      audioUri: 'file:///large.wav',
+      provider: 'cloud',
+      requestContext: 'file',
+      purpose: 'meeting',
+    });
+    expect(result).toMatchObject({
+      text: [0, 1, 2]
+        .filter((index) => index !== silentIndex)
+        .map((index) => `Section ${index}.`)
+        .join(' '),
+      duration: 361,
+    });
+    expect(FileSystem.uploadAsync).toHaveBeenCalledTimes(3);
+    expect(native!.cleanupCloudAudio).toHaveBeenCalledWith(chunks);
+  },
+);
+
+it('reports no speech when every Android chunk is explicitly silent', async () => {
+  const chunks = ['file:///silent-0.wav', 'file:///silent-1.wav'];
+  jest.mocked(native!.splitCloudAudio).mockResolvedValueOnce({ chunks, durationMs: 241000 });
+  jest.mocked(FileSystem.uploadAsync).mockResolvedValue({
+    status: 422,
+    headers: {},
+    mimeType: null,
+    body: JSON.stringify({ code: 'NO_SPEECH_DETECTED' }),
+  });
+  await expect(
+    TranscriptionService.transcribe({
+      audioUri: 'file:///large.wav',
+      provider: 'cloud',
+      requestContext: 'file',
+    }),
+  ).rejects.toThrow(/^No speech detected$/);
+  expect(native!.cleanupCloudAudio).toHaveBeenCalledWith(chunks);
+});
+
+it.each([
+  {
+    status: 422,
+    body: JSON.stringify({ error: 'No speech model available', code: 'MODEL_UNAVAILABLE' }),
+  },
+  { status: 422, body: 'NO_SPEECH_DETECTED' },
+  { status: 400, body: JSON.stringify({ code: 'NO_SPEECH_DETECTED' }) },
+])('does not discard a non-silence chunk failure: %j', async (response) => {
+  const chunks = ['file:///failed.wav'];
+  jest.mocked(native!.splitCloudAudio).mockResolvedValueOnce({ chunks, durationMs: 121000 });
+  jest
+    .mocked(FileSystem.uploadAsync)
+    .mockResolvedValue({ ...response, headers: {}, mimeType: null });
+  await expect(
+    TranscriptionService.transcribe({
+      audioUri: 'file:///large.wav',
+      provider: 'cloud',
+      requestContext: 'file',
+    }),
+  ).rejects.toThrow();
+  expect(native!.cleanupCloudAudio).toHaveBeenCalledWith(chunks);
+});
