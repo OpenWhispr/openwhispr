@@ -132,6 +132,12 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
   db.setActiveAccountId("account-a");
   const stale = 2;
   const word = { id: "dict-1", word: "Kubernetes", client_dict_id: "a-dict" };
+  const snippet = db.upsertSnippetFromCloud({
+    id: "a-snippet",
+    client_snippet_id: "a-snippet-client",
+    trigger: "addr",
+    replacement: "A's address",
+  });
 
   const refused = [
     await invoke("db-upsert-dictionary-from-cloud", word, stale),
@@ -154,10 +160,12 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
     await invoke("db-mark-transcription-synced", 1, "t-1", stale),
     await invoke("db-mark-dictionary-synced", 1, "dict-1", null, null, null, null, stale),
     await invoke("db-mark-snippet-synced", 1, "snip-1", null, null, null, stale),
+    await invoke("db-get-snippet-for-cloud-merge", { trigger: "addr" }, stale),
+    await invoke("db-hard-delete-snippet", snippet.id, stale),
   ];
   for (const result of refused) assert.equal(result?.stale, true);
   assert.deepEqual(db.getDictionary(), []);
-  assert.deepEqual(db.getSnippets(), []);
+  assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's address" }]);
   assert.deepEqual(db.getTranscriptions(), []);
   assert.deepEqual(db.getAgentConversations(), []);
 

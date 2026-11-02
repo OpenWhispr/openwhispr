@@ -23,6 +23,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
 const CURSOR_KEYS = [
@@ -614,39 +615,154 @@ test("a word or snippet the account removes stays removed, with no signed-out co
   assert.deepEqual(db.getDictionary(), [], "the signed-out copy went with the account's word");
 });
 
-test("a chat acknowledged after an account switch stays with the account that sent it", async (t) => {
+for (const switchDuring of ["fetch", "json"]) {
+  test(`a chat created during an account switch in ${switchDuring} stays with its sender`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    const cloudA = createFakeCloud();
+    const chat = db.createAgentConversation("Started signed out");
+    db.addAgentMessage(chat.id, "user", "hello", null);
+    db.addAgentMessage(chat.id, "assistant", "hello back", null);
+
+    const accountA = await signInAs(t, db, cloudA, "account-a");
+    const api = windowStub.electronAPI;
+    const request = api.cloudApiRequest;
+    const switchAccount = () => {
+      db.setActiveAccountId("account-b");
+      api.authState.generation += 1;
+    };
+    const createRequest = createCloudApiRequestHandler({
+      getApiUrl: () => "https://api.openwhispr.test",
+      getAppVersion: () => "1.2.3",
+      tokenStore: {
+        getState: () => ({
+          token: api.authState.generation === 0 ? "token-a" : "token-b",
+          generation: api.authState.generation,
+        }),
+      },
+      proxyFetch: async (_url, options) => {
+        assert.equal(options.headers.Authorization, "Bearer token-a");
+        const result = await cloudA.request({
+          method: options.method,
+          path: "/api/conversations/create",
+          body: JSON.parse(options.body),
+        });
+        if (switchDuring === "fetch") switchAccount();
+        return {
+          ok: true,
+          status: 200,
+          json: async () => {
+            if (switchDuring === "json") switchAccount();
+            return result.data;
+          },
+        };
+      },
+    });
+    api.cloudApiRequest = (options) =>
+      options.path === "/api/conversations/create" ? createRequest(options) : request(options);
+    await accountA.syncAll(true);
+
+    const row = db.db
+      .prepare("SELECT account_id, cloud_id, sync_status FROM agent_conversations WHERE id = ?")
+      .get(chat.id);
+    assert.equal(row.account_id, "account-a", "the chat is A's: its cloud copy is in A's cloud");
+    assert.ok(row.cloud_id, "the row is linked to that copy");
+    assert.equal(row.sync_status, "synced");
+    assert.equal(cloudA.logFor("/api/conversations/delete").length, 0, "A's copy is kept");
+    assert.deepEqual(db.getAgentConversations(), [], "B never sees A's chat");
+
+    const accountA2 = await signInAs(t, db, cloudA, "account-a");
+    await accountA2.syncAll(true);
+    assert.equal(
+      cloudA.logFor("/api/conversations/create").length,
+      1,
+      "A's next pass doesn't create the chat, and its messages, a second time"
+    );
+  });
+}
+
+for (const boundary of ["getSnippetForCloudMerge", "hardDeleteSnippet"]) {
+  test(`a stale snippet tombstone stops at ${boundary} without advancing its cursor`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    const cloudA = createFakeCloud();
+    const tombstone = cloudA.seedSnippet({
+      trigger: "addr",
+      replacement: "A's address",
+      client_snippet_id: "a-snippet",
+    });
+    db.setActiveAccountId("account-b");
+    db.upsertSnippetFromCloud({
+      id: "b-cloud",
+      trigger: "addr",
+      replacement: "B's address",
+      client_snippet_id: "b-snippet",
+    });
+    const accountA = await signInAs(t, db, cloudA, "account-a");
+    db.upsertSnippetFromCloud(tombstone);
+    await cloudA.request({
+      method: "DELETE",
+      path: "/api/snippets/delete",
+      body: { id: tombstone.id },
+    });
+    const since = "2026-10-01T00:00:00.000Z";
+    localStorageStub.setItem("lastSyncedAt.snippets", since);
+    localStorageStub.setItem("lastSyncedAt.snippets.id", "before-page");
+
+    const api = windowStub.electronAPI;
+    const operation = api[boundary];
+    api[boundary] = async (...args) => {
+      db.setActiveAccountId("account-b");
+      api.authState.generation += 1;
+      return operation(...args);
+    };
+    await accountA.pullSnippets();
+
+    assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "B's address" }]);
+    assert.equal(localStorageStub.getItem("lastSyncedAt.snippets"), since);
+    assert.equal(localStorageStub.getItem("lastSyncedAt.snippets.id"), "before-page");
+    db.setActiveAccountId("account-a");
+    assert.ok(
+      db.getSnippetForCloudMerge(tombstone),
+      "the stale page did not delete A's row either"
+    );
+  });
+}
+
+test("a matching legacy transcription pull claims ownership without overwriting local edits", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const chat = db.createAgentConversation("Started signed out");
-  db.addAgentMessage(chat.id, "user", "hello", null);
-
-  const accountA = await signInAs(t, db, cloudA, "account-a");
-  cloudA.failWith((call) => {
-    if (call.path !== "/api/conversations/create") return false;
-    db.setActiveAccountId("account-b");
-    windowStub.electronAPI.authState.generation += 1;
-    return false;
+  const { id } = db.saveTranscription("locally edited text", "local raw text", {
+    clientTranscriptionId: "legacy-transcription",
   });
-  await accountA.syncAll(true);
+  db.db
+    .prepare(
+      "UPDATE transcriptions SET cloud_id = 'legacy-cloud', sync_status = 'synced', legacy_unattributed = 1 WHERE id = ?"
+    )
+    .run(id);
+  const before = db.getTranscriptionById(id);
+  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  windowStub.electronAPI.cloudApiRequest = async () => ({
+    success: true,
+    data: {
+      transcriptions: [
+        {
+          id: "legacy-cloud",
+          client_transcription_id: "legacy-transcription",
+          text: "old cloud text",
+          raw_text: "old cloud raw text",
+          status: "failed",
+          created_at: "2026-10-01T00:00:00.000Z",
+        },
+      ],
+    },
+  });
 
-  const row = db.db
-    .prepare("SELECT account_id, cloud_id, sync_status FROM agent_conversations WHERE id = ?")
-    .get(chat.id);
-  assert.equal(row.account_id, "account-a", "the chat is A's: its cloud copy is in A's cloud");
-  assert.ok(row.cloud_id, "the row is linked to that copy");
-  assert.equal(row.sync_status, "synced");
-  assert.equal(cloudA.logFor("/api/conversations/delete").length, 0, "A's copy is kept");
-  assert.deepEqual(db.getAgentConversations(), [], "B never sees A's chat");
+  await accountA.pullTranscriptions();
 
-  cloudA.clearFailures();
-  const accountA2 = await signInAs(t, db, cloudA, "account-a");
-  await accountA2.syncAll(true);
-  assert.equal(
-    cloudA.logFor("/api/conversations/create").length,
-    1,
-    "A's next pass doesn't create the chat, and its messages, a second time"
-  );
+  assert.deepEqual(db.getTranscriptionById(id), { ...before, account_id: "account-a" });
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getTranscriptions(), [], "B no longer sees A's proven history");
 });
 
 test("a pull page that lands after the account changed is not written for the next account", async (t) => {

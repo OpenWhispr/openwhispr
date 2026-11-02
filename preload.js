@@ -1395,8 +1395,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),
-  getSnippetForCloudMerge: (cloudEntry) =>
-    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry),
+  getSnippetForCloudMerge: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry, expectedAuthGeneration),
   upsertSnippetFromCloud: (cloudEntry, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry, expectedAuthGeneration),
   markSnippetSynced: (
@@ -1416,7 +1416,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedReplacement,
       expectedAuthGeneration
     ),
-  hardDeleteSnippet: (id) => ipcRenderer.invoke("db-hard-delete-snippet", id),
+  hardDeleteSnippet: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-snippet", id, expectedAuthGeneration),
   clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 

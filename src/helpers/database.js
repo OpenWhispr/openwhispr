@@ -9582,6 +9582,14 @@ class DatabaseManager {
           );
           return null;
         }
+        if (existing && !existing.account_id && this.activeAccountId) {
+          // Matching cloud identity proves ownership, without replaying old
+          // cloud text over local edits or reviving a local deletion.
+          this.db
+            .prepare("UPDATE transcriptions SET account_id = ? WHERE id = ?")
+            .run(this.activeAccountId, existing.id);
+          return this.getTranscriptionByClientId(cloudTranscription.client_transcription_id);
+        }
         if (
           existing &&
           (existing.text !== text || existing.raw_text !== rawText || existing.status !== status)

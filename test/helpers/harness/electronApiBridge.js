@@ -19,7 +19,10 @@ function snippetApi(db, authState) {
   return {
     getPendingSnippets: async () => db.getPendingSnippets(),
     getPendingSnippetDeletes: async () => db.getPendingSnippetDeletes(),
-    getSnippetForCloudMerge: async (cloudEntry) => db.getSnippetForCloudMerge(cloudEntry),
+    getSnippetForCloudMerge: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.getSnippetForCloudMerge(cloudEntry),
     upsertSnippetFromCloud: async (cloudEntry, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
@@ -35,7 +38,8 @@ function snippetApi(db, authState) {
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.markSnippetSynced(id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement),
-    hardDeleteSnippet: async (id) => db.hardDeleteSnippet(id),
+    hardDeleteSnippet: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteSnippet(id),
     clearSnippetCloudId: async (id) => db.clearSnippetCloudId(id),
     broadcastSnippetsUpdated: async () => ({ success: true }),
   };
