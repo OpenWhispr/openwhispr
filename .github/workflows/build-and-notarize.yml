@@ -65,7 +65,8 @@ jobs:
   build-linux:
     needs: quality
     if: needs.quality.outputs.build == 'true'
-    # Keep the packaged CPU checks on the verified Ubuntu 24.04 runtime.
+    # The 26.04 runner's amd64v3 loader cannot run the older-CPU checks, and its
+    # glibc would raise the minimum for everything compiled in this job.
     runs-on: ubuntu-24.04
     env:
       # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
