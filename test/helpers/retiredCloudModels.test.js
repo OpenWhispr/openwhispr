@@ -51,6 +51,20 @@ test("remaps every other Tinfoil model the app has offered and Tinfoil has since
   assert.equal(storage.map.get("noteFormattingModel"), "deepseek-v4-1-flash");
 });
 
+test("remaps a scope pinned to the GPT-4.1 Nano OpenAI shut down onto a current model", async () => {
+  const { sweepRetiredCloudModelSelections } = await load();
+  const modelData = require("../../src/models/modelRegistryData.json");
+  const storage = makeStorage({ cleanupProvider: "openai", cleanupModel: "gpt-4.1-nano" });
+
+  assert.deepEqual(sweepRetiredCloudModelSelections(storage, [CLEANUP]), [
+    { storeKey: "cleanupModel", provider: "openai", from: "gpt-4.1-nano", to: "gpt-6-luna" },
+  ]);
+  const openai = modelData.cloudProviders.find((provider) => provider.id === "openai");
+  const replacement = openai.models.find((model) => model.id === "gpt-6-luna");
+  assert.ok(replacement && !replacement.legacy, "the replacement is a current registry model");
+  assert.ok(!openai.models.some((model) => model.id === "gpt-4.1-nano"));
+});
+
 test("still remaps the models Groq retired", async () => {
   const { sweepRetiredCloudModelSelections } = await load();
   const storage = makeStorage({
@@ -224,6 +238,10 @@ test("each provider's sentinel is pinned to the exact set of ids it covers", asy
     tinfoil: {
       migratedKey: "_retiredTinfoilModelsMigrated2",
       retired: ["deepseek-v4-flash", "deepseek-v4-pro", "glm-5-2", "kimi-k2-6"],
+    },
+    openai: {
+      migratedKey: "_retiredOpenAIModelsMigrated",
+      retired: ["gpt-4.1-nano"],
     },
   });
 });

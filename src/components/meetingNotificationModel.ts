@@ -6,9 +6,12 @@ export interface MeetingNotificationPresentation {
   bodyKey:
     | "meetingNotification.body.detected"
     | "meetingNotification.body.starting"
-    | "meetingNotification.body.underway";
-  actionKey: "meetingNotification.start" | "meetingNotification.join";
-  action: "start" | "join";
+    | "meetingNotification.body.underway"
+    | `meetingNotification.folders.errors.${NonNullable<MeetingNotificationData["recordingRefusal"]>}`;
+  actionKey:
+    "meetingNotification.start" | "meetingNotification.join" | "meetingNotification.joinOnly";
+  // "open" joins the meeting without recording it, so it offers no destination.
+  action: "start" | "join" | "open";
   dismissible: true;
 }
 
@@ -26,8 +29,21 @@ export function getMeetingNotificationPresentation(
 ): MeetingNotificationPresentation {
   const variant = data?.variant ?? "detected";
   const eventTitle = variant !== "detected" ? data?.event?.summary : null;
+  const title = eventTitle
+    ? { title: eventTitle }
+    : { titleKey: "meetingNotification.title" as const };
+  // Main sends a refused card only when it can still join the meeting.
+  if (data?.recordingRefusal) {
+    return {
+      ...title,
+      bodyKey: `meetingNotification.folders.errors.${data.recordingRefusal}`,
+      actionKey: "meetingNotification.joinOnly",
+      action: "open",
+      dismissible: true,
+    };
+  }
   return {
-    ...(eventTitle ? { title: eventTitle } : { titleKey: "meetingNotification.title" }),
+    ...title,
     bodyKey: `meetingNotification.body.${variant}`,
     actionKey: data?.joinUrl ? "meetingNotification.join" : "meetingNotification.start",
     action: data?.joinUrl ? "join" : "start",

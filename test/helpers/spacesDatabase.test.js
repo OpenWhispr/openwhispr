@@ -114,6 +114,81 @@ test("spaces migration is idempotent across launches", (t) => {
   assert.equal(privates.count, 1);
 });
 
+function folderIndexNames(sqlite) {
+  return sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'folders'")
+    .all()
+    .map((row) => row.name);
+}
+
+test("relaunch succeeds when two accounts have same-named folders in one space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const insertFolder = db.db.prepare(
+    "INSERT INTO folders (name, space_id, account_id, client_folder_id) VALUES (?, ?, ?, ?)"
+  );
+  for (const accountId of ["account-a", "account-b"]) {
+    for (const name of ["Personal", "Meetings", "Videos"]) {
+      insertFolder.run(name, privateId, accountId, `${accountId}-${name}`);
+    }
+  }
+  db.db.close();
+
+  const db2 = new DatabaseManager();
+  t.after(() => db2.db.close());
+  assert.ok(!folderIndexNames(db2.db).includes("idx_folders_space_name"));
+  const personalCount = db2.db
+    .prepare("SELECT COUNT(*) AS count FROM folders WHERE space_id = ? AND name = 'Personal'")
+    .get(privateId).count;
+  assert.equal(personalCount, 3, "legacy row plus one per account");
+});
+
+test("an old database with globally unique folder names migrates to per-account indexes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db.close();
+  const dbPath = path.join(userDataDir, "transcriptions.db");
+  fs.rmSync(dbPath, { force: true });
+
+  const BetterSqlite = require("better-sqlite3");
+  const legacy = new BetterSqlite(dbPath);
+  legacy.exec(`
+    CREATE TABLE folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT INTO folders (name, is_default, sort_order) VALUES ('Personal', 1, 0), ('Work', 0, 1);
+  `);
+  legacy.close();
+
+  const migrated = new DatabaseManager();
+  t.after(() => migrated.db.close());
+  const foldersSql = migrated.db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'folders'")
+    .get().sql;
+  assert.ok(!foldersSql.includes("UNIQUE"));
+  const indexes = folderIndexNames(migrated.db);
+  assert.ok(!indexes.includes("idx_folders_space_name"));
+  assert.ok(indexes.includes("idx_folders_space_legacy_name"));
+  assert.ok(indexes.includes("idx_folders_space_account_name"));
+
+  const privateId = migrated.getPrivateSpaceId();
+  const work = migrated.db.prepare("SELECT * FROM folders WHERE name = 'Work'").get();
+  assert.equal(work.space_id, privateId);
+  assert.equal(work.account_id, null);
+  assert.throws(
+    () =>
+      migrated.db.prepare("INSERT INTO folders (name, space_id) VALUES ('Work', ?)").run(privateId),
+    /UNIQUE constraint failed/,
+    "legacy folder names stay unique per space"
+  );
+});
+
 test("pre-migration rows are backfilled into the private space", (t) => {
   const db = createDb(t);
   if (!db) return;

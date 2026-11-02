@@ -29,6 +29,7 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
         export const WorkspacesService = {
           list: () => globalThis.__workspaceCacheTest.list(),
           create: (name) => globalThis.__workspaceCacheTest.create(name),
+          listMembers: (workspaceId) => globalThis.__workspaceCacheTest.listMembers(workspaceId),
         };
       `,
       "/policyStore": `
@@ -44,8 +45,10 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
       `,
     },
   });
-  const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
-  return { storage, store: useWorkspaceStore };
+  const { useWorkspaceStore, handleActiveWorkspaceStorage } = await vite.ssrLoadModule(
+    "/stores/workspaceStore.ts"
+  );
+  return { storage, store: useWorkspaceStore, handleActiveWorkspaceStorage };
 }
 
 const failing = async () => {
@@ -287,4 +290,26 @@ test("creating with no refresh in flight asks the server nothing more", async (t
     store.getState().workspaces.map((w) => w.id),
     ["team", "new"]
   );
+});
+
+test("another window's workspace switch clears the roster and discards its pending read", async (t) => {
+  const { store, handleActiveWorkspaceStorage } = await loadStore(t);
+  const members = [{ user_id: "member-1", role: "member" }];
+  store.setState({ activeWorkspaceId: "team", members, membersWorkspaceId: "team" });
+  let answerMembers;
+  globalThis.__workspaceCacheTest.listMembers = () =>
+    new Promise((resolve) => {
+      answerMembers = resolve;
+    });
+  const pending = store.getState().refreshMembers("team");
+
+  handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: "other-team" });
+  assert.equal(store.getState().activeWorkspaceId, "other-team");
+  assert.deepEqual(store.getState().members, []);
+  assert.equal(store.getState().membersWorkspaceId, null);
+
+  answerMembers(members);
+  await pending;
+  assert.deepEqual(store.getState().members, []);
+  assert.equal(store.getState().membersWorkspaceId, null);
 });

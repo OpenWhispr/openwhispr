@@ -1044,3 +1044,24 @@ test("entering onboarding hides an already-visible companion pill", () => {
 
   assert.equal(pill.isVisible(), false);
 });
+
+test("every recording records the app it started over; a close drops the panel's", () => {
+  const { manager } = makeManager({ visible: true });
+  const events = [];
+  manager.assistantPasteTarget = {
+    noteRecordingStart: () => events.push("record"),
+    clear: () => events.push("clear"),
+  };
+
+  manager.setDictationLifecycleState("preparing", "assistant");
+  manager.setDictationLifecycleState("recording", "assistant");
+  manager.setDictationLifecycleState("idle", "assistant");
+  manager.setAssistantPanelOpen(true);
+  // A follow-up spoken into the open panel records its own app too, so the capture a command
+  // adopts is never an older recording's (assistantPasteTarget.js decides which one it keeps).
+  manager.setDictationLifecycleState("recording", "dictation");
+  manager.setDictationLifecycleState("idle", "dictation");
+  manager.setAssistantPanelOpen(false);
+
+  assert.deepEqual(events, ["record", "record", "clear"]);
+});
