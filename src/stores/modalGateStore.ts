@@ -13,7 +13,8 @@ export type GatedModal =
   | "joinYourTeam"
   | "joinYourTeamPending"
   | "postMigration"
-  | "postMigrationPending";
+  | "postMigrationPending"
+  | "toneStyleSetup";
 
 interface ModalGateState {
   // A count per modal, since the same modal can be mounted in two places at once.
