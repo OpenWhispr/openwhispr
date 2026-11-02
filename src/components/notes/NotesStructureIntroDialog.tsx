@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { useModalGate } from "../../stores/modalGateStore";
 
 interface NotesStructureIntroDialogProps {
   open: boolean;
@@ -20,6 +21,7 @@ export default function NotesStructureIntroDialog({
   onOpenChange,
 }: NotesStructureIntroDialogProps) {
   const { t } = useTranslation();
+  useModalGate("notesStructureIntro", open);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

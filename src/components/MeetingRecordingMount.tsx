@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import {
@@ -105,7 +105,6 @@ export default function MeetingRecordingMount(): null {
       variant: "destructive",
       duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
       actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
-      actionsAlign: needsSignIn ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);
@@ -151,19 +150,18 @@ export default function MeetingRecordingMount(): null {
         title: t(`${key}.title`),
         description: t(`${key}.description`),
         duration: interruption.recovering ? 8000 : 0,
-        action:
+        actions:
           key === "notes.meeting.systemAudioStopped" && sessionId
-            ? createElement(
-                "button",
+            ? [
                 {
-                  type: "button",
-                  className: "text-xs text-primary underline hover:text-primary/80",
+                  label: t("notes.editor.stop"),
+                  // The warning closes once the recording stops, below.
+                  dismissOnClick: false,
                   onClick: async (): Promise<void> => {
                     await stopRecording(sessionId);
                   },
                 },
-                t("notes.editor.stop")
-              )
+              ]
             : undefined,
       });
       // The provider survives route changes. Keep its warning until the

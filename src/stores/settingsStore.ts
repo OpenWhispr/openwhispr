@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
@@ -1135,6 +1136,7 @@ export interface SettingsState
   // dedicated model used only when a screenshot is attached.
   voiceAgentScreenContext: boolean;
   emailDraftTarget: EmailDraftTargetSetting;
+  defaultSummaryTemplateId: string;
   toneStyleEnabled: boolean;
   toneStyles: ToneStyles;
   useDictationAgentVisionModel: boolean;
@@ -1171,6 +1173,7 @@ export interface SettingsState
   setToneStyleEnabled: (value: boolean) => void;
   setToneStyles: (styles: ToneStyles) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
+  setDefaultSummaryTemplateId: (clientId: string) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
@@ -2092,6 +2095,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
+  defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),
   toneStyleEnabled: readBoolean("toneStyleEnabled", false),
   toneStyles: normalizeToneStyles(readString("toneStyles", "")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
@@ -2139,6 +2143,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
+  setDefaultSummaryTemplateId: createStringSetter("defaultSummaryTemplateId"),
   setToneStyleEnabled: createBooleanSetter("toneStyleEnabled"),
   setToneStyles: (styles) => {
     if (isBrowser) localStorage.setItem("toneStyles", JSON.stringify(styles));
