@@ -123,6 +123,11 @@ test("the members panel hands the invite dialog's Upgrade up to the space dialog
         export const useWorkspaceStore = (selector) => selector(state);
       `,
       "/services/SpacesService": `export const SpacesService = { listMembers: async () => [] };`,
+      "/services/spaceActions": `
+        export const addSpaceMembers = async () => {};
+        export const removeSpaceMember = async () => {};
+        export const setSpaceMemberRole = async () => {};
+      `,
       "/MemberRoster": `export default function Mock() { return null; }`,
       "/SpaceGroupsSection": `export default function Mock() { return null; }`,
       "/InviteTeammateDialog": `
