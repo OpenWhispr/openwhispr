@@ -2633,7 +2633,7 @@ export class SyncService {
       if (!conv.cloud_id) continue;
       try {
         await ConversationsService.delete(conv.cloud_id, authGeneration);
-        await window.electronAPI.hardDeleteConversation?.(conv.id);
+        await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
       } catch (err) {
         console.error("Conversation delete sync failed:", err);
       }
@@ -2667,7 +2667,11 @@ export class SyncService {
           if (local?.folder_delete_pending) continue;
 
           if (cloudConv.deleted_at) {
-            if (local) await window.electronAPI.hardDeleteConversation?.(local.id);
+            if (local) {
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteConversation?.(local.id, authGeneration)
+              );
+            }
             continue;
           }
 
@@ -2694,6 +2698,7 @@ export class SyncService {
         cursor = next;
       }
 
+      await assertAuthGenerationCurrent(authGeneration);
       if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
     } catch (err) {
       if (!isAuthContextError(err)) console.error("Conversation pull failed:", err);
@@ -2793,7 +2798,7 @@ export class SyncService {
         );
         for (const cloudId of deleted) {
           const local = chunk.find((t) => t.cloud_id === cloudId);
-          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration);
         }
       } catch (err) {
         console.error("Transcription batch delete failed:", err);
@@ -2857,7 +2862,11 @@ export class SyncService {
           );
 
           if (cloudT.deleted_at) {
-            if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+            if (local) {
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration)
+              );
+            }
             continue;
           }
 
@@ -2880,6 +2889,7 @@ export class SyncService {
         cursor = next;
       }
 
+      await assertAuthGenerationCurrent(authGeneration);
       localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
     } catch (err) {
       if (!isAuthContextError(err)) console.error("Transcription pull failed:", err);
@@ -3039,11 +3049,11 @@ export class SyncService {
       if (!entry.cloud_id) continue;
       try {
         await DictionaryService.delete(entry.cloud_id, authGeneration);
-        await window.electronAPI.hardDeleteDictionary?.(entry.id);
+        await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
       } catch (err) {
         // 404 means the row is already gone server-side — treat as success.
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteDictionary?.(entry.id);
+          await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
         } else {
           succeeded = false;
           console.error("Dictionary delete sync failed:", err);
@@ -3090,7 +3100,9 @@ export class SyncService {
             // A pull from the epoch sees old tombstones too; a newer local
             // edit still waiting to be pushed outlives them.
             if (local && !(local.sync_status === "pending" && localTs > cloudTs)) {
-              await window.electronAPI.hardDeleteDictionary?.(local.id);
+              stopIfPullStale(
+                await window.electronAPI.hardDeleteDictionary?.(local.id, authGeneration)
+              );
               changed = true;
             }
           } else if (
@@ -3137,6 +3149,7 @@ export class SyncService {
         cursorId = last.id;
       }
 
+      await assertAuthGenerationCurrent(authGeneration);
       if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.dictionary", maxUpdatedAt);
       if (maxId) localStorage.setItem("lastSyncedAt.dictionary.id", maxId);
     } catch (err) {

@@ -2339,7 +2339,8 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
+    ipcMain.handle("db-hard-delete-dictionary", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       return this.databaseManager.hardDeleteDictionaryEntry(id);
     });
 
@@ -3315,7 +3316,8 @@ class IPCHandlers {
       if (!sender) return { success: false };
       return this.databaseManager.markConversationSynced(id, cloudId, sender);
     });
-    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+    ipcMain.handle("db-hard-delete-conversation", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {
         setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
@@ -3345,7 +3347,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
     );
-    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+    ipcMain.handle("db-hard-delete-transcription", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteTranscription(id);
       if (result?.success) {
         this.audioStorageManager.deleteAudio(id);

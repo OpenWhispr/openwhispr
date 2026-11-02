@@ -729,6 +729,78 @@ for (const boundary of ["getSnippetForCloudMerge", "hardDeleteSnippet"]) {
   });
 }
 
+for (const kind of ["conversations", "transcriptions", "dictionary"]) {
+  for (const boundary of ["lookup", "delete", "empty-page"]) {
+    test(`a stale ${kind} tombstone stops at ${boundary} without changing rows or cursors`, async (t) => {
+      const db = setup(t);
+      if (!db) return;
+      let row;
+      if (kind === "conversations") row = db.createAgentConversation("Legacy chat");
+      if (kind === "transcriptions") row = db.saveTranscription("Legacy dictation").transcription;
+      if (kind === "dictionary") {
+        db.applyDictionaryChanges({ add: ["Legacy"] });
+        [row] = db.getPendingDictionary();
+      }
+      const table = {
+        conversations: "agent_conversations",
+        transcriptions: "transcriptions",
+        dictionary: "custom_dictionary",
+      }[kind];
+      const clientKey = {
+        conversations: "client_conversation_id",
+        transcriptions: "client_transcription_id",
+        dictionary: "client_dict_id",
+      }[kind];
+      const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+      const since = "2026-10-01T00:00:00.000Z";
+      localStorageStub.setItem(`lastSyncedAt.${kind}`, since);
+      if (kind === "dictionary") localStorageStub.setItem("lastSyncedAt.dictionary.id", "before");
+      const api = windowStub.electronAPI;
+      const switchAccount = () => {
+        db.setActiveAccountId("account-b");
+        api.authState.generation += 1;
+        localStorageStub.setItem(`lastSyncedAt.${kind}`, "2026-10-02T00:00:00.000Z");
+        if (kind === "dictionary")
+          localStorageStub.setItem("lastSyncedAt.dictionary.id", "account-b");
+      };
+      api.cloudApiRequest = async () => {
+        if (boundary === "empty-page") switchAccount();
+        return {
+          success: true,
+          data: {
+            [kind === "dictionary" ? "entries" : kind]:
+              boundary === "empty-page"
+                ? []
+                : [{ id: "cloud-a", [clientKey]: row[clientKey], deleted_at: since }],
+            hasMore: false,
+          },
+        };
+      };
+      if (boundary !== "empty-page") {
+        const operationName = {
+          conversations:
+            boundary === "lookup" ? "getConversationByClientId" : "hardDeleteConversation",
+          transcriptions:
+            boundary === "lookup" ? "getTranscriptionByClientId" : "hardDeleteTranscription",
+          dictionary: boundary === "lookup" ? "getDictionaryByClientId" : "hardDeleteDictionary",
+        }[kind];
+        const operation = api[operationName];
+        api[operationName] = async (...args) => {
+          switchAccount();
+          return operation(...args);
+        };
+      }
+      await accountA[`pull${kind[0].toUpperCase()}${kind.slice(1)}`]();
+
+      assert.ok(db.db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(row.id));
+      assert.equal(localStorageStub.getItem(`lastSyncedAt.${kind}`), "2026-10-02T00:00:00.000Z");
+      if (kind === "dictionary") {
+        assert.equal(localStorageStub.getItem("lastSyncedAt.dictionary.id"), "account-b");
+      }
+    });
+  }
+}
+
 test("a matching legacy transcription pull claims ownership without overwriting local edits", async (t) => {
   const db = setup(t);
   if (!db) return;

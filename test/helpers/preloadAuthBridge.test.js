@@ -77,6 +77,9 @@ test("sync writes forward the sign-in that read them and the account a chat was 
   await api.getSnippetForCloudMerge({ id: "s" }, 7);
   await api.upsertSnippetFromCloud({ id: "s" }, 7);
   await api.hardDeleteSnippet(1, 7);
+  await api.hardDeleteConversation(1, 7);
+  await api.hardDeleteTranscription(1, 7);
+  await api.hardDeleteDictionary(1, 7);
   await api.upsertConversationFromCloud({ id: "c" }, [], 7);
   await api.markTranscriptionSynced(1, "t", 7);
   await api.markDictionarySynced(1, "d", "now", "word", "manual", "manual", 7);
@@ -90,6 +93,9 @@ test("sync writes forward the sign-in that read them and the account a chat was 
     ["db-get-snippet-for-cloud-merge", { id: "s" }, 7],
     ["db-upsert-snippet-from-cloud", { id: "s" }, 7],
     ["db-hard-delete-snippet", 1, 7],
+    ["db-hard-delete-conversation", 1, 7],
+    ["db-hard-delete-transcription", 1, 7],
+    ["db-hard-delete-dictionary", 1, 7],
     ["db-upsert-conversation-from-cloud", { id: "c" }, [], 7],
     ["db-mark-transcription-synced", 1, "t", 7],
     ["db-mark-dictionary-synced", 1, "d", "now", "word", "manual", "manual", 7],

@@ -176,6 +176,9 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
     await invoke("db-mark-snippet-synced", 1, "snip-1", null, null, null, stale),
     await invoke("db-get-snippet-for-cloud-merge", { trigger: "addr" }, stale),
     await invoke("db-hard-delete-snippet", snippet.id, stale),
+    await invoke("db-hard-delete-conversation", 1, stale),
+    await invoke("db-hard-delete-transcription", 1, stale),
+    await invoke("db-hard-delete-dictionary", 1, stale),
   ];
   for (const result of refused) assert.equal(result?.stale, true);
   assert.deepEqual(db.getDictionary(), []);

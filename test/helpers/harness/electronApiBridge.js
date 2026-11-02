@@ -216,7 +216,8 @@ function createElectronApi(db, options = {}) {
       db.acknowledgeConversationCreate(id, snapshot, cloudId, accountId || undefined),
     markConversationSynced: async (id, cloudId, accountId) =>
       db.markConversationSynced(id, cloudId, accountId || undefined),
-    hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
+    hardDeleteConversation: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteConversation(id),
 
     // Transcriptions
     getTranscriptionById: async (id) => db.getTranscriptionById(id),
@@ -231,7 +232,8 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.markTranscriptionSynced(id, cloudId),
-    hardDeleteTranscription: async (id) => db.hardDeleteTranscription(id),
+    hardDeleteTranscription: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteTranscription(id),
 
     // Dictionary
     getPendingDictionary: async () => db.getPendingDictionary(),
@@ -260,7 +262,8 @@ function createElectronApi(db, options = {}) {
             expectedSource,
             serverSource
           ),
-    hardDeleteDictionary: async (id) => db.hardDeleteDictionaryEntry(id),
+    hardDeleteDictionary: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteDictionaryEntry(id),
     clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),

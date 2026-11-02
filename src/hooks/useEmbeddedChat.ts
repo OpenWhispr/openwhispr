@@ -77,12 +77,20 @@ export function useEmbeddedChat({
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
   const noteIdRef = useRef(noteId);
+  const historyLoadGenerationRef = useRef(0);
   const [prevNoteId, setPrevNoteId] = useState(noteId);
 
   const persistence = useChatPersistence({
     conversationId,
     onConversationCreated: (id) => {
       setConversationId(id);
+    },
+    onAccountChange: () => {
+      streaming.cancelStream();
+      setConversationId(null);
+      setNoteConversations([]);
+      setNewChatMessage(null);
+      void fetchNoteConversations();
     },
   });
 
@@ -129,8 +137,9 @@ export function useEmbeddedChat({
 
   const fetchNoteConversations = useCallback(async () => {
     if (!noteId) return;
+    const generation = ++historyLoadGenerationRef.current;
     const conversations = await window.electronAPI?.getConversationsForNote?.(noteId);
-    if (noteIdRef.current !== noteId) return;
+    if (noteIdRef.current !== noteId || generation !== historyLoadGenerationRef.current) return;
     setNoteConversations(conversations ?? []);
     return conversations ?? [];
   }, [noteId]);
