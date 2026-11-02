@@ -75,17 +75,14 @@ export default function ConversationList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
-  const loadGenerationRef = useRef(0);
 
   const loadConversations = useCallback(async () => {
-    const generation = ++loadGenerationRef.current;
     setLoadError(false);
     try {
       const [active, archived] = await Promise.all([
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
       ]);
-      if (generation !== loadGenerationRef.current) return;
       const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
@@ -103,26 +100,22 @@ export default function ConversationList({
       // The Archived toggle hides once nothing is archived; leave that view with it.
       if (!archived?.length) setShowArchived(false);
     } catch {
-      if (generation === loadGenerationRef.current) setLoadError(true);
+      setLoadError(true);
     } finally {
-      if (generation === loadGenerationRef.current) {
-        setIsLoading(false);
-        setShowSkeleton(false);
-        if (showSkeletonTimer.current) {
-          clearTimeout(showSkeletonTimer.current);
-          showSkeletonTimer.current = null;
-        }
+      setIsLoading(false);
+      setShowSkeleton(false);
+      if (showSkeletonTimer.current) {
+        clearTimeout(showSkeletonTimer.current);
+        showSkeletonTimer.current = null;
       }
     }
   }, []);
 
   useEffect(() => {
     setIsLoading(true);
-    setConversations([]);
     showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
     loadConversations();
     return () => {
-      loadGenerationRef.current += 1;
       if (showSkeletonTimer.current) clearTimeout(showSkeletonTimer.current);
     };
   }, [loadConversations, refreshKey]);

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
 import { useChatMessageSender } from "../components/chat/useChatMessageSender";
@@ -48,17 +48,10 @@ export function useContainerChat({
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ContainerConversationItem[]>([]);
   const [submissionInFlight, setSubmissionInFlight] = useState(false);
-  const historyLoadGenerationRef = useRef(0);
   const folderId = folder?.id ?? null;
 
   const persistence = useChatPersistence({
     onConversationCreated: (id) => setConversationId(id),
-    onAccountChange: () => {
-      streaming.cancelStream();
-      setConversationId(null);
-      setConversations([]);
-      void fetchConversations();
-    },
   });
 
   const containerContext = useMemo(() => {
@@ -89,14 +82,13 @@ export function useContainerChat({
 
   const fetchConversations = useCallback(
     async (isStale?: () => boolean): Promise<void> => {
-      const generation = ++historyLoadGenerationRef.current;
       let list: ContainerConversationItem[];
       try {
         list = (await window.electronAPI?.getConversationsForContainer?.(space.id, folderId)) ?? [];
       } catch {
         list = [];
       }
-      if (!isStale?.() && generation === historyLoadGenerationRef.current) setConversations(list);
+      if (!isStale?.()) setConversations(list);
     },
     [space.id, folderId]
   );

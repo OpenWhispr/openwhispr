@@ -6,7 +6,6 @@ import { withoutSkillCardDrafts } from "./skillCardRecord";
 interface UseChatPersistenceOptions {
   conversationId?: number | null;
   onConversationCreated?: (id: number, title: string) => void;
-  onAccountChange?: () => void;
 }
 
 export interface ChatPersistence {
@@ -42,8 +41,6 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const [noteId, setNoteId] = useState<number | null | undefined>(null);
   const sessionVersionRef = useRef(0);
   const getSessionVersion = useCallback(() => sessionVersionRef.current, []);
-  const onAccountChangeRef = useRef(options.onAccountChange);
-  onAccountChangeRef.current = options.onAccountChange;
 
   useEffect(
     () => () => {
@@ -146,30 +143,6 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     setConversationId(null);
     setNoteId(null);
   }, []);
-
-  useEffect(() => {
-    let accountId: string | null | undefined;
-    let broadcastReceived = false;
-    const unsubscribe = window.electronAPI?.onActiveAccountScopeChanged?.((scope) => {
-      broadcastReceived = true;
-      const nextAccountId = scope?.accountId ?? null;
-      if (nextAccountId === accountId) return;
-      accountId = nextAccountId;
-      handleNewChat();
-      onAccountChangeRef.current?.();
-    });
-    // A later broadcast wins over the boot read; token rotation within the
-    // same account keeps the conversation.
-    void window.electronAPI
-      ?.getActiveAccountScope?.()
-      .then((scope) => {
-        if (!broadcastReceived) accountId = scope?.accountId ?? null;
-      })
-      .catch((error) => {
-        console.error("Failed to read the chat's account scope:", error);
-      });
-    return unsubscribe;
-  }, [handleNewChat]);
 
   return {
     messages,
