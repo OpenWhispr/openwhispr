@@ -1712,7 +1712,7 @@
         "columns": {
           "name": "Nom",
           "team": "Groupe",
-          "role": "Rôle dans l'espace",
+          "role": "Rôle",
           "email": "E-mail",
           "status": "Statut",
           "actions": "Actions"

@@ -2489,7 +2489,7 @@
         "columns": {
           "name": "Nombre",
           "team": "Grupo",
-          "role": "Rol en el espacio de trabajo",
+          "role": "Rol",
           "email": "Correo electrónico",
           "status": "Estado",
           "actions": "Acciones"

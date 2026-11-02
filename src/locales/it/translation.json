@@ -2437,7 +2437,7 @@
         "columns": {
           "name": "Nome",
           "team": "Gruppo",
-          "role": "Ruolo nell'area di lavoro",
+          "role": "Ruolo",
           "email": "E-mail",
           "status": "Stato",
           "actions": "Azioni"
