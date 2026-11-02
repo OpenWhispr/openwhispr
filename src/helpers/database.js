@@ -9298,7 +9298,7 @@ class DatabaseManager {
           existing &&
           !existing.account_id &&
           this.activeAccountId &&
-          !isCloudEntryNewer(cloudConv.updated_at, existing.updated_at)
+          (existing.deleted_at || !isCloudEntryNewer(cloudConv.updated_at, existing.updated_at))
         ) {
           const claim = this._claimUnattributedSql("agent_conversations", { proven: true });
           this.db

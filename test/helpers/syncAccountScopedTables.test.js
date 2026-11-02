@@ -881,6 +881,7 @@ test("matching legacy pulls claim ownership without overwriting local edits or d
     }
   }
   db.db.prepare("UPDATE snippets SET deleted_at = ?").run(updatedAt);
+  db.db.prepare("UPDATE agent_conversations SET deleted_at = ?").run(updatedAt);
   const before = tables.map((table) => db.db.prepare(`SELECT * FROM ${table}`).get());
   const messagesBefore = db.getAgentMessages(chat.id);
   const payloads = {
@@ -910,7 +911,7 @@ test("matching legacy pulls claim ownership without overwriting local edits or d
       id: "agent_conversations-cloud",
       client_conversation_id: before[3].client_conversation_id,
       title: "cloud title",
-      updated_at: "2026-10-03T00:00:00.000Z",
+      updated_at: "2026-10-05T00:00:00.000Z",
       messages: [{ role: "user", content: "old cloud message" }],
     },
   };
