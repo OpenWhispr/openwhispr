@@ -2,7 +2,7 @@ import 'expo-sqlite/localStorage/install';
 import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
 import { activateAccountDatabase, blockAccountDatabase } from './database';
-import { runMigrations } from '@/db/migrate';
+import { runMigrations } from './migrations';
 import { openApplicationDatabase } from '@/db/connections';
 import { randomUUID } from '@/lib/uuid';
 

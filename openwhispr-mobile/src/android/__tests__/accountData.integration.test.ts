@@ -1,3 +1,4 @@
+jest.mock('@/db/migrate', () => jest.requireActual('@/db/migrate.android'));
 // Exercise the same database adapter Metro selects for Android.
 jest.mock('@/db', () => jest.requireActual('@/db/index.android'));
 
